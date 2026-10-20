@@ -310,7 +310,6 @@ async def test_only_owner_can_change_quote_unit_price(
 
     for email, password in (
         ("buyer@example.com", settings.seed_buyer_password),
-        ("warehouse@example.com", settings.seed_warehouse_password),
         ("books@example.com", settings.seed_books_password),
     ):
         await _login(async_client, email, password)
@@ -319,11 +318,34 @@ async def test_only_owner_can_change_quote_unit_price(
             json={"customer_id": customer_id, "lines": [{**line, "unit_ex_vat": "1.00"}]},
         )
         assert blocked.status_code == 403
+        assert blocked.json()["detail"] == "Forbidden"
         edit_blocked = await async_client.patch(
             f"/api/v1/quotes/{quote_id}",
             json={"lines": [{**line, "unit_ex_vat": "1.00"}]},
         )
         assert edit_blocked.status_code == 403
+        assert edit_blocked.json()["detail"] == "Forbidden"
+
+    await _login(async_client, "warehouse@example.com", settings.seed_warehouse_password)
+    warehouse_me = await async_client.get("/api/v1/auth/me")
+    assert warehouse_me.status_code == 200
+    assert "sales.quotes" in warehouse_me.json()["permissions"]
+    warehouse_quote = await async_client.post(
+        "/api/v1/quotes",
+        json={"customer_id": customer_id, "lines": [{**line, "discount_percent": "10"}]},
+    )
+    assert warehouse_quote.status_code == 201, warehouse_quote.text
+    assert Decimal(warehouse_quote.json()["lines"][0]["unit_ex_vat"]) == Decimal("1000.00")
+    assert Decimal(warehouse_quote.json()["lines"][0]["discount_percent"]) == Decimal("10.00")
+    assert Decimal(warehouse_quote.json()["subtotal_ex_vat"]) == Decimal("900.00")
+    warehouse_price = await async_client.post(
+        "/api/v1/quotes",
+        json={"customer_id": customer_id, "lines": [{**line, "unit_ex_vat": "1.00"}]},
+    )
+    assert warehouse_price.status_code == 403
+    assert (
+        warehouse_price.json()["detail"] == "Only the owner can change the unit price for QT-OWNER"
+    )
     await _relogin_owner(owner_client)
 
 
@@ -390,8 +412,9 @@ async def test_quote_line_discount_by_role(async_client, owner_client, async_db)
     assert Decimal(till_edit.json()["lines"][0]["discount_percent"]) == Decimal("5.00")
     assert Decimal(till_edit.json()["subtotal_ex_vat"]) == Decimal("712.50")
 
-    await _grant_sales_quotes(async_db, "warehouse")
     await _login(async_client, "warehouse@example.com", settings.seed_warehouse_password)
+    warehouse_me = await async_client.get("/api/v1/auth/me")
+    assert "sales.quotes" in warehouse_me.json()["permissions"]
     warehouse = await async_client.post(
         "/api/v1/quotes",
         json={"customer_id": customer_id, "lines": [{**line, "discount_percent": "10"}]},
