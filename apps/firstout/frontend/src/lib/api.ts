@@ -90,11 +90,13 @@ export type UpdateProfilePayload = {
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly detail: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -117,42 +119,60 @@ function buildListQuery(params?: ListParams): string {
   return search.toString();
 }
 
+export function messageFromErrorBody(body: unknown, fallback = "Request failed"): string {
+  const row =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? (body as { detail?: unknown })
+      : null;
+  const detail = row?.detail;
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail) && detail[0] && typeof detail[0] === "object" && "msg" in detail[0]) {
+    const msg = (detail[0] as { msg?: unknown }).msg;
+    if (typeof msg === "string") {
+      return msg;
+    }
+  }
+  if (detail && typeof detail === "object" && !Array.isArray(detail) && "code" in detail) {
+    const coded = detail as { code?: unknown; message?: unknown };
+    const code = coded.code;
+    if (code === "nia_llm_unconfigured") {
+      return "Nia is not configured";
+    }
+    if (code === "nia_cap_exceeded") {
+      return "Monthly Nia allowance used";
+    }
+    if (code === "comms_encryption_unconfigured") {
+      return "Communications encryption is not configured";
+    }
+    if (code === "comms_smtp_unconfigured") {
+      return "SMTP mailbox is not configured";
+    }
+    if (typeof coded.message === "string" && coded.message.trim()) {
+      return coded.message;
+    }
+    if (typeof code === "string") {
+      return code;
+    }
+  }
+  return fallback;
+}
+
 export async function parseErrorMessage(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as {
-      detail?: string | { msg?: string }[] | { code?: string; message?: string };
-    };
-    if (typeof body.detail === "string") {
-      return body.detail;
-    }
-    if (Array.isArray(body.detail) && body.detail[0]?.msg) {
-      return body.detail[0].msg;
-    }
-    if (body.detail && typeof body.detail === "object" && "code" in body.detail) {
-      const code = body.detail.code;
-      if (code === "nia_llm_unconfigured") {
-        return "Nia is not configured";
-      }
-      if (code === "nia_cap_exceeded") {
-        return "Monthly Nia allowance used";
-      }
-      if (code === "comms_encryption_unconfigured") {
-        return "Communications encryption is not configured";
-      }
-      if (code === "comms_smtp_unconfigured") {
-        return "SMTP mailbox is not configured";
-      }
-      if (typeof body.detail.message === "string" && body.detail.message.trim()) {
-        return body.detail.message;
-      }
-      if (typeof code === "string") {
-        return code;
-      }
-    }
+    const body: unknown = await response.json();
+    return messageFromErrorBody(body, response.statusText || "Request failed");
   } catch {
-    // ignore parse errors
+    return response.statusText || "Request failed";
   }
-  return response.statusText || "Request failed";
+}
+
+function errorDetail(body: unknown): unknown {
+  if (body && typeof body === "object" && !Array.isArray(body) && "detail" in body) {
+    return (body as { detail: unknown }).detail;
+  }
+  return body;
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -168,8 +188,17 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   });
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+    throw new ApiError(
+      response.status,
+      messageFromErrorBody(body, response.statusText || "Request failed"),
+      errorDetail(body),
+    );
   }
 
   if (response.status === 204) {
@@ -953,6 +982,7 @@ export type TillSalePayload = {
   tender: TillTender;
   customer_id?: string;
   pick_id?: string;
+  pick_ids?: string[];
   credit_override?: boolean;
   credit_override_reason?: string;
 };
