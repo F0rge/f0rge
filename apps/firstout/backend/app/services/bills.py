@@ -163,6 +163,7 @@ class BillService:
     @staticmethod
     def _to_list_item(bill: Bill) -> BillListItem:
         balance_zar = bill.amount_zar - bill.amount_paid_zar
+        balance_foreign = bill.amount_foreign - bill.amount_paid_foreign
         return BillListItem(
             id=bill.id,
             bill_number=bill.bill_number,
@@ -175,7 +176,10 @@ class BillService:
             amount_foreign=bill.amount_foreign,
             amount_zar=bill.amount_zar,
             amount_paid_zar=bill.amount_paid_zar,
+            amount_paid_foreign=bill.amount_paid_foreign,
             balance_zar=balance_zar,
+            balance_foreign=balance_foreign,
+            payment_status=bill.payment_status.value,
             pdf_storage_key=bill.pdf_storage_key,
             created_at=bill.created_at,
             updated_at=bill.updated_at,
@@ -184,6 +188,7 @@ class BillService:
     @staticmethod
     def _to_response(bill: Bill) -> BillResponse:
         balance_zar = bill.amount_zar - bill.amount_paid_zar
+        balance_foreign = bill.amount_foreign - bill.amount_paid_foreign
         return BillResponse(
             id=bill.id,
             bill_number=bill.bill_number,
@@ -196,7 +201,10 @@ class BillService:
             amount_foreign=bill.amount_foreign,
             amount_zar=bill.amount_zar,
             amount_paid_zar=bill.amount_paid_zar,
+            amount_paid_foreign=bill.amount_paid_foreign,
             balance_zar=balance_zar,
+            balance_foreign=balance_foreign,
+            payment_status=bill.payment_status.value,
             pdf_storage_key=bill.pdf_storage_key,
             lines=[
                 BillLineResponse(

@@ -5,6 +5,7 @@ import {
   InlineNotification,
   Modal,
   Stack,
+  Tag,
   Table,
   TableBody,
   TableCell,
@@ -32,6 +33,7 @@ import {
   getSettings,
   settingsLogoUrl,
   listCreditNotes,
+  listPayments,
   openCommsSend,
   sendDocument,
   type AppSettings,
@@ -41,6 +43,11 @@ import {
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  partialPaymentError,
+  settlementStatusLabel,
+  settlementTagType,
+} from "@/lib/payment-status";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -71,19 +78,22 @@ export default function InvoiceDetailPage() {
   const [creditOpen, setCreditOpen] = useState(false);
   const [creditReason, setCreditReason] = useState("");
   const [lastPayment, setLastPayment] = useState<Payment | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
   const loadInvoice = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const invoiceData = await getInvoice(params.id);
-      const [crmCustomer, creditNotePage, settingsData, comms] = await Promise.all([
+      const [crmCustomer, creditNotePage, settingsData, comms, paymentPage] = await Promise.all([
         getCustomer(invoiceData.customer_id),
         listCreditNotes({ limit: 100 }),
         getSettings(),
         getCommsSettings(),
+        listPayments({ invoice_id: invoiceData.id, limit: 100 }),
       ]);
       setInvoice(invoiceData);
+      setPayments(paymentPage.items);
       setCompanySettings(settingsData);
       setSmtpConfigured(comms.smtp_configured);
       setCustomer(crmCustomer);
@@ -170,6 +180,15 @@ export default function InvoiceDetailPage() {
     if (!invoice) {
       return;
     }
+    const validationError = partialPaymentError({
+      amount: paymentAmount,
+      balance: invoice.balance,
+      documentNumber: invoice.invoice_number,
+    });
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setActionLoading(true);
     setError(null);
     try {
@@ -244,6 +263,9 @@ export default function InvoiceDetailPage() {
         <p className="cds--type-body-01">
           {invoice.customer_name} · Issued {invoice.issue_date}
         </p>
+        <Tag type={settlementTagType(invoice.payment_status)} size="sm">
+          {settlementStatusLabel(invoice.payment_status)}
+        </Tag>
       </div>
 
       {success ? (
@@ -402,12 +424,43 @@ export default function InvoiceDetailPage() {
             VAT ({companySettings?.vat_percent ?? "15"}%): {formatZarAmount(invoice.vat_amount)}
           </p>
           <p className="cds--type-productive-heading-02">
-            Total inc VAT: {formatZarAmount(invoice.total_inc_vat)}
+            Total: {formatZarAmount(invoice.total_inc_vat)}
           </p>
-          <p className="cds--type-body-01">Amount paid: {formatZarAmount(invoice.amount_paid)}</p>
-          <p className="cds--type-body-01">Balance due: {formatZarAmount(invoice.balance)}</p>
+          <p className="cds--type-body-01">Paid: {formatZarAmount(invoice.amount_paid)}</p>
+          <p className="cds--type-body-01">
+            Balance owing: {formatZarAmount(invoice.balance)}
+          </p>
         </div>
       </section>
+
+      <TableContainer title="Payments" description="Money received against this invoice">
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeader>Number</TableHeader>
+              <TableHeader>Paid on</TableHeader>
+              <TableHeader>Amount</TableHeader>
+              <TableHeader>Reconciled</TableHeader>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {payments.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4}>No payments recorded yet.</TableCell>
+              </TableRow>
+            ) : (
+              payments.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell>{payment.payment_number}</TableCell>
+                  <TableCell>{payment.paid_on}</TableCell>
+                  <TableCell>{formatZarAmount(payment.amount)}</TableCell>
+                  <TableCell>{payment.is_reconciled ? "Yes" : "No"}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       <BooksHistory documentType="invoice" documentId={invoice.id} />
 
@@ -424,7 +477,7 @@ export default function InvoiceDetailPage() {
           <TextInput
             id="payment-amount"
             labelText="Amount (ZAR)"
-            helperText="Must equal the remaining invoice balance."
+            helperText={`Any amount up to the ${formatZarAmount(invoice.balance)} still owing. A smaller amount leaves the invoice partially paid.`}
             value={paymentAmount}
             onChange={(event) => setPaymentAmount(event.target.value)}
             required
