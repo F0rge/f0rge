@@ -253,6 +253,7 @@ class InvoiceService:
             amount_paid=invoice.amount_paid,
             balance=balance,
             payment_status=invoice.payment_status.value,
+            reminders_paused=invoice.reminders_paused,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,

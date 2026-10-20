@@ -25,6 +25,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   canAdminNia,
+  canManageUsers,
   canMutateSettings,
   canUseNia,
   getSettings,
@@ -40,6 +41,7 @@ import {
 import { NiaCapsSettings } from "@/components/nia/nia-caps-settings";
 import { NiaScheduleSettings } from "@/components/nia/nia-schedule-settings";
 import { CommunicationsSettings } from "@/app/settings/communications-settings";
+import { PaymentRemindersSettings } from "@/app/settings/payment-reminders-settings";
 import { useAuth } from "@/lib/auth";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -89,6 +91,7 @@ function SettingsSaveButton({
 export default function SettingsPage() {
   const { user } = useAuth();
   const canMutate = canMutateSettings(user);
+  const canConfigureReminders = canManageUsers(user);
   const canUseNiaAssistant = canUseNia(user);
   const canAdminNiaCaps = canAdminNia(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -376,6 +379,7 @@ export default function SettingsPage() {
             <Tab>Locations</Tab>
             <Tab>Operations</Tab>
             <Tab>Communications</Tab>
+            {canConfigureReminders ? <Tab>Payment reminders</Tab> : null}
             {canUseNiaAssistant || canAdminNiaCaps ? <Tab>Nia</Tab> : null}
           </TabList>
           <TabPanels>
@@ -693,6 +697,14 @@ export default function SettingsPage() {
                 <CommunicationsSettings />
               </Tile>
             </TabPanel>
+
+            {canConfigureReminders ? (
+              <TabPanel>
+                <Tile>
+                  <PaymentRemindersSettings />
+                </Tile>
+              </TabPanel>
+            ) : null}
 
             {canUseNiaAssistant || canAdminNiaCaps ? (
               <TabPanel>

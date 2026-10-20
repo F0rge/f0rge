@@ -38,6 +38,7 @@ from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
+from app.services.payment_reminders import PaymentReminderService
 from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.journal_imports import JournalImportService
 from app.services.journals import JournalService
@@ -152,6 +153,10 @@ def get_search_service(db: AsyncSession = Depends(get_db)) -> SearchService:
 
 def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
     return SettingsService(db)
+
+
+def get_payment_reminder_service(db: AsyncSession = Depends(get_db)) -> PaymentReminderService:
+    return PaymentReminderService(db)
 
 
 def get_comms_outbox_service(db: AsyncSession = Depends(get_db)) -> CommsOutboxService:
