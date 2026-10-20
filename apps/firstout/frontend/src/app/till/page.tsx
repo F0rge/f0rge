@@ -35,6 +35,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { CustomerPicker } from "@/components/customer-picker";
 import { TillScanner } from "@/components/till-scanner";
 
 import {
@@ -241,28 +242,6 @@ function filterSkuItem({
     item.name.toLowerCase().includes(query) ||
     item.our_ref.toLowerCase().includes(query) ||
     item.our_barcode.toLowerCase().includes(query)
-  );
-}
-
-function customerItemToString(item: CustomerCrm | null): string {
-  return item ? item.name : "";
-}
-
-function filterCustomerItem({
-  item,
-  inputValue,
-}: {
-  item: CustomerCrm;
-  inputValue: string | null;
-}): boolean {
-  const query = (inputValue ?? "").trim().toLowerCase();
-  if (!query) {
-    return true;
-  }
-  return (
-    item.name.toLowerCase().includes(query) ||
-    (item.email ?? "").toLowerCase().includes(query) ||
-    (item.phone ?? "").toLowerCase().includes(query)
   );
 }
 
@@ -964,15 +943,12 @@ export default function TillPage() {
                 </dl>
 
                 <div className="firstout-till-picker-row">
-                  <ComboBox
+                  <CustomerPicker
                     id="till-customer"
                     titleText="Customer (optional)"
-                    placeholder="Search customer..."
-                    items={customers}
-                    itemToString={customerItemToString}
-                    selectedItem={selectedCustomer}
-                    shouldFilterItem={filterCustomerItem}
-                    onChange={({ selectedItem }) => setCustomerId(selectedItem?.id ?? "")}
+                    customers={customers}
+                    selectedId={customerId}
+                    onChange={setCustomerId}
                   />
                   <Button
                     kind="ghost"

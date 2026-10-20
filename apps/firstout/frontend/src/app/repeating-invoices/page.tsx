@@ -6,8 +6,6 @@ import {
   InlineNotification,
   Modal,
   NumberInput,
-  Select,
-  SelectItem,
   Stack,
   Table,
   TableBody,
@@ -21,6 +19,7 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CustomerPicker } from "@/components/customer-picker";
 import {
   canMutateBooks,
   computeInvoicePreview,
@@ -351,17 +350,12 @@ export default function RepeatingInvoicesPage() {
         size="lg"
       >
         <Stack gap={5}>
-          <Select
+          <CustomerPicker
             id="repeating-customer"
-            labelText="Customer"
-            value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
-          >
-            <SelectItem value="" text="Select a customer" />
-            {customers.map((customer) => (
-              <SelectItem key={customer.id} value={customer.id} text={customer.name} />
-            ))}
-          </Select>
+            customers={customers}
+            selectedId={customerId}
+            onChange={setCustomerId}
+          />
           <TextInput
             id="repeating-name"
             labelText="Name (optional)"

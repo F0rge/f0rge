@@ -3737,6 +3737,15 @@ export type CustomerListFilters = {
   overdue?: boolean;
   active_layby?: boolean;
   on_hold?: boolean;
+  q?: string;
+};
+
+export type CustomerDuplicateMatch = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  matched_fields: Array<"name" | "email" | "phone">;
 };
 
 export type CreateCustomerPayload = {
@@ -3785,8 +3794,34 @@ export function listCustomers(filters?: CustomerListFilters): Promise<CustomerCr
   if (filters?.on_hold) {
     params.set("on_hold", "true");
   }
+  const q = filters?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
   const qs = params.toString();
   return apiFetch<CustomerCrm[]>(qs ? `/customers?${qs}` : "/customers");
+}
+
+export function findCustomerDuplicates(query: {
+  name?: string;
+  email?: string;
+  phone?: string;
+}): Promise<CustomerDuplicateMatch[]> {
+  const params = new URLSearchParams();
+  const name = query.name?.trim();
+  const email = query.email?.trim();
+  const phone = query.phone?.trim();
+  if (name) {
+    params.set("name", name);
+  }
+  if (email) {
+    params.set("email", email);
+  }
+  if (phone) {
+    params.set("phone", phone);
+  }
+  const qs = params.toString();
+  return apiFetch<CustomerDuplicateMatch[]>(`/customers/duplicates${qs ? `?${qs}` : ""}`);
 }
 
 export function getCustomer(id: string): Promise<CustomerCrm> {

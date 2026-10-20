@@ -26,6 +26,11 @@ import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import {
+  CustomerDuplicateModal,
+  DUPLICATE_NAME_TAKEN,
+} from "@/components/customer-duplicate-modal";
+import { CustomerPicker } from "@/components/customer-picker";
+import {
   ApiError,
   addLaybyPayment,
   cancelLayby,
@@ -35,6 +40,7 @@ import {
   computeInvoicePreview,
   createCustomer,
   createLayby,
+  findCustomerDuplicates,
   downloadLaybyPdf,
   formatPriceAmount,
   formatZarAmount,
@@ -50,6 +56,7 @@ import {
   roundHalfUp,
   sendDocument,
   type CustomerCrm,
+  type CustomerDuplicateMatch,
   type Layby,
   type LaybyListItem,
   type LaybyTender,
@@ -263,6 +270,9 @@ function LaybysPageContent() {
   const [customerId, setCustomerId] = useState("");
   const [newCustomerName, setNewCustomerName] = useState("");
   const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateMatches, setDuplicateMatches] = useState<CustomerDuplicateMatch[]>([]);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [lines, setLines] = useState<LineForm[]>([emptyLine()]);
   const [durationMonths, setDurationMonths] = useState<"3" | "6">("3");
   const [holdStock, setHoldStock] = useState(true);
@@ -433,7 +443,13 @@ function LaybysPageContent() {
     setPaymentTender("cash");
   }
 
-  async function handleCreateCustomer() {
+  function closeCustomerDuplicates() {
+    setDuplicateOpen(false);
+    setDuplicateMatches([]);
+    setDuplicateError(null);
+  }
+
+  async function handleCreateCustomer(force = false) {
     const name = newCustomerName.trim();
     if (!name) {
       return;
@@ -441,11 +457,33 @@ function LaybysPageContent() {
     setCreatingCustomer(true);
     setError(null);
     try {
+      if (!force) {
+        const matches = await findCustomerDuplicates({ name });
+        if (matches.length > 0) {
+          setDuplicateMatches(matches);
+          setDuplicateError(null);
+          setDuplicateOpen(true);
+          return;
+        }
+      }
       const created = await createCustomer({ name });
       setCustomers((current) => [...current, created]);
       setCustomerId(created.id);
       setNewCustomerName("");
+      closeCustomerDuplicates();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setDuplicateError(DUPLICATE_NAME_TAKEN);
+        setDuplicateOpen(true);
+        if (duplicateMatches.length === 0) {
+          try {
+            setDuplicateMatches(await findCustomerDuplicates({ name }));
+          } catch {
+            setDuplicateMatches([]);
+          }
+        }
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to create customer.");
     } finally {
       setCreatingCustomer(false);
@@ -759,27 +797,25 @@ function LaybysPageContent() {
       )}
 
       <Modal
-        open={createOpen}
+        open={createOpen && !duplicateOpen}
         modalHeading="New layby"
         primaryButtonText={saving ? "Creating…" : "Confirm Layby & Print Receipt"}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={saving || !createFormValid}
-        onRequestClose={() => setCreateOpen(false)}
+        onRequestClose={() => {
+          closeCustomerDuplicates();
+          setCreateOpen(false);
+        }}
         onRequestSubmit={() => void handleCreate()}
         size="lg"
       >
         <Stack gap={5}>
-          <Select
+          <CustomerPicker
             id="layby-customer"
-            labelText="Customer"
-            value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
-          >
-            <SelectItem value="" text="Select a customer" />
-            {customers.map((customer) => (
-              <SelectItem key={customer.id} value={customer.id} text={customer.name} />
-            ))}
-          </Select>
+            customers={customers}
+            selectedId={customerId}
+            onChange={setCustomerId}
+          />
           <Stack gap={3} orientation="horizontal">
             <TextInput
               id="layby-new-customer"
@@ -927,6 +963,20 @@ function LaybysPageContent() {
           ) : null}
         </Stack>
       </Modal>
+
+      <CustomerDuplicateModal
+        open={duplicateOpen}
+        matches={duplicateMatches}
+        saving={creatingCustomer}
+        error={duplicateError}
+        onCancel={closeCustomerDuplicates}
+        onCreateAnyway={() => void handleCreateCustomer(true)}
+        onOpenExisting={(customerIdToOpen) => {
+          closeCustomerDuplicates();
+          setCreateOpen(false);
+          router.push(`/customers/${customerIdToOpen}`);
+        }}
+      />
 
       <Modal
         open={manageOpen}
