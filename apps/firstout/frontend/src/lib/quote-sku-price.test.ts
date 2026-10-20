@@ -72,6 +72,7 @@ function customer(overrides: Partial<CustomerCrm> = {}): CustomerCrm {
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
+    payment_reminders_opt_out: overrides.payment_reminders_opt_out ?? false,
   };
 }
 
