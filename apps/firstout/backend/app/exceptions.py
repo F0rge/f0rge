@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from f0rge_core.exceptions import DomainError
+from f0rge_core.exceptions import ConflictError, DomainError
 
 
 class ForbiddenError(DomainError):
@@ -19,6 +19,20 @@ class CommsSmtpUnconfiguredError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("comms_smtp_unconfigured")
+
+
+class KitRequiresPickError(ConflictError):
+    """Till kit is not fully at the showroom and has no matching pick. HTTP 409."""
+
+    def __init__(self, kits: list[dict]) -> None:
+        self.kits = kits
+        message = " ".join(str(kit["message"]) for kit in kits if kit.get("message"))
+        super().__init__(message or "Kit requires pick")
+        self.payload = {
+            "code": "kit_requires_pick",
+            "message": self.detail,
+            "kits": kits,
+        }
 
 
 class CommsSmtpFailedError(DomainError):
