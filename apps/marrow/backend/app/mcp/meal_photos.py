@@ -11,6 +11,7 @@ import base64
 import binascii
 import hashlib
 import io
+import os
 import re
 import uuid
 from typing import Optional
@@ -31,6 +32,7 @@ from app.services.photo_storage import (
     save_photo,
     thumb_filename,
 )
+from app.services.object_storage import object_storage_enabled
 from app.services.photos import entry_photo_upload_lock, next_photo_filename
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.tenant import owned_by_user
@@ -38,6 +40,20 @@ from f0rge_db.tenant import owned_by_user
 MAX_PHOTO_BYTES = 25 * 1024 * 1024
 _HASH_PREFIX = "sha256:"
 _DATA_URL = re.compile(r"^data:image/[^;,]+;base64,", re.IGNORECASE)
+
+
+def ensure_servable_photo_storage() -> None:
+    """Refuse a photo write the API process cannot read.
+
+    Local ``PHOTO_DIR`` is correct for single-process dev and tests. On Railway
+    the API serves ``/photos/{id}/file`` and ``/thumb`` from the shared bucket.
+    A JPEG written only onto this container's disk 404s there, and the check-in
+    tile falls back to the bowl icon.
+    """
+    if object_storage_enabled():
+        return
+    if os.environ.get("RAILWAY_ENVIRONMENT"):
+        raise ValidationError("meal photos require the shared photo bucket (BUCKET_NAME and AWS_*)")
 
 
 def photo_hash_tag(raw: bytes) -> str:

@@ -4,6 +4,7 @@ import datetime
 from typing import Any, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
+from app.cache.invalidation import invalidate_user_insights_cache
 from app.crud.entries import EntryCRUD
 from app.crud.meal_tags import MealTagCRUD
 from app.crud.meals import MealCRUD
@@ -20,6 +21,7 @@ from app.mcp.meal_photos import (
     copy_photo_bytes,
     decode_photo_b64,
     delete_photo_files,
+    ensure_servable_photo_storage,
     filename_in_use,
     find_duplicate,
     photo_hash_tag,
@@ -206,7 +208,11 @@ def register_meals_tools(server: FastMCP) -> None:
                 if existing_entry is not None:
                     duplicate = await find_duplicate(db, existing_entry.id, hash_tag)
                     if duplicate is not None:
+                        await invalidate_user_insights_cache(user_id, parsed)
                         return await _deduped_meal_result(db, duplicate, parsed, hash_tag)
+
+            if raw is not None:
+                ensure_servable_photo_storage()
 
             saved: list[str] = []
             try:
@@ -257,6 +263,7 @@ def register_meals_tools(server: FastMCP) -> None:
             result_ingredients = [
                 ingredient_payload(row, resolution) for row, resolution in zip(rows, resolutions)
             ]
+            await invalidate_user_insights_cache(user_id, parsed)
 
         return {
             "photo_id": photo.id,
@@ -301,7 +308,9 @@ def register_meals_tools(server: FastMCP) -> None:
             if raw is None:
                 raise ValidationError("pass exactly one of photo_base64 or source_photo_id")
             hash_tag = photo_hash_tag(raw)
+            entry_date = photo.entry.date
             if _image_hash_matches(photo, hash_tag):
+                await invalidate_user_insights_cache(user_id, entry_date)
                 return {
                     "photo_id": photo.id,
                     "meal_id": photo.meal_id,
@@ -311,6 +320,7 @@ def register_meals_tools(server: FastMCP) -> None:
                 }
             if photo.filename and not replace:
                 raise ValidationError("meal already has a photo; pass replace=true to overwrite")
+            ensure_servable_photo_storage()
 
             old_filename = photo.filename
             sole = await placement_count(db, photo.meal_id) == 1
@@ -337,6 +347,7 @@ def register_meals_tools(server: FastMCP) -> None:
                 and not await filename_in_use(db, old_filename)
             ):
                 await delete_photo_files([old_filename, thumb_filename(old_filename)], user_id)
+            await invalidate_user_insights_cache(user_id, entry_date)
             return {
                 "photo_id": photo.id,
                 "meal_id": photo.meal_id,
