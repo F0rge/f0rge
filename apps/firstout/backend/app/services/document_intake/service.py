@@ -94,6 +94,9 @@ class DocumentIntakeService:
         self,
         extracted: ExtractedDocument,
         usage: ModelUsage,
+        *,
+        record_proforma_duplicate: bool = True,
+        number_noun: str = "proforma",
     ) -> ProformaReview:
         suppliers = await self._supplier_records()
         skus = await self._sku_records()
@@ -105,7 +108,11 @@ class DocumentIntakeService:
             suppliers,
         )
         duplicate = False
-        if chosen.supplier_id is not None and extracted.document_number.strip():
+        if (
+            record_proforma_duplicate
+            and chosen.supplier_id is not None
+            and extracted.document_number.strip()
+        ):
             duplicate = await self._proforma_exists(chosen.supplier_id, extracted.document_number)
 
         reviewed: list[ReviewedLine] = []
@@ -166,7 +173,7 @@ class DocumentIntakeService:
                     CENT,
                 )
             ),
-            flags=document_flags(extracted, computed_ex, duplicate),
+            flags=document_flags(extracted, computed_ex, duplicate, number_noun=number_noun),
             usage=usage,
         )
 

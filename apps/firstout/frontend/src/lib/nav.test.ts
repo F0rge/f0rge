@@ -45,6 +45,8 @@ describe("nav path helpers", () => {
     expect(isAdminPath("/users")).toBe(true);
     expect(isAdminPath("/audit")).toBe(true);
     expect(isBooksPath("/invoices/abc")).toBe(true);
+    expect(isBooksPath("/bills/read")).toBe(true);
+    expect(labelForNavPath("/bills/read")).toBe("Bills");
     expect(isBooksPath("/ledger")).toBe(true);
     expect(isBooksPath("/books-periods")).toBe(true);
     expect(isBooksPath("/contacts")).toBe(false);

@@ -5,7 +5,17 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +44,11 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
     amount_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     pdf_storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    purchase_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     supplier: Mapped["Supplier"] = relationship()
     lines: Mapped[list["BillLine"]] = relationship(
@@ -42,7 +57,16 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
         order_by="BillLine.sort_order",
     )
 
-    __table_args__ = (UniqueConstraint("bill_number", name="uq_bills_bill_number"),)
+    __table_args__ = (
+        UniqueConstraint("bill_number", name="uq_bills_bill_number"),
+        Index(
+            "uq_bills_supplier_ref_ci",
+            "supplier_id",
+            text("lower(supplier_ref)"),
+            unique=True,
+            postgresql_where=text("btrim(supplier_ref) <> ''"),
+        ),
+    )
 
 
 class BillLine(UUIDPkMixin, Base):

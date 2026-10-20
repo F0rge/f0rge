@@ -48,6 +48,7 @@ class BillListItem(BaseModel):
     amount_paid_zar: Decimal
     balance_zar: Decimal
     pdf_storage_key: Optional[str]
+    purchase_order_id: Optional[uuid.UUID] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -68,6 +69,7 @@ class BillResponse(BaseModel):
     amount_paid_zar: Decimal
     balance_zar: Decimal
     pdf_storage_key: Optional[str]
+    purchase_order_id: Optional[uuid.UUID] = None
     lines: list[BillLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime

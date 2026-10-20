@@ -698,6 +698,65 @@ export function suggestIntakeSku(payload: {
   });
 }
 
+export type PurchaseOrderMatch = {
+  purchase_order_id: string;
+  po_number: string;
+  status: string;
+  supplier_id: string;
+  supplier_name: string;
+};
+
+export type ProcessedSupplierBill = {
+  bill_id: string;
+  bill_number: string;
+  auto: boolean;
+  purchase_order_id: string;
+  po_number: string;
+};
+
+export type InvoiceReview = ProformaReview & {
+  po_reference: string | null;
+  proforma_number: string | null;
+  purchase_order: PurchaseOrderMatch | null;
+  purchase_order_candidates: PurchaseOrderMatch[];
+  exact: boolean;
+  differences: string[];
+  auto_process_enabled: boolean;
+  needs_fx: boolean;
+  processed: ProcessedSupplierBill | null;
+};
+
+export type InvoiceProcessPayload = {
+  supplier_id?: string | null;
+  create_supplier?: ProformaConfirmPayload["create_supplier"];
+  purchase_order_id: string;
+  document_number: string;
+  document_date: string;
+  currency: string;
+  fx_to_zar?: string | null;
+  accept_differences: boolean;
+  vat_total?: string | null;
+  total?: string | null;
+  charges: { description: string; amount: string }[];
+  lines: ProformaConfirmLine[];
+};
+
+export function extractSupplierInvoice(file: File): Promise<InvoiceReview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<InvoiceReview>("/document-intake/invoices/extract", formData);
+}
+
+export function processSupplierInvoice(
+  file: File,
+  payload: InvoiceProcessPayload,
+): Promise<ProcessedSupplierBill> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("payload", JSON.stringify(payload));
+  return apiUpload<ProcessedSupplierBill>("/document-intake/invoices/process", formData);
+}
+
 export function createIntakeSku(payload: {
   our_ref: string;
   our_barcode: string;
@@ -1893,6 +1952,7 @@ export type Bill = {
   amount_paid_zar: string;
   balance_zar: string;
   pdf_storage_key: string | null;
+  purchase_order_id: string | null;
   lines: BillLine[];
   created_at: string;
   updated_at: string;
@@ -3020,6 +3080,7 @@ export type AppSettings = {
   has_logo: boolean;
   max_till_discount_percent: string | null;
   po_approval_threshold_zar: string | null;
+  auto_process_exact_supplier_invoices: boolean;
   session_ttl_hours: number;
   payment_terms_days: number;
   default_receive_location_id: string | null;
@@ -3181,6 +3242,7 @@ export function updateSettings(payload: {
   has_logo?: boolean;
   max_till_discount_percent?: string | null;
   po_approval_threshold_zar?: string | null;
+  auto_process_exact_supplier_invoices?: boolean;
   session_ttl_hours?: number;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;

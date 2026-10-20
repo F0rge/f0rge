@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import UploadFile
 from fastapi.responses import Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.bill import BillCRUD
@@ -53,7 +54,12 @@ class BillService:
             raise NotFoundError("Bill not found")
         return self._to_response(bill)
 
-    async def create(self, data: BillCreate, user_id: Optional[uuid.UUID] = None) -> BillResponse:
+    async def create(
+        self,
+        data: BillCreate,
+        user_id: Optional[uuid.UUID] = None,
+        note: Optional[str] = None,
+    ) -> BillResponse:
         await assert_date_postable(self.db, data.issue_date)
         supplier = await self.supplier_crud.get_by_id(data.supplier_id)
         if supplier is None:
@@ -61,6 +67,7 @@ class BillService:
 
         currency = SupplierService.normalize_currency(data.currency)
         fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
+        await self._reject_duplicate_supplier_ref(data.supplier_id, data.supplier_ref)
 
         amount_foreign = Decimal(0)
         line_models: list[BillLine] = []
@@ -114,6 +121,7 @@ class BillService:
                 bill.id,
                 BooksEventAction.CREATED,
                 actor_user_id=user_id,
+                note=note,
             )
             await self.crud.commit_refresh(bill)
 
@@ -152,6 +160,23 @@ class BillService:
             "Bill attachment not found",
         )
 
+    async def _reject_duplicate_supplier_ref(
+        self, supplier_id: uuid.UUID, supplier_ref: str
+    ) -> None:
+        ref = supplier_ref.strip()
+        if not ref:
+            return
+        existing = (
+            await self.db.execute(
+                select(Bill.id).where(
+                    Bill.supplier_id == supplier_id,
+                    func.lower(Bill.supplier_ref) == ref.lower(),
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise ConflictError("This supplier invoice number is already on a bill.")
+
     @staticmethod
     def _resolve_fx(currency: str, fx_to_zar: Optional[Decimal]) -> Decimal:
         if currency == "ZAR":
@@ -177,6 +202,7 @@ class BillService:
             amount_paid_zar=bill.amount_paid_zar,
             balance_zar=balance_zar,
             pdf_storage_key=bill.pdf_storage_key,
+            purchase_order_id=bill.purchase_order_id,
             created_at=bill.created_at,
             updated_at=bill.updated_at,
         )
@@ -198,6 +224,7 @@ class BillService:
             amount_paid_zar=bill.amount_paid_zar,
             balance_zar=balance_zar,
             pdf_storage_key=bill.pdf_storage_key,
+            purchase_order_id=bill.purchase_order_id,
             lines=[
                 BillLineResponse(
                     id=line.id,

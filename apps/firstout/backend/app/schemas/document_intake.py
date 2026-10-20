@@ -165,6 +165,49 @@ class ProformaConfirmResponse(BaseModel):
     purchase_order: PurchaseOrderResponse
 
 
+class PurchaseOrderMatchOut(BaseModel):
+    purchase_order_id: uuid.UUID
+    po_number: str
+    status: str
+    supplier_id: uuid.UUID
+    supplier_name: str
+
+
+class ProcessedBillOut(BaseModel):
+    bill_id: uuid.UUID
+    bill_number: str
+    auto: bool
+    purchase_order_id: uuid.UUID
+    po_number: str
+
+
+class InvoiceReview(ProformaReview):
+    po_reference: Optional[str] = None
+    proforma_number: Optional[str] = None
+    purchase_order: Optional[PurchaseOrderMatchOut] = None
+    purchase_order_candidates: list[PurchaseOrderMatchOut] = Field(default_factory=list)
+    exact: bool = False
+    differences: list[str] = Field(default_factory=list)
+    auto_process_enabled: bool = False
+    needs_fx: bool = False
+    processed: Optional[ProcessedBillOut] = None
+
+
+class InvoiceProcessIn(BaseModel):
+    supplier_id: Optional[uuid.UUID] = None
+    create_supplier: Optional[NewSupplierIn] = None
+    purchase_order_id: uuid.UUID
+    document_number: str = Field(min_length=1, max_length=64)
+    document_date: datetime.date
+    currency: str = Field(min_length=3, max_length=3)
+    fx_to_zar: Optional[Decimal] = None
+    accept_differences: bool = False
+    vat_total: Optional[Decimal] = None
+    total: Optional[Decimal] = None
+    charges: list[ChargeIn] = Field(default_factory=list)
+    lines: list[ConfirmLineIn] = Field(min_length=1)
+
+
 class SkuSuggestIn(BaseModel):
     description: str = Field(min_length=1)
     supplier_code: Optional[str] = None
