@@ -56,6 +56,9 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
     is_archive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    reminders_paused: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     customer: Mapped["Customer"] = relationship()
     lines: Mapped[list["InvoiceLine"]] = relationship(

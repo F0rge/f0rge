@@ -41,6 +41,12 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
     )
     on_hold_reason: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    payment_reminders_opt_out: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     price_list_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("price_lists.id", ondelete="SET NULL"),

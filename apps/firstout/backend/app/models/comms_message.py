@@ -28,6 +28,7 @@ class CommsDocumentType(str, enum.Enum):
     INVOICE = "invoice"
     CREDIT_NOTE = "credit_note"
     LAYBY = "layby"
+    PAYMENT_REMINDER = "payment_reminder"
 
 
 class CommsStatus(str, enum.Enum):
@@ -110,7 +111,7 @@ class CommsMessage(UUIDPkMixin, Base):
             name="ck_comms_messages_provider",
         ),
         CheckConstraint(
-            "document_type IN ('invoice', 'credit_note', 'layby')",
+            "document_type IN ('invoice', 'credit_note', 'layby', 'payment_reminder')",
             name="ck_comms_messages_document_type",
         ),
         CheckConstraint(

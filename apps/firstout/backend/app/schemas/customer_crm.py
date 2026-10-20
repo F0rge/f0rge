@@ -20,6 +20,7 @@ class CustomerCrmCreate(BaseModel):
     price_tier: str = "standard"
     payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
     price_list_id: Optional[uuid.UUID] = None
+    payment_reminders_opt_out: bool = False
 
 
 class CustomerCrmUpdate(BaseModel):
@@ -35,6 +36,7 @@ class CustomerCrmUpdate(BaseModel):
     on_hold_reason: Optional[str] = None
     payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
     price_list_id: Optional[uuid.UUID] = None
+    payment_reminders_opt_out: Optional[bool] = None
 
 
 class CustomerCrmResponse(BaseModel):
@@ -51,6 +53,7 @@ class CustomerCrmResponse(BaseModel):
     on_hold_reason: Optional[str] = None
     payment_terms_days: Optional[int] = None
     price_list_id: Optional[uuid.UUID] = None
+    payment_reminders_opt_out: bool = False
     open_invoices_count: int
     open_invoices_zar: Decimal
     overdue_invoices_count: int
