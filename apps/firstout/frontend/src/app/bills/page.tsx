@@ -234,15 +234,20 @@ export default function BillsPage() {
           <p className="cds--type-body-01">Supplier bills in foreign currency with ZAR conversion.</p>
         </div>
         {canMutate ? (
-          <Button
-            data-tour="bill-new"
-            onClick={() => {
-              resetCreateForm();
-              setCreateOpen(true);
-            }}
-          >
-            Create bill
-          </Button>
+          <div style={{ display: "flex", gap: "0.75rem" }}>
+            <Button kind="secondary" href="/bills/read">
+              Read a supplier invoice
+            </Button>
+            <Button
+              data-tour="bill-new"
+              onClick={() => {
+                resetCreateForm();
+                setCreateOpen(true);
+              }}
+            >
+              Create bill
+            </Button>
+          </div>
         ) : null}
       </div>
 

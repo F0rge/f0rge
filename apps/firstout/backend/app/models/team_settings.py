@@ -111,6 +111,12 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         Numeric(14, 2),
         nullable=True,
     )
+    auto_process_exact_supplier_invoices: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     session_ttl_hours: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

@@ -51,6 +51,7 @@ class BillListItem(BaseModel):
     balance_foreign: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid"]
     pdf_storage_key: Optional[str]
+    purchase_order_id: Optional[uuid.UUID] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -74,6 +75,7 @@ class BillResponse(BaseModel):
     balance_foreign: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid"]
     pdf_storage_key: Optional[str]
+    purchase_order_id: Optional[uuid.UUID] = None
     lines: list[BillLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime

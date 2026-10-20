@@ -346,6 +346,7 @@ def document_flags(
     extracted: ExtractedDocument,
     computed_ex_vat: Decimal,
     duplicate: bool,
+    number_noun: str = "proforma",
 ) -> list[ReviewFlag]:
     flags: list[ReviewFlag] = []
     charges = sum((row.amount for row in extracted.charges), Decimal("0"))
@@ -390,7 +391,7 @@ def document_flags(
         flags.append(
             ReviewFlag(
                 code="number_missing",
-                message="The proforma number was not read. Type it in before saving.",
+                message=f"The {number_noun} number was not read. Type it in before saving.",
             )
         )
     if extracted.document_date is None:

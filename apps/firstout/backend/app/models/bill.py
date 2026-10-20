@@ -10,6 +10,7 @@ from sqlalchemy import (
     Date,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -65,6 +66,11 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
         server_default=SettlementStatus.UNPAID.value,
     )
     pdf_storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    purchase_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     supplier: Mapped["Supplier"] = relationship()
     lines: Mapped[list["BillLine"]] = relationship(
@@ -73,7 +79,16 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
         order_by="BillLine.sort_order",
     )
 
-    __table_args__ = (UniqueConstraint("bill_number", name="uq_bills_bill_number"),)
+    __table_args__ = (
+        UniqueConstraint("bill_number", name="uq_bills_bill_number"),
+        Index(
+            "uq_bills_supplier_ref_ci",
+            "supplier_id",
+            text("lower(supplier_ref)"),
+            unique=True,
+            postgresql_where=text("btrim(supplier_ref) <> ''"),
+        ),
+    )
 
 
 class BillLine(UUIDPkMixin, Base):
