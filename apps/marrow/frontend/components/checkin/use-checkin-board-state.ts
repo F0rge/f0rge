@@ -6,6 +6,7 @@ import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus, SymptomEvent } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, loadCollapsedCards, saveCollapsedCards, toggleCollapsedCard, type CardId, type CollapseId } from '@/lib/checkin/card-order'
+import { resolveEmptyDayDefaults } from './checkin-board-defaults'
 import { shouldApplyEntryHydration, shouldSyncEntryPhotos } from './checkin-board-entry-sync'
 import { LG_DESKTOP_QUERY, useMediaQuery } from '@f0rge/ui'
 
@@ -203,8 +204,13 @@ export function useCheckinBoardState({
 
   useEffect(() => {
     if (existingEntry || isDirty || supplementsTouched || symptomsTouched || !defaultsReady) return
-    setSupplements(defaultSupplementsCsv)
-    setSymptomsJson(defaultSymptoms)
+    const seeded = resolveEmptyDayDefaults({
+      defaultsReady,
+      defaultSupplements: defaultSupplementsCsv,
+      defaultSymptoms,
+    })
+    setSupplements(seeded.supplements)
+    setSymptomsJson(seeded.symptoms)
   }, [
     defaultSupplementsCsv,
     defaultSymptoms,
@@ -255,7 +261,14 @@ export function useCheckinBoardState({
       setAlcoholUnits(existingEntry.alcohol_units ?? 0)
       setCaffeineServings(existingEntry.caffeine_servings ?? 0)
     } else {
-      // Entry gone (or never existed) — reset board so a save cannot resurrect stale values.
+      // Entry gone (or never existed) — reset scores and notes so a save cannot
+      // resurrect them. Supplements and symptoms use saved defaults: this effect
+      // runs after the seed and must not blank a warm cache.
+      const seeded = resolveEmptyDayDefaults({
+        defaultsReady,
+        defaultSupplements: defaultSupplementsCsv,
+        defaultSymptoms,
+      })
       dirtyRef.current = false
       setIsDirty(false)
       setOverall(null)
@@ -266,10 +279,10 @@ export function useCheckinBoardState({
       setSleepQuality(null)
       setStress(null)
       setDietRisk('')
-      setSupplements('')
+      setSupplements(seeded.supplements)
       setSupplementsTouched(false)
       setMedications([])
-      setSymptomsJson({})
+      setSymptomsJson(seeded.symptoms)
       setSymptomEvents([])
       setSymptomsTouched(false)
       setSick(false)
@@ -279,7 +292,7 @@ export function useCheckinBoardState({
       setCaffeineServings(0)
       setExistingPhotos([])
     }
-  }, [existingEntry, isDirty])
+  }, [existingEntry, isDirty, defaultsReady, defaultSupplementsCsv, defaultSymptoms])
 
   const fivePoint = (existingEntry?.schema_version ?? 4) >= 4
 
