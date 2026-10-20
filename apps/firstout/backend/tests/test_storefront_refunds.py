@@ -1058,6 +1058,7 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
     try:
         async with race_engine.begin() as connection:
             await connection.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
+            await connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
             await connection.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(race_engine, expire_on_commit=False, class_=AsyncSession)
         async with maker() as session:
