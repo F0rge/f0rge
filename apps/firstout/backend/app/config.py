@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "openai/gpt-4o-mini"
+    # Vision-capable model for supplier proforma and invoice reading.
+    # Text-layer PDFs are sent as text; photos and scans go to this model as images.
+    openrouter_document_model: str = "openai/gpt-4o-mini"
     # OpenRouter unified reasoning (pydantic-ai openrouter_reasoning → extra_body.reasoning).
     # GLM-5.3 / glm-5.3-flash always reason; effort low|high|max (default max upstream).
     openrouter_reasoning_effort: str = "low"

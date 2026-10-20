@@ -153,6 +153,9 @@ export function messageFromErrorBody(body: unknown, fallback = "Request failed")
     if (code === "nia_llm_unconfigured") {
       return "Nia is not configured";
     }
+    if (code === "document_llm_unconfigured") {
+      return "Document reading is not configured. Add the OpenRouter key on the API.";
+    }
     if (code === "nia_cap_exceeded") {
       return "Monthly Nia allowance used";
     }
@@ -472,6 +475,8 @@ export type Supplier = {
   id: string;
   name: string;
   default_currency: string;
+  vat_number: string | null;
+  address: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -479,6 +484,8 @@ export type Supplier = {
 export type CreateSupplierPayload = {
   name: string;
   default_currency?: string;
+  vat_number?: string | null;
+  address?: string | null;
 };
 
 export function listSuppliers(): Promise<Supplier[]> {
@@ -597,6 +604,159 @@ export function createProforma(payload: CreateProformaPayload): Promise<Proforma
 
 export async function downloadProformaPdf(id: string, invoiceNumber: string): Promise<void> {
   await downloadApiFile(`/api/v1/proformas/${id}/file`, `${invoiceNumber}.pdf`);
+}
+
+export type IntakeFlag = { code: string; message: string };
+
+export type IntakeSupplierMatch = {
+  supplier_id: string | null;
+  name: string;
+  vat_number: string | null;
+  address: string | null;
+  confidence: number;
+  reason: string;
+};
+
+export type IntakeSkuMatch = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  confidence: number;
+  reason: string;
+};
+
+export type IntakeCharge = { description: string; amount: string };
+
+export type IntakeReviewedLine = {
+  supplier_code: string | null;
+  description: string;
+  qty: string;
+  qty_whole: number | null;
+  unit_price: string;
+  discount_percent: string | null;
+  discount_amount: string | null;
+  net_unit_price: string;
+  vat_rate: string | null;
+  vat_amount: string | null;
+  line_total: string | null;
+  match: IntakeSkuMatch | null;
+  alternatives: IntakeSkuMatch[];
+  flags: IntakeFlag[];
+};
+
+export type ProformaReview = {
+  supplier: IntakeSupplierMatch;
+  supplier_candidates: IntakeSupplierMatch[];
+  document_number: string;
+  document_date: string | null;
+  currency: string;
+  payment_terms: string | null;
+  deposit: string | null;
+  lines: IntakeReviewedLine[];
+  charges: IntakeCharge[];
+  subtotal: string | null;
+  vat_total: string | null;
+  total: string | null;
+  computed_total: string;
+  flags: IntakeFlag[];
+  usage: { model: string; prompt_tokens: number; completion_tokens: number; total_tokens: number };
+};
+
+export type ProformaConfirmLine = {
+  supplier_code?: string | null;
+  description: string;
+  qty: number;
+  unit_price: string;
+  discount_percent?: string | null;
+  vat_rate?: string | null;
+  sku_id?: string | null;
+  skip: boolean;
+};
+
+export type ProformaConfirmPayload = {
+  supplier_id?: string | null;
+  create_supplier?: {
+    name: string;
+    vat_number?: string | null;
+    address?: string | null;
+    default_currency?: string | null;
+  } | null;
+  document_number: string;
+  document_date: string;
+  currency: string;
+  payment_terms?: string | null;
+  deposit?: string | null;
+  vat_total?: string | null;
+  total?: string | null;
+  charges: { description: string; amount: string }[];
+  lines: ProformaConfirmLine[];
+};
+
+export type ProformaConfirmResult = {
+  proforma: Proforma;
+  purchase_order: { id: string; po_number: string; status: string; proforma_id: string | null };
+};
+
+export function extractProforma(file: File): Promise<ProformaReview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<ProformaReview>("/document-intake/proformas/extract", formData);
+}
+
+export function confirmProforma(
+  file: File,
+  payload: ProformaConfirmPayload,
+): Promise<ProformaConfirmResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("payload", JSON.stringify(payload));
+  return apiUpload<ProformaConfirmResult>("/document-intake/proformas/confirm", formData);
+}
+
+export type SkuSuggestion = {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  supplier_ref: string | null;
+  category: string | null;
+  cost_price: string | null;
+  vat_rate: string | null;
+  source: string;
+};
+
+export function suggestIntakeSku(payload: {
+  description: string;
+  supplier_code?: string | null;
+  unit_price?: string | null;
+  currency?: string | null;
+  vat_rate?: string | null;
+  hint?: string | null;
+  supplier_id?: string | null;
+}): Promise<SkuSuggestion> {
+  return apiFetch<SkuSuggestion>("/document-intake/sku-suggestions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createIntakeSku(payload: {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  supplier_ref?: string | null;
+  category?: string | null;
+  supplier_id: string;
+  supplier_sku?: string | null;
+  latest_price?: string | null;
+}): Promise<{ sku: Sku; supplier_price_id: string }> {
+  return apiFetch("/document-intake/skus", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export type Sku = {

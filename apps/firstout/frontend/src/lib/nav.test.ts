@@ -66,4 +66,10 @@ describe("nav path helpers", () => {
     expect(isCatalogueMenuPath("/price-lists")).toBe(true);
     expect(labelForNavPath("/price-lists")).toBe("Price lists");
   });
+
+  it("keeps the proforma reader under the catalogue menu", () => {
+    expect(isCatalogueMenuPath("/proformas/read")).toBe(true);
+    expect(isNavLinkActive("/proformas/read", "/proformas")).toBe(true);
+    expect(labelForNavPath("/proformas/read")).toBe("Proformas");
+  });
 });

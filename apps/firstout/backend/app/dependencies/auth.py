@@ -55,6 +55,7 @@ from app.services.comms.outbox import CommsOutboxService
 from app.services.comms.send import CommsSendService
 from app.services.comms.whatsapp import WhatsAppWebhookService
 from app.services.settings import SettingsService
+from app.services.document_intake.service import DocumentIntakeService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
 from app.services.purchase_orders import PurchaseOrderService
@@ -121,6 +122,10 @@ def get_price_list_service(db: AsyncSession = Depends(get_db)) -> PriceListServi
 
 def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
     return ProformaService(db)
+
+
+def get_document_intake_service(db: AsyncSession = Depends(get_db)) -> DocumentIntakeService:
+    return DocumentIntakeService(db)
 
 
 def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
