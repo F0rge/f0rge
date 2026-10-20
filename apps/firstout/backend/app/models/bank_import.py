@@ -62,6 +62,36 @@ class BankImportLine(UUIDPkMixin, TimestampMixin, Base):
     bank_import: Mapped["BankImport"] = relationship(back_populates="lines")
     matched_payment: Mapped[Optional["Payment"]] = relationship()
     matched_journal: Mapped[Optional["JournalEntry"]] = relationship()
+    allocations: Mapped[list["BankImportLineAllocation"]] = relationship(
+        back_populates="line",
+        cascade="all, delete-orphan",
+    )
+
+
+class BankImportLineAllocation(UUIDPkMixin, TimestampMixin, Base):
+    """One bank line can pay several invoices or bills. The first payment is also
+    stored on the line so existing matched checks keep working.
+    """
+
+    __tablename__ = "bank_import_line_allocations"
+
+    line_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("bank_import_lines.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    amount_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    document_number: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+
+    line: Mapped[BankImportLine] = relationship(back_populates="allocations")
+    payment: Mapped["Payment"] = relationship()
 
 
 from app.models.account import Account  # noqa: E402
