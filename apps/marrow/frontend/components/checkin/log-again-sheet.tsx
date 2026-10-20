@@ -12,7 +12,8 @@ import {
 import { Input } from '@f0rge/ui'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
-import { MealIconThumb, useMealThumbSrc } from './meal-icon-thumb'
+import { mealThumbKind, useMealThumbSrc } from './meal-icon-thumb'
+import { MealThumbFallback } from './meal-thumb-fallback'
 import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 
@@ -31,11 +32,11 @@ function matchesQuery(meal: RecentMeal, q: string): boolean {
 
 function RecentMealThumb({ meal, loading }: { meal: RecentMeal; loading: boolean }) {
   const { src, onError } = useMealThumbSrc(meal.source_photo_id)
-  const showPhoto = meal.has_image !== false && src != null
+  const thumbKind = mealThumbKind(meal.has_image !== false, src)
 
   return (
     <div className="relative size-12 flex-none overflow-hidden rounded-lg bg-muted">
-      {showPhoto ? (
+      {thumbKind === 'photo' && src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
@@ -45,10 +46,10 @@ function RecentMealThumb({ meal, loading }: { meal: RecentMeal; loading: boolean
           onError={onError}
         />
       ) : (
-        <MealIconThumb
-          iconKey={meal.icon_key ?? 'bowl'}
+        <MealThumbFallback
+          kind={thumbKind === 'missing' ? 'missing' : 'library'}
+          iconKey={meal.icon_key}
           size="md"
-          className="size-full rounded-lg"
         />
       )}
       {loading && (

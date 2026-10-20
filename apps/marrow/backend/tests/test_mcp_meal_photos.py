@@ -563,3 +563,209 @@ async def test_railway_without_bucket_does_not_store_a_local_only_photo(
         )
     assert await _photo_count(async_db, "unservable bowl") == 0
     assert [path for path in photo_dir.rglob("*") if path.is_file()] == []
+
+
+def _stored_names(photo_dir: Path) -> list[str]:
+    return sorted(path.name for path in photo_dir.rglob("*") if path.is_file())
+
+
+async def _photo_row(async_db: AsyncSession, photo_id: int) -> Photo:
+    return (await async_db.execute(select(Photo).where(Photo.id == photo_id))).scalar_one()
+
+
+async def test_attach_same_bytes_is_noop_when_image_and_thumb_exist(
+    async_db: AsyncSession, photo_dir: Path
+) -> None:
+    raw = _jpeg(64, 48, "navy")
+    logged = await _log(
+        async_db,
+        date="2026-07-15",
+        name="kept bowl",
+        photo_base64=_b64(raw),
+    )
+    row = await _photo_row(async_db, logged["photo_id"])
+    assert row.filename is not None
+    before = _stored_names(photo_dir)
+    again = await _attach(
+        async_db,
+        photo_id=logged["photo_id"],
+        photo_base64=_b64(raw),
+        replace=True,
+    )
+    assert again["replaced"] is False
+    assert again["has_photo"] is True
+    refreshed = await _photo_row(async_db, logged["photo_id"])
+    assert refreshed.filename == row.filename
+    assert _stored_names(photo_dir) == before
+
+
+async def test_attach_same_bytes_restores_missing_image_and_thumb(
+    async_db: AsyncSession, photo_dir: Path
+) -> None:
+    raw = _jpeg(72, 48, "olive")
+    logged = await _log(
+        async_db,
+        date="2026-07-16",
+        name="lost bowl",
+        photo_base64=_b64(raw),
+    )
+    row = await _photo_row(async_db, logged["photo_id"])
+    assert row.filename is not None
+    (photo_dir / row.filename).unlink()
+    (photo_dir / thumb_filename(row.filename)).unlink()
+
+    repaired = await _attach(
+        async_db,
+        photo_id=logged["photo_id"],
+        photo_base64=_b64(raw),
+        replace=False,
+    )
+    assert repaired["has_photo"] is True
+    assert repaired["photo_sha256"] == photo_hash_tag(raw)
+    refreshed = await _photo_row(async_db, logged["photo_id"])
+    assert refreshed.filename is not None
+    assert (photo_dir / refreshed.filename).is_file()
+    assert (photo_dir / thumb_filename(refreshed.filename)).is_file()
+
+
+async def test_attach_same_bytes_restores_missing_thumb_only(
+    async_db: AsyncSession, photo_dir: Path
+) -> None:
+    raw = _jpeg(40, 40, "teal")
+    logged = await _log(
+        async_db,
+        date="2026-07-17",
+        name="thumbless bowl",
+        photo_base64=_b64(raw),
+    )
+    row = await _photo_row(async_db, logged["photo_id"])
+    assert row.filename is not None
+    (photo_dir / thumb_filename(row.filename)).unlink()
+    assert (photo_dir / row.filename).is_file()
+
+    repaired = await _attach(
+        async_db,
+        photo_id=logged["photo_id"],
+        photo_base64=_b64(raw),
+        replace=False,
+    )
+    assert repaired["has_photo"] is True
+    refreshed = await _photo_row(async_db, logged["photo_id"])
+    assert refreshed.filename is not None
+    assert (photo_dir / refreshed.filename).is_file()
+    assert (photo_dir / thumb_filename(refreshed.filename)).is_file()
+
+
+async def test_attach_different_bytes_still_requires_replace_when_file_is_missing(
+    async_db: AsyncSession, photo_dir: Path
+) -> None:
+    logged = await _log(
+        async_db,
+        date="2026-07-18",
+        name="guarded bowl",
+        photo_base64=_b64(_jpeg(32, 32, "red")),
+    )
+    row = await _photo_row(async_db, logged["photo_id"])
+    assert row.filename is not None
+    (photo_dir / row.filename).unlink()
+    (photo_dir / thumb_filename(row.filename)).unlink()
+    with pytest.raises(ValidationError, match="replace"):
+        await _attach(
+            async_db,
+            photo_id=logged["photo_id"],
+            photo_base64=_b64(_jpeg(32, 32, "blue")),
+            replace=False,
+        )
+    refreshed = await _photo_row(async_db, logged["photo_id"])
+    assert refreshed.filename == row.filename
+    assert not (photo_dir / row.filename).exists()
+
+
+async def test_log_meal_reuse_is_noop_when_files_exist(
+    async_db: AsyncSession, photo_dir: Path
+) -> None:
+    raw = _jpeg(36, 36, "purple")
+    payload = _b64(raw)
+    first = await _log(
+        async_db,
+        date="2026-07-19",
+        name="reuse bowl",
+        photo_base64=payload,
+    )
+    row = await _photo_row(async_db, first["photo_id"])
+    assert row.filename is not None
+    before = _stored_names(photo_dir)
+    second = await _log(
+        async_db,
+        date="2026-07-19",
+        name="reuse bowl again",
+        photo_base64=payload,
+    )
+    assert second["deduplicated"] is True
+    assert second["photo_id"] == first["photo_id"]
+    assert second["has_photo"] is True
+    refreshed = await _photo_row(async_db, first["photo_id"])
+    assert refreshed.filename == row.filename
+    assert _stored_names(photo_dir) == before
+    assert await _photo_count(async_db, "reuse bowl again") == 0
+
+
+async def test_log_meal_repairs_duplicate_when_files_are_missing(
+    async_db: AsyncSession, photo_dir: Path
+) -> None:
+    raw = _jpeg(44, 28, "maroon")
+    payload = _b64(raw)
+    first = await _log(
+        async_db,
+        date="2026-07-20",
+        name="repair bowl",
+        photo_base64=payload,
+    )
+    row = await _photo_row(async_db, first["photo_id"])
+    assert row.filename is not None
+    (photo_dir / row.filename).unlink()
+    (photo_dir / thumb_filename(row.filename)).unlink()
+
+    second = await _log(
+        async_db,
+        date="2026-07-20",
+        name="repair bowl again",
+        photo_base64=payload,
+    )
+    assert second["deduplicated"] is True
+    assert second["photo_id"] == first["photo_id"]
+    assert second["has_photo"] is True
+    refreshed = await _photo_row(async_db, first["photo_id"])
+    assert refreshed.filename is not None
+    assert (photo_dir / refreshed.filename).is_file()
+    assert (photo_dir / thumb_filename(refreshed.filename)).is_file()
+    assert await _photo_count(async_db, "repair bowl") == 1
+    assert await _photo_count(async_db, "repair bowl again") == 0
+
+
+async def test_log_meal_repairs_duplicate_when_only_thumb_is_missing(
+    async_db: AsyncSession, photo_dir: Path
+) -> None:
+    payload = _b64(_jpeg(28, 28, "gold"))
+    first = await _log(
+        async_db,
+        date="2026-07-21",
+        name="thumb repair bowl",
+        photo_base64=payload,
+    )
+    row = await _photo_row(async_db, first["photo_id"])
+    assert row.filename is not None
+    (photo_dir / thumb_filename(row.filename)).unlink()
+
+    second = await _log(
+        async_db,
+        date="2026-07-21",
+        name="thumb repair bowl",
+        photo_base64=payload,
+    )
+    assert second["deduplicated"] is True
+    assert second["photo_id"] == first["photo_id"]
+    refreshed = await _photo_row(async_db, first["photo_id"])
+    assert refreshed.filename is not None
+    assert (photo_dir / refreshed.filename).is_file()
+    assert (photo_dir / thumb_filename(refreshed.filename)).is_file()

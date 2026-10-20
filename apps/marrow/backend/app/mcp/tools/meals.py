@@ -22,12 +22,13 @@ from app.mcp.meal_photos import (
     decode_photo_b64,
     delete_photo_files,
     ensure_servable_photo_storage,
-    filename_in_use,
     find_duplicate,
+    photo_files_present,
     photo_hash_tag,
     photo_sha256_value,
     placement_count,
     store_photo_for,
+    store_photo_replacing,
 )
 from app.mcp.observability import instrument_tool
 from app.mcp.tools._common import (
@@ -41,7 +42,6 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.services.entries import get_or_create_entry
 from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 from app.services.meal_tags import MealTagService
-from app.services.photo_storage import thumb_filename
 from app.prompts.ingredient_rules import INGREDIENT_TOOL_NOTE
 from app.crud.base import unit_of_work
 from f0rge_core.exceptions import NotFoundError, ValidationError
@@ -208,6 +208,23 @@ def register_meals_tools(server: FastMCP) -> None:
                 if existing_entry is not None:
                     duplicate = await find_duplicate(db, existing_entry.id, hash_tag)
                     if duplicate is not None:
+                        # Same bytes already logged today. Reuse the row when its
+                        # image and thumbnail are actually in storage. A missing
+                        # object is repaired in place — never returned as-is.
+                        if raw is not None and not await photo_files_present(duplicate):
+                            if duplicate.meal is None:
+                                raise NotFoundError(f"Meal photo {duplicate.id} not found")
+                            ensure_servable_photo_storage()
+                            sole = await placement_count(db, duplicate.meal_id) == 1
+                            await store_photo_replacing(
+                                db,
+                                existing_entry,
+                                duplicate,
+                                duplicate.meal,
+                                raw,
+                                user_id,
+                                bind_meal=sole,
+                            )
                         await invalidate_user_insights_cache(user_id, parsed)
                         return await _deduped_meal_result(db, duplicate, parsed, hash_tag)
 
@@ -309,7 +326,10 @@ def register_meals_tools(server: FastMCP) -> None:
                 raise ValidationError("pass exactly one of photo_base64 or source_photo_id")
             hash_tag = photo_hash_tag(raw)
             entry_date = photo.entry.date
-            if _image_hash_matches(photo, hash_tag):
+            same_bytes = _image_hash_matches(photo, hash_tag)
+            # Identical bytes are a no-op only when the stored file and thumbnail
+            # both exist. A missing object is rewritten even if replace is false.
+            if same_bytes and await photo_files_present(photo):
                 await invalidate_user_insights_cache(user_id, entry_date)
                 return {
                     "photo_id": photo.id,
@@ -318,35 +338,20 @@ def register_meals_tools(server: FastMCP) -> None:
                     "photo_sha256": hash_tag,
                     "replaced": False,
                 }
-            if photo.filename and not replace:
+            if photo.filename and not replace and not same_bytes:
                 raise ValidationError("meal already has a photo; pass replace=true to overwrite")
             ensure_servable_photo_storage()
 
-            old_filename = photo.filename
             sole = await placement_count(db, photo.meal_id) == 1
-            saved: list[str] = []
-            try:
-                async with unit_of_work(db):
-                    saved = await store_photo_for(
-                        db,
-                        photo.entry,
-                        photo,
-                        photo.meal,
-                        raw,
-                        user_id,
-                        bind_meal=sole,
-                    )
-            except Exception:
-                await delete_photo_files(saved, user_id)
-                raise
-
-            replaced = bool(old_filename) and old_filename != photo.filename
-            if (
-                replaced
-                and old_filename is not None
-                and not await filename_in_use(db, old_filename)
-            ):
-                await delete_photo_files([old_filename, thumb_filename(old_filename)], user_id)
+            replaced = await store_photo_replacing(
+                db,
+                photo.entry,
+                photo,
+                photo.meal,
+                raw,
+                user_id,
+                bind_meal=sole,
+            )
             await invalidate_user_insights_cache(user_id, entry_date)
             return {
                 "photo_id": photo.id,
