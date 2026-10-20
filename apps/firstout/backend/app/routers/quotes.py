@@ -58,10 +58,10 @@ async def get_quote(
 async def update_quote(
     quote_id: uuid.UUID,
     body: QuoteUpdate,
-    _: uuid.UUID = Depends(require_quotes),
+    user_id: uuid.UUID = Depends(require_quotes),
     service: QuotesService = Depends(get_quote_service),
 ):
-    return await service.update(quote_id, body)
+    return await service.update(quote_id, body, user_id)
 
 
 @quotes_router.post("/{quote_id}/mark-sent", response_model=QuoteResponse)

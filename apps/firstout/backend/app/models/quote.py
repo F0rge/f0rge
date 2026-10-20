@@ -84,13 +84,25 @@ class QuoteLine(UUIDPkMixin, TimestampMixin, Base):
     )
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    discount_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
     description: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     quote: Mapped[Quote] = relationship(back_populates="lines")
     sku: Mapped["Sku"] = relationship()
 
-    __table_args__ = (CheckConstraint("qty > 0", name="ck_quote_lines_qty"),)
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="ck_quote_lines_qty"),
+        CheckConstraint(
+            "discount_percent >= 0 AND discount_percent <= 100",
+            name="ck_quote_lines_discount_percent",
+        ),
+    )
 
 
 from app.models.customer import Customer  # noqa: E402

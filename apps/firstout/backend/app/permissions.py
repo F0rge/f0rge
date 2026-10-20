@@ -64,7 +64,14 @@ ROLE_PRESETS: dict[str, frozenset[str]] = {
     SLUG_OWNER: frozenset(PERMISSION_CATALOG),
     SLUG_BUYER: frozenset({CATALOGUE_MUTATE, PO_RAISE, STOCK_COST_VIEW}),
     SLUG_WAREHOUSE: frozenset(
-        {STOCK_RECEIVE, STOCK_TRANSFER, STOCK_ADJUST, SALES_RETURNS, SALES_DELIVERIES}
+        {
+            STOCK_RECEIVE,
+            STOCK_TRANSFER,
+            STOCK_ADJUST,
+            SALES_RETURNS,
+            SALES_QUOTES,
+            SALES_DELIVERIES,
+        }
     ),
     SLUG_TILL: frozenset(
         {

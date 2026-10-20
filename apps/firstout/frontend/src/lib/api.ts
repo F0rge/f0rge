@@ -3384,6 +3384,7 @@ export type QuoteLine = {
   name: string;
   qty: number;
   unit_ex_vat: string;
+  discount_percent: string;
   description: string;
   notes: string | null;
 };
@@ -3409,7 +3410,13 @@ export type Quote = QuoteListItem & {
 
 export type CreateQuotePayload = {
   customer_id: string;
-  lines: { sku_id: string; qty: number; notes?: string }[];
+  lines: {
+    sku_id: string;
+    qty: number;
+    notes?: string;
+    unit_ex_vat?: string;
+    discount_percent?: string;
+  }[];
   notes?: string;
 };
 
