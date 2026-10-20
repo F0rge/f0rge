@@ -37,6 +37,14 @@ class CustomerCrmUpdate(BaseModel):
     price_list_id: Optional[uuid.UUID] = None
 
 
+class CustomerDuplicateMatch(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    matched_fields: list[Literal["name", "email", "phone"]]
+
+
 class CustomerCrmResponse(BaseModel):
     id: uuid.UUID
     name: str

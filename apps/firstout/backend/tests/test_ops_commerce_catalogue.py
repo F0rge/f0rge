@@ -233,6 +233,7 @@ async def test_service_credential_cannot_select_another_database_backed_instance
         second_engine = create_async_engine(async_url(second_postgres))
         async with second_engine.begin() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
             await conn.run_sync(Base.metadata.create_all)
         async with async_sessionmaker(second_engine, expire_on_commit=False)() as session:
             other_company = Team(name="Other operational instance")

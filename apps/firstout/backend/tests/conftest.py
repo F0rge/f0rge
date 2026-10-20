@@ -71,6 +71,7 @@ async def async_engine(
     engine = create_async_engine(async_url(postgres_container), echo=False)
     async with engine.begin() as conn:
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS citext"))
+        await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.create_all)
     async with async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)() as session:
         await RoleSeedService(session).seed()

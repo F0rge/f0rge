@@ -7,8 +7,6 @@ import {
   Modal,
   NumberInput,
   Pagination,
-  Select,
-  SelectItem,
   Stack,
   Table,
   TableBody,
@@ -22,6 +20,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 
+import { CustomerPicker } from "@/components/customer-picker";
 import {
   canMutateBooks,
   computeInvoicePreview,
@@ -411,17 +410,12 @@ function InvoicesPageContent() {
         size="lg"
       >
         <Stack gap={5}>
-          <Select
+          <CustomerPicker
             id="invoice-customer"
-            labelText="Customer"
-            value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
-          >
-            <SelectItem value="" text="Select a customer" />
-            {customers.map((customer) => (
-              <SelectItem key={customer.id} value={customer.id} text={customer.name} />
-            ))}
-          </Select>
+            customers={customers}
+            selectedId={customerId}
+            onChange={setCustomerId}
+          />
           <TextInput
             id="invoice-issue-date"
             labelText="Issue date"

@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 
+import { CustomerPicker } from "@/components/customer-picker";
 import {
   ApiError,
   acceptQuote,
@@ -272,16 +273,12 @@ function QuotesPageInner() {
         onRequestSubmit={() => void onCreate()}
       >
         <Stack gap={4}>
-          <Select
+          <CustomerPicker
             id="quote-customer"
-            labelText="Customer"
-            value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
-          >
-            {customers.map((customer) => (
-              <SelectItem key={customer.id} value={customer.id} text={customer.name} />
-            ))}
-          </Select>
+            customers={customers}
+            selectedId={customerId}
+            onChange={setCustomerId}
+          />
           {lines.map((line, index) => (
             <Stack key={index} gap={3} orientation="horizontal">
               <Select

@@ -23,23 +23,31 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
 import {
+  CustomerDuplicateModal,
+  DUPLICATE_NAME_TAKEN,
+} from "@/components/customer-duplicate-modal";
+import {
   CustomerFormFields,
   customerWritePayload,
   emptyCustomerForm,
   formFromCustomer,
 } from "@/components/customer-form-fields";
 import {
+  ApiError,
   CUSTOMER_TYPE_LABELS,
   canManageCustomerCredit,
   canMutateCustomers,
   createCustomer,
+  findCustomerDuplicates,
   formatZarAmount,
   listCustomers,
   updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
+  type CustomerDuplicateMatch,
   type CustomerType,
 } from "@/lib/api";
+import { CUSTOMER_SEARCH_PLACEHOLDER } from "@/lib/customer-search";
 import { useAuth } from "@/lib/auth";
 import { downloadCsv } from "@/lib/csv";
 import { formatIsoDate, laybyActiveBadgeLabel, overdueBadgeLabel } from "@/lib/customer-crm";
@@ -117,6 +125,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>("any");
   const [overdueFilter, setOverdueFilter] = useState(false);
@@ -129,6 +138,14 @@ export default function CustomersPage() {
   const [editCustomer, setEditCustomer] = useState<CustomerCrm | null>(null);
   const [editForm, setEditForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
   const [saving, setSaving] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateMatches, setDuplicateMatches] = useState<CustomerDuplicateMatch[]>([]);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchFilter), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchFilter]);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -138,6 +155,7 @@ export default function CustomersPage() {
         overdue: overdueFilter || undefined,
         active_layby: activeLaybyFilter || undefined,
         on_hold: onHoldFilter || undefined,
+        q: debouncedSearch,
       });
       setCustomers(data);
     } catch (err) {
@@ -145,7 +163,7 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [overdueFilter, activeLaybyFilter, onHoldFilter]);
+  }, [overdueFilter, activeLaybyFilter, onHoldFilter, debouncedSearch]);
 
   useEffect(() => {
     if (user) {
@@ -154,7 +172,6 @@ export default function CustomersPage() {
   }, [user, loadCustomers]);
 
   const filteredCustomers = useMemo(() => {
-    const query = searchFilter.trim().toLowerCase();
     return customers.filter((customer) => {
       if (typeFilter !== "all" && customer.customer_type !== typeFilter) {
         return false;
@@ -165,16 +182,9 @@ export default function CustomersPage() {
       if (balanceFilter === "active_laybys" && customer.active_laybys_count === 0) {
         return false;
       }
-      if (!query) {
-        return true;
-      }
-      return (
-        customer.name.toLowerCase().includes(query) ||
-        customer.id.toLowerCase().includes(query) ||
-        (customer.email?.toLowerCase().includes(query) ?? false)
-      );
+      return true;
     });
-  }, [customers, searchFilter, typeFilter, balanceFilter]);
+  }, [customers, typeFilter, balanceFilter]);
 
   useEffect(() => {
     setPage(1);
@@ -221,7 +231,13 @@ export default function CustomersPage() {
     );
   }
 
-  async function handleCreate() {
+  function closeDuplicates() {
+    setDuplicateOpen(false);
+    setDuplicateMatches([]);
+    setDuplicateError(null);
+  }
+
+  async function handleCreate(force = false) {
     const name = createForm.name.trim();
     if (!name) {
       setError("Customer name is required.");
@@ -230,11 +246,42 @@ export default function CustomersPage() {
     setSaving(true);
     setError(null);
     try {
+      if (!force) {
+        const matches = await findCustomerDuplicates({
+          name,
+          email: createForm.email,
+          phone: createForm.phone,
+        });
+        if (matches.length > 0) {
+          setDuplicateMatches(matches);
+          setDuplicateError(null);
+          setDuplicateOpen(true);
+          return;
+        }
+      }
       await createCustomer(customerWritePayload(createForm, canEditCredit));
+      closeDuplicates();
       setCreateOpen(false);
       setCreateForm(emptyCustomerForm);
       await loadCustomers();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setDuplicateError(DUPLICATE_NAME_TAKEN);
+        setDuplicateOpen(true);
+        if (duplicateMatches.length === 0) {
+          try {
+            const matches = await findCustomerDuplicates({
+              name,
+              email: createForm.email,
+              phone: createForm.phone,
+            });
+            setDuplicateMatches(matches);
+          } catch {
+            setDuplicateMatches([]);
+          }
+        }
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to create customer.");
     } finally {
       setSaving(false);
@@ -287,6 +334,7 @@ export default function CustomersPage() {
               data-tour="customer-new"
               onClick={() => {
                 setCreateForm(emptyCustomerForm);
+                closeDuplicates();
                 setCreateOpen(true);
               }}
             >
@@ -313,7 +361,7 @@ export default function CustomersPage() {
               id="customers-search"
               labelText="Filter customers"
               hideLabel
-              placeholder="Filter by name, email, or ID…"
+              placeholder={CUSTOMER_SEARCH_PLACEHOLDER}
               value={searchFilter}
               onChange={(event) => setSearchFilter(event.target.value)}
             />
@@ -526,12 +574,15 @@ export default function CustomersPage() {
       </div>
 
       <Modal
-        open={createOpen}
+        open={createOpen && !duplicateOpen}
         modalHeading="New customer"
         primaryButtonText="Create customer"
         secondaryButtonText="Cancel"
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
+        onRequestClose={() => {
+          closeDuplicates();
+          setCreateOpen(false);
+        }}
+        onRequestSubmit={() => void handleCreate(false)}
         primaryButtonDisabled={saving || !createForm.name.trim()}
         size="md"
       >
@@ -542,6 +593,20 @@ export default function CustomersPage() {
           showCreditFields={canEditCredit}
         />
       </Modal>
+
+      <CustomerDuplicateModal
+        open={duplicateOpen}
+        matches={duplicateMatches}
+        saving={saving}
+        error={duplicateError}
+        onCancel={closeDuplicates}
+        onCreateAnyway={() => void handleCreate(true)}
+        onOpenExisting={(customerId) => {
+          closeDuplicates();
+          setCreateOpen(false);
+          router.push(`/customers/${customerId}`);
+        }}
+      />
 
       <Modal
         open={editCustomer !== null}
