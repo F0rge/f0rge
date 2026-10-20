@@ -2042,8 +2042,27 @@ export function formatFxGainLoss(value: string): string {
   return `${prefix}R ${Math.abs(amount).toFixed(2)}`;
 }
 
+export type BankDocumentSuggestion = {
+  kind: "invoice" | "bill";
+  document_id: string;
+  document_number: string;
+  contact_name: string;
+  outstanding_zar: string;
+  confidence: number;
+  reason: string;
+  auto_match: boolean;
+};
+
+export type BankLineAllocation = {
+  payment_id: string;
+  payment_number?: string | null;
+  amount_zar: string;
+  document_number?: string | null;
+};
+
 export type BankImportLine = {
   id: string;
+  import_id?: string;
   transaction_date: string;
   description: string;
   reference: string | null;
@@ -2058,6 +2077,22 @@ export type BankImportLine = {
   suggested_rule_pattern?: string | null;
   suggested_account_code?: string | null;
   suggested_account_name?: string | null;
+  document_suggestions?: BankDocumentSuggestion[];
+  allocations?: BankLineAllocation[];
+};
+
+export type AutoMatchPreviewItem = {
+  import_id: string;
+  line_id: string;
+  transaction_date: string;
+  description: string;
+  amount_zar: string;
+  kind: "invoice" | "bill";
+  document_id: string;
+  document_number: string;
+  contact_name: string;
+  confidence: number;
+  reason: string;
 };
 
 export type BankRule = {
@@ -2227,6 +2262,47 @@ export function matchBankLine(
   return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match`, {
     method: "POST",
     body: JSON.stringify(target),
+  });
+}
+
+export function matchBankDocument(
+  importId: string,
+  lineId: string,
+  target: { invoice_id: string } | { bill_id: string },
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match-document`, {
+    method: "POST",
+    body: JSON.stringify(target),
+  });
+}
+
+export function splitBankLine(
+  importId: string,
+  lineId: string,
+  allocations: Array<{ invoice_id?: string; bill_id?: string; amount: string }>,
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/split`, {
+    method: "POST",
+    body: JSON.stringify({ allocations }),
+  });
+}
+
+export function previewAutoMatch(accountId?: string): Promise<{ matches: AutoMatchPreviewItem[] }> {
+  const params = new URLSearchParams();
+  if (accountId) {
+    params.set("account_id", accountId);
+  }
+  const qs = params.toString();
+  return apiFetch(`/bank-imports/auto-match/preview${qs ? `?${qs}` : ""}`, { method: "POST" });
+}
+
+export function confirmAutoMatch(lineIds: string[]): Promise<{
+  applied: AutoMatchPreviewItem[];
+  skipped: string[];
+}> {
+  return apiFetch("/bank-imports/auto-match/confirm", {
+    method: "POST",
+    body: JSON.stringify({ line_ids: lineIds }),
   });
 }
 
