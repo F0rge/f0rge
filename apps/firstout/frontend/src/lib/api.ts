@@ -102,7 +102,14 @@ export class ApiError extends Error {
 
 export type Page<T> = { items: T[]; total: number };
 export const PAGE_SIZES = [10, 25, 50] as const;
-export type ListParams = { limit?: number; offset?: number; q?: string; status?: string };
+export type ListParams = {
+  limit?: number;
+  offset?: number;
+  q?: string;
+  status?: string;
+  invoice_id?: string;
+  bill_id?: string;
+};
 
 function buildListQuery(params?: ListParams): string {
   const search = new URLSearchParams();
@@ -115,6 +122,12 @@ function buildListQuery(params?: ListParams): string {
   const status = params?.status?.trim();
   if (status) {
     search.set("status", status);
+  }
+  if (params?.invoice_id) {
+    search.set("invoice_id", params.invoice_id);
+  }
+  if (params?.bill_id) {
+    search.set("bill_id", params.bill_id);
   }
   return search.toString();
 }
@@ -1607,6 +1620,7 @@ export type InvoiceListItem = {
   total_inc_vat: string;
   amount_paid: string;
   balance: string;
+  payment_status: "unpaid" | "partially_paid" | "paid";
   created_at: string;
   updated_at: string;
 };
@@ -1761,7 +1775,10 @@ export type Bill = {
   amount_foreign: string;
   amount_zar: string;
   amount_paid_zar: string;
+  amount_paid_foreign: string;
   balance_zar: string;
+  balance_foreign: string;
+  payment_status: "unpaid" | "partially_paid" | "paid";
   pdf_storage_key: string | null;
   lines: BillLine[];
   created_at: string;
@@ -4581,12 +4598,7 @@ export function cancelDelivery(id: string): Promise<Delivery> {
 }
 
 export function isInvoiceFullyPaid(invoice: InvoiceListItem): boolean {
-  if (invoice.amount_paid === invoice.total_inc_vat) {
-    return true;
-  }
-  const paid = Number(invoice.amount_paid);
-  const total = Number(invoice.total_inc_vat);
-  return Number.isFinite(paid) && Number.isFinite(total) && paid === total;
+  return invoice.payment_status === "paid";
 }
 
 export type ReorderRow = {
