@@ -11,9 +11,11 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -81,6 +83,8 @@ class PurchaseOrder(UUIDPkMixin, TimestampMixin, Base):
     )
     # Charges, VAT and terms captured when a proforma was read into this order.
     intake_snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    supplier_ref: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     supplier: Mapped["Supplier"] = relationship()
     proforma: Mapped[Optional["Proforma"]] = relationship()
@@ -97,19 +101,30 @@ class PoLine(UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("purchase_orders.id", ondelete="CASCADE"),
         nullable=False,
     )
-    sku_id: Mapped[uuid.UUID] = mapped_column(
+    sku_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("skus.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
+    supplier_code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     factory_unit_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="lines")
-    sku: Mapped["Sku"] = relationship()
+    sku: Mapped[Optional["Sku"]] = relationship()
 
-    __table_args__ = (UniqueConstraint("po_id", "sku_id", name="uq_po_lines_po_sku"),)
+    __table_args__ = (
+        Index(
+            "uq_po_lines_po_sku",
+            "po_id",
+            "sku_id",
+            unique=True,
+            postgresql_where=text("sku_id IS NOT NULL"),
+        ),
+    )
 
 
 class LandingBillKind(str, enum.Enum):

@@ -17,6 +17,9 @@ export function expectedCartonsForPo(
   let cartons = 0;
   let sellableQty = 0;
   for (const line of po.lines) {
+    if (!line.sku_id) {
+      continue;
+    }
     sellableQty += line.qty;
     cartons += line.qty * skuCartonCount(byId.get(line.sku_id));
   }
