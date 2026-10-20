@@ -19,6 +19,7 @@ from app.exceptions import (
     CommsEncryptionUnconfiguredError,
     CommsSmtpFailedError,
     CommsSmtpUnconfiguredError,
+    DocumentLlmUnconfiguredError,
     ForbiddenError,
     KitRequiresPickError,
 )
@@ -43,6 +44,7 @@ from app.routers import (
     credit_notes,
     customers,
     deliveries,
+    document_intake,
     health,
     home,
     invoices,
@@ -204,9 +206,21 @@ async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
+async def _document_llm_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, DocumentLlmUnconfiguredError)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": {"code": exc.detail}},
+    )
+
+
 app.add_exception_handler(KitRequiresPickError, cast(ExceptionHandler, _kit_requires_pick_handler))
 app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handler))
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+app.add_exception_handler(
+    DocumentLlmUnconfiguredError,
+    cast(ExceptionHandler, _document_llm_unconfigured_handler),
+)
 app.add_exception_handler(
     CommsEncryptionUnconfiguredError,
     cast(ExceptionHandler, _comms_unconfigured_handler),
@@ -239,6 +253,7 @@ app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
+app.include_router(document_intake.document_intake_router)
 app.include_router(skus.skus_router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)

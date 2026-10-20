@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     # Background loop that emails overdue invoices. Tests turn this off.
     payment_reminder_ticker: bool = True
 
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    # Fallback when openrouter_document_model is empty.
+    openrouter_model: str = "openai/gpt-4o-mini"
+    # Vision-capable model for supplier proforma and invoice reading.
+    # Text-layer PDFs are sent as text; photos and scans go to this model as images.
+    openrouter_document_model: str = "openai/gpt-4o-mini"
+    # Accepted for operators who set them. The document reader posts temperature 0
+    # and does not send OpenRouter reasoning flags.
+    openrouter_reasoning_effort: str = "low"
+    openrouter_reasoning_exclude: bool = True
     settings_encryption_key: str = ""
     wa_verify_token: str = ""
 
