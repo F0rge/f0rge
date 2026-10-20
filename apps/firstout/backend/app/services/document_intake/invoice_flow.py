@@ -85,6 +85,7 @@ class InvoiceIntakeService:
             raise ValidationError("Choose a PDF, JPG, or PNG.")
         po = await self._purchase_order(data.purchase_order_id)
         self._require_processable(po)
+        _refuse_incomplete(po)
         supplier_id = await self._resolve_supplier(data)
         if supplier_id != po.supplier_id:
             raise ValidationError("This invoice supplier does not match the purchase order.")
@@ -295,7 +296,7 @@ class InvoiceIntakeService:
             po_total=_po_money(po, "total"),
             invoice_total=data.total,
         )
-        return _merge(exact, differences, discounts)
+        return _with_incomplete(po, *_merge(exact, differences, discounts))
 
     def _compare(
         self,
@@ -317,7 +318,7 @@ class InvoiceIntakeService:
             po_total=_po_money(po, "total"),
             invoice_total=as_decimal(review.total),
         )
-        return _merge(exact, differences, discounts)
+        return _with_incomplete(po, *_merge(exact, differences, discounts))
 
     def _bill_lines(
         self,
@@ -548,10 +549,37 @@ def _po_out(po: PurchaseOrder) -> PurchaseOrderMatchOut:
 
 
 def _po_lines(po: PurchaseOrder) -> list[tuple[uuid.UUID, str, int, Decimal]]:
-    return [
-        (line.sku_id, line.sku.our_ref, line.qty, Decimal(line.factory_unit_amount))
-        for line in po.lines
-    ]
+    rows: list[tuple[uuid.UUID, str, int, Decimal]] = []
+    for line in po.lines:
+        if line.sku_id is None or line.sku is None:
+            continue
+        rows.append((line.sku_id, line.sku.our_ref, line.qty, Decimal(line.factory_unit_amount)))
+    return rows
+
+
+def _incomplete_note(po: PurchaseOrder) -> list[str]:
+    missing = sum(1 for line in po.lines if line.sku_id is None)
+    if missing == 0:
+        return []
+    noun = "line" if missing == 1 else "lines"
+    return [f"The purchase order still has {missing} {noun} without a SKU."]
+
+
+def _with_incomplete(
+    po: PurchaseOrder,
+    exact: bool,
+    differences: list[str],
+) -> tuple[bool, list[str]]:
+    extra = _incomplete_note(po)
+    if extra:
+        return False, [*differences, *extra]
+    return exact, differences
+
+
+def _refuse_incomplete(po: PurchaseOrder) -> None:
+    extra = _incomplete_note(po)
+    if extra:
+        raise ValidationError(extra[0])
 
 
 def _po_currency(po: PurchaseOrder) -> str:
