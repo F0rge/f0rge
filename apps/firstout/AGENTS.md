@@ -89,7 +89,7 @@ Authorisation is a **permission catalog**, not role-tuple checks. `users.role` i
 |--------|------|
 | **owner** | all catalog keys; cannot strip; cannot demote last owner |
 | **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view`, `nia.use` |
-| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.deliveries`, `nia.use` (no `stock.cost.view`, no till) |
+| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.quotes`, `sales.deliveries`, `nia.use` (no `stock.cost.view`, no till). `sales.quotes` also allows mark-sent, accept, cancel, and hold stock. |
 | **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `nia.use` (no `stock.cost.view`) |
 | **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view`, `nia.use` (no `till.sell`) |
 

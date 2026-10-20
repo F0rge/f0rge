@@ -57,7 +57,7 @@ from app.services.payment_terms import compute_due_date
 from app.services.pricing import resolve_unit_ex_vat
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
-from app.services.vat import CENT, ex_to_inc
+from app.services.vat import CENT, discounted_unit_ex, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -135,17 +135,22 @@ class SalesOrdersService:
         existing = await self.crud.get_by_quote_id(quote.id)
         if existing is not None:
             raise ConflictError("Quote already has a sales order")
-        line_models = [
-            SalesOrderLine(
-                sku_id=line.sku_id,
-                qty=line.qty,
-                unit_ex_vat=line.unit_ex_vat,
-                description=line.description,
-                notes=line.notes,
-                held_qty=0,
+        line_models = []
+        for line in quote.lines:
+            notes = line.notes
+            if line.discount_percent > 0:
+                discount_note = f"{line.discount_percent:.2f}% line discount"
+                notes = f"{notes}; {discount_note}" if notes else discount_note
+            line_models.append(
+                SalesOrderLine(
+                    sku_id=line.sku_id,
+                    qty=line.qty,
+                    unit_ex_vat=discounted_unit_ex(line.unit_ex_vat, line.discount_percent),
+                    description=line.description,
+                    notes=notes,
+                    held_qty=0,
+                )
             )
-            for line in quote.lines
-        ]
         order = SalesOrder(
             so_number="",
             customer_id=quote.customer_id,
