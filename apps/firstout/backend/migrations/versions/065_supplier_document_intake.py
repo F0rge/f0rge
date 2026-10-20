@@ -1,7 +1,12 @@
 """Supplier VAT/address and purchase-order intake snapshot.
 
-Revision ID: 063_supplier_document_intake
+Revision ID: 065_supplier_document_intake
 Revises: 062_cin7_import
+
+Ordering: this revises 062_cin7_import and does not follow the other open drafts
+063_customer_search (#877) or 063_quote_line_discount / 064_warehouse_sales_quotes (#878).
+Those also branch from 062, so Alembic will have more than one head until a merge
+revision is added. Apply this chain on a database whose head is 062.
 
 Stores the supplier particulars a proforma reader can match on, and the
 charges / VAT / terms captured when a proforma becomes a purchase order.
@@ -15,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "063_supplier_document_intake"
+revision: str = "065_supplier_document_intake"
 down_revision: Union[str, Sequence[str], None] = "062_cin7_import"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
