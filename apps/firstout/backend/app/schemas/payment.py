@@ -12,7 +12,7 @@ class PaymentCreate(BaseModel):
     direction: Literal["in", "out"]
     invoice_id: Optional[uuid.UUID] = None
     bill_id: Optional[uuid.UUID] = None
-    amount: Decimal = Field(gt=0)
+    amount: Decimal
     currency: str = Field(min_length=3, max_length=8)
     fx_to_zar: Optional[Decimal] = None
     paid_on: datetime.date

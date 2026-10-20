@@ -7,6 +7,7 @@ import {
   InlineNotification,
   Modal,
   Stack,
+  Tag,
   Table,
   TableBody,
   TableCell,
@@ -27,11 +28,17 @@ import {
   formatFxGainLoss,
   formatZarAmount,
   getBill,
+  listPayments,
   uploadBillAttachment,
   type Bill,
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  partialPaymentError,
+  settlementStatusLabel,
+  settlementTagType,
+} from "@/lib/payment-status";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -58,13 +65,16 @@ export default function BillDetailPage() {
   const [paymentFx, setPaymentFx] = useState("");
   const [paymentDate, setPaymentDate] = useState(todayIso());
   const [lastPayment, setLastPayment] = useState<Payment | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
   const loadBill = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getBill(params.id);
+      const paymentPage = await listPayments({ bill_id: data.id, limit: 100 });
       setBill(data);
+      setPayments(paymentPage.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load bill.");
     } finally {
@@ -115,7 +125,7 @@ export default function BillDetailPage() {
     if (!bill) {
       return;
     }
-    setPaymentAmount(bill.amount_foreign);
+    setPaymentAmount(bill.balance_foreign);
     setPaymentCurrency(bill.currency);
     setPaymentFx(bill.fx_to_zar);
     setPaymentDate(todayIso());
@@ -124,6 +134,16 @@ export default function BillDetailPage() {
 
   async function handleRecordPayment() {
     if (!bill) {
+      return;
+    }
+    const validationError = partialPaymentError({
+      amount: paymentAmount,
+      balance: bill.balance_foreign,
+      documentNumber: bill.bill_number,
+      currency: bill.currency,
+    });
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setActionLoading(true);
@@ -166,7 +186,7 @@ export default function BillDetailPage() {
     );
   }
 
-  const showPayment = canMutate && hasPositiveBalance(bill.balance_zar);
+  const showPayment = canMutate && hasPositiveBalance(bill.balance_foreign);
 
   return (
     <Stack gap={6}>
@@ -180,6 +200,9 @@ export default function BillDetailPage() {
         <p className="cds--type-body-01">
           {bill.supplier_name} · Ref {bill.supplier_ref} · {bill.issue_date}
         </p>
+        <Tag type={settlementTagType(bill.payment_status)} size="sm">
+          {settlementStatusLabel(bill.payment_status)}
+        </Tag>
       </div>
 
       {success ? (
@@ -217,13 +240,50 @@ export default function BillDetailPage() {
 
       <div className="firstout-bill-summary">
         <p className="cds--type-body-01">
-          Amount: {bill.currency} {bill.amount_foreign}
+          Total: {bill.currency} {bill.amount_foreign}
         </p>
         <p className="cds--type-body-01">FX to ZAR: {bill.fx_to_zar}</p>
-        <p className="cds--type-body-01">Amount ZAR: {formatZarAmount(bill.amount_zar)}</p>
+        <p className="cds--type-body-01">Total ZAR: {formatZarAmount(bill.amount_zar)}</p>
+        <p className="cds--type-body-01">
+          Paid: {bill.currency} {bill.amount_paid_foreign}
+        </p>
         <p className="cds--type-body-01">Paid ZAR: {formatZarAmount(bill.amount_paid_zar)}</p>
+        <p className="cds--type-body-01">
+          Balance owing: {bill.currency} {bill.balance_foreign}
+        </p>
         <p className="cds--type-body-01">Balance ZAR: {formatZarAmount(bill.balance_zar)}</p>
       </div>
+
+      <TableContainer title="Payments" description="Money paid against this bill">
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeader>Number</TableHeader>
+              <TableHeader>Paid on</TableHeader>
+              <TableHeader>Amount</TableHeader>
+              <TableHeader>ZAR</TableHeader>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {payments.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4}>No payments recorded yet.</TableCell>
+              </TableRow>
+            ) : (
+              payments.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell>{payment.payment_number}</TableCell>
+                  <TableCell>{payment.paid_on}</TableCell>
+                  <TableCell>
+                    {payment.currency} {payment.amount}
+                  </TableCell>
+                  <TableCell>{formatZarAmount(payment.amount_zar)}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {lastPayment ? (
         <InlineNotification
@@ -319,7 +379,7 @@ export default function BillDetailPage() {
           <TextInput
             id="bill-payment-amount"
             labelText="Amount"
-            helperText="Must equal the full bill foreign amount."
+            helperText={`Any amount up to the ${bill.currency} ${bill.balance_foreign} still owing. A smaller amount leaves the bill partially paid.`}
             value={paymentAmount}
             onChange={(event) => setPaymentAmount(event.target.value)}
             required
