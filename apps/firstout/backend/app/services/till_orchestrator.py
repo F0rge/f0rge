@@ -38,8 +38,13 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.stocktakes import StocktakeService
+from app.services.till_kit_pick import (
+    REASON_MISSING_PARTS,
+    REASON_SPLIT_PICK,
+    kit_pick_message,
+)
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
-from app.exceptions import ForbiddenError
+from app.exceptions import ForbiddenError, KitRequiresPickError
 from app.permissions import TILL_DISCOUNT, USERS_MANAGE
 from app.services.permissions import PermissionService
 from app.services.books_periods import assert_date_postable
@@ -119,6 +124,12 @@ class TillOrchestrator:
         stock_decrements: list[tuple[uuid.UUID, int]] = []
         reserved: dict[uuid.UUID, int] = {}
         picks_to_link: list[Pick] = []
+        kit_blocks: list[dict] = []
+        used_pick_ids: set[uuid.UUID] = set()
+        candidate_pick_ids: list[uuid.UUID] = []
+        for candidate in [*data.pick_ids, data.pick_id]:
+            if candidate is not None and candidate not in candidate_pick_ids:
+                candidate_pick_ids.append(candidate)
         total_cogs = Decimal(0)
 
         for line in data.lines:
@@ -129,15 +140,20 @@ class TillOrchestrator:
 
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
             if bom_lines:
-                line_cogs, pick = await self._kit_line_cogs(
+                line_cogs, pick, block = await self._kit_line_cogs(
                     sku=sku,
                     line_qty=line.qty,
                     bom_lines=bom_lines,
                     location_id=data.location_id,
-                    pick_id=data.pick_id,
+                    location_name=location.name,
+                    pick_ids=candidate_pick_ids,
+                    used_pick_ids=used_pick_ids,
                     reserved=reserved,
                     stock_decrements=stock_decrements,
                 )
+                if block is not None:
+                    kit_blocks.append(block)
+                    continue
                 if pick is not None:
                     picks_to_link.append(pick)
             else:
@@ -165,6 +181,9 @@ class TillOrchestrator:
             cogs_code = await self.category_posting.cogs_code_for_sku(sku)
             cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
             line_inputs.append((sku, line.qty, line.discount_percent, base_unit))
+
+        if kit_blocks:
+            raise KitRequiresPickError(kit_blocks)
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -352,16 +371,70 @@ class TillOrchestrator:
             ),
         )
 
+    async def _matching_kit_pick(
+        self,
+        pick_ids: list[uuid.UUID],
+        sku_id: uuid.UUID,
+        line_qty: int,
+        used_pick_ids: set[uuid.UUID],
+    ) -> Optional[Pick]:
+        invoiced_match = False
+        for pick_id in pick_ids:
+            if pick_id in used_pick_ids:
+                continue
+            pick = await self.pick_crud.get_by_id(pick_id)
+            if (
+                pick is None
+                or pick.status not in (PickStatus.CONFIRMED, PickStatus.PICKING, PickStatus.STAGED)
+                or pick.kit_sku_id != sku_id
+                or pick.kit_qty != line_qty
+            ):
+                continue
+            if pick.invoice_id is not None:
+                invoiced_match = True
+                continue
+            used_pick_ids.add(pick_id)
+            return pick
+        if invoiced_match:
+            raise ConflictError("Pick is already linked to an invoice")
+        return None
+
+    async def _component_on_hand_total(self, sku_id: uuid.UUID) -> int:
+        rows = await self.location_stock_crud.list_by_sku_id(sku_id)
+        total = 0
+        for row in rows:
+            location = row.location
+            if location is not None and location.is_archived:
+                continue
+            total += row.on_hand
+        return total
+
+    async def _kit_block_reason(
+        self,
+        bom_lines,
+        line_qty: int,
+        reserved: dict[uuid.UUID, int],
+    ) -> str:
+        for bom in bom_lines:
+            need = bom.qty * line_qty
+            available = await self._component_on_hand_total(bom.component_sku_id)
+            available -= reserved.get(bom.component_sku_id, 0)
+            if available < need:
+                return REASON_MISSING_PARTS
+        return REASON_SPLIT_PICK
+
     async def _kit_line_cogs(
         self,
         sku,
         line_qty: int,
         bom_lines,
         location_id: uuid.UUID,
-        pick_id: Optional[uuid.UUID],
+        location_name: str,
+        pick_ids: list[uuid.UUID],
+        used_pick_ids: set[uuid.UUID],
         reserved: dict[uuid.UUID, int],
         stock_decrements: list[tuple[uuid.UUID, int]],
-    ) -> tuple[Decimal, Optional[Pick]]:
+    ) -> tuple[Decimal, Optional[Pick], Optional[dict]]:
         showroom_ok = True
         for bom in bom_lines:
             need = bom.qty * line_qty
@@ -396,20 +469,25 @@ class TillOrchestrator:
                 )
                 reserved[bom.component_sku_id] = reserved.get(bom.component_sku_id, 0) + need
                 stock_decrements.append((bom.component_sku_id, need))
-            return line_cogs, None
+            return line_cogs, None, None
 
-        pick = None
-        if pick_id is not None:
-            pick = await self.pick_crud.get_by_id(pick_id)
-        if (
-            pick is None
-            or pick.status not in (PickStatus.CONFIRMED, PickStatus.PICKING, PickStatus.STAGED)
-            or pick.kit_sku_id != sku.id
-            or pick.kit_qty != line_qty
-        ):
-            raise ConflictError("Kit requires pick")
-        if pick.invoice_id is not None:
-            raise ConflictError("Pick is already linked to an invoice")
+        pick = await self._matching_kit_pick(pick_ids, sku.id, line_qty, used_pick_ids)
+        if pick is None:
+            reason = await self._kit_block_reason(bom_lines, line_qty, reserved)
+            return (
+                Decimal(0),
+                None,
+                {
+                    "sku_id": str(sku.id),
+                    "sku_code": sku.our_ref,
+                    "sku_name": sku.name,
+                    "qty": line_qty,
+                    "location_id": str(location_id),
+                    "location_name": location_name,
+                    "reason": reason,
+                    "message": kit_pick_message(sku.name, sku.our_ref, location_name, reason),
+                },
+            )
 
         line_cogs = Decimal(0)
         for pick_line in pick.lines:
@@ -431,7 +509,7 @@ class TillOrchestrator:
                 if cost is None:
                     raise ConflictError(f"No unit cost for {component.our_ref}")
                 line_cogs += (cost * alloc.qty).quantize(CENT, rounding=ROUND_HALF_UP)
-        return line_cogs, pick
+        return line_cogs, pick, None
 
     async def _get_walk_in_customer(self):
         from app.models.customer import Customer

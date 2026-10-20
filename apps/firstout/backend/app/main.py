@@ -9,19 +9,20 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
+from f0rge_core.exceptions import ConflictError
 from f0rge_core.handlers import register_exception_handlers
 
+from app.config import settings
+from app.database import async_session_maker
 from app.exceptions import (
     CommsEncryptionUnconfiguredError,
     CommsSmtpFailedError,
     CommsSmtpUnconfiguredError,
     ForbiddenError,
+    KitRequiresPickError,
     NiaCapExceededError,
     NiaLlmUnconfiguredError,
 )
-
-from app.config import settings
-from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
 from app.routers import (
     accounts,
@@ -193,6 +194,29 @@ async def _comms_smtp_failed_handler(_: Request, exc: Exception) -> JSONResponse
     )
 
 
+async def _kit_requires_pick_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, KitRequiresPickError)
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": exc.payload},
+    )
+
+
+async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, KitRequiresPickError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": exc.payload},
+        )
+    assert isinstance(exc, ConflictError)
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": exc.detail},
+    )
+
+
+app.add_exception_handler(KitRequiresPickError, cast(ExceptionHandler, _kit_requires_pick_handler))
+app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handler))
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
 app.add_exception_handler(
     NiaLlmUnconfiguredError,
