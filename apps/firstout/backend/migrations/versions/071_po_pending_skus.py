@@ -1,14 +1,7 @@
 """Purchase orders can wait for SKUs before approval.
 
-Revision ID: 067_po_pending_skus
-Revises: 066_supplier_invoice_match
-
-Ordering: revises 066_supplier_invoice_match. That revision revises
-065_supplier_document_intake, which revises 062_cin7_import.
-This chain does not follow 063_customer_search (#877) or
-063_quote_line_discount / 064_warehouse_sales_quotes (#878). Those drafts
-also branch from 062, so Alembic has more than one head until a merge
-revision is added. Apply this chain on a database whose head is 062.
+Revision ID: 071_po_pending_skus
+Revises: 070_supplier_invoice_match
 """
 
 from __future__ import annotations
@@ -18,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "067_po_pending_skus"
-down_revision: Union[str, Sequence[str], None] = "066_supplier_invoice_match"
+revision: str = "071_po_pending_skus"
+down_revision: Union[str, Sequence[str], None] = "070_supplier_invoice_match"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

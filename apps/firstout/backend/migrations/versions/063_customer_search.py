@@ -1,7 +1,7 @@
 """Customer search indexes for name, email, and normalised phone.
 
-Revision ID: 067_customer_search
-Revises: 066_stock_sku_indexes
+Revision ID: 063_customer_search
+Revises: 062_cin7_import
 
 Adds a stored national-digit phone column (0027 / 27 / leading 0 folded away)
 and trigram indexes so partial name, email, and cell search stays index-backed.
@@ -16,8 +16,8 @@ from alembic import op
 
 from app.models.customer import PHONE_NATIONAL_SQL
 
-revision: str = "067_customer_search"
-down_revision: Union[str, Sequence[str], None] = "066_stock_sku_indexes"
+revision: str = "063_customer_search"
+down_revision: Union[str, Sequence[str], None] = "062_cin7_import"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -1,7 +1,7 @@
 """Grant sales.quotes to the warehouse preset.
 
-Revision ID: 069_warehouse_sales_quotes
-Revises: 068_quote_line_discount
+Revision ID: 065_warehouse_sales_quotes
+Revises: 064_quote_line_discount
 
 Existing databases already have the warehouse role from 033. New installs
 pick the key up from ROLE_PRESETS when 033 runs; this insert is a no-op then.
@@ -13,8 +13,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "069_warehouse_sales_quotes"
-down_revision: Union[str, Sequence[str], None] = "068_quote_line_discount"
+revision: str = "065_warehouse_sales_quotes"
+down_revision: Union[str, Sequence[str], None] = "064_quote_line_discount"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -1,11 +1,7 @@
 """Partial invoice and bill payments.
 
-Revision ID: 063_partial_payments
-Revises: 062_cin7_import
-
-develop HEAD at authoring time is 062_cin7_import. Open PRs were checked and
-none of them added 063. If another branch lands 063 (or the previously
-rumoured 064) first, renumber this revision before merge.
+Revision ID: 066_partial_payments
+Revises: 065_warehouse_sales_quotes
 
 """
 
@@ -16,8 +12,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "063_partial_payments"
-down_revision: Union[str, Sequence[str], None] = "062_cin7_import"
+revision: str = "066_partial_payments"
+down_revision: Union[str, Sequence[str], None] = "065_warehouse_sales_quotes"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

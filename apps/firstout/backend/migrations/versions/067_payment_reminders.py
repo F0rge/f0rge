@@ -1,10 +1,7 @@
 """Automatic invoice payment reminders.
 
-Revision ID: 064_payment_reminders
-Revises: 063_partial_payments
-
-Stacked on the partial-payments branch. The bank-matching branch also revises
-063, so the two migrations are sibling heads until one is renumbered on merge.
+Revision ID: 067_payment_reminders
+Revises: 066_partial_payments
 
 """
 
@@ -16,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "064_payment_reminders"
-down_revision: Union[str, Sequence[str], None] = "063_partial_payments"
+revision: str = "067_payment_reminders"
+down_revision: Union[str, Sequence[str], None] = "066_partial_payments"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
