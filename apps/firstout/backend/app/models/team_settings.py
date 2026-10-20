@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from decimal import Decimal
 from typing import Optional
@@ -7,6 +8,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     ForeignKey,
     Integer,
     LargeBinary,
@@ -145,6 +147,17 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         default="en",
         server_default=text("'en'"),
+    )
+    payment_reminders_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    payment_reminder_steps: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    payment_reminders_last_run_on: Mapped[Optional[datetime.date]] = mapped_column(
+        Date,
+        nullable=True,
     )
 
     team: Mapped["Team"] = relationship()

@@ -30,6 +30,8 @@ import {
   getCommsSettings,
   getCustomer,
   getInvoice,
+  pauseInvoiceReminders,
+  resumeInvoiceReminders,
   getSettings,
   settingsLogoUrl,
   listCreditNotes,
@@ -112,6 +114,29 @@ export default function InvoiceDetailPage() {
       void loadInvoice();
     }
   }, [user, params.id, loadInvoice]);
+
+  async function handleToggleReminders() {
+    if (!invoice) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      if (invoice.reminders_paused) {
+        await resumeInvoiceReminders(invoice.id);
+        setSuccess("Payment reminders resumed for this invoice.");
+      } else {
+        await pauseInvoiceReminders(invoice.id);
+        setSuccess("Payment reminders paused for this invoice.");
+      }
+      await loadInvoice();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update reminders.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   async function handleDownload() {
     if (!invoice) {
@@ -313,6 +338,15 @@ export default function InvoiceDetailPage() {
         {showPayment ? (
           <Button disabled={actionLoading} onClick={openPaymentModal}>
             Record payment in
+          </Button>
+        ) : null}
+        {canMutate ? (
+          <Button
+            kind="ghost"
+            disabled={actionLoading}
+            onClick={() => void handleToggleReminders()}
+          >
+            {invoice.reminders_paused ? "Resume reminders" : "Pause reminders"}
           </Button>
         ) : null}
         {showCreditNote ? (

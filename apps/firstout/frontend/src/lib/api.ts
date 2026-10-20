@@ -277,6 +277,7 @@ export {
   canMutateQuotes,
   canMutateReturns,
   canMutateSettings,
+  canManageUsers,
   canSendComms,
   canAdminNia,
   canUseNia,
@@ -1597,6 +1598,7 @@ export type InvoiceListItem = {
 
 export type Invoice = InvoiceListItem & {
   lines: InvoiceLine[];
+  reminders_paused: boolean;
 };
 
 export type CreateInvoiceLinePayload = {
@@ -1625,6 +1627,103 @@ export function createInvoice(payload: CreateInvoicePayload): Promise<Invoice> {
 
 export function getInvoice(id: string): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`);
+}
+
+export type PaymentReminderStep = {
+  offset_days: number;
+  subject: string;
+  body: string;
+};
+
+export type PaymentReminderSettings = {
+  enabled: boolean;
+  steps: PaymentReminderStep[];
+  last_run_on: string | null;
+  placeholders: string[];
+};
+
+export type ReminderRow = {
+  invoice_id: string;
+  invoice_number: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string | null;
+  offset_days: number;
+  trigger_on: string;
+  amount_owing: string;
+  days_overdue: number;
+  status: string;
+  sent_at: string | null;
+  detail: string | null;
+  reminders_paused: boolean;
+  payment_reminders_opt_out: boolean;
+};
+
+export type ReminderAttention = {
+  invoice_id: string;
+  invoice_number: string;
+  customer_id: string;
+  customer_name: string;
+  reason: "no_email" | "no_due_date";
+};
+
+export type ReminderBoard = {
+  enabled: boolean;
+  upcoming: ReminderRow[];
+  due: ReminderRow[];
+  sent: ReminderRow[];
+  held: ReminderRow[];
+  needs_attention: ReminderAttention[];
+};
+
+export function getPaymentReminderSettings(): Promise<PaymentReminderSettings> {
+  return apiFetch<PaymentReminderSettings>("/settings/payment-reminders");
+}
+
+export function updatePaymentReminderSettings(payload: {
+  enabled: boolean;
+  steps: PaymentReminderStep[];
+}): Promise<PaymentReminderSettings> {
+  return apiFetch<PaymentReminderSettings>("/settings/payment-reminders", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getReminderBoard(): Promise<ReminderBoard> {
+  return apiFetch<ReminderBoard>("/payment-reminders");
+}
+
+export function sendReminderNow(invoiceId: string, offsetDays: number): Promise<ReminderRow> {
+  return apiFetch<ReminderRow>("/payment-reminders/send-now", {
+    method: "POST",
+    body: JSON.stringify({ invoice_id: invoiceId, offset_days: offsetDays }),
+  });
+}
+
+export function skipReminder(invoiceId: string, offsetDays: number): Promise<ReminderRow> {
+  return apiFetch<ReminderRow>("/payment-reminders/skip", {
+    method: "POST",
+    body: JSON.stringify({ invoice_id: invoiceId, offset_days: offsetDays }),
+  });
+}
+
+export function pauseInvoiceReminders(invoiceId: string): Promise<{ reminders_paused: boolean }> {
+  return apiFetch(`/payment-reminders/invoices/${invoiceId}/pause`, { method: "POST" });
+}
+
+export function resumeInvoiceReminders(invoiceId: string): Promise<{ reminders_paused: boolean }> {
+  return apiFetch(`/payment-reminders/invoices/${invoiceId}/resume`, { method: "POST" });
+}
+
+export function setCustomerReminderOptOut(
+  customerId: string,
+  optOut: boolean,
+): Promise<{ payment_reminders_opt_out: boolean }> {
+  return apiFetch(`/payment-reminders/customers/${customerId}/opt-out`, {
+    method: "POST",
+    body: JSON.stringify({ opt_out: optOut }),
+  });
 }
 
 export type RepeatingInvoiceLine = {
@@ -4253,6 +4352,7 @@ export type CustomerCrm = {
   on_hold_reason: string | null;
   payment_terms_days: number | null;
   price_list_id: string | null;
+  payment_reminders_opt_out: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -4276,6 +4376,7 @@ export type CreateCustomerPayload = {
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
   price_list_id?: string | null;
+  payment_reminders_opt_out?: boolean;
 };
 
 export type UpdateCustomerPayload = {
@@ -4291,6 +4392,7 @@ export type UpdateCustomerPayload = {
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
   price_list_id?: string | null;
+  payment_reminders_opt_out?: boolean;
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {

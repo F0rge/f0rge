@@ -75,6 +75,7 @@ class InvoiceResponse(BaseModel):
     amount_paid: Decimal
     balance: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid"]
+    reminders_paused: bool = False
     lines: list[InvoiceLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime

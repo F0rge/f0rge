@@ -36,6 +36,7 @@ PROFILE_PATCH_FIELDS = frozenset(
         "price_tier",
         "payment_terms_days",
         "price_list_id",
+        "payment_reminders_opt_out",
     }
 )
 
@@ -82,6 +83,7 @@ class CustomersCrmService:
             price_tier=data.price_tier,
             payment_terms_days=data.payment_terms_days,
             price_list_id=data.price_list_id,
+            payment_reminders_opt_out=data.payment_reminders_opt_out,
         )
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(customer)
@@ -125,6 +127,10 @@ class CustomersCrmService:
             customer.price_tier = data.price_tier
         if "payment_terms_days" in fields_set:
             customer.payment_terms_days = data.payment_terms_days
+        if "payment_reminders_opt_out" in fields_set:
+            if data.payment_reminders_opt_out is None:
+                raise ValidationError("payment_reminders_opt_out cannot be null")
+            customer.payment_reminders_opt_out = data.payment_reminders_opt_out
         if "price_list_id" in fields_set:
             await self._assert_price_list_id(data.price_list_id)
             customer.price_list_id = data.price_list_id
@@ -187,6 +193,7 @@ class CustomersCrmService:
             on_hold_reason=customer.on_hold_reason,
             payment_terms_days=customer.payment_terms_days,
             price_list_id=customer.price_list_id,
+            payment_reminders_opt_out=customer.payment_reminders_opt_out,
             open_invoices_count=invoice_agg.open_count,
             open_invoices_zar=invoice_agg.open_zar.quantize(Decimal("0.01")),
             overdue_invoices_count=invoice_agg.overdue_count,
