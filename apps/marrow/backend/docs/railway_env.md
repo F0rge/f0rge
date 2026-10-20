@@ -24,12 +24,21 @@ After Postgres (pgvector), Redis, and Bucket `photos` exist:
 | `MIGRATION_DATABASE_URL` | htmigrate (or Postgres owner) URL for alembic pre-deploy |
 | `MCP_READONLY_DATABASE_URL` | `healthtracker_ro` URL (MCP only) |
 | `OPENROUTER_API_KEY` | Same as API (`${{marrow-api.OPENROUTER_API_KEY}}` on `marrow-mcp`) — required for MCP `search` embeddings |
-| `REDIS_URL` | `${{Redis.REDIS_URL}}` (API + worker). Not set on `marrow-mcp` today: MCP writes then skip cache invalidation (entry/feature-matrix/signals keys live until TTL) |
-| `BUCKET_NAME` | `${{photos.BUCKET}}` |
-| `AWS_ACCESS_KEY_ID` | `${{photos.ACCESS_KEY_ID}}` |
-| `AWS_SECRET_ACCESS_KEY` | `${{photos.SECRET_ACCESS_KEY}}` |
-| `AWS_ENDPOINT_URL_S3` | `${{photos.ENDPOINT}}` |
-| `AWS_REGION` | `${{photos.REGION}}` |
+| `REDIS_URL` | `${{Redis.REDIS_URL}}` on API, worker, **and** `marrow-mcp`. MCP meal writes call `invalidate_user_insights_cache`. Without Redis, the API keeps serving the cached day (check-in still says there are no food photos) until `cache_ttl_entry_seconds`. |
+| `BUCKET_NAME` | `${{photos.BUCKET}}` on API, worker, **and** `marrow-mcp` |
+| `AWS_ACCESS_KEY_ID` | `${{photos.ACCESS_KEY_ID}}` on API, worker, **and** `marrow-mcp` |
+| `AWS_SECRET_ACCESS_KEY` | `${{photos.SECRET_ACCESS_KEY}}` on API, worker, **and** `marrow-mcp` |
+| `AWS_ENDPOINT_URL_S3` | `${{photos.ENDPOINT}}` on API, worker, **and** `marrow-mcp` |
+| `AWS_REGION` | `${{photos.REGION}}` on API, worker, **and** `marrow-mcp` |
+
+`marrow-mcp` must use the same `photos` bucket as `marrow-api`. Meal bytes are
+served only by the API (`/photos/{id}/file` and `/thumb`). If the MCP service
+has no bucket credentials it writes the JPEG to container-local `PHOTO_DIR`,
+the API 404s, and the check-in tile falls back to the bowl icon. On Railway,
+`log_meal` / `attach_meal_photo` refuse that write instead of reporting
+`has_photo: true` for a file the API cannot read. Rows already saved that way
+are not repaired by a migration: the object is not in the bucket. Attach the
+image again after the bucket variables are set.
 
 `f0rge_db.resolve_database_url` already rewrites `postgres://` / `postgresql://`
 to `postgresql+asyncpg://`.

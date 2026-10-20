@@ -49,6 +49,8 @@ async def photo_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(settings, "aws_secret_access_key", "")
     monkeypatch.setattr(settings, "aws_endpoint_url_s3", "")
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
+    # CI and laptops must not inherit a Railway env and trip the shared-bucket guard.
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
     return directory
 
 
@@ -433,3 +435,131 @@ async def test_commit_failure_leaves_no_orphan_files(
     leftovers = [path for path in photo_dir.rglob("*") if path.is_file()]
     assert leftovers == []
     assert await _photo_count(async_db, "orphan bowl") == 0
+
+
+@pytest.mark.usefixtures("memory_redis")
+async def test_mcp_photo_shows_on_cached_day_and_log_again_thumb(
+    async_db: AsyncSession, photo_dir: Path, memory_redis: dict
+) -> None:
+    """Check-in reads the Redis day. MCP must drop that cache and leave a thumb the API can serve.
+
+    ``times_logged`` is distinct calendar days for the dish name, so a second
+    photo of the same dish on the same day does not increment it.
+    """
+    from app.cache.keys import entry_key
+    from app.services.entries import EntryService, get_or_create_entry
+    from app.services.meals import MealService
+    from f0rge_db.tenant import current_user_id
+
+    day = datetime.date(2026, 7, 11)
+    await get_or_create_entry(async_db, day)
+    svc = EntryService(async_db)
+    before = await svc.get_entry(day)
+    assert before.photos == []
+    cache_key = entry_key(current_user_id(), day)
+    assert cache_key in memory_redis["store"]
+
+    logged = await _log(
+        async_db,
+        date=day.isoformat(),
+        name="cache bowl",
+        photo_base64=_b64(_jpeg(64, 48, "navy")),
+    )
+    assert logged["has_photo"] is True
+    assert logged["deduplicated"] is False
+    assert cache_key not in memory_redis["store"]
+
+    async_db.expire_all()
+    after = await svc.get_entry(day)
+    photo = next(item for item in after.photos if item.id == logged["photo_id"])
+    assert photo.has_image is True
+    assert photo.filename
+
+    recent = await MealService(async_db).list_recent()
+    hit = next(item for item in recent if item.dish_name == "cache bowl")
+    assert hit.has_image is True
+    assert hit.source_photo_id == logged["photo_id"]
+    assert hit.times_logged == 1
+    assert hit.last_logged == day
+
+    same_day = await _log(
+        async_db,
+        date=day.isoformat(),
+        name="cache bowl",
+        photo_base64=_b64(_jpeg(32, 32, "teal")),
+        allow_duplicate=True,
+    )
+    assert same_day["photo_id"] != logged["photo_id"]
+    again = await MealService(async_db).list_recent()
+    still = next(item for item in again if item.dish_name == "cache bowl")
+    assert still.times_logged == 1
+    assert still.has_image is True
+
+    thumb = await PhotoService(
+        async_db, FoodAnalysisOrchestrator(), MealTagService(async_db)
+    ).serve_photo_thumb(logged["photo_id"])
+    assert thumb.body[:2] == b"\xff\xd8"
+
+    other_day = datetime.date(2026, 7, 12)
+    await _log(
+        async_db,
+        date=other_day.isoformat(),
+        name="cache bowl",
+        photo_base64=_b64(_jpeg(40, 40, "olive")),
+    )
+    spanned = await MealService(async_db).list_recent()
+    counted = next(item for item in spanned if item.dish_name == "cache bowl")
+    assert counted.times_logged == 2
+    assert counted.last_logged == other_day
+
+
+@pytest.mark.usefixtures("memory_redis")
+async def test_attach_meal_photo_busts_entry_cache(
+    async_db: AsyncSession, photo_dir: Path, memory_redis: dict
+) -> None:
+    from app.cache.keys import entry_key
+    from app.services.entries import EntryService
+    from f0rge_db.tenant import current_user_id
+
+    day = datetime.date(2026, 7, 13)
+    bare = await _log(async_db, date=day.isoformat(), name="attach bowl")
+    assert bare["has_photo"] is False
+
+    svc = EntryService(async_db)
+    cached = await svc.get_entry(day)
+    assert cached.photos[0].has_image is False
+    cache_key = entry_key(current_user_id(), day)
+    assert cache_key in memory_redis["store"]
+
+    attached = await _attach(
+        async_db,
+        photo_id=bare["photo_id"],
+        photo_base64=_b64(_jpeg(48, 36, "orange")),
+    )
+    assert attached["has_photo"] is True
+    assert cache_key not in memory_redis["store"]
+
+    async_db.expire_all()
+    refreshed = await svc.get_entry(day)
+    photo = next(item for item in refreshed.photos if item.id == bare["photo_id"])
+    assert photo.has_image is True
+
+    thumb = await PhotoService(
+        async_db, FoodAnalysisOrchestrator(), MealTagService(async_db)
+    ).serve_photo_thumb(bare["photo_id"])
+    assert thumb.body[:2] == b"\xff\xd8"
+
+
+async def test_railway_without_bucket_does_not_store_a_local_only_photo(
+    async_db: AsyncSession, photo_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    with pytest.raises(ValidationError, match="shared photo bucket"):
+        await _log(
+            async_db,
+            date="2026-07-14",
+            name="unservable bowl",
+            photo_base64=_b64(_jpeg(24, 24, "black")),
+        )
+    assert await _photo_count(async_db, "unservable bowl") == 0
+    assert [path for path in photo_dir.rglob("*") if path.is_file()] == []
