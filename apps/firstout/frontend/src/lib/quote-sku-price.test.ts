@@ -68,6 +68,7 @@ function customer(overrides: Partial<CustomerCrm> = {}): CustomerCrm {
     on_hold_reason: null,
     payment_terms_days: null,
     price_list_id: null,
+    payment_reminders_opt_out: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,

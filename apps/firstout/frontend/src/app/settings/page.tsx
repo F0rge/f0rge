@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  canManageUsers,
   canMutateSettings,
   getSettings,
   isActiveLocation,
@@ -36,6 +37,7 @@ import {
   type Location,
 } from "@/lib/api";
 import { CommunicationsSettings } from "@/app/settings/communications-settings";
+import { PaymentRemindersSettings } from "@/app/settings/payment-reminders-settings";
 import { useAuth } from "@/lib/auth";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -85,6 +87,7 @@ function SettingsSaveButton({
 export default function SettingsPage() {
   const { user } = useAuth();
   const canMutate = canMutateSettings(user);
+  const canConfigureReminders = canManageUsers(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [vatPercent, setVatPercent] = useState("15");
   const [currency, setCurrency] = useState("ZAR");
@@ -365,6 +368,7 @@ export default function SettingsPage() {
             <Tab>Locations</Tab>
             <Tab>Operations</Tab>
             <Tab>Communications</Tab>
+            {canConfigureReminders ? <Tab>Payment reminders</Tab> : null}
           </TabList>
           <TabPanels>
             <TabPanel>
@@ -681,6 +685,14 @@ export default function SettingsPage() {
                 <CommunicationsSettings />
               </Tile>
             </TabPanel>
+
+            {canConfigureReminders ? (
+              <TabPanel>
+                <Tile>
+                  <PaymentRemindersSettings />
+                </Tile>
+              </TabPanel>
+            ) : null}
           </TabPanels>
         </Tabs>
       ) : null}

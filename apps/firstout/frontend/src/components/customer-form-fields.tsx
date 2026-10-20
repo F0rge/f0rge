@@ -22,6 +22,7 @@ export const emptyCustomerForm: CreateCustomerPayload = {
   on_hold_reason: "",
   payment_terms_days: undefined,
   price_list_id: "",
+  payment_reminders_opt_out: false,
 };
 
 export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
@@ -38,6 +39,7 @@ export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
     on_hold_reason: customer.on_hold_reason ?? "",
     payment_terms_days: customer.payment_terms_days ?? undefined,
     price_list_id: customer.price_list_id ?? "",
+    payment_reminders_opt_out: customer.payment_reminders_opt_out ?? false,
   };
 }
 
@@ -69,6 +71,7 @@ export function customerWritePayload(
   }
   const listId = form.price_list_id?.trim?.() ?? form.price_list_id;
   payload.price_list_id = listId ? listId : null;
+  payload.payment_reminders_opt_out = form.payment_reminders_opt_out ?? false;
   return payload;
 }
 
@@ -163,6 +166,15 @@ export function CustomerFormFields({
             payment_terms_days: value === "" ? undefined : Number(value),
           })
         }
+        disabled={disabled}
+      />
+      <Toggle
+        id={`${idPrefix}-reminders`}
+        labelText="Payment reminders"
+        labelA="Opted out"
+        labelB="On"
+        toggled={!form.payment_reminders_opt_out}
+        onToggle={(checked) => onChange({ payment_reminders_opt_out: !checked })}
         disabled={disabled}
       />
       <TextInput

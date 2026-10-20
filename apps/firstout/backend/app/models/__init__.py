@@ -36,6 +36,7 @@ from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, Pick
 from app.models.price_list import PriceList, PriceListItem
 from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.payment import Payment, PaymentDirection
+from app.models.payment_reminder import PaymentReminderSend
 from app.models.payment_term import PaymentTerm
 from app.models.proforma import Proforma
 from app.models.quote import Quote, QuoteLine, QuoteStatus
@@ -143,6 +144,7 @@ __all__ = [
     "OpsCommerceOrder",
     "Payment",
     "PaymentDirection",
+    "PaymentReminderSend",
     "PaymentTerm",
     "ArchiveCreditNote",
     "ArchiveCreditNoteLine",

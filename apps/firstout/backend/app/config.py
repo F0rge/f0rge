@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # Off so a wiped database stays wiped. Owner bootstrap is separate.
     seed_boot_fixtures: bool = False
     seed_playground: bool = False
+    # Background loop that emails overdue invoices. Tests turn this off.
+    payment_reminder_ticker: bool = True
 
     settings_encryption_key: str = ""
     wa_verify_token: str = ""
