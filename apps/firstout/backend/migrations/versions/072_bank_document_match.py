@@ -1,11 +1,7 @@
 """Split bank lines across invoice and bill payments.
 
-Revision ID: 064_bank_document_match
-Revises: 063_partial_payments
-
-Stacked on the partial-payments branch, independently of payment reminders.
-That branch also adds a revision 064, so these two are sibling Alembic heads
-until one is renumbered when they merge.
+Revision ID: 072_bank_document_match
+Revises: 071_payment_reminders
 
 """
 
@@ -17,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "064_bank_document_match"
-down_revision: Union[str, Sequence[str], None] = "063_partial_payments"
+revision: str = "072_bank_document_match"
+down_revision: Union[str, Sequence[str], None] = "071_payment_reminders"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
