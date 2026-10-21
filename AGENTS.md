@@ -6,7 +6,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ## Stack
 
-- Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.10
+- Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.11
 - Frontend: Next.js 16 + React 19 + Tailwind 4 + shadcn/ui
 - Auth: JWT in `ht_session` httpOnly cookie (email + password)
 - Deploy: Railway (API, worker, MCP, frontend) + Railway pgvector Postgres + Redis + Buckets for photos
@@ -113,7 +113,7 @@ Canonical reference for what lives in `libs/` and the non-duplication mandate. S
 
 ## Conventions
 
-- Python: ruff for linting/formatting, target Python 3.10 (no 3.11+ syntax)
+- Python: ruff for linting/formatting, target Python 3.11
 - Use `from __future__ import annotations` in all Python files
 - Frontend: TypeScript strict, Tailwind for styling; primitives from `@f0rge/ui`; forms from `@f0rge/ui/forms`; token skins in app CSS; Storybook is the catalogue — see `.cursor/rules/ui-kit.mdc`
 - API prefix: /api/v1

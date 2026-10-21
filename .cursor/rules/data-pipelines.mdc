@@ -79,7 +79,7 @@ Source JSON files live in `apps/marrow/backend/data/`. `apps/marrow/backend/data
 2. **Source traceability** — always record origin and timestamp
 3. **Normalize aggressively** — handle messy real-world ingredient names
 4. **Postgres-native** — dietary data lives in Postgres via Alembic migrations
-5. **Python 3.10** — no newer syntax
+5. **Python 3.11**
 
 ## Commands
 
@@ -146,7 +146,7 @@ Correlate dietary intake with symptom scores; time-series trigger identification
 2. **Confidence scores everywhere** — never present uncertain results as definitive
 3. **Fail open** — flag for human review rather than guess
 4. **Reproducibility** — all analysis reproducible from stored data
-5. **Python 3.10** — no syntax newer than 3.10
+5. **Python 3.11**
 
 ## Commands
 

@@ -1,5 +1,5 @@
 name: Setup Python uv
-description: uv + Python 3.10, optionally install pinned ruff from .github/ruff-version
+description: uv + Python 3.10 (repo default) and 3.11 (Marrow), optionally install pinned ruff from .github/ruff-version
 
 inputs:
   install-ruff:
@@ -14,9 +14,14 @@ runs:
       with:
         enable-cache: true
 
-    - name: Pin Python 3.10
+    - name: Pin Python 3.10 and 3.11
       shell: bash
-      run: uv python install 3.10
+      # Both interpreters are installed. CI sync selects 3.11 only when the
+      # project .python-version says so (Marrow). Other projects pass
+      # UV_PYTHON=3.10 so they do not pick up 3.11.
+      run: |
+        uv python install 3.10
+        uv python install 3.11
 
     - name: Install pinned ruff
       if: inputs.install-ruff == 'true'

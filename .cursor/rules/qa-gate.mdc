@@ -35,7 +35,7 @@ Report every violation with `file:line`.
 
 ### Phase 2: Rule Adherence
 
-**Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.10 syntax.
+**Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.11. Shared libs stay valid on 3.10.
 
 **Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first. No `@base-ui/react` or `@mantine/*` imports in `apps/**` (see `ui-kit.mdc`). When `libs/ui` is affected and Storybook exists, run `npx nx run f0rge-ui:storybook` build. Enforce restricted-imports ESLint when configured.
 

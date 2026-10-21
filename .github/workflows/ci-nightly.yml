@@ -26,7 +26,14 @@ jobs:
         run: |
           for p in $(npx nx show projects --projects tag:platform:py --json | jq -r '.[]'); do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            uv sync --frozen --project "$ROOT"
+            # Same interpreter rule as ci.yml: only a project .python-version
+            # (Marrow is 3.11) overrides the 3.10 default.
+            if [ -f "$ROOT/.python-version" ]; then
+              PY=$(tr -d '[:space:]' < "$ROOT/.python-version")
+            else
+              PY=3.10
+            fi
+            UV_PYTHON="$PY" uv sync --frozen --project "$ROOT"
           done
 
       - name: Assert no root uv.lock
