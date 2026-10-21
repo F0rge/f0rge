@@ -28,16 +28,18 @@ import {
 } from "@/components/customer-duplicate-modal";
 import {
   CustomerFormFields,
+  RepriceDraftsModal,
   customerWritePayload,
   emptyCustomerForm,
   formFromCustomer,
 } from "@/components/customer-form-fields";
 import {
   ApiError,
-  CUSTOMER_TYPE_LABELS,
+  PRICE_CLASSIFICATIONS,
   canManageCustomerCredit,
   canMutateCustomers,
   createCustomer,
+  repriceCustomerDrafts,
   findCustomerDuplicates,
   formatZarAmount,
   listCustomers,
@@ -45,7 +47,6 @@ import {
   type CreateCustomerPayload,
   type CustomerCrm,
   type CustomerDuplicateMatch,
-  type CustomerType,
 } from "@/lib/api";
 import { CUSTOMER_SEARCH_PLACEHOLDER } from "@/lib/customer-search";
 import { useAuth } from "@/lib/auth";
@@ -64,8 +65,8 @@ const ACTIONS_HEADER = { key: "actions", header: "" };
 
 const CSV_HEADERS = [
   "Customer",
-  "Type",
-  "Tier",
+  "Classification",
+  "Cin7 price tier",
   "Email",
   "Phone",
   "Open invoices",
@@ -75,7 +76,7 @@ const CSV_HEADERS = [
   "Last purchase",
 ];
 
-type TypeFilter = "all" | CustomerType;
+type TypeFilter = "all" | (typeof PRICE_CLASSIFICATIONS)[number];
 type BalanceFilter = "any" | "open_invoices" | "active_laybys";
 
 type CustomerRow = {
@@ -108,8 +109,19 @@ function formatActiveLaybys(customer: CustomerCrm): { amount: string; detail: st
   return { amount: formatZarAmount(customer.active_laybys_zar), detail: label };
 }
 
-function customerTypeTagType(type: CustomerType): "blue" | "purple" {
-  return type === "retail" ? "blue" : "purple";
+function classificationTagType(
+  classification: (typeof PRICE_CLASSIFICATIONS)[number],
+): "blue" | "purple" | "teal" | "magenta" {
+  if (classification === "Retail") {
+    return "blue";
+  }
+  if (classification === "Wholesale") {
+    return "purple";
+  }
+  if (classification === "Stockist") {
+    return "teal";
+  }
+  return "magenta";
 }
 
 function csvMoney(count: number, amount: string): string {
@@ -141,6 +153,8 @@ export default function CustomersPage() {
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [duplicateMatches, setDuplicateMatches] = useState<CustomerDuplicateMatch[]>([]);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [repriceCustomer, setRepriceCustomer] = useState<CustomerCrm | null>(null);
+  const [repriceBusy, setRepriceBusy] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchFilter), 250);
@@ -173,7 +187,7 @@ export default function CustomersPage() {
 
   const filteredCustomers = useMemo(() => {
     return customers.filter((customer) => {
-      if (typeFilter !== "all" && customer.customer_type !== typeFilter) {
+      if (typeFilter !== "all" && customer.price_classification !== typeFilter) {
         return false;
       }
       if (balanceFilter === "open_invoices" && customer.open_invoices_count === 0) {
@@ -218,7 +232,7 @@ export default function CustomersPage() {
       CSV_HEADERS,
       filteredCustomers.map((customer) => [
         customer.name,
-        CUSTOMER_TYPE_LABELS[customer.customer_type],
+        customer.price_classification,
         customer.price_tier,
         customer.email ?? "",
         customer.phone ?? "",
@@ -300,14 +314,39 @@ export default function CustomersPage() {
     setSaving(true);
     setError(null);
     try {
-      await updateCustomer(editCustomer.id, customerWritePayload(editForm, canEditCredit));
+      const previous = editCustomer.price_classification;
+      const updated = await updateCustomer(
+        editCustomer.id,
+        customerWritePayload(editForm, canEditCredit),
+      );
       setEditCustomer(null);
       setEditForm(emptyCustomerForm);
       await loadCustomers();
+      const drafts = (updated.draft_quote_count ?? 0) + (updated.draft_sales_order_count ?? 0);
+      if (previous !== updated.price_classification && drafts > 0) {
+        setRepriceCustomer(updated);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update customer.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function confirmReprice() {
+    if (!repriceCustomer) {
+      return;
+    }
+    setRepriceBusy(true);
+    setError(null);
+    try {
+      await repriceCustomerDrafts(repriceCustomer.id);
+      setRepriceCustomer(null);
+      await loadCustomers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reprice drafts.");
+    } finally {
+      setRepriceBusy(false);
     }
   }
 
@@ -366,28 +405,24 @@ export default function CustomersPage() {
               onChange={(event) => setSearchFilter(event.target.value)}
             />
             <span className="firstout-catalogue-toolbar__divider" aria-hidden />
-            <div className="firstout-catalogue-chips" role="group" aria-label="Customer type filter">
+            <div className="firstout-catalogue-chips" role="group" aria-label="Price classification filter">
               <Button
                 kind={typeFilter === "all" ? "primary" : "ghost"}
                 size="sm"
                 onClick={() => setTypeFilter("all")}
               >
-                All Types
+                All
               </Button>
-              <Button
-                kind={typeFilter === "retail" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setTypeFilter("retail")}
-              >
-                Retail
-              </Button>
-              <Button
-                kind={typeFilter === "trade" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setTypeFilter("trade")}
-              >
-                Trade
-              </Button>
+              {PRICE_CLASSIFICATIONS.map((classification) => (
+                <Button
+                  key={classification}
+                  kind={typeFilter === classification ? "primary" : "ghost"}
+                  size="sm"
+                  onClick={() => setTypeFilter(classification)}
+                >
+                  {classification}
+                </Button>
+              ))}
             </div>
             <span className="firstout-catalogue-toolbar__divider" aria-hidden />
             <div className="firstout-catalogue-chips" role="group" aria-label="Balance filter">
@@ -502,11 +537,14 @@ export default function CustomersPage() {
                                 <CustomerCrmBadges customer={entry} />
                               </TableCell>
                               <TableCell>
-                                <Tag type={customerTypeTagType(entry.customer_type)} size="sm">
-                                  {CUSTOMER_TYPE_LABELS[entry.customer_type]}
+                                <Tag type={classificationTagType(entry.price_classification)} size="sm">
+                                  {entry.price_classification}
                                 </Tag>
                                 <div className="firstout-muted-text" style={{ marginTop: "0.25rem" }}>
-                                  Tier: {entry.price_tier}
+                                  {entry.price_classification === "Retail" ? "incl. VAT" : "excl. VAT"}
+                                  {entry.price_tier && entry.price_tier !== "standard"
+                                    ? ` · Cin7 ${entry.price_tier}`
+                                    : ""}
                                 </div>
                               </TableCell>
                               <TableCell className="firstout-cell-wrap">
@@ -628,6 +666,14 @@ export default function CustomersPage() {
           showCreditFields={canEditCredit}
         />
       </Modal>
+      <RepriceDraftsModal
+        open={repriceCustomer !== null}
+        quotes={repriceCustomer?.draft_quote_count ?? 0}
+        orders={repriceCustomer?.draft_sales_order_count ?? 0}
+        busy={repriceBusy}
+        onConfirm={() => void confirmReprice()}
+        onCancel={() => setRepriceCustomer(null)}
+      />
     </Stack>
   );
 }

@@ -62,8 +62,10 @@ export default function NewSkuPage() {
   const canMutate = canMutateCatalogue(user);
   const [createForm, setCreateForm] = useState<CreateSkuPayload>(emptyCreateForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [retailIncVat, setRetailIncVat] = useState("");
+  const [stockistIncVat, setStockistIncVat] = useState("");
   const [wholesaleIncVat, setWholesaleIncVat] = useState("");
+  const [decoratorIncVat, setDecoratorIncVat] = useState("");
+  const [retailIncVat, setRetailIncVat] = useState("");
   const [recordStockNow, setRecordStockNow] = useState(false);
   const [openingLocationId, setOpeningLocationId] = useState("");
   const [openingQty, setOpeningQty] = useState<number | "">(1);
@@ -160,13 +162,21 @@ export default function NewSkuPage() {
       const created = await createSku(payload);
 
       const pricePayload: UpdateSkuPricePayload = {};
+      const stockist = parseOptionalIncVat(stockistIncVat, "Stockist inc VAT");
+      if (stockist !== null) {
+        pricePayload.stockist_inc_vat = stockist;
+      }
+      const wholesale = parseOptionalIncVat(wholesaleIncVat, "Wholesale inc VAT");
+      if (wholesale !== null) {
+        pricePayload.wholesale_inc_vat = wholesale;
+      }
+      const decorator = parseOptionalIncVat(decoratorIncVat, "Decorator inc VAT");
+      if (decorator !== null) {
+        pricePayload.decorator_inc_vat = decorator;
+      }
       const retail = parseOptionalIncVat(retailIncVat, "Retail inc VAT");
       if (retail !== null) {
         pricePayload.retail_inc_vat = retail;
-      }
-      const wholesale = parseOptionalIncVat(wholesaleIncVat, "Trade/Wholesale inc VAT");
-      if (wholesale !== null) {
-        pricePayload.wholesale_inc_vat = wholesale;
       }
       if (Object.keys(pricePayload).length > 0) {
         await updateSku(created.id, pricePayload);
@@ -370,7 +380,37 @@ export default function NewSkuPage() {
           <Tile>
             <Stack gap={5}>
               <h2 className="cds--type-productive-heading-02">Pricing (ZAR, includes 15% VAT)</h2>
+              <p className="cds--type-body-01">
+                Enter each price including VAT. Firstout stores the ex-VAT amount at 15%.
+              </p>
               <Grid condensed fullWidth>
+                <Column lg={8} md={4} sm={4}>
+                  <TextInput
+                    id="new-sku-stockist-inc-vat"
+                    labelText="Stockist inc VAT"
+                    helperText="Optional — saved after the SKU is created"
+                    value={stockistIncVat}
+                    onChange={(event) => setStockistIncVat(event.target.value)}
+                  />
+                </Column>
+                <Column lg={8} md={4} sm={4}>
+                  <TextInput
+                    id="new-sku-wholesale-inc-vat"
+                    labelText="Wholesale inc VAT"
+                    helperText="Optional — saved after the SKU is created"
+                    value={wholesaleIncVat}
+                    onChange={(event) => setWholesaleIncVat(event.target.value)}
+                  />
+                </Column>
+                <Column lg={8} md={4} sm={4}>
+                  <TextInput
+                    id="new-sku-decorator-inc-vat"
+                    labelText="Decorator inc VAT"
+                    helperText="Optional — saved after the SKU is created"
+                    value={decoratorIncVat}
+                    onChange={(event) => setDecoratorIncVat(event.target.value)}
+                  />
+                </Column>
                 <Column lg={8} md={4} sm={4}>
                   <TextInput
                     id="new-sku-retail-inc-vat"
@@ -378,15 +418,6 @@ export default function NewSkuPage() {
                     helperText="Optional — saved after the SKU is created"
                     value={retailIncVat}
                     onChange={(event) => setRetailIncVat(event.target.value)}
-                  />
-                </Column>
-                <Column lg={8} md={4} sm={4}>
-                  <TextInput
-                    id="new-sku-wholesale-inc-vat"
-                    labelText="Trade/Wholesale inc VAT"
-                    helperText="Optional — saved after the SKU is created"
-                    value={wholesaleIncVat}
-                    onChange={(event) => setWholesaleIncVat(event.target.value)}
                   />
                 </Column>
               </Grid>

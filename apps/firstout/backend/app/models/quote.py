@@ -5,7 +5,17 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Integer, Numeric, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,6 +55,12 @@ class Quote(UUIDPkMixin, TimestampMixin, Base):
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prices_include_vat: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
@@ -92,6 +108,7 @@ class QuoteLine(UUIDPkMixin, TimestampMixin, Base):
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     quote: Mapped[Quote] = relationship(back_populates="lines")
     sku: Mapped["Sku"] = relationship()

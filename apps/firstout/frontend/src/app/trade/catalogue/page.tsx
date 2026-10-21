@@ -57,7 +57,7 @@ export default function TradeCataloguePage() {
             <div key={item.id} style={{ display: "flex", gap: "1rem", alignItems: "end" }}>
               <div style={{ flex: 1 }}>
                 <strong>{item.our_ref}</strong> {item.name}
-                <div>{formatZarAmount(item.unit_inc_vat)} inc VAT</div>
+                <div>{formatZarAmount(item.unit_ex_vat)} excl. VAT</div>
               </div>
               <NumberInput
                 id={`qty-${item.id}`}

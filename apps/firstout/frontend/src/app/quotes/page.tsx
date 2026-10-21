@@ -31,8 +31,11 @@ import {
   computeInvoicePreview,
   createQuote,
   downloadQuotePdf,
+  exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
+  incVatToExVat,
+  parsePriceInput,
   isActiveLocation,
   listCustomers,
   listLocations,
@@ -50,12 +53,15 @@ import { useAuth } from "@/lib/auth";
 import {
   canEditQuoteDiscount,
   canOverrideQuoteUnitPrice,
+  displayUnitAmount,
   formatQuoteSkuOption,
   formatUnitExVatInput,
+  pricesIncludeVat,
   quoteLineExVat,
   quoteSkuMatchesQuery,
   quoteSkuUnitExVat,
   quoteUnitPriceHelper,
+  vatBasisLabel,
 } from "@/lib/quote-sku-price";
 
 const TABLE_HEADERS = [
@@ -132,6 +138,7 @@ function QuotesPageInner() {
   const [holdStock, setHoldStock] = useState(true);
   const [depositAmount, setDepositAmount] = useState("");
   const [tender, setTender] = useState<"cash" | "eft">("eft");
+  const [unitDrafts, setUnitDrafts] = useState<Record<number, string>>({});
 
   const loadQuotes = useCallback(async () => {
     setLoading(true);
@@ -207,6 +214,15 @@ function QuotesPageInner() {
   );
 
   const selectedCustomer = customers.find((row) => row.id === customerId) ?? null;
+  const showInclusive = pricesIncludeVat(selectedCustomer);
+
+  function shownUnit(ex: string): string {
+    const parsed = parsePriceInput(ex);
+    if (parsed === null) {
+      return ex;
+    }
+    return formatPriceAmount(displayUnitAmount(parsed, showInclusive));
+  }
 
   const quotePreview = useMemo(() => {
     const subtotal = lines.reduce(
@@ -218,6 +234,7 @@ function QuotesPageInner() {
 
   function applyCustomer(nextId: string) {
     const customer = customers.find((row) => row.id === nextId) ?? null;
+    setUnitDrafts({});
     setCustomerId(nextId);
     setLines((current) =>
       current.map((line) =>
@@ -404,14 +421,15 @@ function QuotesPageInner() {
             value={customerId}
             onChange={(event) => applyCustomer(event.target.value)}
           >
-            <SelectItem value="" text="No customer (retail ex VAT)" />
+            <SelectItem value="" text="No customer (retail incl. VAT)" />
             {customers.map((customer) => (
               <SelectItem key={customer.id} value={customer.id} text={customer.name} />
             ))}
           </Select>
           <p className="cds--type-helper-text-01">
-            SKU prices are ex VAT. The quote total adds 15% VAT. A customer&apos;s price list is
-            used when it has the SKU, then trade wholesale ex VAT, otherwise retail ex VAT.
+            Retail unit prices are shown incl. VAT. Stockist, Wholesale, and Decorator unit prices
+            are shown excl. VAT, and VAT is added on the total. A price list overrides the
+            classification. A missing tier price falls back to Retail and is marked on the line.
             {canOverridePrice
               ? " You can edit the unit price."
               : " The unit price is read-only. Only the owner can change it."}
@@ -463,31 +481,62 @@ function QuotesPageInner() {
                 />
                 <TextInput
                   id={`quote-unit-${index}`}
-                  labelText="Unit ex VAT"
-                  value={line.unit_ex_vat}
+                  labelText={`Unit ${vatBasisLabel(showInclusive)}`}
+                  value={unitDrafts[index] ?? shownUnit(line.unit_ex_vat)}
                   readOnly={!canOverridePrice}
                   helperText={
-                    !canOverridePrice
-                      ? priced
-                        ? `${quoteUnitPriceHelper(priced, Boolean(selectedCustomer))} · read-only`
-                        : "Ex VAT · read-only"
-                      : line.priceEdited
-                        ? "Ex VAT — edited"
-                        : priced
-                          ? quoteUnitPriceHelper(priced, Boolean(selectedCustomer))
-                          : "Ex VAT"
+                    priced?.warning
+                      ? priced.warning
+                      : !canOverridePrice
+                        ? priced
+                          ? `${quoteUnitPriceHelper(priced, Boolean(selectedCustomer))} · read-only`
+                          : `${vatBasisLabel(showInclusive)} · read-only`
+                        : line.priceEdited
+                          ? `${vatBasisLabel(showInclusive)} — edited`
+                          : priced
+                            ? quoteUnitPriceHelper(priced, Boolean(selectedCustomer))
+                            : vatBasisLabel(showInclusive)
                   }
+                  onFocus={() => {
+                    if (!canOverridePrice) {
+                      return;
+                    }
+                    setUnitDrafts((current) => ({
+                      ...current,
+                      [index]: shownUnit(line.unit_ex_vat),
+                    }));
+                  }}
                   onChange={(event) => {
                     if (!canOverridePrice) {
                       return;
                     }
+                    setUnitDrafts((current) => ({ ...current, [index]: event.target.value }));
+                  }}
+                  onBlur={() => {
+                    const draft = unitDrafts[index];
+                    if (draft === undefined) {
+                      return;
+                    }
+                    const parsed = parsePriceInput(draft);
+                    const stored =
+                      parsed === null
+                        ? ""
+                        : formatPriceAmount(showInclusive ? incVatToExVat(parsed) : parsed);
+                    const previousAmount = parsePriceInput(line.unit_ex_vat);
+                    const previousText =
+                      previousAmount === null ? "" : formatPriceAmount(previousAmount);
                     const next = [...lines];
                     next[index] = {
                       ...next[index],
-                      unit_ex_vat: event.target.value,
-                      priceEdited: true,
+                      unit_ex_vat: stored,
+                      priceEdited: stored !== previousText,
                     };
                     setLines(next);
+                    setUnitDrafts((current) => {
+                      const rest = { ...current };
+                      delete rest[index];
+                      return rest;
+                    });
                   }}
                 />
                 <TextInput
@@ -516,8 +565,9 @@ function QuotesPageInner() {
             Add line
           </Button>
           <p className="cds--type-body-01">
+            {showInclusive ? "Unit prices incl. VAT. " : "Unit prices excl. VAT. "}
             Ex VAT: R {formatPriceAmount(quotePreview.subtotal)} · VAT 15%: R{" "}
-            {formatPriceAmount(quotePreview.vat)} · Total inc VAT: R{" "}
+            {formatPriceAmount(quotePreview.vat)} · Total incl. VAT: R{" "}
             {formatPriceAmount(quotePreview.totalIncVat)}
           </p>
         </Stack>

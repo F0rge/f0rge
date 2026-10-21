@@ -43,6 +43,7 @@ class TillSaleResponse(BaseModel):
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal
+    prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     location: TillSaleLocationStock
 

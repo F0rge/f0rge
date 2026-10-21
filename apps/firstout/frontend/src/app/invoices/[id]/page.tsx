@@ -26,6 +26,8 @@ import {
   createCreditNote,
   createPayment,
   downloadInvoicePdf,
+  exVatToIncVat,
+  formatPriceAmount,
   formatZarAmount,
   getCommsSettings,
   getCustomer,
@@ -430,7 +432,9 @@ export default function InvoiceDetailPage() {
               <TableRow>
                 <TableHeader>Description</TableHeader>
                 <TableHeader>Qty</TableHeader>
-                <TableHeader>Unit ex VAT</TableHeader>
+                <TableHeader>
+                  {invoice.prices_include_vat ? "Unit incl. VAT" : "Unit excl. VAT"}
+                </TableHeader>
                 <TableHeader>Ex VAT</TableHeader>
                 <TableHeader>VAT ({companySettings?.vat_percent ?? "15"}%)</TableHeader>
                 <TableHeader>Inc VAT</TableHeader>
@@ -439,9 +443,20 @@ export default function InvoiceDetailPage() {
             <TableBody>
               {invoice.lines.map((line) => (
                 <TableRow key={line.id}>
-                  <TableCell>{line.description}</TableCell>
+                  <TableCell>
+                    {line.description}
+                    {line.price_warning ? (
+                      <div className="firstout-muted-text">{line.price_warning}</div>
+                    ) : null}
+                  </TableCell>
                   <TableCell>{line.qty}</TableCell>
-                  <TableCell>{formatZarAmount(line.unit_ex_vat)}</TableCell>
+                  <TableCell>
+                    {formatZarAmount(
+                      invoice.prices_include_vat
+                        ? formatPriceAmount(exVatToIncVat(Number(line.unit_ex_vat)))
+                        : line.unit_ex_vat,
+                    )}
+                  </TableCell>
                   <TableCell>{formatZarAmount(line.ex_vat)}</TableCell>
                   <TableCell>{formatZarAmount(line.vat_amount)}</TableCell>
                   <TableCell>{formatZarAmount(line.inc_vat)}</TableCell>

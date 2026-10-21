@@ -79,6 +79,12 @@ class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prices_include_vat: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
     fulfillment_promise: Mapped[Optional[dict]] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=True
     )
@@ -134,6 +140,7 @@ class SalesOrderLine(UUIDPkMixin, TimestampMixin, Base):
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     fulfillment_promise: Mapped[Optional[dict]] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=True
     )

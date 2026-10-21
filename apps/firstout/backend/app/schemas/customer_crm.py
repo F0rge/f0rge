@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 CustomerType = Literal["retail", "trade"]
+PriceClassification = Literal["Stockist", "Wholesale", "Decorator", "Retail"]
 
 
 class CustomerCrmCreate(BaseModel):
@@ -17,6 +18,7 @@ class CustomerCrmCreate(BaseModel):
     vat_number: Optional[str] = None
     billing_address: Optional[str] = None
     customer_type: CustomerType = "retail"
+    price_classification: Optional[PriceClassification] = None
     price_tier: str = "standard"
     payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
     price_list_id: Optional[uuid.UUID] = None
@@ -30,6 +32,7 @@ class CustomerCrmUpdate(BaseModel):
     vat_number: Optional[str] = None
     billing_address: Optional[str] = None
     customer_type: Optional[CustomerType] = None
+    price_classification: Optional[PriceClassification] = None
     price_tier: Optional[str] = None
     credit_limit: Optional[Decimal] = None
     on_hold: Optional[bool] = None
@@ -37,6 +40,11 @@ class CustomerCrmUpdate(BaseModel):
     payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
     price_list_id: Optional[uuid.UUID] = None
     payment_reminders_opt_out: Optional[bool] = None
+
+
+class DraftRepriceResponse(BaseModel):
+    quotes: int
+    sales_orders: int
 
 
 class CustomerDuplicateMatch(BaseModel):
@@ -55,7 +63,10 @@ class CustomerCrmResponse(BaseModel):
     vat_number: Optional[str] = None
     billing_address: Optional[str] = None
     customer_type: CustomerType
+    price_classification: PriceClassification
     price_tier: str
+    draft_quote_count: int = 0
+    draft_sales_order_count: int = 0
     credit_limit: Optional[Decimal] = None
     on_hold: bool
     on_hold_reason: Optional[str] = None

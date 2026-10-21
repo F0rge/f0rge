@@ -61,8 +61,12 @@ class SkuUpdate(BaseModel):
     made_to_order_expires_at: Optional[datetime.datetime] = None
     reorder_min: Optional[int] = Field(default=None, ge=1)
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
+    stockist_ex_vat: Optional[Decimal] = None
+    stockist_inc_vat: Optional[Decimal] = None
     wholesale_ex_vat: Optional[Decimal] = None
     wholesale_inc_vat: Optional[Decimal] = None
+    decorator_ex_vat: Optional[Decimal] = None
+    decorator_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
     carton_count: Optional[int] = Field(default=None, ge=1)
@@ -88,8 +92,12 @@ class SkuResponse(BaseModel):
     last_landed_cost_zar: Optional[Decimal] = None
     category: Optional[str] = None
     photo_storage_key: Optional[str]
+    stockist_ex_vat: Optional[Decimal] = None
+    stockist_inc_vat: Optional[Decimal] = None
     wholesale_ex_vat: Optional[Decimal] = None
     wholesale_inc_vat: Optional[Decimal] = None
+    decorator_ex_vat: Optional[Decimal] = None
+    decorator_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
     carton_count: int

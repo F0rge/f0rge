@@ -1,14 +1,23 @@
 import {
+  exVatToIncVat,
   formatPriceAmount,
   parsePriceInput,
   roundHalfUp,
   type CustomerCrm,
+  type PriceClassification,
   type PriceList,
   type Sku,
 } from "@/lib/api";
 
-/** How a quote line's starting unit price was chosen. All amounts are ex VAT. */
-export type QuotePriceSource = "price_list" | "wholesale" | "retail" | "missing";
+/** How a line's starting unit price was chosen. Amounts on the object are ex VAT. */
+export type QuotePriceSource =
+  | "price_list"
+  | "stockist"
+  | "wholesale"
+  | "decorator"
+  | "retail"
+  | "retail_fallback"
+  | "missing";
 
 /** Matches `UserRole.OWNER`. Other roles see the computed price and cannot change it. */
 export function canOverrideQuoteUnitPrice(role: string | null | undefined): boolean {
@@ -43,11 +52,53 @@ export type QuoteSkuPrice = {
   unitExVat: number | null;
   source: QuotePriceSource;
   priceListName: string | null;
+  warning: string | null;
+  pricesIncludeVat: boolean;
 };
 
-type QuoteCustomer = Pick<CustomerCrm, "customer_type" | "price_list_id"> | null;
+type QuoteCustomer = Pick<CustomerCrm, "customer_type" | "price_list_id" | "price_classification"> | null;
 
-type QuoteSku = Pick<Sku, "id" | "our_ref" | "name" | "our_barcode" | "retail_ex_vat" | "wholesale_ex_vat">;
+type QuoteSku = Pick<
+  Sku,
+  | "id"
+  | "our_ref"
+  | "name"
+  | "our_barcode"
+  | "retail_ex_vat"
+  | "wholesale_ex_vat"
+  | "stockist_ex_vat"
+  | "decorator_ex_vat"
+>;
+
+const TIER_FIELD = {
+  Stockist: "stockist_ex_vat",
+  Wholesale: "wholesale_ex_vat",
+  Decorator: "decorator_ex_vat",
+  Retail: "retail_ex_vat",
+} as const;
+
+export function classificationOf(customer: QuoteCustomer): PriceClassification {
+  if (customer?.price_classification) {
+    return customer.price_classification;
+  }
+  if (customer?.customer_type === "trade") {
+    return "Wholesale";
+  }
+  return "Retail";
+}
+
+/** Retail, and no customer, is the only inclusive display. */
+export function pricesIncludeVat(customer: QuoteCustomer): boolean {
+  return classificationOf(customer) === "Retail";
+}
+
+export function vatBasisLabel(includingVat: boolean): "incl. VAT" | "excl. VAT" {
+  return includingVat ? "incl. VAT" : "excl. VAT";
+}
+
+export function displayUnitAmount(unitExVat: number, includingVat: boolean): number {
+  return includingVat ? exVatToIncVat(unitExVat) : unitExVat;
+}
 
 function positiveAmount(value: string | null | undefined): number | null {
   if (!value) {
@@ -60,9 +111,17 @@ function positiveAmount(value: string | null | undefined): number | null {
   return parsed;
 }
 
-function moneyLabel(value: string | null | undefined): string {
-  const amount = positiveAmount(value);
-  return amount === null ? "—" : `R ${formatPriceAmount(amount)}`;
+const CIN7_NAMED_PRICE_LISTS = new Set([
+  "Cin7 Stockist",
+  "Cin7 Wholesale",
+  "Cin7 Decorator",
+  "Cin7 Retail",
+]);
+
+/** Cin7 import lists. They must not replace the customer's classification price. */
+export function isCin7GeneratedPriceList(name: string | null | undefined): boolean {
+  const text = name?.trim() ?? "";
+  return CIN7_NAMED_PRICE_LISTS.has(text) || /^Cin7 Tier [1-9]\d*$/.test(text);
 }
 
 function listUnitExVat(
@@ -74,70 +133,104 @@ function listUnitExVat(
     return null;
   }
   const list = priceLists.find((entry) => entry.id === customer.price_list_id);
-  const item = list?.items.find((row) => row.sku_id === sku.id);
+  if (!list || isCin7GeneratedPriceList(list.name)) {
+    return null;
+  }
+  const item = list.items.find((row) => row.sku_id === sku.id);
   const unitExVat = positiveAmount(item?.unit_ex_vat);
-  if (!list || unitExVat === null) {
+  if (unitExVat === null) {
     return null;
   }
   return { unitExVat, priceListName: list.name };
 }
 
 /**
- * Unit price for a quote line, ex VAT.
+ * Unit price for a document line, stored ex VAT.
  *
- * Same order as the API (`resolve_unit_ex_vat`): the customer's price list,
- * then wholesale ex VAT for a trade customer, otherwise retail ex VAT.
- * `customers.price_tier` is a label and is not used. No customer → retail.
+ * Same order as the API: a hand-made price list, then the classification
+ * tier, then Retail when that tier is missing. Cin7 lists are skipped.
+ * No customer → Retail.
  */
 export function quoteSkuUnitExVat(
-  sku: Pick<Sku, "id" | "retail_ex_vat" | "wholesale_ex_vat">,
+  sku: Pick<Sku, "id" | "retail_ex_vat" | "wholesale_ex_vat" | "stockist_ex_vat" | "decorator_ex_vat">,
   customer: QuoteCustomer,
   priceLists: PriceList[],
 ): QuoteSkuPrice {
+  const classification = classificationOf(customer);
+  const includingVat = classification === "Retail";
   const listed = listUnitExVat(sku, customer, priceLists);
   if (listed) {
     return {
       unitExVat: listed.unitExVat,
       source: "price_list",
       priceListName: listed.priceListName,
+      warning: null,
+      pricesIncludeVat: includingVat,
     };
   }
-  const wholesale = positiveAmount(sku.wholesale_ex_vat);
-  if (customer?.customer_type === "trade" && wholesale !== null) {
-    return { unitExVat: wholesale, source: "wholesale", priceListName: null };
+  const tierField = TIER_FIELD[classification];
+  const tierPrice = positiveAmount(sku[tierField]);
+  if (tierPrice !== null) {
+    return {
+      unitExVat: tierPrice,
+      source: classification.toLowerCase() as QuotePriceSource,
+      priceListName: null,
+      warning: null,
+      pricesIncludeVat: includingVat,
+    };
   }
   const retail = positiveAmount(sku.retail_ex_vat);
-  if (retail !== null) {
-    return { unitExVat: retail, source: "retail", priceListName: null };
+  if (classification !== "Retail" && retail !== null) {
+    return {
+      unitExVat: retail,
+      source: "retail_fallback",
+      priceListName: null,
+      warning: `${classification} price is missing for this SKU; using Retail price`,
+      pricesIncludeVat: includingVat,
+    };
   }
-  return { unitExVat: null, source: "missing", priceListName: null };
+  if (retail !== null && classification === "Retail") {
+    return {
+      unitExVat: retail,
+      source: "retail",
+      priceListName: null,
+      warning: null,
+      pricesIncludeVat: true,
+    };
+  }
+  return {
+    unitExVat: null,
+    source: "missing",
+    priceListName: null,
+    warning: null,
+    pricesIncludeVat: includingVat,
+  };
 }
 
 export function formatUnitExVatInput(unitExVat: number | null): string {
   return unitExVat === null ? "" : formatPriceAmount(unitExVat);
 }
 
-/** Dropdown label: code, name, and ex-VAT retail plus wholesale (list price when it applies). */
+/** Dropdown label: code, name, and the price the customer would be charged. */
 export function formatQuoteSkuOption(
   sku: QuoteSku,
   customer: QuoteCustomer,
   priceLists: PriceList[],
 ): string {
   const priced = quoteSkuUnitExVat(sku, customer, priceLists);
-  const retail = moneyLabel(sku.retail_ex_vat);
-  const wholesale = moneyLabel(sku.wholesale_ex_vat);
   const head = `${sku.our_ref} — ${sku.name}`;
+  const basis = vatBasisLabel(priced.pricesIncludeVat);
   if (priced.source === "price_list" && priced.unitExVat !== null) {
-    const list = `R ${formatPriceAmount(priced.unitExVat)}`;
-    return `${head} · ${list} list ex VAT · retail ${retail} · wholesale ${wholesale}`;
+    const list = `R ${formatPriceAmount(displayUnitAmount(priced.unitExVat, priced.pricesIncludeVat))}`;
+    return `${head} · ${list} list ${basis}`;
   }
-  if (priced.source === "wholesale") {
-    return `${head} · ${wholesale} wholesale ex VAT · retail ${retail}`;
+  if (priced.unitExVat !== null && priced.source !== "missing") {
+    const shown = `R ${formatPriceAmount(displayUnitAmount(priced.unitExVat, priced.pricesIncludeVat))}`;
+    const tier =
+      priced.source === "retail_fallback" ? "Retail fallback" : classificationOf(customer);
+    return `${head} · ${shown} ${tier} ${basis}`;
   }
-  if (priced.source === "retail") {
-    return `${head} · ${retail} retail ex VAT · wholesale ${wholesale}`;
-  }
-  return `${head} · no ex VAT price · retail ${retail} · wholesale ${wholesale}`;
+  return `${head} · no price`;
 }
 
 export function quoteSkuMatchesQuery(sku: QuoteSku, inputValue: string | null, label: string): boolean {
@@ -157,14 +250,24 @@ export function quoteSkuMatchesQuery(sku: QuoteSku, inputValue: string | null, l
 }
 
 export function quoteUnitPriceHelper(priced: QuoteSkuPrice, hasCustomer: boolean): string {
+  const basis = vatBasisLabel(priced.pricesIncludeVat);
+  if (priced.warning) {
+    return priced.warning;
+  }
   if (priced.source === "price_list" && priced.priceListName) {
-    return `Price list ${priced.priceListName} · ex VAT`;
+    return `Price list ${priced.priceListName} overrides the classification · ${basis}`;
+  }
+  if (priced.source === "stockist") {
+    return `Stockist · ${basis}`;
   }
   if (priced.source === "wholesale") {
-    return "Trade wholesale · ex VAT";
+    return `Wholesale · ${basis}`;
+  }
+  if (priced.source === "decorator") {
+    return `Decorator · ${basis}`;
   }
   if (priced.source === "retail") {
-    return hasCustomer ? "Retail · ex VAT" : "Retail · ex VAT (no customer)";
+    return hasCustomer ? `Retail · ${basis}` : `Retail · ${basis} (no customer)`;
   }
   return "No catalogue price · enter unit ex VAT";
 }
