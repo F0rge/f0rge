@@ -7,6 +7,7 @@ import {
   canOverrideQuoteUnitPrice,
   formatQuoteSkuOption,
   formatUnitExVatInput,
+  isCin7GeneratedPriceList,
   quoteLineExVat,
   quoteSkuMatchesQuery,
   quoteSkuUnitExVat,
@@ -185,6 +186,34 @@ describe("quoteSkuUnitExVat", () => {
       warning: null,
       pricesIncludeVat: false,
     });
+  });
+
+  it("ignores a Cin7 Tier 4 list and keeps the classification price", () => {
+    const cin7Tier4: PriceList = {
+      id: "cin7-tier-4",
+      name: "Cin7 Tier 4",
+      items: [{ sku_id: "sku-1", our_ref: "PG-TABLE", unit_ex_vat: "1150.00" }],
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    const priced = quoteSkuUnitExVat(
+      sku(),
+      customer({
+        customer_type: "retail",
+        price_classification: "Retail",
+        price_list_id: "cin7-tier-4",
+      }),
+      [cin7Tier4, decoratorList],
+    );
+    expect(priced).toMatchObject({
+      unitExVat: 1000,
+      source: "retail",
+      priceListName: null,
+      pricesIncludeVat: true,
+    });
+    expect(isCin7GeneratedPriceList("Cin7 Retail")).toBe(true);
+    expect(isCin7GeneratedPriceList("Cin7 Tier 10")).toBe(true);
+    expect(isCin7GeneratedPriceList("Decorator")).toBe(false);
   });
 
   it("uses a price list for a retail customer and still shows prices including VAT", () => {

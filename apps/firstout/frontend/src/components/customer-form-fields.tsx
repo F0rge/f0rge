@@ -9,6 +9,7 @@ import {
   type PriceClassification,
   type PriceList,
 } from "@/lib/api";
+import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
 
 export const emptyCustomerForm: CreateCustomerPayload = {
   name: "",
@@ -152,6 +153,12 @@ export function CustomerFormFields({
     form.credit_limit === "" || form.credit_limit == null ? "" : Number(form.credit_limit);
   const paymentTermsValue =
     form.payment_terms_days == null ? "" : Number(form.payment_terms_days);
+  const assignedList = priceLists.find((entry) => entry.id === form.price_list_id);
+  const assignedCin7List =
+    assignedList && isCin7GeneratedPriceList(assignedList.name) ? assignedList : null;
+  const selectableLists = priceLists.filter(
+    (entry) => !isCin7GeneratedPriceList(entry.name) || entry.id === form.price_list_id,
+  );
 
   return (
     <Stack gap={5}>
@@ -166,7 +173,7 @@ export function CustomerFormFields({
       <Select
         id={`${idPrefix}-classification`}
         labelText="Price classification"
-        helperText="Retail prices are shown including VAT. Stockist, Wholesale, and Decorator prices are excluding VAT. A price list overrides the classification."
+        helperText="Retail prices are shown including VAT. Stockist, Wholesale, and Decorator prices are excluding VAT. A list you create overrides this. Cin7 lists do not."
         value={form.price_classification ?? "Retail"}
         onChange={(event) =>
           onChange({ price_classification: event.target.value as PriceClassification })
@@ -188,13 +195,17 @@ export function CustomerFormFields({
       <Select
         id={`${idPrefix}-price-list`}
         labelText="Price list"
-        helperText="When a list has this SKU, that price is used instead of the classification."
+        helperText={
+          assignedCin7List
+            ? `${assignedCin7List.name} does not set the price. The classification does.`
+            : "A list you create overrides the classification. Cin7 lists do not."
+        }
         value={form.price_list_id ?? ""}
         onChange={(event) => onChange({ price_list_id: event.target.value })}
         disabled={disabled}
       >
         <SelectItem value="" text="None" />
-        {priceLists.map((entry) => (
+        {selectableLists.map((entry) => (
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>

@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatIsoDate } from "@/lib/customer-crm";
+import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -37,6 +38,16 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <p className="cds--type-body-01 firstout-break-text">{value || "—"}</p>
     </div>
   );
+}
+
+function priceListLabel(customer: CustomerCrm, priceLists: PriceList[]): string {
+  if (!customer.price_list_id) {
+    return "—";
+  }
+  const name =
+    priceLists.find((entry) => entry.id === customer.price_list_id)?.name ??
+    customer.price_list_id;
+  return isCin7GeneratedPriceList(name) ? `${name} · classification sets the price` : name;
 }
 
 export default function CustomerDetailPage() {
@@ -233,15 +244,7 @@ export default function CustomerDetailPage() {
                   }
                 />
                 <DetailRow label="Last purchase" value={formatIsoDate(customer.last_purchase_date)} />
-                <DetailRow
-                  label="Price list"
-                  value={
-                    customer.price_list_id
-                      ? (priceLists.find((entry) => entry.id === customer.price_list_id)?.name ??
-                        customer.price_list_id)
-                      : "—"
-                  }
-                />
+                <DetailRow label="Price list" value={priceListLabel(customer, priceLists)} />
                 <DetailRow label="Phone" value={customer.phone ?? "—"} />
                 <DetailRow label="Email" value={customer.email ?? "—"} />
                 <DetailRow label="VAT number" value={customer.vat_number ?? "—"} />

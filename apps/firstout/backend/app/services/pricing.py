@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
@@ -14,6 +15,16 @@ from f0rge_core.exceptions import ValidationError
 
 PRICE_CLASSIFICATIONS = ("Stockist", "Wholesale", "Decorator", "Retail")
 RETAIL_CLASSIFICATION = "Retail"
+# Names the Cin7 import writes. These lists must not override classification.
+CIN7_NAMED_PRICE_LISTS = frozenset(
+    {
+        "Cin7 Stockist",
+        "Cin7 Wholesale",
+        "Cin7 Decorator",
+        "Cin7 Retail",
+    }
+)
+_CIN7_TIER_LIST = re.compile(r"^Cin7 Tier [1-9]\d*$")
 
 _TIER_ATTR = {
     "Stockist": "stockist_ex_vat",
@@ -56,6 +67,17 @@ def classification_of(customer: Optional[Customer]) -> str:
     return classification_for_legacy_customer_type(getattr(customer, "customer_type", None))
 
 
+def is_cin7_generated_price_list(name: Optional[str]) -> bool:
+    """True for `Cin7 Tier N` and the four named Cin7 classification lists.
+
+    Matching is by those names. A list with any other name still overrides.
+    """
+    if name is None:
+        return False
+    text = name.strip()
+    return text in CIN7_NAMED_PRICE_LISTS or _CIN7_TIER_LIST.fullmatch(text) is not None
+
+
 def shows_prices_including_vat(customer: Optional[Customer]) -> bool:
     """Retail, including a walk-in with no customer, is the only inclusive display."""
     return classification_of(customer) == RETAIL_CLASSIFICATION
@@ -91,18 +113,22 @@ async def resolve_unit_price(
     sku: Sku,
     customer: Optional[Customer],
 ) -> ResolvedUnitPrice:
-    """Price-list override, then the customer's classification tier, then Retail.
+    """Hand-made price list, then the customer's classification tier, then Retail.
 
+    Cin7-generated lists are not overrides: `Cin7 Tier 4` stored inc-VAT figures
+    as ex VAT, and the named Cin7 lists would replace the classification.
     A missing Stockist, Wholesale, or Decorator price falls back to Retail and
     sets a warning. Retail with no positive price is still an error.
     """
     classification = classification_of(customer)
     price_list_id = getattr(customer, "price_list_id", None) if customer is not None else None
     if price_list_id is not None and db is not None:
-        list_price = await PriceListCRUD(db).get_item_price(price_list_id, sku.id)
-        positive_list = _positive(list_price)
-        if positive_list is not None:
-            return ResolvedUnitPrice(positive_list, None, "price_list")
+        list_name = await PriceListCRUD(db).get_name(price_list_id)
+        if list_name is not None and not is_cin7_generated_price_list(list_name):
+            list_price = await PriceListCRUD(db).get_item_price(price_list_id, sku.id)
+            positive_list = _positive(list_price)
+            if positive_list is not None:
+                return ResolvedUnitPrice(positive_list, None, "price_list")
 
     tier_amount = _positive(getattr(sku, _TIER_ATTR[classification], None))
     if tier_amount is not None:

@@ -111,6 +111,19 @@ function positiveAmount(value: string | null | undefined): number | null {
   return parsed;
 }
 
+const CIN7_NAMED_PRICE_LISTS = new Set([
+  "Cin7 Stockist",
+  "Cin7 Wholesale",
+  "Cin7 Decorator",
+  "Cin7 Retail",
+]);
+
+/** Cin7 import lists. They must not replace the customer's classification price. */
+export function isCin7GeneratedPriceList(name: string | null | undefined): boolean {
+  const text = name?.trim() ?? "";
+  return CIN7_NAMED_PRICE_LISTS.has(text) || /^Cin7 Tier [1-9]\d*$/.test(text);
+}
+
 function listUnitExVat(
   sku: Pick<Sku, "id">,
   customer: QuoteCustomer,
@@ -120,9 +133,12 @@ function listUnitExVat(
     return null;
   }
   const list = priceLists.find((entry) => entry.id === customer.price_list_id);
-  const item = list?.items.find((row) => row.sku_id === sku.id);
+  if (!list || isCin7GeneratedPriceList(list.name)) {
+    return null;
+  }
+  const item = list.items.find((row) => row.sku_id === sku.id);
   const unitExVat = positiveAmount(item?.unit_ex_vat);
-  if (!list || unitExVat === null) {
+  if (unitExVat === null) {
     return null;
   }
   return { unitExVat, priceListName: list.name };
@@ -131,8 +147,9 @@ function listUnitExVat(
 /**
  * Unit price for a document line, stored ex VAT.
  *
- * Same order as the API: the customer's price list, then the classification
- * tier, then Retail when that tier is missing. No customer → Retail.
+ * Same order as the API: a hand-made price list, then the classification
+ * tier, then Retail when that tier is missing. Cin7 lists are skipped.
+ * No customer → Retail.
  */
 export function quoteSkuUnitExVat(
   sku: Pick<Sku, "id" | "retail_ex_vat" | "wholesale_ex_vat" | "stockist_ex_vat" | "decorator_ex_vat">,

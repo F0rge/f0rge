@@ -12,7 +12,11 @@ from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.sales_order import SalesOrderCreate, SalesOrderLineCreate
-from app.services.pricing import classification_for_legacy_customer_type
+from app.services.cin7_import.parse import NAMED_PRICE_TIERS, tier_price_list_name
+from app.services.pricing import (
+    classification_for_legacy_customer_type,
+    is_cin7_generated_price_list,
+)
 from app.services.sales_orders import SalesOrdersService
 from tests.test_price_lists import _stock_sku_at_bedford
 from tests.test_purchase_orders import _create_till
@@ -32,6 +36,20 @@ _TIERS = (
 def _pdf_text(pdf_bytes: bytes) -> str:
     reader = PdfReader(BytesIO(pdf_bytes))
     return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+@pytest.mark.no_db
+def test_cin7_generated_list_names_do_not_count_as_overrides() -> None:
+    for tier, name, _includes_vat in NAMED_PRICE_TIERS:
+        assert tier_price_list_name(tier) == name
+        assert is_cin7_generated_price_list(name)
+    for tier in range(1, 11):
+        assert is_cin7_generated_price_list(f"Cin7 Tier {tier}")
+    assert is_cin7_generated_price_list("  Cin7 Tier 4  ")
+    assert not is_cin7_generated_price_list("Decorator")
+    assert not is_cin7_generated_price_list("Cin7")
+    assert not is_cin7_generated_price_list("Cin7 Tier")
+    assert not is_cin7_generated_price_list(None)
 
 
 @pytest.mark.no_db
@@ -380,3 +398,107 @@ async def test_reprice_drafts_waits_for_confirm_and_leaves_invoices(
     assert after_invoice.json()["lines"][0]["unit_ex_vat"] == "800.00"
     after_order = await SalesOrdersService(async_db).get(order.id)
     assert after_order.lines[0].unit_ex_vat == Decimal("600.00")
+
+
+async def test_cin7_tier_4_list_does_not_override_classification(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    """Old Cin7 Tier 4 stored the inc-VAT figure as if it were ex VAT."""
+    sku_id, bedford_id = await _stock_sku_at_bedford(
+        async_client, owner_client, "CIN7-TIER4", qty=4
+    )
+    cin7_list = await owner_client.post("/api/v1/price-lists", json={"name": "Cin7 Tier 4"})
+    assert cin7_list.status_code == 201, cin7_list.text
+    cin7_list_id = cin7_list.json()["id"]
+    cin7_item = await owner_client.put(
+        f"/api/v1/price-lists/{cin7_list_id}/items",
+        json={"sku_id": sku_id, "unit_ex_vat": "1150.00"},
+    )
+    assert cin7_item.status_code == 200, cin7_item.text
+
+    handmade = await owner_client.post("/api/v1/price-lists", json={"name": "Counter special"})
+    assert handmade.status_code == 201, handmade.text
+    handmade_id = handmade.json()["id"]
+    handmade_item = await owner_client.put(
+        f"/api/v1/price-lists/{handmade_id}/items",
+        json={"sku_id": sku_id, "unit_ex_vat": "650.00"},
+    )
+    assert handmade_item.status_code == 200, handmade_item.text
+
+    retail = await owner_client.post(
+        "/api/v1/customers",
+        json={
+            "name": "Retail on Cin7 Tier 4",
+            "price_classification": "Retail",
+            "price_list_id": cin7_list_id,
+        },
+    )
+    assert retail.status_code == 201, retail.text
+    wholesale = await owner_client.post(
+        "/api/v1/customers",
+        json={
+            "name": "Wholesale on Cin7 Tier 4",
+            "price_classification": "Wholesale",
+            "price_list_id": cin7_list_id,
+        },
+    )
+    assert wholesale.status_code == 201, wholesale.text
+    special = await owner_client.post(
+        "/api/v1/customers",
+        json={
+            "name": "Retail on a hand-made list",
+            "price_classification": "Retail",
+            "price_list_id": handmade_id,
+        },
+    )
+    assert special.status_code == 201, special.text
+
+    retail_quote = await owner_client.post(
+        "/api/v1/quotes",
+        json={"customer_id": retail.json()["id"], "lines": [{"sku_id": sku_id, "qty": 1}]},
+    )
+    assert retail_quote.status_code == 201, retail_quote.text
+    assert retail_quote.json()["lines"][0]["unit_ex_vat"] == "1000.00"
+    assert retail_quote.json()["lines"][0]["price_warning"] is None
+    assert retail_quote.json()["prices_include_vat"] is True
+
+    retail_invoice = await owner_client.post(
+        "/api/v1/invoices",
+        json={
+            "customer_id": retail.json()["id"],
+            "issue_date": "2026-10-21",
+            "lines": [{"description": "Tier 4 ignored", "qty": 1, "sku_id": sku_id}],
+        },
+    )
+    assert retail_invoice.status_code == 201, retail_invoice.text
+    assert retail_invoice.json()["lines"][0]["unit_ex_vat"] == "1000.00"
+
+    wholesale_quote = await owner_client.post(
+        "/api/v1/quotes",
+        json={"customer_id": wholesale.json()["id"], "lines": [{"sku_id": sku_id, "qty": 1}]},
+    )
+    assert wholesale_quote.status_code == 201, wholesale_quote.text
+    assert wholesale_quote.json()["lines"][0]["unit_ex_vat"] == "800.00"
+    assert wholesale_quote.json()["prices_include_vat"] is False
+
+    special_quote = await owner_client.post(
+        "/api/v1/quotes",
+        json={"customer_id": special.json()["id"], "lines": [{"sku_id": sku_id, "qty": 1}]},
+    )
+    assert special_quote.status_code == 201, special_quote.text
+    assert special_quote.json()["lines"][0]["unit_ex_vat"] == "650.00"
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "customer_id": retail.json()["id"],
+            "lines": [{"sku_id": sku_id, "qty": 1, "discount_percent": "0"}],
+            "tender": "cash",
+        },
+    )
+    assert sale.status_code == 201, sale.text
+    assert sale.json()["lines"][0]["unit_ex_vat"] == "1000.00"
+    assert sale.json()["prices_include_vat"] is True

@@ -67,7 +67,8 @@ ASSUMPTIONS = [
     "PriceTier3 is Decorator ex VAT, and PriceTier4 is Retail including 15% VAT. "
     "Retail is stored ex VAT (inc / 1.15, half-up to the cent). "
     "The same four amounts are written to price lists Cin7 Stockist, Cin7 Wholesale, "
-    "Cin7 Decorator, and Cin7 Retail. Customer PriceTier is stored as price_classification "
+    "Cin7 Decorator, and Cin7 Retail. Those lists, and older Cin7 Tier N lists, do not "
+    "override price_classification. Customer PriceTier is stored as price_classification "
     "and selects that SKU price. price_tier keeps the Cin7 label.",
     "New SKUs get design cin7:{ProductCode} and fabric '-'. Later runs leave design and fabric as they are.",
     "Blank barcodes, and every barcode shared by more than one product, are replaced with CIN7-{ProductCode}. "
