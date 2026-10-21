@@ -177,8 +177,8 @@ jobs:
           PAYLOAD=$(python3 .github/deploy/coolify_payload.py --sha "$SHA" --base "$DIFF_BASE" --branch "$BRANCH")
           # Each matrix row signs with that component's secret only. Coolify still
           # checks every app on this repo+branch, so siblings answer
-          # "Invalid signature." That does not fail the job; only this app's
-          # entry must say "Deployment queued."
+          # "Invalid signature." That does not fail the job. This app must queue
+          # a deployment, or return the exact watch-path ignore (skipped).
           SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
           RESPONSE=$(curl -sS --fail-with-body -w '\nHTTP %{http_code}' \
             -X POST "${COOLIFY_BASE_URL%/}/webhooks/source/github/events/manual" \
@@ -192,6 +192,7 @@ jobs:
           }
           echo "$RESPONSE"
           BODY=$(printf '%s\n' "$RESPONSE" | sed '$d')
+          HTTP_STATUS=$(printf '%s\n' "$RESPONSE" | tail -n1 | awk '{print $2}')
 
           # App reports Deployments disabled → not deploying through Coolify right now.
           if echo "$BODY" | jq -e --arg uuid "$APP_UUID" '
@@ -205,15 +206,28 @@ jobs:
             exit 0
           fi
 
-          # Coolify answers 200 even when it queues nothing (per-app failures land in the
-          # body), so a 2xx is not proof of a deploy — assert this app was actually queued.
-          # A queued manual push is status "success" + "Deployment queued." (beta.473);
-          # status "queued" counts too. Watch-path ignores stay a hard failure.
-          if ! printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --require-queued --app-uuid "$APP_UUID"; then
+          # Coolify answers 2xx even when it queues nothing. classify_coolify_response
+          # maps a queued deploy to success, the exact watch-path ignore sentence
+          # to skipped, and every other non-queue reply to failed. curl
+          # --fail-with-body already failed the step on non-2xx.
+          if ! CLASS=$(printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --classify --http-status "$HTTP_STATUS" --app-uuid "$APP_UUID"); then
             echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
             exit 1
           fi
-          echo "Triggered Coolify deploy for $APP_NAME"
+          case "$CLASS" in
+            success)
+              echo "Triggered Coolify deploy for $APP_NAME"
+              ;;
+            skipped)
+              echo "SKIPPED ${APP_NAME}: Coolify ignored (watch paths)" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "skipped=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            *)
+              echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
+              exit 1
+              ;;
+          esac
 
       - name: Smoke health
         # Internal-only targets (e.g. buycycle on the Pi) have no health_url: runners can't reach them,

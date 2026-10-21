@@ -7,14 +7,27 @@ from `.github/deploy` (that directory is not importable as `.github`).
 
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 
 import coolify_payload as payload
+
+
+@contextmanager
+def _stdin(text: str):
+    old = sys.stdin
+    sys.stdin = io.StringIO(text)
+    try:
+        yield
+    finally:
+        sys.stdin = old
 
 
 class DiffBaseTests(unittest.TestCase):
@@ -221,6 +234,108 @@ class QueuedResponseTests(unittest.TestCase):
         )
         self.assertFalse(payload.response_queues_app(body, backend))
         self.assertTrue(payload.response_queues_app(body, self.UUID))
+
+
+class ClassifyCoolifyResponseTests(unittest.TestCase):
+    """HTTP status + this app's message → success / skipped / failed."""
+
+    UUID = "xi0qwpbyl2d8gf8u3xl13jkv"
+    OTHER = "other-app"
+    IGNORE = "Changed files do not match watch paths. Ignoring deployment."
+
+    def _body(self, message: str, app_uuid: str | None = None, **extra: object) -> str:
+        entry: dict[str, object] = {
+            "status": "failed",
+            "message": message,
+            "application_uuid": self.UUID if app_uuid is None else app_uuid,
+            "application_name": "buycycle",
+            "details": {
+                "changed_files": ["package-lock.json"],
+                "watch_paths": ["apps/buycycle/**"],
+            },
+        }
+        entry.update(extra)
+        return json.dumps(
+            [
+                entry,
+                {"application": "daskasas-backend", "status": "failed", "message": "Invalid signature."},
+            ]
+        )
+
+    def _classify(self, http_status: int, body: str, app_uuid: str | None = None) -> str:
+        app = self.UUID if app_uuid is None else app_uuid
+        outcome = payload.classify_coolify_response(http_status, body, app)
+        stdout = io.StringIO()
+        with _stdin(body), redirect_stdout(stdout):
+            code = payload.main(
+                ["--classify", "--http-status", str(http_status), "--app-uuid", app]
+            )
+        self.assertEqual(stdout.getvalue().strip(), outcome)
+        self.assertEqual(code, 0 if outcome in {"success", "skipped"} else 1)
+        return outcome
+
+    def test_queued_is_success(self) -> None:
+        body = json.dumps(
+            [
+                {
+                    "application": "buycycle",
+                    "status": "success",
+                    "message": "Deployment queued.",
+                    "application_uuid": self.UUID,
+                    "application_name": "buycycle",
+                    "deployment_uuid": "dep123",
+                },
+                {"application": "daskasas-backend", "status": "failed", "message": "Invalid signature."},
+            ]
+        )
+        self.assertEqual(self._classify(200, body), "success")
+        self.assertEqual(
+            self._classify(200, json.dumps([{"application_uuid": self.UUID, "status": "queued", "deployment_uuid": "dep"}])),
+            "success",
+        )
+
+    def test_watch_path_ignore_is_skipped(self) -> None:
+        # Shape from Deploy run 39547607493 (buycycle / envmon): HTTP 200,
+        # status failed, exact ignore sentence, no deployment uuid.
+        body = self._body(self.IGNORE)
+        self.assertEqual(self._classify(200, body), "skipped")
+        self.assertEqual(self._classify(201, body), "skipped")
+        # Same body, different app: the sentence belongs to UUID, not OTHER.
+        self.assertEqual(self._classify(200, body, self.OTHER), "failed")
+
+    def test_other_ignore_or_unknown_message_is_failed(self) -> None:
+        messages = [
+            "Ignoring",
+            "Ignoring deployment.",
+            "Ignoring deployment",
+            "Changed files do not match watch paths. Ignoring deployment",
+            "Changed files do not match watch paths. Ignoring deployment. ",
+            "changed files do not match watch paths. Ignoring deployment.",
+            "Changed files do not match watch paths. Ignoring deployment. extra",
+            "Invalid signature.",
+            "Deployments disabled.",
+            "No deployment was queued.",
+        ]
+        for message in messages:
+            with self.subTest(message=message):
+                self.assertEqual(self._classify(200, self._body(message)), "failed")
+        self.assertEqual(self._classify(200, json.dumps({"status": "failed"})), "failed")
+        self.assertEqual(self._classify(200, "not-json"), "failed")
+
+    def test_non_2xx_is_failed(self) -> None:
+        ignore = self._body(self.IGNORE)
+        queued = json.dumps(
+            {
+                "status": "success",
+                "message": "Deployment queued.",
+                "application_uuid": self.UUID,
+                "deployment_uuid": "dep123",
+            }
+        )
+        for status in (199, 300, 404, 500):
+            with self.subTest(status=status):
+                self.assertEqual(self._classify(status, ignore), "failed")
+                self.assertEqual(self._classify(status, queued), "failed")
 
 
 class ManifestSecretTests(unittest.TestCase):
