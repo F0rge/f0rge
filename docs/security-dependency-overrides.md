@@ -52,3 +52,10 @@ integration tests and frontend/admin builds. Reverting the overrides restores
 vulnerable packages; the security gate must then remain failing until an actual
 fix is selected. Moderate advisories outside these four fixes remain visible to
 the audit and are outside this CI repair's scope.
+
+`@medusajs/admin-bundler` is overridden to `vite` 7.3.7. The hoisted production
+copy was 7.3.6, which fails `npm audit --omit=dev --audit-level=high`
+([GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm) and
+the two related launch-editor advisories). The override is nested so `libs/ui`
+stays on vite 6.4.3. Commerce's own devDependency range `^7.3.6` already
+accepts 7.3.7. Vite's dependency set is unchanged between 7.3.6 and 7.3.7.
