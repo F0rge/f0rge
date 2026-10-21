@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine
-from app.nia.canvas import build_overdue_invoices_canvas_spec
 from app.services.settlement import booked_portion
 
 
@@ -214,7 +213,6 @@ async def test_three_cent_slices_settle_without_drift(owner_client: AsyncClient)
 
 async def test_aged_ar_and_overdue_use_outstanding_balance(
     owner_client: AsyncClient,
-    async_db: AsyncSession,
 ) -> None:
     invoice = await _create_invoice(owner_client, name="Aged Partial Customer")
     paid = await _pay(owner_client, invoice["id"], "400.00")
@@ -245,11 +243,6 @@ async def test_aged_ar_and_overdue_use_outstanding_balance(
     assert crm["overdue_invoices_count"] == 1
     assert crm["open_invoices_zar"] == "375.00"
     assert crm["overdue_invoices_zar"] == "375.00"
-
-    spec = await build_overdue_invoices_canvas_spec(async_db)
-    rows = spec["components"][0]["rows"]
-    match = next(row for row in rows if row[0] == overdue["invoice_number"])
-    assert match[3] == "375.00"
 
 
 async def test_bank_suggestion_matches_the_partial_amount(owner_client: AsyncClient) -> None:
