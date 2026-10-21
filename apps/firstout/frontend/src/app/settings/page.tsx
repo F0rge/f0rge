@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  canManageUsers,
   canMutateSettings,
   getSettings,
   isActiveLocation,
@@ -36,6 +37,7 @@ import {
   type Location,
 } from "@/lib/api";
 import { CommunicationsSettings } from "@/app/settings/communications-settings";
+import { PaymentRemindersSettings } from "@/app/settings/payment-reminders-settings";
 import { useAuth } from "@/lib/auth";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -85,6 +87,7 @@ function SettingsSaveButton({
 export default function SettingsPage() {
   const { user } = useAuth();
   const canMutate = canMutateSettings(user);
+  const canConfigureReminders = canManageUsers(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [vatPercent, setVatPercent] = useState("15");
   const [currency, setCurrency] = useState("ZAR");
@@ -107,6 +110,7 @@ export default function SettingsPage() {
   const [defaultTillLocationId, setDefaultTillLocationId] = useState("");
   const [documentSequences, setDocumentSequences] = useState<DocumentSequence[]>([]);
   const [preferWarehouse, setPreferWarehouse] = useState(true);
+  const [autoProcessExactInvoices, setAutoProcessExactInvoices] = useState(false);
   const [pickPriority, setPickPriority] = useState<string[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [addLocationId, setAddLocationId] = useState("");
@@ -145,6 +149,7 @@ export default function SettingsPage() {
     setDefaultTillLocationId(data.default_till_location_id ?? "");
     setDocumentSequences(data.document_sequences);
     setPreferWarehouse(data.always_prefer_warehouse);
+    setAutoProcessExactInvoices(data.auto_process_exact_supplier_invoices);
     setPickPriority(data.pick_priority);
   }
 
@@ -205,6 +210,7 @@ export default function SettingsPage() {
           padding: row.padding,
         })),
         always_prefer_warehouse: preferWarehouse,
+        auto_process_exact_supplier_invoices: autoProcessExactInvoices,
         pick_priority: pickPriority,
       });
       applySettings(updated);
@@ -365,6 +371,7 @@ export default function SettingsPage() {
             <Tab>Locations</Tab>
             <Tab>Operations</Tab>
             <Tab>Communications</Tab>
+            {canConfigureReminders ? <Tab>Payment reminders</Tab> : null}
           </TabList>
           <TabPanels>
             <TabPanel>
@@ -595,6 +602,20 @@ export default function SettingsPage() {
                     onToggle={(checked) => setPreferWarehouse(checked)}
                     disabled={!canMutate || saving}
                   />
+                  <Toggle
+                    id="auto-process-exact-invoices"
+                    labelText="Auto-process exact supplier invoices"
+                    labelA="Off"
+                    labelB="On"
+                    toggled={autoProcessExactInvoices}
+                    onToggle={(checked) => setAutoProcessExactInvoices(checked)}
+                    disabled={!canMutate || saving}
+                  />
+                  <p className="cds--type-helper-text-01">
+                    Off by default. When on, an invoice that matches its purchase order exactly is
+                    posted like a typed-in bill, without a second click. Anything that differs still
+                    waits for you. A posted bill is reversed with a journal.
+                  </p>
                   {pickPrioritySection}
                   <SettingsSaveButton
                     canMutate={canMutate}
@@ -681,6 +702,14 @@ export default function SettingsPage() {
                 <CommunicationsSettings />
               </Tile>
             </TabPanel>
+
+            {canConfigureReminders ? (
+              <TabPanel>
+                <Tile>
+                  <PaymentRemindersSettings />
+                </Tile>
+              </TabPanel>
+            ) : null}
           </TabPanels>
         </Tabs>
       ) : null}

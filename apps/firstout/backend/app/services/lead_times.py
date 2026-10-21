@@ -103,6 +103,8 @@ def build_sku_lead_times(orders: Iterable[PurchaseOrder]) -> SkuLeadTimesReport:
     for po in orders:
         sample = _sample_from_po(po)
         for line in po.lines:
+            if line.sku_id is None or line.sku is None:
+                continue
             grouped.setdefault(line.sku_id, []).append(sample)
             meta[line.sku_id] = (line.sku.our_ref, line.sku.name, line.sku.lead_time_days)
     lines = []

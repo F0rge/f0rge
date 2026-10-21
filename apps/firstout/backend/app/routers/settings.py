@@ -4,7 +4,18 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from app.dependencies.auth import get_current_user_id, get_settings_service, require_settings
+from app.dependencies.auth import (
+    get_current_user_id,
+    get_payment_reminder_service,
+    get_settings_service,
+    require_owner,
+    require_settings,
+)
+from app.schemas.payment_reminder import (
+    PaymentReminderSettingsResponse,
+    PaymentReminderSettingsUpdate,
+)
+from app.services.payment_reminders import PaymentReminderService
 from app.schemas.comms import (
     CommsSettingsResponse,
     CommsSettingsUpdate,
@@ -58,6 +69,23 @@ async def test_comms_email(
     service: SettingsService = Depends(get_settings_service),
 ) -> CommsTestEmailResponse:
     return await service.test_email(user_id, data)
+
+
+@settings_router.get("/payment-reminders", response_model=PaymentReminderSettingsResponse)
+async def get_payment_reminder_settings(
+    _: uuid.UUID = Depends(require_owner),
+    service: PaymentReminderService = Depends(get_payment_reminder_service),
+) -> PaymentReminderSettingsResponse:
+    return await service.get_settings()
+
+
+@settings_router.patch("/payment-reminders", response_model=PaymentReminderSettingsResponse)
+async def update_payment_reminder_settings(
+    data: PaymentReminderSettingsUpdate,
+    _: uuid.UUID = Depends(require_owner),
+    service: PaymentReminderService = Depends(get_payment_reminder_service),
+) -> PaymentReminderSettingsResponse:
+    return await service.update_settings(data)
 
 
 @settings_router.post("/logo", response_model=SettingsResponse)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from typing import AsyncIterator, cast
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
+from typing import AsyncIterator, Optional, cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +19,7 @@ from app.exceptions import (
     CommsEncryptionUnconfiguredError,
     CommsSmtpFailedError,
     CommsSmtpUnconfiguredError,
+    DocumentLlmUnconfiguredError,
     ForbiddenError,
     KitRequiresPickError,
 )
@@ -41,6 +44,7 @@ from app.routers import (
     credit_notes,
     customers,
     deliveries,
+    document_intake,
     health,
     home,
     invoices,
@@ -48,6 +52,7 @@ from app.routers import (
     journals,
     locations,
     payments,
+    payment_reminders,
     picks,
     price_lists,
     proformas,
@@ -80,7 +85,12 @@ from app.services.role_user_seed import RoleUserSeedService
 from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
 from app.services.storefront_system_actor import StorefrontSystemActorService
+from app.services.payment_reminders import PaymentReminderService
 from app.services.users import BootstrapService
+
+logger = logging.getLogger(__name__)
+
+TICK_INTERVAL_SECONDS = 60
 
 
 async def seed_boot_fixtures(session: AsyncSession) -> None:
@@ -94,6 +104,20 @@ async def seed_boot_fixtures(session: AsyncSession) -> None:
     await RoleUserSeedService(session).seed()
     await StorefrontSystemActorService(session).ensure()
     await TillSeedService(session).seed_if_empty()
+
+
+async def _payment_reminder_loop(stop: asyncio.Event) -> None:
+    """Daily overdue-invoice emails. Standalone: Nia and its schedule loop are gone."""
+    while not stop.is_set():
+        try:
+            async with async_session_maker() as session:
+                await PaymentReminderService(session).tick()
+        except Exception:
+            logger.exception("payment reminder tick failed")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=TICK_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
 
 
 @asynccontextmanager
@@ -111,7 +135,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
         await PlaygroundSeedService(session).seed_if_enabled()
-    yield
+    stop = asyncio.Event()
+    ticker: Optional[asyncio.Task] = None
+    if settings.payment_reminder_ticker:
+        ticker = asyncio.create_task(_payment_reminder_loop(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        if ticker is not None:
+            ticker.cancel()
+            with suppress(asyncio.CancelledError):
+                await ticker
 
 
 app = FastAPI(
@@ -171,9 +206,21 @@ async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
+async def _document_llm_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, DocumentLlmUnconfiguredError)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": {"code": exc.detail}},
+    )
+
+
 app.add_exception_handler(KitRequiresPickError, cast(ExceptionHandler, _kit_requires_pick_handler))
 app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handler))
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+app.add_exception_handler(
+    DocumentLlmUnconfiguredError,
+    cast(ExceptionHandler, _document_llm_unconfigured_handler),
+)
 app.add_exception_handler(
     CommsEncryptionUnconfiguredError,
     cast(ExceptionHandler, _comms_unconfigured_handler),
@@ -206,6 +253,7 @@ app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
+app.include_router(document_intake.document_intake_router)
 app.include_router(skus.skus_router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
@@ -235,6 +283,7 @@ app.include_router(journal_imports.journal_imports_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
+app.include_router(payment_reminders.payment_reminders_router)
 app.include_router(books_events.books_events_router)
 app.include_router(books_periods.books_periods_router)
 app.include_router(audit.audit_router)

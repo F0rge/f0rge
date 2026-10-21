@@ -81,6 +81,10 @@ export function canMutateSettings(user: PermissionHolder): boolean {
   return can(user, "settings.mutate");
 }
 
+export function canManageUsers(user: PermissionHolder): boolean {
+  return can(user, "users.manage");
+}
+
 export function canMutateReturns(user: PermissionHolder): boolean {
   return can(user, "sales.returns");
 }

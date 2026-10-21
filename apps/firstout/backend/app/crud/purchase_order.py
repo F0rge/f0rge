@@ -50,6 +50,7 @@ class PurchaseOrderCRUD(BaseCRUD):
         offset: int,
         q: Optional[str] = None,
         status: Optional[PurchaseOrderStatus] = None,
+        needs_skus: bool = False,
     ) -> tuple[list[PurchaseOrder], int]:
         filters = []
         if q:
@@ -62,6 +63,10 @@ class PurchaseOrderCRUD(BaseCRUD):
             )
         if status is not None:
             filters.append(PurchaseOrder.status == status)
+        if needs_skus:
+            filters.append(
+                PurchaseOrder.id.in_(select(PoLine.po_id).where(PoLine.sku_id.is_(None)))
+            )
 
         count_stmt = select(func.count(PurchaseOrder.id)).join(
             Supplier, PurchaseOrder.supplier_id == Supplier.id

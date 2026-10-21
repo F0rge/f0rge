@@ -13,13 +13,16 @@ from app.dependencies.auth import (
     get_purchase_order_service,
     require_catalogue_mutate,
     require_owner,
+    require_po_line_edit,
     require_receive,
 )
-from app.schemas.inventory import InventorySkuResponse
 from app.models.purchase_order import PurchaseOrderStatus
+from app.schemas.inventory import InventorySkuResponse
 from app.schemas.page import Page, PageParams, get_page_params
 from app.schemas.purchase_order import (
+    PoLineSkuCreate,
     PurchaseOrderCreate,
+    PurchaseOrderLinesUpdate,
     PurchaseOrderListItem,
     PurchaseOrderResponse,
     ReceiveRequest,
@@ -34,10 +37,11 @@ purchase_orders_router = APIRouter(prefix="/api/v1/purchase-orders", tags=["purc
 async def list_purchase_orders(
     params: PageParams = Depends(get_page_params),
     status: Optional[PurchaseOrderStatus] = None,
+    needs_skus: bool = False,
     _: uuid.UUID = Depends(get_current_user_id),
     service: PurchaseOrderService = Depends(get_purchase_order_service),
 ):
-    return await service.list(params, status=status)
+    return await service.list(params, status=status, needs_skus=needs_skus)
 
 
 @purchase_orders_router.post(
@@ -49,6 +53,30 @@ async def create_purchase_order(
     service: PurchaseOrderService = Depends(get_purchase_order_service),
 ):
     return await service.create(data, user_id)
+
+
+@purchase_orders_router.patch("/{po_id}", response_model=PurchaseOrderResponse)
+async def update_pending_purchase_order(
+    po_id: uuid.UUID,
+    data: PurchaseOrderLinesUpdate,
+    _: uuid.UUID = Depends(require_po_line_edit),
+    service: PurchaseOrderService = Depends(get_purchase_order_service),
+):
+    return await service.update_pending(po_id, data)
+
+
+@purchase_orders_router.post(
+    "/{po_id}/lines/{line_id}/sku",
+    response_model=PurchaseOrderResponse,
+)
+async def create_sku_for_purchase_order_line(
+    po_id: uuid.UUID,
+    line_id: uuid.UUID,
+    data: PoLineSkuCreate,
+    user_id: uuid.UUID = Depends(require_po_line_edit),
+    service: PurchaseOrderService = Depends(get_purchase_order_service),
+):
+    return await service.create_line_sku(po_id, line_id, data, user_id)
 
 
 @purchase_orders_router.get("/{po_id}", response_model=PurchaseOrderResponse)

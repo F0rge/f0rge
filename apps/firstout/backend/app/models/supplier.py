@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import Index, String, text
+from typing import Optional
+
+from sqlalchemy import Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -12,6 +14,8 @@ class Supplier(UUIDPkMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     default_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    vat_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         Index(
@@ -19,4 +23,5 @@ class Supplier(UUIDPkMixin, TimestampMixin, Base):
             text("lower(name)"),
             unique=True,
         ),
+        Index("ix_suppliers_vat_number", "vat_number"),
     )

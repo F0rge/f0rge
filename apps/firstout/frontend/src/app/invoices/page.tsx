@@ -3,6 +3,7 @@
 import {
   Button,
   DataTable,
+  Tag,
   InlineNotification,
   Modal,
   NumberInput,
@@ -37,6 +38,7 @@ import {
   type InvoiceListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
 
 const TABLE_HEADERS = [
   { key: "invoice_number", header: "Number" },
@@ -44,8 +46,10 @@ const TABLE_HEADERS = [
   { key: "issue_date", header: "Issue date" },
   { key: "subtotal_ex_vat", header: "Ex VAT" },
   { key: "vat_amount", header: "VAT" },
-  { key: "total_inc_vat", header: "Inc VAT" },
-  { key: "balance", header: "Balance" },
+  { key: "total_inc_vat", header: "Total" },
+  { key: "amount_paid", header: "Paid" },
+  { key: "balance", header: "Balance owing" },
+  { key: "payment_status", header: "Status" },
   { key: "actions", header: "" },
 ] as const;
 
@@ -57,7 +61,9 @@ type InvoiceRow = {
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
+  amount_paid: string;
   balance: string;
+  payment_status: string;
   actions: string;
 };
 
@@ -252,7 +258,9 @@ function InvoicesPageContent() {
     subtotal_ex_vat: formatZarAmount(entry.subtotal_ex_vat),
     vat_amount: formatZarAmount(entry.vat_amount),
     total_inc_vat: formatZarAmount(entry.total_inc_vat),
+    amount_paid: formatZarAmount(entry.amount_paid),
     balance: formatZarAmount(entry.balance),
+    payment_status: settlementStatusLabel(entry.payment_status),
     actions: entry.id,
   }));
 
@@ -345,6 +353,20 @@ function InvoicesPageContent() {
                       style={{ cursor: "pointer" }}
                     >
                       {row.cells.map((cell) => {
+                        if (cell.info.header === "payment_status") {
+                          const invoice = invoices.find((entry) => entry.id === row.id);
+                          return (
+                            <TableCell key={cell.id}>
+                              {invoice ? (
+                                <Tag type={settlementTagType(invoice.payment_status)} size="sm">
+                                  {settlementStatusLabel(invoice.payment_status)}
+                                </Tag>
+                              ) : (
+                                cell.value
+                              )}
+                            </TableCell>
+                          );
+                        }
                         if (cell.info.header === "actions") {
                           const invoice = invoices.find((entry) => entry.id === row.id);
                           return (
