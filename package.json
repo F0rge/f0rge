@@ -29,6 +29,9 @@
     "proxy-addr": "2.0.8",
     "source-map-js": "1.2.2",
     "follow-redirects": "1.16.1",
+    "@medusajs/admin-bundler": {
+      "vite": "7.3.7"
+    },
     "@medusajs/deps": {
       "@opentelemetry/instrumentation-pg": "0.73.0"
     },
