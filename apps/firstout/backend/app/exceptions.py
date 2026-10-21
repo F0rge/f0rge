@@ -14,7 +14,6 @@ class DocumentLlmUnconfiguredError(DomainError):
         super().__init__("document_llm_unconfigured")
 
 
-
 class CommsEncryptionUnconfiguredError(DomainError):
     """SETTINGS_ENCRYPTION_KEY missing or invalid. Mapped to HTTP 503."""
 
