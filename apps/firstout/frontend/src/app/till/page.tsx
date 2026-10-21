@@ -513,7 +513,7 @@ export default function TillPage() {
         discountPercent: line.discountPercent,
       })),
     });
-  }, [cart, customerId, linkedPickIds, locationId, pickId]);
+  }, [cart, cartReady, customerId, linkedPickIds, locationId, pickId]);
 
   const summary = cartSummary(cart, selectedCustomer, priceLists);
   const totalIncLabel = formatPriceAmount(summary.totalIncVat);
