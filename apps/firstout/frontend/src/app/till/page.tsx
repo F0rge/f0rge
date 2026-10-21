@@ -6,6 +6,7 @@ import {
   Checkbox,
   ComboBox,
   InlineNotification,
+  Modal,
   NumberInput,
   Select,
   SelectItem,
@@ -43,7 +44,10 @@ import {
   can,
   canManageCustomerCredit,
   canUseTill,
+  cancelPick,
   computeInvoicePreview,
+  confirmPick,
+  createPick,
   createTillSale,
   downloadInvoicePdf,
   getSettings,
@@ -74,7 +78,16 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isCreditBlockMessage } from "@/lib/customer-crm";
-import { isKitRequiresPickMessage, picksCreateHref } from "@/lib/picks";
+import {
+  clearTillCart,
+  loadTillCart,
+  nextTillStateAfterKitConfirm,
+  openPicksHrefForKit,
+  parseKitRequiresPick,
+  salePickIds,
+  saveTillCart,
+  type TillKitBlock,
+} from "@/lib/till-kit-pick";
 import {
   isDesktopPointer,
   isProtectedScanField,
@@ -306,9 +319,19 @@ export default function TillPage() {
   const [creditOverrideReason, setCreditOverrideReason] = useState("");
   const [creditBlock, setCreditBlock] = useState<string | null>(null);
   const [pickId, setPickId] = useState("");
+  const [linkedPickIds, setLinkedPickIds] = useState<Record<string, string>>({});
   const [confirmedPicks, setConfirmedPicks] = useState<PickDocument[]>([]);
-  const [kitRequiresPick, setKitRequiresPick] = useState(false);
+  const [kitBlocks, setKitBlocks] = useState<TillKitBlock[]>([]);
+  const [pickDraft, setPickDraft] = useState<{
+    kit: TillKitBlock;
+    pick: PickDocument | null;
+    creating: boolean;
+    confirming: boolean;
+    ack: boolean;
+    error: string | null;
+  } | null>(null);
   const scanBufferRef = useRef("");
+  const [cartReady, setCartReady] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -401,15 +424,12 @@ export default function TillPage() {
   }, [cart]);
 
   const cartKits = useMemo(() => cart.filter((line) => line.sku.is_kit), [cart]);
-  const firstCartKit = cartKits[0];
   const cartKitKey = cartKits
     .map((line) => line.sku.id)
     .sort()
     .join(",");
 
   useEffect(() => {
-    setPickId("");
-    setKitRequiresPick(false);
     if (!cartKitKey) {
       setConfirmedPicks([]);
       return;
@@ -433,6 +453,67 @@ export default function TillPage() {
       cancelled = true;
     };
   }, [cartKitKey]);
+
+  useEffect(() => {
+    if (loading || cartReady) {
+      return;
+    }
+    const snapshot = loadTillCart();
+    if (!snapshot) {
+      setCartReady(true);
+      return;
+    }
+    if (skus.length === 0) {
+      return;
+    }
+    const byId = new Map(skus.map((sku) => [sku.id, sku]));
+    const lines: CartLine[] = [];
+    for (const line of snapshot.lines) {
+      const sku = byId.get(line.skuId);
+      if (!sku) {
+        continue;
+      }
+      lines.push({
+        key: sku.id,
+        sku,
+        qty: line.qty,
+        discountPercent: line.discountPercent,
+      });
+    }
+    if (lines.length > 0) {
+      setCart(lines);
+    }
+    if (snapshot.locationId) {
+      setLocationId(snapshot.locationId);
+    }
+    if (snapshot.customerId) {
+      setCustomerId(snapshot.customerId);
+    }
+    if (snapshot.pickId) {
+      setPickId(snapshot.pickId);
+    }
+    if (Object.keys(snapshot.linkedPickIds).length > 0) {
+      setLinkedPickIds(snapshot.linkedPickIds);
+    }
+    setCartReady(true);
+  }, [cartReady, loading, skus]);
+
+  useEffect(() => {
+    if (!cartReady) {
+      return;
+    }
+    saveTillCart({
+      locationId,
+      customerId,
+      pickId,
+      linkedPickIds,
+      lines: cart.map((line) => ({
+        skuId: line.sku.id,
+        qty: line.qty,
+        discountPercent: line.discountPercent,
+      })),
+    });
+  }, [cart, cartReady, customerId, linkedPickIds, locationId, pickId]);
 
   const summary = cartSummary(cart, selectedCustomer, priceLists);
   const totalIncLabel = formatPriceAmount(summary.totalIncVat);
@@ -598,9 +679,10 @@ export default function TillPage() {
     setSubmitting(true);
     setError(null);
     setCreditBlock(null);
-    setKitRequiresPick(false);
+    setKitBlocks([]);
     setLastSale(null);
     try {
+      const pickIds = salePickIds(linkedPickIds, pickId);
       const result = await createTillSale({
         location_id: locationId,
         lines: cart.map((line) => {
@@ -616,6 +698,7 @@ export default function TillPage() {
         tender,
         ...(customerId ? { customer_id: customerId } : {}),
         ...(pickId ? { pick_id: pickId } : {}),
+        ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
         ...(canOverrideCredit && creditOverride
           ? {
               credit_override: true,
@@ -629,6 +712,9 @@ export default function TillPage() {
       setSkuId("");
       setCustomerId("");
       setPickId("");
+      setLinkedPickIds({});
+      setKitBlocks([]);
+      clearTillCart();
       setQty(1);
       await loadData();
     } catch (err) {
@@ -642,12 +728,115 @@ export default function TillPage() {
       if (err instanceof ApiError && err.status === 409 && isCreditBlockMessage(err.message)) {
         setCreditBlock(err.message);
       }
-      if (err instanceof ApiError && err.status === 409 && isKitRequiresPickMessage(err.message)) {
-        setKitRequiresPick(true);
+      if (err instanceof ApiError && err.status === 409) {
+        const parsed = parseKitRequiresPick(err.detail);
+        if (parsed) {
+          setKitBlocks(parsed.kits);
+          setError(null);
+        }
       }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function rememberConfirmedPick(kit: TillKitBlock, confirmed: PickDocument) {
+    const next = nextTillStateAfterKitConfirm(
+      { cart, pickId, linkedPickIds, blocks: kitBlocks },
+      { id: confirmed.id, skuId: kit.sku_id },
+    );
+    setPickId(next.pickId);
+    setLinkedPickIds(next.linkedPickIds);
+    setKitBlocks(next.blocks);
+    setConfirmedPicks((current) => [
+      confirmed,
+      ...current.filter((entry) => entry.id !== confirmed.id),
+    ]);
+    setPickDraft(null);
+    setError(null);
+  }
+
+  async function startKitPick(kit: TillKitBlock) {
+    setPickDraft({
+      kit,
+      pick: null,
+      creating: true,
+      confirming: false,
+      ack: false,
+      error: null,
+    });
+    try {
+      const created = await createPick({
+        sku_id: kit.sku_id,
+        qty: kit.qty,
+        ...(customerId ? { customer_id: customerId } : {}),
+      });
+      setPickDraft((current) =>
+        current && current.kit.sku_id === kit.sku_id
+          ? { ...current, pick: created, creating: false }
+          : current,
+      );
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Could not create the pick.";
+      setPickDraft((current) =>
+        current && current.kit.sku_id === kit.sku_id
+          ? { ...current, creating: false, error: message }
+          : current,
+      );
+    }
+  }
+
+  async function confirmKitPick() {
+    if (!pickDraft?.pick || pickDraft.confirming) {
+      return;
+    }
+    const requireAck = pickDraft.pick.needs_confirm;
+    if (requireAck && !pickDraft.ack) {
+      setPickDraft({ ...pickDraft, error: "Acknowledge the split before confirming." });
+      return;
+    }
+    if (pickDraft.pick.qty_short) {
+      setPickDraft({
+        ...pickDraft,
+        error: "There are not enough parts in stock to confirm this pick.",
+      });
+      return;
+    }
+    setPickDraft({ ...pickDraft, confirming: true, error: null });
+    try {
+      const confirmed = await confirmPick(pickDraft.pick.id, requireAck ? true : undefined);
+      rememberConfirmedPick(pickDraft.kit, confirmed);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Could not confirm the pick.";
+      setPickDraft((current) => (current ? { ...current, confirming: false, error: message } : current));
+    }
+  }
+
+  async function dismissPickDraft() {
+    const draft = pickDraft;
+    setPickDraft(null);
+    if (draft?.pick && draft.pick.status === "draft") {
+      try {
+        await cancelPick(draft.pick.id);
+      } catch {
+        // Leave the draft on the picks list if cancel fails.
+      }
+    }
+  }
+
+  function openPicksForKit(kit: TillKitBlock) {
+    saveTillCart({
+      locationId,
+      customerId,
+      pickId,
+      linkedPickIds,
+      lines: cart.map((line) => ({
+        skuId: line.sku.id,
+        qty: line.qty,
+        discountPercent: line.discountPercent,
+      })),
+    });
+    router.push(openPicksHrefForKit(kit));
   }
 
   if (!canSell) {
@@ -700,23 +889,25 @@ export default function TillPage() {
         />
       ) : null}
 
-      {kitRequiresPick && firstCartKit ? (
-        <Stack gap={3}>
+      {kitBlocks.map((kit) => (
+        <Stack key={`${kit.sku_id}-${kit.qty}`} gap={3}>
           <InlineNotification
             kind="warning"
-            title="Kit requires pick"
-            subtitle="Create and confirm a pick before selling this kit. A split kit cannot be sold from the till."
+            title={`${kit.sku_name} (${kit.sku_code})`}
+            subtitle={kit.message}
             hideCloseButton
             lowContrast
           />
-          <Button
-            kind="ghost"
-            onClick={() => router.push(picksCreateHref(firstCartKit.sku.id, firstCartKit.qty))}
-          >
-            Open picks
-          </Button>
+          <div className="firstout-catalogue-actions">
+            <Button kind="primary" onClick={() => void startKitPick(kit)}>
+              Create pick for this kit
+            </Button>
+            <Button kind="ghost" onClick={() => openPicksForKit(kit)}>
+              Open picks
+            </Button>
+          </div>
         </Stack>
-      ) : null}
+      ))}
 
       {loading ? (
         <p>Loading…</p>
@@ -1159,6 +1350,82 @@ export default function TillPage() {
           </Stack>
         </Tile>
       ) : null}
+
+      <Modal
+        open={pickDraft !== null}
+        modalHeading={
+          pickDraft
+            ? `Create pick for ${pickDraft.kit.sku_name}`
+            : "Create pick for this kit"
+        }
+        primaryButtonText={
+          pickDraft?.confirming ? "Confirming…" : pickDraft?.creating ? "Creating…" : "Confirm pick"
+        }
+        secondaryButtonText="Cancel"
+        primaryButtonDisabled={
+          !pickDraft?.pick ||
+          pickDraft.creating ||
+          pickDraft.confirming ||
+          pickDraft.pick.qty_short ||
+          (pickDraft.pick.needs_confirm && !pickDraft.ack)
+        }
+        onRequestClose={() => void dismissPickDraft()}
+        onRequestSubmit={() => void confirmKitPick()}
+      >
+        {pickDraft ? (
+          <Stack gap={4}>
+            <p className="cds--type-body-01">
+              {pickDraft.kit.sku_name} ({pickDraft.kit.sku_code}) × {pickDraft.kit.qty}. A pick
+              tells the warehouse which storeroom each part comes from. The cart stays on the till.
+            </p>
+            {pickDraft.creating ? <p className="cds--type-body-01">Creating the pick…</p> : null}
+            {pickDraft.pick
+              ? pickDraft.pick.lines.map((line) => (
+                  <p key={line.sku_id} className="cds--type-body-01">
+                    {line.sku_name || line.sku_our_ref} × {line.qty_needed}
+                  </p>
+                ))
+              : null}
+            {pickDraft.pick?.needs_confirm ? (
+              <>
+                <InlineNotification
+                  kind="warning"
+                  title="Split pick"
+                  subtitle="These parts are in more than one place. Tick the box so the warehouse can take them from those locations."
+                  hideCloseButton
+                  lowContrast
+                />
+                <Checkbox
+                  id="till-pick-ack-split"
+                  labelText="I acknowledge this split pick"
+                  checked={pickDraft.ack}
+                  onChange={() =>
+                    setPickDraft((current) => (current ? { ...current, ack: !current.ack } : current))
+                  }
+                />
+              </>
+            ) : null}
+            {pickDraft.pick?.qty_short ? (
+              <InlineNotification
+                kind="error"
+                title="Not enough parts"
+                subtitle="This pick cannot be confirmed until the missing parts are in stock."
+                hideCloseButton
+                lowContrast
+              />
+            ) : null}
+            {pickDraft.error ? (
+              <InlineNotification
+                kind="error"
+                title="Pick"
+                subtitle={pickDraft.error}
+                hideCloseButton
+                lowContrast
+              />
+            ) : null}
+          </Stack>
+        ) : null}
+      </Modal>
     </Stack>
   );
 }

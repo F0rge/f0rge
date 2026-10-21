@@ -89,11 +89,13 @@ export type UpdateProfilePayload = {
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly detail: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -168,36 +170,58 @@ export function formatHttpError(
   return trimmed;
 }
 
-export async function parseErrorMessage(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as {
-      detail?: string | { msg?: string }[] | { code?: string; message?: string };
-    };
-    if (typeof body.detail === "string") {
-      return body.detail;
-    }
-    if (Array.isArray(body.detail) && body.detail[0]?.msg) {
-      return body.detail[0].msg;
-    }
-    if (body.detail && typeof body.detail === "object" && "code" in body.detail) {
-      const code = body.detail.code;
-      if (code === "comms_encryption_unconfigured") {
-        return "Communications encryption is not configured";
-      }
-      if (code === "comms_smtp_unconfigured") {
-        return "SMTP mailbox is not configured";
-      }
-      if (typeof body.detail.message === "string" && body.detail.message.trim()) {
-        return body.detail.message;
-      }
-      if (typeof code === "string") {
-        return code;
-      }
-    }
-  } catch {
-    // ignore parse errors
+function detailMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") {
+    return detail;
   }
-  return response.statusText || "Request failed";
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: unknown } | undefined;
+    if (first && typeof first.msg === "string") {
+      return first.msg;
+    }
+  }
+  if (detail && typeof detail === "object" && "code" in detail) {
+    const coded = detail as { code?: unknown; message?: unknown };
+    const code = coded.code;
+    if (code === "comms_encryption_unconfigured") {
+      return "Communications encryption is not configured";
+    }
+    if (code === "comms_smtp_unconfigured") {
+      return "SMTP mailbox is not configured";
+    }
+    if (typeof coded.message === "string" && coded.message.trim()) {
+      return coded.message;
+    }
+    if (typeof code === "string") {
+      return code;
+    }
+  }
+  return fallback;
+}
+
+function payloadDetail(body: unknown): unknown {
+  if (body && typeof body === "object" && !Array.isArray(body) && "detail" in body) {
+    return (body as { detail: unknown }).detail;
+  }
+  return undefined;
+}
+
+async function readErrorPayload(
+  response: Response,
+): Promise<{ message: string; detail: unknown }> {
+  const fallback = response.statusText || "Request failed";
+  try {
+    const body: unknown = await response.json();
+    const detail = payloadDetail(body);
+    return { message: detailMessage(detail, fallback), detail };
+  } catch {
+    return { message: fallback, detail: undefined };
+  }
+}
+
+export async function parseErrorMessage(response: Response): Promise<string> {
+  const payload = await readErrorPayload(response);
+  return payload.message;
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -219,10 +243,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   }
 
   if (!response.ok) {
-    const detail = await parseErrorMessage(response);
+    const payload = await readErrorPayload(response);
     throw new ApiError(
       response.status,
-      formatHttpError(call, response.status, response.statusText, detail),
+      formatHttpError(call, response.status, response.statusText, payload.message),
+      payload.detail,
     );
   }
 
@@ -471,10 +496,11 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   }
 
   if (!response.ok) {
-    const detail = await parseErrorMessage(response);
+    const payload = await readErrorPayload(response);
     throw new ApiError(
       response.status,
-      formatHttpError(call, response.status, response.statusText, detail),
+      formatHttpError(call, response.status, response.statusText, payload.message),
+      payload.detail,
     );
   }
 
@@ -992,6 +1018,7 @@ export type TillSalePayload = {
   tender: TillTender;
   customer_id?: string;
   pick_id?: string;
+  pick_ids?: string[];
   credit_override?: boolean;
   credit_override_reason?: string;
 };
