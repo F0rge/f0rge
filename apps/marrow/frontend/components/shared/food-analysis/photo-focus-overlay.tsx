@@ -2,10 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { Eye, EyeOff, Pencil } from 'lucide-react'
+import { Eye, EyeOff, ImageOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { MealIconThumb, photoHasImage, useMealFileSrc } from '@/components/checkin/meal-icon-thumb'
+import {
+  MEAL_LIBRARY_LABEL,
+  MEAL_PHOTO_MISSING_LABEL,
+  MealIconThumb,
+  mealThumbKind,
+  photoHasImage,
+  useMealFileSrc,
+} from '@/components/checkin/meal-icon-thumb'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import {
   usePhotoAnalysis,
@@ -447,8 +454,8 @@ export function PhotoFocusOverlay({
 
         {/* Hero image + meal tabs */}
         <div data-sheet-top-region className="relative">
-          {photoId !== null && currentPhoto && (
-            photoHasImage(currentPhoto) && fileSrc ? (
+          {photoId !== null && currentPhoto &&
+            (mealThumbKind(photoHasImage(currentPhoto), fileSrc) === 'photo' && fileSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={fileSrc}
@@ -458,19 +465,20 @@ export function PhotoFocusOverlay({
               />
             ) : (
               <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-muted">
-                <MealIconThumb
-                  iconKey={currentPhoto.icon_key ?? 'bowl'}
-                  size="lg"
-                  className="size-24 rounded-2xl"
-                />
-                {!photoHasImage(currentPhoto) && (
-                  <span className="absolute left-3 top-3 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
-                    Library
-                  </span>
+                {photoHasImage(currentPhoto) ? (
+                  <ImageOff className="size-10 text-muted-foreground" aria-hidden />
+                ) : (
+                  <MealIconThumb
+                    iconKey={currentPhoto.icon_key ?? 'bowl'}
+                    size="lg"
+                    className="size-24 rounded-2xl"
+                  />
                 )}
+                <span className="absolute left-3 top-3 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
+                  {photoHasImage(currentPhoto) ? MEAL_PHOTO_MISSING_LABEL : MEAL_LIBRARY_LABEL}
+                </span>
               </div>
-            )
-          )}
+            ))}
 
           {photos.length > 1 && (
             <div className="absolute inset-x-0 bottom-2 flex justify-center px-2">

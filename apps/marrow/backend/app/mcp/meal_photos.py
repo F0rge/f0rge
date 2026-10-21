@@ -27,6 +27,7 @@ from app.services.photo_storage import (
     THUMB_MAX_DIM,
     THUMB_QUALITY,
     delete_photo,
+    missing_photo_objects,
     read_photo,
     resize_image,
     save_photo,
@@ -35,6 +36,7 @@ from app.services.photo_storage import (
 from app.services.object_storage import object_storage_enabled
 from app.services.photos import entry_photo_upload_lock, next_photo_filename
 from f0rge_core.exceptions import NotFoundError, ValidationError
+from f0rge_db.crud import unit_of_work
 from f0rge_db.tenant import owned_by_user
 
 MAX_PHOTO_BYTES = 25 * 1024 * 1024
@@ -143,6 +145,44 @@ async def store_photo_for(
         meal.filename = filename
         meal.original_filename = tag
     return list(saved)
+
+
+async def photo_files_present(photo: Photo) -> bool:
+    """True when this row's full image and thumbnail are both in storage."""
+    if not photo.filename:
+        return False
+    missing = await asyncio.to_thread(
+        missing_photo_objects, photo.filename, user_id=str(photo.user_id)
+    )
+    return not missing
+
+
+async def store_photo_replacing(
+    db: AsyncSession,
+    entry: Entry,
+    photo: Photo,
+    meal: Meal,
+    raw: bytes,
+    user_id: uuid.UUID,
+    *,
+    bind_meal: bool,
+) -> bool:
+    """Write full + thumb for ``photo``. True when its filename changed.
+
+    Retires the previous objects when no other row still points at them.
+    """
+    old_filename = photo.filename
+    saved: list[str] = []
+    try:
+        async with unit_of_work(db):
+            saved = await store_photo_for(db, entry, photo, meal, raw, user_id, bind_meal=bind_meal)
+    except Exception:
+        await delete_photo_files(saved, user_id)
+        raise
+    replaced = bool(old_filename) and old_filename != photo.filename
+    if replaced and old_filename is not None and not await filename_in_use(db, old_filename):
+        await delete_photo_files([old_filename, thumb_filename(old_filename)], user_id)
+    return replaced
 
 
 async def find_duplicate(db: AsyncSession, entry_id: int, hash_tag: str) -> Optional[Photo]:

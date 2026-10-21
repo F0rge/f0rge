@@ -18,6 +18,7 @@ __all__ = [
     "read_photo",
     "photo_exists",
     "thumb_filename",
+    "missing_photo_objects",
 ]
 
 
@@ -40,3 +41,16 @@ def read_photo(filename: str, *, user_id: str | None = None) -> bytes:
 
 def photo_exists(filename: str, *, user_id: str | None = None) -> bool:
     return object_storage.exists_relative(filename, user_id=user_id)
+
+
+def missing_photo_objects(filename: str, *, user_id: str | None = None) -> list[str]:
+    """Object kinds absent from storage: ``image`` and/or ``thumbnail``.
+
+    Empty when both the full file and its thumbnail exist. Read-only.
+    """
+    missing: list[str] = []
+    if not photo_exists(filename, user_id=user_id):
+        missing.append("image")
+    if not photo_exists(thumb_filename(filename), user_id=user_id):
+        missing.append("thumbnail")
+    return missing
