@@ -5,11 +5,23 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    event,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.services.settlement import SettlementStatus, settlement_status
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -29,7 +41,22 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    payment_status: Mapped[SettlementStatus] = mapped_column(
+        Enum(
+            SettlementStatus,
+            name="invoice_payment_status",
+            native_enum=False,
+            length=32,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=False,
+        default=SettlementStatus.UNPAID,
+        server_default=SettlementStatus.UNPAID.value,
+    )
     is_archive: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    reminders_paused: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 
@@ -71,6 +98,12 @@ class InvoiceLine(UUIDPkMixin, Base):
     )
 
     invoice: Mapped[TaxInvoice] = relationship(back_populates="lines")
+
+
+@event.listens_for(TaxInvoice, "before_insert")
+@event.listens_for(TaxInvoice, "before_update")
+def _sync_invoice_payment_status(_mapper, _connection, target: TaxInvoice) -> None:
+    target.payment_status = settlement_status(target.amount_paid, target.total_inc_vat)
 
 
 from app.models.customer import Customer  # noqa: E402

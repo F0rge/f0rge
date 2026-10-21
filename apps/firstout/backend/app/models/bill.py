@@ -5,11 +5,24 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    event,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.services.settlement import SettlementStatus, bill_settlement_status
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -33,7 +46,25 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
     amount_foreign: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    amount_paid_foreign: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    payment_status: Mapped[SettlementStatus] = mapped_column(
+        Enum(
+            SettlementStatus,
+            name="bill_payment_status",
+            native_enum=False,
+            length=32,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=False,
+        default=SettlementStatus.UNPAID,
+        server_default=SettlementStatus.UNPAID.value,
+    )
     pdf_storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    purchase_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     supplier: Mapped["Supplier"] = relationship()
     lines: Mapped[list["BillLine"]] = relationship(
@@ -42,7 +73,16 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
         order_by="BillLine.sort_order",
     )
 
-    __table_args__ = (UniqueConstraint("bill_number", name="uq_bills_bill_number"),)
+    __table_args__ = (
+        UniqueConstraint("bill_number", name="uq_bills_bill_number"),
+        Index(
+            "uq_bills_supplier_ref_ci",
+            "supplier_id",
+            text("lower(supplier_ref)"),
+            unique=True,
+            postgresql_where=text("btrim(supplier_ref) <> ''"),
+        ),
+    )
 
 
 class BillLine(UUIDPkMixin, Base):
@@ -61,6 +101,17 @@ class BillLine(UUIDPkMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     bill: Mapped[Bill] = relationship(back_populates="lines")
+
+
+@event.listens_for(Bill, "before_insert")
+@event.listens_for(Bill, "before_update")
+def _sync_bill_payment_status(_mapper, _connection, target: Bill) -> None:
+    target.payment_status = bill_settlement_status(
+        target.amount_paid_foreign or Decimal(0),
+        target.amount_foreign,
+        target.amount_paid_zar or Decimal(0),
+        target.amount_zar,
+    )
 
 
 from app.models.supplier import Supplier  # noqa: E402

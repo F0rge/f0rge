@@ -2,6 +2,7 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/ledger", label: "Chart of accounts" },
   { href: "/journals", label: "Journals" },
   { href: "/invoices", label: "Invoices" },
+  { href: "/payment-reminders", label: "Payment reminders" },
   { href: "/repeating-invoices", label: "Repeating invoices" },
   { href: "/credit-notes", label: "Credit notes" },
   { href: "/bills", label: "Bills" },
@@ -86,6 +87,7 @@ export function isBooksPath(pathname: string): boolean {
     BOOKS_HREFS.has(pathname) ||
     pathname.startsWith("/journals/") ||
     pathname.startsWith("/invoices/") ||
+    pathname.startsWith("/payment-reminders") ||
     pathname.startsWith("/repeating-invoices/") ||
     pathname.startsWith("/credit-notes/") ||
     pathname.startsWith("/bills/") ||
@@ -101,7 +103,7 @@ export function isCatalogueMenuPath(pathname: string): boolean {
   if (CATALOGUE_HREFS.has(pathname)) {
     return true;
   }
-  return pathname.startsWith("/catalogue/");
+  return pathname.startsWith("/catalogue/") || pathname.startsWith("/proformas/");
 }
 
 export function isWarehousePath(pathname: string): boolean {
@@ -163,6 +165,9 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
   if (href === "/invoices" && pathname.startsWith("/invoices/")) {
     return true;
   }
+  if (href === "/payment-reminders" && pathname.startsWith("/payment-reminders")) {
+    return true;
+  }
   if (href === "/repeating-invoices" && pathname.startsWith("/repeating-invoices/")) {
     return true;
   }
@@ -173,6 +178,9 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/purchase-orders" && pathname.startsWith("/purchase-orders/")) {
+    return true;
+  }
+  if (href === "/proformas" && pathname.startsWith("/proformas/")) {
     return true;
   }
   if (href === "/catalogue" && pathname.startsWith("/catalogue/")) {

@@ -9,19 +9,21 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
+from f0rge_core.exceptions import ConflictError
 from f0rge_core.handlers import register_exception_handlers
 
+from app.config import settings
+from app.database import async_session_maker
 from app.exceptions import (
     CommsEncryptionUnconfiguredError,
     CommsSmtpFailedError,
     CommsSmtpUnconfiguredError,
+    DocumentLlmUnconfiguredError,
     ForbiddenError,
+    KitRequiresPickError,
     NiaCapExceededError,
     NiaLlmUnconfiguredError,
 )
-
-from app.config import settings
-from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
 from app.routers import (
     accounts,
@@ -41,6 +43,7 @@ from app.routers import (
     credit_notes,
     customers,
     deliveries,
+    document_intake,
     health,
     home,
     invoices,
@@ -48,6 +51,7 @@ from app.routers import (
     journals,
     locations,
     payments,
+    payment_reminders,
     picks,
     price_lists,
     product_groups,
@@ -90,6 +94,7 @@ from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
 from app.services.storefront_system_actor import StorefrontSystemActorService
 from app.services.nia_schedule import NiaScheduleService
+from app.services.payment_reminders import PaymentReminderService
 from app.services.users import BootstrapService
 
 logger = logging.getLogger(__name__)
@@ -104,6 +109,11 @@ async def _nia_schedule_loop(stop: asyncio.Event) -> None:
                 await NiaScheduleService(session).tick_due_tasks()
         except Exception:
             logger.exception("nia schedule tick failed")
+        try:
+            async with async_session_maker() as session:
+                await PaymentReminderService(session).tick()
+        except Exception:
+            logger.exception("payment reminder tick failed")
         try:
             await asyncio.wait_for(stop.wait(), timeout=TICK_INTERVAL_SECONDS)
         except asyncio.TimeoutError:
@@ -193,7 +203,42 @@ async def _comms_smtp_failed_handler(_: Request, exc: Exception) -> JSONResponse
     )
 
 
+async def _kit_requires_pick_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, KitRequiresPickError)
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": exc.payload},
+    )
+
+
+async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, KitRequiresPickError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": exc.payload},
+        )
+    assert isinstance(exc, ConflictError)
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": exc.detail},
+    )
+
+
+async def _document_llm_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, DocumentLlmUnconfiguredError)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": {"code": exc.detail}},
+    )
+
+
+app.add_exception_handler(KitRequiresPickError, cast(ExceptionHandler, _kit_requires_pick_handler))
+app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handler))
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+app.add_exception_handler(
+    DocumentLlmUnconfiguredError,
+    cast(ExceptionHandler, _document_llm_unconfigured_handler),
+)
 app.add_exception_handler(
     NiaLlmUnconfiguredError,
     cast(ExceptionHandler, _nia_llm_unconfigured_handler),
@@ -233,6 +278,7 @@ app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
+app.include_router(document_intake.document_intake_router)
 app.include_router(skus.skus_router)
 app.include_router(product_groups.router)
 app.include_router(ops_commerce.router)
@@ -266,6 +312,7 @@ app.include_router(journal_imports.journal_imports_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
+app.include_router(payment_reminders.payment_reminders_router)
 app.include_router(books_events.books_events_router)
 app.include_router(books_periods.books_periods_router)
 app.include_router(audit.audit_router)

@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
   Tag,
+  TextInput,
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -32,11 +33,17 @@ import {
   listPayments,
   listUnmatchedCounts,
   listUnmatchedLines,
+  confirmAutoMatch,
+  matchBankDocument,
   matchBankLine,
+  previewAutoMatch,
   recodeLine,
+  splitBankLine,
   uploadBankImport,
   type Account,
   type BankImport,
+  type AutoMatchPreviewItem,
+  type BankDocumentSuggestion,
   type BankImportLine,
   type BankImportSummary,
   type BankUnmatchedCount,
@@ -93,6 +100,18 @@ function lineStatus(line: BankImportLine, journals: JournalListItem[]): string {
   return "Unmatched";
 }
 
+function topDocumentSuggestion(line: BankImportLine): BankDocumentSuggestion | null {
+  return line.document_suggestions?.[0] ?? null;
+}
+
+function documentSuggestionText(line: BankImportLine): string {
+  const top = topDocumentSuggestion(line);
+  if (!top) {
+    return "";
+  }
+  return `${top.document_number} · ${top.confidence}% · ${top.reason}`;
+}
+
 function ruleSuggestion(line: BankImportLine): string {
   if (!line.suggested_rule_id) {
     return "—";
@@ -112,12 +131,16 @@ function LineActions({
   line,
   canMutate,
   onMatch,
+  onMatchDocument,
+  onSplit,
   onApply,
   onRecode,
 }: {
   line: BankImportLine;
   canMutate: boolean;
   onMatch: () => void;
+  onMatchDocument: () => void;
+  onSplit: () => void;
   onApply: () => void;
   onRecode: () => void;
 }) {
@@ -125,8 +148,19 @@ function LineActions({
     return null;
   }
   const unmatched = !isLineMatched(line);
+  const suggestion = topDocumentSuggestion(line);
   return (
     <Stack gap={2} orientation="horizontal">
+      {unmatched && suggestion ? (
+        <Button kind="primary" size="sm" onClick={onMatchDocument}>
+          Match to {suggestion.document_number}
+        </Button>
+      ) : null}
+      {unmatched && (line.document_suggestions?.length ?? 0) > 1 ? (
+        <Button kind="tertiary" size="sm" onClick={onSplit}>
+          Split
+        </Button>
+      ) : null}
       {unmatched && line.suggested_rule_id ? (
         <Button kind="tertiary" size="sm" onClick={onApply}>
           Apply rule
@@ -175,6 +209,11 @@ export default function BankReconciliationPage() {
   const [recodeLineRow, setRecodeLineRow] = useState<BankImportLine | null>(null);
   const [recodeAccountId, setRecodeAccountId] = useState("");
   const [recoding, setRecoding] = useState(false);
+  const [splitLineRow, setSplitLineRow] = useState<BankImportLine | null>(null);
+  const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
+  const [splitting, setSplitting] = useState(false);
+  const [autoPreview, setAutoPreview] = useState<AutoMatchPreviewItem[] | null>(null);
+  const [autoMatching, setAutoMatching] = useState(false);
   const importIdByLineRef = useRef<Record<string, string>>({});
   const selectedImportIdRef = useRef<string | null>(null);
 
@@ -385,6 +424,115 @@ export default function BankReconciliationPage() {
     }
   }
 
+  function openSplitModal(line: BankImportLine) {
+    const amounts: Record<string, string> = {};
+    for (const suggestion of line.document_suggestions ?? []) {
+      amounts[suggestion.document_id] = "";
+    }
+    setSplitAmounts(amounts);
+    setSplitLineRow(line);
+  }
+
+  async function handleMatchDocument(line: BankImportLine) {
+    const suggestion = topDocumentSuggestion(line);
+    const importId = line.import_id ?? (await resolveImportId(line.id));
+    if (!suggestion || !importId) {
+      setError("That suggestion is no longer available.");
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    try {
+      const target =
+        suggestion.kind === "invoice"
+          ? { invoice_id: suggestion.document_id }
+          : { bill_id: suggestion.document_id };
+      await matchBankDocument(importId, line.id, target);
+      setSuccess(`Matched to ${suggestion.document_number}.`);
+      await refreshAfterMutation(importId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Match failed.");
+    }
+  }
+
+  async function handleSplit() {
+    if (!splitLineRow) {
+      return;
+    }
+    const importId = splitLineRow.import_id ?? (await resolveImportId(splitLineRow.id));
+    if (!importId) {
+      setError("Could not find that bank line.");
+      return;
+    }
+    const allocations = (splitLineRow.document_suggestions ?? [])
+      .map((suggestion) => {
+        const amount = (splitAmounts[suggestion.document_id] ?? "").trim();
+        if (!amount) {
+          return null;
+        }
+        return suggestion.kind === "invoice"
+          ? { invoice_id: suggestion.document_id, amount }
+          : { bill_id: suggestion.document_id, amount };
+      })
+      .filter((item): item is { invoice_id: string; amount: string } | { bill_id: string; amount: string } =>
+        item !== null,
+      );
+    if (allocations.length < 2) {
+      setError("Enter an amount on at least two documents.");
+      return;
+    }
+    setSplitting(true);
+    setError(null);
+    try {
+      await splitBankLine(importId, splitLineRow.id, allocations);
+      setSplitLineRow(null);
+      setSuccess("Bank line split across the documents.");
+      await refreshAfterMutation(importId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Split failed.");
+    } finally {
+      setSplitting(false);
+    }
+  }
+
+  async function handlePreviewAutoMatch() {
+    setAutoMatching(true);
+    setError(null);
+    try {
+      const preview = await previewAutoMatch(accountId || undefined);
+      setAutoPreview(preview.matches);
+      if (preview.matches.length === 0) {
+        setSuccess("No exact reference matches to apply.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not preview auto-match.");
+    } finally {
+      setAutoMatching(false);
+    }
+  }
+
+  async function handleConfirmAutoMatch() {
+    if (!autoPreview || autoPreview.length === 0) {
+      return;
+    }
+    setAutoMatching(true);
+    setError(null);
+    try {
+      const result = await confirmAutoMatch(autoPreview.map((item) => item.line_id));
+      setAutoPreview(null);
+      setSuccess(
+        result.applied.length
+          ? `Auto-matched ${result.applied.length} line${result.applied.length === 1 ? "" : "s"}.`
+          : "Nothing was posted.",
+      );
+      await refreshAfterMutation(selectedImport?.id ?? result.applied[0]?.import_id ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Auto-match failed.");
+    } finally {
+      setAutoMatching(false);
+    }
+  }
+
   async function handleMatch() {
     const hasPayment = Boolean(matchPaymentId);
     const hasJournal = Boolean(matchJournalId);
@@ -499,7 +647,7 @@ export default function BankReconciliationPage() {
     description: line.description,
     reference: line.reference ?? "—",
     amount_zar: formatZarAmount(line.amount_zar),
-    suggestion: ruleSuggestion(line),
+    suggestion: documentSuggestionText(line) || ruleSuggestion(line),
     actions: "actions",
   }));
 
@@ -617,6 +765,15 @@ export default function BankReconciliationPage() {
         <p className="cds--type-body-01">Loading…</p>
       ) : (
         <Stack gap={4}>
+          {canMutate ? (
+            <Button
+              kind="tertiary"
+              disabled={autoMatching || unmatchedRows.length === 0}
+              onClick={() => void handlePreviewAutoMatch()}
+            >
+              {autoMatching ? "Checking…" : "Auto-match exact references"}
+            </Button>
+          ) : null}
           {unmatchedRows.length > 0 ? (
             <DataTable rows={unmatchedRows} headers={[...UNMATCHED_HEADERS]}>
               {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
@@ -648,6 +805,8 @@ export default function BankReconciliationPage() {
                                     onMatch={() =>
                                       void openMatchModal(line.id, line.suggested_payment_id)
                                     }
+                                    onMatchDocument={() => void handleMatchDocument(line)}
+                                    onSplit={() => openSplitModal(line)}
                                     onApply={() => void openApplyModal(line)}
                                     onRecode={() => void openRecodeModal(line)}
                                   />
@@ -735,6 +894,8 @@ export default function BankReconciliationPage() {
                                         onMatch={() =>
                                           void openMatchModal(line.id, line.suggested_payment_id)
                                         }
+                                        onMatchDocument={() => void handleMatchDocument(line)}
+                                        onSplit={() => openSplitModal(line)}
                                         onApply={() => void openApplyModal(line)}
                                         onRecode={() => void openRecodeModal(line)}
                                       />
@@ -872,6 +1033,58 @@ export default function BankReconciliationPage() {
               />
             ))}
           </Select>
+        </Stack>
+      </Modal>
+
+      <Modal
+        open={splitLineRow !== null}
+        modalHeading={splitLineRow ? `Split ${formatZarAmount(splitLineRow.amount_zar)}` : "Split"}
+        primaryButtonText={splitting ? "Splitting…" : "Split and reconcile"}
+        secondaryButtonText="Cancel"
+        primaryButtonDisabled={splitting}
+        onRequestClose={() => setSplitLineRow(null)}
+        onRequestSubmit={() => void handleSplit()}
+      >
+        <Stack gap={4}>
+          <p className="cds--helper-text">
+            Amounts must add up to the bank line. Leave a document blank to leave it out.
+          </p>
+          {(splitLineRow?.document_suggestions ?? []).map((suggestion) => (
+            <TextInput
+              key={suggestion.document_id}
+              id={`split-${suggestion.document_id}`}
+              labelText={`${suggestion.document_number} · ${suggestion.contact_name} · owing ${formatZarAmount(suggestion.outstanding_zar)}`}
+              value={splitAmounts[suggestion.document_id] ?? ""}
+              onChange={(event) =>
+                setSplitAmounts((current) => ({
+                  ...current,
+                  [suggestion.document_id]: event.target.value,
+                }))
+              }
+            />
+          ))}
+        </Stack>
+      </Modal>
+
+      <Modal
+        open={autoPreview !== null && autoPreview.length > 0}
+        modalHeading="Confirm auto-match"
+        primaryButtonText={autoMatching ? "Posting…" : "Post these matches"}
+        secondaryButtonText="Cancel"
+        primaryButtonDisabled={autoMatching}
+        onRequestClose={() => setAutoPreview(null)}
+        onRequestSubmit={() => void handleConfirmAutoMatch()}
+      >
+        <Stack gap={3}>
+          <p className="cds--helper-text">
+            Only exact amount and reference matches are listed. Nothing is posted until you confirm.
+          </p>
+          {(autoPreview ?? []).map((item) => (
+            <p key={item.line_id}>
+              {item.description} · {formatZarAmount(item.amount_zar)} → {item.document_number} (
+              {item.confidence}%, {item.reason})
+            </p>
+          ))}
         </Stack>
       </Modal>
     </Stack>

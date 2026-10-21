@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import UploadFile
 from fastapi.responses import Response
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
@@ -27,15 +28,21 @@ from app.models.purchase_order import (
 )
 from app.models.supplier import Supplier
 from app.schemas.page import Page, PageParams
+from app.models.sku_supplier_price import SkuSupplierPrice
 from app.schemas.purchase_order import (
     LandingBillResponse,
     PoLineCreate,
     PoLineResponse,
+    PoLineSkuCreate,
+    PoLineWrite,
     PurchaseOrderCreate,
+    PurchaseOrderLinesUpdate,
     PurchaseOrderListItem,
     PurchaseOrderResponse,
     ReceiveRequest,
 )
+from app.schemas.sku import SkuCreate, SkuUpdate
+from app.services.skus import SkuService
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.books_periods import assert_date_postable
 from app.services.cost_audit import CostAuditService
@@ -87,12 +94,14 @@ class PurchaseOrderService:
         self,
         params: PageParams,
         status: Optional[PurchaseOrderStatus] = None,
+        needs_skus: bool = False,
     ) -> Page[PurchaseOrderListItem]:
         orders, total = await self.crud.list_page(
             limit=params.limit,
             offset=params.offset,
             q=params.q,
             status=status,
+            needs_skus=needs_skus,
         )
         return Page(
             items=[self._to_list_item(po) for po in orders],
@@ -115,25 +124,19 @@ class PurchaseOrderService:
             if proforma.supplier_id != data.supplier_id:
                 raise ValidationError("Proforma must belong to the same supplier")
 
-        if not data.lines:
-            raise ValidationError("At least one line is required")
-
-        sku_ids = {line.sku_id for line in data.lines}
-        if len(sku_ids) != len(data.lines):
-            raise ValidationError("Duplicate SKU lines are not allowed")
-
-        for line in data.lines:
-            sku = await self.sku_crud.get_by_id(line.sku_id)
-            if sku is None:
-                raise NotFoundError("SKU not found")
+        await self._validate_line_writes(data.lines)
 
         total_zar = await self._factory_total_zar(supplier, data.lines)
         create_status = await self._resolve_create_status(user_id, total_zar)
+        if data.submit_for_approval or any(line.sku_id is None for line in data.lines):
+            create_status = PurchaseOrderStatus.PENDING_APPROVAL
 
         po = PurchaseOrder(
             po_number="",
             supplier_id=data.supplier_id,
             proforma_id=data.proforma_id,
+            supplier_ref=_blank_to_none(data.supplier_ref),
+            notes=_blank_to_none(data.notes),
             status=create_status,
         )
 
@@ -142,21 +145,94 @@ class PurchaseOrderService:
             await self.crud.add_and_flush(po)
             _stamp_first(po, "ordered_at", _as_aware_utc(po.created_at))
             for line in data.lines:
-                po_line = PoLine(
-                    po_id=po.id,
-                    sku_id=line.sku_id,
-                    qty=line.qty,
-                    factory_unit_amount=line.factory_unit_amount,
-                )
+                po_line = _po_line_from_write(po.id, line)
                 await self.crud.add_and_flush(po_line)
 
         reloaded = await self._get_po_or_404(po.id)
         return self._to_response(reloaded)
 
+    async def update_pending(
+        self,
+        po_id: uuid.UUID,
+        data: PurchaseOrderLinesUpdate,
+    ) -> PurchaseOrderResponse:
+        po = await self._reload(po_id)
+        if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
+            raise ConflictError("Only a purchase order waiting for approval can be edited.")
+        await self._validate_line_writes(data.lines)
+        existing = {line.id: line for line in po.lines}
+        seen: set[uuid.UUID] = set()
+        async with unit_of_work(self.db):
+            provided = data.model_fields_set
+            if "supplier_ref" in provided:
+                po.supplier_ref = _blank_to_none(data.supplier_ref)
+            if "notes" in provided:
+                po.notes = _blank_to_none(data.notes)
+            for item in data.lines:
+                if item.id is None:
+                    await self.crud.add_and_flush(_po_line_from_write(po.id, item))
+                    continue
+                row = existing.get(item.id)
+                if row is None:
+                    raise NotFoundError("Purchase order line not found")
+                _apply_line_write(row, item)
+                seen.add(item.id)
+            for line_id, row in existing.items():
+                if line_id not in seen:
+                    await self.db.delete(row)
+        return self._to_response(await self._reload(po_id))
+
+    async def create_line_sku(
+        self,
+        po_id: uuid.UUID,
+        line_id: uuid.UUID,
+        data: PoLineSkuCreate,
+        user_id: uuid.UUID,
+    ) -> PurchaseOrderResponse:
+        po = await self._reload(po_id)
+        if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
+            raise ConflictError("Only a purchase order waiting for approval can be edited.")
+        line = next((row for row in po.lines if row.id == line_id), None)
+        if line is None:
+            raise NotFoundError("Purchase order line not found")
+        if line.sku_id is not None:
+            raise ConflictError("This line already has a SKU.")
+        supplier_code = _blank_to_none(line.supplier_code)
+        skus = SkuService(self.db)
+        created = await skus.create(
+            SkuCreate(
+                our_ref=data.our_ref,
+                our_barcode=data.our_barcode,
+                name=data.name,
+                design=data.design,
+                fabric=data.fabric,
+                supplier_ref=None if supplier_code is None else supplier_code[:64],
+                category=data.category,
+            ),
+            user_id,
+        )
+        await skus.update(created.id, SkuUpdate(preferred_supplier_id=po.supplier_id), user_id)
+        po = await self._reload(po_id)
+        current = next((row for row in po.lines if row.id == line_id), None)
+        if current is None:
+            raise NotFoundError("Purchase order line not found")
+        price = SkuSupplierPrice(
+            sku_id=created.id,
+            supplier_id=po.supplier_id,
+            supplier_sku=supplier_code,
+            latest_price=current.factory_unit_amount,
+        )
+        async with unit_of_work(self.db):
+            self.db.add(price)
+            current.sku_id = created.id
+            await self.db.flush()
+        return self._to_response(await self._reload(po_id))
+
     async def approve(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
         po = await self._get_po_or_404(po_id)
         if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
             raise ConflictError("Purchase order is not pending approval")
+        _require_complete_lines(po, "approving")
         async with unit_of_work(self.db):
             po.status = PurchaseOrderStatus.OPEN
         reloaded = await self._get_po_or_404(po_id)
@@ -173,6 +249,7 @@ class PurchaseOrderService:
 
     async def mark_on_water(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
         po = await self._get_po_or_404(po_id)
+        _require_complete_lines(po, "this step")
         if po.status != PurchaseOrderStatus.OPEN:
             raise ConflictError("Purchase order is not open")
 
@@ -180,6 +257,8 @@ class PurchaseOrderService:
             po.status = PurchaseOrderStatus.ON_WATER
             _stamp_first(po, "on_water_at", _utc_now())
             for line in po.lines:
+                if line.sku_id is None:
+                    continue
                 stock = await self.sku_stock_crud.get_by_sku_id(line.sku_id)
                 if stock is None:
                     stock = SkuStock(sku_id=line.sku_id, on_order=0)
@@ -211,6 +290,7 @@ class PurchaseOrderService:
             raise ValidationError("fx_to_zar must be positive")
 
         po = await self._get_po_or_404(po_id)
+        _require_complete_lines(po, "this step")
         if po.status != PurchaseOrderStatus.ON_WATER:
             raise ConflictError("Purchase order must be on water to land")
 
@@ -312,6 +392,7 @@ class PurchaseOrderService:
 
     async def packing_sheet(self, po_id: uuid.UUID) -> Response:
         po = await self._get_po_or_404(po_id)
+        _require_complete_lines(po, "this step")
         lines_data = [
             (
                 line.sku.our_ref,
@@ -338,6 +419,7 @@ class PurchaseOrderService:
         await assert_date_postable(self.db, datetime.date.today())
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         po = await self._get_po_or_404(data.purchase_order_id)
+        _require_complete_lines(po, "this step")
 
         if po.status == PurchaseOrderStatus.RECEIVED:
             raise ConflictError("Purchase order already received")
@@ -357,6 +439,8 @@ class PurchaseOrderService:
             _stamp_first(po, "received_at", _utc_now())
 
             for line in po.lines:
+                if line.sku_id is None:
+                    continue
                 stock = await self.sku_stock_crud.get_by_sku_id(line.sku_id)
                 if stock is None:
                     raise ConflictError("SKU stock record not found")
@@ -380,6 +464,35 @@ class PurchaseOrderService:
 
         reloaded = await self._get_po_or_404(data.purchase_order_id)
         return self._to_response(reloaded)
+
+    async def _validate_line_writes(self, lines: list[PoLineCreate] | list[PoLineWrite]) -> None:
+        if not lines:
+            raise ValidationError("At least one line is required")
+        sku_ids = [line.sku_id for line in lines if line.sku_id is not None]
+        if len(sku_ids) != len(set(sku_ids)):
+            raise ValidationError("Duplicate SKU lines are not allowed")
+        for line in lines:
+            if line.sku_id is None and not (line.description or "").strip():
+                raise ValidationError("A line without a SKU needs a description.")
+            if line.sku_id is not None:
+                sku = await self.sku_crud.get_by_id(line.sku_id)
+                if sku is None:
+                    raise NotFoundError("SKU not found")
+
+    async def _reload(self, po_id: uuid.UUID) -> PurchaseOrder:
+        """Re-read lines from the database.
+
+        The test session keeps loaded relationships after commit. A later
+        request in that same session would otherwise edit a stale line list
+        and miss a SKU that was just created.
+        """
+        current = await self.crud.get_by_id(po_id)
+        if current is not None:
+            for line in list(current.lines):
+                if sa_inspect(line).persistent:
+                    self.db.expire(line, ["sku"])
+            self.db.expire(current, ["lines"])
+        return await self._get_po_or_404(po_id)
 
     async def _get_po_or_404(self, po_id: uuid.UUID) -> PurchaseOrder:
         po = await self.crud.get_by_id(po_id)
@@ -449,8 +562,11 @@ class PurchaseOrderService:
             supplier_id=po.supplier_id,
             supplier_name=po.supplier.name,
             proforma_id=po.proforma_id,
+            supplier_ref=po.supplier_ref,
+            notes=po.notes,
             fx_to_zar=po.fx_to_zar,
             line_count=len(po.lines),
+            needs_sku_count=_needs_sku_count(po),
             received_location_id=po.received_location_id,
             ordered_at=po.ordered_at,
             on_water_at=po.on_water_at,
@@ -462,20 +578,7 @@ class PurchaseOrderService:
 
     @staticmethod
     def _to_response(po: PurchaseOrder) -> PurchaseOrderResponse:
-        lines = [
-            PoLineResponse(
-                id=line.id,
-                sku_id=line.sku_id,
-                our_ref=line.sku.our_ref,
-                our_barcode=line.sku.our_barcode,
-                name=line.sku.name,
-                fabric=line.sku.fabric,
-                qty=line.qty,
-                factory_unit_amount=line.factory_unit_amount,
-                unit_cost_zar=line.unit_cost_zar,
-            )
-            for line in po.lines
-        ]
+        lines = [_line_response(line) for line in po.lines]
         bills = [
             LandingBillResponse(
                 kind=bill.kind.value,
@@ -492,7 +595,10 @@ class PurchaseOrderService:
             supplier_id=po.supplier_id,
             supplier_name=po.supplier.name,
             proforma_id=po.proforma_id,
+            supplier_ref=po.supplier_ref,
+            notes=po.notes,
             fx_to_zar=po.fx_to_zar,
+            needs_sku_count=_needs_sku_count(po),
             lines=lines,
             bills=bills,
             received_location_id=po.received_location_id,
@@ -503,3 +609,65 @@ class PurchaseOrderService:
             created_at=po.created_at,
             updated_at=po.updated_at,
         )
+
+
+def _blank_to_none(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _needs_sku_count(po: PurchaseOrder) -> int:
+    return sum(1 for line in po.lines if line.sku_id is None)
+
+
+def _require_complete_lines(po: PurchaseOrder, step: str) -> None:
+    missing = _needs_sku_count(po)
+    if missing == 0:
+        return
+    noun = "line" if missing == 1 else "lines"
+    raise ValidationError(
+        f"This purchase order still has {missing} {noun} without a SKU. "
+        f"Fill those in before {step}."
+    )
+
+
+def _po_line_from_write(po_id: uuid.UUID, line: PoLineCreate | PoLineWrite) -> PoLine:
+    return PoLine(
+        po_id=po_id,
+        sku_id=line.sku_id,
+        supplier_code=_blank_to_none(line.supplier_code),
+        description=_blank_to_none(line.description),
+        notes=_blank_to_none(line.notes),
+        qty=line.qty,
+        factory_unit_amount=line.factory_unit_amount,
+    )
+
+
+def _apply_line_write(row: PoLine, line: PoLineWrite) -> None:
+    row.sku_id = line.sku_id
+    row.supplier_code = _blank_to_none(line.supplier_code)
+    row.description = _blank_to_none(line.description)
+    row.notes = _blank_to_none(line.notes)
+    row.qty = line.qty
+    row.factory_unit_amount = line.factory_unit_amount
+
+
+def _line_response(line: PoLine) -> PoLineResponse:
+    sku = line.sku
+    return PoLineResponse(
+        id=line.id,
+        sku_id=line.sku_id,
+        our_ref=None if sku is None else sku.our_ref,
+        our_barcode=None if sku is None else sku.our_barcode,
+        name=(line.description or "Needs a SKU") if sku is None else sku.name,
+        fabric=None if sku is None else sku.fabric,
+        supplier_code=line.supplier_code,
+        description=line.description,
+        notes=line.notes,
+        needs_sku=line.sku_id is None,
+        qty=line.qty,
+        factory_unit_amount=line.factory_unit_amount,
+        unit_cost_zar=line.unit_cost_zar,
+    )

@@ -45,6 +45,7 @@ const WALK_IN_SENTINEL: CustomerCrm = {
   on_hold_reason: null,
   payment_terms_days: null,
   price_list_id: null,
+  payment_reminders_opt_out: false,
   created_at: "",
   updated_at: "",
 };

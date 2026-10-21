@@ -38,6 +38,7 @@ from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
+from app.services.payment_reminders import PaymentReminderService
 from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.journal_imports import JournalImportService
 from app.services.journals import JournalService
@@ -54,6 +55,8 @@ from app.services.comms.outbox import CommsOutboxService
 from app.services.comms.send import CommsSendService
 from app.services.comms.whatsapp import WhatsAppWebhookService
 from app.services.settings import SettingsService
+from app.services.document_intake.invoice_flow import InvoiceIntakeService
+from app.services.document_intake.service import DocumentIntakeService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
 from app.services.purchase_orders import PurchaseOrderService
@@ -122,6 +125,14 @@ def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
     return ProformaService(db)
 
 
+def get_document_intake_service(db: AsyncSession = Depends(get_db)) -> DocumentIntakeService:
+    return DocumentIntakeService(db)
+
+
+def get_invoice_intake_service(db: AsyncSession = Depends(get_db)) -> InvoiceIntakeService:
+    return InvoiceIntakeService(db)
+
+
 def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
     return SkuService(db)
 
@@ -152,6 +163,10 @@ def get_search_service(db: AsyncSession = Depends(get_db)) -> SearchService:
 
 def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
     return SettingsService(db)
+
+
+def get_payment_reminder_service(db: AsyncSession = Depends(get_db)) -> PaymentReminderService:
+    return PaymentReminderService(db)
 
 
 def get_comms_outbox_service(db: AsyncSession = Depends(get_db)) -> CommsOutboxService:
@@ -383,6 +398,13 @@ async def require_catalogue_mutate(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (CATALOGUE_MUTATE,))
+
+
+async def require_po_line_edit(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (CATALOGUE_MUTATE, USERS_MANAGE))
 
 
 async def require_returns_mutate(

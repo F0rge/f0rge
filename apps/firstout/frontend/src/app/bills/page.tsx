@@ -10,6 +10,7 @@ import {
   Select,
   SelectItem,
   Stack,
+  Tag,
   Table,
   TableBody,
   TableCell,
@@ -33,6 +34,7 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
 
 const TABLE_HEADERS = [
   { key: "bill_number", header: "Number" },
@@ -41,7 +43,8 @@ const TABLE_HEADERS = [
   { key: "currency", header: "Currency" },
   { key: "amount_foreign", header: "Amount" },
   { key: "amount_zar", header: "ZAR" },
-  { key: "balance_zar", header: "Balance ZAR" },
+  { key: "balance_zar", header: "Balance owing" },
+  { key: "payment_status", header: "Status" },
   { key: "actions", header: "" },
 ] as const;
 
@@ -54,6 +57,7 @@ type BillRow = {
   amount_foreign: string;
   amount_zar: string;
   balance_zar: string;
+  payment_status: string;
   actions: string;
 };
 
@@ -218,6 +222,7 @@ export default function BillsPage() {
     amount_foreign: `${entry.currency} ${entry.amount_foreign}`,
     amount_zar: formatZarAmount(entry.amount_zar),
     balance_zar: formatZarAmount(entry.balance_zar),
+    payment_status: settlementStatusLabel(entry.payment_status),
     actions: entry.id,
   }));
 
@@ -229,14 +234,19 @@ export default function BillsPage() {
           <p className="cds--type-body-01">Supplier bills in foreign currency with ZAR conversion.</p>
         </div>
         {canMutate ? (
-          <Button
-            onClick={() => {
-              resetCreateForm();
-              setCreateOpen(true);
-            }}
-          >
-            Create bill
-          </Button>
+          <div style={{ display: "flex", gap: "0.75rem" }}>
+            <Button kind="secondary" href="/bills/read">
+              Read a supplier invoice
+            </Button>
+            <Button
+              onClick={() => {
+                resetCreateForm();
+                setCreateOpen(true);
+              }}
+            >
+              Create bill
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -284,6 +294,20 @@ export default function BillsPage() {
                       style={{ cursor: "pointer" }}
                     >
                       {row.cells.map((cell) => {
+                        if (cell.info.header === "payment_status") {
+                          const bill = bills.find((entry) => entry.id === row.id);
+                          return (
+                            <TableCell key={cell.id}>
+                              {bill ? (
+                                <Tag type={settlementTagType(bill.payment_status)} size="sm">
+                                  {settlementStatusLabel(bill.payment_status)}
+                                </Tag>
+                              ) : (
+                                cell.value
+                              )}
+                            </TableCell>
+                          );
+                        }
                         if (cell.info.header === "actions") {
                           return (
                             <TableCell key={cell.id}>

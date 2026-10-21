@@ -14,6 +14,15 @@ def _content_disposition(filename: str) -> str:
     return f'attachment; filename="{safe}"'
 
 
+def media_type_for_storage_key(storage_key: str) -> str:
+    lower = storage_key.lower()
+    if lower.endswith(".png"):
+        return "image/png"
+    if lower.endswith(".jpg") or lower.endswith(".jpeg"):
+        return "image/jpeg"
+    return "application/pdf"
+
+
 async def serve_stored_pdf(
     storage_key: Optional[str],
     filename: str,
@@ -27,6 +36,6 @@ async def serve_stored_pdf(
         raise NotFoundError(not_found_message) from exc
     return Response(
         content=data,
-        media_type="application/pdf",
+        media_type=media_type_for_storage_key(storage_key),
         headers={"Content-Disposition": _content_disposition(filename)},
     )

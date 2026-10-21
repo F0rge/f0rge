@@ -17,6 +17,7 @@ from app.schemas.customer_crm import (
     CustomerCrmCreate,
     CustomerCrmResponse,
     CustomerCrmUpdate,
+    CustomerDuplicateMatch,
 )
 from app.schemas.customer_portal import PortalMeResponse, PortalUserCreate
 from app.services.customer_portal import CustomerPortalService
@@ -30,10 +31,22 @@ async def list_customers(
     overdue: Optional[bool] = None,
     active_layby: Optional[bool] = None,
     on_hold: Optional[bool] = None,
+    q: Optional[str] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
-    return await service.list(overdue=overdue, active_layby=active_layby, on_hold=on_hold)
+    return await service.list(overdue=overdue, active_layby=active_layby, on_hold=on_hold, q=q)
+
+
+@customers_router.get("/duplicates", response_model=list[CustomerDuplicateMatch])
+async def list_customer_duplicates(
+    name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: CustomersCrmService = Depends(get_customers_crm_service),
+):
+    return await service.find_duplicates(name=name, email=email, phone=phone)
 
 
 @customers_router.post(

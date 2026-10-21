@@ -26,7 +26,12 @@ class SupplierService:
         if existing is not None:
             raise ConflictError("A supplier with this name already exists")
 
-        supplier = Supplier(name=data.name, default_currency=currency)
+        supplier = Supplier(
+            name=data.name,
+            default_currency=currency,
+            vat_number=normalize_vat_number(data.vat_number),
+            address=(data.address or "").strip() or None,
+        )
         await self.crud.add_and_flush(supplier)
         try:
             await self.crud.commit_refresh(supplier)
@@ -39,3 +44,11 @@ class SupplierService:
     @staticmethod
     def normalize_currency(value: Optional[str]) -> str:
         return (value or "").strip().upper() or "USD"
+
+
+def normalize_vat_number(value: Optional[str]) -> Optional[str]:
+    """Strip spaces and dashes so '498 765 4321' matches '4987654321'."""
+    if value is None:
+        return None
+    cleaned = "".join(ch for ch in value.upper() if ch.isalnum())
+    return cleaned or None

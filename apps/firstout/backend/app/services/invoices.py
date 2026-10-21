@@ -232,6 +232,7 @@ class InvoiceService:
             total_inc_vat=invoice.total_inc_vat,
             amount_paid=invoice.amount_paid,
             balance=balance,
+            payment_status=invoice.payment_status.value,
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
         )
@@ -251,6 +252,8 @@ class InvoiceService:
             total_inc_vat=invoice.total_inc_vat,
             amount_paid=invoice.amount_paid,
             balance=balance,
+            payment_status=invoice.payment_status.value,
+            reminders_paused=invoice.reminders_paused,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,

@@ -3,8 +3,9 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,15 @@ from app.schemas.customer_crm import (
     CustomerCrmCreate,
     CustomerCrmResponse,
     CustomerCrmUpdate,
+    CustomerDuplicateMatch,
+)
+from app.services.customer_match import (
+    NAME_UNIQUE_INDEX,
+    email_duplicate_clause,
+    fold_email,
+    fold_name,
+    name_duplicate_clause,
+    national_phone_digits,
 )
 from app.services.comms.phone import to_whatsapp_e164
 from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
@@ -36,6 +46,7 @@ PROFILE_PATCH_FIELDS = frozenset(
         "price_tier",
         "payment_terms_days",
         "price_list_id",
+        "payment_reminders_opt_out",
     }
 )
 
@@ -51,8 +62,9 @@ class CustomersCrmService:
         overdue: Optional[bool] = None,
         active_layby: Optional[bool] = None,
         on_hold: Optional[bool] = None,
+        q: Optional[str] = None,
     ) -> list[CustomerCrmResponse]:
-        customers = await self.crud.list_all()
+        customers = await self.crud.list_all(q=q)
         responses = await self._to_responses(customers)
         if overdue is not None:
             responses = [row for row in responses if (row.overdue_invoices_count > 0) is overdue]
@@ -61,6 +73,61 @@ class CustomersCrmService:
         if on_hold is not None:
             responses = [row for row in responses if row.on_hold is on_hold]
         return responses
+
+    async def find_duplicates(
+        self,
+        name: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+    ) -> list[CustomerDuplicateMatch]:
+        name_key = fold_name(name)
+        email_key = fold_email(email)
+        phone_key = national_phone_digits(phone)
+        filters = []
+        if name_key:
+            filters.append(name_duplicate_clause(name_key))
+        if email_key:
+            filters.append(email_duplicate_clause(email_key))
+        if phone_key:
+            filters.append(Customer.phone_national == phone_key)
+        if not filters:
+            return []
+
+        rows = (
+            (
+                await self.db.execute(
+                    select(Customer)
+                    .where(or_(*filters))
+                    .order_by(Customer.name)
+                    .limit(50)
+                    .execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        matches: list[CustomerDuplicateMatch] = []
+        for customer in rows:
+            matched: list[Literal["name", "email", "phone"]] = []
+            if name_key and fold_name(customer.name) == name_key:
+                matched.append("name")
+            if email_key and fold_email(customer.email) == email_key:
+                matched.append("email")
+            if phone_key and (customer.phone_national or "") == phone_key:
+                matched.append("phone")
+            if not matched:
+                continue
+            matches.append(
+                CustomerDuplicateMatch(
+                    id=customer.id,
+                    name=customer.name,
+                    email=customer.email,
+                    phone=customer.phone,
+                    matched_fields=matched,
+                )
+            )
+        return matches
 
     async def get(self, customer_id: uuid.UUID) -> CustomerCrmResponse:
         customer = await self.crud.get_by_id(customer_id)
@@ -82,13 +149,14 @@ class CustomersCrmService:
             price_tier=data.price_tier,
             payment_terms_days=data.payment_terms_days,
             price_list_id=data.price_list_id,
+            payment_reminders_opt_out=data.payment_reminders_opt_out,
         )
         async with unit_of_work(self.db):
-            await self.crud.add_and_flush(customer)
             try:
+                await self.crud.add_and_flush(customer)
                 await self.crud.commit_refresh(customer)
             except IntegrityError as exc:
-                raise ConflictError("Customer could not be created") from exc
+                raise self._conflict_from_integrity(exc, creating=True) from exc
 
         return await self.get(customer.id)
 
@@ -125,6 +193,10 @@ class CustomersCrmService:
             customer.price_tier = data.price_tier
         if "payment_terms_days" in fields_set:
             customer.payment_terms_days = data.payment_terms_days
+        if "payment_reminders_opt_out" in fields_set:
+            if data.payment_reminders_opt_out is None:
+                raise ValidationError("payment_reminders_opt_out cannot be null")
+            customer.payment_reminders_opt_out = data.payment_reminders_opt_out
         if "price_list_id" in fields_set:
             await self._assert_price_list_id(data.price_list_id)
             customer.price_list_id = data.price_list_id
@@ -141,7 +213,7 @@ class CustomersCrmService:
             try:
                 await self.crud.commit_refresh(customer)
             except IntegrityError as exc:
-                raise ConflictError("Customer could not be updated") from exc
+                raise self._conflict_from_integrity(exc, creating=False) from exc
 
         return await self.get(customer.id)
 
@@ -187,6 +259,7 @@ class CustomersCrmService:
             on_hold_reason=customer.on_hold_reason,
             payment_terms_days=customer.payment_terms_days,
             price_list_id=customer.price_list_id,
+            payment_reminders_opt_out=customer.payment_reminders_opt_out,
             open_invoices_count=invoice_agg.open_count,
             open_invoices_zar=invoice_agg.open_zar.quantize(Decimal("0.01")),
             overdue_invoices_count=invoice_agg.overdue_count,
@@ -206,6 +279,15 @@ class CustomersCrmService:
         if fields_set & CREDIT_PATCH_FIELDS:
             if not await self.permissions.has_any(user_id, CREDIT_OVERRIDE_KEYS):
                 raise ForbiddenError("Credit fields require additional permission")
+
+    def _conflict_from_integrity(self, exc: IntegrityError, *, creating: bool) -> ConflictError:
+        orig = exc.orig
+        constraint = getattr(orig, "constraint_name", None)
+        text = f"{constraint or ''} {orig}"
+        if NAME_UNIQUE_INDEX in text:
+            return ConflictError("A customer with this name already exists")
+        action = "created" if creating else "updated"
+        return ConflictError(f"Customer could not be {action}")
 
     def _validate_customer_type(self, customer_type: str) -> None:
         if customer_type not in ("retail", "trade"):
