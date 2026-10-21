@@ -71,8 +71,12 @@ runners can't reach the Pi, so the job relies on Coolify's `queued` response and
 skips the health smoke. A `TODO…` placeholder `app_uuid` also skips. Buycycle
 cutover: [apps/buycycle/deploy/PI_CUTOVER.md](../../apps/buycycle/deploy/PI_CUTOVER.md).
 
-Coolify steps **skip (success)** when webhook secrets are missing or Coolify
-returns `Deployments disabled` for the app — so a parked Pi app does not fail
+Coolify steps **skip (success)** when webhook secrets are missing, Coolify
+returns `Deployments disabled` for the app, or Coolify answers HTTP 2xx with
+this app's message exactly equal to `Changed files do not match watch paths. Ignoring deployment.`
+The watch-path case logs `SKIPPED <app>: Coolify ignored (watch paths)` and
+writes that line to the job summary. Any other 2xx that does not queue a
+deployment, and any non-2xx, fails the job. A parked Pi app does not fail
 the marrow Railway smoke.
 
 See also [manifest.yml](manifest.yml) and [plan_deploy.py](plan_deploy.py).
