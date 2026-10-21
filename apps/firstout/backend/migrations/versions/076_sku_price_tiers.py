@@ -11,8 +11,8 @@ customer_type and price_tier stay, so nothing already stored is deleted.
 Line warnings and a document display flag are additive. Issued invoice
 amounts are not rewritten.
 
-This revision follows 075_po_pending_skus from release/firstout-main-oct21.
-Merge that release before this one. On main alone, 075 is not in the tree yet.
+075_po_pending_skus is on main (release/firstout-main-oct21, PR #894).
+This revision follows it.
 """
 
 from __future__ import annotations
