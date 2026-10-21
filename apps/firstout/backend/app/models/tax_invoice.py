@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     event,
     text,
@@ -52,6 +53,12 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         default=SettlementStatus.UNPAID,
         server_default=SettlementStatus.UNPAID.value,
+    )
+    prices_include_vat: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
     )
     is_archive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
@@ -96,6 +103,7 @@ class InvoiceLine(UUIDPkMixin, Base):
         ForeignKey("skus.id", ondelete="RESTRICT"),
         nullable=True,
     )
+    price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     invoice: Mapped[TaxInvoice] = relationship(back_populates="lines")
 

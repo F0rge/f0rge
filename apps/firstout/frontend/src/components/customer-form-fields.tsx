@@ -1,17 +1,19 @@
-import { NumberInput, Select, SelectItem, Stack, TextArea, TextInput, Toggle } from "@carbon/react";
+import { Modal, NumberInput, Select, SelectItem, Stack, TextArea, TextInput, Toggle } from "@carbon/react";
 import { useEffect, useState } from "react";
 
 import {
+  PRICE_CLASSIFICATIONS,
   listPriceLists,
   type CreateCustomerPayload,
   type CustomerCrm,
-  type CustomerType,
+  type PriceClassification,
   type PriceList,
 } from "@/lib/api";
 
 export const emptyCustomerForm: CreateCustomerPayload = {
   name: "",
   customer_type: "retail",
+  price_classification: "Retail",
   price_tier: "standard",
   email: "",
   phone: "",
@@ -29,6 +31,7 @@ export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
   return {
     name: customer.name,
     customer_type: customer.customer_type,
+    price_classification: customer.price_classification ?? "Retail",
     price_tier: customer.price_tier,
     email: customer.email ?? "",
     phone: customer.phone ?? "",
@@ -47,9 +50,11 @@ export function customerWritePayload(
   form: CreateCustomerPayload,
   includeCredit: boolean,
 ): CreateCustomerPayload {
+  const classification = form.price_classification ?? "Retail";
   const payload: CreateCustomerPayload = {
     name: form.name.trim(),
-    customer_type: form.customer_type ?? "retail",
+    customer_type: classification === "Retail" ? "retail" : "trade",
+    price_classification: classification,
     price_tier: form.price_tier?.trim() || "standard",
     email: form.email,
     phone: form.phone,
@@ -73,6 +78,41 @@ export function customerWritePayload(
   payload.price_list_id = listId ? listId : null;
   payload.payment_reminders_opt_out = form.payment_reminders_opt_out ?? false;
   return payload;
+}
+
+export function RepriceDraftsModal({
+  open,
+  quotes,
+  orders,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  quotes: number;
+  orders: number;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const quoteLabel = quotes === 1 ? "1 draft quote" : `${quotes} draft quotes`;
+  const orderLabel = orders === 1 ? "1 draft sales order" : `${orders} draft sales orders`;
+  return (
+    <Modal
+      open={open}
+      modalHeading="Reprice draft documents?"
+      primaryButtonText={busy ? "Repricing…" : "Reprice drafts"}
+      secondaryButtonText="Keep current prices"
+      primaryButtonDisabled={busy}
+      onRequestSubmit={onConfirm}
+      onRequestClose={onCancel}
+    >
+      <p>
+        This customer has {quoteLabel} and {orderLabel}. Reprice them to the new classification?
+        Issued invoices will not change.
+      </p>
+    </Modal>
+  );
 }
 
 export function CustomerFormFields({
@@ -124,25 +164,31 @@ export function CustomerFormFields({
         disabled={disabled}
       />
       <Select
-        id={`${idPrefix}-type`}
-        labelText="Customer type"
-        value={form.customer_type ?? "retail"}
-        onChange={(event) => onChange({ customer_type: event.target.value as CustomerType })}
+        id={`${idPrefix}-classification`}
+        labelText="Price classification"
+        helperText="Retail prices are shown including VAT. Stockist, Wholesale, and Decorator prices are excluding VAT. A price list overrides the classification."
+        value={form.price_classification ?? "Retail"}
+        onChange={(event) =>
+          onChange({ price_classification: event.target.value as PriceClassification })
+        }
         disabled={disabled}
       >
-        <SelectItem value="retail" text="Retail" />
-        <SelectItem value="trade" text="Trade" />
+        {PRICE_CLASSIFICATIONS.map((classification) => (
+          <SelectItem
+            key={classification}
+            value={classification}
+            text={
+              classification === "Retail"
+                ? "Retail (incl. VAT)"
+                : `${classification} (excl. VAT)`
+            }
+          />
+        ))}
       </Select>
-      <TextInput
-        id={`${idPrefix}-tier`}
-        labelText="Price tier"
-        value={form.price_tier ?? "standard"}
-        onChange={(event) => onChange({ price_tier: event.target.value })}
-        disabled={disabled}
-      />
       <Select
         id={`${idPrefix}-price-list`}
         labelText="Price list"
+        helperText="When a list has this SKU, that price is used instead of the classification."
         value={form.price_list_id ?? ""}
         onChange={(event) => onChange({ price_list_id: event.target.value })}
         disabled={disabled}

@@ -25,7 +25,12 @@ from app.schemas.quote import (
     QuoteUpdate,
 )
 from app.services.invoice_pdf import build_tax_invoice_pdf
-from app.services.pricing import resolve_unit_ex_vat
+from app.services.pricing import (
+    format_pdf_unit,
+    pdf_unit_basis_note,
+    resolve_unit_price,
+    shows_prices_including_vat,
+)
 from app.services.settings import SettingsService
 from app.services.vat import CENT, discounted_unit_ex, ex_to_inc, inc_to_ex
 from f0rge_core.exceptions import ConflictError, NotFoundError
@@ -75,6 +80,7 @@ class QuotesService:
             vat_amount=vat_amount,
             total_inc_vat=total_inc,
             notes=data.notes,
+            prices_include_vat=shows_prices_including_vat(customer),
             created_by_user_id=user_id,
             lines=line_models,
         )
@@ -124,6 +130,7 @@ class QuotesService:
             vat_amount=vat_total,
             total_inc_vat=total_inc,
             notes=notes,
+            prices_include_vat=shows_prices_including_vat(customer),
             created_by_user_id=user_id,
             lines=models,
         )
@@ -193,11 +200,13 @@ class QuotesService:
             description = line.description
             if line.discount_percent > 0:
                 description = f"{description} ({line.discount_percent:.2f}% discount)"
+            if line.price_warning:
+                description = f"{description} — {line.price_warning}"
             lines.append(
                 (
                     description,
                     line.qty,
-                    f"{line.unit_ex_vat:.2f}",
+                    format_pdf_unit(line.unit_ex_vat, quote.prices_include_vat),
                     f"{ex_vat:.2f}",
                     f"{line_vat:.2f}",
                     f"{inc_vat:.2f}",
@@ -216,6 +225,7 @@ class QuotesService:
             title="Quote",
             number_label="Quote No",
             seller=seller,
+            unit_basis_note=pdf_unit_basis_note(quote.prices_include_vat),
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 
@@ -261,18 +271,18 @@ class QuotesService:
         line: QuoteLineCreate,
         allow_price_override: bool,
         previous_unit: Optional[Decimal],
-    ) -> Decimal:
-        computed = (await resolve_unit_ex_vat(self.db, sku, customer)).quantize(
-            CENT,
-            rounding=ROUND_HALF_UP,
-        )
+        previous_warning: Optional[str],
+    ) -> tuple[Decimal, Optional[str]]:
+        resolved = await resolve_unit_price(self.db, sku, customer)
+        computed = resolved.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
         if line.unit_ex_vat is None:
             if previous_unit is not None:
-                return previous_unit.quantize(CENT, rounding=ROUND_HALF_UP)
-            return computed
+                return previous_unit.quantize(CENT, rounding=ROUND_HALF_UP), previous_warning
+            return computed, resolved.warning
         submitted = line.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
         if submitted == computed or allow_price_override:
-            return submitted
+            warning = resolved.warning if submitted == computed else None
+            return submitted, warning
         raise ForbiddenError(f"Only the owner can change the unit price for {sku.our_ref}")
 
     async def _build_line_models(
@@ -296,12 +306,13 @@ class QuotesService:
             prior = next((row for row in unmatched if row.sku_id == sku.id), None)
             if prior is not None:
                 unmatched.remove(prior)
-            unit_ex = await self._line_unit_ex_vat(
+            unit_ex, warning = await self._line_unit_ex_vat(
                 sku,
                 customer,
                 line,
                 allow_price_override,
                 prior.unit_ex_vat if prior is not None else None,
+                prior.price_warning if prior is not None else None,
             )
             discount = self._resolve_discount(
                 sku,
@@ -324,6 +335,7 @@ class QuotesService:
                     discount_percent=discount,
                     description=sku.name,
                     notes=line.notes,
+                    price_warning=warning,
                 )
             )
         return models, subtotal, vat_total, total_inc
@@ -371,6 +383,7 @@ class QuotesService:
             vat_amount=quote.vat_amount,
             total_inc_vat=quote.total_inc_vat,
             notes=quote.notes,
+            prices_include_vat=quote.prices_include_vat,
             lines=[
                 QuoteLineResponse(
                     id=line.id,
@@ -382,6 +395,7 @@ class QuotesService:
                     discount_percent=line.discount_percent,
                     description=line.description,
                     notes=line.notes,
+                    price_warning=line.price_warning,
                 )
                 for line in quote.lines
             ],

@@ -59,6 +59,7 @@ function customer(overrides: Partial<CustomerCrm> = {}): CustomerCrm {
     vat_number: null,
     billing_address: null,
     customer_type: "trade",
+    price_classification: "Wholesale",
     price_tier: "ignored-tier",
     open_invoices_count: 0,
     open_invoices_zar: "0.00",
@@ -123,30 +124,55 @@ describe("quoteLineExVat", () => {
 describe("quoteSkuUnitExVat", () => {
   it("uses retail ex VAT when no customer is chosen", () => {
     const priced = quoteSkuUnitExVat(sku(), null, [decoratorList]);
-    expect(priced).toEqual({ unitExVat: 1000, source: "retail", priceListName: null });
+    expect(priced).toEqual({
+      unitExVat: 1000,
+      source: "retail",
+      priceListName: null,
+      warning: null,
+      pricesIncludeVat: true,
+    });
   });
 
-  it("uses wholesale ex VAT for a trade customer", () => {
+  it("uses wholesale ex VAT for a wholesale customer", () => {
     const priced = quoteSkuUnitExVat(sku(), customer(), []);
     expect(priced.source).toBe("wholesale");
     expect(priced.unitExVat).toBe(800);
+    expect(priced.pricesIncludeVat).toBe(false);
+  });
+
+  it("uses the stockist and decorator columns for those classifications", () => {
+    const item = sku({ stockist_ex_vat: "700.00", decorator_ex_vat: "650.00" });
+    expect(
+      quoteSkuUnitExVat(item, customer({ price_classification: "Stockist" }), []),
+    ).toMatchObject({ unitExVat: 700, source: "stockist", pricesIncludeVat: false });
+    expect(
+      quoteSkuUnitExVat(item, customer({ price_classification: "Decorator" }), []),
+    ).toMatchObject({ unitExVat: 650, source: "decorator", pricesIncludeVat: false });
   });
 
   it("uses retail ex VAT for a retail customer even when wholesale is set", () => {
-    const priced = quoteSkuUnitExVat(sku(), customer({ customer_type: "retail" }), []);
-    expect(priced).toMatchObject({ unitExVat: 1000, source: "retail" });
+    const priced = quoteSkuUnitExVat(
+      sku(),
+      customer({ customer_type: "retail", price_classification: "Retail" }),
+      [],
+    );
+    expect(priced).toMatchObject({ unitExVat: 1000, source: "retail", pricesIncludeVat: true });
   });
 
   it("ignores the price_tier label", () => {
     const priced = quoteSkuUnitExVat(
       sku(),
-      customer({ customer_type: "retail", price_tier: "trade" }),
+      customer({
+        customer_type: "retail",
+        price_classification: "Retail",
+        price_tier: "Wholesale",
+      }),
       [],
     );
     expect(priced.source).toBe("retail");
   });
 
-  it("prefers the customer's price list over wholesale", () => {
+  it("prefers the customer's price list over the classification tier", () => {
     const priced = quoteSkuUnitExVat(
       sku(),
       customer({ price_list_id: "list-1" }),
@@ -156,17 +182,24 @@ describe("quoteSkuUnitExVat", () => {
       unitExVat: 900,
       source: "price_list",
       priceListName: "Decorator",
+      warning: null,
+      pricesIncludeVat: false,
     });
   });
 
-  it("uses a price list for a retail customer too", () => {
+  it("uses a price list for a retail customer and still shows prices including VAT", () => {
     const priced = quoteSkuUnitExVat(
       sku(),
-      customer({ customer_type: "retail", price_list_id: "list-1" }),
+      customer({
+        customer_type: "retail",
+        price_classification: "Retail",
+        price_list_id: "list-1",
+      }),
       [decoratorList],
     );
     expect(priced.source).toBe("price_list");
     expect(priced.unitExVat).toBe(900);
+    expect(priced.pricesIncludeVat).toBe(true);
   });
 
   it("falls through to wholesale when the list has no row for the SKU", () => {
@@ -179,9 +212,15 @@ describe("quoteSkuUnitExVat", () => {
     expect(priced.unitExVat).toBe(800);
   });
 
-  it("falls back to retail when a trade customer has no wholesale price", () => {
+  it("falls back to retail with a warning when the classification price is missing", () => {
     const priced = quoteSkuUnitExVat(sku({ wholesale_ex_vat: null }), customer(), []);
-    expect(priced).toMatchObject({ unitExVat: 1000, source: "retail" });
+    expect(priced).toMatchObject({
+      unitExVat: 1000,
+      source: "retail_fallback",
+      pricesIncludeVat: false,
+    });
+    expect(priced.warning).toContain("Wholesale price is missing");
+    expect(priced.warning).toContain("Retail");
   });
 
   it("treats zero and blank prices as missing", () => {
@@ -190,37 +229,37 @@ describe("quoteSkuUnitExVat", () => {
       null,
       [],
     );
-    expect(priced).toEqual({ unitExVat: null, source: "missing", priceListName: null });
+    expect(priced).toEqual({
+      unitExVat: null,
+      source: "missing",
+      priceListName: null,
+      warning: null,
+      pricesIncludeVat: true,
+    });
   });
 });
 
 describe("formatQuoteSkuOption", () => {
-  it("shows retail and wholesale ex VAT, with retail applied when there is no customer", () => {
+  it("shows the retail price including VAT when there is no customer", () => {
     const item = sku();
     const label = formatQuoteSkuOption(item, null, []);
-    expect(label).toBe(
-      "PG-TABLE — Dining table · R 1000.00 retail ex VAT · wholesale R 800.00",
-    );
+    expect(label).toBe("PG-TABLE — Dining table · R 1150.00 Retail incl. VAT");
     expect(quoteSkuMatchesQuery(item, "dining", label)).toBe(true);
     expect(quoteSkuMatchesQuery(item, label, label)).toBe(true);
     expect(quoteSkuMatchesQuery(item, "PG-TABLE-BAR", label)).toBe(true);
     expect(quoteSkuMatchesQuery(item, "missing-sku", label)).toBe(false);
   });
 
-  it("leads with the list price and still shows retail and wholesale", () => {
+  it("leads with the list price", () => {
     const label = formatQuoteSkuOption(sku(), customer({ price_list_id: "list-1" }), [
       decoratorList,
     ]);
-    expect(label).toContain("R 900.00 list ex VAT");
-    expect(label).toContain("retail R 1000.00");
-    expect(label).toContain("wholesale R 800.00");
+    expect(label).toContain("R 900.00 list excl. VAT");
   });
 
-  it("leads with wholesale ex VAT for a trade customer", () => {
+  it("leads with wholesale excl. VAT for a wholesale customer", () => {
     const label = formatQuoteSkuOption(sku(), customer(), []);
-    expect(label).toBe(
-      "PG-TABLE — Dining table · R 800.00 wholesale ex VAT · retail R 1000.00",
-    );
+    expect(label).toBe("PG-TABLE — Dining table · R 800.00 Wholesale excl. VAT");
   });
 });
 
@@ -229,12 +268,24 @@ describe("quote unit field copy", () => {
     expect(formatUnitExVatInput(900)).toBe("900.00");
     expect(formatUnitExVatInput(null)).toBe("");
     expect(quoteUnitPriceHelper(
-      { unitExVat: 900, source: "price_list", priceListName: "Decorator" },
+      {
+        unitExVat: 900,
+        source: "price_list",
+        priceListName: "Decorator",
+        warning: null,
+        pricesIncludeVat: false,
+      },
       true,
-    )).toBe("Price list Decorator · ex VAT");
+    )).toBe("Price list Decorator overrides the classification · excl. VAT");
     expect(quoteUnitPriceHelper(
-      { unitExVat: 1000, source: "retail", priceListName: null },
+      {
+        unitExVat: 1000,
+        source: "retail",
+        priceListName: null,
+        warning: null,
+        pricesIncludeVat: true,
+      },
       false,
-    )).toBe("Retail · ex VAT (no customer)");
+    )).toBe("Retail · incl. VAT (no customer)");
   });
 });

@@ -236,7 +236,7 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 - **SKUs:** nullable `category` (max 64) on create (`SkuCreate`), PATCH (`SkuUpdate` — set or clear with `null`), and in responses.
 - **List filter:** `GET /skus?category=` — case-insensitive exact match when provided; omit to list all.
 - **CSV import:** inventory `category` column is written on create and update (same as manual create).
-- **Prices:** trade/wholesale = `wholesale_ex_vat`; retail = `retail_ex_vat` (S5, unchanged).
+- **Prices:** the customer's `price_classification` selects stockist, wholesale, decorator, or retail ex VAT (S5). Retail is shown including VAT.
 
 ## V2-S9 till
 
@@ -480,7 +480,7 @@ v1 is location not bin.
 
 ## S5 prices
 
-Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for stockist, wholesale, decorator, and retail. Source of truth columns on `skus`: `stockist_ex_vat`, `wholesale_ex_vat`, `decorator_ex_vat`, `retail_ex_vat` (ex-VAT stored; inc-VAT derived on read at 15%). Cin7 PriceTier1 is Stockist, PriceTier2 is Wholesale, PriceTier3 is Decorator (all already ex VAT). Cin7 PriceTier4 is Retail including 15% VAT and is stored with `inc_to_ex`. Till, quotes, and invoices still resolve the customer price list, then wholesale for a trade customer, otherwise retail. `customers.price_tier` does not select Stockist or Decorator.
+Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for stockist, wholesale, decorator, and retail. Source of truth columns on `skus`: `stockist_ex_vat`, `wholesale_ex_vat`, `decorator_ex_vat`, `retail_ex_vat` (ex-VAT stored; inc-VAT derived on read at 15%). Cin7 PriceTier1 is Stockist, PriceTier2 is Wholesale, PriceTier3 is Decorator (all already ex VAT). Cin7 PriceTier4 is Retail including 15% VAT and is stored with `inc_to_ex`. `customers.price_classification` is Stockist, Wholesale, Decorator, or Retail (default Retail). Till, quotes, sales orders, and invoices use that tier after an assigned price list. A missing tier price falls back to Retail and stores a line warning. Retail (and a walk-in) is the only classification whose unit price is shown including VAT. `customers.price_tier` stays as the Cin7 label and does not select the price. `customer_type` stays: Retail is `retail`, the other three are `trade`.
 
 - **VAT:** 15% hardcoded (V1). Home currency **ZAR**. No SARS API.
 - **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
@@ -494,7 +494,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for 
 
 **Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Over-cap **create** without `users.manage` → **201** `pending_approval` (still allocates `po_number`); owner/manage create stays `open`. Land re-checks with the posted FX; over-cap land without `users.manage` still **409**. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not). `POST /purchase-orders/{id}/approve|reject` (`users.manage`): pending → open/rejected.
 
-**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins). Optional `customers.price_list_id` overrides with named list item prices (list → trade wholesale → retail). Stockist and decorator prices are stored on the SKU and shown on the SKU screen; they are not the default till or quote price.
+**Customer classification:** Stockist, Wholesale, and Decorator customers are charged that SKU column, shown excluding VAT, with VAT added on the document total. Retail customers and the till walk-in are charged `retail_ex_vat`, and the unit price is shown including VAT. The stored line amount stays ex VAT, so the VAT total matches the previous retail calculation. An assigned price list still overrides the tier. Changing classification does not rewrite draft quotes or draft sales orders until `POST /api/v1/customers/{id}/reprice-drafts`. Issued invoices are never rewritten.
 
 ## S6 ledger (books)
 

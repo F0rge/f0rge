@@ -1317,6 +1317,7 @@ export type TillSaleResult = {
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
+  prices_include_vat: boolean;
   lines: InvoiceLine[];
   location: {
     location_id: string;
@@ -1943,6 +1944,7 @@ export type InvoiceLine = {
   vat_amount: string;
   sort_order: number;
   sku_id?: string | null;
+  price_warning?: string | null;
 };
 
 export type InvoiceListItem = {
@@ -1963,6 +1965,7 @@ export type InvoiceListItem = {
 };
 
 export type Invoice = InvoiceListItem & {
+  prices_include_vat: boolean;
   lines: InvoiceLine[];
   reminders_paused: boolean;
 };
@@ -3900,6 +3903,7 @@ export type QuoteLine = {
   discount_percent: string;
   description: string;
   notes: string | null;
+  price_warning?: string | null;
 };
 
 export type QuoteListItem = {
@@ -3918,6 +3922,7 @@ export type QuoteListItem = {
 };
 
 export type Quote = QuoteListItem & {
+  prices_include_vat: boolean;
   lines: QuoteLine[];
 };
 
@@ -4227,6 +4232,15 @@ export function createPortalUser(
 
 export type CustomerType = "retail" | "trade";
 
+export type PriceClassification = "Stockist" | "Wholesale" | "Decorator" | "Retail";
+
+export const PRICE_CLASSIFICATIONS: PriceClassification[] = [
+  "Stockist",
+  "Wholesale",
+  "Decorator",
+  "Retail",
+];
+
 export type CustomerCrm = {
   id: string;
   name: string;
@@ -4236,7 +4250,10 @@ export type CustomerCrm = {
   vat_number: string | null;
   billing_address: string | null;
   customer_type: CustomerType;
+  price_classification: PriceClassification;
   price_tier: string;
+  draft_quote_count?: number;
+  draft_sales_order_count?: number;
   open_invoices_count: number;
   open_invoices_zar: string;
   overdue_invoices_count: number;
@@ -4276,6 +4293,7 @@ export type CreateCustomerPayload = {
   vat_number?: string;
   billing_address?: string;
   customer_type?: CustomerType;
+  price_classification?: PriceClassification;
   price_tier?: string;
   credit_limit?: string | null;
   on_hold?: boolean;
@@ -4292,6 +4310,7 @@ export type UpdateCustomerPayload = {
   vat_number?: string;
   billing_address?: string;
   customer_type?: CustomerType;
+  price_classification?: PriceClassification;
   price_tier?: string;
   credit_limit?: string | null;
   on_hold?: boolean;
@@ -4377,6 +4396,9 @@ function buildCustomerPayload(
   if (payload.customer_type) {
     body.customer_type = payload.customer_type;
   }
+  if (payload.price_classification) {
+    body.price_classification = payload.price_classification;
+  }
   const tier = payload.price_tier?.trim();
   if (tier) {
     body.price_tier = tier;
@@ -4417,6 +4439,12 @@ export function updateCustomer(
     method: "PATCH",
     body: JSON.stringify(buildCustomerPayload(payload)),
   });
+}
+
+export function repriceCustomerDrafts(
+  id: string,
+): Promise<{ quotes: number; sales_orders: number }> {
+  return apiFetch(`/customers/${id}/reprice-drafts`, { method: "POST" });
 }
 
 export type DeliveryStatus = "draft" | "packed" | "loaded" | "delivered" | "cancelled";

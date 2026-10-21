@@ -42,6 +42,7 @@ class SalesOrderLineResponse(BaseModel):
     unit_ex_vat: Decimal
     description: str
     notes: Optional[str]
+    price_warning: Optional[str] = None
     held_qty: int
     hold_location_id: Optional[uuid.UUID]
 
@@ -100,6 +101,7 @@ class SalesOrderResponse(BaseModel):
     amount_paid: Decimal
     balance: Decimal
     notes: Optional[str]
+    prices_include_vat: bool
     lines: list[SalesOrderLineResponse]
     payments: list[SalesOrderPaymentResponse]
     created_at: datetime.datetime

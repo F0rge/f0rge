@@ -55,7 +55,6 @@ import {
   exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
-  incVatToExVat,
   isActiveLocation,
   listCustomers,
   listInventory,
@@ -77,6 +76,12 @@ import {
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  displayUnitAmount,
+  pricesIncludeVat,
+  quoteSkuUnitExVat,
+  vatBasisLabel,
+} from "@/lib/quote-sku-price";
 import { isCreditBlockMessage } from "@/lib/customer-crm";
 import {
   clearTillCart,
@@ -126,55 +131,13 @@ type CartLine = {
   discountPercent: number;
 };
 
-function listUnitExVat(
-  sku: Sku,
-  customer: CustomerCrm | null,
-  priceLists: PriceList[],
-): number | null {
-  if (!customer?.price_list_id) {
-    return null;
-  }
-  const list = priceLists.find((entry) => entry.id === customer.price_list_id);
-  const item = list?.items.find((row) => row.sku_id === sku.id);
-  if (!item) {
-    return null;
-  }
-  const parsed = Number(item.unit_ex_vat);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
 function unitExVat(sku: Sku, customer: CustomerCrm | null, priceLists: PriceList[]): number {
-  const listed = listUnitExVat(sku, customer, priceLists);
-  if (listed !== null) {
-    return listed;
-  }
-  if (customer?.customer_type === "trade" && sku.wholesale_ex_vat) {
-    return Number(sku.wholesale_ex_vat);
-  }
-  if (sku.retail_ex_vat) {
-    return Number(sku.retail_ex_vat);
-  }
-  if (sku.retail_inc_vat) {
-    return incVatToExVat(Number(sku.retail_inc_vat));
-  }
-  return 0;
+  return quoteSkuUnitExVat(sku, customer, priceLists).unitExVat ?? 0;
 }
 
 function unitIncVat(sku: Sku, customer: CustomerCrm | null, priceLists: PriceList[]): number {
-  const listed = listUnitExVat(sku, customer, priceLists);
-  if (listed !== null) {
-    return exVatToIncVat(listed);
-  }
-  if (customer?.customer_type === "trade" && sku.wholesale_ex_vat) {
-    return exVatToIncVat(Number(sku.wholesale_ex_vat));
-  }
-  if (sku.retail_inc_vat) {
-    return Number(sku.retail_inc_vat);
-  }
-  if (sku.retail_ex_vat) {
-    return exVatToIncVat(Number(sku.retail_ex_vat));
-  }
-  return 0;
+  const ex = unitExVat(sku, customer, priceLists);
+  return ex > 0 ? exVatToIncVat(ex) : 0;
 }
 
 function lineDiscountedEx(
@@ -217,10 +180,25 @@ function cartSummary(
     (sum, line) => sum + lineDiscountedEx(line, customer, priceLists),
     0,
   );
+  const subtotalExBeforeDiscount = lines.reduce(
+    (sum, line) => sum + roundHalfUp(unitExVat(line.sku, customer, priceLists) * line.qty, 2),
+    0,
+  );
+  const lineDiscountsEx = lines.reduce(
+    (sum, line) =>
+      sum +
+      roundHalfUp(
+        unitExVat(line.sku, customer, priceLists) * line.qty * (line.discountPercent / 100),
+        2,
+      ),
+    0,
+  );
   const preview = computeInvoicePreview(discountedExSubtotal);
   return {
     subtotalIncBeforeDiscount,
+    subtotalExBeforeDiscount,
     lineDiscounts,
+    lineDiscountsEx,
     vatIncluded: preview.vat,
     totalIncVat: preview.totalIncVat,
   };
@@ -516,6 +494,7 @@ export default function TillPage() {
   }, [cart, cartReady, customerId, linkedPickIds, locationId, pickId]);
 
   const summary = cartSummary(cart, selectedCustomer, priceLists);
+  const showInclusive = pricesIncludeVat(selectedCustomer);
   const totalIncLabel = formatPriceAmount(summary.totalIncVat);
 
   useEffect(() => {
@@ -1016,7 +995,9 @@ export default function TillPage() {
                           </TableHeader>
                           <TableHeader>Item</TableHeader>
                           <TableHeader>Qty</TableHeader>
-                          <TableHeader>Unit price (ZAR inc VAT)</TableHeader>
+                          <TableHeader>
+                            Unit price ({vatBasisLabel(showInclusive)})
+                          </TableHeader>
                           {canDiscount ? <TableHeader>Discount %</TableHeader> : null}
                           <TableHeader>Total (ZAR)</TableHeader>
                           <TableHeader />
@@ -1031,6 +1012,11 @@ export default function TillPage() {
                             <TableCell>
                               <strong>{line.sku.name}</strong>
                               <div className="firstout-muted-text">SKU: {line.sku.our_ref}</div>
+                              {quoteSkuUnitExVat(line.sku, selectedCustomer, priceLists).warning ? (
+                                <div className="firstout-muted-text">
+                                  {quoteSkuUnitExVat(line.sku, selectedCustomer, priceLists).warning}
+                                </div>
+                              ) : null}
                             </TableCell>
                             <TableCell>
                               <NumberInput
@@ -1053,7 +1039,12 @@ export default function TillPage() {
                             </TableCell>
                             <TableCell>
                               {formatZarAmount(
-                                formatPriceAmount(unitIncVat(line.sku, selectedCustomer, priceLists)),
+                                formatPriceAmount(
+                                  displayUnitAmount(
+                                    unitExVat(line.sku, selectedCustomer, priceLists),
+                                    showInclusive,
+                                  ),
+                                ),
                               )}
                             </TableCell>
                             {canDiscount ? (
@@ -1112,23 +1103,37 @@ export default function TillPage() {
 
                 <dl className="firstout-sale-summary">
                   <div className="firstout-sale-summary__row">
-                    <dt>Subtotal (before discount)</dt>
-                    <dd>{formatZarAmount(formatPriceAmount(summary.subtotalIncBeforeDiscount))}</dd>
+                    <dt>
+                      {showInclusive ? "Subtotal (before discount, incl. VAT)" : "Subtotal excl. VAT"}
+                    </dt>
+                    <dd>
+                      {formatZarAmount(
+                        formatPriceAmount(
+                          showInclusive
+                            ? summary.subtotalIncBeforeDiscount
+                            : summary.subtotalExBeforeDiscount,
+                        ),
+                      )}
+                    </dd>
                   </div>
                   <div className="firstout-sale-summary__row firstout-sale-summary__row--discount">
-                    <dt>Line discounts</dt>
+                    <dt>{showInclusive ? "Line discounts" : "Line discounts excl. VAT"}</dt>
                     <dd>
-                      {summary.lineDiscounts > 0
-                        ? `- ${formatZarAmount(formatPriceAmount(summary.lineDiscounts))}`
+                      {(showInclusive ? summary.lineDiscounts : summary.lineDiscountsEx) > 0
+                        ? `- ${formatZarAmount(
+                            formatPriceAmount(
+                              showInclusive ? summary.lineDiscounts : summary.lineDiscountsEx,
+                            ),
+                          )}`
                         : formatZarAmount(formatPriceAmount(0))}
                     </dd>
                   </div>
                   <div className="firstout-sale-summary__row">
-                    <dt>VAT ({vatRateLabel}) included</dt>
+                    <dt>{showInclusive ? `VAT (${vatRateLabel}) included` : `VAT (${vatRateLabel})`}</dt>
                     <dd>{formatZarAmount(formatPriceAmount(summary.vatIncluded))}</dd>
                   </div>
                   <div className="firstout-sale-summary__row firstout-sale-summary__row--total">
-                    <dt>Total (ZAR)</dt>
+                    <dt>{showInclusive ? "Total (incl. VAT)" : "Total incl. VAT"}</dt>
                     <dd>{formatZarAmount(formatPriceAmount(summary.totalIncVat))}</dd>
                   </div>
                 </dl>
@@ -1295,12 +1300,20 @@ export default function TillPage() {
               </div>
             </div>
 
+            <p className="cds--type-helper-text-01">
+              {lastSale.prices_include_vat
+                ? "Unit prices incl. VAT"
+                : "Unit prices excl. VAT. VAT is added to the total."}
+            </p>
             <TableContainer>
               <Table size="sm">
                 <TableHead>
                   <TableRow>
                     <TableHeader>Description</TableHeader>
                     <TableHeader>Qty</TableHeader>
+                    <TableHeader>
+                      {lastSale.prices_include_vat ? "Unit incl. VAT" : "Unit excl. VAT"}
+                    </TableHeader>
                     <TableHeader>Ex VAT</TableHeader>
                     <TableHeader>VAT</TableHeader>
                     <TableHeader>Inc VAT</TableHeader>
@@ -1309,8 +1322,20 @@ export default function TillPage() {
                 <TableBody>
                   {lastSale.lines.map((line) => (
                     <TableRow key={line.id}>
-                      <TableCell>{line.description}</TableCell>
+                      <TableCell>
+                        {line.description}
+                        {line.price_warning ? (
+                          <div className="firstout-muted-text">{line.price_warning}</div>
+                        ) : null}
+                      </TableCell>
                       <TableCell>{line.qty}</TableCell>
+                      <TableCell>
+                        {formatZarAmount(
+                          lastSale.prices_include_vat
+                            ? formatPriceAmount(exVatToIncVat(Number(line.unit_ex_vat)))
+                            : line.unit_ex_vat,
+                        )}
+                      </TableCell>
                       <TableCell>{formatZarAmount(line.ex_vat)}</TableCell>
                       <TableCell>{formatZarAmount(line.vat_amount)}</TableCell>
                       <TableCell>{formatZarAmount(line.inc_vat)}</TableCell>

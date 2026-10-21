@@ -49,7 +49,7 @@ from app.exceptions import ForbiddenError, KitRequiresPickError
 from app.permissions import TILL_DISCOUNT, USERS_MANAGE
 from app.services.permissions import PermissionService
 from app.services.books_periods import assert_date_postable
-from app.services.pricing import resolve_unit_ex_vat
+from app.services.pricing import resolve_unit_price, shows_prices_including_vat
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -137,7 +137,9 @@ class TillOrchestrator:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
-            base_unit = await resolve_unit_ex_vat(self.db, sku, customer)
+            resolved = await resolve_unit_price(self.db, sku, customer)
+            base_unit = resolved.unit_ex_vat
+            price_warning = resolved.warning
 
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
             if bom_lines:
@@ -181,7 +183,7 @@ class TillOrchestrator:
             total_cogs += line_cogs
             cogs_code = await self.category_posting.cogs_code_for_sku(sku)
             cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
-            line_inputs.append((sku, line.qty, line.discount_percent, base_unit))
+            line_inputs.append((sku, line.qty, line.discount_percent, base_unit, price_warning))
 
         if kit_blocks:
             raise KitRequiresPickError(kit_blocks)
@@ -192,7 +194,7 @@ class TillOrchestrator:
         invoice_line_models: list[InvoiceLine] = []
         sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
-        for index, (sku, qty, discount_percent, base_unit) in enumerate(line_inputs):
+        for index, (sku, qty, discount_percent, base_unit, price_warning) in enumerate(line_inputs):
             discounted_unit = (
                 base_unit * (Decimal(100) - discount_percent) / Decimal(100)
             ).quantize(CENT, rounding=ROUND_HALF_UP)
@@ -214,6 +216,7 @@ class TillOrchestrator:
                     vat_amount=line_vat,
                     sort_order=index,
                     sku_id=sku.id,
+                    price_warning=price_warning,
                 )
             )
 
@@ -240,6 +243,7 @@ class TillOrchestrator:
                 vat_amount=vat_total,
                 total_inc_vat=total_inc,
                 amount_paid=Decimal(0),
+                prices_include_vat=shows_prices_including_vat(customer),
                 lines=invoice_line_models,
             )
 
@@ -351,6 +355,7 @@ class TillOrchestrator:
             subtotal_ex_vat=reloaded.subtotal_ex_vat,
             vat_amount=reloaded.vat_amount,
             total_inc_vat=reloaded.total_inc_vat,
+            prices_include_vat=reloaded.prices_include_vat,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,
@@ -362,6 +367,7 @@ class TillOrchestrator:
                     vat_amount=line.vat_amount,
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
+                    price_warning=line.price_warning,
                 )
                 for line in reloaded.lines
             ],

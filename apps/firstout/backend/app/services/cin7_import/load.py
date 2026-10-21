@@ -56,13 +56,19 @@ from app.services.cin7_import.children import (
     upsert_children,
 )
 from app.services.cin7_import.report import EntityResult, ImportReport
+from app.services.pricing import (
+    classification_from_cin7_tier,
+    customer_type_for_classification,
+    shows_prices_including_vat,
+)
 
 ASSUMPTIONS = [
     "Cin7 PriceTier1 is Stockist ex VAT, PriceTier2 is Wholesale ex VAT, "
     "PriceTier3 is Decorator ex VAT, and PriceTier4 is Retail including 15% VAT. "
     "Retail is stored ex VAT (inc / 1.15, half-up to the cent). "
     "The same four amounts are written to price lists Cin7 Stockist, Cin7 Wholesale, "
-    "Cin7 Decorator, and Cin7 Retail. Customer price_tier is a label and is not used to pick a price.",
+    "Cin7 Decorator, and Cin7 Retail. Customer PriceTier is stored as price_classification "
+    "and selects that SKU price. price_tier keeps the Cin7 label.",
     "New SKUs get design cin7:{ProductCode} and fabric '-'. Later runs leave design and fabric as they are.",
     "Blank barcodes, and every barcode shared by more than one product, are replaced with CIN7-{ProductCode}. "
     "The lowest product code keeps a shared Cin7 barcode.",
@@ -73,7 +79,9 @@ ASSUMPTIONS = [
     "On-hand quantities come from StockOnHand only. A received purchase order does not increase stock.",
     "Archive invoices are left out of VAT, aged receivables, and overdue balances. "
     "Sales-by-SKU and SKU criticality still include them when the date range covers the invoice.",
-    "Customer tiers Wholesale, Decorator, and Stockist are stored as trade. Retail is stored as retail.",
+    "Customer PriceTier Stockist, Wholesale, and Decorator set price_classification and customer_type trade. "
+    "Retail and any other tier set price_classification Retail and customer_type retail. "
+    "price_tier keeps the original Cin7 text.",
     "LocationsWithBins has an empty BinGroup. Each location gets the required FLOOR bin. "
     "StockOnHand bin names are matched to location names.",
 ]
@@ -85,7 +93,6 @@ CLASS_MAP = {
     "REVENUE": AccountType.INCOME,
     "EXPENSE": AccountType.EXPENSE,
 }
-TRADE_TIERS = {"wholesale", "decorator", "stockist"}
 PO_STATUS = {
     "completed": PurchaseOrderStatus.RECEIVED,
     "fully billed": PurchaseOrderStatus.RECEIVED,
@@ -505,7 +512,7 @@ class Cin7Loader:
         if tier == "0":
             result.note("price tier cell was 0 and was stored as standard")
             tier = "standard"
-        customer_type = "trade" if tier.lower() in TRADE_TIERS else "retail"
+        classification = classification_from_cin7_tier(None if tier == "standard" else tier)
         credit = money(row.get("CreditLimit"))
         if credit is not None and credit <= 0:
             credit = None
@@ -515,7 +522,8 @@ class Cin7Loader:
             "email": _email(row),
             "phone": _phone(row),
             "vat_number": clip(row.get("TaxNumber"), 64),
-            "customer_type": customer_type,
+            "customer_type": customer_type_for_classification(classification),
+            "price_classification": classification,
             "price_tier": tier,
             "credit_limit": credit,
             "on_hold": bool(status) and status != "active",
@@ -1194,6 +1202,7 @@ class Cin7Loader:
                     total_inc_vat=ZERO,
                     amount_paid=ZERO,
                     notes=notes,
+                    prices_include_vat=shows_prices_including_vat(customer),
                     is_archive=True,
                 )
                 self.session.add(current)
@@ -1295,6 +1304,7 @@ class Cin7Loader:
                     vat_amount=vat,
                     total_inc_vat=total,
                     amount_paid=ZERO,
+                    prices_include_vat=shows_prices_including_vat(customer),
                     is_archive=True,
                 )
                 self.session.add(current)
@@ -1724,6 +1734,7 @@ def _customer_same(current: Customer, payload: dict[str, object]) -> bool:
         and current.phone == payload["phone"]
         and current.vat_number == payload["vat_number"]
         and current.customer_type == payload["customer_type"]
+        and current.price_classification == payload["price_classification"]
         and current.price_tier == payload["price_tier"]
         and _dec_eq(current.credit_limit, payload["credit_limit"])  # type: ignore[arg-type]
         and current.on_hold == payload["on_hold"]

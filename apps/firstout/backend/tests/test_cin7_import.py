@@ -493,7 +493,9 @@ def test_cin7_retail_rounds_half_up_to_the_cent() -> None:
 
 @pytest.mark.no_db
 @pytest.mark.asyncio
-async def test_till_price_stays_wholesale_or_retail() -> None:
+async def test_classification_selects_the_sku_tier() -> None:
+    from app.services.pricing import resolve_unit_price
+
     sku = Sku(
         our_ref="TIER",
         our_barcode="TIER-BAR",
@@ -506,13 +508,42 @@ async def test_till_price_stays_wholesale_or_retail() -> None:
         retail_ex_vat=Decimal("40.00"),
     )
     retail_customer = Customer(
-        name="Walk in", customer_type="retail", price_tier="Stockist", price_list_id=None
+        name="Walk in",
+        customer_type="retail",
+        price_classification="Retail",
+        price_tier="Stockist",
+        price_list_id=None,
     )
-    trade_customer = Customer(
-        name="Trade house", customer_type="trade", price_tier="Decorator", price_list_id=None
+    decorator = Customer(
+        name="Trade house",
+        customer_type="trade",
+        price_classification="Decorator",
+        price_tier="ignored",
+        price_list_id=None,
     )
     assert await resolve_unit_ex_vat(None, sku, retail_customer) == Decimal("40.00")  # type: ignore[arg-type]
-    assert await resolve_unit_ex_vat(None, sku, trade_customer) == Decimal("30.00")  # type: ignore[arg-type]
+    resolved = await resolve_unit_price(None, sku, decorator)
+    assert resolved.unit_ex_vat == Decimal("20.00")
+    assert resolved.warning is None
+    missing = Customer(
+        name="Stockist",
+        customer_type="trade",
+        price_classification="Stockist",
+        price_list_id=None,
+    )
+    bare = Sku(
+        our_ref="BARE",
+        our_barcode="BARE-BAR",
+        name="Bare",
+        design="tier",
+        fabric="-",
+        wholesale_ex_vat=Decimal("5.00"),
+        retail_ex_vat=Decimal("40.00"),
+    )
+    fallback = await resolve_unit_price(None, bare, missing)
+    assert fallback.unit_ex_vat == Decimal("40.00")
+    assert fallback.warning is not None
+    assert "Stockist price is missing" in fallback.warning
 
 
 @pytest.mark.no_db

@@ -4,7 +4,18 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Computed, ForeignKey, Index, Integer, Numeric, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Computed,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,6 +63,13 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
         default="standard",
         server_default="standard",
     )
+    # Stockist, Wholesale, Decorator, or Retail. Retail is the only tier shown including VAT.
+    price_classification: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="Retail",
+        server_default="Retail",
+    )
     credit_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2), nullable=True)
     on_hold: Mapped[bool] = mapped_column(
         Boolean,
@@ -75,6 +93,10 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "price_classification IN ('Stockist', 'Wholesale', 'Decorator', 'Retail')",
+            name="ck_customers_price_classification",
+        ),
         Index("ix_customers_name_lower", text("lower(name)"), unique=True),
         Index(
             "ix_customers_name_trgm",

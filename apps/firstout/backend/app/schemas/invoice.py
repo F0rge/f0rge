@@ -39,6 +39,7 @@ class InvoiceLineResponse(BaseModel):
     vat_amount: Decimal
     sort_order: int
     sku_id: Optional[uuid.UUID] = None
+    price_warning: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -76,6 +77,7 @@ class InvoiceResponse(BaseModel):
     balance: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid"]
     reminders_paused: bool = False
+    prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime

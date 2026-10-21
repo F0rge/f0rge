@@ -20,6 +20,11 @@ from app.schemas.customer_crm import (
     CustomerCrmUpdate,
     CustomerDuplicateMatch,
 )
+from app.services.draft_reprice import DraftRepriceService
+from app.services.pricing import (
+    classification_for_legacy_customer_type,
+    customer_type_for_classification,
+)
 from app.services.customer_match import (
     NAME_UNIQUE_INDEX,
     email_duplicate_clause,
@@ -43,6 +48,7 @@ PROFILE_PATCH_FIELDS = frozenset(
         "vat_number",
         "billing_address",
         "customer_type",
+        "price_classification",
         "price_tier",
         "payment_terms_days",
         "price_list_id",
@@ -137,7 +143,9 @@ class CustomersCrmService:
         return responses[0]
 
     async def create(self, data: CustomerCrmCreate) -> CustomerCrmResponse:
-        self._validate_customer_type(data.customer_type)
+        classification = data.price_classification or classification_for_legacy_customer_type(
+            data.customer_type
+        )
         await self._assert_price_list_id(data.price_list_id)
         customer = Customer(
             name=data.name,
@@ -145,7 +153,8 @@ class CustomersCrmService:
             phone=data.phone,
             vat_number=data.vat_number,
             billing_address=data.billing_address,
-            customer_type=data.customer_type,
+            customer_type=customer_type_for_classification(classification),
+            price_classification=classification,
             price_tier=data.price_tier,
             payment_terms_days=data.payment_terms_days,
             price_list_id=data.price_list_id,
@@ -172,6 +181,7 @@ class CustomersCrmService:
 
         fields_set = data.model_fields_set
         await self._assert_patch_permissions(user_id, fields_set)
+        classification_changed = False
         if "name" in fields_set and data.name is not None:
             customer.name = data.name
         if "email" in fields_set:
@@ -182,11 +192,20 @@ class CustomersCrmService:
             customer.vat_number = data.vat_number
         if "billing_address" in fields_set:
             customer.billing_address = data.billing_address
-        if "customer_type" in fields_set:
+        if "price_classification" in fields_set:
+            if data.price_classification is None:
+                raise ValidationError("price_classification cannot be null")
+            classification_changed = customer.price_classification != data.price_classification
+            customer.price_classification = data.price_classification
+            customer.customer_type = customer_type_for_classification(data.price_classification)
+        elif "customer_type" in fields_set:
             if data.customer_type is None:
                 raise ValidationError("customer_type cannot be null")
             self._validate_customer_type(data.customer_type)
+            classification = classification_for_legacy_customer_type(data.customer_type)
+            classification_changed = customer.price_classification != classification
             customer.customer_type = data.customer_type
+            customer.price_classification = classification
         if "price_tier" in fields_set:
             if data.price_tier is None:
                 raise ValidationError("price_tier cannot be null")
@@ -215,7 +234,16 @@ class CustomersCrmService:
             except IntegrityError as exc:
                 raise self._conflict_from_integrity(exc, creating=False) from exc
 
-        return await self.get(customer.id)
+        response = await self.get(customer.id)
+        if classification_changed:
+            counts = await DraftRepriceService(self.db).counts_for(customer.id)
+            return response.model_copy(
+                update={
+                    "draft_quote_count": counts.quotes,
+                    "draft_sales_order_count": counts.sales_orders,
+                }
+            )
+        return response
 
     async def _to_responses(self, customers: list[Customer]) -> list[CustomerCrmResponse]:
         if not customers:
@@ -248,7 +276,8 @@ class CustomersCrmService:
             phone=customer.phone,
             vat_number=customer.vat_number,
             billing_address=customer.billing_address,
-            customer_type=customer.customer_type,
+            customer_type=customer.customer_type,  # type: ignore[arg-type]
+            price_classification=customer.price_classification,  # type: ignore[arg-type]
             price_tier=customer.price_tier,
             credit_limit=(
                 customer.credit_limit.quantize(Decimal("0.01"))

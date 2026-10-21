@@ -18,10 +18,12 @@ from app.schemas.customer_crm import (
     CustomerCrmResponse,
     CustomerCrmUpdate,
     CustomerDuplicateMatch,
+    DraftRepriceResponse,
 )
 from app.schemas.customer_portal import PortalMeResponse, PortalUserCreate
 from app.services.customer_portal import CustomerPortalService
 from app.services.customers_crm import CustomersCrmService
+from app.services.draft_reprice import DraftRepriceService
 
 customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 
@@ -79,6 +81,20 @@ async def update_customer(
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
     return await service.update(customer_id, body, user_id)
+
+
+@customers_router.post(
+    "/{customer_id}/reprice-drafts",
+    response_model=DraftRepriceResponse,
+)
+async def reprice_customer_drafts(
+    customer_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_customers_patch),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reprice draft quotes and draft sales orders. Issued invoices stay as they are."""
+    counts = await DraftRepriceService(db).reprice(customer_id)
+    return DraftRepriceResponse(quotes=counts.quotes, sales_orders=counts.sales_orders)
 
 
 @customers_router.post(
