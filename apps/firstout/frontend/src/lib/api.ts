@@ -900,8 +900,12 @@ export type Sku = {
   reorder_min: number | null;
   last_landed_cost_zar: string | null;
   photo_storage_key: string | null;
+  stockist_ex_vat: string | null;
+  stockist_inc_vat: string | null;
   wholesale_ex_vat: string | null;
   wholesale_inc_vat: string | null;
+  decorator_ex_vat: string | null;
+  decorator_inc_vat: string | null;
   retail_ex_vat: string | null;
   retail_inc_vat: string | null;
   carton_count: number;
@@ -917,8 +921,12 @@ export type UpdateSkuPricePayload = {
   design?: string;
   fabric?: string;
   category?: string | null;
+  stockist_ex_vat?: string | number | null;
+  stockist_inc_vat?: string | number | null;
   wholesale_ex_vat?: string | number | null;
   wholesale_inc_vat?: string | number | null;
+  decorator_ex_vat?: string | number | null;
+  decorator_inc_vat?: string | number | null;
   retail_ex_vat?: string | number | null;
   retail_inc_vat?: string | number | null;
   preferred_supplier_id?: string | null;

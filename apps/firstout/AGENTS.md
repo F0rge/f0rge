@@ -480,7 +480,7 @@ v1 is location not bin.
 
 ## S5 prices
 
-Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).
+Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for stockist, wholesale, decorator, and retail. Source of truth columns on `skus`: `stockist_ex_vat`, `wholesale_ex_vat`, `decorator_ex_vat`, `retail_ex_vat` (ex-VAT stored; inc-VAT derived on read at 15%). Cin7 PriceTier1 is Stockist, PriceTier2 is Wholesale, PriceTier3 is Decorator (all already ex VAT). Cin7 PriceTier4 is Retail including 15% VAT and is stored with `inc_to_ex`. Till, quotes, and invoices still resolve the customer price list, then wholesale for a trade customer, otherwise retail. `customers.price_tier` does not select Stockist or Decorator.
 
 - **VAT:** 15% hardcoded (V1). Home currency **ZAR**. No SARS API.
 - **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
@@ -494,7 +494,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 
 **Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Over-cap **create** without `users.manage` → **201** `pending_approval` (still allocates `po_number`); owner/manage create stays `open`. Land re-checks with the posted FX; over-cap land without `users.manage` still **409**. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not). `POST /purchase-orders/{id}/approve|reject` (`users.manage`): pending → open/rejected.
 
-**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins). Optional `customers.price_list_id` overrides with named list item prices (list → trade wholesale → retail).
+**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins). Optional `customers.price_list_id` overrides with named list item prices (list → trade wholesale → retail). Stockist and decorator prices are stored on the SKU and shown on the SKU screen; they are not the default till or quote price.
 
 ## S6 ledger (books)
 

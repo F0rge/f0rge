@@ -22,8 +22,12 @@ async def _create_sku(owner_client: AsyncClient, suffix: str) -> dict:
 
 async def test_create_sku_prices_null(owner_client: AsyncClient) -> None:
     body = await _create_sku(owner_client, "NULL")
+    assert body["stockist_ex_vat"] is None
+    assert body["stockist_inc_vat"] is None
     assert body["wholesale_ex_vat"] is None
     assert body["wholesale_inc_vat"] is None
+    assert body["decorator_ex_vat"] is None
+    assert body["decorator_inc_vat"] is None
     assert body["retail_ex_vat"] is None
     assert body["retail_inc_vat"] is None
 
@@ -266,3 +270,30 @@ async def test_list_and_get_include_price_fields(owner_client: AsyncClient) -> N
     listed = next(item for item in list_resp.json() if item["id"] == sku["id"])
     assert listed["wholesale_inc_vat"] == "115.00"
     assert listed["retail_ex_vat"] == "2000.00"
+
+
+async def test_patch_stockist_and_decorator_inc_vat(owner_client: AsyncClient) -> None:
+    sku = await _create_sku(owner_client, "TIERS")
+    resp = await owner_client.patch(
+        f"/api/v1/skus/{sku['id']}",
+        json={"stockist_inc_vat": "1150.00", "decorator_ex_vat": "450.00"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["stockist_ex_vat"] == "1000.00"
+    assert body["stockist_inc_vat"] == "1150.00"
+    assert body["decorator_ex_vat"] == "450.00"
+    assert body["decorator_inc_vat"] == "517.50"
+    assert body["retail_ex_vat"] is None
+    assert body["wholesale_ex_vat"] is None
+
+
+async def test_both_ex_and_inc_stockist_returns_validation_error(
+    owner_client: AsyncClient,
+) -> None:
+    sku = await _create_sku(owner_client, "BOTH-S")
+    resp = await owner_client.patch(
+        f"/api/v1/skus/{sku['id']}",
+        json={"stockist_ex_vat": "100.00", "stockist_inc_vat": "115.00"},
+    )
+    assert resp.status_code == 400

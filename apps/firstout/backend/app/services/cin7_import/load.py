@@ -35,8 +35,6 @@ from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.models.tax_rule import TaxRule
 from app.services.cin7_import.parse import (
-    RETAIL_TIER,
-    WHOLESALE_TIER,
     as_bool,
     assign_barcodes,
     carton_count,
@@ -44,10 +42,13 @@ from app.services.cin7_import.parse import (
     find_file,
     integral_qty,
     money,
+    named_sku_prices,
     parse_date,
     read_csv_records,
     read_xlsx_all,
     reorder_min,
+    tier_amount_ex_vat,
+    tier_price_list_name,
 )
 from app.services.cin7_import.children import (
     address_payload,
@@ -57,8 +58,11 @@ from app.services.cin7_import.children import (
 from app.services.cin7_import.report import EntityResult, ImportReport
 
 ASSUMPTIONS = [
-    "Retail ex-VAT is Cin7 PriceTier1 and wholesale ex-VAT is PriceTier2. "
-    "Customer tier names are stored on customers.price_tier and are not linked to a price list.",
+    "Cin7 PriceTier1 is Stockist ex VAT, PriceTier2 is Wholesale ex VAT, "
+    "PriceTier3 is Decorator ex VAT, and PriceTier4 is Retail including 15% VAT. "
+    "Retail is stored ex VAT (inc / 1.15, half-up to the cent). "
+    "The same four amounts are written to price lists Cin7 Stockist, Cin7 Wholesale, "
+    "Cin7 Decorator, and Cin7 Retail. Customer price_tier is a label and is not used to pick a price.",
     "New SKUs get design cin7:{ProductCode} and fabric '-'. Later runs leave design and fabric as they are.",
     "Blank barcodes, and every barcode shared by more than one product, are replaced with CIN7-{ProductCode}. "
     "The lowest product code keeps a shared Cin7 barcode.",
@@ -795,8 +799,7 @@ class Cin7Loader:
             supplier = self.suppliers.get(_key(supplier_name)) if supplier_name else None
             if supplier_name and supplier is None:
                 result.note("LastSuppliedBy did not match a supplier")
-            retail = _tier_price(row, RETAIL_TIER)
-            wholesale = _tier_price(row, WHOLESALE_TIER)
+            prices = named_sku_prices(row)
             minimum = reorder_min(row.get("MinimumBeforeReorder", ""))
             cartons = carton_count(row.get("CartonQuantity", ""))
             current = existing.get(code)
@@ -816,8 +819,10 @@ class Cin7Loader:
                     preferred_supplier_id=supplier.id if supplier else None,
                     reorder_min=minimum,
                     category=category,
-                    wholesale_ex_vat=wholesale,
-                    retail_ex_vat=retail,
+                    stockist_ex_vat=prices.stockist_ex_vat,
+                    wholesale_ex_vat=prices.wholesale_ex_vat,
+                    decorator_ex_vat=prices.decorator_ex_vat,
+                    retail_ex_vat=prices.retail_ex_vat,
                     carton_count=cartons,
                 )
                 self.session.add(current)
@@ -832,8 +837,10 @@ class Cin7Loader:
                     and current.preferred_supplier_id == (supplier.id if supplier else None)
                     and current.reorder_min == minimum
                     and current.carton_count == cartons
-                    and _dec_eq(current.wholesale_ex_vat, wholesale)
-                    and _dec_eq(current.retail_ex_vat, retail)
+                    and _dec_eq(current.stockist_ex_vat, prices.stockist_ex_vat)
+                    and _dec_eq(current.wholesale_ex_vat, prices.wholesale_ex_vat)
+                    and _dec_eq(current.decorator_ex_vat, prices.decorator_ex_vat)
+                    and _dec_eq(current.retail_ex_vat, prices.retail_ex_vat)
                     and original_barcodes.get(code) == barcode
                 )
                 current.our_barcode = barcode
@@ -846,8 +853,10 @@ class Cin7Loader:
                     current.preferred_supplier_id = supplier.id if supplier else None
                     current.reorder_min = minimum
                     current.carton_count = cartons
-                    current.wholesale_ex_vat = wholesale
-                    current.retail_ex_vat = retail
+                    current.stockist_ex_vat = prices.stockist_ex_vat
+                    current.wholesale_ex_vat = prices.wholesale_ex_vat
+                    current.decorator_ex_vat = prices.decorator_ex_vat
+                    current.retail_ex_vat = prices.retail_ex_vat
                     result.updated += 1
             self.skus[code] = current
         missing_code = len(rows) - len(by_code)
@@ -871,15 +880,15 @@ class Cin7Loader:
             positives = []
             for row in rows:
                 code = row.get("ProductCode", "").strip()
-                price = _tier_price(row, tier)
+                price = tier_amount_ex_vat(_tier_price(row, tier), tier)
                 sku = self.skus.get(code)
-                if price is None or price <= 0 or sku is None:
+                if price is None or sku is None:
                     continue
                 positives.append((sku, price))
             if not positives:
                 items.skip(f"PriceTier{tier} has no positive price")
                 continue
-            name = f"Cin7 Tier {tier}"
+            name = tier_price_list_name(tier)
             price_list = existing_lists.get(name)
             if price_list is None:
                 price_list = PriceList(name=name)
