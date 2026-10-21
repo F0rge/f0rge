@@ -78,7 +78,7 @@ import {
   isWarehousePath,
 } from "@/lib/nav";
 import { HeaderSearch } from "@/components/header-search";
-import { OverviewTourButton, PageTourButton, TourProvider } from "@/components/tour/tour-provider";
+import { PageTourButton, TourProvider } from "@/components/tour/tour-provider";
 import {
   getNarrowViewportServerSnapshot,
   getNarrowViewportSnapshot,
@@ -305,9 +305,6 @@ export function AppShell({ children }: AppShellProps) {
               <HeaderSearch />
               <span className="firstout-tour-anchor" data-tour="header-page-tour">
                 <PageTourButton />
-              </span>
-              <span className="firstout-tour-anchor" data-tour="header-overview-tour">
-                <OverviewTourButton />
               </span>
               <span className="firstout-header-user" title={user.email}>
                 {user.display_name || user.email}
