@@ -242,7 +242,7 @@ export default function PriceListsPage() {
         <div>
           <h1 className="cds--type-productive-heading-04">Price lists</h1>
           <p className="cds--type-body-01">
-            A list you create overrides the customer's classification. Cin7 lists do not.
+            A list you create overrides the customer&apos;s classification. Cin7 lists do not.
           </p>
         </div>
         {canMutate ? (
