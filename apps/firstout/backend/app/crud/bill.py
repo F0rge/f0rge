@@ -16,17 +16,18 @@ class BillCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
-    async def get_by_id(self, bill_id: uuid.UUID) -> Optional[Bill]:
-        return (
-            await self.db.execute(
-                select(Bill)
-                .options(
-                    selectinload(Bill.supplier),
-                    selectinload(Bill.lines),
-                )
-                .where(Bill.id == bill_id)
+    async def get_by_id(self, bill_id: uuid.UUID, *, for_update: bool = False) -> Optional[Bill]:
+        stmt = (
+            select(Bill)
+            .options(
+                selectinload(Bill.supplier),
+                selectinload(Bill.lines),
             )
-        ).scalar_one_or_none()
+            .where(Bill.id == bill_id)
+        )
+        if for_update:
+            stmt = stmt.execution_options(populate_existing=True).with_for_update(of=Bill)
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_all(self) -> list[Bill]:
         result = await self.db.execute(

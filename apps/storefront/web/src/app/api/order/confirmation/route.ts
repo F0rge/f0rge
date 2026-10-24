@@ -21,14 +21,15 @@ function reply(payload: unknown, status: number): NextResponse {
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const emailAccess = await currentEmailOrderAccess();
-    if (emailAccess) {
+    const access = await currentOrderAccess();
+    const checkoutInProgress = access !== null && (emailAccess === null || access.issuedAt > emailAccess.issuedAt);
+    if (!checkoutInProgress && emailAccess) {
       const { status, payload } = await storefrontOrderStatusResponse(emailAccess.orderId, emailAccess.token);
       if (status >= 200 && status < 300) {
         void publishConfirmationOutcomes({ headers: request.headers, orderId: emailAccess.orderId, payload }).catch(() => undefined);
       }
       return reply(payload, status);
     }
-    const access = await currentOrderAccess();
     if (!access) return reply({ message: "Order confirmation not found" }, 404);
     const { cartId, token } = access;
     const { status, payload } = await orderConfirmationResponse(cartId, token);

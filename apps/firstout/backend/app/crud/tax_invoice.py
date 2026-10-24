@@ -24,11 +24,12 @@ class TaxInvoiceCRUD(BaseCRUD):
             .options(
                 selectinload(TaxInvoice.customer),
                 selectinload(TaxInvoice.lines),
+                selectinload(TaxInvoice.credit_note),
             )
             .where(TaxInvoice.id == invoice_id)
         )
         if for_update:
-            stmt = stmt.execution_options(populate_existing=True).with_for_update()
+            stmt = stmt.execution_options(populate_existing=True).with_for_update(of=TaxInvoice)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_for_customer(self, customer_id: uuid.UUID) -> list[TaxInvoice]:
@@ -79,7 +80,10 @@ class TaxInvoiceCRUD(BaseCRUD):
 
         stmt = (
             select(TaxInvoice)
-            .options(selectinload(TaxInvoice.customer))
+            .options(
+                selectinload(TaxInvoice.customer),
+                selectinload(TaxInvoice.credit_note),
+            )
             .join(Customer, TaxInvoice.customer_id == Customer.id)
         )
         if filters:
