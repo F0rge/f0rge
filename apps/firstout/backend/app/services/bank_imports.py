@@ -40,6 +40,7 @@ from app.schemas.bank_import import (
 from app.schemas.journal import JournalCreate, JournalLineCreate
 from app.schemas.payment import PaymentCreate, PaymentResponse
 from app.services.bank_match_rank import OpenDocument, rank_documents, unique_auto_match
+from app.services.payment_terms import invoice_collectible_balance, invoice_open_balance_expr
 from app.services.settlement import cents
 from app.services.bank_csv import parse_bank_csv
 from app.services.chart_of_accounts import CODE_BANK
@@ -625,10 +626,17 @@ class BankImportService:
             totals[document_id] = cents(totals.get(document_id, Decimal(0)) + cents(item.amount))
         for document_id, amount in totals.items():
             if money_in:
-                invoice = await self.db.get(TaxInvoice, document_id)
+                invoice = (
+                    await self.db.execute(
+                        select(TaxInvoice)
+                        .options(selectinload(TaxInvoice.credit_note))
+                        .where(TaxInvoice.id == document_id)
+                        .execution_options(populate_existing=True)
+                    )
+                ).scalar_one_or_none()
                 if invoice is None:
                     raise NotFoundError("Invoice not found")
-                remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+                remaining = cents(invoice_collectible_balance(invoice))
             else:
                 bill = await self.db.get(Bill, document_id)
                 if bill is None:
@@ -672,13 +680,17 @@ class BankImportService:
         cached = getattr(self, "_open_document_cache", None)
         if cached is not None:
             return cached
+        open_balance = invoice_open_balance_expr()
         invoices = (
             (
                 await self.db.execute(
                     select(TaxInvoice)
-                    .options(selectinload(TaxInvoice.customer))
+                    .options(
+                        selectinload(TaxInvoice.customer),
+                        selectinload(TaxInvoice.credit_note),
+                    )
                     .where(TaxInvoice.is_archive.is_(False))
-                    .where(TaxInvoice.total_inc_vat > TaxInvoice.amount_paid)
+                    .where(open_balance > 0)
                 )
             )
             .scalars()
@@ -702,10 +714,10 @@ class BankImportService:
                 document_id=invoice.id,
                 number=invoice.invoice_number,
                 contact_name=invoice.customer.name,
-                outstanding_zar=cents(invoice.total_inc_vat - invoice.amount_paid),
+                outstanding_zar=cents(invoice_collectible_balance(invoice)),
                 issue_date=invoice.issue_date,
                 currency="ZAR",
-                outstanding_foreign=cents(invoice.total_inc_vat - invoice.amount_paid),
+                outstanding_foreign=cents(invoice_collectible_balance(invoice)),
                 fx_to_zar=Decimal("1"),
             )
             for invoice in invoices

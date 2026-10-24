@@ -29,6 +29,7 @@ from app.schemas.payment_reminder import (
     ReminderRow,
 )
 from app.services.comms.send import CommsSendService
+from app.services.payment_terms import invoice_collectible_balance, invoice_open_balance_expr
 from app.services.payment_reminder_schedule import (
     PLACEHOLDERS,
     TERMINAL_STATUSES,
@@ -48,6 +49,10 @@ from f0rge_db.crud import unit_of_work
 logger = logging.getLogger(__name__)
 
 _SKIP_LATER = "A later reminder covers this invoice."
+
+
+def _amount_owing(invoice: TaxInvoice) -> Decimal:
+    return cents(invoice_collectible_balance(invoice))
 
 
 class PaymentReminderService:
@@ -92,7 +97,7 @@ class PaymentReminderService:
 
         for invoice in invoices:
             customer = invoice.customer
-            remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+            remaining = _amount_owing(invoice)
             recorded = by_invoice.get(invoice.id, {})
             if remaining <= 0:
                 sent.extend(self._recorded_rows(invoice, recorded, today))
@@ -241,7 +246,7 @@ class PaymentReminderService:
             raise ValidationError("This reminder was already sent.")
         if existing is not None and existing.status == "skipped":
             return self._row_from_send(invoice, existing, datetime.date.today())
-        remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+        remaining = _amount_owing(invoice)
         row = await self._upsert_send(
             invoice_id=invoice.id,
             offset_days=data.offset_days,
@@ -280,7 +285,7 @@ class PaymentReminderService:
         invoice = await self._require_invoice(invoice_id)
         if invoice.due_date is None or invoice.is_archive:
             return "ignored"
-        remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+        remaining = _amount_owing(invoice)
         if remaining <= 0:
             return "paid"
         if invoice.customer.payment_reminders_opt_out or invoice.reminders_paused:
@@ -312,7 +317,7 @@ class PaymentReminderService:
         force: bool,
     ) -> str:
         invoice = await self._require_invoice(invoice.id)
-        remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+        remaining = _amount_owing(invoice)
         if remaining <= 0:
             return "paid"
         if invoice.customer.payment_reminders_opt_out:
@@ -450,16 +455,22 @@ class PaymentReminderService:
     async def _open_invoices(self) -> list[TaxInvoice]:
         result = await self.db.execute(
             select(TaxInvoice)
-            .options(selectinload(TaxInvoice.customer))
+            .options(
+                selectinload(TaxInvoice.customer),
+                selectinload(TaxInvoice.credit_note),
+            )
             .where(TaxInvoice.is_archive.is_(False))
-            .where(TaxInvoice.total_inc_vat > TaxInvoice.amount_paid)
+            .where(invoice_open_balance_expr() > 0)
         )
         return list(result.scalars().all())
 
     async def _invoices_for_board(self) -> list[TaxInvoice]:
         result = await self.db.execute(
             select(TaxInvoice)
-            .options(selectinload(TaxInvoice.customer))
+            .options(
+                selectinload(TaxInvoice.customer),
+                selectinload(TaxInvoice.credit_note),
+            )
             .where(TaxInvoice.is_archive.is_(False))
         )
         return list(result.scalars().all())
@@ -467,7 +478,11 @@ class PaymentReminderService:
     async def _require_invoice(self, invoice_id: uuid.UUID) -> TaxInvoice:
         result = await self.db.execute(
             select(TaxInvoice)
-            .options(selectinload(TaxInvoice.customer), selectinload(TaxInvoice.lines))
+            .options(
+                selectinload(TaxInvoice.customer),
+                selectinload(TaxInvoice.lines),
+                selectinload(TaxInvoice.credit_note),
+            )
             .where(TaxInvoice.id == invoice_id)
             .execution_options(populate_existing=True)
         )

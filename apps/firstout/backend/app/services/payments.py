@@ -104,15 +104,11 @@ class PaymentService:
                     CreditNote.invoice_id == invoice.id
                 )
             )
-            remaining = cents(
-                invoice.total_inc_vat - invoice.amount_paid - Decimal(credited or 0)
-            )
+            remaining = cents(invoice.total_inc_vat - invoice.amount_paid - Decimal(credited or 0))
             if remaining <= 0:
                 raise ValidationError("Invoice is already fully paid")
             if amount > remaining:
-                raise ValidationError(
-                    overpayment_message(remaining, "ZAR", invoice.invoice_number)
-                )
+                raise ValidationError(overpayment_message(remaining, "ZAR", invoice.invoice_number))
 
             payment = Payment(
                 payment_number="",

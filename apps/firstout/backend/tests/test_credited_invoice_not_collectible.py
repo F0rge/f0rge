@@ -58,6 +58,13 @@ async def test_fully_credited_invoice_is_not_collectible(owner_client: AsyncClie
         line["document_number"] != invoice_body["invoice_number"] for line in aged_body["lines"]
     )
 
+    reminders = await owner_client.get("/api/v1/payment-reminders")
+    assert reminders.status_code == 200
+    board = reminders.json()
+    chased = [row["invoice_number"] for key in ("upcoming", "due", "held") for row in board[key]]
+    assert invoice_body["invoice_number"] not in chased
+    assert all(row["invoice_id"] != invoice_body["id"] for row in board["needs_attention"])
+
     reloaded = await owner_client.get(f"/api/v1/invoices/{invoice_body['id']}")
     assert reloaded.status_code == 200
     assert reloaded.json()["amount_paid"] == "0.00"
