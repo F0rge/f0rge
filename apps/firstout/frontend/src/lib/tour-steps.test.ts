@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { OVERVIEW_STEPS, PAGE_TOURS, pageTourForPath } from "./tour-steps";
+import { PAGE_TOURS, pageTourForPath } from "./tour-steps";
 
 const MAX_COPY = 140;
 
@@ -35,7 +35,7 @@ describe("firstout page tours", () => {
 
     for (const tour of PAGE_TOURS) {
       expect(tour.steps.length).toBeGreaterThan(0);
-      expect(tour.steps.length).toBeLessThan(OVERVIEW_STEPS.length);
+      expect(tour.steps.length).toBeLessThanOrEqual(6);
       const stepIds = tour.steps.map((step) => step.id);
       expect(new Set(stepIds).size).toBe(stepIds.length);
       for (const step of tour.steps) {
@@ -48,20 +48,9 @@ describe("firstout page tours", () => {
     }
   });
 
-  it("keeps the full shop walk as a longer overview", () => {
-    expect(OVERVIEW_STEPS.length).toBeGreaterThan(10);
-    const routes = new Set(OVERVIEW_STEPS.map((step) => step.route).filter(Boolean));
-    expect(routes.has("/")).toBe(true);
-    expect(routes.has("/laybys")).toBe(true);
-    expect(routes.has("/customers")).toBe(true);
-    expect(routes.has("/catalogue")).toBe(true);
-    expect(OVERVIEW_STEPS.at(-1)?.target).toBe("[data-tour='header-overview-tour']");
-    expect(OVERVIEW_STEPS.at(-1)?.content.toLowerCase()).toContain("question mark");
-
-    for (const step of OVERVIEW_STEPS) {
-      expect(step.content.trim().length).toBeLessThanOrEqual(MAX_COPY);
-      expect(step.target).not.toContain("h1");
-      expect("heading" in step).toBe(false);
-    }
+  it("points the profile tour at the header question mark", () => {
+    const profile = pageTourForPath("/profile");
+    expect(profile?.steps.at(-1)?.target).toBe("[data-tour='header-page-tour']");
+    expect(profile?.steps.at(-1)?.content.toLowerCase()).toContain("question mark");
   });
 });
