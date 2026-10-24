@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.models.account import Account, AccountType, TaxTreatment
-from app.models.bank_import import BankImport, BankImportLine
+from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.books_period import BooksPeriod, BooksPeriodStatus
 from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillLine
@@ -36,6 +36,7 @@ from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, Pick
 from app.models.price_list import PriceList, PriceListItem
 from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.payment import Payment, PaymentDirection
+from app.models.payment_reminder import PaymentReminderSend
 from app.models.payment_term import PaymentTerm
 from app.models.proforma import Proforma
 from app.models.quote import Quote, QuoteLine, QuoteStatus
@@ -98,6 +99,7 @@ __all__ = [
     "AccountType",
     "BankImport",
     "BankImportLine",
+    "BankImportLineAllocation",
     "BankRule",
     "BooksPeriod",
     "BooksPeriodStatus",
@@ -143,6 +145,7 @@ __all__ = [
     "OpsCommerceOrder",
     "Payment",
     "PaymentDirection",
+    "PaymentReminderSend",
     "PaymentTerm",
     "ArchiveCreditNote",
     "ArchiveCreditNoteLine",

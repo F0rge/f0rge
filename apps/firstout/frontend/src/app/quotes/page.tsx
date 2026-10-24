@@ -3,6 +3,7 @@
 import { Printer } from "@carbon/icons-react";
 import {
   Button,
+  ComboBox,
   DataTable,
   InlineNotification,
   Modal,
@@ -20,28 +21,48 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 
 import {
   ApiError,
   acceptQuote,
   canMutateQuotes,
+  computeInvoicePreview,
   createQuote,
   downloadQuotePdf,
+  exVatToIncVat,
+  formatPriceAmount,
   formatZarAmount,
+  incVatToExVat,
+  parsePriceInput,
   isActiveLocation,
   listCustomers,
   listLocations,
+  listPriceLists,
   listQuotes,
   listSkus,
   markQuoteSent,
   type CustomerCrm,
   type Location,
+  type PriceList,
   type QuoteListItem,
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  canEditQuoteDiscount,
+  canOverrideQuoteUnitPrice,
+  displayUnitAmount,
+  formatQuoteSkuOption,
+  formatUnitExVatInput,
+  pricesIncludeVat,
+  quoteLineExVat,
+  quoteSkuMatchesQuery,
+  quoteSkuUnitExVat,
+  quoteUnitPriceHelper,
+  vatBasisLabel,
+} from "@/lib/quote-sku-price";
 
 const TABLE_HEADERS = [
   { key: "quote_number", header: "Reference" },
@@ -62,29 +83,62 @@ type QuoteRow = {
   actions: string;
 };
 
-type LineForm = { sku_id: string; qty: number | "" };
+type LineForm = {
+  sku_id: string;
+  qty: number | "";
+  unit_ex_vat: string;
+  discount_percent: string;
+  priceEdited: boolean;
+};
+
+const EMPTY_LINE: LineForm = {
+  sku_id: "",
+  qty: 1,
+  unit_ex_vat: "",
+  discount_percent: "0",
+  priceEdited: false,
+};
+
+function pricedLine(
+  line: LineForm,
+  sku: Sku | undefined,
+  customer: CustomerCrm | null,
+  priceLists: PriceList[],
+): LineForm {
+  if (line.priceEdited || !sku) {
+    return line;
+  }
+  const priced = quoteSkuUnitExVat(sku, customer, priceLists);
+  return { ...line, unit_ex_vat: formatUnitExVatInput(priced.unitExVat) };
+}
 
 function QuotesPageInner() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateQuotes(user);
+  const canOverridePrice = canOverrideQuoteUnitPrice(user?.role);
+  const canEditDiscount = canEditQuoteDiscount(user?.role);
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState<QuoteListItem | null>(null);
   const [customerId, setCustomerId] = useState("");
-  const [lines, setLines] = useState<LineForm[]>([{ sku_id: "", qty: 1 }]);
+  const [lines, setLines] = useState<LineForm[]>([{ ...EMPTY_LINE }]);
+  const customerIdRef = useRef(customerId);
+  customerIdRef.current = customerId;
   const [locationId, setLocationId] = useState("");
   const [holdStock, setHoldStock] = useState(true);
   const [depositAmount, setDepositAmount] = useState("");
   const [tender, setTender] = useState<"cash" | "eft">("eft");
+  const [unitDrafts, setUnitDrafts] = useState<Record<number, string>>({});
 
   const loadQuotes = useCallback(async () => {
     setLoading(true);
@@ -102,18 +156,32 @@ function QuotesPageInner() {
 
   const loadQuoteForm = useCallback(async () => {
     try {
-      const [customerRows, skuRows, locationRows] = await Promise.all([
+      const [customerRows, skuRows, locationRows, priceListRows] = await Promise.all([
         listCustomers(),
         listSkus(),
         listLocations(),
+        listPriceLists(),
       ]);
       setCustomers(customerRows);
       setSkus(skuRows);
+      setPriceLists(priceListRows);
       setLocations(locationRows.filter(isActiveLocation));
       const walkIn = customerRows.find((row) => row.name === "Walk-in customer");
-      if (walkIn) {
-        setCustomerId((current) => current || walkIn.id);
+      const nextCustomerId = customerIdRef.current || walkIn?.id || "";
+      if (nextCustomerId !== customerIdRef.current) {
+        setCustomerId(nextCustomerId);
       }
+      const customer = customerRows.find((row) => row.id === nextCustomerId) ?? null;
+      setLines((current) =>
+        current.map((line) =>
+          pricedLine(
+            line,
+            skuRows.find((sku) => sku.id === line.sku_id),
+            customer,
+            priceListRows,
+          ),
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load quote form");
     }
@@ -145,14 +213,88 @@ function QuotesPageInner() {
     [quotes],
   );
 
+  const selectedCustomer = customers.find((row) => row.id === customerId) ?? null;
+  const showInclusive = pricesIncludeVat(selectedCustomer);
+
+  function shownUnit(ex: string): string {
+    const parsed = parsePriceInput(ex);
+    if (parsed === null) {
+      return ex;
+    }
+    return formatPriceAmount(displayUnitAmount(parsed, showInclusive));
+  }
+
+  const quotePreview = useMemo(() => {
+    const subtotal = lines.reduce(
+      (sum, line) => sum + quoteLineExVat(line.qty, line.unit_ex_vat, line.discount_percent),
+      0,
+    );
+    return { subtotal, ...computeInvoicePreview(subtotal) };
+  }, [lines]);
+
+  function applyCustomer(nextId: string) {
+    const customer = customers.find((row) => row.id === nextId) ?? null;
+    setUnitDrafts({});
+    setCustomerId(nextId);
+    setLines((current) =>
+      current.map((line) =>
+        pricedLine(
+          line,
+          skus.find((sku) => sku.id === line.sku_id),
+          customer,
+          priceLists,
+        ),
+      ),
+    );
+  }
+
+  function selectSku(index: number, sku: Sku | null | undefined) {
+    setLines((current) => {
+      const next = [...current];
+      const line = next[index];
+      if (!line) {
+        return current;
+      }
+      if (!sku) {
+        next[index] = {
+          ...line,
+          sku_id: "",
+          unit_ex_vat: line.priceEdited ? line.unit_ex_vat : "",
+        };
+        return next;
+      }
+      const priced = quoteSkuUnitExVat(sku, selectedCustomer, priceLists);
+      next[index] = {
+        ...line,
+        sku_id: sku.id,
+        unit_ex_vat: formatUnitExVatInput(priced.unitExVat),
+        priceEdited: false,
+      };
+      return next;
+    });
+  }
+
   async function onCreate() {
     setError(null);
+    if (!customerId) {
+      setError("Choose a customer");
+      return;
+    }
     try {
       await createQuote({
         customer_id: customerId,
         lines: lines
           .filter((line) => line.sku_id && line.qty)
-          .map((line) => ({ sku_id: line.sku_id, qty: Number(line.qty) })),
+          .map((line) => ({
+            sku_id: line.sku_id,
+            qty: Number(line.qty),
+            ...(canOverridePrice && line.unit_ex_vat.trim()
+              ? { unit_ex_vat: line.unit_ex_vat.trim() }
+              : {}),
+            ...(canEditDiscount
+              ? { discount_percent: line.discount_percent.trim() || "0" }
+              : {}),
+          })),
       });
       setOpen(false);
       await loadQuotes();
@@ -270,51 +412,164 @@ function QuotesPageInner() {
         secondaryButtonText="Cancel"
         onRequestClose={() => setOpen(false)}
         onRequestSubmit={() => void onCreate()}
+        size="lg"
       >
         <Stack gap={4}>
           <Select
             id="quote-customer"
             labelText="Customer"
             value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
+            onChange={(event) => applyCustomer(event.target.value)}
           >
+            <SelectItem value="" text="No customer (retail incl. VAT)" />
             {customers.map((customer) => (
               <SelectItem key={customer.id} value={customer.id} text={customer.name} />
             ))}
           </Select>
-          {lines.map((line, index) => (
-            <Stack key={index} gap={3} orientation="horizontal">
-              <Select
-                id={`quote-sku-${index}`}
-                labelText="SKU"
-                value={line.sku_id}
-                onChange={(event) => {
-                  const next = [...lines];
-                  next[index] = { ...next[index], sku_id: event.target.value };
-                  setLines(next);
+          <p className="cds--type-helper-text-01">
+            Retail unit prices are shown incl. VAT. Stockist, Wholesale, and Decorator unit prices
+            are shown excl. VAT, and VAT is added on the total. A price list overrides the
+            classification. A missing tier price falls back to Retail and is marked on the line.
+            {canOverridePrice
+              ? " You can edit the unit price."
+              : " The unit price is read-only. Only the owner can change it."}
+            {canEditDiscount
+              ? " A discount is a percent off the line. The unit price stays the same."
+              : " The discount is read-only. Only the owner, till, or warehouse can change it."}
+          </p>
+          {lines.map((line, index) => {
+            const sku = skus.find((item) => item.id === line.sku_id);
+            const priced = sku ? quoteSkuUnitExVat(sku, selectedCustomer, priceLists) : null;
+            return (
+              <div
+                key={index}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 2fr) 6rem 9rem 7rem",
+                  gap: "0.75rem",
+                  alignItems: "start",
                 }}
               >
-                <SelectItem value="" text="Select SKU" />
-                {skus.map((sku) => (
-                  <SelectItem key={sku.id} value={sku.id} text={`${sku.our_ref} — ${sku.name}`} />
-                ))}
-              </Select>
-              <NumberInput
-                id={`quote-qty-${index}`}
-                label="Qty"
-                min={1}
-                value={line.qty}
-                onChange={(_, { value }) => {
-                  const next = [...lines];
-                  next[index] = { ...next[index], qty: value === "" ? "" : Number(value) };
-                  setLines(next);
-                }}
-              />
-            </Stack>
-          ))}
-          <Button kind="tertiary" size="sm" onClick={() => setLines([...lines, { sku_id: "", qty: 1 }])}>
+                <ComboBox
+                  id={`quote-sku-${index}`}
+                  titleText="SKU"
+                  placeholder="Search by code, barcode, or name"
+                  items={skus}
+                  itemToString={(item) =>
+                    item ? formatQuoteSkuOption(item, selectedCustomer, priceLists) : ""
+                  }
+                  selectedItem={sku ?? null}
+                  shouldFilterItem={({ item, inputValue }) =>
+                    quoteSkuMatchesQuery(
+                      item,
+                      inputValue,
+                      formatQuoteSkuOption(item, selectedCustomer, priceLists),
+                    )
+                  }
+                  onChange={({ selectedItem }) => selectSku(index, selectedItem)}
+                />
+                <NumberInput
+                  id={`quote-qty-${index}`}
+                  label="Qty"
+                  min={1}
+                  value={line.qty}
+                  onChange={(_, { value }) => {
+                    const next = [...lines];
+                    next[index] = { ...next[index], qty: value === "" ? "" : Number(value) };
+                    setLines(next);
+                  }}
+                />
+                <TextInput
+                  id={`quote-unit-${index}`}
+                  labelText={`Unit ${vatBasisLabel(showInclusive)}`}
+                  value={unitDrafts[index] ?? shownUnit(line.unit_ex_vat)}
+                  readOnly={!canOverridePrice}
+                  helperText={
+                    priced?.warning
+                      ? priced.warning
+                      : !canOverridePrice
+                        ? priced
+                          ? `${quoteUnitPriceHelper(priced, Boolean(selectedCustomer))} · read-only`
+                          : `${vatBasisLabel(showInclusive)} · read-only`
+                        : line.priceEdited
+                          ? `${vatBasisLabel(showInclusive)} — edited`
+                          : priced
+                            ? quoteUnitPriceHelper(priced, Boolean(selectedCustomer))
+                            : vatBasisLabel(showInclusive)
+                  }
+                  onFocus={() => {
+                    if (!canOverridePrice) {
+                      return;
+                    }
+                    setUnitDrafts((current) => ({
+                      ...current,
+                      [index]: shownUnit(line.unit_ex_vat),
+                    }));
+                  }}
+                  onChange={(event) => {
+                    if (!canOverridePrice) {
+                      return;
+                    }
+                    setUnitDrafts((current) => ({ ...current, [index]: event.target.value }));
+                  }}
+                  onBlur={() => {
+                    const draft = unitDrafts[index];
+                    if (draft === undefined) {
+                      return;
+                    }
+                    const parsed = parsePriceInput(draft);
+                    const stored =
+                      parsed === null
+                        ? ""
+                        : formatPriceAmount(showInclusive ? incVatToExVat(parsed) : parsed);
+                    const previousAmount = parsePriceInput(line.unit_ex_vat);
+                    const previousText =
+                      previousAmount === null ? "" : formatPriceAmount(previousAmount);
+                    const next = [...lines];
+                    next[index] = {
+                      ...next[index],
+                      unit_ex_vat: stored,
+                      priceEdited: stored !== previousText,
+                    };
+                    setLines(next);
+                    setUnitDrafts((current) => {
+                      const rest = { ...current };
+                      delete rest[index];
+                      return rest;
+                    });
+                  }}
+                />
+                <TextInput
+                  id={`quote-discount-${index}`}
+                  labelText="Discount %"
+                  value={line.discount_percent}
+                  readOnly={!canEditDiscount}
+                  helperText={
+                    canEditDiscount
+                      ? "Percent off the line"
+                      : "Read-only"
+                  }
+                  onChange={(event) => {
+                    if (!canEditDiscount) {
+                      return;
+                    }
+                    const next = [...lines];
+                    next[index] = { ...next[index], discount_percent: event.target.value };
+                    setLines(next);
+                  }}
+                />
+              </div>
+            );
+          })}
+          <Button kind="tertiary" size="sm" onClick={() => setLines([...lines, { ...EMPTY_LINE }])}>
             Add line
           </Button>
+          <p className="cds--type-body-01">
+            {showInclusive ? "Unit prices incl. VAT. " : "Unit prices excl. VAT. "}
+            Ex VAT: R {formatPriceAmount(quotePreview.subtotal)} · VAT 15%: R{" "}
+            {formatPriceAmount(quotePreview.vat)} · Total incl. VAT: R{" "}
+            {formatPriceAmount(quotePreview.totalIncVat)}
+          </p>
         </Stack>
       </Modal>
       <Modal

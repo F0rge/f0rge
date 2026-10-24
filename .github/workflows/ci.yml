@@ -70,7 +70,15 @@ jobs:
           fi
           for p in $PROJECTS; do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            uv sync --frozen --project "$ROOT"
+            # Nested projects do not inherit a repo-root pin. Marrow's
+            # .python-version is 3.11; every other project stays on 3.10
+            # even after that interpreter is installed.
+            if [ -f "$ROOT/.python-version" ]; then
+              PY=$(tr -d '[:space:]' < "$ROOT/.python-version")
+            else
+              PY=3.10
+            fi
+            UV_PYTHON="$PY" uv sync --frozen --project "$ROOT"
           done
 
       - name: uv pip audit (high severity)
@@ -173,7 +181,7 @@ jobs:
             esac
           fi
           if [ "$NEED" = "true" ]; then
-            uv sync --frozen --project apps/marrow/backend
+            UV_PYTHON=3.11 uv sync --frozen --project apps/marrow/backend
           else
             echo "marrow-frontend not affected — skip backend sync for codegen"
           fi

@@ -89,7 +89,7 @@ Authorisation is a **permission catalog**, not role-tuple checks. `users.role` i
 |--------|------|
 | **owner** | all catalog keys; cannot strip; cannot demote last owner |
 | **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view` |
-| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.deliveries` (no `stock.cost.view`, no till) |
+| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.quotes`, `sales.deliveries` (no `stock.cost.view`, no till). `sales.quotes` also allows mark-sent, accept, cancel, and hold stock. |
 | **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers` (no `stock.cost.view`) |
 | **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view` (no `till.sell`) |
 
@@ -174,7 +174,7 @@ Migration: `031_two_step_transfers`.
 ## Shop-floor qty patterns (A / B / C)
 
 - **A carton_count**: same SKU ships in N cartons; qty is sellable units. Stock, till, PO qty, and books qty stay sellable. Packing sheet and invoice PDF may print a generated carton total when `carton_count > 1`.
-- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components. Till explodes the BOM: if **100% of every component** is at the posted showroom, consume there (F1). Otherwise `ConflictError("Kit requires pick")` unless a confirmed/picking/staged pick for the same kit×qty is posted (`pick_id` on the sale). Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
+- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components. Till explodes the BOM: if **100% of every component** is at the posted showroom, consume there (F1). Otherwise `KitRequiresPickError` (HTTP 409, `detail.code` `kit_requires_pick`) unless a confirmed/picking/staged pick for the same kit×qty is posted (`pick_id` or `pick_ids` on the sale). The payload names each blocked kit (`sku_id`, `sku_code`, `sku_name`, location, `reason` `missing_parts` or `split_pick`). Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
 - **C inner pack**: supplier carton of N eaches — **not in this ticket** (PO line later).
 
 ## V2-S2 stocktakes
@@ -236,7 +236,7 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 - **SKUs:** nullable `category` (max 64) on create (`SkuCreate`), PATCH (`SkuUpdate` — set or clear with `null`), and in responses.
 - **List filter:** `GET /skus?category=` — case-insensitive exact match when provided; omit to list all.
 - **CSV import:** inventory `category` column is written on create and update (same as manual create).
-- **Prices:** trade/wholesale = `wholesale_ex_vat`; retail = `retail_ex_vat` (S5, unchanged).
+- **Prices:** the customer's `price_classification` selects stockist, wholesale, decorator, or retail ex VAT (S5). Retail is shown including VAT.
 
 ## V2-S9 till
 
@@ -474,13 +474,13 @@ Location-scoped (not bin). No email. Reuse `stock.transfer` / `till.sell` / `sal
 
 **API** `/api/v1/picks`: GET list/get/pdf any authenticated (`?source_type=`). POST/PATCH/confirm/complete/cancel: any of `stock.transfer`, `till.sell`, `sales.deliveries`. Preview explodes F1 BOM, no persist, 400 if not a kit. Sales-order origin: kit lines explode; non-kit is one PickLine for the sellable SKU (no “SKU is not a kit”). Confirm requires full allocation; if `needs_confirm` and `confirm_split` is not true → 409 `"confirm_split required"`. Complete creates F2 transfers toward default staging (first warehouse in pick_priority / derived order — never a hardcoded UUID/name) and dispatches; dest on-hand rises only on receive. Non-kit sales-order picks skip F2 when stock was already held. If every allocation is already at one showroom and `collect_from_showroom` (or all already at staging), skip transfers and set `staged`. One delivery (components, no stock move) when invoice/layby/sales order exists. Till-origin skips delivery until `invoice_id` is set. Receive of the last pick transfer sets `staged` and creates that delivery. Cancel draft/confirmed only.
 
-**Till:** kit not 100% at the posted showroom and no matching pick → 409 `"Kit requires pick"` (do not decrement only Bedfordview). Matching pick: no showroom component decrement; set `pick.invoice_id`; COGS from allocation locations or showroom cost; missing cost → 409, do not steal stock.
+**Till:** kit not 100% at the posted showroom and no matching pick → 409 `detail.code` `kit_requires_pick` with one entry per blocked kit (do not decrement only Bedfordview). `reason` is `missing_parts` when a component is short everywhere, otherwise `split_pick`. Matching pick (`pick_id` or `pick_ids`): no showroom component decrement; set `pick.invoice_id`; COGS from allocation locations or showroom cost; missing cost → 409, do not steal stock.
 
 v1 is location not bin.
 
 ## S5 prices
 
-Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).
+Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for stockist, wholesale, decorator, and retail. Source of truth columns on `skus`: `stockist_ex_vat`, `wholesale_ex_vat`, `decorator_ex_vat`, `retail_ex_vat` (ex-VAT stored; inc-VAT derived on read at 15%). Cin7 PriceTier1 is Stockist, PriceTier2 is Wholesale, PriceTier3 is Decorator (all already ex VAT). Cin7 PriceTier4 is Retail including 15% VAT and is stored with `inc_to_ex`. `customers.price_classification` is Stockist, Wholesale, Decorator, or Retail (default Retail). Till, quotes, sales orders, and invoices use that tier. A hand-made price list still overrides. Lists named `Cin7 Tier N` or `Cin7 Stockist` / `Cin7 Wholesale` / `Cin7 Decorator` / `Cin7 Retail` do not. A missing tier price falls back to Retail and stores a line warning. Retail (and a walk-in) is the only classification whose unit price is shown including VAT. `customers.price_tier` stays as the Cin7 label and does not select the price. `customer_type` stays: Retail is `retail`, the other three are `trade`.
 
 - **VAT:** 15% hardcoded (V1). Home currency **ZAR**. No SARS API.
 - **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
@@ -494,7 +494,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 
 **Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Over-cap **create** without `users.manage` → **201** `pending_approval` (still allocates `po_number`); owner/manage create stays `open`. Land re-checks with the posted FX; over-cap land without `users.manage` still **409**. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not). `POST /purchase-orders/{id}/approve|reject` (`users.manage`): pending → open/rejected.
 
-**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins). Optional `customers.price_list_id` overrides with named list item prices (list → trade wholesale → retail).
+**Customer classification:** Stockist, Wholesale, and Decorator customers are charged that SKU column, shown excluding VAT, with VAT added on the document total. Retail customers and the till walk-in are charged `retail_ex_vat`, and the unit price is shown including VAT. The stored line amount stays ex VAT, so the VAT total matches the previous retail calculation. A hand-made price list still overrides the tier. Cin7-generated lists do not. Changing classification does not rewrite draft quotes or draft sales orders until `POST /api/v1/customers/{id}/reprice-drafts`. Issued invoices are never rewritten.
 
 ## S6 ledger (books)
 

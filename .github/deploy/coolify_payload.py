@@ -152,14 +152,20 @@ def _app_id(obj: dict[str, Any]) -> str:
     return ""
 
 
+# Coolify's manual handler returns this sentence, verbatim, when the push
+# changed files miss the app's watch paths. Match the whole message only.
+WATCH_PATH_IGNORE_MESSAGE = "Changed files do not match watch paths. Ignoring deployment."
+
+
 def response_queues_app(body: str, app_uuid: str) -> bool:
     """True when this Coolify app was actually queued.
 
     The manual push handler reports a queued deploy as ``status: success``
     and ``message: Deployment queued.`` (v4.0.0-beta.473). ``status: queued``
-    on this same app counts too. Watch-path ignores and an ``Invalid
-    signature`` on this app stay failures. Sibling apps are separate objects
-    (often with no uuid) and their ``Invalid signature`` entries are ignored.
+    on this same app counts too. The watch-path ignore sentence is not a
+    queue (see ``classify_coolify_response``). An ``Invalid signature`` on
+    this app is not a queue. Sibling apps are separate objects (often with
+    no uuid) and their ``Invalid signature`` entries are ignored.
     """
     try:
         data = json.loads(body)
@@ -179,6 +185,43 @@ def response_queues_app(body: str, app_uuid: str) -> bool:
     return False
 
 
+def response_watch_path_ignored(body: str, app_uuid: str) -> bool:
+    """True when this app's message is exactly the watch-path ignore sentence.
+
+    Equality is case-sensitive and covers the whole message. A shorter
+    string such as ``Ignoring`` does not match, and a sibling app's copy
+    of the sentence does not count.
+    """
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return False
+    for obj in _walk_objects(data):
+        if _app_id(obj) != app_uuid:
+            continue
+        if obj.get("message") == WATCH_PATH_IGNORE_MESSAGE:
+            return True
+    return False
+
+
+def classify_coolify_response(http_status: int, body: str, app_uuid: str) -> str:
+    """Classify one Coolify manual-webhook reply for this app.
+
+    Returns ``success`` when the app was queued, ``skipped`` when the HTTP
+    status is 2xx and this app's message equals ``WATCH_PATH_IGNORE_MESSAGE``,
+    and ``failed`` otherwise. Non-2xx is ``failed`` even if the body contains
+    that sentence. Any other 2xx that did not queue a deployment (no queued
+    status, no deployment uuid, different message) is ``failed``.
+    """
+    if http_status < 200 or http_status >= 300:
+        return "failed"
+    if response_queues_app(body, app_uuid):
+        return "success"
+    if response_watch_path_ignored(body, app_uuid):
+        return "skipped"
+    return "failed"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build or check a Coolify GitHub push payload")
     parser.add_argument("--sha", help="Deployed commit (payload after / commits[0].id)")
@@ -190,8 +233,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Read a Coolify response on stdin and exit 0 only if --app-uuid was queued",
     )
+    parser.add_argument(
+        "--classify",
+        action="store_true",
+        help="Print success, skipped, or failed for the Coolify response on stdin",
+    )
+    parser.add_argument("--http-status", type=int)
     parser.add_argument("--app-uuid", default="")
     args = parser.parse_args(argv)
+    if args.classify:
+        if args.http_status is None or not args.app_uuid:
+            parser.error("--classify requires --http-status and --app-uuid")
+        body = sys.stdin.read()
+        outcome = classify_coolify_response(args.http_status, body, args.app_uuid)
+        sys.stdout.write(outcome + "\n")
+        return 0 if outcome in {"success", "skipped"} else 1
     if args.require_queued:
         body = sys.stdin.read()
         return 0 if response_queues_app(body, args.app_uuid) else 1

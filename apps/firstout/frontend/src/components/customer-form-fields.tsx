@@ -1,17 +1,20 @@
-import { NumberInput, Select, SelectItem, Stack, TextArea, TextInput, Toggle } from "@carbon/react";
+import { Modal, NumberInput, Select, SelectItem, Stack, TextArea, TextInput, Toggle } from "@carbon/react";
 import { useEffect, useState } from "react";
 
 import {
+  PRICE_CLASSIFICATIONS,
   listPriceLists,
   type CreateCustomerPayload,
   type CustomerCrm,
-  type CustomerType,
+  type PriceClassification,
   type PriceList,
 } from "@/lib/api";
+import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
 
 export const emptyCustomerForm: CreateCustomerPayload = {
   name: "",
   customer_type: "retail",
+  price_classification: "Retail",
   price_tier: "standard",
   email: "",
   phone: "",
@@ -22,12 +25,14 @@ export const emptyCustomerForm: CreateCustomerPayload = {
   on_hold_reason: "",
   payment_terms_days: undefined,
   price_list_id: "",
+  payment_reminders_opt_out: false,
 };
 
 export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
   return {
     name: customer.name,
     customer_type: customer.customer_type,
+    price_classification: customer.price_classification ?? "Retail",
     price_tier: customer.price_tier,
     email: customer.email ?? "",
     phone: customer.phone ?? "",
@@ -38,6 +43,7 @@ export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
     on_hold_reason: customer.on_hold_reason ?? "",
     payment_terms_days: customer.payment_terms_days ?? undefined,
     price_list_id: customer.price_list_id ?? "",
+    payment_reminders_opt_out: customer.payment_reminders_opt_out ?? false,
   };
 }
 
@@ -45,9 +51,11 @@ export function customerWritePayload(
   form: CreateCustomerPayload,
   includeCredit: boolean,
 ): CreateCustomerPayload {
+  const classification = form.price_classification ?? "Retail";
   const payload: CreateCustomerPayload = {
     name: form.name.trim(),
-    customer_type: form.customer_type ?? "retail",
+    customer_type: classification === "Retail" ? "retail" : "trade",
+    price_classification: classification,
     price_tier: form.price_tier?.trim() || "standard",
     email: form.email,
     phone: form.phone,
@@ -69,7 +77,43 @@ export function customerWritePayload(
   }
   const listId = form.price_list_id?.trim?.() ?? form.price_list_id;
   payload.price_list_id = listId ? listId : null;
+  payload.payment_reminders_opt_out = form.payment_reminders_opt_out ?? false;
   return payload;
+}
+
+export function RepriceDraftsModal({
+  open,
+  quotes,
+  orders,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  quotes: number;
+  orders: number;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const quoteLabel = quotes === 1 ? "1 draft quote" : `${quotes} draft quotes`;
+  const orderLabel = orders === 1 ? "1 draft sales order" : `${orders} draft sales orders`;
+  return (
+    <Modal
+      open={open}
+      modalHeading="Reprice draft documents?"
+      primaryButtonText={busy ? "Repricing…" : "Reprice drafts"}
+      secondaryButtonText="Keep current prices"
+      primaryButtonDisabled={busy}
+      onRequestSubmit={onConfirm}
+      onRequestClose={onCancel}
+    >
+      <p>
+        This customer has {quoteLabel} and {orderLabel}. Reprice them to the new classification?
+        Issued invoices will not change.
+      </p>
+    </Modal>
+  );
 }
 
 export function CustomerFormFields({
@@ -109,6 +153,12 @@ export function CustomerFormFields({
     form.credit_limit === "" || form.credit_limit == null ? "" : Number(form.credit_limit);
   const paymentTermsValue =
     form.payment_terms_days == null ? "" : Number(form.payment_terms_days);
+  const assignedList = priceLists.find((entry) => entry.id === form.price_list_id);
+  const assignedCin7List =
+    assignedList && isCin7GeneratedPriceList(assignedList.name) ? assignedList : null;
+  const selectableLists = priceLists.filter(
+    (entry) => !isCin7GeneratedPriceList(entry.name) || entry.id === form.price_list_id,
+  );
 
   return (
     <Stack gap={5}>
@@ -121,31 +171,41 @@ export function CustomerFormFields({
         disabled={disabled}
       />
       <Select
-        id={`${idPrefix}-type`}
-        labelText="Customer type"
-        value={form.customer_type ?? "retail"}
-        onChange={(event) => onChange({ customer_type: event.target.value as CustomerType })}
+        id={`${idPrefix}-classification`}
+        labelText="Price classification"
+        helperText="Retail prices are shown including VAT. Stockist, Wholesale, and Decorator prices are excluding VAT. A list you create overrides this. Cin7 lists do not."
+        value={form.price_classification ?? "Retail"}
+        onChange={(event) =>
+          onChange({ price_classification: event.target.value as PriceClassification })
+        }
         disabled={disabled}
       >
-        <SelectItem value="retail" text="Retail" />
-        <SelectItem value="trade" text="Trade" />
+        {PRICE_CLASSIFICATIONS.map((classification) => (
+          <SelectItem
+            key={classification}
+            value={classification}
+            text={
+              classification === "Retail"
+                ? "Retail (incl. VAT)"
+                : `${classification} (excl. VAT)`
+            }
+          />
+        ))}
       </Select>
-      <TextInput
-        id={`${idPrefix}-tier`}
-        labelText="Price tier"
-        value={form.price_tier ?? "standard"}
-        onChange={(event) => onChange({ price_tier: event.target.value })}
-        disabled={disabled}
-      />
       <Select
         id={`${idPrefix}-price-list`}
         labelText="Price list"
+        helperText={
+          assignedCin7List
+            ? `${assignedCin7List.name} does not set the price. The classification does.`
+            : "A list you create overrides the classification. Cin7 lists do not."
+        }
         value={form.price_list_id ?? ""}
         onChange={(event) => onChange({ price_list_id: event.target.value })}
         disabled={disabled}
       >
         <SelectItem value="" text="None" />
-        {priceLists.map((entry) => (
+        {selectableLists.map((entry) => (
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>
@@ -163,6 +223,15 @@ export function CustomerFormFields({
             payment_terms_days: value === "" ? undefined : Number(value),
           })
         }
+        disabled={disabled}
+      />
+      <Toggle
+        id={`${idPrefix}-reminders`}
+        labelText="Payment reminders"
+        labelA="Opted out"
+        labelB="On"
+        toggled={!form.payment_reminders_opt_out}
+        onToggle={(checked) => onChange({ payment_reminders_opt_out: !checked })}
         disabled={disabled}
       />
       <TextInput

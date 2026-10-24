@@ -54,10 +54,10 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.payment_terms import compute_due_date
-from app.services.pricing import resolve_unit_ex_vat
+from app.services.pricing import resolve_unit_price, shows_prices_including_vat
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
-from app.services.vat import CENT, ex_to_inc
+from app.services.vat import CENT, discounted_unit_ex, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -118,6 +118,7 @@ class SalesOrdersService:
             total_inc_vat=total_inc,
             amount_paid=Decimal(0),
             notes=data.notes,
+            prices_include_vat=shows_prices_including_vat(customer),
             created_by_user_id=user_id,
             lines=line_models,
         )
@@ -135,17 +136,23 @@ class SalesOrdersService:
         existing = await self.crud.get_by_quote_id(quote.id)
         if existing is not None:
             raise ConflictError("Quote already has a sales order")
-        line_models = [
-            SalesOrderLine(
-                sku_id=line.sku_id,
-                qty=line.qty,
-                unit_ex_vat=line.unit_ex_vat,
-                description=line.description,
-                notes=line.notes,
-                held_qty=0,
+        line_models = []
+        for line in quote.lines:
+            notes = line.notes
+            if line.discount_percent > 0:
+                discount_note = f"{line.discount_percent:.2f}% line discount"
+                notes = f"{notes}; {discount_note}" if notes else discount_note
+            line_models.append(
+                SalesOrderLine(
+                    sku_id=line.sku_id,
+                    qty=line.qty,
+                    unit_ex_vat=discounted_unit_ex(line.unit_ex_vat, line.discount_percent),
+                    description=line.description,
+                    notes=notes,
+                    price_warning=line.price_warning,
+                    held_qty=0,
+                )
             )
-            for line in quote.lines
-        ]
         order = SalesOrder(
             so_number="",
             customer_id=quote.customer_id,
@@ -157,6 +164,7 @@ class SalesOrdersService:
             subtotal_ex_vat=quote.subtotal_ex_vat,
             vat_amount=quote.vat_amount,
             total_inc_vat=quote.total_inc_vat,
+            prices_include_vat=quote.prices_include_vat,
             amount_paid=Decimal(0),
             notes=quote.notes,
             created_by_user_id=user_id,
@@ -399,6 +407,7 @@ class SalesOrdersService:
                     vat_amount=line_vat,
                     sort_order=index,
                     sku_id=line.sku_id,
+                    price_warning=line.price_warning,
                 )
             )
 
@@ -455,6 +464,7 @@ class SalesOrdersService:
                 vat_amount=vat_total,
                 total_inc_vat=total_inc,
                 amount_paid=deposit_total,
+                prices_include_vat=order.prices_include_vat,
                 lines=invoice_line_models,
             )
             await self.invoice_crud.add_and_flush(invoice)
@@ -633,7 +643,8 @@ class SalesOrdersService:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
-            unit_ex = await resolve_unit_ex_vat(self.db, sku, customer)
+            resolved = await resolve_unit_price(self.db, sku, customer)
+            unit_ex = resolved.unit_ex_vat
             ex_vat = (Decimal(line.qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = ex_to_inc(ex_vat)
             line_vat = inc_vat - ex_vat
@@ -647,6 +658,7 @@ class SalesOrdersService:
                     unit_ex_vat=unit_ex,
                     description=sku.name,
                     notes=getattr(line, "notes", None),
+                    price_warning=resolved.warning,
                     held_qty=0,
                 )
             )
@@ -729,6 +741,7 @@ class SalesOrdersService:
             amount_paid=order.amount_paid,
             balance=balance,
             notes=order.notes,
+            prices_include_vat=order.prices_include_vat,
             lines=[
                 SalesOrderLineResponse(
                     id=line.id,
@@ -739,6 +752,7 @@ class SalesOrdersService:
                     unit_ex_vat=line.unit_ex_vat,
                     description=line.description,
                     notes=line.notes,
+                    price_warning=line.price_warning,
                     held_qty=line.held_qty,
                     hold_location_id=line.hold_location_id,
                 )

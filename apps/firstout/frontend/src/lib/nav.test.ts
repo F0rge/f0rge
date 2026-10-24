@@ -43,6 +43,8 @@ describe("nav path helpers", () => {
     expect(isAdminPath("/users")).toBe(true);
     expect(isAdminPath("/audit")).toBe(true);
     expect(isBooksPath("/invoices/abc")).toBe(true);
+    expect(isBooksPath("/bills/read")).toBe(true);
+    expect(labelForNavPath("/bills/read")).toBe("Bills");
     expect(isBooksPath("/ledger")).toBe(true);
     expect(isBooksPath("/books-periods")).toBe(true);
     expect(isBooksPath("/contacts")).toBe(false);
@@ -59,5 +61,11 @@ describe("nav path helpers", () => {
   it("includes price lists in catalogue menu", () => {
     expect(isCatalogueMenuPath("/price-lists")).toBe(true);
     expect(labelForNavPath("/price-lists")).toBe("Price lists");
+  });
+
+  it("keeps the proforma reader under the catalogue menu", () => {
+    expect(isCatalogueMenuPath("/proformas/read")).toBe(true);
+    expect(isNavLinkActive("/proformas/read", "/proformas")).toBe(true);
+    expect(labelForNavPath("/proformas/read")).toBe("Proformas");
   });
 });

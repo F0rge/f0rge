@@ -19,6 +19,7 @@
   "executionEnvironments": [
     {
       "root": "apps/marrow/backend",
+      "pythonVersion": "3.11",
       "extraPaths": [
         "apps/marrow/backend",
         "libs/backend/core/src",

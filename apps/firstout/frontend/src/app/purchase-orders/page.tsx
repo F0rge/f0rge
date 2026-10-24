@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Checkbox,
   DataTable,
   InlineNotification,
   Modal,
@@ -17,6 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TextArea,
   TextInput,
 } from "@carbon/react";
 import { useRouter } from "next/navigation";
@@ -44,6 +46,7 @@ const TABLE_HEADERS = [
   { key: "po_number", header: "PO number" },
   { key: "supplier_name", header: "Supplier" },
   { key: "status", header: "Status" },
+  { key: "needs_skus", header: "Needs SKUs" },
   { key: "line_count", header: "Lines" },
   { key: "created_at", header: "Created" },
   { key: "actions", header: "" },
@@ -54,6 +57,7 @@ type PoRow = {
   po_number: string;
   supplier_name: string;
   status: string;
+  needs_skus: string;
   line_count: string;
   created_at: string;
   actions: string;
@@ -61,12 +65,14 @@ type PoRow = {
 
 type PoLineForm = {
   sku_id: string;
+  description: string;
   qty: number | "";
   factory_unit_amount: string;
 };
 
 const emptyLine = (): PoLineForm => ({
   sku_id: "",
+  description: "",
   qty: "",
   factory_unit_amount: "",
 });
@@ -100,11 +106,15 @@ export default function PurchaseOrdersPage() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [needsSkus, setNeedsSkus] = useState<"all" | "yes">("all");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [proformas, setProformas] = useState<Proforma[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [supplierId, setSupplierId] = useState("");
   const [proformaId, setProformaId] = useState("");
+  const [supplierRef, setSupplierRef] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitForApproval, setSubmitForApproval] = useState(false);
   const [lines, setLines] = useState<PoLineForm[]>([emptyLine(), emptyLine()]);
 
   const loadOrders = useCallback(async () => {
@@ -115,6 +125,7 @@ export default function PurchaseOrdersPage() {
         limit: pageSize,
         offset: (page - 1) * pageSize,
         status: statusFilter === "all" ? undefined : statusFilter,
+        needs_skus: needsSkus === "yes",
       });
       setOrders(data.items);
       setTotal(data.total);
@@ -123,7 +134,7 @@ export default function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, statusFilter]);
+  }, [page, pageSize, statusFilter, needsSkus]);
 
   useEffect(() => {
     if (user) {
@@ -133,7 +144,7 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, needsSkus]);
 
   const loadCreateData = useCallback(async () => {
     try {
@@ -161,6 +172,9 @@ export default function PurchaseOrdersPage() {
   function resetCreateForm() {
     setSupplierId("");
     setProformaId("");
+    setSupplierRef("");
+    setNotes("");
+    setSubmitForApproval(false);
     setLines([emptyLine(), emptyLine()]);
   }
 
@@ -186,7 +200,7 @@ export default function PurchaseOrdersPage() {
 
   const linesValid = lines.every(
     (line) =>
-      line.sku_id &&
+      (line.sku_id || line.description.trim()) &&
       typeof line.qty === "number" &&
       line.qty > 0 &&
       line.factory_unit_amount.trim() !== "",
@@ -203,9 +217,13 @@ export default function PurchaseOrdersPage() {
       const payload = {
         supplier_id: supplierId,
         proforma_id: proformaId || undefined,
+        supplier_ref: supplierRef.trim() || null,
+        notes: notes.trim() || null,
+        submit_for_approval: submitForApproval,
         lines: lines.map(
           (line): CreatePoLinePayload => ({
-            sku_id: line.sku_id,
+            sku_id: line.sku_id || null,
+            description: line.description.trim() || null,
             qty: line.qty as number,
             factory_unit_amount: line.factory_unit_amount.trim(),
           }),
@@ -236,6 +254,7 @@ export default function PurchaseOrdersPage() {
     po_number: entry.po_number,
     supplier_name: entry.supplier_name,
     status: PO_STATUS_LABELS[entry.status],
+    needs_skus: entry.needs_sku_count > 0 ? `${entry.needs_sku_count} to fill` : "",
     line_count: String(entry.line_count),
     created_at: formatDate(entry.created_at),
     actions: entry.id,
@@ -273,18 +292,30 @@ export default function PurchaseOrdersPage() {
         />
       ) : null}
 
-      <Select
-        id="po-status-filter"
-        labelText="Status"
-        value={statusFilter}
-        onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-        style={{ maxWidth: "16rem" }}
-      >
-        <SelectItem value="all" text="All" />
-        {PO_STATUS_FILTER_ORDER.map((status) => (
-          <SelectItem key={status} value={status} text={PO_STATUS_LABELS[status]} />
-        ))}
-      </Select>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+        <Select
+          id="po-status-filter"
+          labelText="Status"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+          style={{ maxWidth: "16rem" }}
+        >
+          <SelectItem value="all" text="All" />
+          {PO_STATUS_FILTER_ORDER.map((status) => (
+            <SelectItem key={status} value={status} text={PO_STATUS_LABELS[status]} />
+          ))}
+        </Select>
+        <Select
+          id="po-needs-skus-filter"
+          labelText="Needs SKUs"
+          value={needsSkus}
+          onChange={(event) => setNeedsSkus(event.target.value as "all" | "yes")}
+          style={{ maxWidth: "16rem" }}
+        >
+          <SelectItem value="all" text="All" />
+          <SelectItem value="yes" text="Needs SKUs" />
+        </Select>
+      </div>
 
       {loading ? (
         <p className="cds--type-body-01">Loading purchase orders…</p>
@@ -293,9 +324,11 @@ export default function PurchaseOrdersPage() {
           kind="info"
           title="No purchase orders"
           subtitle={
-            statusFilter === "all"
-              ? "No purchase orders have been raised yet."
-              : `No purchase orders with status "${PO_STATUS_LABELS[statusFilter as PurchaseOrderStatus]}".`
+            needsSkus === "yes"
+              ? "No purchase orders are waiting for a SKU."
+              : statusFilter === "all"
+                ? "No purchase orders have been raised yet."
+                : `No purchase orders with status "${PO_STATUS_LABELS[statusFilter]}".`
           }
           hideCloseButton
           lowContrast
@@ -403,16 +436,38 @@ export default function PurchaseOrdersPage() {
               />
             ))}
           </Select>
+          <TextInput
+            id="po-supplier-ref"
+            labelText="Supplier reference"
+            helperText="Supplier invoice or proforma number"
+            value={supplierRef}
+            onChange={(event) => setSupplierRef(event.target.value)}
+          />
+          <TextArea
+            id="po-notes"
+            labelText="Notes"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+          <Checkbox
+            id="po-submit-for-approval"
+            labelText="Submit for approval"
+            helperText="The order waits for approval, including when an owner raises it."
+            checked={submitForApproval}
+            onChange={(_, { checked }) => setSubmitForApproval(checked)}
+          />
           <div>
             <p className="cds--label">Lines</p>
-            <p className="cds--helper-text">At least one SKU line.</p>
+            <p className="cds--helper-text">
+              A line can wait without a SKU when it has a description. That order stays pending until the SKU is filled in and the order is approved.
+            </p>
             <Stack gap={4}>
               {lines.map((line, index) => (
                 <div
                   key={`line-${index}`}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr auto",
+                    gridTemplateColumns: "1.3fr 1.3fr 0.6fr 0.8fr auto",
                     gap: "0.5rem",
                     alignItems: "end",
                   }}
@@ -424,7 +479,7 @@ export default function PurchaseOrdersPage() {
                     value={line.sku_id}
                     onChange={(event) => updateLine(index, { sku_id: event.target.value })}
                   >
-                    <SelectItem value="" text="Select SKU" />
+                    <SelectItem value="" text="No SKU yet" />
                     {skus.map((sku) => (
                       <SelectItem
                         key={sku.id}
@@ -433,6 +488,13 @@ export default function PurchaseOrdersPage() {
                       />
                     ))}
                   </Select>
+                  <TextInput
+                    id={`po-line-description-${index}`}
+                    labelText={index === 0 ? "Description" : ""}
+                    hideLabel={index > 0}
+                    value={line.description}
+                    onChange={(event) => updateLine(index, { description: event.target.value })}
+                  />
                   <NumberInput
                     id={`po-line-qty-${index}`}
                     label={index === 0 ? "Qty" : ""}

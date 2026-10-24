@@ -28,6 +28,10 @@ class PriceListCRUD(BaseCRUD):
             raise NotFoundError("Price list not found")
         return row
 
+    async def get_name(self, price_list_id: uuid.UUID) -> Optional[str]:
+        result = await self.db.execute(select(PriceList.name).where(PriceList.id == price_list_id))
+        return result.scalar_one_or_none()
+
     async def get_by_name(self, name: str) -> Optional[PriceList]:
         result = await self.db.execute(select(PriceList).where(PriceList.name == name))
         return result.scalar_one_or_none()

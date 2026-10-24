@@ -51,8 +51,10 @@ const TABLE_HEADERS = [
   { key: "lead_time_days", header: "Lead time" },
   { key: "reorder_min", header: "Reorder min" },
   { key: "cost_zar", header: "Cost (ZAR)" },
+  { key: "stockist_inc_vat", header: "Stockist Price" },
+  { key: "wholesale_inc_vat", header: "Wholesale Price" },
+  { key: "decorator_inc_vat", header: "Decorator Price" },
   { key: "retail_inc_vat", header: "Retail Price" },
-  { key: "wholesale_inc_vat", header: "Trade Price" },
   { key: "our_barcode", header: "Our barcode" },
   { key: "actions", header: "Actions" },
 ] as const;
@@ -66,8 +68,10 @@ type SkuRow = {
   lead_time_days: string;
   reorder_min: string;
   cost_zar: string;
-  retail_inc_vat: string;
+  stockist_inc_vat: string;
   wholesale_inc_vat: string;
+  decorator_inc_vat: string;
+  retail_inc_vat: string;
   our_barcode: string;
   select: string;
   actions: string;
@@ -255,8 +259,10 @@ function CataloguePageContent() {
     cost_zar: costUnavailable
       ? "Unavailable"
       : formatCatalogueMoney(unitCostBySku.get(entry.id) ?? null),
-    retail_inc_vat: formatIncVatPrice(entry.retail_inc_vat),
+    stockist_inc_vat: formatIncVatPrice(entry.stockist_inc_vat),
     wholesale_inc_vat: formatIncVatPrice(entry.wholesale_inc_vat),
+    decorator_inc_vat: formatIncVatPrice(entry.decorator_inc_vat),
+    retail_inc_vat: formatIncVatPrice(entry.retail_inc_vat),
     our_barcode: entry.our_barcode,
     select: entry.id,
     actions: entry.id,
@@ -339,8 +345,10 @@ function CataloguePageContent() {
           "Lead time",
           "Reorder min",
           ...(canViewCost ? ["Cost (ZAR)"] : []),
+          "Stockist inc VAT",
+          "Wholesale inc VAT",
+          "Decorator inc VAT",
           "Retail inc VAT",
-          "Trade inc VAT",
           "Our barcode",
         ],
         matching.map((sku) => [
@@ -354,8 +362,10 @@ function CataloguePageContent() {
           ...(canViewCost
             ? [costUnavailable && costs.size === 0 ? "Unavailable" : (costs.get(sku.id) ?? "")]
             : []),
-          sku.retail_inc_vat ?? "",
+          sku.stockist_inc_vat ?? "",
           sku.wholesale_inc_vat ?? "",
+          sku.decorator_inc_vat ?? "",
+          sku.retail_inc_vat ?? "",
           sku.our_barcode,
         ]),
       );
@@ -586,8 +596,10 @@ function CataloguePageContent() {
                               }
                               if (
                                 cell.info.header === "cost_zar" ||
-                                cell.info.header === "retail_inc_vat" ||
-                                cell.info.header === "wholesale_inc_vat"
+                                cell.info.header === "stockist_inc_vat" ||
+                                cell.info.header === "wholesale_inc_vat" ||
+                                cell.info.header === "decorator_inc_vat" ||
+                                cell.info.header === "retail_inc_vat"
                               ) {
                                 return (
                                   <TableCell key={cell.id} style={{ textAlign: "right" }}>

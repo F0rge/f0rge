@@ -22,6 +22,7 @@ class TillSaleCreate(BaseModel):
     tender: Literal["cash", "card", "deposit", "eft"]
     customer_id: Optional[uuid.UUID] = None
     pick_id: Optional[uuid.UUID] = None
+    pick_ids: list[uuid.UUID] = Field(default_factory=list)
     credit_override: bool = False
     credit_override_reason: Optional[str] = None
 
@@ -42,6 +43,7 @@ class TillSaleResponse(BaseModel):
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal
+    prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     location: TillSaleLocationStock
 

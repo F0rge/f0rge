@@ -45,6 +45,11 @@ postgres_container = postgres_container_fixture("postgres:16")
 
 
 @pytest.fixture(autouse=True)
+def disable_payment_reminder_ticker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "payment_reminder_ticker", False)
+
+
+@pytest.fixture(autouse=True)
 def patch_storage_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     storage_path = tmp_path / "storage"
     storage_path.mkdir()
@@ -71,6 +76,7 @@ async def async_engine(
     engine = create_async_engine(async_url(postgres_container), echo=False)
     async with engine.begin() as conn:
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS citext"))
+        await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.create_all)
     async with async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)() as session:
         await RoleSeedService(session).seed()

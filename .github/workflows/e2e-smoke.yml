@@ -84,7 +84,7 @@ jobs:
 
       - name: Install backend + Playwright browsers
         run: |
-          uv sync --frozen --project apps/marrow/backend
+          UV_PYTHON=3.11 uv sync --frozen --project apps/marrow/backend
           npx playwright install --with-deps chromium
 
       - name: Migrate database

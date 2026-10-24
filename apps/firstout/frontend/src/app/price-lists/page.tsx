@@ -242,7 +242,7 @@ export default function PriceListsPage() {
         <div>
           <h1 className="cds--type-productive-heading-04">Price lists</h1>
           <p className="cds--type-body-01">
-            Named SKU price lists for trade customers. Resolves before wholesale and retail.
+            A list you create overrides the customer&apos;s classification. Cin7 lists do not.
           </p>
         </div>
         {canMutate ? (

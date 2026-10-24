@@ -16,7 +16,7 @@
     "@carbon/styles": "^1.95.0",
     "barcode-detector": "^3.2.2",
     "jsbarcode": "^3.12.3",
-    "next": "16.3.8",
+    "next": "16.4.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-joyride": "^3.2.0"

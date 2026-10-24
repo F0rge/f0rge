@@ -6,7 +6,7 @@ alwaysApply: false
 
 # FastAPI Backend Standards
 
-Target **Python 3.10** (no 3.11+ syntax). Package manager: **`uv`** (never pip). Lint/format: **`ruff`**.
+Target **Python 3.11**. Package manager: **`uv`** (never pip). Lint/format: **`ruff`**. Shared libs stay valid on 3.10 (Firstout and dk).
 
 ## Architecture: Router → Service/Orchestrator → CRUD
 
@@ -67,7 +67,7 @@ SQLAlchemy 2.0 style. Always include `id`, `created_at`. Use `__table_args__` wi
 6. Type everything — all signatures and return types
 7. Never hardcode secrets — use `app/config.py` + env vars
 8. Postgres-native, async all the way: `AsyncSession`, `await`
-9. Python 3.10 only — no `match/case`, use `Union[]`/`Optional[]` not `X | Y`
+9. Python 3.11. Style: no `match/case`; use `Union[]`/`Optional[]` not `X | Y`
 
 ## New Code Order
 

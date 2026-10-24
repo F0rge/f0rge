@@ -9,6 +9,7 @@ import { SalesHistoryTable } from "@/components/records/history-tables";
 import { PartyRecords } from "@/components/records/party-records";
 import {
   CustomerFormFields,
+  RepriceDraftsModal,
   customerWritePayload,
   emptyCustomerForm,
   formFromCustomer,
@@ -20,6 +21,7 @@ import {
   formatZarAmount,
   getCustomer,
   listPriceLists,
+  repriceCustomerDrafts,
   updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
@@ -27,6 +29,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatIsoDate } from "@/lib/customer-crm";
+import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -35,6 +38,16 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <p className="cds--type-body-01 firstout-break-text">{value || "—"}</p>
     </div>
   );
+}
+
+function priceListLabel(customer: CustomerCrm, priceLists: PriceList[]): string {
+  if (!customer.price_list_id) {
+    return "—";
+  }
+  const name =
+    priceLists.find((entry) => entry.id === customer.price_list_id)?.name ??
+    customer.price_list_id;
+  return isCin7GeneratedPriceList(name) ? `${name} · classification sets the price` : name;
 }
 
 export default function CustomerDetailPage() {
@@ -53,6 +66,8 @@ export default function CustomerDetailPage() {
   const [portalEmail, setPortalEmail] = useState("");
   const [portalPassword, setPortalPassword] = useState("");
   const [portalSaving, setPortalSaving] = useState(false);
+  const [repriceOpen, setRepriceOpen] = useState(false);
+  const [repriceBusy, setRepriceBusy] = useState(false);
 
   const loadCustomer = useCallback(async () => {
     setLoading(true);
@@ -88,14 +103,40 @@ export default function CustomerDetailPage() {
     setError(null);
     setSuccess(null);
     try {
+      const previous = customer.price_classification;
       const updated = await updateCustomer(customer.id, customerWritePayload(form, canEditCredit));
       setCustomer(updated);
       setForm(formFromCustomer(updated));
-      setSuccess("Customer updated.");
+      const drafts = (updated.draft_quote_count ?? 0) + (updated.draft_sales_order_count ?? 0);
+      if (previous !== updated.price_classification && drafts > 0) {
+        setRepriceOpen(true);
+        setSuccess("Classification saved. Confirm whether to reprice drafts.");
+      } else {
+        setSuccess("Customer updated.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update customer.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function confirmReprice() {
+    if (!customer) {
+      return;
+    }
+    setRepriceBusy(true);
+    setError(null);
+    try {
+      const result = await repriceCustomerDrafts(customer.id);
+      setRepriceOpen(false);
+      setSuccess(
+        `Repriced ${result.quotes} draft quotes and ${result.sales_orders} draft sales orders. Issued invoices were left unchanged.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reprice drafts.");
+    } finally {
+      setRepriceBusy(false);
     }
   }
 
@@ -177,6 +218,14 @@ export default function CustomerDetailPage() {
             <Stack gap={5}>
               <h2 className="cds--type-productive-heading-03">Account</h2>
               <div className="firstout-detail-grid">
+                <DetailRow
+                  label="Classification"
+                  value={
+                    customer.price_classification === "Retail"
+                      ? "Retail · incl. VAT"
+                      : `${customer.price_classification} · excl. VAT`
+                  }
+                />
                 <DetailRow label="Open invoices" value={formatZarAmount(customer.open_invoices_zar)} />
                 <DetailRow
                   label="Overdue"
@@ -195,15 +244,7 @@ export default function CustomerDetailPage() {
                   }
                 />
                 <DetailRow label="Last purchase" value={formatIsoDate(customer.last_purchase_date)} />
-                <DetailRow
-                  label="Price list"
-                  value={
-                    customer.price_list_id
-                      ? (priceLists.find((entry) => entry.id === customer.price_list_id)?.name ??
-                        customer.price_list_id)
-                      : "—"
-                  }
-                />
+                <DetailRow label="Price list" value={priceListLabel(customer, priceLists)} />
                 <DetailRow label="Phone" value={customer.phone ?? "—"} />
                 <DetailRow label="Email" value={customer.email ?? "—"} />
                 <DetailRow label="VAT number" value={customer.vat_number ?? "—"} />
@@ -280,6 +321,17 @@ export default function CustomerDetailPage() {
           lowContrast
         />
       )}
+      <RepriceDraftsModal
+        open={repriceOpen}
+        quotes={customer?.draft_quote_count ?? 0}
+        orders={customer?.draft_sales_order_count ?? 0}
+        busy={repriceBusy}
+        onConfirm={() => void confirmReprice()}
+        onCancel={() => {
+          setRepriceOpen(false);
+          setSuccess("Classification saved. Draft quotes and orders kept their prices.");
+        }}
+      />
     </Stack>
   );
 }

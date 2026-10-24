@@ -17,10 +17,13 @@ from app.schemas.customer_crm import (
     CustomerCrmCreate,
     CustomerCrmResponse,
     CustomerCrmUpdate,
+    CustomerDuplicateMatch,
+    DraftRepriceResponse,
 )
 from app.schemas.customer_portal import PortalMeResponse, PortalUserCreate
 from app.services.customer_portal import CustomerPortalService
 from app.services.customers_crm import CustomersCrmService
+from app.services.draft_reprice import DraftRepriceService
 
 customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 
@@ -30,10 +33,22 @@ async def list_customers(
     overdue: Optional[bool] = None,
     active_layby: Optional[bool] = None,
     on_hold: Optional[bool] = None,
+    q: Optional[str] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
-    return await service.list(overdue=overdue, active_layby=active_layby, on_hold=on_hold)
+    return await service.list(overdue=overdue, active_layby=active_layby, on_hold=on_hold, q=q)
+
+
+@customers_router.get("/duplicates", response_model=list[CustomerDuplicateMatch])
+async def list_customer_duplicates(
+    name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: CustomersCrmService = Depends(get_customers_crm_service),
+):
+    return await service.find_duplicates(name=name, email=email, phone=phone)
 
 
 @customers_router.post(
@@ -66,6 +81,20 @@ async def update_customer(
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
     return await service.update(customer_id, body, user_id)
+
+
+@customers_router.post(
+    "/{customer_id}/reprice-drafts",
+    response_model=DraftRepriceResponse,
+)
+async def reprice_customer_drafts(
+    customer_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_customers_patch),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reprice draft quotes and draft sales orders. Issued invoices stay as they are."""
+    counts = await DraftRepriceService(db).reprice(customer_id)
+    return DraftRepriceResponse(quotes=counts.quotes, sales_orders=counts.sales_orders)
 
 
 @customers_router.post(

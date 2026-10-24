@@ -50,7 +50,9 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
     reorder_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    stockist_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     wholesale_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    decorator_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     retail_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     carton_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default=text("1")

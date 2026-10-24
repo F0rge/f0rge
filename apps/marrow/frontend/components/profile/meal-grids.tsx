@@ -5,11 +5,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { LayoutGrid, Tag } from 'lucide-react'
 import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
-import {
-  MealIconThumb,
-  photoHasImage,
-  useMealThumbSrc,
-} from '@/components/checkin/meal-icon-thumb'
+import { photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
+import { MealThumbFallback } from '@/components/checkin/meal-thumb-fallback'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { EmptyBoard } from '@/components/shared/color-artifact'
 import { usePhotos } from '@/lib/api/hooks'
@@ -80,10 +77,9 @@ function GridTile({
           onError={onThumbError}
         />
       ) : (
-        <MealIconThumb
-          iconKey={photo.icon_key ?? 'bowl'}
-          size="lg"
-          className="size-full rounded-none"
+        <MealThumbFallback
+          kind={photoHasImage(photo) ? 'missing' : 'library'}
+          iconKey={photo.icon_key}
         />
       )}
       {tagged && photo.tagged_by_handle && (

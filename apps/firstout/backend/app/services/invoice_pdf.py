@@ -94,6 +94,7 @@ def build_tax_invoice_pdf(
     seller: Optional[SellerDetails] = None,
     due_date: Optional[str] = None,
     number_label: str = "Invoice No",
+    unit_basis_note: Optional[str] = None,
 ) -> bytes:
     """Each line: description, qty, unit_ex_vat, ex_vat, vat_amount, inc_vat."""
     from io import BytesIO
@@ -166,6 +167,11 @@ def build_tax_invoice_pdf(
         pdf.drawString(25 * mm, y, f"VAT No: {customer_vat}")
         y -= 5 * mm
     y -= 8 * mm
+
+    if unit_basis_note:
+        pdf.setFont("Helvetica-Oblique", 9)
+        pdf.drawString(25 * mm, y, unit_basis_note)
+        y -= 6 * mm
 
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawString(25 * mm, y, "Description")

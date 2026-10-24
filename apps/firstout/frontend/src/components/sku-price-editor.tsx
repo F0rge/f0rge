@@ -38,13 +38,23 @@ import { formatObservedMedianLine } from "@/lib/lead-times";
 
 type PriceBasis = "ex" | "inc";
 
+const PRICE_TIERS = [
+  { key: "stockist", label: "Stockist", exField: "stockist_ex_vat", incField: "stockist_inc_vat" },
+  { key: "wholesale", label: "Wholesale", exField: "wholesale_ex_vat", incField: "wholesale_inc_vat" },
+  { key: "decorator", label: "Decorator", exField: "decorator_ex_vat", incField: "decorator_inc_vat" },
+  { key: "retail", label: "Retail", exField: "retail_ex_vat", incField: "retail_inc_vat" },
+] as const;
+
+type TierKey = (typeof PRICE_TIERS)[number]["key"];
+
+type TierForm = {
+  ex: string;
+  inc: string;
+  lastEdited: PriceBasis | null;
+};
+
 type EditorFormState = {
-  wholesaleEx: string;
-  wholesaleInc: string;
-  retailEx: string;
-  retailInc: string;
-  lastEditedWholesale: PriceBasis | null;
-  lastEditedRetail: PriceBasis | null;
+  prices: Record<TierKey, TierForm>;
   preferredSupplierId: string;
   supplierRef: string;
   leadTimeDays: string;
@@ -54,6 +64,15 @@ type EditorFormState = {
   madeToOrderExpiresAt: string;
   reorderMin: string;
 };
+
+function emptyPrices(): Record<TierKey, TierForm> {
+  return {
+    stockist: { ex: "", inc: "", lastEdited: null },
+    wholesale: { ex: "", inc: "", lastEdited: null },
+    decorator: { ex: "", inc: "", lastEdited: null },
+    retail: { ex: "", inc: "", lastEdited: null },
+  };
+}
 
 type SkuPriceEditorProps = {
   sku: Sku | null;
@@ -79,12 +98,7 @@ const COST_AUDIT_HEADERS = [
 ] as const;
 
 const emptyForm: EditorFormState = {
-  wholesaleEx: "",
-  wholesaleInc: "",
-  retailEx: "",
-  retailInc: "",
-  lastEditedWholesale: null,
-  lastEditedRetail: null,
+  prices: emptyPrices(),
   preferredSupplierId: "",
   supplierRef: "",
   leadTimeDays: "",
@@ -104,12 +118,28 @@ function localDateTimeInput(value: string | null): string {
 
 function formFromSku(sku: Sku): EditorFormState {
   return {
-    wholesaleEx: sku.wholesale_ex_vat ?? "",
-    wholesaleInc: sku.wholesale_inc_vat ?? "",
-    retailEx: sku.retail_ex_vat ?? "",
-    retailInc: sku.retail_inc_vat ?? "",
-    lastEditedWholesale: null,
-    lastEditedRetail: null,
+    prices: {
+      stockist: {
+        ex: sku.stockist_ex_vat ?? "",
+        inc: sku.stockist_inc_vat ?? "",
+        lastEdited: null,
+      },
+      wholesale: {
+        ex: sku.wholesale_ex_vat ?? "",
+        inc: sku.wholesale_inc_vat ?? "",
+        lastEdited: null,
+      },
+      decorator: {
+        ex: sku.decorator_ex_vat ?? "",
+        inc: sku.decorator_inc_vat ?? "",
+        lastEdited: null,
+      },
+      retail: {
+        ex: sku.retail_ex_vat ?? "",
+        inc: sku.retail_inc_vat ?? "",
+        lastEdited: null,
+      },
+    },
     preferredSupplierId: sku.preferred_supplier_id ?? "",
     supplierRef: sku.supplier_ref ?? "",
     leadTimeDays: sku.lead_time_days !== null ? String(sku.lead_time_days) : "",
@@ -176,16 +206,13 @@ function madeToOrderFormChanged(sku: Sku, form: EditorFormState): boolean {
 function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
   const payload: UpdateSkuPricePayload = {};
 
-  if (form.lastEditedWholesale === "ex") {
-    payload.wholesale_ex_vat = form.wholesaleEx.trim() || null;
-  } else if (form.lastEditedWholesale === "inc") {
-    payload.wholesale_inc_vat = form.wholesaleInc.trim() || null;
-  }
-
-  if (form.lastEditedRetail === "ex") {
-    payload.retail_ex_vat = form.retailEx.trim() || null;
-  } else if (form.lastEditedRetail === "inc") {
-    payload.retail_inc_vat = form.retailInc.trim() || null;
+  for (const tier of PRICE_TIERS) {
+    const edited = form.prices[tier.key];
+    if (edited.lastEdited === "ex") {
+      payload[tier.exField] = edited.ex.trim() || null;
+    } else if (edited.lastEdited === "inc") {
+      payload[tier.incField] = edited.inc.trim() || null;
+    }
   }
 
   const preferredSupplierId = form.preferredSupplierId.trim();
@@ -221,7 +248,7 @@ function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
 }
 
 function hasFormEdits(sku: Sku, form: EditorFormState): boolean {
-  if (form.lastEditedWholesale !== null || form.lastEditedRetail !== null) {
+  if (PRICE_TIERS.some((tier) => form.prices[tier.key].lastEdited !== null)) {
     return true;
   }
   if (form.preferredSupplierId.trim() !== (sku.preferred_supplier_id ?? "")) {
@@ -318,50 +345,23 @@ export function SkuPriceEditor({
     };
   }, [open, embedded, sku, showCostAudit]);
 
-  function updateWholesaleEx(value: string) {
+  function updateTier(tier: TierKey, basis: PriceBasis, value: string) {
     setForm((current) => {
       const parsed = parsePriceInput(value);
+      const paired =
+        parsed === null
+          ? ""
+          : formatPriceAmount(basis === "ex" ? exVatToIncVat(parsed) : incVatToExVat(parsed));
       return {
         ...current,
-        wholesaleEx: value,
-        wholesaleInc: parsed === null ? "" : formatPriceAmount(exVatToIncVat(parsed)),
-        lastEditedWholesale: "ex",
-      };
-    });
-  }
-
-  function updateWholesaleInc(value: string) {
-    setForm((current) => {
-      const parsed = parsePriceInput(value);
-      return {
-        ...current,
-        wholesaleInc: value,
-        wholesaleEx: parsed === null ? "" : formatPriceAmount(incVatToExVat(parsed)),
-        lastEditedWholesale: "inc",
-      };
-    });
-  }
-
-  function updateRetailEx(value: string) {
-    setForm((current) => {
-      const parsed = parsePriceInput(value);
-      return {
-        ...current,
-        retailEx: value,
-        retailInc: parsed === null ? "" : formatPriceAmount(exVatToIncVat(parsed)),
-        lastEditedRetail: "ex",
-      };
-    });
-  }
-
-  function updateRetailInc(value: string) {
-    setForm((current) => {
-      const parsed = parsePriceInput(value);
-      return {
-        ...current,
-        retailInc: value,
-        retailEx: parsed === null ? "" : formatPriceAmount(incVatToExVat(parsed)),
-        lastEditedRetail: "inc",
+        prices: {
+          ...current.prices,
+          [tier]: {
+            ex: basis === "ex" ? value : paired,
+            inc: basis === "inc" ? value : paired,
+            lastEdited: basis,
+          },
+        },
       };
     });
   }
@@ -607,36 +607,25 @@ export function SkuPriceEditor({
               <InlineNotification kind="error" title="Made-to-order offer needs attention" subtitle={madeToOrderError} hideCloseButton lowContrast />}
           </>
         )}
-        <TextInput
-          id="sku-wholesale-ex-vat"
-          labelText="Wholesale ex-VAT"
-          helperText="VAT 15% — paired inc-VAT updates as you type"
-          value={form.wholesaleEx}
-          readOnly={readOnly}
-          onChange={(event) => updateWholesaleEx(event.target.value)}
-        />
-        <TextInput
-          id="sku-wholesale-inc-vat"
-          labelText="Wholesale inc-VAT"
-          value={form.wholesaleInc}
-          readOnly={readOnly}
-          onChange={(event) => updateWholesaleInc(event.target.value)}
-        />
-        <TextInput
-          id="sku-retail-ex-vat"
-          labelText="Retail ex-VAT"
-          helperText="VAT 15% — paired inc-VAT updates as you type"
-          value={form.retailEx}
-          readOnly={readOnly}
-          onChange={(event) => updateRetailEx(event.target.value)}
-        />
-        <TextInput
-          id="sku-retail-inc-vat"
-          labelText="Retail inc-VAT"
-          value={form.retailInc}
-          readOnly={readOnly}
-          onChange={(event) => updateRetailInc(event.target.value)}
-        />
+        {PRICE_TIERS.map((tier) => (
+          <div key={tier.key} style={{ display: "grid", gap: "1rem" }}>
+            <TextInput
+              id={`sku-${tier.key}-ex-vat`}
+              labelText={`${tier.label} ex-VAT`}
+              helperText="Stored ex VAT. VAT 15% — paired inc-VAT updates as you type"
+              value={form.prices[tier.key].ex}
+              readOnly={readOnly}
+              onChange={(event) => updateTier(tier.key, "ex", event.target.value)}
+            />
+            <TextInput
+              id={`sku-${tier.key}-inc-vat`}
+              labelText={`${tier.label} inc-VAT`}
+              value={form.prices[tier.key].inc}
+              readOnly={readOnly}
+              onChange={(event) => updateTier(tier.key, "inc", event.target.value)}
+            />
+          </div>
+        ))}
         {showCostAudit ? (
           <div>
             <h3 className="cds--type-productive-heading-02">Cost history</h3>

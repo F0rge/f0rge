@@ -1,11 +1,11 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version == '3.13.*'",
     "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "(python_full_version >= '3.11' and python_full_version < '3.13' and sys_platform != 'emscripten') or (python_full_version == '3.11.*' and sys_platform == 'emscripten')",
+    "python_full_version == '3.11.*' or (python_full_version == '3.12.*' and sys_platform != 'emscripten')",
     "python_full_version < '3.11'",
 ]
 
@@ -985,6 +985,7 @@ dependencies = [
     { name = "openpyxl" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
+    { name = "pypdf" },
     { name = "reportlab" },
     { name = "sqlalchemy" },
 ]
@@ -993,7 +994,6 @@ dependencies = [
 dev = [
     { name = "f0rge-testing" },
     { name = "httpx" },
-    { name = "pypdf" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -1014,6 +1014,7 @@ requires-dist = [
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pyjwt", specifier = ">=2.8" },
+    { name = "pypdf", specifier = ">=6.16.2" },
     { name = "reportlab", specifier = ">=5.0.1" },
     { name = "sqlalchemy", specifier = ">=2.0" },
 ]
@@ -1022,7 +1023,6 @@ requires-dist = [
 dev = [
     { name = "f0rge-testing", editable = "../../../libs/backend/testing" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "pypdf", specifier = ">=6.16.2" },
     { name = "pytest", specifier = ">=9.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
 ]

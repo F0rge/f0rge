@@ -42,6 +42,41 @@ from f0rge_db.crud import unit_of_work
 from f0rge_storage.images import resize_image
 
 
+# Stored ex VAT. Inc-VAT inputs use the same 15% conversion as wholesale and retail.
+_PRICE_COLUMNS = (
+    ("stockist_ex_vat", "stockist_ex_vat", "stockist_inc_vat"),
+    ("wholesale_ex_vat", "wholesale_ex_vat", "wholesale_inc_vat"),
+    ("decorator_ex_vat", "decorator_ex_vat", "decorator_inc_vat"),
+    ("retail_ex_vat", "retail_ex_vat", "retail_inc_vat"),
+)
+
+
+def _apply_stored_ex_vat(
+    sku: Sku,
+    data: SkuUpdate,
+    fields_set: set[str],
+    *,
+    column: str,
+    ex_field: str,
+    inc_field: str,
+) -> None:
+    if ex_field in fields_set and inc_field in fields_set:
+        raise ValidationError(f"Cannot set both {ex_field} and {inc_field}")
+    if ex_field in fields_set:
+        value = getattr(data, ex_field)
+        if value is not None:
+            validate_non_negative_price(value, ex_field)
+        setattr(sku, column, value)
+        return
+    if inc_field in fields_set:
+        value = getattr(data, inc_field)
+        if value is None:
+            setattr(sku, column, None)
+        else:
+            validate_non_negative_price(value, inc_field)
+            setattr(sku, column, inc_to_ex(value))
+
+
 def _blank_to_none(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -229,32 +264,15 @@ class SkuService:
             assert data.carton_count is not None
             sku.carton_count = data.carton_count
 
-        if "wholesale_ex_vat" in fields_set and "wholesale_inc_vat" in fields_set:
-            raise ValidationError("Cannot set both wholesale_ex_vat and wholesale_inc_vat")
-        if "retail_ex_vat" in fields_set and "retail_inc_vat" in fields_set:
-            raise ValidationError("Cannot set both retail_ex_vat and retail_inc_vat")
-
-        if "wholesale_ex_vat" in fields_set:
-            if data.wholesale_ex_vat is not None:
-                validate_non_negative_price(data.wholesale_ex_vat, "wholesale_ex_vat")
-            sku.wholesale_ex_vat = data.wholesale_ex_vat
-        elif "wholesale_inc_vat" in fields_set:
-            if data.wholesale_inc_vat is None:
-                sku.wholesale_ex_vat = None
-            else:
-                validate_non_negative_price(data.wholesale_inc_vat, "wholesale_inc_vat")
-                sku.wholesale_ex_vat = inc_to_ex(data.wholesale_inc_vat)
-
-        if "retail_ex_vat" in fields_set:
-            if data.retail_ex_vat is not None:
-                validate_non_negative_price(data.retail_ex_vat, "retail_ex_vat")
-            sku.retail_ex_vat = data.retail_ex_vat
-        elif "retail_inc_vat" in fields_set:
-            if data.retail_inc_vat is None:
-                sku.retail_ex_vat = None
-            else:
-                validate_non_negative_price(data.retail_inc_vat, "retail_inc_vat")
-                sku.retail_ex_vat = inc_to_ex(data.retail_inc_vat)
+        for column, ex_field, inc_field in _PRICE_COLUMNS:
+            _apply_stored_ex_vat(
+                sku,
+                data,
+                fields_set,
+                column=column,
+                ex_field=ex_field,
+                inc_field=inc_field,
+            )
 
         try:
             await self.crud.commit_refresh(sku)
@@ -420,8 +438,12 @@ class SkuService:
             last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
             photo_storage_key=sku.photo_storage_key,
+            stockist_ex_vat=sku.stockist_ex_vat,
+            stockist_inc_vat=inc_vat_or_none(sku.stockist_ex_vat),
             wholesale_ex_vat=sku.wholesale_ex_vat,
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
+            decorator_ex_vat=sku.decorator_ex_vat,
+            decorator_inc_vat=inc_vat_or_none(sku.decorator_ex_vat),
             retail_ex_vat=sku.retail_ex_vat,
             retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
             carton_count=sku.carton_count,

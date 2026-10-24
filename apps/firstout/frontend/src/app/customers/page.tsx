@@ -23,23 +23,32 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
 import {
+  CustomerDuplicateModal,
+  DUPLICATE_NAME_TAKEN,
+} from "@/components/customer-duplicate-modal";
+import {
   CustomerFormFields,
+  RepriceDraftsModal,
   customerWritePayload,
   emptyCustomerForm,
   formFromCustomer,
 } from "@/components/customer-form-fields";
 import {
-  CUSTOMER_TYPE_LABELS,
+  ApiError,
+  PRICE_CLASSIFICATIONS,
   canManageCustomerCredit,
   canMutateCustomers,
   createCustomer,
+  repriceCustomerDrafts,
+  findCustomerDuplicates,
   formatZarAmount,
   listCustomers,
   updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
-  type CustomerType,
+  type CustomerDuplicateMatch,
 } from "@/lib/api";
+import { CUSTOMER_SEARCH_PLACEHOLDER } from "@/lib/customer-search";
 import { useAuth } from "@/lib/auth";
 import { downloadCsv } from "@/lib/csv";
 import { formatIsoDate, laybyActiveBadgeLabel, overdueBadgeLabel } from "@/lib/customer-crm";
@@ -56,8 +65,8 @@ const ACTIONS_HEADER = { key: "actions", header: "" };
 
 const CSV_HEADERS = [
   "Customer",
-  "Type",
-  "Tier",
+  "Classification",
+  "Cin7 price tier",
   "Email",
   "Phone",
   "Open invoices",
@@ -67,7 +76,7 @@ const CSV_HEADERS = [
   "Last purchase",
 ];
 
-type TypeFilter = "all" | CustomerType;
+type TypeFilter = "all" | (typeof PRICE_CLASSIFICATIONS)[number];
 type BalanceFilter = "any" | "open_invoices" | "active_laybys";
 
 type CustomerRow = {
@@ -100,8 +109,19 @@ function formatActiveLaybys(customer: CustomerCrm): { amount: string; detail: st
   return { amount: formatZarAmount(customer.active_laybys_zar), detail: label };
 }
 
-function customerTypeTagType(type: CustomerType): "blue" | "purple" {
-  return type === "retail" ? "blue" : "purple";
+function classificationTagType(
+  classification: (typeof PRICE_CLASSIFICATIONS)[number],
+): "blue" | "purple" | "teal" | "magenta" {
+  if (classification === "Retail") {
+    return "blue";
+  }
+  if (classification === "Wholesale") {
+    return "purple";
+  }
+  if (classification === "Stockist") {
+    return "teal";
+  }
+  return "magenta";
 }
 
 function csvMoney(count: number, amount: string): string {
@@ -117,6 +137,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>("any");
   const [overdueFilter, setOverdueFilter] = useState(false);
@@ -129,6 +150,16 @@ export default function CustomersPage() {
   const [editCustomer, setEditCustomer] = useState<CustomerCrm | null>(null);
   const [editForm, setEditForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
   const [saving, setSaving] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateMatches, setDuplicateMatches] = useState<CustomerDuplicateMatch[]>([]);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [repriceCustomer, setRepriceCustomer] = useState<CustomerCrm | null>(null);
+  const [repriceBusy, setRepriceBusy] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchFilter), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchFilter]);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -138,6 +169,7 @@ export default function CustomersPage() {
         overdue: overdueFilter || undefined,
         active_layby: activeLaybyFilter || undefined,
         on_hold: onHoldFilter || undefined,
+        q: debouncedSearch,
       });
       setCustomers(data);
     } catch (err) {
@@ -145,7 +177,7 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [overdueFilter, activeLaybyFilter, onHoldFilter]);
+  }, [overdueFilter, activeLaybyFilter, onHoldFilter, debouncedSearch]);
 
   useEffect(() => {
     if (user) {
@@ -154,9 +186,8 @@ export default function CustomersPage() {
   }, [user, loadCustomers]);
 
   const filteredCustomers = useMemo(() => {
-    const query = searchFilter.trim().toLowerCase();
     return customers.filter((customer) => {
-      if (typeFilter !== "all" && customer.customer_type !== typeFilter) {
+      if (typeFilter !== "all" && customer.price_classification !== typeFilter) {
         return false;
       }
       if (balanceFilter === "open_invoices" && customer.open_invoices_count === 0) {
@@ -165,16 +196,9 @@ export default function CustomersPage() {
       if (balanceFilter === "active_laybys" && customer.active_laybys_count === 0) {
         return false;
       }
-      if (!query) {
-        return true;
-      }
-      return (
-        customer.name.toLowerCase().includes(query) ||
-        customer.id.toLowerCase().includes(query) ||
-        (customer.email?.toLowerCase().includes(query) ?? false)
-      );
+      return true;
     });
-  }, [customers, searchFilter, typeFilter, balanceFilter]);
+  }, [customers, typeFilter, balanceFilter]);
 
   useEffect(() => {
     setPage(1);
@@ -208,7 +232,7 @@ export default function CustomersPage() {
       CSV_HEADERS,
       filteredCustomers.map((customer) => [
         customer.name,
-        CUSTOMER_TYPE_LABELS[customer.customer_type],
+        customer.price_classification,
         customer.price_tier,
         customer.email ?? "",
         customer.phone ?? "",
@@ -221,7 +245,13 @@ export default function CustomersPage() {
     );
   }
 
-  async function handleCreate() {
+  function closeDuplicates() {
+    setDuplicateOpen(false);
+    setDuplicateMatches([]);
+    setDuplicateError(null);
+  }
+
+  async function handleCreate(force = false) {
     const name = createForm.name.trim();
     if (!name) {
       setError("Customer name is required.");
@@ -230,11 +260,42 @@ export default function CustomersPage() {
     setSaving(true);
     setError(null);
     try {
+      if (!force) {
+        const matches = await findCustomerDuplicates({
+          name,
+          email: createForm.email,
+          phone: createForm.phone,
+        });
+        if (matches.length > 0) {
+          setDuplicateMatches(matches);
+          setDuplicateError(null);
+          setDuplicateOpen(true);
+          return;
+        }
+      }
       await createCustomer(customerWritePayload(createForm, canEditCredit));
+      closeDuplicates();
       setCreateOpen(false);
       setCreateForm(emptyCustomerForm);
       await loadCustomers();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setDuplicateError(DUPLICATE_NAME_TAKEN);
+        setDuplicateOpen(true);
+        if (duplicateMatches.length === 0) {
+          try {
+            const matches = await findCustomerDuplicates({
+              name,
+              email: createForm.email,
+              phone: createForm.phone,
+            });
+            setDuplicateMatches(matches);
+          } catch {
+            setDuplicateMatches([]);
+          }
+        }
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to create customer.");
     } finally {
       setSaving(false);
@@ -253,14 +314,39 @@ export default function CustomersPage() {
     setSaving(true);
     setError(null);
     try {
-      await updateCustomer(editCustomer.id, customerWritePayload(editForm, canEditCredit));
+      const previous = editCustomer.price_classification;
+      const updated = await updateCustomer(
+        editCustomer.id,
+        customerWritePayload(editForm, canEditCredit),
+      );
       setEditCustomer(null);
       setEditForm(emptyCustomerForm);
       await loadCustomers();
+      const drafts = (updated.draft_quote_count ?? 0) + (updated.draft_sales_order_count ?? 0);
+      if (previous !== updated.price_classification && drafts > 0) {
+        setRepriceCustomer(updated);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update customer.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function confirmReprice() {
+    if (!repriceCustomer) {
+      return;
+    }
+    setRepriceBusy(true);
+    setError(null);
+    try {
+      await repriceCustomerDrafts(repriceCustomer.id);
+      setRepriceCustomer(null);
+      await loadCustomers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reprice drafts.");
+    } finally {
+      setRepriceBusy(false);
     }
   }
 
@@ -287,6 +373,7 @@ export default function CustomersPage() {
               data-tour="customer-new"
               onClick={() => {
                 setCreateForm(emptyCustomerForm);
+                closeDuplicates();
                 setCreateOpen(true);
               }}
             >
@@ -313,33 +400,29 @@ export default function CustomersPage() {
               id="customers-search"
               labelText="Filter customers"
               hideLabel
-              placeholder="Filter by name, email, or ID…"
+              placeholder={CUSTOMER_SEARCH_PLACEHOLDER}
               value={searchFilter}
               onChange={(event) => setSearchFilter(event.target.value)}
             />
             <span className="firstout-catalogue-toolbar__divider" aria-hidden />
-            <div className="firstout-catalogue-chips" role="group" aria-label="Customer type filter">
+            <div className="firstout-catalogue-chips" role="group" aria-label="Price classification filter">
               <Button
                 kind={typeFilter === "all" ? "primary" : "ghost"}
                 size="sm"
                 onClick={() => setTypeFilter("all")}
               >
-                All Types
+                All
               </Button>
-              <Button
-                kind={typeFilter === "retail" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setTypeFilter("retail")}
-              >
-                Retail
-              </Button>
-              <Button
-                kind={typeFilter === "trade" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setTypeFilter("trade")}
-              >
-                Trade
-              </Button>
+              {PRICE_CLASSIFICATIONS.map((classification) => (
+                <Button
+                  key={classification}
+                  kind={typeFilter === classification ? "primary" : "ghost"}
+                  size="sm"
+                  onClick={() => setTypeFilter(classification)}
+                >
+                  {classification}
+                </Button>
+              ))}
             </div>
             <span className="firstout-catalogue-toolbar__divider" aria-hidden />
             <div className="firstout-catalogue-chips" role="group" aria-label="Balance filter">
@@ -454,11 +537,14 @@ export default function CustomersPage() {
                                 <CustomerCrmBadges customer={entry} />
                               </TableCell>
                               <TableCell>
-                                <Tag type={customerTypeTagType(entry.customer_type)} size="sm">
-                                  {CUSTOMER_TYPE_LABELS[entry.customer_type]}
+                                <Tag type={classificationTagType(entry.price_classification)} size="sm">
+                                  {entry.price_classification}
                                 </Tag>
                                 <div className="firstout-muted-text" style={{ marginTop: "0.25rem" }}>
-                                  Tier: {entry.price_tier}
+                                  {entry.price_classification === "Retail" ? "incl. VAT" : "excl. VAT"}
+                                  {entry.price_tier && entry.price_tier !== "standard"
+                                    ? ` · Cin7 ${entry.price_tier}`
+                                    : ""}
                                 </div>
                               </TableCell>
                               <TableCell className="firstout-cell-wrap">
@@ -526,12 +612,15 @@ export default function CustomersPage() {
       </div>
 
       <Modal
-        open={createOpen}
+        open={createOpen && !duplicateOpen}
         modalHeading="New customer"
         primaryButtonText="Create customer"
         secondaryButtonText="Cancel"
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
+        onRequestClose={() => {
+          closeDuplicates();
+          setCreateOpen(false);
+        }}
+        onRequestSubmit={() => void handleCreate(false)}
         primaryButtonDisabled={saving || !createForm.name.trim()}
         size="md"
       >
@@ -542,6 +631,20 @@ export default function CustomersPage() {
           showCreditFields={canEditCredit}
         />
       </Modal>
+
+      <CustomerDuplicateModal
+        open={duplicateOpen}
+        matches={duplicateMatches}
+        saving={saving}
+        error={duplicateError}
+        onCancel={closeDuplicates}
+        onCreateAnyway={() => void handleCreate(true)}
+        onOpenExisting={(customerId) => {
+          closeDuplicates();
+          setCreateOpen(false);
+          router.push(`/customers/${customerId}`);
+        }}
+      />
 
       <Modal
         open={editCustomer !== null}
@@ -563,6 +666,14 @@ export default function CustomersPage() {
           showCreditFields={canEditCredit}
         />
       </Modal>
+      <RepriceDraftsModal
+        open={repriceCustomer !== null}
+        quotes={repriceCustomer?.draft_quote_count ?? 0}
+        orders={repriceCustomer?.draft_sales_order_count ?? 0}
+        busy={repriceBusy}
+        onConfirm={() => void confirmReprice()}
+        onCancel={() => setRepriceCustomer(null)}
+      />
     </Stack>
   );
 }

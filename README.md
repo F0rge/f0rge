@@ -14,7 +14,7 @@ libs/
 └── ui/             @f0rge/ui      shadcn primitives, API client, hooks
 
 apps/marrow/
-├── backend/   FastAPI + async SQLAlchemy + Postgres (Fly MPG) — Python 3.10, uv
+├── backend/   FastAPI + async SQLAlchemy + Postgres (Fly MPG) — Python 3.11, uv
 └── frontend/  Next.js 16 + React 19 + Tailwind + @f0rge/ui
 
 apps/dk/tag-printer/

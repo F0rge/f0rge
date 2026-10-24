@@ -2,7 +2,8 @@
 
 The root production audit gate remains `npm audit --omit=dev --audit-level=high`.
 The October 2026 dependency refresh fixes four upstream advisories without
-changing Medusa 2.21.1, Next 16.3.8, or application behavior.
+changing Medusa 2.21.1 or application behavior. Next stayed at 16.3.8 in that
+refresh and moves to 16.4.3 in the later audit repair below.
 
 | Package | Previous version | Fixed official release | Advisory |
 | --- | --- | --- | --- |
@@ -52,3 +53,29 @@ integration tests and frontend/admin builds. Reverting the overrides restores
 vulnerable packages; the security gate must then remain failing until an actual
 fix is selected. Moderate advisories outside these four fixes remain visible to
 the audit and are outside this CI repair's scope.
+
+`@medusajs/admin-bundler` is overridden to `vite` 7.3.7. The hoisted production
+copy was 7.3.6, which fails `npm audit --omit=dev --audit-level=high`
+([GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm) and
+the two related launch-editor advisories). The override is nested so `libs/ui`
+stays on vite 6.4.3. Commerce's own devDependency range `^7.3.6` already
+accepts 7.3.7. Vite's dependency set is unchanged between 7.3.6 and 7.3.7.
+
+## 24 Oct 2026 prod audit repair
+
+`npm audit --omit=dev --audit-level=high` failed on `next` 16.3.8 (critical),
+`zod` &lt;4.6.6 (high, including Medusa 2.21.1's exact 4.2.0 pins), `body-parser`
+&lt;1.20.9 (high), and `multer` &lt;2.5.0 (high). Medusa stays on 2.21.1. Direct
+`next` dependencies and the root override are 16.4.3, the latest stable 16.x.
+Commerce's direct `zod` dependency is 4.6.7. The other fixes are root overrides:
+
+| Override | Version | Why this shape |
+| --- | --- | --- |
+| `fast-uri` | 3.1.9 | Replaces the previous 3.1.7 pin, which was still inside GHSA-hrr3-gc8f-f4qj and the related fast-uri advisories. |
+| `multer` | 2.5.0 | Medusa's `^2.3.0` range already accepts this patch. |
+| `qs` | 6.16.1 | Clears GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx. Express 4.22.2 still requests `~6.15.1`; the override is what installs the fixed minor. |
+| `body-parser@^1` | 1.20.9 | Patches the 1.x copy Express 4 installs. The `@^1` selector leaves `@modelcontextprotocol/sdk`'s body-parser 2.x alone. |
+| `zod@^4.0.0` | 4.6.7 | Lifts Medusa's exact 4.2.0 copies and the hoisted Zod 4.4.3. Zod 3 under `shadcn` (`^3.24.1`) does not match. Medusa re-exports Zod from `@medusajs/deps/zod`. |
+| `bullmq` → `uuid` | 11.1.1 | BullMQ 5.13.0 (pinned by Medusa) only calls `uuid.v4()`. Uuid 11 still ships that function for `require()`. `@nxlv/python` keeps uuid 9. |
+| `@rushstack/node-core-library` → `ajv` | 8.20.0 | The production copy under MikroORM's `umzug` was ajv 8.13.0. Ajv 6 stays for ESLint. |
+| `postcss-selector-parser@^7` | 7.1.7 | Patches the 7.1.x copy (shadcn). The 6.x copies under Tailwind 3 / `postcss-nested` stay on 6.1.5: Tailwind 3 requires `postcss-selector-parser/dist/util/unesc`, which a major bump to 7.x would drop. GHSA-rj75-hqrm-r3gf therefore remains moderate and does not fail `--audit-level=high`. |

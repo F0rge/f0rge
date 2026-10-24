@@ -14,14 +14,22 @@ from app.models.archive_credit_note import ArchiveCreditNote
 from app.models.bill import Bill
 from app.models.cin7_party import SupplierContact
 from app.models.credit_note import CreditNote
+from app.models.customer import Customer
 from app.models.inventory import LocationStock
 from app.models.journal import JournalEntry
+from app.models.price_list import PriceList, PriceListItem
 from app.models.purchase_order import PurchaseOrder
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
 from app.models.tax_invoice import TaxInvoice
-from app.services.cin7_import.parse import assign_barcodes, fill_down, realign_status_row
 from app.services.cin7_import.load import run_import
+from app.services.cin7_import.parse import (
+    assign_barcodes,
+    fill_down,
+    named_sku_prices,
+    realign_status_row,
+)
+from app.services.pricing import resolve_unit_ex_vat
 
 
 def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
@@ -184,6 +192,8 @@ def _fixture_dir(root: Path) -> Path:
             "SupplierProductCode",
             "PriceTier1",
             "PriceTier2",
+            "PriceTier3",
+            "PriceTier4",
             "PriceTier7",
         ],
         [
@@ -198,6 +208,8 @@ def _fixture_dir(root: Path) -> Path:
                 "MILL-1",
                 "100.00",
                 "80.00",
+                "70.00",
+                "1150.00",
                 "0.0000",
             ],
             [
@@ -211,6 +223,8 @@ def _fixture_dir(root: Path) -> Path:
                 "SUP-LONG",
                 "50.00",
                 "40.00",
+                "0.00",
+                "0.00",
                 "0.0000",
             ],
             [
@@ -224,14 +238,16 @@ def _fixture_dir(root: Path) -> Path:
                 "",
                 "10.00",
                 "0.00",
+                "0.00",
+                "",
                 "0.0000",
             ],
         ],
     )
     _write_csv(
         root / "SimplePrices_fixture.csv",
-        ["ProductCode", "PriceTier1", "PriceTier2"],
-        [["CHAIR-1", "100.00", "80.00"]],
+        ["ProductCode", "PriceTier1", "PriceTier2", "PriceTier3", "PriceTier4"],
+        [["CHAIR-1", "100.00", "80.00", "70.00", "1150.00"]],
     )
     _write_csv(
         root / "MarkupPrices_fixture.csv",
@@ -425,6 +441,112 @@ def test_assign_barcodes_keeps_one_shared_code_and_generates_the_rest() -> None:
 
 
 @pytest.mark.no_db
+def test_cin7_named_tiers_keep_ex_vat_and_convert_retail() -> None:
+    prices = named_sku_prices(
+        {
+            "PriceTier1": "500.00",
+            "PriceTier2": "400.00",
+            "PriceTier3": "450.00",
+            "PriceTier4": "1150.00",
+        }
+    )
+    assert prices.stockist_ex_vat == Decimal("500.00")
+    assert prices.wholesale_ex_vat == Decimal("400.00")
+    assert prices.decorator_ex_vat == Decimal("450.00")
+    assert prices.retail_ex_vat == Decimal("1000.00")
+
+
+@pytest.mark.no_db
+def test_cin7_retail_1150_inc_vat_stores_1000_ex_vat() -> None:
+    prices = named_sku_prices({"PriceTier4": "1150"})
+    assert prices.retail_ex_vat == Decimal("1000.00")
+
+
+@pytest.mark.no_db
+def test_cin7_stockist_1150_is_not_stripped_of_vat() -> None:
+    prices = named_sku_prices({"PriceTier1": "1150.00"})
+    assert prices.stockist_ex_vat == Decimal("1150.00")
+    assert prices.retail_ex_vat is None
+
+
+@pytest.mark.no_db
+def test_cin7_blank_and_zero_tiers_are_absent() -> None:
+    prices = named_sku_prices(
+        {
+            "PriceTier1": "",
+            "PriceTier2": "0.00",
+            "PriceTier3": "0",
+            "PriceTier4": "",
+        }
+    )
+    assert prices.stockist_ex_vat is None
+    assert prices.wholesale_ex_vat is None
+    assert prices.decorator_ex_vat is None
+    assert prices.retail_ex_vat is None
+
+
+@pytest.mark.no_db
+def test_cin7_retail_rounds_half_up_to_the_cent() -> None:
+    prices = named_sku_prices({"PriceTier4": "2500.00"})
+    assert prices.retail_ex_vat == Decimal("2173.91")
+
+
+@pytest.mark.no_db
+@pytest.mark.asyncio
+async def test_classification_selects_the_sku_tier() -> None:
+    from app.services.pricing import resolve_unit_price
+
+    sku = Sku(
+        our_ref="TIER",
+        our_barcode="TIER-BAR",
+        name="Tier chair",
+        design="tier",
+        fabric="-",
+        stockist_ex_vat=Decimal("10.00"),
+        wholesale_ex_vat=Decimal("30.00"),
+        decorator_ex_vat=Decimal("20.00"),
+        retail_ex_vat=Decimal("40.00"),
+    )
+    retail_customer = Customer(
+        name="Walk in",
+        customer_type="retail",
+        price_classification="Retail",
+        price_tier="Stockist",
+        price_list_id=None,
+    )
+    decorator = Customer(
+        name="Trade house",
+        customer_type="trade",
+        price_classification="Decorator",
+        price_tier="ignored",
+        price_list_id=None,
+    )
+    assert await resolve_unit_ex_vat(None, sku, retail_customer) == Decimal("40.00")  # type: ignore[arg-type]
+    resolved = await resolve_unit_price(None, sku, decorator)
+    assert resolved.unit_ex_vat == Decimal("20.00")
+    assert resolved.warning is None
+    missing = Customer(
+        name="Stockist",
+        customer_type="trade",
+        price_classification="Stockist",
+        price_list_id=None,
+    )
+    bare = Sku(
+        our_ref="BARE",
+        our_barcode="BARE-BAR",
+        name="Bare",
+        design="tier",
+        fabric="-",
+        wholesale_ex_vat=Decimal("5.00"),
+        retail_ex_vat=Decimal("40.00"),
+    )
+    fallback = await resolve_unit_price(None, bare, missing)
+    assert fallback.unit_ex_vat == Decimal("40.00")
+    assert fallback.warning is not None
+    assert "Stockist price is missing" in fallback.warning
+
+
+@pytest.mark.no_db
 def test_database_url_guard_refuses_marrow_and_remote_without_develop_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -454,14 +576,31 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     assert chair.our_barcode == "CIN7-CHAIR-1"
     assert chair.design == "cin7:CHAIR-1"
     assert chair.fabric == "-"
-    assert chair.retail_ex_vat == Decimal("100.00")
+    assert chair.stockist_ex_vat == Decimal("100.00")
     assert chair.wholesale_ex_vat == Decimal("80.00")
+    assert chair.decorator_ex_vat == Decimal("70.00")
+    # Cin7 retail R1150 includes 15% VAT. Stored ex VAT is 1150 / 1.15.
+    assert chair.retail_ex_vat == Decimal("1000.00")
+    retail_list = (
+        await async_db.execute(select(PriceList).where(PriceList.name == "Cin7 Retail"))
+    ).scalar_one()
+    retail_item = (
+        await async_db.execute(
+            select(PriceListItem).where(
+                PriceListItem.price_list_id == retail_list.id,
+                PriceListItem.sku_id == chair.id,
+            )
+        )
+    ).scalar_one()
+    assert retail_item.unit_ex_vat == Decimal("1000.00")
     assert chair.reorder_min == 2
     assert chair.carton_count == 1
     assert chair.preferred_supplier_id is not None
 
     lamp = (await async_db.execute(select(Sku).where(Sku.our_ref == "LAMP-1"))).scalar_one()
     vase = (await async_db.execute(select(Sku).where(Sku.our_ref == "VASE-1"))).scalar_one()
+    assert lamp.decorator_ex_vat is None
+    assert lamp.retail_ex_vat is None
     assert lamp.our_barcode == "SHARED"
     assert vase.our_barcode.startswith("CIN7-")
     assert lamp.carton_count == 2

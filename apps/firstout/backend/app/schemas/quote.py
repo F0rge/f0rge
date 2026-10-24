@@ -14,6 +14,10 @@ class QuoteLineCreate(BaseModel):
     sku_id: uuid.UUID
     qty: int = Field(gt=0)
     notes: Optional[str] = None
+    # Staff override. Omitted on an existing line keeps that line's price until a confirmed reprice.
+    unit_ex_vat: Optional[Decimal] = Field(default=None, gt=0)
+    # Percent off the line total. Omitted means no discount. Does not change unit_ex_vat.
+    discount_percent: Decimal = Field(default=Decimal("0"), ge=0, le=100)
 
 
 class QuoteCreate(BaseModel):
@@ -46,8 +50,10 @@ class QuoteLineResponse(BaseModel):
     name: str
     qty: int
     unit_ex_vat: Decimal
+    discount_percent: Decimal
     description: str
     notes: Optional[str]
+    price_warning: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -79,6 +85,7 @@ class QuoteResponse(BaseModel):
     vat_amount: Decimal
     total_inc_vat: Decimal
     notes: Optional[str]
+    prices_include_vat: bool
     lines: list[QuoteLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime
