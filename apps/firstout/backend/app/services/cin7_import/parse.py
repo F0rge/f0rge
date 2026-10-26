@@ -85,6 +85,54 @@ def named_sku_prices(row: dict[str, str]) -> NamedSkuPrices:
     )
 
 
+def _odd_price_detail(amount: Decimal, includes_vat: bool) -> Optional[str]:
+    """A positive stored price that is still not a usable tier amount.
+
+    Amounts below 1 are placeholders (0.01, 0.87). Retail includes 15% VAT;
+    a figure that does not survive inc-to-ex and back to the same cent is odd.
+    """
+    reasons: list[str] = []
+    if amount < 1:
+        reasons.append("price is below 1")
+    if includes_vat:
+        ex_vat = inc_to_ex(amount)
+        restored = (ex_vat * Decimal("1.15")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if restored != amount:
+            reasons.append("including VAT does not round-trip to the same cent")
+    if not reasons:
+        return None
+    return "; ".join(reasons)
+
+
+def price_warnings(row: dict[str, str]) -> list[dict[str, str]]:
+    """Missing or odd named-tier prices. Does not change the stored amount."""
+    code = row.get("ProductCode", "").strip()
+    found: list[dict[str, str]] = []
+    for tier, name, includes_vat in NAMED_PRICE_TIERS:
+        amount = money(row.get(f"PriceTier{tier}"))
+        if amount is None or amount <= 0:
+            found.append(
+                {
+                    "kind": "missing_tier",
+                    "product_code": code,
+                    "tier": name,
+                    "detail": f"PriceTier{tier} has no positive price",
+                }
+            )
+            continue
+        detail = _odd_price_detail(amount, includes_vat)
+        if detail:
+            found.append(
+                {
+                    "kind": "odd_price",
+                    "product_code": code,
+                    "tier": name,
+                    "detail": detail,
+                }
+            )
+    return found
+
+
 def money(value: object, places: str = "0.01") -> Optional[Decimal]:
     if value is None:
         return None
@@ -219,6 +267,33 @@ def assign_barcodes(
         claimed.add(chosen)
         assigned[code] = (chosen, generated)
     return assigned
+
+
+def generated_barcode_rows(
+    pairs: list[tuple[str, str]],
+    assigned: dict[str, tuple[str, bool]],
+) -> list[dict[str, str]]:
+    """SKUs ``assign_barcodes`` would rewrite, with blank or shared as the reason.
+
+    Reads the assignment. Does not choose a different barcode.
+    """
+    last_raw: dict[str, str] = {}
+    for code, raw in sorted(pairs, key=lambda item: item[0]):
+        last_raw[code] = raw.strip()
+    rows: list[dict[str, str]] = []
+    for code in sorted(assigned):
+        chosen, was_generated = assigned[code]
+        if not was_generated:
+            continue
+        raw = last_raw.get(code, "")
+        rows.append(
+            {
+                "product_code": code,
+                "reason": "blank" if raw == "" else "shared",
+                "generated_barcode": chosen,
+            }
+        )
+    return rows
 
 
 def _generated_barcode(code: str, claimed: set[str]) -> str:

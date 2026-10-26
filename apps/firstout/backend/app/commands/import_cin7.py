@@ -9,6 +9,8 @@ that look like Marrow.
 
     python -m app.commands.import_cin7 --export-dir /path/to/cin7
     python -m app.commands.import_cin7 --export-dir /path/to/cin7 --commit
+
+The admin UI at ``/cin7-import`` calls the same ``run_import`` service.
 """
 
 from __future__ import annotations

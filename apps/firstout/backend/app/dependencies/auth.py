@@ -46,6 +46,7 @@ from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
 from app.services.bank_rules import BankRuleService
 from app.services.catalogue_imports import CatalogueImportService
+from app.services.cin7_import_jobs import Cin7ImportJobService
 from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
@@ -236,6 +237,12 @@ def get_catalogue_import_service(
     db: AsyncSession = Depends(get_db),
 ) -> CatalogueImportService:
     return CatalogueImportService(db)
+
+
+def get_cin7_import_job_service(
+    db: AsyncSession = Depends(get_db),
+) -> Cin7ImportJobService:
+    return Cin7ImportJobService(db)
 
 
 def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:

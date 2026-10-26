@@ -37,6 +37,7 @@ from app.routers import (
     books_events,
     books_periods,
     catalogue_imports,
+    cin7_imports,
     category_maps,
     comms,
     customer_portal,
@@ -258,6 +259,7 @@ app.include_router(skus.skus_router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
+app.include_router(cin7_imports.cin7_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)

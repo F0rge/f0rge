@@ -37,13 +37,16 @@ from app.models.tax_rule import TaxRule
 from app.services.cin7_import.parse import (
     as_bool,
     assign_barcodes,
+    generated_barcode_rows,
     carton_count,
     clip,
     find_file,
     integral_qty,
     money,
+    NamedSkuPrices,
     named_sku_prices,
     parse_date,
+    price_warnings,
     read_csv_records,
     read_xlsx_all,
     reorder_min,
@@ -131,6 +134,32 @@ def _dec_eq(left: Optional[Decimal], right: Optional[Decimal]) -> bool:
     if left is None or right is None:
         return False
     return Decimal(left) == Decimal(right)
+
+
+def _note_price_changes(
+    report: ImportReport,
+    current: Optional[Sku],
+    prices: NamedSkuPrices,
+) -> None:
+    """Count tier prices that would change. A new SKU counts each price it sets."""
+    pairs = (
+        ("stockist", None if current is None else current.stockist_ex_vat, prices.stockist_ex_vat),
+        (
+            "wholesale",
+            None if current is None else current.wholesale_ex_vat,
+            prices.wholesale_ex_vat,
+        ),
+        (
+            "decorator",
+            None if current is None else current.decorator_ex_vat,
+            prices.decorator_ex_vat,
+        ),
+        ("retail", None if current is None else current.retail_ex_vat, prices.retail_ex_vat),
+    )
+    for tier, old, new in pairs:
+        changed = new is not None if current is None else not _dec_eq(old, new)
+        if changed:
+            report.price_changes[tier] = report.price_changes.get(tier, 0) + 1
 
 
 def _group(rows: list[dict[str, str]], column: str) -> list[tuple[str, list[dict[str, str]]]]:
@@ -785,6 +814,7 @@ class Cin7Loader:
         generated = sum(1 for _code, (_barcode, was_generated) in assigned.items() if was_generated)
         if generated:
             result.note("barcode generated because it was blank or duplicated", generated)
+        self.report.barcode_replacements = generated_barcode_rows(pairs, assigned)
         designs = {
             (row.design.lower(), row.fabric.lower()): row.our_ref for row in existing.values()
         }
@@ -800,6 +830,7 @@ class Cin7Loader:
         }
         for code in sorted(by_code):
             row = by_code[code]
+            self.report.warnings.extend(price_warnings(row))
             barcode, _generated = assigned[code]
             name = clip(row.get("Name"), 255) or code
             category = clip(row.get("Category"), 64)
@@ -838,6 +869,7 @@ class Cin7Loader:
                 existing[code] = current
                 designs[(design.lower(), fabric.lower())] = code
                 result.created += 1
+                _note_price_changes(self.report, None, prices)
             else:
                 same = (
                     current.name == name
@@ -856,6 +888,7 @@ class Cin7Loader:
                 if same:
                     result.unchanged += 1
                 else:
+                    _note_price_changes(self.report, current, prices)
                     current.name = name
                     current.category = category
                     current.supplier_ref = supplier_ref
