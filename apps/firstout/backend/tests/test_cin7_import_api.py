@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
 import io
+import logging
+import os
 import stat
 import uuid
 import zipfile
@@ -13,9 +16,12 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.cin7_import_run import Cin7ImportRunCRUD
 from app.models.cin7_import_run import Cin7ImportRun
 from app.models.sku import Sku
 from app.models.user import User
+from app.services.cin7_import_jobs import Cin7ImportJobService
+from app.services.object_storage import save_bytes
 from app.services.cin7_import.archive import (
     MAX_UPLOAD_BYTES,
     MIN_UPLOAD_LIMIT_BYTES,
@@ -31,11 +37,25 @@ from tests.conftest import OWNER_EMAIL
 from tests.test_cin7_import import _fixture_dir
 from tests.test_records_api import _login_as
 
-PRICE_FIXTURE = Path(__file__).parent / "fixtures" / "cin7_inventory_prices.csv"
-# Counted by price_warnings on the trimmed InventoryList (price columns only).
-PRICE_FIXTURE_ROWS = 4964
-PRICE_FIXTURE_MISSING = 878
-PRICE_FIXTURE_ODD = 749
+# Invented prices. Missing cells, amounts below 1, and a retail figure that does
+# not survive inc-to-ex and back (100.01 -> 100.02). Not a real catalogue.
+PRICE_FIXTURE_CSV = """ProductCode,PriceTier1,PriceTier2,PriceTier3,PriceTier4
+TEST-001,100.00,80.00,70.00,1150.00
+TEST-002,0,80.00,70.00,1150.00
+TEST-003,100.00,,70.00,1150.00
+TEST-004,100.00,80.00,0,1150.00
+TEST-005,100.00,80.00,70.00,
+TEST-006,0.50,80.00,70.00,1150.00
+TEST-007,100.00,0.01,70.00,1150.00
+TEST-008,100.00,80.00,70.00,0.40
+TEST-009,100.00,80.00,70.00,100.01
+TEST-010,0,0,0,0
+TEST-011,10.00,20.00,30.00,11.50
+TEST-012,100.00,80.00,0.87,1150.00
+"""
+PRICE_FIXTURE_ROWS = 12
+PRICE_FIXTURE_MISSING = 8
+PRICE_FIXTURE_ODD = 5
 
 
 @pytest.fixture(autouse=True)
@@ -319,23 +339,31 @@ def test_zip_rejects_traversal_symlink_and_bomb(tmp_path: Path) -> None:
 
 @pytest.mark.no_db
 def test_sample_price_fixture_parses(tmp_path: Path) -> None:
-    rows, _shifted = read_csv_records(PRICE_FIXTURE)
+    fixture = tmp_path / "prices.csv"
+    fixture.write_text(PRICE_FIXTURE_CSV, encoding="utf-8")
+    rows, _shifted = read_csv_records(fixture)
     assert len(rows) == PRICE_FIXTURE_ROWS
+    assert rows[0]["ProductCode"] == "TEST-001"
     warnings = [item for row in rows for item in price_warnings(row)]
     missing = sum(1 for item in warnings if item["kind"] == "missing_tier")
     odd = sum(1 for item in warnings if item["kind"] == "odd_price")
     assert missing == PRICE_FIXTURE_MISSING
     assert odd == PRICE_FIXTURE_ODD
-    assert missing > 800
+    assert any(
+        item["product_code"] == "TEST-009" and "round-trip" in item["detail"] for item in warnings
+    )
+    assert any(
+        item["product_code"] == "TEST-006" and item["kind"] == "odd_price" for item in warnings
+    )
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.write(PRICE_FIXTURE, "cin7-export/InventoryList.csv")
+        archive.write(fixture, "cin7-export/InventoryList.csv")
     dest = tmp_path / "sample"
     extract_zip(buffer.getvalue(), dest)
     extracted, _shifted = read_csv_records(locate_export_dir(dest) / "InventoryList.csv")
     assert len(extracted) == PRICE_FIXTURE_ROWS
-    assert extracted[0]["ProductCode"] == rows[0]["ProductCode"]
+    assert extracted[0]["ProductCode"] == "TEST-001"
 
 
 @pytest.mark.no_db
@@ -345,3 +373,122 @@ def test_loose_files_pack_to_a_stable_hash() -> None:
     assert first == second
     with pytest.raises(ValidationError, match="not a csv"):
         pack_export_files([("notes.txt", b"nope")])
+
+
+def _stored(name: str, payload: bytes) -> str:
+    return save_bytes(f"cin7-imports/{name}.zip", payload)
+
+
+def _audit_row(owner: User, **overrides: object) -> Cin7ImportRun:
+    values: dict[str, object] = {
+        "user_id": owner.id,
+        "user_email": owner.email,
+        "file_sha256": "c" * 64,
+        "file_name": "export.zip",
+        "storage_key": None,
+        "mode": "dry_run",
+        "status": "completed",
+        "summary": {},
+        "warnings": [],
+        "errors": [],
+        "warning_count": 0,
+        "error_count": 0,
+        "barcode_replacements": [],
+        "active_lock": None,
+    }
+    values.update(overrides)
+    return Cin7ImportRun(**values)
+
+
+async def test_startup_fails_abandoned_jobs_and_purges_uploads(
+    async_db: AsyncSession, caplog: pytest.LogCaptureFixture
+) -> None:
+    owner = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
+    assert owner is not None
+    running_file = _stored("running", b"running")
+    queued_file = _stored("queued", b"queued")
+    failed_file = _stored("failed", b"failed")
+    kept_file = _stored("kept", b"kept")
+    old_file = _stored("old", b"old")
+    running = _audit_row(
+        owner,
+        file_sha256="d" * 64,
+        status="running",
+        storage_key=running_file,
+        active_lock=True,
+    )
+    queued = _audit_row(
+        owner,
+        file_sha256="e" * 64,
+        status="queued",
+        storage_key=queued_file,
+        active_lock=None,
+    )
+    failed = _audit_row(
+        owner,
+        file_sha256="f" * 64,
+        status="failed",
+        storage_key=failed_file,
+        error_count=1,
+        errors=[{"message": "InventoryList file not found"}],
+    )
+    kept = _audit_row(owner, file_sha256="1" * 64, storage_key=kept_file)
+    shared = _audit_row(
+        owner,
+        file_sha256="1" * 64,
+        mode="commit",
+        status="failed",
+        storage_key=kept_file,
+        error_count=1,
+        errors=[{"message": "boom"}],
+    )
+    old = _audit_row(
+        owner,
+        file_sha256="2" * 64,
+        storage_key=old_file,
+        created_at=datetime.datetime.utcnow() - datetime.timedelta(days=8),
+    )
+    async_db.add_all([running, queued, failed, kept, shared, old])
+    await async_db.flush()
+    running_id, queued_id = running.id, queued.id
+    failed_id, kept_id = failed.id, kept.id
+    shared_id, old_id = shared.id, old.id
+
+    with caplog.at_level(logging.WARNING, logger="app.services.cin7_import_jobs"):
+        await Cin7ImportJobService(async_db).recover_on_startup()
+
+    async_db.expire_all()
+    assert "interrupted by restart" in caplog.text
+    for row_id in (running_id, queued_id):
+        fresh = await async_db.get(Cin7ImportRun, row_id)
+        assert fresh is not None
+        assert fresh.status == "failed"
+        assert fresh.active_lock is None
+        assert fresh.errors == [{"message": "interrupted by restart"}]
+        assert fresh.storage_key is None
+    assert not os.path.exists(running_file)
+    assert not os.path.exists(queued_file)
+    assert not os.path.exists(failed_file)
+    failed_fresh = await async_db.get(Cin7ImportRun, failed_id)
+    assert failed_fresh is not None and failed_fresh.storage_key is None
+    kept_fresh = await async_db.get(Cin7ImportRun, kept_id)
+    assert kept_fresh is not None and kept_fresh.storage_key == kept_file
+    assert os.path.exists(kept_file)
+    shared_fresh = await async_db.get(Cin7ImportRun, shared_id)
+    assert shared_fresh is not None and shared_fresh.storage_key is None
+    old_fresh = await async_db.get(Cin7ImportRun, old_id)
+    assert old_fresh is not None and old_fresh.storage_key is None
+    assert not os.path.exists(old_file)
+
+
+async def test_busy_lock_rejects_a_second_upload_without_waiting(
+    owner_client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _refuse_lock(self: Cin7ImportRunCRUD) -> bool:
+        return False
+
+    monkeypatch.setattr(Cin7ImportRunCRUD, "try_lock", _refuse_lock)
+    data = _zip_dir(_fixture_dir(tmp_path / "export"))
+    response = await owner_client.post("/api/v1/cin7-imports", files=_upload(data))
+    assert response.status_code == 409
+    assert response.json()["detail"] == "A Cin7 import is already running"

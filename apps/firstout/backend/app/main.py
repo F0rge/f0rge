@@ -80,6 +80,7 @@ from app.routers import (
     whatsapp_webhook,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
+from app.services.cin7_import_jobs import Cin7ImportJobService
 from app.services.locations import LocationSeedService
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
@@ -136,6 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
         await PlaygroundSeedService(session).seed_if_enabled()
+        await Cin7ImportJobService(session).recover_on_startup()
     stop = asyncio.Event()
     ticker: Optional[asyncio.Task] = None
     if settings.payment_reminder_ticker:

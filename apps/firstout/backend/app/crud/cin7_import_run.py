@@ -34,6 +34,29 @@ class Cin7ImportRunCRUD:
             text("SELECT pg_advisory_xact_lock(:key)"), {"key": ADVISORY_LOCK_KEY}
         )
 
+    async def try_lock(self) -> bool:
+        """Take the import lock without waiting. False means another transaction holds it."""
+        locked = await self.db.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:key)"),
+            {"key": ADVISORY_LOCK_KEY},
+        )
+        return bool(locked)
+
+    async def interrupt_in_flight(self, now: datetime.datetime) -> int:
+        result = await self.db.execute(
+            update(Cin7ImportRun)
+            .where(Cin7ImportRun.status.in_(("queued", "running")))
+            .values(
+                status="failed",
+                active_lock=None,
+                finished_at=now,
+                error_count=1,
+                errors=[{"message": "interrupted by restart"}],
+                updated_at=now,
+            )
+        )
+        return int(result.rowcount or 0)
+
     async def active_id(self) -> Optional[uuid.UUID]:
         return await self.db.scalar(
             select(Cin7ImportRun.id).where(Cin7ImportRun.active_lock.is_(True)).limit(1)
@@ -50,13 +73,9 @@ class Cin7ImportRunCRUD:
             .limit(1)
         )
 
-    async def expired_uploads(self, cutoff: datetime.datetime) -> list[Cin7ImportRun]:
+    async def stored_uploads(self) -> list[Cin7ImportRun]:
         result = await self.db.scalars(
-            select(Cin7ImportRun).where(
-                Cin7ImportRun.storage_key.is_not(None),
-                Cin7ImportRun.active_lock.is_(None),
-                Cin7ImportRun.created_at < cutoff,
-            )
+            select(Cin7ImportRun).where(Cin7ImportRun.storage_key.is_not(None))
         )
         return list(result.all())
 

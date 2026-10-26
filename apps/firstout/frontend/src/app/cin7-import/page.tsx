@@ -1,4 +1,3 @@
-// Superdesign CLI is not installed in this environment. The page uses Carbon.
 "use client";
 
 import {

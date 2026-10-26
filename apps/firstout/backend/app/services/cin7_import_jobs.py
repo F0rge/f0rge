@@ -56,6 +56,14 @@ def _now() -> datetime.datetime:
     return datetime.datetime.utcnow()
 
 
+def _purge_candidate(row: Cin7ImportRun, cutoff: datetime.datetime) -> bool:
+    if row.active_lock is True or not row.storage_key:
+        return False
+    if row.status == "failed":
+        return True
+    return row.created_at < cutoff
+
+
 def _safe_message(exc: BaseException) -> str:
     text = str(exc).replace("\n", " ").strip() or exc.__class__.__name__
     return text[:500]
@@ -224,9 +232,10 @@ class Cin7ImportJobService:
     ) -> None:
         try:
             async with unit_of_work(self.db):
-                await self.crud.acquire_lock()
-                await self._purge_expired()
+                if not await self.crud.try_lock():
+                    raise ConflictError("A Cin7 import is already running")
                 await self.crud.fail_stale(_now() - STALE_AFTER)
+                await self._purge_uploads()
                 if await self.crud.active_id() is not None:
                     raise ConflictError("A Cin7 import is already running")
                 email = await self.db.scalar(select(User.email).where(User.id == user_id))
@@ -284,7 +293,7 @@ class Cin7ImportJobService:
             data = await asyncio.to_thread(read_bytes, storage_key)
             with tempfile.TemporaryDirectory(prefix="cin7-import-") as tmp:
                 root = Path(tmp)
-                extract_zip(data, root)
+                await asyncio.to_thread(extract_zip, data, root)
                 export_dir = locate_export_dir(root)
                 report = await run_import(self.db, export_dir)
                 if find_file(export_dir, "InventoryList", ".csv") is None:
@@ -362,25 +371,46 @@ class Cin7ImportJobService:
         await asyncio.to_thread(_delete_quiet, storage_key)
         await self.crud.clear_storage(storage_key)
 
-    async def _purge_expired(self) -> None:
+    async def recover_on_startup(self) -> None:
+        """Fail jobs a restart abandoned, then drop uploads we no longer keep."""
+        async with unit_of_work(self.db):
+            interrupted = await self.crud.interrupt_in_flight(_now())
+            if interrupted:
+                logger.warning(
+                    "cin7 import interrupted by restart (%s job(s))",
+                    interrupted,
+                )
+            self.db.expire_all()
+            await self._purge_uploads()
+
+    async def _purge_uploads(self) -> None:
+        """Delete uploads older than 7 days, and any upload of a failed run.
+
+        A file still referenced by a live dry run stays, so a failed commit of
+        that same file can be retried.
+        """
         cutoff = _now() - RETENTION
-        expired = await self.crud.expired_uploads(cutoff)
-        active = await self.db.scalars(
-            select(Cin7ImportRun.storage_key).where(
-                Cin7ImportRun.active_lock.is_(True),
-                Cin7ImportRun.storage_key.is_not(None),
-            )
-        )
-        in_use = {key for key in active.all() if key}
-        freed: set[str] = set()
-        for row in expired:
+        rows = await self.crud.stored_uploads()
+        keepers: set[str] = set()
+        candidates: list[Cin7ImportRun] = []
+        for row in rows:
             key = row.storage_key
-            if not key or key in in_use:
+            if not key:
                 continue
-            if key not in freed:
+            if _purge_candidate(row, cutoff):
+                candidates.append(row)
+            else:
+                keepers.add(key)
+        freed: set[str] = set()
+        for row in candidates:
+            key = row.storage_key
+            if not key:
+                continue
+            if key not in keepers and key not in freed:
                 await asyncio.to_thread(_delete_quiet, key)
                 freed.add(key)
-            row.storage_key = None
+            if key not in keepers or row.status == "failed":
+                row.storage_key = None
 
     async def _read_upload(
         self,
@@ -392,13 +422,13 @@ class Cin7ImportJobService:
             raise ValidationError("Choose a Cin7 export zip or the export files")
         if len(uploads) == 1 and uploads[0].filename.lower().endswith(".zip"):
             data = await self._read_limited(uploads[0])
-            validate_zip(data)
+            await asyncio.to_thread(validate_zip, data)
             return data, Path(uploads[0].filename).name
         named: list[tuple[str, bytes]] = []
         for item in uploads:
             payload = await self._read_limited(item)
             named.append((Path(item.filename).name, payload))
-        data = pack_export_files(named)
+        data = await asyncio.to_thread(pack_export_files, named)
         return data, "cin7-export.zip"
 
     async def _read_limited(self, upload: UploadFile) -> bytes:
