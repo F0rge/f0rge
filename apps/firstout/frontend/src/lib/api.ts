@@ -1162,6 +1162,68 @@ export function commitCatalogueImport(formData: FormData): Promise<CatalogueImpo
   return apiUpload<CatalogueImportCommit>("/imports/commit", formData);
 }
 
+export type Cin7EntityCounts = {
+  created: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+};
+
+export type Cin7ImportSummary = {
+  entities: Record<string, Cin7EntityCounts>;
+  price_changes: Record<string, number>;
+  generated_barcodes: number;
+  generated_barcodes_blank: number;
+  generated_barcodes_shared: number;
+};
+
+export type Cin7ImportRun = {
+  id: string;
+  created_at: string;
+  finished_at: string | null;
+  user_id: string;
+  user_email: string;
+  file_sha256: string;
+  file_name: string;
+  mode: "dry_run" | "commit";
+  status: "queued" | "running" | "completed" | "failed";
+  dry_run_id: string | null;
+  summary: Cin7ImportSummary;
+  warning_count: number;
+  error_count: number;
+};
+
+export function listCin7Imports(): Promise<Cin7ImportRun[]> {
+  return apiFetch<Cin7ImportRun[]>("/cin7-imports");
+}
+
+export function getCin7Import(id: string): Promise<Cin7ImportRun> {
+  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}`);
+}
+
+export function startCin7Import(formData: FormData): Promise<Cin7ImportRun> {
+  return apiUpload<Cin7ImportRun>("/cin7-imports", formData);
+}
+
+export function commitCin7Import(id: string, fileSha256: string): Promise<Cin7ImportRun> {
+  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}/commit`, {
+    method: "POST",
+    body: JSON.stringify({ file_sha256: fileSha256 }),
+  });
+}
+
+export function downloadCin7Warnings(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/warnings.csv`, "cin7-import-warnings.csv");
+}
+
+export function downloadCin7Errors(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/errors.csv`, "cin7-import-errors.csv");
+}
+
+export function downloadCin7Barcodes(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/barcodes.csv`, "cin7-import-barcodes.csv");
+}
+
 export type PurchaseOrderStatus =
   | "pending_approval"
   | "rejected"

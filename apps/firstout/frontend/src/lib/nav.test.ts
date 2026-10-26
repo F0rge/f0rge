@@ -40,6 +40,7 @@ describe("nav path helpers", () => {
 
   it("groups admin and books paths", () => {
     expect(isAdminPath("/settings")).toBe(true);
+    expect(isAdminPath("/cin7-import")).toBe(true);
     expect(isAdminPath("/users")).toBe(true);
     expect(isAdminPath("/audit")).toBe(true);
     expect(isBooksPath("/invoices/abc")).toBe(true);

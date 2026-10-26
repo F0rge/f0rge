@@ -609,6 +609,8 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 
 `uv run --project apps/firstout/backend python -m app.commands.import_cin7 --export-dir <dir> [--commit]` loads a Cin7 Core full export. Dry-run is the default. It upserts on natural keys (SKU, customer/supplier name, document number), so a second run of the same export changes nothing. A non-local `DATABASE_URL` needs `FIRSTOUT_CIN7_IMPORT_TARGET=firstout` (Firstout is main-only). Never commit the export: it holds customer PII. Tests use fake fixtures.
 
+Admins can run the same loader in the app. `POST /api/v1/cin7-imports` (multipart `file` zip, or `files` for the export folder) starts a dry run and returns the job. `GET /api/v1/cin7-imports/{id}` is the status poll. Commit is `POST /api/v1/cin7-imports/{id}/commit` with `{ "file_sha256" }` and is allowed only for a completed dry run of that hash with zero errors, when nothing has been imported since. One job at a time. The audit table is migration `077_cin7_import_runs`. Auth is `users.manage` (`require_owner`: the owner preset, or a custom role with that key). Anonymous is 401; any other signed-in role is 403. The summary includes `generated_barcodes`, `generated_barcodes_blank`, and `generated_barcodes_shared`. `GET /cin7-imports/{id}/barcodes.csv` lists each affected SKU with reason `blank` or `shared`. Barcode assignment is unchanged: blank and shared barcodes still become `CIN7-{ProductCode}`, and the lowest product code keeps a shared barcode. UI: `/cin7-import` (Admin nav). Uploads stay in private object storage (`cin7-imports/{id}.zip`) and are deleted after a successful commit, when the run fails, or after 7 days. API startup marks queued or running jobs failed (`interrupted by restart`) and purges those uploads, so a restart does not leave the one-job lock held. A second upload while a job holds the lock returns 409 without waiting. No new environment variables.
+
 - Workbook names may use spaces or underscores (`Sale Documents_ALLTIME.xlsx`). Only the `All` sheet is read.
 - Customers and suppliers that appear only on documents are created as stubs before contacts, SKUs, and documents.
 - Every address and contact row goes to `customer_addresses`, `customer_contacts`, `supplier_addresses`, and `supplier_contacts`, keyed by a content hash (`natural_key`). The default contact and billing address are also copied onto the customer row.
@@ -691,6 +693,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
+| `/cin7-import` | `/cin7-imports` |
 | `/returns` | `/returns` |
 | `/laybys` | `/laybys` |
 | `/customers` | `/customers` |

@@ -32,6 +32,10 @@ class ImportReport:
     customer_rows_realigned: int = 0
     supplier_rows_realigned: int = 0
     assumptions: list[str] = field(default_factory=list)
+    price_changes: dict[str, int] = field(default_factory=dict)
+    warnings: list[dict[str, str]] = field(default_factory=list)
+    errors: list[dict[str, str]] = field(default_factory=list)
+    barcode_replacements: list[dict[str, str]] = field(default_factory=list)
 
     def entity(self, name: str) -> EntityResult:
         if name not in self.entities:
@@ -64,6 +68,14 @@ def format_report(report: ImportReport) -> str:
         f"customer rows realigned: {report.customer_rows_realigned}; "
         f"supplier rows realigned: {report.supplier_rows_realigned}"
     )
+    if report.price_changes:
+        lines.append("")
+        lines.append("price changes")
+        for tier, count in report.price_changes.items():
+            lines.append(f"  {tier}: {count}")
+    if report.warnings or report.errors:
+        lines.append("")
+        lines.append(f"warnings: {len(report.warnings)}; errors: {len(report.errors)}")
     if report.assumptions:
         lines.append("")
         lines.append("assumptions")

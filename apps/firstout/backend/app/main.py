@@ -37,6 +37,7 @@ from app.routers import (
     books_events,
     books_periods,
     catalogue_imports,
+    cin7_imports,
     category_maps,
     comms,
     customer_portal,
@@ -79,6 +80,7 @@ from app.routers import (
     whatsapp_webhook,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
+from app.services.cin7_import_jobs import Cin7ImportJobService
 from app.services.locations import LocationSeedService
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
@@ -135,6 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
         await PlaygroundSeedService(session).seed_if_enabled()
+        await Cin7ImportJobService(session).recover_on_startup()
     stop = asyncio.Event()
     ticker: Optional[asyncio.Task] = None
     if settings.payment_reminder_ticker:
@@ -258,6 +261,7 @@ app.include_router(skus.skus_router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
+app.include_router(cin7_imports.cin7_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)

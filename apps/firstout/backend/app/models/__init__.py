@@ -77,6 +77,7 @@ from app.models.tax_rule import TaxRule
 from app.models.team_settings import TeamSettings
 from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
+from app.models.cin7_import_run import Cin7ImportRun
 from app.models.team import Team
 from app.models.archive_credit_note import ArchiveCreditNote, ArchiveCreditNoteLine
 from app.models.cin7_party import (
@@ -147,6 +148,7 @@ __all__ = [
     "PaymentDirection",
     "PaymentReminderSend",
     "PaymentTerm",
+    "Cin7ImportRun",
     "ArchiveCreditNote",
     "ArchiveCreditNoteLine",
     "CustomerAddress",
