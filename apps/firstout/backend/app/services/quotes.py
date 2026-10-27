@@ -419,5 +419,10 @@ class QuotesService:
             created_at=quote.created_at,
             updated_at=quote.updated_at,
         )
-        await annotate_line_warnings(self.db, response.lines, viewer_user_id=viewer_user_id)
+        await annotate_line_warnings(
+            self.db,
+            response.lines,
+            viewer_user_id=viewer_user_id,
+            prices_include_vat=quote.prices_include_vat,
+        )
         return response

@@ -21,28 +21,52 @@ from tests.test_sku_bom import _sku
 @pytest.mark.no_db
 def test_placeholder_and_below_cost_thresholds() -> None:
     placeholder = suspect_unit_price_warning(Decimal("1.00"), None, reveal_cost=True)
-    assert placeholder is not None
-    assert "R1.00 or below" in placeholder
-    retail_placeholder = suspect_unit_price_warning(Decimal("0.87"), None, reveal_cost=True)
-    assert retail_placeholder is not None
-    assert "R1.00 or below" in retail_placeholder
+    assert placeholder == (
+        "Unit price R1.00 excl. VAT is R1.00 excl. VAT or below "
+        "(R1.15 incl. VAT or less). Check this price."
+    )
+    retail_placeholder = suspect_unit_price_warning(
+        Decimal("0.87"),
+        None,
+        reveal_cost=True,
+        prices_include_vat=True,
+    )
+    assert retail_placeholder == (
+        "Unit price R1.00 incl. VAT (R0.87 excl.) is R1.00 excl. VAT or below "
+        "(R1.15 incl. VAT or less). Check this price."
+    )
 
     at_cost = suspect_unit_price_warning(Decimal("1.00"), Decimal("1.00"), reveal_cost=True)
     assert at_cost is not None
     assert "below average cost" not in at_cost
 
     below = suspect_unit_price_warning(Decimal("400.00"), Decimal("1500.00"), reveal_cost=True)
-    assert below == "Unit price R400.00 is below average cost R1500.00."
+    assert below == "Unit price R400.00 excl. VAT is below average cost R1500.00 excl. VAT."
+    retail_below = suspect_unit_price_warning(
+        Decimal("400.00"),
+        Decimal("1500.00"),
+        reveal_cost=True,
+        prices_include_vat=True,
+    )
+    assert retail_below == (
+        "Unit price R460.00 incl. VAT (R400.00 excl.) is below average cost R1500.00 excl. VAT."
+    )
 
     assert (
         suspect_unit_price_warning(Decimal("800.00"), Decimal("400.00"), reveal_cost=True) is None
     )
     assert suspect_unit_price_warning(Decimal("1.01"), Decimal("0.50"), reveal_cost=True) is None
 
-    hidden = suspect_unit_price_warning(Decimal("400.00"), Decimal("1500.00"), reveal_cost=False)
+    hidden = suspect_unit_price_warning(
+        Decimal("400.00"),
+        Decimal("1500.00"),
+        reveal_cost=False,
+        prices_include_vat=True,
+    )
     assert hidden == RESTRICTED_SUSPECT_PRICE_WARNING
     assert "1500" not in hidden
     assert "400" not in hidden
+    assert "460" not in hidden
 
 
 async def _customer(client: AsyncClient, name: str, classification: str) -> str:
@@ -94,7 +118,7 @@ async def test_quote_warns_for_placeholder_below_cost_and_a_normal_price(
     below_line = below.json()["lines"][0]
     assert Decimal(below_line["unit_ex_vat"]) == Decimal("400.00")
     assert below_line["suspect_price_warning"] == (
-        "Unit price R400.00 is below average cost R1500.00."
+        "Unit price R400.00 excl. VAT is below average cost R1500.00 excl. VAT."
     )
 
     retail_id = await _customer(owner_client, "Suspect Retail", "Retail")
@@ -105,8 +129,10 @@ async def test_quote_warns_for_placeholder_below_cost_and_a_normal_price(
     assert placeholder.status_code == 201, placeholder.text
     placeholder_line = placeholder.json()["lines"][0]
     assert Decimal(placeholder_line["unit_ex_vat"]) == Decimal("0.87")
-    assert "R1.00 or below" in placeholder_line["suspect_price_warning"]
-    assert "R1500.00" in placeholder_line["suspect_price_warning"]
+    assert placeholder_line["suspect_price_warning"] == (
+        "Unit price R1.00 incl. VAT (R0.87 excl.) is R1.00 excl. VAT or below "
+        "and below average cost R1500.00 excl. VAT."
+    )
 
     wholesale_id = await _customer(owner_client, "Suspect Wholesale", "Wholesale")
     healthy = await owner_client.post(
@@ -141,7 +167,10 @@ async def test_manual_override_still_warns_and_quote_is_not_blocked(
     assert created.status_code == 201, created.text
     line = created.json()["lines"][0]
     assert Decimal(line["unit_ex_vat"]) == Decimal("1.00")
-    assert "R1.00 or below" in line["suspect_price_warning"]
+    assert line["suspect_price_warning"] == (
+        "Unit price R1.15 incl. VAT (R1.00 excl.) is R1.00 excl. VAT or below "
+        "(R1.15 incl. VAT or less). Check this price."
+    )
 
 
 async def test_restricted_role_sees_the_warning_without_the_cost(

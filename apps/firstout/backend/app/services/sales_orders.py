@@ -778,5 +778,10 @@ class SalesOrdersService:
             created_at=order.created_at,
             updated_at=order.updated_at,
         )
-        await annotate_line_warnings(self.db, response.lines, viewer_user_id=viewer_user_id)
+        await annotate_line_warnings(
+            self.db,
+            response.lines,
+            viewer_user_id=viewer_user_id,
+            prices_include_vat=order.prices_include_vat,
+        )
         return response

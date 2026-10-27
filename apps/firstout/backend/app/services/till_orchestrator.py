@@ -378,7 +378,12 @@ class TillOrchestrator:
                 on_hand=on_hand,
             ),
         )
-        await annotate_line_warnings(self.db, sale.lines, viewer_user_id=user_id)
+        await annotate_line_warnings(
+            self.db,
+            sale.lines,
+            viewer_user_id=user_id,
+            prices_include_vat=reloaded.prices_include_vat,
+        )
         return sale
 
     async def _matching_kit_pick(

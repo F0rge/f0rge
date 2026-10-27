@@ -67,12 +67,22 @@ export const PLACEHOLDER_UNIT_EX_VAT = 1;
 export const RESTRICTED_SUSPECT_PRICE_WARNING =
   "Price looks wrong (R1 or below cost) – check with the owner";
 
+function unitPhrase(unitExVat: number, pricesIncludeVat: boolean): string {
+  if (pricesIncludeVat) {
+    const shown = formatPriceAmount(exVatToIncVat(unitExVat));
+    return `R${shown} incl. VAT (R${formatPriceAmount(unitExVat)} excl.)`;
+  }
+  return `R${formatPriceAmount(unitExVat)} excl. VAT`;
+}
+
 export function suspectUnitPriceWarning(input: {
   unitExVat: number | null;
   averageUnitCostZar: string | number | null;
   catalogueBelowCost: boolean;
   unitMatchesCatalogue: boolean;
   canViewCost: boolean;
+  /** Retail and no-customer lines display incl. VAT. Trade tiers display excl. VAT. */
+  pricesIncludeVat?: boolean;
 }): string | null {
   if (input.unitExVat === null || !Number.isFinite(input.unitExVat)) {
     return null;
@@ -96,14 +106,20 @@ export function suspectUnitPriceWarning(input: {
   if (!input.canViewCost) {
     return RESTRICTED_SUSPECT_PRICE_WARNING;
   }
-  const shown = formatPriceAmount(unit);
+  const shown = unitPhrase(unit, input.pricesIncludeVat === true);
   if (placeholder && belowCost && cost !== null) {
-    return `Unit price R${shown} is R1.00 or below and below average cost R${formatPriceAmount(cost)}.`;
+    return (
+      `Unit price ${shown} is R1.00 excl. VAT or below and below average cost ` +
+      `R${formatPriceAmount(cost)} excl. VAT.`
+    );
   }
   if (belowCost && cost !== null) {
-    return `Unit price R${shown} is below average cost R${formatPriceAmount(cost)}.`;
+    return `Unit price ${shown} is below average cost R${formatPriceAmount(cost)} excl. VAT.`;
   }
-  return "Unit price is R1.00 or below (R1.15 incl. VAT or less). Check this price.";
+  return (
+    `Unit price ${shown} is R1.00 excl. VAT or below ` +
+    "(R1.15 incl. VAT or less). Check this price."
+  );
 }
 
 type QuoteCustomer = Pick<CustomerCrm, "customer_type" | "price_list_id" | "price_classification"> | null;
@@ -341,6 +357,7 @@ export function quoteLineSuspectWarning(
   sku: Pick<Sku, "average_unit_cost_zar"> | null | undefined,
   priced: QuoteSkuPrice | null,
   canViewCost: boolean,
+  pricesIncludeVat?: boolean,
 ): string | null {
   const unit = parsePriceInput(unitExVatText);
   const catalogue = priced?.unitExVat ?? null;
@@ -352,6 +369,7 @@ export function quoteLineSuspectWarning(
     catalogueBelowCost: priced?.belowAverageCost ?? false,
     unitMatchesCatalogue: matches,
     canViewCost,
+    pricesIncludeVat: pricesIncludeVat ?? priced?.pricesIncludeVat ?? false,
   });
 }
 

@@ -16,7 +16,7 @@ from app.crud.purchase_order import LocationStockCRUD
 from app.permissions import STOCK_COST_VIEW
 from app.services.packing_sheet import sku_level_unit_cost
 from app.services.permissions import PermissionService
-from app.services.vat import CENT
+from app.services.vat import CENT, ex_to_inc
 
 # R1.00 ex VAT is R1.15 incl. VAT. A Cin7 placeholder of R1.00 ex, or R1.00 incl.
 # VAT stored as R0.87 ex, is at or under this line. R1.01 ex (R1.16 incl.) is not.
@@ -54,13 +54,25 @@ def tier_price_below_cost(amount: Optional[Decimal], average_cost: Optional[Deci
     return is_below_average_cost(amount, average_cost)
 
 
+def _unit_phrase(unit_ex_vat: Decimal, *, prices_include_vat: bool) -> str:
+    """Quote the unit in the basis the line shows. Cost stays ex VAT elsewhere."""
+    if prices_include_vat:
+        return f"R{ex_to_inc(unit_ex_vat):.2f} incl. VAT (R{unit_ex_vat:.2f} excl.)"
+    return f"R{unit_ex_vat:.2f} excl. VAT"
+
+
 def suspect_unit_price_warning(
     unit_ex_vat: Decimal,
     average_cost: Optional[Decimal],
     *,
     reveal_cost: bool,
+    prices_include_vat: bool = False,
 ) -> Optional[str]:
-    """Staff warning for one unit price. ``reveal_cost`` is ``stock.cost.view``."""
+    """Staff warning for one unit price. ``reveal_cost`` is ``stock.cost.view``.
+
+    Detection uses the ex-VAT unit. ``prices_include_vat`` only changes the
+    wording so it matches a Retail (incl. VAT) or trade (excl. VAT) line.
+    """
     unit = cents(unit_ex_vat)
     placeholder = unit <= PLACEHOLDER_UNIT_EX_VAT
     cost = cents(average_cost) if average_cost is not None else None
@@ -69,11 +81,18 @@ def suspect_unit_price_warning(
         return None
     if not reveal_cost:
         return RESTRICTED_SUSPECT_PRICE_WARNING
+    shown = _unit_phrase(unit, prices_include_vat=prices_include_vat)
     if placeholder and below_cost and cost is not None:
-        return f"Unit price R{unit:.2f} is R1.00 or below and below average cost R{cost:.2f}."
+        return (
+            f"Unit price {shown} is R1.00 excl. VAT or below and below "
+            f"average cost R{cost:.2f} excl. VAT."
+        )
     if below_cost and cost is not None:
-        return f"Unit price R{unit:.2f} is below average cost R{cost:.2f}."
-    return "Unit price is R1.00 or below (R1.15 incl. VAT or less). Check this price."
+        return f"Unit price {shown} is below average cost R{cost:.2f} excl. VAT."
+    return (
+        f"Unit price {shown} is R1.00 excl. VAT or below "
+        "(R1.15 incl. VAT or less). Check this price."
+    )
 
 
 async def average_costs_by_sku_id(
@@ -99,6 +118,7 @@ async def annotate_line_warnings(
     lines: list[_PricedLine],
     *,
     viewer_user_id: Optional[uuid.UUID],
+    prices_include_vat: bool,
 ) -> None:
     """Fill ``suspect_price_warning`` from the stored unit. Does not write the row."""
     sku_ids = [line.sku_id for line in lines if line.sku_id is not None]
@@ -110,4 +130,5 @@ async def annotate_line_warnings(
             line.unit_ex_vat,
             cost,
             reveal_cost=reveal_cost,
+            prices_include_vat=prices_include_vat,
         )

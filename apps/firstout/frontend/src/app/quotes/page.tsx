@@ -442,7 +442,13 @@ function QuotesPageInner() {
           {lines.map((line, index) => {
             const sku = skus.find((item) => item.id === line.sku_id);
             const priced = sku ? quoteSkuUnitExVat(sku, selectedCustomer, priceLists) : null;
-            const suspect = quoteLineSuspectWarning(line.unit_ex_vat, sku, priced, canViewCost);
+            const suspect = quoteLineSuspectWarning(
+              line.unit_ex_vat,
+              sku,
+              priced,
+              canViewCost,
+              showInclusive,
+            );
             return (
               <div
                 key={index}

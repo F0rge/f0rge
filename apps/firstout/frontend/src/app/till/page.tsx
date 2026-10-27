@@ -1014,6 +1014,7 @@ export default function TillPage() {
                             line.sku,
                             priced,
                             canViewCost,
+                            showInclusive,
                           );
                           const columnCount = canDiscount ? 7 : 6;
                           return (

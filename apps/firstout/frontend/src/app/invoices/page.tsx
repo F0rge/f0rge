@@ -460,6 +460,7 @@ function InvoicesPageContent() {
                   catalogueBelowCost: false,
                   unitMatchesCatalogue: false,
                   canViewCost,
+                  pricesIncludeVat: false,
                 });
                 return (
                 <div
