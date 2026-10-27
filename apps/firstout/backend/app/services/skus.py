@@ -30,6 +30,7 @@ from app.schemas.sku import (
 )
 from app.services.inventory import InventoryService
 from app.services.stock_movements import StockMovementService
+from app.services.suspect_price import average_costs_by_sku_id, tier_price_below_cost
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
 from app.services.object_storage import (
     is_remote_storage_ref,
@@ -395,6 +396,7 @@ class SkuService:
         landed_costs = await self.unit_cost_audit_crud.latest_landed_costs_by_sku_ids(sku_ids)
         supplier_names = await self.supplier_crud.names_by_ids(supplier_ids)
         kit_ids = await self.bom_crud.parent_ids_with_bom(sku_ids)
+        average_costs = await average_costs_by_sku_id(self.db, sku_ids)
 
         return [
             self._to_response(
@@ -406,6 +408,19 @@ class SkuService:
                 ),
                 last_landed_cost_zar=None if hide_cost else landed_costs.get(sku.id),
                 is_kit=sku.id in kit_ids,
+                average_unit_cost_zar=None if hide_cost else average_costs.get(sku.id),
+                stockist_below_cost=tier_price_below_cost(
+                    sku.stockist_ex_vat, average_costs.get(sku.id)
+                ),
+                wholesale_below_cost=tier_price_below_cost(
+                    sku.wholesale_ex_vat, average_costs.get(sku.id)
+                ),
+                decorator_below_cost=tier_price_below_cost(
+                    sku.decorator_ex_vat, average_costs.get(sku.id)
+                ),
+                retail_below_cost=tier_price_below_cost(
+                    sku.retail_ex_vat, average_costs.get(sku.id)
+                ),
             )
             for sku in skus
         ]
@@ -417,6 +432,11 @@ class SkuService:
         preferred_supplier_name: Optional[str] = None,
         last_landed_cost_zar: Optional[Decimal] = None,
         is_kit: bool = False,
+        average_unit_cost_zar: Optional[Decimal] = None,
+        stockist_below_cost: bool = False,
+        wholesale_below_cost: bool = False,
+        decorator_below_cost: bool = False,
+        retail_below_cost: bool = False,
     ) -> SkuResponse:
         return SkuResponse(
             id=sku.id,
@@ -446,6 +466,11 @@ class SkuService:
             decorator_inc_vat=inc_vat_or_none(sku.decorator_ex_vat),
             retail_ex_vat=sku.retail_ex_vat,
             retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            average_unit_cost_zar=average_unit_cost_zar,
+            stockist_below_cost=stockist_below_cost,
+            wholesale_below_cost=wholesale_below_cost,
+            decorator_below_cost=decorator_below_cost,
+            retail_below_cost=retail_below_cost,
             carton_count=sku.carton_count,
             is_kit=is_kit,
             created_at=sku.created_at,

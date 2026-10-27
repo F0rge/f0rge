@@ -11,6 +11,8 @@ class PriceListItemResponse(BaseModel):
     sku_id: uuid.UUID
     our_ref: str
     unit_ex_vat: Decimal
+    # True when this list price is strictly under the SKU's on-hand average cost.
+    below_average_cost: bool = False
 
 
 class PriceListResponse(BaseModel):

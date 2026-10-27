@@ -54,7 +54,73 @@ export type QuoteSkuPrice = {
   priceListName: string | null;
   warning: string | null;
   pricesIncludeVat: boolean;
+  /** The chosen catalogue or list price is strictly under average cost. */
+  belowAverageCost: boolean;
 };
+
+/**
+ * Ex-VAT unit at or under R1.00. That is R1.15 incl. VAT: a Cin7 placeholder of
+ * R1.00 ex, or R1.00 incl. VAT stored as R0.87 ex, is caught. R1.01 ex is not.
+ */
+export const PLACEHOLDER_UNIT_EX_VAT = 1;
+
+export const RESTRICTED_SUSPECT_PRICE_WARNING =
+  "Price looks wrong (R1 or below cost) – check with the owner";
+
+function unitPhrase(unitExVat: number, pricesIncludeVat: boolean): string {
+  if (pricesIncludeVat) {
+    const shown = formatPriceAmount(exVatToIncVat(unitExVat));
+    return `R${shown} incl. VAT (R${formatPriceAmount(unitExVat)} excl.)`;
+  }
+  return `R${formatPriceAmount(unitExVat)} excl. VAT`;
+}
+
+export function suspectUnitPriceWarning(input: {
+  unitExVat: number | null;
+  averageUnitCostZar: string | number | null;
+  catalogueBelowCost: boolean;
+  unitMatchesCatalogue: boolean;
+  canViewCost: boolean;
+  /** Retail and no-customer lines display incl. VAT. Trade tiers display excl. VAT. */
+  pricesIncludeVat?: boolean;
+}): string | null {
+  if (input.unitExVat === null || !Number.isFinite(input.unitExVat)) {
+    return null;
+  }
+  const unit = roundHalfUp(input.unitExVat, 2);
+  const placeholder = unit <= PLACEHOLDER_UNIT_EX_VAT;
+  let belowCost = false;
+  let cost: number | null = null;
+  if (input.canViewCost && input.averageUnitCostZar != null && input.averageUnitCostZar !== "") {
+    const parsed = Number(input.averageUnitCostZar);
+    if (Number.isFinite(parsed)) {
+      cost = roundHalfUp(parsed, 2);
+      belowCost = unit < cost;
+    }
+  } else if (!input.canViewCost && input.unitMatchesCatalogue && input.catalogueBelowCost) {
+    belowCost = true;
+  }
+  if (!placeholder && !belowCost) {
+    return null;
+  }
+  if (!input.canViewCost) {
+    return RESTRICTED_SUSPECT_PRICE_WARNING;
+  }
+  const shown = unitPhrase(unit, input.pricesIncludeVat === true);
+  if (placeholder && belowCost && cost !== null) {
+    return (
+      `Unit price ${shown} is R1.00 excl. VAT or below and below average cost ` +
+      `R${formatPriceAmount(cost)} excl. VAT.`
+    );
+  }
+  if (belowCost && cost !== null) {
+    return `Unit price ${shown} is below average cost R${formatPriceAmount(cost)} excl. VAT.`;
+  }
+  return (
+    `Unit price ${shown} is R1.00 excl. VAT or below ` +
+    "(R1.15 incl. VAT or less). Check this price."
+  );
+}
 
 type QuoteCustomer = Pick<CustomerCrm, "customer_type" | "price_list_id" | "price_classification"> | null;
 
@@ -128,7 +194,7 @@ function listUnitExVat(
   sku: Pick<Sku, "id">,
   customer: QuoteCustomer,
   priceLists: PriceList[],
-): { unitExVat: number; priceListName: string } | null {
+): { unitExVat: number; priceListName: string; belowAverageCost: boolean } | null {
   if (!customer?.price_list_id) {
     return null;
   }
@@ -141,7 +207,27 @@ function listUnitExVat(
   if (unitExVat === null) {
     return null;
   }
-  return { unitExVat, priceListName: list.name };
+  return {
+    unitExVat,
+    priceListName: list.name,
+    belowAverageCost: item?.below_average_cost === true,
+  };
+}
+
+function tierBelowAverageCost(
+  sku: Pick<Sku, "stockist_below_cost" | "wholesale_below_cost" | "decorator_below_cost" | "retail_below_cost">,
+  classification: PriceClassification,
+): boolean {
+  if (classification === "Stockist") {
+    return sku.stockist_below_cost === true;
+  }
+  if (classification === "Wholesale") {
+    return sku.wholesale_below_cost === true;
+  }
+  if (classification === "Decorator") {
+    return sku.decorator_below_cost === true;
+  }
+  return sku.retail_below_cost === true;
 }
 
 /**
@@ -152,7 +238,18 @@ function listUnitExVat(
  * No customer → Retail.
  */
 export function quoteSkuUnitExVat(
-  sku: Pick<Sku, "id" | "retail_ex_vat" | "wholesale_ex_vat" | "stockist_ex_vat" | "decorator_ex_vat">,
+  sku: Pick<
+    Sku,
+    | "id"
+    | "retail_ex_vat"
+    | "wholesale_ex_vat"
+    | "stockist_ex_vat"
+    | "decorator_ex_vat"
+    | "stockist_below_cost"
+    | "wholesale_below_cost"
+    | "decorator_below_cost"
+    | "retail_below_cost"
+  >,
   customer: QuoteCustomer,
   priceLists: PriceList[],
 ): QuoteSkuPrice {
@@ -166,6 +263,7 @@ export function quoteSkuUnitExVat(
       priceListName: listed.priceListName,
       warning: null,
       pricesIncludeVat: includingVat,
+      belowAverageCost: listed.belowAverageCost,
     };
   }
   const tierField = TIER_FIELD[classification];
@@ -177,6 +275,7 @@ export function quoteSkuUnitExVat(
       priceListName: null,
       warning: null,
       pricesIncludeVat: includingVat,
+      belowAverageCost: tierBelowAverageCost(sku, classification),
     };
   }
   const retail = positiveAmount(sku.retail_ex_vat);
@@ -187,6 +286,7 @@ export function quoteSkuUnitExVat(
       priceListName: null,
       warning: `${classification} price is missing for this SKU; using Retail price`,
       pricesIncludeVat: includingVat,
+      belowAverageCost: sku.retail_below_cost === true,
     };
   }
   if (retail !== null && classification === "Retail") {
@@ -196,6 +296,7 @@ export function quoteSkuUnitExVat(
       priceListName: null,
       warning: null,
       pricesIncludeVat: true,
+      belowAverageCost: sku.retail_below_cost === true,
     };
   }
   return {
@@ -204,6 +305,7 @@ export function quoteSkuUnitExVat(
     priceListName: null,
     warning: null,
     pricesIncludeVat: includingVat,
+    belowAverageCost: false,
   };
 }
 
@@ -247,6 +349,28 @@ export function quoteSkuMatchesQuery(sku: QuoteSku, inputValue: string | null, l
     sku.our_ref.toLowerCase().includes(query) ||
     sku.our_barcode.toLowerCase().includes(query)
   );
+}
+
+/** Warning for the unit on a quote or till line. Does not look at the line discount. */
+export function quoteLineSuspectWarning(
+  unitExVatText: string,
+  sku: Pick<Sku, "average_unit_cost_zar"> | null | undefined,
+  priced: QuoteSkuPrice | null,
+  canViewCost: boolean,
+  pricesIncludeVat?: boolean,
+): string | null {
+  const unit = parsePriceInput(unitExVatText);
+  const catalogue = priced?.unitExVat ?? null;
+  const matches =
+    unit !== null && catalogue !== null && roundHalfUp(unit, 2) === roundHalfUp(catalogue, 2);
+  return suspectUnitPriceWarning({
+    unitExVat: unit,
+    averageUnitCostZar: canViewCost ? (sku?.average_unit_cost_zar ?? null) : null,
+    catalogueBelowCost: priced?.belowAverageCost ?? false,
+    unitMatchesCatalogue: matches,
+    canViewCost,
+    pricesIncludeVat: pricesIncludeVat ?? priced?.pricesIncludeVat ?? false,
+  });
 }
 
 export function quoteUnitPriceHelper(priced: QuoteSkuPrice, hasCustomer: boolean): string {

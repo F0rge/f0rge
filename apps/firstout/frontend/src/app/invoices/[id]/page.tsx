@@ -448,6 +448,9 @@ export default function InvoiceDetailPage() {
                     {line.price_warning ? (
                       <div className="firstout-muted-text">{line.price_warning}</div>
                     ) : null}
+                    {line.suspect_price_warning ? (
+                      <div className="firstout-price-warning">{line.suspect_price_warning}</div>
+                    ) : null}
                   </TableCell>
                   <TableCell>{line.qty}</TableCell>
                   <TableCell>

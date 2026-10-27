@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { CustomerPicker } from "@/components/customer-picker";
 import {
   canMutateBooks,
+  canViewCostAudit,
   computeInvoicePreview,
   createInvoice,
   downloadInvoicePdf,
@@ -32,12 +33,14 @@ import {
   getCustomer,
   listCustomers,
   listInvoices,
+  parsePriceInput,
   sumInvoiceLinesExVat,
   type CreateInvoiceLinePayload,
   type CustomerCrm,
   type InvoiceListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { suspectUnitPriceWarning } from "@/lib/quote-sku-price";
 import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
 
 const TABLE_HEADERS = [
@@ -96,6 +99,7 @@ function InvoicesPageContent() {
   const searchParams = useSearchParams();
   const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const { user } = useAuth();
+  const canViewCost = canViewCostAudit(user);
   const canMutate = canMutateBooks(user);
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
@@ -449,7 +453,16 @@ function InvoicesPageContent() {
           <div>
             <p className="cds--label">Lines</p>
             <Stack gap={4}>
-              {lines.map((line, index) => (
+              {lines.map((line, index) => {
+                const suspect = suspectUnitPriceWarning({
+                  unitExVat: parsePriceInput(line.unit_ex_vat),
+                  averageUnitCostZar: null,
+                  catalogueBelowCost: false,
+                  unitMatchesCatalogue: false,
+                  canViewCost,
+                  pricesIncludeVat: false,
+                });
+                return (
                 <div
                   key={`line-${index}`}
                   style={{
@@ -490,8 +503,19 @@ function InvoicesPageContent() {
                   ) : (
                     <span />
                   )}
+                  {suspect ? (
+                    <InlineNotification
+                      kind="warning"
+                      lowContrast
+                      hideCloseButton
+                      title="Check this price"
+                      subtitle={suspect}
+                      style={{ gridColumn: "1 / -1", minWidth: 0, maxWidth: "100%" }}
+                    />
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
             </Stack>
             <Button kind="ghost" size="sm" onClick={addLine} style={{ marginTop: "0.5rem" }}>
               Add line

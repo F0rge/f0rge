@@ -32,6 +32,7 @@ from app.services.pricing import (
     shows_prices_including_vat,
 )
 from app.services.settings import SettingsService
+from app.services.suspect_price import annotate_line_warnings
 from app.services.vat import CENT, discounted_unit_ex, ex_to_inc, inc_to_ex
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -60,8 +61,12 @@ class QuotesService:
         )
         return Page(items=[self._to_list_item(row) for row in rows], total=total)
 
-    async def get(self, quote_id: uuid.UUID) -> QuoteResponse:
-        return self._to_response(await self._get_or_404(quote_id))
+    async def get(
+        self,
+        quote_id: uuid.UUID,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> QuoteResponse:
+        return await self._to_response(await self._get_or_404(quote_id), viewer_user_id)
 
     async def create(self, data: QuoteCreate, user_id: uuid.UUID) -> QuoteResponse:
         customer = await self._require_customer(data.customer_id)
@@ -87,7 +92,7 @@ class QuotesService:
         async with unit_of_work(self.db):
             quote.quote_number = await self.crud.get_next_quote_number()
             await self.crud.add_and_flush(quote)
-        return self._to_response(await self._get_or_404(quote.id))
+        return await self._to_response(await self._get_or_404(quote.id), user_id)
 
     async def create_from_snapshots(
         self,
@@ -137,7 +142,7 @@ class QuotesService:
         async with unit_of_work(self.db):
             quote.quote_number = await self.crud.get_next_quote_number()
             await self.crud.add_and_flush(quote)
-        return self._to_response(await self._get_or_404(quote.id))
+        return await self._to_response(await self._get_or_404(quote.id), user_id)
 
     async def update(
         self,
@@ -170,23 +175,31 @@ class QuotesService:
             quote.vat_amount = vat_amount
             quote.total_inc_vat = total_inc
         await self.crud.commit_refresh(quote)
-        return self._to_response(await self._get_or_404(quote.id))
+        return await self._to_response(await self._get_or_404(quote.id), user_id)
 
-    async def mark_sent(self, quote_id: uuid.UUID) -> QuoteResponse:
+    async def mark_sent(
+        self,
+        quote_id: uuid.UUID,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> QuoteResponse:
         quote = await self._get_or_404(quote_id)
         if quote.status not in (QuoteStatus.DRAFT, QuoteStatus.SENT):
             raise ConflictError("Quote cannot be marked sent")
         async with unit_of_work(self.db):
             quote.status = QuoteStatus.SENT
-        return self._to_response(await self._get_or_404(quote.id))
+        return await self._to_response(await self._get_or_404(quote.id), viewer_user_id)
 
-    async def cancel(self, quote_id: uuid.UUID) -> QuoteResponse:
+    async def cancel(
+        self,
+        quote_id: uuid.UUID,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> QuoteResponse:
         quote = await self._get_or_404(quote_id)
         if quote.status not in (QuoteStatus.DRAFT, QuoteStatus.SENT):
             raise ConflictError("Quote cannot be cancelled")
         async with unit_of_work(self.db):
             quote.status = QuoteStatus.CANCELLED
-        return self._to_response(await self._get_or_404(quote.id))
+        return await self._to_response(await self._get_or_404(quote.id), viewer_user_id)
 
     async def serve_pdf(self, quote_id: uuid.UUID) -> Response:
         quote = await self._get_or_404(quote_id)
@@ -372,8 +385,12 @@ class QuotesService:
             updated_at=quote.updated_at,
         )
 
-    def _to_response(self, quote: Quote) -> QuoteResponse:
-        return QuoteResponse(
+    async def _to_response(
+        self,
+        quote: Quote,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> QuoteResponse:
+        response = QuoteResponse(
             id=quote.id,
             quote_number=quote.quote_number,
             customer_id=quote.customer_id,
@@ -402,3 +419,10 @@ class QuotesService:
             created_at=quote.created_at,
             updated_at=quote.updated_at,
         )
+        await annotate_line_warnings(
+            self.db,
+            response.lines,
+            viewer_user_id=viewer_user_id,
+            prices_include_vat=quote.prices_include_vat,
+        )
+        return response

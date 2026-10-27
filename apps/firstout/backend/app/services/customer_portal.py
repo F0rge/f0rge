@@ -190,7 +190,7 @@ class CustomerPortalService:
     async def list_orders(self, portal_user_id: uuid.UUID) -> list[SalesOrderResponse]:
         user = await self._require_user(portal_user_id)
         rows = await self.orders.crud.list_for_customer(user.customer_id)
-        return [self.orders._to_response(row) for row in rows]
+        return [await self.orders._to_response(row) for row in rows]
 
     async def _require_user(self, portal_user_id: uuid.UUID) -> CustomerPortalUser:
         user = await self.crud.get_by_id(portal_user_id)

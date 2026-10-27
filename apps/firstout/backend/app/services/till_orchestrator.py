@@ -50,6 +50,7 @@ from app.permissions import TILL_DISCOUNT, USERS_MANAGE
 from app.services.permissions import PermissionService
 from app.services.books_periods import assert_date_postable
 from app.services.pricing import resolve_unit_price, shows_prices_including_vat
+from app.services.suspect_price import annotate_line_warnings
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -345,7 +346,7 @@ class TillOrchestrator:
         )
         on_hand = remaining_stock.on_hand if remaining_stock is not None else 0
 
-        return TillSaleResponse(
+        sale = TillSaleResponse(
             invoice_id=reloaded.id,
             invoice_number=reloaded.invoice_number,
             payment_id=payment.id,
@@ -377,6 +378,13 @@ class TillOrchestrator:
                 on_hand=on_hand,
             ),
         )
+        await annotate_line_warnings(
+            self.db,
+            sale.lines,
+            viewer_user_id=user_id,
+            prices_include_vat=reloaded.prices_include_vat,
+        )
+        return sale
 
     async def _matching_kit_pick(
         self,

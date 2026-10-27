@@ -100,6 +100,14 @@ class SkuResponse(BaseModel):
     decorator_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
+    # On-hand weighted average. Null without stock.cost.view, or when nothing is on hand.
+    average_unit_cost_zar: Optional[Decimal] = None
+    # True when that tier's ex-VAT price is strictly under the average cost.
+    # The rand amount stays off the payload for roles that cannot see costs.
+    stockist_below_cost: bool = False
+    wholesale_below_cost: bool = False
+    decorator_below_cost: bool = False
+    retail_below_cost: bool = False
     carton_count: int
     is_kit: bool = False
     created_at: datetime.datetime

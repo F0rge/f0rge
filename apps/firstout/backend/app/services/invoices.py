@@ -39,6 +39,7 @@ from app.services.pricing import (
     resolve_unit_price,
     shows_prices_including_vat,
 )
+from app.services.suspect_price import annotate_line_warnings
 from app.services.settings import SettingsService
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
@@ -67,11 +68,15 @@ class InvoiceService:
             total=total,
         )
 
-    async def get(self, invoice_id: uuid.UUID) -> InvoiceResponse:
+    async def get(
+        self,
+        invoice_id: uuid.UUID,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> InvoiceResponse:
         invoice = await self.crud.get_by_id(invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
-        return self._to_response(invoice)
+        return await self._to_response(invoice, viewer_user_id)
 
     async def create(
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
@@ -177,7 +182,7 @@ class InvoiceService:
 
         reloaded = await self.crud.get_by_id(invoice.id)
         assert reloaded is not None
-        return self._to_response(reloaded)
+        return await self._to_response(reloaded, user_id)
 
     async def build_pdf_bytes(self, invoice_id: uuid.UUID) -> tuple[bytes, str, TaxInvoice]:
         invoice = await self.crud.get_by_id(invoice_id)
@@ -250,10 +255,13 @@ class InvoiceService:
             updated_at=invoice.updated_at,
         )
 
-    @staticmethod
-    def _to_response(invoice: TaxInvoice) -> InvoiceResponse:
+    async def _to_response(
+        self,
+        invoice: TaxInvoice,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> InvoiceResponse:
         balance = invoice.total_inc_vat - invoice.amount_paid
-        return InvoiceResponse(
+        response = InvoiceResponse(
             id=invoice.id,
             invoice_number=invoice.invoice_number,
             customer_id=invoice.customer_id,
@@ -286,3 +294,10 @@ class InvoiceService:
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
         )
+        await annotate_line_warnings(
+            self.db,
+            response.lines,
+            viewer_user_id=viewer_user_id,
+            prices_include_vat=invoice.prices_include_vat,
+        )
+        return response
