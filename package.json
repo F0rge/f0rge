@@ -61,6 +61,7 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "braces": "file:vendor/braces/braces-3.0.4-f0rge.1.tgz"
+    "braces": "file:vendor/braces/braces-3.0.4-f0rge.1.tgz",
+    "uuid": "11.1.1"
   }
 }

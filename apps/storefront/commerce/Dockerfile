@@ -4,6 +4,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY vendor/braces/braces-3.0.4-f0rge.1.tgz ./vendor/braces/
 COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
+# This install omits root devDependencies. @medusajs/core-flows require()s uuid
+# without declaring it, so the hoisted uuid must be a root production dependency
+# (uuid@11.1.1). A dev-only uuid@9 in that slot is not installed and medusa start
+# exits with "Cannot find module 'uuid'".
 RUN npm ci --workspace=@f0rge/storefront-commerce --include-workspace-root=false
 
 FROM node:22-alpine AS builder
