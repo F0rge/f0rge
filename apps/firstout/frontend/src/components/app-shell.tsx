@@ -159,7 +159,10 @@ export function AppShell({ children }: AppShellProps) {
     getNarrowViewportServerSnapshot,
   );
   const isPublic =
-    pathname === "/login" || pathname.startsWith("/trade");
+    pathname === "/login" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname.startsWith("/trade");
 
   useEffect(() => {
     if (!loading && !user && !isPublic) {

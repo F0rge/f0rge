@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3003"]
     jwt_secret: str = ""
     cookie_secure: bool = False
+    # Origin for links in email (password reset). Empty uses the first CORS origin.
+    public_app_url: str = ""
     seed_owner_email: str = "owner@example.com"
     seed_owner_password: str = "change-me-owner"
     seed_till_password: str = "change-me-till"

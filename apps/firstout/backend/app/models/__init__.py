@@ -35,6 +35,7 @@ from app.models.ops_commerce_refund import OpsCommerceRefund, OpsCommerceRefundE
 from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from app.models.price_list import PriceList, PriceListItem
 from app.models.product_group import ProductGroup, ProductGroupVariant
+from app.models.password_reset_token import PasswordResetToken
 from app.models.payment import Payment, PaymentDirection
 from app.models.payment_reminder import PaymentReminderSend
 from app.models.payment_term import PaymentTerm
@@ -144,6 +145,7 @@ __all__ = [
     "OpsCommerceRefund",
     "OpsCommerceRefundEvent",
     "OpsCommerceOrder",
+    "PasswordResetToken",
     "Payment",
     "PaymentDirection",
     "PaymentReminderSend",

@@ -22,6 +22,7 @@ from app.exceptions import (
     DocumentLlmUnconfiguredError,
     ForbiddenError,
     KitRequiresPickError,
+    RateLimitedError,
 )
 from app.middleware.auth import AuthContextMiddleware
 from app.middleware.slow_request import SlowRequestMiddleware
@@ -164,6 +165,14 @@ app = FastAPI(
 register_exception_handlers(app)
 
 
+async def _rate_limited_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RateLimitedError)
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": exc.detail},
+    )
+
+
 async def _forbidden_handler(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, ForbiddenError)
     return JSONResponse(
@@ -220,6 +229,7 @@ async def _document_llm_unconfigured_handler(_: Request, exc: Exception) -> JSON
 app.add_exception_handler(KitRequiresPickError, cast(ExceptionHandler, _kit_requires_pick_handler))
 app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handler))
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+app.add_exception_handler(RateLimitedError, cast(ExceptionHandler, _rate_limited_handler))
 app.add_exception_handler(
     DocumentLlmUnconfiguredError,
     cast(ExceptionHandler, _document_llm_unconfigured_handler),

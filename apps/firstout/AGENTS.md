@@ -73,6 +73,8 @@ On startup, if the `users` table is empty the API seeds one team (`Firstout`) an
 
 Login requires `JWT_SECRET`. Cookie name is `firstout_session` (HttpOnly, SameSite=Lax, `Path=/`). Session cookie TTL is team-configurable via `team_settings.session_ttl_hours` (default **12 hours**, range 1–720); login sets JWT `exp` and cookie `Max-Age` from the current setting — no sliding refresh; changing the setting does not revoke already-issued tokens. Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
 
+Staff password reset: `/login` links to `/forgot-password`. `POST /api/v1/auth/forgot-password` always returns the same message for a missing, active, or disabled account (email match is the same CITEXT lookup as login). A live account with the shop SMTP mailbox configured receives a one-hour single-use link to `/reset-password?token=…`. Only the SHA-256 hash is stored (`password_reset_tokens`, migration `078_password_reset`). A new request invalidates older unused tokens for that user. `POST /api/v1/auth/reset-password` checks the same minimum password length as profile password change (8) plus a confirm field. Success consumes that token, invalidates the user's other reset tokens, and increments `users.token_version`. JWTs include `ver`; `get_current_user_id` rejects a mismatch or a disabled user, so older sessions stop working. Changing a password in profile or user admin bumps the same version (profile re-issues the current cookie). Disabled users cannot complete a reset. In-process limits (no shared limiter in this app): 5 requests per email and 20 per IP per hour, 10 confirm attempts per IP per 15 minutes. The link origin is `PUBLIC_APP_URL` when set, otherwise the first `CORS_ORIGINS` entry (default `http://localhost:3003`). Mail goes out through the existing shop SMTP mailbox (Settings → Communications).
+
 Copy `apps/firstout/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally. Generate `SETTINGS_ENCRYPTION_KEY` with Fernet (`cryptography.fernet.Fernet.generate_key()`) before saving an SMTP password in Settings → Communications.
 
 ### Communications (outbound SMTP)
@@ -668,6 +670,9 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 | UI route | API prefix (`/api/v1`) |
 |----------|------------------------|
+| `/login` | `/auth/login` |
+| `/forgot-password` | `/auth/forgot-password` |
+| `/reset-password` | `/auth/reset-password` |
 | `/catalogue` | `/skus` |
 | `/catalogue/[id]` | `/skus/{id}` (+ `/inventory` rollup on Stock tab) |
 | `/price-lists` | `/price-lists` |

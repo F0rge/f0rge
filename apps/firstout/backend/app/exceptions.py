@@ -42,6 +42,13 @@ class KitRequiresPickError(ConflictError):
         }
 
 
+class RateLimitedError(DomainError):
+    """Too many attempts from this email or IP. Mapped to HTTP 429."""
+
+    def __init__(self, detail: str = "Too many attempts. Try again later.") -> None:
+        super().__init__(detail)
+
+
 class CommsSmtpFailedError(DomainError):
     """SMTP provider rejected the send. Mapped to HTTP 502."""
 
