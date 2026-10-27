@@ -36,10 +36,10 @@ async def list_sales_orders(
 @sales_orders_router.get("/{sales_order_id}", response_model=SalesOrderResponse)
 async def get_sales_order(
     sales_order_id: uuid.UUID,
-    _: uuid.UUID = Depends(get_current_user_id),
+    user_id: uuid.UUID = Depends(get_current_user_id),
     service: SalesOrdersService = Depends(get_sales_order_service),
 ):
-    return await service.get(sales_order_id)
+    return await service.get(sales_order_id, user_id)
 
 
 @sales_orders_router.post("/{sales_order_id}/confirm", response_model=SalesOrderResponse)

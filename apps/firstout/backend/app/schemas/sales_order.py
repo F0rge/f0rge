@@ -43,6 +43,8 @@ class SalesOrderLineResponse(BaseModel):
     description: str
     notes: Optional[str]
     price_warning: Optional[str] = None
+    # Computed on read. Not stored, and not printed on the customer PDF.
+    suspect_price_warning: Optional[str] = None
     held_qty: int
     hold_location_id: Optional[uuid.UUID]
 

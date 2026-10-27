@@ -28,10 +28,10 @@ import {
   ApiError,
   acceptQuote,
   canMutateQuotes,
+  canViewCostAudit,
   computeInvoicePreview,
   createQuote,
   downloadQuotePdf,
-  exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
   incVatToExVat,
@@ -58,6 +58,7 @@ import {
   formatUnitExVatInput,
   pricesIncludeVat,
   quoteLineExVat,
+  quoteLineSuspectWarning,
   quoteSkuMatchesQuery,
   quoteSkuUnitExVat,
   quoteUnitPriceHelper,
@@ -118,6 +119,7 @@ function QuotesPageInner() {
   const canMutate = canMutateQuotes(user);
   const canOverridePrice = canOverrideQuoteUnitPrice(user?.role);
   const canEditDiscount = canEditQuoteDiscount(user?.role);
+  const canViewCost = canViewCostAudit(user);
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -440,6 +442,7 @@ function QuotesPageInner() {
           {lines.map((line, index) => {
             const sku = skus.find((item) => item.id === line.sku_id);
             const priced = sku ? quoteSkuUnitExVat(sku, selectedCustomer, priceLists) : null;
+            const suspect = quoteLineSuspectWarning(line.unit_ex_vat, sku, priced, canViewCost);
             return (
               <div
                 key={index}
@@ -558,6 +561,16 @@ function QuotesPageInner() {
                     setLines(next);
                   }}
                 />
+                {suspect ? (
+                  <InlineNotification
+                    kind="warning"
+                    lowContrast
+                    hideCloseButton
+                    title="Check this price"
+                    subtitle={suspect}
+                    style={{ gridColumn: "1 / -1", minWidth: 0, maxWidth: "100%" }}
+                  />
+                ) : null}
               </div>
             );
           })}

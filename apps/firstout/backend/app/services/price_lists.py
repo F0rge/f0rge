@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +17,7 @@ from app.schemas.price_list import (
     PriceListResponse,
     PriceListUpdate,
 )
+from app.services.suspect_price import average_costs_by_sku_id, is_below_average_cost
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
 
@@ -27,11 +30,13 @@ class PriceListService:
 
     async def list(self) -> list[PriceListResponse]:
         rows = await self.crud.list_all()
-        return [self._to_response(row) for row in rows]
+        costs = await self._costs_for(rows)
+        return [self._to_response(row, costs) for row in rows]
 
     async def get(self, price_list_id: uuid.UUID) -> PriceListResponse:
         row = await self.crud.get_by_id(price_list_id)
-        return self._to_response(row)
+        costs = await self._costs_for([row])
+        return self._to_response(row, costs)
 
     async def create(self, data: PriceListCreate) -> PriceListResponse:
         existing = await self.crud.get_by_name(data.name)
@@ -95,12 +100,21 @@ class PriceListService:
             await self.db.delete(item)
         return await self.get(price_list_id)
 
-    def _to_response(self, row: PriceList) -> PriceListResponse:
+    async def _costs_for(self, rows: list[PriceList]) -> dict[uuid.UUID, Optional[Decimal]]:
+        sku_ids = [item.sku_id for row in rows for item in row.items]
+        return await average_costs_by_sku_id(self.db, sku_ids)
+
+    def _to_response(
+        self,
+        row: PriceList,
+        costs: dict[uuid.UUID, Optional[Decimal]],
+    ) -> PriceListResponse:
         items = [
             PriceListItemResponse(
                 sku_id=item.sku_id,
                 our_ref=item.sku.our_ref,
                 unit_ex_vat=item.unit_ex_vat,
+                below_average_cost=is_below_average_cost(item.unit_ex_vat, costs.get(item.sku_id)),
             )
             for item in row.items
         ]

@@ -564,6 +564,7 @@ export type PriceListItem = {
   sku_id: string;
   our_ref: string;
   unit_ex_vat: string;
+  below_average_cost?: boolean;
 };
 
 export type PriceList = {
@@ -908,6 +909,11 @@ export type Sku = {
   decorator_inc_vat: string | null;
   retail_ex_vat: string | null;
   retail_inc_vat: string | null;
+  average_unit_cost_zar?: string | null;
+  stockist_below_cost?: boolean;
+  wholesale_below_cost?: boolean;
+  decorator_below_cost?: boolean;
+  retail_below_cost?: boolean;
   carton_count: number;
   is_kit: boolean;
   created_at: string;
@@ -2007,6 +2013,7 @@ export type InvoiceLine = {
   sort_order: number;
   sku_id?: string | null;
   price_warning?: string | null;
+  suspect_price_warning?: string | null;
 };
 
 export type InvoiceListItem = {
@@ -3966,6 +3973,7 @@ export type QuoteLine = {
   description: string;
   notes: string | null;
   price_warning?: string | null;
+  suspect_price_warning?: string | null;
 };
 
 export type QuoteListItem = {
@@ -4017,6 +4025,8 @@ export type SalesOrderLine = {
   unit_ex_vat: string;
   description: string;
   notes: string | null;
+  price_warning?: string | null;
+  suspect_price_warning?: string | null;
   held_qty: number;
   hold_location_id: string | null;
 };

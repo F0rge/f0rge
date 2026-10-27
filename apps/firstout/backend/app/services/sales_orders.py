@@ -56,6 +56,7 @@ from app.services.chart_of_accounts import (
 from app.services.payment_terms import compute_due_date
 from app.services.pricing import resolve_unit_price, shows_prices_including_vat
 from app.services.stock_movements import StockMovementService
+from app.services.suspect_price import annotate_line_warnings
 from app.services.stocktakes import StocktakeService
 from app.services.vat import CENT, discounted_unit_ex, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -93,8 +94,12 @@ class SalesOrdersService:
         )
         return Page(items=[self._to_list_item(row) for row in rows], total=total)
 
-    async def get(self, sales_order_id: uuid.UUID) -> SalesOrderResponse:
-        return self._to_response(await self._get_or_404(sales_order_id))
+    async def get(
+        self,
+        sales_order_id: uuid.UUID,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> SalesOrderResponse:
+        return await self._to_response(await self._get_or_404(sales_order_id), viewer_user_id)
 
     async def create_draft(
         self,
@@ -125,7 +130,7 @@ class SalesOrdersService:
         async with unit_of_work(self.db):
             order.so_number = await self.crud.get_next_so_number()
             await self.crud.add_and_flush(order)
-        return self._to_response(await self._get_or_404(order.id))
+        return await self._to_response(await self._get_or_404(order.id), user_id)
 
     async def create_from_quote(
         self,
@@ -181,7 +186,7 @@ class SalesOrdersService:
                     order,
                     SalesOrderPaymentCreate(amount=data.deposit.amount, tender=data.deposit.tender),
                 )
-        return self._to_response(await self._get_or_404(order.id))
+        return await self._to_response(await self._get_or_404(order.id), user_id)
 
     async def confirm(
         self,
@@ -200,7 +205,7 @@ class SalesOrdersService:
                 await self._apply_hold(order, data.location_id, user_id)
             if data.deposit is not None:
                 await self._add_deposit_locked(order, data.deposit)
-        return self._to_response(await self._get_or_404(order.id))
+        return await self._to_response(await self._get_or_404(order.id), user_id)
 
     async def add_payment(
         self,
@@ -208,14 +213,13 @@ class SalesOrdersService:
         data: SalesOrderPaymentCreate,
         user_id: uuid.UUID,
     ) -> SalesOrderResponse:
-        del user_id
         order = await self._require_open(sales_order_id, for_update=True)
         new_total = order.amount_paid + data.amount
         if new_total > order.total_inc_vat:
             raise ValidationError("Payment would exceed sales order total")
         async with unit_of_work(self.db):
             await self._add_deposit_locked(order, data)
-        return self._to_response(await self._get_or_404(order.id))
+        return await self._to_response(await self._get_or_404(order.id), user_id)
 
     async def cancel(self, sales_order_id: uuid.UUID, user_id: uuid.UUID) -> SalesOrderResponse:
         order = await self._get_or_404(sales_order_id, for_update=True)
@@ -252,7 +256,7 @@ class SalesOrdersService:
                 )
             order.status = SalesOrderStatus.CANCELLED
             order.hold_stock = False
-        return self._to_response(await self._get_or_404(order.id))
+        return await self._to_response(await self._get_or_404(order.id), user_id)
 
     async def complete_storefront_cancel_after_refund(
         self, order: SalesOrder, user_id: uuid.UUID
@@ -545,7 +549,7 @@ class SalesOrdersService:
             if before_commit is not None:
                 await before_commit()
 
-        return self._to_response(await self._get_or_404(order.id))
+        return await self._to_response(await self._get_or_404(order.id), user_id)
 
     async def _apply_hold(
         self,
@@ -721,9 +725,13 @@ class SalesOrdersService:
             updated_at=order.updated_at,
         )
 
-    def _to_response(self, order: SalesOrder) -> SalesOrderResponse:
+    async def _to_response(
+        self,
+        order: SalesOrder,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> SalesOrderResponse:
         balance = order.total_inc_vat - order.amount_paid
-        return SalesOrderResponse(
+        response = SalesOrderResponse(
             id=order.id,
             so_number=order.so_number,
             customer_id=order.customer_id,
@@ -770,3 +778,5 @@ class SalesOrdersService:
             created_at=order.created_at,
             updated_at=order.updated_at,
         )
+        await annotate_line_warnings(self.db, response.lines, viewer_user_id=viewer_user_id)
+        return response
