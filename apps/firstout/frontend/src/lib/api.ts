@@ -285,6 +285,32 @@ export function login(email: string, password: string): Promise<LoginResponse> {
   });
 }
 
+export type PasswordResetMessage = {
+  message: string;
+};
+
+export function requestPasswordReset(email: string): Promise<PasswordResetMessage> {
+  return apiFetch<PasswordResetMessage>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmPasswordReset(
+  token: string,
+  password: string,
+  passwordConfirm: string,
+): Promise<PasswordResetMessage> {
+  return apiFetch<PasswordResetMessage>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({
+      token,
+      password,
+      password_confirm: passwordConfirm,
+    }),
+  });
+}
+
 export function logout(): Promise<void> {
   return apiFetch<void>("/auth/logout", { method: "POST" });
 }

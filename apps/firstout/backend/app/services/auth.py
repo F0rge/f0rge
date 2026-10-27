@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
+from app.models.user import User
 from app.permissions import role_slug
 from app.services.permissions import PermissionService
 from f0rge_core.exceptions import UnauthorizedError, ValidationError
@@ -34,17 +35,23 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
-def create_access_token(user_id: uuid.UUID, ttl_hours: int) -> str:
+def create_access_token(
+    user_id: uuid.UUID,
+    ttl_hours: int,
+    *,
+    token_version: int = 0,
+) -> str:
     now = datetime.datetime.utcnow()
     payload = {
         "sub": str(user_id),
+        "ver": token_version,
         "iat": now,
         "exp": now + datetime.timedelta(hours=ttl_hours),
     }
     return jwt.encode(payload, _require_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
-def decode_access_token(token: str) -> uuid.UUID:
+def decode_access_token_claims(token: str) -> tuple[uuid.UUID, int]:
     try:
         payload = jwt.decode(token, _require_jwt_secret(), algorithms=[JWT_ALGORITHM])
     except jwt.PyJWTError as exc:
@@ -57,9 +64,34 @@ def decode_access_token(token: str) -> uuid.UUID:
         raise UnauthorizedError("Invalid session")
 
     try:
-        return uuid.UUID(str(sub))
+        user_id = uuid.UUID(str(sub))
     except ValueError as exc:
         raise UnauthorizedError("Invalid session") from exc
+
+    raw_version = payload.get("ver", 0)
+    if isinstance(raw_version, bool):
+        raise UnauthorizedError("Invalid session")
+    try:
+        version = int(raw_version)
+    except (TypeError, ValueError) as exc:
+        raise UnauthorizedError("Invalid session") from exc
+    return user_id, version
+
+
+def decode_access_token(token: str) -> uuid.UUID:
+    user_id, _version = decode_access_token_claims(token)
+    return user_id
+
+
+async def issue_session_cookie(db: AsyncSession, user: User, response: Response) -> None:
+    team_settings = await TeamSettingsCRUD(db).get_or_create_for_team(user.team_id)
+    ttl_hours = int(team_settings.session_ttl_hours)
+    token = create_access_token(
+        user.id,
+        ttl_hours,
+        token_version=int(user.token_version),
+    )
+    set_session_cookie(response, token, max_age=ttl_hours * 3600)
 
 
 def set_session_cookie(response: Response, token: str, *, max_age: int) -> None:
@@ -99,10 +131,7 @@ class AuthService:
         if user.is_disabled:
             raise UnauthorizedError("Invalid email or password")
 
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
-        ttl_hours = int(team_settings.session_ttl_hours)
-        token = create_access_token(user.id, ttl_hours)
-        set_session_cookie(response, token, max_age=ttl_hours * 3600)
+        await issue_session_cookie(self.db, user, response)
         return {"email": user.email}
 
     async def logout(self, response: Response) -> None:

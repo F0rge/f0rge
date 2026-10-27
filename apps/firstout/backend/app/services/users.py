@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from typing import Optional
 
+from fastapi import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,13 +15,21 @@ from app.models.team import Team
 from app.models.user import User, UserRole
 from app.permissions import SLUG_OWNER, role_slug
 from app.schemas.user import ProfileUpdate, UserCreate, UserUpdate
-from app.services.auth import hash_password, validate_password
+from app.crud.password_reset_token import PasswordResetTokenCRUD
+from app.services.auth import hash_password, issue_session_cookie, validate_password
 from app.services.user_default_location import (
     bedfordview_default_location_id,
     resolve_writable_default_location_id,
 )
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+
+
+async def _apply_new_password(db: AsyncSession, user: User, password: str) -> None:
+    validate_password(password)
+    user.password_hash = hash_password(password)
+    user.token_version = int(user.token_version) + 1
+    await PasswordResetTokenCRUD(db).invalidate_unused(user.id, datetime.datetime.utcnow())
 
 
 class UserService:
@@ -89,8 +99,7 @@ class UserService:
                 await self._reject_last_owner()
             user.is_disabled = data.is_disabled
         if data.password is not None:
-            validate_password(data.password)
-            user.password_hash = hash_password(data.password)
+            await _apply_new_password(self.db, user, data.password)
         if "default_location_id" in data.model_fields_set:
             user.default_location_id = await resolve_writable_default_location_id(
                 self.db,
@@ -124,7 +133,12 @@ class ProfileService:
         self.db = db
         self.crud = UserCRUD(db)
 
-    async def update(self, user_id: uuid.UUID, data: ProfileUpdate) -> User:
+    async def update(
+        self,
+        user_id: uuid.UUID,
+        data: ProfileUpdate,
+        response: Response,
+    ) -> User:
         user = await self.crud.get_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
@@ -133,9 +147,9 @@ class ProfileService:
             user.email = data.email
         if data.display_name is not None:
             user.display_name = data.display_name
+        password_changed = data.password is not None
         if data.password is not None:
-            validate_password(data.password)
-            user.password_hash = hash_password(data.password)
+            await _apply_new_password(self.db, user, data.password)
         if "default_location_id" in data.model_fields_set:
             user.default_location_id = await resolve_writable_default_location_id(
                 self.db,
@@ -148,6 +162,8 @@ class ProfileService:
             raise ConflictError("Email already registered") from exc
         reloaded = await self.crud.get_by_id(user.id)
         assert reloaded is not None
+        if password_changed:
+            await issue_session_cookie(self.db, reloaded, response)
         return reloaded
 
 

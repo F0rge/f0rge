@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, InlineNotification, PasswordInput, Stack, TextInput, Theme } from "@carbon/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
@@ -80,6 +81,9 @@ export default function LoginPage() {
                   required
                   disabled={submitting}
                 />
+                <Link href="/forgot-password" className="cds--link firstout-login-forgot">
+                  Forgot your password?
+                </Link>
                 <Button type="submit" disabled={submitting}>
                   {submitting ? "Signing in…" : "Log in"}
                 </Button>

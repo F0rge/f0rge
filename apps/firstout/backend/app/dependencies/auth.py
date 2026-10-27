@@ -26,6 +26,7 @@ from app.permissions import (
     USERS_MANAGE,
 )
 from app.services.auth import AuthService
+from app.services.password_reset import PasswordResetService
 from app.services.permissions import PermissionService
 from app.services.bills import BillService
 from app.services.books_events import BooksEventService
@@ -83,6 +84,10 @@ from app.services.audit_hub import AuditHubService
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(db)
+
+
+def get_password_reset_service(db: AsyncSession = Depends(get_db)) -> PasswordResetService:
+    return PasswordResetService(db)
 
 
 def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
