@@ -41,6 +41,7 @@ dev = [
 [tool.uv]
 constraint-dependencies = [
     "h2>=4.4.1",  # PYSEC-2026-3628 / CVE-2026-71554 (aioapns transitive)
+    "dnspython>=2.9.0",  # GHSA-45c3-73f7-pv4m / CVE-2026-114605 (email-validator transitive)
 ]
 
 [tool.uv.sources]
