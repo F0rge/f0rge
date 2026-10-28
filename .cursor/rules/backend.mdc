@@ -6,7 +6,7 @@ alwaysApply: false
 
 # FastAPI Backend Standards
 
-Target **Python 3.11**. Package manager: **`uv`** (never pip). Lint/format: **`ruff`**. Shared libs stay valid on 3.10 (Firstout and dk).
+Target **Python 3.11**. Package manager: **`uv`** (never pip). Lint/format: **`ruff`**. Shared libs stay valid on 3.10 (environment-monitor, buycycle, and airflow).
 
 ## Architecture: Router → Service/Orchestrator → CRUD
 

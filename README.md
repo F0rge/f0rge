@@ -18,7 +18,7 @@ apps/marrow/
 └── frontend/  Next.js 16 + React 19 + Tailwind + @f0rge/ui
 
 apps/dk/tag-printer/
-├── backend/   FastAPI + pandas/fpdf — Python 3.10, uv (Pi Coolify prod)
+├── backend/   FastAPI + pandas/fpdf — Python 3.11, uv (Pi Coolify prod)
 └── frontend/  Next.js 16 + React 19 + Tailwind 3
 ```
 

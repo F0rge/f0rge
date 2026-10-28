@@ -2,7 +2,7 @@
 name = "firstout-backend"
 version = "0.1.0"
 description = "Firstout back-office API (stock, books, till)"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]",
     "sqlalchemy>=2.0",
@@ -31,6 +31,11 @@ dev = [
     "f0rge-testing",
 ]
 
+[tool.uv]
+constraint-dependencies = [
+    "dnspython>=2.9.0",  # GHSA-45c3-73f7-pv4m / CVE-2026-114605 (email-validator transitive)
+]
+
 [tool.uv.sources]
 f0rge-core = { path = "../../../libs/backend/core", editable = true }
 f0rge-db = { path = "../../../libs/backend/db", editable = true }
@@ -48,7 +53,7 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]
@@ -59,7 +64,7 @@ ignore = [
 ]
 
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"
 extraPaths = [

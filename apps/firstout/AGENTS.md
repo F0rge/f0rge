@@ -22,7 +22,7 @@ Read `~/.cursor/agent-memory/<agent>/MEMORY.md` first. Write gotchas back when d
 
 ## Stack
 
-- Backend: FastAPI Python 3.10 + async SQLAlchemy + asyncpg + Alembic. API prefix `/api/v1`.
+- Backend: FastAPI Python 3.11 + async SQLAlchemy + asyncpg + Alembic. API prefix `/api/v1`.
 - Frontend: Next.js App Router `output: 'standalone'`.
 - Auth cookie (S1, not S0): `firstout_session` — **not** `ht_session`.
 - Import only: `f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing`. No Firstout domain in shared libs.
@@ -715,7 +715,7 @@ Still out of scope: Marrow, auto-email repeating invoices, Gmail OAuth, unoffici
 
 ## Python
 
-`uv --project apps/firstout/backend`. **Never** create a root `uv.lock`. Python 3.10 only (`from __future__ import annotations`; no `X | Y`).
+`uv --project apps/firstout/backend`. **Never** create a root `uv.lock`. Python 3.11 (`from __future__ import annotations`; `Union[]` / `Optional[]`, not `X | Y`).
 
 ## PRs
 
