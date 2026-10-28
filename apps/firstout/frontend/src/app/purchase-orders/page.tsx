@@ -41,6 +41,11 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  displayFabric,
+  lookupManufacturerCode,
+  supplierCodeAfterSkuPick,
+} from "@/lib/po-supplier-code";
 
 const TABLE_HEADERS = [
   { key: "po_number", header: "PO number" },
@@ -65,6 +70,8 @@ type PoRow = {
 
 type PoLineForm = {
   sku_id: string;
+  supplier_code: string;
+  supplierCodeTouched: boolean;
   description: string;
   qty: number | "";
   factory_unit_amount: string;
@@ -72,6 +79,8 @@ type PoLineForm = {
 
 const emptyLine = (): PoLineForm => ({
   sku_id: "",
+  supplier_code: "",
+  supplierCodeTouched: false,
   description: "",
   qty: "",
   factory_unit_amount: "",
@@ -190,6 +199,65 @@ export default function PurchaseOrdersPage() {
     );
   }
 
+  function applyManufacturerCode(index: number, skuId: string, code: string) {
+    setLines((current) =>
+      current.map((line, lineIndex) => {
+        if (lineIndex !== index || line.sku_id !== skuId || line.supplierCodeTouched) {
+          return line;
+        }
+        return {
+          ...line,
+          supplier_code: supplierCodeAfterSkuPick({
+            current: line.supplier_code,
+            touched: false,
+            manufacturerCode: code,
+          }),
+        };
+      }),
+    );
+  }
+
+  function onSkuPicked(index: number, skuId: string) {
+    updateLine(index, { sku_id: skuId });
+    const sku = skus.find((item) => item.id === skuId);
+    if (!sku) {
+      return;
+    }
+    void lookupManufacturerCode(supplierId, sku).then((code) => {
+      applyManufacturerCode(index, skuId, code);
+    });
+  }
+
+  async function refreshSupplierCodes(nextSupplier: string) {
+    const snapshot = lines;
+    const codes = await Promise.all(
+      snapshot.map(async (line) => {
+        if (line.supplierCodeTouched || !line.sku_id) {
+          return line.supplier_code;
+        }
+        const sku = skus.find((item) => item.id === line.sku_id);
+        if (!sku) {
+          return line.supplier_code;
+        }
+        const code = await lookupManufacturerCode(nextSupplier, sku);
+        return supplierCodeAfterSkuPick({
+          current: line.supplier_code,
+          touched: false,
+          manufacturerCode: code,
+        });
+      }),
+    );
+    setLines((current) =>
+      current.map((line, index) => {
+        const source = snapshot[index];
+        if (!source || line.supplierCodeTouched || line.sku_id !== source.sku_id) {
+          return line;
+        }
+        return { ...line, supplier_code: codes[index] ?? line.supplier_code };
+      }),
+    );
+  }
+
   function addLine() {
     setLines((current) => [...current, emptyLine()]);
   }
@@ -223,6 +291,7 @@ export default function PurchaseOrdersPage() {
         lines: lines.map(
           (line): CreatePoLinePayload => ({
             sku_id: line.sku_id || null,
+            supplier_code: line.supplier_code.trim() || null,
             description: line.description.trim() || null,
             qty: line.qty as number,
             factory_unit_amount: line.factory_unit_amount.trim(),
@@ -411,8 +480,10 @@ export default function PurchaseOrdersPage() {
             labelText="Supplier"
             value={supplierId}
             onChange={(event) => {
-              setSupplierId(event.target.value);
+              const nextSupplier = event.target.value;
+              setSupplierId(nextSupplier);
               setProformaId("");
+              void refreshSupplierCodes(nextSupplier);
             }}
           >
             <SelectItem value="" text="Select a supplier" />
@@ -462,12 +533,14 @@ export default function PurchaseOrdersPage() {
               A line can wait without a SKU when it has a description. That order stays pending until the SKU is filled in and the order is approved.
             </p>
             <Stack gap={4}>
-              {lines.map((line, index) => (
+              {lines.map((line, index) => {
+                const fabric = displayFabric(skus.find((sku) => sku.id === line.sku_id)?.fabric);
+                return (
+                <div key={`line-${index}`}>
                 <div
-                  key={`line-${index}`}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1.3fr 1.3fr 0.6fr 0.8fr auto",
+                    gridTemplateColumns: "1.1fr 1fr 1.1fr 0.5fr 0.7fr auto",
                     gap: "0.5rem",
                     alignItems: "end",
                   }}
@@ -477,7 +550,7 @@ export default function PurchaseOrdersPage() {
                     labelText={index === 0 ? "SKU" : ""}
                     hideLabel={index > 0}
                     value={line.sku_id}
-                    onChange={(event) => updateLine(index, { sku_id: event.target.value })}
+                    onChange={(event) => onSkuPicked(index, event.target.value)}
                   >
                     <SelectItem value="" text="No SKU yet" />
                     {skus.map((sku) => (
@@ -488,6 +561,18 @@ export default function PurchaseOrdersPage() {
                       />
                     ))}
                   </Select>
+                  <TextInput
+                    id={`po-line-supplier-code-${index}`}
+                    labelText={index === 0 ? "Supplier code" : ""}
+                    hideLabel={index > 0}
+                    value={line.supplier_code}
+                    onChange={(event) =>
+                      updateLine(index, {
+                        supplier_code: event.target.value,
+                        supplierCodeTouched: true,
+                      })
+                    }
+                  />
                   <TextInput
                     id={`po-line-description-${index}`}
                     labelText={index === 0 ? "Description" : ""}
@@ -527,7 +612,14 @@ export default function PurchaseOrdersPage() {
                     <span />
                   )}
                 </div>
-              ))}
+                {fabric ? (
+                  <p id={`po-line-fabric-${index}`} className="cds--helper-text">
+                    Fabric / finish: {fabric}
+                  </p>
+                ) : null}
+                </div>
+                );
+              })}
             </Stack>
             <Button kind="ghost" size="sm" onClick={addLine} style={{ marginTop: "0.5rem" }}>
               Add line

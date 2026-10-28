@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import UploadFile
 from fastapi.responses import Response
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
@@ -54,6 +55,7 @@ from app.services.packing_sheet import (
     compute_landed_unit_costs,
     convert_bill_to_zar,
 )
+from app.services.purchase_order_pdf import PurchaseOrderPdfLine, build_purchase_order_pdf
 from app.services.settings import SettingsService
 from app.services.suppliers import SupplierService
 from app.permissions import USERS_MANAGE
@@ -125,6 +127,10 @@ class PurchaseOrderService:
                 raise ValidationError("Proforma must belong to the same supplier")
 
         await self._validate_line_writes(data.lines)
+        resolved_codes = [
+            await self._resolved_supplier_code(data.supplier_id, line.sku_id, line.supplier_code)
+            for line in data.lines
+        ]
 
         total_zar = await self._factory_total_zar(supplier, data.lines)
         create_status = await self._resolve_create_status(user_id, total_zar)
@@ -144,8 +150,8 @@ class PurchaseOrderService:
             po.po_number = await self.crud.get_next_po_number()
             await self.crud.add_and_flush(po)
             _stamp_first(po, "ordered_at", _as_aware_utc(po.created_at))
-            for line in data.lines:
-                po_line = _po_line_from_write(po.id, line)
+            for line, supplier_code in zip(data.lines, resolved_codes):
+                po_line = _po_line_from_write(po.id, line, supplier_code)
                 await self.crud.add_and_flush(po_line)
 
         reloaded = await self._get_po_or_404(po.id)
@@ -160,6 +166,10 @@ class PurchaseOrderService:
         if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
             raise ConflictError("Only a purchase order waiting for approval can be edited.")
         await self._validate_line_writes(data.lines)
+        resolved_codes = [
+            await self._resolved_supplier_code(po.supplier_id, line.sku_id, line.supplier_code)
+            for line in data.lines
+        ]
         existing = {line.id: line for line in po.lines}
         seen: set[uuid.UUID] = set()
         async with unit_of_work(self.db):
@@ -168,14 +178,14 @@ class PurchaseOrderService:
                 po.supplier_ref = _blank_to_none(data.supplier_ref)
             if "notes" in provided:
                 po.notes = _blank_to_none(data.notes)
-            for item in data.lines:
+            for item, supplier_code in zip(data.lines, resolved_codes):
                 if item.id is None:
-                    await self.crud.add_and_flush(_po_line_from_write(po.id, item))
+                    await self.crud.add_and_flush(_po_line_from_write(po.id, item, supplier_code))
                     continue
                 row = existing.get(item.id)
                 if row is None:
                     raise NotFoundError("Purchase order line not found")
-                _apply_line_write(row, item)
+                _apply_line_write(row, item, supplier_code)
                 seen.add(item.id)
             for line_id, row in existing.items():
                 if line_id not in seen:
@@ -415,6 +425,46 @@ class PurchaseOrderService:
 
         return Response(content=pdf_bytes, media_type="application/pdf")
 
+    async def purchase_order_pdf(self, po_id: uuid.UUID) -> Response:
+        po = await self._get_po_or_404(po_id)
+        if po.status == PurchaseOrderStatus.REJECTED:
+            raise ConflictError("A rejected purchase order cannot be downloaded.")
+        seller = await SettingsService(self.db).build_seller_details()
+        currency = SupplierService.normalize_currency(po.supplier.default_currency)
+        stamp = po.ordered_at or po.created_at
+        po_date = _as_aware_utc(stamp).strftime("%Y-%m-%d")
+        lines: list[PurchaseOrderPdfLine] = []
+        for line in po.lines:
+            lines.append(
+                PurchaseOrderPdfLine(
+                    supplier_code=await self._supplier_code_for_pdf(po, line),
+                    description=_line_description(line),
+                    our_ref=None if line.sku is None else line.sku.our_ref,
+                    fabric=None if line.sku is None else _supplier_facing_fabric(line.sku.fabric),
+                    notes=_blank_to_none(line.notes),
+                    qty=line.qty,
+                    unit_price=line.factory_unit_amount,
+                )
+            )
+        pdf_bytes = build_purchase_order_pdf(
+            po_number=po.po_number,
+            po_date=po_date,
+            status_label=_STATUS_LABELS[po.status],
+            draft=po.status == PurchaseOrderStatus.PENDING_APPROVAL,
+            supplier_name=po.supplier.name,
+            supplier_ref=_blank_to_none(po.supplier_ref),
+            currency=currency,
+            notes=_blank_to_none(po.notes),
+            lines=lines,
+            seller=seller,
+        )
+        filename = f"{po.po_number}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     async def receive(self, data: ReceiveRequest, user_id: uuid.UUID) -> PurchaseOrderResponse:
         await assert_date_postable(self.db, datetime.date.today())
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
@@ -464,6 +514,49 @@ class PurchaseOrderService:
 
         reloaded = await self._get_po_or_404(data.purchase_order_id)
         return self._to_response(reloaded)
+
+    async def _resolved_supplier_code(
+        self,
+        supplier_id: uuid.UUID,
+        sku_id: Optional[uuid.UUID],
+        given: Optional[str],
+    ) -> Optional[str]:
+        """Keep a typed code. Otherwise fill from the factory's model code.
+
+        Prefer sku_supplier_prices.supplier_sku for this PO's supplier. That is
+        the code the factory itself uses (Cin7 import and "create SKU from a PO
+        line" already write it), and one SKU can be bought from more than one
+        factory. Fall back to skus.supplier_ref when this supplier has no code.
+        """
+        typed = _blank_to_none(given)
+        if typed is not None or sku_id is None:
+            return typed
+        supplier_sku = (
+            await self.db.execute(
+                select(SkuSupplierPrice.supplier_sku).where(
+                    SkuSupplierPrice.sku_id == sku_id,
+                    SkuSupplierPrice.supplier_id == supplier_id,
+                )
+            )
+        ).scalar_one_or_none()
+        from_supplier = _blank_to_none(supplier_sku)
+        if from_supplier is not None:
+            return from_supplier
+        sku = await self.sku_crud.get_by_id(sku_id)
+        if sku is None:
+            return None
+        return _blank_to_none(sku.supplier_ref)
+
+    async def _supplier_code_for_pdf(self, po: PurchaseOrder, line: PoLine) -> Optional[str]:
+        """Show the stored code. Look one up for older lines that were never filled.
+
+        Reading the catalogue here does not write the line, so existing POs stay
+        as they are until someone edits them.
+        """
+        stored = _blank_to_none(line.supplier_code)
+        if stored is not None or line.sku_id is None:
+            return stored
+        return await self._resolved_supplier_code(po.supplier_id, line.sku_id, None)
 
     async def _validate_line_writes(self, lines: list[PoLineCreate] | list[PoLineWrite]) -> None:
         if not lines:
@@ -633,11 +726,42 @@ def _require_complete_lines(po: PurchaseOrder, step: str) -> None:
     )
 
 
-def _po_line_from_write(po_id: uuid.UUID, line: PoLineCreate | PoLineWrite) -> PoLine:
+_STATUS_LABELS = {
+    PurchaseOrderStatus.PENDING_APPROVAL: "Pending approval",
+    PurchaseOrderStatus.REJECTED: "Rejected",
+    PurchaseOrderStatus.OPEN: "Open",
+    PurchaseOrderStatus.ON_WATER: "On water",
+    PurchaseOrderStatus.LANDED: "Landed",
+    PurchaseOrderStatus.RECEIVED: "Received",
+}
+
+
+def _supplier_facing_fabric(fabric: Optional[str]) -> Optional[str]:
+    """Table-top colour and upholstery share skus.fabric. '-' is the placeholder."""
+    cleaned = (fabric or "").strip()
+    if not cleaned or cleaned == "-":
+        return None
+    return cleaned
+
+
+def _line_description(line: PoLine) -> str:
+    description = _blank_to_none(line.description)
+    if description is not None:
+        return description
+    if line.sku is not None and line.sku.name:
+        return line.sku.name
+    return "—"
+
+
+def _po_line_from_write(
+    po_id: uuid.UUID,
+    line: PoLineCreate | PoLineWrite,
+    supplier_code: Optional[str],
+) -> PoLine:
     return PoLine(
         po_id=po_id,
         sku_id=line.sku_id,
-        supplier_code=_blank_to_none(line.supplier_code),
+        supplier_code=supplier_code,
         description=_blank_to_none(line.description),
         notes=_blank_to_none(line.notes),
         qty=line.qty,
@@ -645,9 +769,9 @@ def _po_line_from_write(po_id: uuid.UUID, line: PoLineCreate | PoLineWrite) -> P
     )
 
 
-def _apply_line_write(row: PoLine, line: PoLineWrite) -> None:
+def _apply_line_write(row: PoLine, line: PoLineWrite, supplier_code: Optional[str]) -> None:
     row.sku_id = line.sku_id
-    row.supplier_code = _blank_to_none(line.supplier_code)
+    row.supplier_code = supplier_code
     row.description = _blank_to_none(line.description)
     row.notes = _blank_to_none(line.notes)
     row.qty = line.qty

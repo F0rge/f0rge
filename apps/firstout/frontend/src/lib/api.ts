@@ -1467,6 +1467,10 @@ export async function downloadPackingSheet(id: string, poNumber: string): Promis
   await downloadApiFile(`/api/v1/purchase-orders/${id}/packing-sheet`, `${poNumber}-packing-sheet.pdf`);
 }
 
+export async function downloadPurchaseOrder(id: string, poNumber: string): Promise<void> {
+  await downloadApiFile(`/api/v1/purchase-orders/${id}/pdf`, `${poNumber}.pdf`);
+}
+
 export function markOnWater(id: string): Promise<PurchaseOrder> {
   return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/on-water`, {
     method: "POST",
