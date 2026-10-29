@@ -152,9 +152,10 @@ def _app_id(obj: dict[str, Any]) -> str:
     return ""
 
 
-# Coolify's manual handler returns this sentence, verbatim, when the push
-# changed files miss the app's watch paths. Match the whole message only.
+# Coolify's manual handler returns these sentences verbatim. Match the whole
+# message only, and only on the app the plan selected.
 WATCH_PATH_IGNORE_MESSAGE = "Changed files do not match watch paths. Ignoring deployment."
+DEPLOYMENTS_DISABLED_MESSAGE = "Deployments disabled."
 
 
 def response_queues_app(body: str, app_uuid: str) -> bool:
@@ -162,10 +163,11 @@ def response_queues_app(body: str, app_uuid: str) -> bool:
 
     The manual push handler reports a queued deploy as ``status: success``
     and ``message: Deployment queued.`` (v4.0.0-beta.473). ``status: queued``
-    on this same app counts too. The watch-path ignore sentence is not a
-    queue (see ``classify_coolify_response``). An ``Invalid signature`` on
-    this app is not a queue. Sibling apps are separate objects (often with
-    no uuid) and their ``Invalid signature`` entries are ignored.
+    on this same app counts too. The watch-path ignore sentence and
+    ``Deployments disabled.`` are not a queue (see
+    ``classify_coolify_response``). An ``Invalid signature`` on this app is
+    not a queue. Sibling apps are separate objects (often with no uuid) and
+    their ``Invalid signature`` entries are ignored.
     """
     try:
         data = json.loads(body)
@@ -185,12 +187,11 @@ def response_queues_app(body: str, app_uuid: str) -> bool:
     return False
 
 
-def response_watch_path_ignored(body: str, app_uuid: str) -> bool:
-    """True when this app's message is exactly the watch-path ignore sentence.
+def _response_message_equals(body: str, app_uuid: str, expected: str) -> bool:
+    """True when an object for ``app_uuid`` has ``message`` equal to ``expected``.
 
-    Equality is case-sensitive and covers the whole message. A shorter
-    string such as ``Ignoring`` does not match, and a sibling app's copy
-    of the sentence does not count.
+    Equality is case-sensitive and covers the whole message. Objects for
+    other apps do not count. Invalid JSON is false.
     """
     try:
         data = json.loads(body)
@@ -199,9 +200,28 @@ def response_watch_path_ignored(body: str, app_uuid: str) -> bool:
     for obj in _walk_objects(data):
         if _app_id(obj) != app_uuid:
             continue
-        if obj.get("message") == WATCH_PATH_IGNORE_MESSAGE:
+        if obj.get("message") == expected:
             return True
     return False
+
+
+def response_watch_path_ignored(body: str, app_uuid: str) -> bool:
+    """True when this app's message is exactly the watch-path ignore sentence.
+
+    Equality is case-sensitive and covers the whole message. A shorter
+    string such as ``Ignoring`` does not match, and a sibling app's copy
+    of the sentence does not count.
+    """
+    return _response_message_equals(body, app_uuid, WATCH_PATH_IGNORE_MESSAGE)
+
+
+def response_deployments_disabled(body: str, app_uuid: str) -> bool:
+    """True when this app's message is exactly ``Deployments disabled.``
+
+    Same match as the watch-path sentence: whole message, this app's id
+    only. A sibling app's copy does not count.
+    """
+    return _response_message_equals(body, app_uuid, DEPLOYMENTS_DISABLED_MESSAGE)
 
 
 def classify_coolify_response(http_status: int, body: str, app_uuid: str) -> str:
@@ -209,9 +229,13 @@ def classify_coolify_response(http_status: int, body: str, app_uuid: str) -> str
 
     Returns ``success`` when the app was queued, ``skipped`` when the HTTP
     status is 2xx and this app's message equals ``WATCH_PATH_IGNORE_MESSAGE``,
-    and ``failed`` otherwise. Non-2xx is ``failed`` even if the body contains
-    that sentence. Any other 2xx that did not queue a deployment (no queued
-    status, no deployment uuid, different message) is ``failed``.
+    ``disabled`` when the HTTP status is 2xx and this app's message equals
+    ``DEPLOYMENTS_DISABLED_MESSAGE``, and ``failed`` otherwise. ``disabled``
+    is a failure (the CLI exits 1): the plan selected this app, so that
+    sentence must not be a skip. Non-2xx is ``failed`` even if the body
+    contains either sentence. Any other 2xx that did not queue a deployment
+    is ``failed``, including ``Invalid signature`` on this app. A sibling
+    app's sentence does not count.
     """
     if http_status < 200 or http_status >= 300:
         return "failed"
@@ -219,6 +243,8 @@ def classify_coolify_response(http_status: int, body: str, app_uuid: str) -> str
         return "success"
     if response_watch_path_ignored(body, app_uuid):
         return "skipped"
+    if response_deployments_disabled(body, app_uuid):
+        return "disabled"
     return "failed"
 
 
@@ -236,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--classify",
         action="store_true",
-        help="Print success, skipped, or failed for the Coolify response on stdin",
+        help="Print success, skipped, disabled, or failed for the Coolify response on stdin",
     )
     parser.add_argument("--http-status", type=int)
     parser.add_argument("--app-uuid", default="")

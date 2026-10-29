@@ -237,7 +237,7 @@ class QueuedResponseTests(unittest.TestCase):
 
 
 class ClassifyCoolifyResponseTests(unittest.TestCase):
-    """HTTP status + this app's message → success / skipped / failed."""
+    """HTTP status + this app's message → success / skipped / disabled / failed."""
 
     UUID = "xi0qwpbyl2d8gf8u3xl13jkv"
     OTHER = "other-app"
@@ -313,7 +313,10 @@ class ClassifyCoolifyResponseTests(unittest.TestCase):
             "changed files do not match watch paths. Ignoring deployment.",
             "Changed files do not match watch paths. Ignoring deployment. extra",
             "Invalid signature.",
-            "Deployments disabled.",
+            "Deployments disabled",
+            "deployments disabled.",
+            "Deployments disabled. ",
+            "Deployments disabled. extra",
             "No deployment was queued.",
         ]
         for message in messages:
@@ -321,6 +324,76 @@ class ClassifyCoolifyResponseTests(unittest.TestCase):
                 self.assertEqual(self._classify(200, self._body(message)), "failed")
         self.assertEqual(self._classify(200, json.dumps({"status": "failed"})), "failed")
         self.assertEqual(self._classify(200, "not-json"), "failed")
+
+    def test_deployments_disabled_is_failure(self) -> None:
+        # Shape from Deploy run 40820662158 (dk-tag-printer-backend): HTTP 200,
+        # selected app message is exactly "Deployments disabled.", siblings are
+        # "Invalid signature." with no uuid. The class is a failure (CLI exit 1).
+        backend = "pskswsc8c0044ggo40go4og0"
+        body = json.dumps(
+            [
+                {"application": "buycycle", "status": "failed", "message": "Invalid signature."},
+                {"application": "daskasas-frontend", "status": "failed", "message": "Invalid signature."},
+                {
+                    "application": "environment-monitor-backend",
+                    "status": "failed",
+                    "message": "Invalid signature.",
+                },
+                {
+                    "status": "failed",
+                    "message": "Deployments disabled.",
+                    "application_uuid": backend,
+                    "application_name": "daskasas-backend",
+                },
+                {
+                    "application": "environment-monitor-frontend",
+                    "status": "failed",
+                    "message": "Invalid signature.",
+                },
+            ]
+        )
+        self.assertTrue(payload.response_deployments_disabled(body, backend))
+        self.assertFalse(payload.response_deployments_disabled(body, self.UUID))
+        self.assertEqual(self._classify(200, body, backend), "disabled")
+        self.assertEqual(self._classify(201, body, backend), "disabled")
+        # Sentence belongs to the backend uuid, not to some other selected app.
+        self.assertEqual(self._classify(200, body, self.UUID), "failed")
+        # No uuid on the object: not this app, so a plain failure (still not a skip).
+        bare = json.dumps({"status": "failed", "message": "Deployments disabled."})
+        self.assertEqual(self._classify(200, bare), "failed")
+        self.assertEqual(self._classify(500, body, backend), "failed")
+
+    def test_sibling_disabled_does_not_change_selected_outcome(self) -> None:
+        disabled_sibling = {
+            "status": "failed",
+            "message": "Deployments disabled.",
+            "application_uuid": "pskswsc8c0044ggo40go4og0",
+            "application_name": "daskasas-backend",
+        }
+        queued = {
+            "application": "buycycle",
+            "status": "success",
+            "message": "Deployment queued.",
+            "application_uuid": self.UUID,
+            "deployment_uuid": "dep123",
+        }
+        self.assertEqual(self._classify(200, json.dumps([queued, disabled_sibling])), "success")
+        ignored = {
+            "status": "failed",
+            "message": self.IGNORE,
+            "application_uuid": self.UUID,
+            "application_name": "buycycle",
+        }
+        self.assertEqual(self._classify(200, json.dumps([ignored, disabled_sibling])), "skipped")
+        # Selected app's own Invalid signature fails. The sibling's disabled
+        # sentence does not reclassify it, and does not skip the job.
+        invalid = {
+            "application": "buycycle",
+            "status": "failed",
+            "message": "Invalid signature.",
+            "application_uuid": self.UUID,
+        }
+        self.assertEqual(self._classify(200, json.dumps([invalid, disabled_sibling])), "failed")
 
     def test_non_2xx_is_failed(self) -> None:
         ignore = self._body(self.IGNORE)

@@ -179,6 +179,7 @@ jobs:
           # checks every app on this repo+branch, so siblings answer
           # "Invalid signature." That does not fail the job. This app must queue
           # a deployment, or return the exact watch-path ignore (skipped).
+          # "Deployments disabled." on this app fails the job.
           SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
           RESPONSE=$(curl -sS --fail-with-body -w '\nHTTP %{http_code}' \
             -X POST "${COOLIFY_BASE_URL%/}/webhooks/source/github/events/manual" \
@@ -194,24 +195,19 @@ jobs:
           BODY=$(printf '%s\n' "$RESPONSE" | sed '$d')
           HTTP_STATUS=$(printf '%s\n' "$RESPONSE" | tail -n1 | awk '{print $2}')
 
-          # App reports Deployments disabled → not deploying through Coolify right now.
-          if echo "$BODY" | jq -e --arg uuid "$APP_UUID" '
-            [.. | objects
-              | select((.uuid? // .id? // .application_id? // .application_uuid? // "") == $uuid)
-              | .message? // ""
-            ] | any(test("Deployments disabled"; "i"))
-          ' >/dev/null 2>&1; then
-            echo "::notice::Skipping Coolify deploy for $APP_NAME — deployments disabled on Coolify"
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           # Coolify answers 2xx even when it queues nothing. classify_coolify_response
           # maps a queued deploy to success, the exact watch-path ignore sentence
-          # to skipped, and every other non-queue reply to failed. curl
-          # --fail-with-body already failed the step on non-2xx.
+          # to skipped, this app's exact "Deployments disabled." to disabled
+          # (a failure), and every other non-queue reply to failed. curl
+          # --fail-with-body already failed the step on non-2xx. The CLI exits
+          # 1 for disabled and failed; the printed class picks the message.
           if ! CLASS=$(printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --classify --http-status "$HTTP_STATUS" --app-uuid "$APP_UUID"); then
-            echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
+            if [ "$CLASS" = "disabled" ]; then
+              echo "::error::Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify."
+              echo "Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
+            fi
             exit 1
           fi
           case "$CLASS" in
