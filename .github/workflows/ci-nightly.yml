@@ -26,8 +26,9 @@ jobs:
         run: |
           for p in $(npx nx show projects --projects tag:platform:py --json | jq -r '.[]'); do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            # Same interpreter rule as ci.yml: only a project .python-version
-            # (Marrow is 3.11) overrides the 3.10 default.
+            # Same interpreter rule as ci.yml: a project .python-version
+            # (Marrow, Firstout, and dk tag-printer are 3.11) overrides the
+            # 3.10 default.
             if [ -f "$ROOT/.python-version" ]; then
               PY=$(tr -d '[:space:]' < "$ROOT/.python-version")
             else

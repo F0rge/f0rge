@@ -152,7 +152,7 @@ Work through this in order for any non-trivial backend diff.
 
 1. **Router thinness** — run: `grep -En "if |raise |try:|HTTPException|db\.query|db\.add|db\.commit|db\.flush" apps/marrow/backend/app/routers/<file>.py` → must return nothing for new code.
 2. **`from __future__ import annotations`** at top of every new `.py` file.
-3. **Python syntax** — Marrow runtime is 3.11. Shared libs, Firstout, and dk stay on the 3.10 floor, so lib code must not use 3.11-only syntax. No `match/case`; use `Union[X, Y]` or `Optional[X]` rather than `X | Y`.
+3. **Python syntax** — Marrow, Firstout, and dk runtimes are 3.11. Shared libs stay on the 3.10 floor because environment-monitor, buycycle, and airflow still require it, so lib code must not use 3.11-only syntax. No `match/case`; use `Union[X, Y]` or `Optional[X]` rather than `X | Y`.
 4. **Pydantic v2 schema naming** — `ThingCreate` / `ThingUpdate` / `ThingResponse`. `model_config = ConfigDict(from_attributes=True)` on any schema that is returned from an ORM query.
 5. **`db.flush()` then `db.refresh()`** before returning an ORM-mapped object from a service method. Never return a detached instance.
 6. **Session scoping** — `AsyncSession` is injected per-request via `Depends(get_db)`. Services receive it in `__init__`. Never create a bare `async_session_maker()` in a service (that bypasses request scoping).

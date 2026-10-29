@@ -70,9 +70,9 @@ jobs:
           fi
           for p in $PROJECTS; do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            # Nested projects do not inherit a repo-root pin. Marrow's
-            # .python-version is 3.11; every other project stays on 3.10
-            # even after that interpreter is installed.
+            # Nested projects do not inherit a repo-root pin. A project
+            # .python-version selects the interpreter (Marrow, Firstout, and
+            # dk tag-printer are 3.11). Every other project stays on 3.10.
             if [ -f "$ROOT/.python-version" ]; then
               PY=$(tr -d '[:space:]' < "$ROOT/.python-version")
             else
