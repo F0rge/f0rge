@@ -33,6 +33,7 @@ import {
   canReceive,
   createPurchaseOrderLineSku,
   downloadPackingSheet,
+  downloadPurchaseOrder,
   getPurchaseOrder,
   landPurchaseOrder,
   listSkus,
@@ -45,6 +46,11 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  displayFabric,
+  lookupManufacturerCode,
+  supplierCodeWhenBlank,
+} from "@/lib/po-supplier-code";
 
 type BillForm = {
   invoice_number: string;
@@ -189,6 +195,50 @@ export default function PurchaseOrderDetailPage() {
       .catch(() => setSkus([]));
   }, [canEditLines, order?.status, order?.id]);
 
+  const editingPending = Boolean(
+    order && order.status === "pending_approval" && canEditLines,
+  );
+
+  useEffect(() => {
+    if (!editingPending || !order || skus.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    const supplierId = order.supplier_id;
+    void (async () => {
+      const filled = await Promise.all(
+        order.lines.map(async (line) => {
+          if ((line.supplier_code ?? "").trim() || !line.sku_id) {
+            return line.supplier_code ?? "";
+          }
+          const sku = skus.find((item) => item.id === line.sku_id);
+          if (!sku) {
+            return "";
+          }
+          return lookupManufacturerCode(supplierId, sku);
+        }),
+      );
+      if (cancelled) {
+        return;
+      }
+      setDraftLines((current) =>
+        current.map((line) => {
+          const index = order.lines.findIndex((row) => row.id === line.id);
+          if (index < 0 || line.supplier_code.trim()) {
+            return line;
+          }
+          return {
+            ...line,
+            supplier_code: supplierCodeWhenBlank(line.supplier_code, filled[index] ?? ""),
+          };
+        }),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editingPending, order, skus]);
+
   async function handleDownload() {
     if (!order) {
       return;
@@ -202,6 +252,40 @@ export default function PurchaseOrderDetailPage() {
     } finally {
       setActionLoading(false);
     }
+  }
+
+  async function handleDownloadPurchaseOrder() {
+    if (!order) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await downloadPurchaseOrder(order.id, order.po_number);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download the purchase order.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function onDraftSkuPicked(key: string, skuId: string) {
+    updateDraft(key, { sku_id: skuId });
+    const sku = skus.find((item) => item.id === skuId);
+    if (!sku || !order) {
+      return;
+    }
+    const supplierId = order.supplier_id;
+    void lookupManufacturerCode(supplierId, sku).then((code) => {
+      setDraftLines((current) =>
+        current.map((line) => {
+          if (line.key !== key || line.sku_id !== skuId) {
+            return line;
+          }
+          return { ...line, supplier_code: supplierCodeWhenBlank(line.supplier_code, code) };
+        }),
+      );
+    });
   }
 
   async function handleApprove() {
@@ -506,6 +590,17 @@ export default function PurchaseOrderDetailPage() {
           <p className="cds--type-body-01">Supplier reference {order.supplier_ref}</p>
         ) : null}
         {order.notes ? <p className="cds--type-body-01">{order.notes}</p> : null}
+        {order.status !== "rejected" ? (
+          <div style={{ marginTop: "1rem" }}>
+            <Button
+              kind="secondary"
+              disabled={actionLoading}
+              onClick={() => void handleDownloadPurchaseOrder()}
+            >
+              Download purchase order
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -603,6 +698,7 @@ export default function PurchaseOrderDetailPage() {
                   <TableHeader>SKU</TableHeader>
                   <TableHeader>Supplier code</TableHeader>
                   <TableHeader>Description</TableHeader>
+                  <TableHeader>Fabric / finish</TableHeader>
                   <TableHeader>Qty</TableHeader>
                   <TableHeader>Factory unit</TableHeader>
                   <TableHeader>Notes</TableHeader>
@@ -621,7 +717,7 @@ export default function PurchaseOrderDetailPage() {
                         labelText="SKU"
                         hideLabel
                         value={line.sku_id}
-                        onChange={(event) => updateDraft(line.key, { sku_id: event.target.value })}
+                        onChange={(event) => onDraftSkuPicked(line.key, event.target.value)}
                       >
                         <SelectItem value="" text="No SKU yet" />
                         {skus.map((sku) => (
@@ -654,6 +750,12 @@ export default function PurchaseOrderDetailPage() {
                           updateDraft(line.key, { description: event.target.value })
                         }
                       />
+                    </TableCell>
+                    <TableCell>
+                      {displayFabric(
+                        skus.find((sku) => sku.id === line.sku_id)?.fabric ??
+                          order.lines.find((row) => row.id === line.id)?.fabric,
+                      ) ?? ""}
                     </TableCell>
                     <TableCell>
                       <NumberInput
@@ -732,6 +834,7 @@ export default function PurchaseOrderDetailPage() {
               <TableHeader>Supplier code</TableHeader>
               <TableHeader>Description</TableHeader>
               <TableHeader>Name</TableHeader>
+              <TableHeader>Fabric / finish</TableHeader>
               <TableHeader>Qty</TableHeader>
               <TableHeader>Factory unit</TableHeader>
               <TableHeader>Unit cost ZAR</TableHeader>
@@ -747,6 +850,7 @@ export default function PurchaseOrderDetailPage() {
                 <TableCell>{line.supplier_code ?? "—"}</TableCell>
                 <TableCell>{line.description ?? line.name}</TableCell>
                 <TableCell>{line.name}</TableCell>
+                <TableCell>{displayFabric(line.fabric) ?? ""}</TableCell>
                 <TableCell>{line.qty}</TableCell>
                 <TableCell>{line.factory_unit_amount}</TableCell>
                 <TableCell>{line.unit_cost_zar ?? "—"}</TableCell>
