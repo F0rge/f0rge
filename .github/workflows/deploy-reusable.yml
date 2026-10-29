@@ -197,12 +197,11 @@ jobs:
 
           # Coolify answers 2xx even when it queues nothing. classify_coolify_response
           # maps a queued deploy to success, the exact watch-path ignore sentence
-          # to skipped, this app's exact "Deployments disabled." to disabled
-          # (a failure), and every other non-queue reply to failed. curl
-          # --fail-with-body already failed the step on non-2xx. The CLI exits
-          # 1 for disabled and failed; the printed class picks the message.
+          # to skipped, and every other non-queue reply to failed. That includes
+          # this app's exact "Deployments disabled." (CLI exits 1). curl
+          # --fail-with-body already failed the step on non-2xx.
           if ! CLASS=$(printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --classify --http-status "$HTTP_STATUS" --app-uuid "$APP_UUID"); then
-            if [ "$CLASS" = "disabled" ]; then
+            if printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --deployments-disabled --app-uuid "$APP_UUID"; then
               echo "::error::Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify."
               echo "Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify." >> "$GITHUB_STEP_SUMMARY"
             else

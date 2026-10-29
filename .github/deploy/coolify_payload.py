@@ -229,13 +229,11 @@ def classify_coolify_response(http_status: int, body: str, app_uuid: str) -> str
 
     Returns ``success`` when the app was queued, ``skipped`` when the HTTP
     status is 2xx and this app's message equals ``WATCH_PATH_IGNORE_MESSAGE``,
-    ``disabled`` when the HTTP status is 2xx and this app's message equals
-    ``DEPLOYMENTS_DISABLED_MESSAGE``, and ``failed`` otherwise. ``disabled``
-    is a failure (the CLI exits 1): the plan selected this app, so that
-    sentence must not be a skip. Non-2xx is ``failed`` even if the body
-    contains either sentence. Any other 2xx that did not queue a deployment
-    is ``failed``, including ``Invalid signature`` on this app. A sibling
-    app's sentence does not count.
+    and ``failed`` otherwise. This app's exact ``Deployments disabled.``
+    sentence is ``failed`` (the CLI exits 1), not a skip. Non-2xx is
+    ``failed`` even if the body contains either sentence. Any other 2xx that
+    did not queue a deployment is ``failed``, including ``Invalid signature``
+    on this app. A sibling app's sentence does not count.
     """
     if http_status < 200 or http_status >= 300:
         return "failed"
@@ -243,8 +241,6 @@ def classify_coolify_response(http_status: int, body: str, app_uuid: str) -> str
         return "success"
     if response_watch_path_ignored(body, app_uuid):
         return "skipped"
-    if response_deployments_disabled(body, app_uuid):
-        return "disabled"
     return "failed"
 
 
@@ -262,7 +258,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--classify",
         action="store_true",
-        help="Print success, skipped, disabled, or failed for the Coolify response on stdin",
+        help="Print success, skipped, or failed for the Coolify response on stdin",
+    )
+    parser.add_argument(
+        "--deployments-disabled",
+        action="store_true",
+        help="Exit 0 only if this app's message is exactly Deployments disabled.",
     )
     parser.add_argument("--http-status", type=int)
     parser.add_argument("--app-uuid", default="")
@@ -274,6 +275,11 @@ def main(argv: list[str] | None = None) -> int:
         outcome = classify_coolify_response(args.http_status, body, args.app_uuid)
         sys.stdout.write(outcome + "\n")
         return 0 if outcome in {"success", "skipped"} else 1
+    if args.deployments_disabled:
+        if not args.app_uuid:
+            parser.error("--deployments-disabled requires --app-uuid")
+        body = sys.stdin.read()
+        return 0 if response_deployments_disabled(body, args.app_uuid) else 1
     if args.require_queued:
         body = sys.stdin.read()
         return 0 if response_queues_app(body, args.app_uuid) else 1

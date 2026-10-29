@@ -14,6 +14,8 @@ patch_app() {
   local dockerfile="$2"
   local watch_paths="$3"
   echo "Patching $uuid …"
+  # Coolify v4 blocks the manual webhook when auto-deploy is off. This repo
+  # has no GitHub push webhooks, so leaving it on does not double-deploy.
   curl -sf -X PATCH "${API}/applications/${uuid}" \
     -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
     -H "Content-Type: application/json" \
@@ -28,7 +30,7 @@ patch_app() {
         base_directory: "/",
         dockerfile_location: $dockerfile,
         watch_paths: $watch,
-        is_auto_deploy_enabled: false
+        is_auto_deploy_enabled: true
       }')"
   echo "OK: $uuid"
 }

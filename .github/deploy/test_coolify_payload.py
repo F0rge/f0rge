@@ -237,7 +237,7 @@ class QueuedResponseTests(unittest.TestCase):
 
 
 class ClassifyCoolifyResponseTests(unittest.TestCase):
-    """HTTP status + this app's message → success / skipped / disabled / failed."""
+    """HTTP status + this app's message → success / skipped / failed."""
 
     UUID = "xi0qwpbyl2d8gf8u3xl13jkv"
     OTHER = "other-app"
@@ -328,7 +328,7 @@ class ClassifyCoolifyResponseTests(unittest.TestCase):
     def test_deployments_disabled_is_failure(self) -> None:
         # Shape from Deploy run 40820662158 (dk-tag-printer-backend): HTTP 200,
         # selected app message is exactly "Deployments disabled.", siblings are
-        # "Invalid signature." with no uuid. The class is a failure (CLI exit 1).
+        # "Invalid signature." with no uuid. classify returns failed (CLI exit 1).
         backend = "pskswsc8c0044ggo40go4og0"
         body = json.dumps(
             [
@@ -354,8 +354,16 @@ class ClassifyCoolifyResponseTests(unittest.TestCase):
         )
         self.assertTrue(payload.response_deployments_disabled(body, backend))
         self.assertFalse(payload.response_deployments_disabled(body, self.UUID))
-        self.assertEqual(self._classify(200, body, backend), "disabled")
-        self.assertEqual(self._classify(201, body, backend), "disabled")
+        self.assertEqual(self._classify(200, body, backend), "failed")
+        self.assertEqual(self._classify(201, body, backend), "failed")
+        disabled_out = io.StringIO()
+        with _stdin(body), redirect_stdout(disabled_out):
+            disabled_code = payload.main(["--deployments-disabled", "--app-uuid", backend])
+        self.assertEqual(disabled_code, 0)
+        self.assertEqual(disabled_out.getvalue(), "")
+        with _stdin(body), redirect_stdout(io.StringIO()):
+            other_code = payload.main(["--deployments-disabled", "--app-uuid", self.UUID])
+        self.assertEqual(other_code, 1)
         # Sentence belongs to the backend uuid, not to some other selected app.
         self.assertEqual(self._classify(200, body, self.UUID), "failed")
         # No uuid on the object: not this app, so a plain failure (still not a skip).

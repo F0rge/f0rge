@@ -65,10 +65,12 @@ ignores that answer on apps it did not select. The selected app must queue a
 deployment, or return the exact watch-path ignore. `Invalid signature` on the
 selected app fails the job.
 
-Leave Coolify **Auto Deploy** enabled on every app the plan deploys. The
-manual webhook returns `Deployments disabled.` when that switch is off, and
-the job fails. Deploy stays CI-gated: `deploy-reusable.yml` runs on `main`
-only after CI succeeds.
+Leave Coolify **Auto Deploy** on (`is_auto_deploy_enabled: true`) for every
+app this workflow deploys. In Coolify v4, `is_auto_deploy_enabled=false` also
+blocks the manual webhook CI posts, so the reply is `Deployments disabled.`
+and the job fails. This repo has no GitHub push webhooks, so leaving
+auto-deploy on does not deploy twice. Deploy stays CI-gated:
+`deploy-reusable.yml` runs on `main` only after CI succeeds.
 
 Internal-only Coolify components (e.g. `buycycle`, `environment-monitor-*`, `host: pi`) omit `health_url`:
 runners can't reach the Pi, so the job relies on Coolify's `queued` response and
@@ -82,8 +84,9 @@ The watch-path case logs `SKIPPED <app>: Coolify ignored (watch paths)` and
 writes that line to the job summary.
 
 HTTP 2xx with this selected app's message exactly equal to `Deployments disabled.`
-**fails** the job. The error names the app and its Coolify uuid and tells you
-to enable auto-deploy for that app in Coolify. A sibling's copy of that
+**fails** the job. `classify_coolify_response` returns `failed` for that
+sentence (not `skipped`). The error names the app and its Coolify uuid and
+tells you to turn Auto Deploy on for that app. A sibling's copy of that
 sentence does not count. Any other 2xx that does not queue a deployment, and
 any non-2xx, fails the job. Missing secrets and placeholder uuids still skip,
 so an unconfigured Pi app does not fail the marrow Railway smoke.
