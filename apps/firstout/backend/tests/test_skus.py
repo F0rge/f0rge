@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
+from app.services.sku_barcode import csv_style_barcode
+
 # 1x1 PNG
 TINY_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -477,6 +479,136 @@ async def test_create_sku_defaults_carton_count_one(owner_client: AsyncClient) -
     body = resp.json()
     assert body["carton_count"] == 1
     assert body["is_kit"] is False
+
+
+def test_csv_style_barcode_matches_import_and_fits_column() -> None:
+    assert csv_style_barcode("DC-23-11G") == "csv:DC-23-11G"
+    long_ref = "R" * 64
+    generated = csv_style_barcode(long_ref)
+    assert generated == f"csv:{long_ref}"[:64]
+    assert len(generated) == 64
+    collision = csv_style_barcode(long_ref, attempt=2)
+    assert len(collision) == 64
+    assert collision.endswith("-2")
+    assert collision != generated
+
+
+async def test_blank_barcode_is_generated_without_changing_existing(
+    owner_client: AsyncClient,
+) -> None:
+    existing = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "KEEP-REF",
+            "our_barcode": "csv:NEW-CHAIR",
+            "name": "Existing chair",
+            "design": "Keep design",
+            "fabric": "Keep fabric",
+        },
+    )
+    assert existing.status_code == 201
+    existing_body = existing.json()
+
+    created = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "NEW-CHAIR",
+            "name": "Moseli Dining Chair 58*54*79 cm",
+            "design": "Dining Chair",
+            "fabric": "Teddy - C01",
+            "supplier_ref": "DC-23-11G",
+            "category": "Dining Room",
+            "carton_count": 1,
+        },
+    )
+    assert created.status_code == 201
+    created_body = created.json()
+    assert created_body["our_barcode"] == "csv:NEW-CHAIR-2"
+    assert created_body["supplier_ref"] == "DC-23-11G"
+
+    again = await owner_client.get(f"/api/v1/skus/{existing_body['id']}")
+    assert again.status_code == 200
+    assert again.json()["our_barcode"] == "csv:NEW-CHAIR"
+    assert again.json()["our_ref"] == "KEEP-REF"
+
+
+async def test_whitespace_barcode_is_generated(owner_client: AsyncClient) -> None:
+    resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "BLANK-BC",
+            "our_barcode": "   ",
+            "name": "Blank barcode chair",
+            "design": "Blank design",
+            "fabric": "Blank fabric",
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["our_barcode"] == "csv:BLANK-BC"
+
+
+async def test_long_ref_barcode_stays_within_column(owner_client: AsyncClient) -> None:
+    our_ref = "L" * 64
+    resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": our_ref,
+            "name": "Long ref",
+            "design": "Long design",
+            "fabric": "Long fabric",
+        },
+    )
+    assert resp.status_code == 201
+    barcode = resp.json()["our_barcode"]
+    assert barcode == f"csv:{our_ref}"[:64]
+    assert len(barcode) <= 64
+
+
+async def test_photo_with_spaces_in_filename_is_stored(owner_client: AsyncClient) -> None:
+    created = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "PHOTO-SPACE",
+            "name": "Photo chair",
+            "design": "Photo design",
+            "fabric": "Photo fabric",
+        },
+    )
+    assert created.status_code == 201
+    sku_id = created.json()["id"]
+    assert created.json()["our_barcode"] == "csv:PHOTO-SPACE"
+
+    photo_resp = await owner_client.post(
+        f"/api/v1/skus/{sku_id}/photo",
+        files={"photo": ("1602DC-23-11G dining chair.png", TINY_PNG, "image/png")},
+    )
+    assert photo_resp.status_code == 200
+    assert photo_resp.json()["photo_storage_key"]
+
+    get_photo = await owner_client.get(f"/api/v1/skus/{sku_id}/photo")
+    assert get_photo.status_code == 200
+    assert get_photo.headers["content-type"].startswith("image/jpeg")
+    assert get_photo.content.startswith(b"\xff\xd8")
+
+
+async def test_unreadable_photo_returns_400(owner_client: AsyncClient) -> None:
+    created = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "PHOTO-BAD",
+            "our_barcode": "BAR-PHOTO-BAD",
+            "name": "Bad photo",
+            "design": "Bad design",
+            "fabric": "Bad fabric",
+        },
+    )
+    assert created.status_code == 201
+    photo_resp = await owner_client.post(
+        f"/api/v1/skus/{created.json()['id']}/photo",
+        files={"photo": ("notes.txt", b"not an image", "text/plain")},
+    )
+    assert photo_resp.status_code == 400
+    assert "image" in photo_resp.json()["detail"].lower()
 
 
 async def test_create_sku_rejects_carton_count_zero(owner_client: AsyncClient) -> None:

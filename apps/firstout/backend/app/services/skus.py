@@ -29,6 +29,7 @@ from app.schemas.sku import (
     SkuUpdate,
 )
 from app.services.inventory import InventoryService
+from app.services.sku_barcode import csv_style_barcode
 from app.services.stock_movements import StockMovementService
 from app.services.suspect_price import average_costs_by_sku_id, tier_price_below_cost
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
@@ -295,7 +296,10 @@ class SkuService:
             ) from exc
 
     async def create(self, data: SkuCreate, user_id: uuid.UUID) -> SkuResponse:
-        await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, data.our_barcode)
+        barcode = data.our_barcode
+        if barcode is None:
+            barcode = await self._allocate_csv_barcode(data.our_ref)
+        await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, barcode)
 
         if data.opening_location_id is not None:
             location = await self.location_crud.get_by_id(data.opening_location_id)
@@ -306,7 +310,7 @@ class SkuService:
 
         sku = Sku(
             our_ref=data.our_ref,
-            our_barcode=data.our_barcode,
+            our_barcode=barcode,
             name=data.name,
             design=data.design,
             fabric=data.fabric,
@@ -347,7 +351,12 @@ class SkuService:
         if not raw_bytes:
             raise ValidationError("Photo file is required")
 
-        image_bytes = await asyncio.to_thread(resize_image, raw_bytes)
+        try:
+            image_bytes = await asyncio.to_thread(resize_image, raw_bytes)
+        except OSError as exc:
+            raise ValidationError(
+                "That file isn't a readable image. Use a JPEG, PNG, or WebP."
+            ) from exc
         relative_path = f"skus/{sku_id}.jpg"
         try:
             storage_key = await asyncio.to_thread(save_bytes, relative_path, image_bytes)
@@ -476,6 +485,13 @@ class SkuService:
             created_at=sku.created_at,
             updated_at=sku.updated_at,
         )
+
+    async def _allocate_csv_barcode(self, our_ref: str) -> str:
+        for attempt in range(1, 1000):
+            candidate = csv_style_barcode(our_ref, attempt)
+            if await self.crud.get_by_our_barcode(candidate) is None:
+                return candidate
+        raise ConflictError("Could not allocate a unique barcode")
 
     async def _ensure_unique_fields(
         self,

@@ -1011,7 +1011,7 @@ export function displayPrice(value: string | null | undefined): string {
 
 export type CreateSkuPayload = {
   our_ref: string;
-  our_barcode: string;
+  our_barcode?: string;
   name: string;
   design: string;
   fabric: string;
@@ -1076,6 +1076,12 @@ export function getSku(id: string): Promise<Sku> {
 
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   const body: CreateSkuPayload = { ...payload };
+  const barcode = body.our_barcode?.trim();
+  if (barcode) {
+    body.our_barcode = barcode;
+  } else {
+    delete body.our_barcode;
+  }
   const category = body.category?.trim();
   if (category) {
     body.category = category;
