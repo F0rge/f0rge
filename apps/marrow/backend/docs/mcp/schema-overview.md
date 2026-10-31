@@ -19,9 +19,9 @@ day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added 
 | Supplements | `list_supplements(include_archived=False)` | read | Per-user supplement catalog (keys for `set_supplements`) |
 | Supplements | `set_supplements(keys, date?, mode='replace')` | write | `replace` / `add` / `remove` the day's supplement keys |
 | Meals | `get_meal(photo_id)` | read | Ingredients, tags, photo metadata. `photo_sha256` is set when `original_filename` starts with `sha256:`; `photo_created_at` is the placement timestamp |
-| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?, source_photo_id?, allow_duplicate=false)` | write | No background vision; `ingredients` = decomposed, catalogue-named list; returns per-ingredient match status (see below). `photo_base64` and `source_photo_id` are mutually exclusive. Same-day repeat of the same image returns the existing meal with `deduplicated: true` unless `allow_duplicate` |
+| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?, source_photo_id?, allow_duplicate=false)` | write | No background vision; `ingredients` = decomposed, catalogue-named list; returns per-ingredient match status (see below). `photo_base64` and `source_photo_id` are mutually exclusive. Same-day repeat of the same image returns the existing meal with `deduplicated: true` unless `allow_duplicate`. Naive `meal_time` is Europe/Luxembourg local, stored as naive UTC; the response includes `meal_time` (UTC) and `meal_time_local` |
 | Meals | `attach_meal_photo(photo_id, photo_base64?, source_photo_id?, replace=false)` | write | Attach or replace the image on an existing meal. Exactly one of `photo_base64` or `source_photo_id`. Returns `photo_id`, `meal_id`, `has_photo`, `photo_sha256`, `replaced` |
-| Meals | `edit_meal(photo_id, name?, meal_time?)` | write | Name/time only; ingredients via `set_ingredients` |
+| Meals | `edit_meal(photo_id, name?, meal_time?)` | write | Name/time only; naive times are Europe/Luxembourg local, stored UTC; a `meal_time` on another local date moves the meal and delivered tag copies to that day (entries created if missing), pending tags follow; ingredients via `set_ingredients` |
 | Meals | `search_ingredients(query, limit=10)` | read | Ranked lookup in the caller's active catalogue: canonical name, match type, score, flags |
 | Meals | `set_ingredients(photo_id, ingredients)` | write | Atomically replaces the ingredient list (all or nothing); returns per-ingredient match status |
 | Meals | `tag_meal(photo_id, handles)` | write | Tag accepted connections |
@@ -105,7 +105,7 @@ Alembic data migration (e.g. `056`: muesli, flour, bread, pasta, cocoa).
 ## Date and time conventions
 
 - `entries.date` — `DATE`, one row per day; tool `date` arguments are calendar dates (`YYYY-MM-DD`), no timezone conversion. `set_supplements` defaults to today in `app_timezone` (Europe/Luxembourg).
-- `entries.entry_time`, `photos.meal_time` — `TIMESTAMP WITHOUT TIME ZONE` (naive UTC)
+- `entries.entry_time`, `photos.meal_time` — `TIMESTAMP WITHOUT TIME ZONE` (naive UTC). MCP `log_meal` / `edit_meal` treat an offset-free `meal_time` as `app_timezone` (Europe/Luxembourg) and store the UTC instant; an explicit offset is kept. `edit_meal` picks the day from that local date.
 - Symptom severities in `symptoms_json` are integers keyed by catalog `key` (e.g. `"vss": 6`)
 
 ## Supplements
