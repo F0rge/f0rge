@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from f0rge_db.organisation import tenant_id_ctx
+
 import uuid
 from collections import defaultdict
 from typing import Optional
@@ -564,7 +566,9 @@ class PickService:
         user = await self.user_crud.get_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
-        settings = await self.settings_crud.get_or_create_for_team(user.team_id)
+        settings = await self.settings_crud.get_or_create_for_team(
+            (tenant_id_ctx.get() or user.team_id)
+        )
         return bool(settings.always_prefer_warehouse), parse_pick_priority(settings.pick_priority)
 
     async def _stock_rows(self, sku_ids: list[uuid.UUID]) -> list[LocationStockRow]:

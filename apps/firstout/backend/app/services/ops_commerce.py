@@ -31,6 +31,7 @@ from app.models.ops_commerce_order import OpsCommerceOrder
 from app.models.sales_order import SalesOrder, SalesOrderLine, SalesOrderStatus
 from app.models.sku import Sku
 from app.models.team import Team
+from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
 from app.models.user import User
 from app.schemas.ops_commerce import (
     OpsProductResponse,
@@ -632,6 +633,8 @@ class OpsCommerceService:
             raise HTTPException(status_code=403, detail="Wrong operational company")
         if not await self.crud.has_company(company_id):
             raise HTTPException(status_code=503, detail="Operational company is unavailable")
+        tenant_id_ctx.set(company_id)
+        await apply_tenant_context(self.db, company_id)
         return company_id
 
     @staticmethod

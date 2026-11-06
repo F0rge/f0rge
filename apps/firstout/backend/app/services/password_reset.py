@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
+
 import asyncio
 import datetime
 import hashlib
@@ -186,6 +188,8 @@ class PasswordResetService:
         user = await self.users.get_by_email(email)
         if user is None or user.is_disabled:
             return
+        tenant_id_ctx.set(user.team_id)
+        await apply_tenant_context(self.db, user.team_id)
         team_settings = await self.team_settings.get_or_create_for_team(user.team_id)
         config = mailbox_or_none(team_settings)
         if config is None:

@@ -7,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.team import Team
+from app.models.membership import Membership
+from f0rge_db.organisation import tenant_id_ctx
 from app.models.user import User
 from app.services.auth import hash_password
 from f0rge_core.exceptions import ValidationError
@@ -22,6 +24,7 @@ class StorefrontSystemActorService:
         self.db = db
 
     async def ensure(self, company_id: uuid.UUID | None = None) -> User:
+        company_id = company_id or tenant_id_ctx.get()
         team = (
             await self.db.get(Team, company_id)
             if company_id
@@ -29,7 +32,12 @@ class StorefrontSystemActorService:
         )
         if team is None:
             raise ValidationError("Storefront operational company is unavailable")
-        actor = await self.db.scalar(select(User).where(User.email == STOREFRONT_ACTOR_EMAIL))
+        actor_email = (
+            STOREFRONT_ACTOR_EMAIL
+            if team.slug == "firstout"
+            else f"storefront-{team.id}@system.example.com"
+        )
+        actor = await self.db.scalar(select(User).where(User.email == actor_email))
         if actor is not None:
             if actor.team_id != team.id or actor.role != "system" or not actor.is_disabled:
                 raise ValidationError("Storefront system actor is not safely configured")
@@ -37,7 +45,7 @@ class StorefrontSystemActorService:
 
         actor = User(
             team_id=team.id,
-            email=STOREFRONT_ACTOR_EMAIL,
+            email=actor_email,
             password_hash=hash_password(secrets.token_urlsafe(48)),
             display_name="Storefront integration (system)",
             role="system",
@@ -46,4 +54,14 @@ class StorefrontSystemActorService:
         async with unit_of_work(self.db):
             self.db.add(actor)
             await self.db.flush()
+            self.db.add(
+                Membership(
+                    user_id=actor.id,
+                    team_id=team.id,
+                    role="system",
+                    permission_source="legacy",
+                    is_disabled=True,
+                    is_legacy_home=True,
+                )
+            )
         return actor

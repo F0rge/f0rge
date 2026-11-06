@@ -3,7 +3,13 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
+import jwt
+from sqlalchemy import select
+from app.models.team import Team
+from app.services.auth import _require_jwt_secret
+from app.services.tenant_host import request_tenant_slug, require_matching_host
+from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
 from fastapi.responses import Response
 
 from app.database import get_db
@@ -30,12 +36,30 @@ def get_portal_service(db: AsyncSession = Depends(get_db)) -> CustomerPortalServ
 
 
 async def get_current_portal_user_id(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     firstout_customer_session: Optional[str] = Cookie(default=None, alias=CUSTOMER_COOKIE_NAME),
 ) -> uuid.UUID:
     if not firstout_customer_session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        return decode_customer_access_token(firstout_customer_session)
+        user_id = decode_customer_access_token(firstout_customer_session)
+        claims = jwt.decode(firstout_customer_session, _require_jwt_secret(), algorithms=["HS256"])
+        team_id = claims.get("team_id")
+        query = (
+            select(Team).where(Team.id == uuid.UUID(team_id))
+            if team_id
+            else select(Team).where(Team.slug == "firstout")
+        )
+        team = (await db.execute(query)).scalar_one_or_none()
+        if team is None or team.status != "active":
+            raise HTTPException(401, "Invalid session")
+        require_matching_host(request_tenant_slug(request), team.slug)
+        await apply_tenant_context(db, team.id)
+        tenant_id_ctx.set(team.id)
+        return user_id
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
 
@@ -43,9 +67,19 @@ async def get_current_portal_user_id(
 @portal_router.post("/login", response_model=PortalLoginResponse)
 async def portal_login(
     body: PortalLoginRequest,
+    request: Request,
     response: Response,
+    db: AsyncSession = Depends(get_db),
     service: CustomerPortalService = Depends(get_portal_service),
 ):
+    slug = request_tenant_slug(request) or "firstout"
+    team = (
+        await db.execute(select(Team).where(Team.slug == slug, Team.status == "active"))
+    ).scalar_one_or_none()
+    if team is None:
+        raise HTTPException(404, "Unknown tenant")
+    await apply_tenant_context(db, team.id)
+    tenant_id_ctx.set(team.id)
     return await service.login(body, response)
 
 

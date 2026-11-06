@@ -8,6 +8,15 @@ class Settings(BaseSettings):
     direct_database_url: str = ""
     cors_origins: list[str] = ["http://localhost:3003"]
     jwt_secret: str = ""
+    clerk_enabled: bool = False
+    clerk_issuer: str = ""
+    clerk_authorized_parties: list[str] = []
+    clerk_webhook_secret: str = ""
+    clerk_import_enabled: bool = False
+    frontend_proxy_secret: str = ""
+    billing_disabled: bool = True
+    billing_test_mode: bool = True
+    tenant_signup_enabled: bool = False
     cookie_secure: bool = False
     # Origin for links in email (password reset). Empty uses the first CORS origin.
     public_app_url: str = ""

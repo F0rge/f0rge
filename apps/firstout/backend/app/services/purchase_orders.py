@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from f0rge_db.organisation import tenant_id_ctx
+
 import asyncio
 import datetime
 import uuid
@@ -525,7 +527,9 @@ class PurchaseOrderService:
         user = await self.user_crud.get_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(
+            (tenant_id_ctx.get() or user.team_id)
+        )
         threshold = team_settings.po_approval_threshold_zar
         if threshold is None:
             return PurchaseOrderStatus.OPEN
@@ -539,7 +543,9 @@ class PurchaseOrderService:
         user = await self.user_crud.get_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(
+            (tenant_id_ctx.get() or user.team_id)
+        )
         threshold = team_settings.po_approval_threshold_zar
         if threshold is None:
             return

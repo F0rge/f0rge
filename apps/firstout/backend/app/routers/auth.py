@@ -26,10 +26,11 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 @router.post("/login", response_model=LoginResponse)
 async def login(
     body: LoginRequest,
+    request: Request,
     response: Response,
     service: AuthService = Depends(get_auth_service),
 ):
-    return await service.login(body.email, body.password, response)
+    return await service.login(body.email, body.password, response, request)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 import datetime
 import uuid
 
@@ -13,6 +15,10 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.models.user import User
 from app.permissions import role_slug
+from app.services.staff_identity import resolve_membership, staff_identity_ctx
+from app.services.tenant_host import request_tenant_slug, require_matching_host
+from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
+from fastapi import Request
 from app.services.permissions import PermissionService
 from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
@@ -84,8 +90,15 @@ def decode_access_token(token: str) -> uuid.UUID:
 
 
 async def issue_session_cookie(db: AsyncSession, user: User, response: Response) -> None:
-    team_settings = await TeamSettingsCRUD(db).get_or_create_for_team(user.team_id)
-    ttl_hours = int(team_settings.session_ttl_hours)
+    if tenant_id_ctx.get() not in (None, user.team_id):
+        from app.database import tenant_session
+
+        async with tenant_session(user.team_id) as home_db:
+            team_settings = await TeamSettingsCRUD(home_db).get_or_create_for_team(user.team_id)
+            ttl_hours = int(team_settings.session_ttl_hours)
+    else:
+        team_settings = await TeamSettingsCRUD(db).get_or_create_for_team(user.team_id)
+        ttl_hours = int(team_settings.session_ttl_hours)
     token = create_access_token(
         user.id,
         ttl_hours,
@@ -124,13 +137,20 @@ class AuthService:
         self.db = db
         self.crud = UserCRUD(db)
 
-    async def login(self, email: str, password: str, response: Response) -> dict[str, str]:
+    async def login(
+        self, email: str, password: str, response: Response, request: Optional[Request] = None
+    ) -> dict[str, str]:
         user = await self.crud.get_by_email(email)
         if user is None or not verify_password(password, user.password_hash):
             raise UnauthorizedError("Invalid email or password")
         if user.is_disabled:
             raise UnauthorizedError("Invalid email or password")
 
+        identity = await resolve_membership(self.db, user)
+        if request is not None:
+            require_matching_host(request_tenant_slug(request), identity.team_slug)
+        tenant_id_ctx.set(identity.team_id)
+        await apply_tenant_context(self.db, identity.team_id)
         await issue_session_cookie(self.db, user, response)
         return {"email": user.email}
 
@@ -141,12 +161,17 @@ class AuthService:
         user = await self.crud.get_by_id(user_id)
         if user is None or user.is_disabled:
             raise UnauthorizedError("Invalid session")
+        identity = staff_identity_ctx.get()
         return {
             "id": user.id,
             "email": user.email,
             "display_name": user.display_name,
-            "role": role_slug(user.role),
+            "role": identity.role if identity else role_slug(user.role),
             "permissions": await PermissionService(self.db).keys_for_user(user.id),
-            "team": {"id": user.team.id, "name": user.team.name},
-            "default_location_id": user.default_location_id,
+            "team": {"id": identity.team_id, "name": identity.team_name}
+            if identity
+            else {"id": user.team.id, "name": user.team.name},
+            "default_location_id": identity.default_location_id
+            if identity
+            else user.default_location_id,
         }
