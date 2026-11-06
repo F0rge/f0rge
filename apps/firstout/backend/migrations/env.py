@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -24,7 +25,7 @@ def run_migrations_offline() -> None:
     """Run migrations in offline mode — emits SQL to stdout, no live DB."""
     context.configure(
         url=resolve_database_url(
-            settings.database_url,
+            os.environ.get("MIGRATION_DATABASE_URL") or settings.database_url,
             direct_url=settings.direct_database_url,
         ),
         target_metadata=target_metadata,
@@ -45,7 +46,7 @@ async def run_migrations_online() -> None:
     """Run migrations in online mode using the async engine from settings."""
     engine = create_async_engine(
         resolve_database_url(
-            settings.database_url,
+            os.environ.get("MIGRATION_DATABASE_URL") or settings.database_url,
             direct_url=settings.direct_database_url,
         ),
         echo=False,

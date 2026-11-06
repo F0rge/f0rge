@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -35,7 +36,7 @@ class PurchaseOrderStatus(str, enum.Enum):
     RECEIVED = "received"
 
 
-class PurchaseOrder(UUIDPkMixin, TimestampMixin, Base):
+class PurchaseOrder(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "purchase_orders"
 
     po_number: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
@@ -93,7 +94,7 @@ class PurchaseOrder(UUIDPkMixin, TimestampMixin, Base):
     bills: Mapped[list["LandingBill"]] = relationship(back_populates="purchase_order")
 
 
-class PoLine(UUIDPkMixin, TimestampMixin, Base):
+class PoLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "po_lines"
 
     po_id: Mapped[uuid.UUID] = mapped_column(
@@ -133,7 +134,7 @@ class LandingBillKind(str, enum.Enum):
     CLEARANCE = "clearance"
 
 
-class LandingBill(UUIDPkMixin, TimestampMixin, Base):
+class LandingBill(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "landing_bills"
 
     po_id: Mapped[uuid.UUID] = mapped_column(

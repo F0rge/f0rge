@@ -6,6 +6,7 @@ from sqlalchemy import Boolean, CheckConstraint, Enum, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -28,7 +29,7 @@ def default_tax_treatment(account_type: AccountType) -> TaxTreatment:
     return TaxTreatment.NONE
 
 
-class Account(UUIDPkMixin, TimestampMixin, Base):
+class Account(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "accounts"
 
     code: Mapped[str] = mapped_column(String(16), nullable=False)

@@ -6,10 +6,11 @@ from sqlalchemy import Boolean, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class TaxRule(UUIDPkMixin, TimestampMixin, Base):
+class TaxRule(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "tax_rules"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)

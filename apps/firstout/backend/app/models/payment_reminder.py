@@ -10,10 +10,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class PaymentReminderSend(UUIDPkMixin, TimestampMixin, Base):
+class PaymentReminderSend(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """One row per invoice and schedule step. Sent and skipped never send again."""
 
     __tablename__ = "payment_reminder_sends"

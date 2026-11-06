@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import UUIDPkMixin
 
 
@@ -38,7 +39,7 @@ class CommsStatus(str, enum.Enum):
     OPENED = "opened"
 
 
-class CommsMessage(UUIDPkMixin, Base):
+class CommsMessage(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "comms_messages"
 
     created_at: Mapped[datetime.datetime] = mapped_column(
