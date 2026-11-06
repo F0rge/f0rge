@@ -49,7 +49,7 @@ async def test_migration_002_seed_stores_lowercase_role(
     subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=BACKEND_ROOT,
-        env={**os.environ, "DATABASE_URL": mig_url},
+        env={**os.environ, "DATABASE_URL": mig_url, "MIGRATION_DATABASE_URL": mig_url},
         check=True,
     )
 

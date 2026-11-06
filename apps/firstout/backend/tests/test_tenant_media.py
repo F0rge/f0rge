@@ -35,6 +35,8 @@ async def test_remote_media_returns_authenticated_bytes_without_redirect(
                 "our_ref": "MEDIA-REMOTE",
                 "our_barcode": "MEDIA-REMOTE",
                 "name": "Synthetic media SKU",
+                "design": "Synthetic media design",
+                "fabric": "Synthetic media fabric",
             },
         )
         assert created.status_code == 201
@@ -58,6 +60,10 @@ async def test_remote_media_returns_authenticated_bytes_without_redirect(
 
     remote = Mock(side_effect=read_remote)
     monkeypatch.setattr(settings, "bucket_name", "synthetic-media-bucket")
+    monkeypatch.setattr(settings, "aws_access_key_id", "synthetic-only-id")
+    monkeypatch.setattr(settings, "aws_secret_access_key", "synthetic-only-secret")
+    monkeypatch.setattr(settings, "aws_endpoint_url_s3", "https://storage.synthetic.invalid")
+    assert object_storage.is_remote_storage_ref(key)
     monkeypatch.setattr(object_storage._storage, "read_bytes", remote)
     monkeypatch.setattr(
         object_storage._storage,

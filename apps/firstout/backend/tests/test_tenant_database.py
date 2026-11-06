@@ -27,35 +27,58 @@ def migrate(url: str, target: str, command: str = "upgrade") -> None:
     subprocess.run(
         [sys.executable, "-m", "alembic", command, target],
         cwd=BACKEND,
-        env={**os.environ, "DATABASE_URL": url},
+        env={**os.environ, "DATABASE_URL": url, "MIGRATION_DATABASE_URL": url},
         check=True,
         capture_output=True,
     )
 
 
-def disposable_url():
-    url = os.environ.get("FIRSTOUT_RLS_TEST_DATABASE_URL")
-    if not url:
-        pytest.skip("requires disposable FIRSTOUT_RLS_TEST_DATABASE_URL")
-    parsed = make_url(url)
-    assert parsed.host in (None, "localhost", "127.0.0.1")
-    assert parsed.database == "firstout_astra_rls"
-    return url
+@pytest_asyncio.fixture(scope="module")
+async def rls_database_url(request):
+    """CI always runs this matrix in an independent database on its testcontainer.
+
+    A local override is optional; absence never silently skips the security gate.
+    The pure storage test does not request this fixture or start a container.
+    """
+    explicit = os.environ.get("FIRSTOUT_RLS_TEST_DATABASE_URL")
+    if explicit:
+        parsed = make_url(explicit)
+        assert parsed.host in (None, "localhost", "127.0.0.1")
+        assert parsed.database == "firstout_astra_rls"
+        yield explicit
+        return
+    from f0rge_testing import async_url
+
+    container = request.getfixturevalue("postgres_container")
+    parsed = make_url(async_url(container))
+    database = "firstout_rls_test_" + uuid.uuid4().hex
+    admin = create_async_engine(parsed.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    async with admin.connect() as conn:
+        await conn.execute(sa.text(f'CREATE DATABASE "{database}"'))
+    try:
+        yield parsed.set(database=database).render_as_string(hide_password=False)
+    finally:
+        async with admin.connect() as conn:
+            await conn.execute(sa.text(f'DROP DATABASE "{database}" WITH (FORCE)'))
+        await admin.dispose()
 
 
 @pytest_asyncio.fixture
-async def tenant_database():
-    url = disposable_url()
+async def tenant_database(rls_database_url):
+    url = rls_database_url
     parsed = make_url(url)
     migrate(url, "head")
     admin = create_async_engine(url)
     role = "firstout_astra_runtime"
+    runtime_password = "synthetic-" + uuid.uuid4().hex
     async with admin.begin() as conn:
         exists = await conn.scalar(
             sa.text("SELECT 1 FROM pg_roles WHERE rolname=:role"), {"role": role}
         )
         if not exists:
             await conn.execute(sa.text(f"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS"))
+        # Generated synthetic secret only for this disposable role, never logged.
+        await conn.execute(sa.text(f"ALTER ROLE {role} PASSWORD '{runtime_password}'"))
         await conn.execute(sa.text(f"GRANT USAGE ON SCHEMA public TO {role}"))
         await conn.execute(
             sa.text(f"GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO {role}")
@@ -64,7 +87,7 @@ async def tenant_database():
             sa.text(f"GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO {role}")
         )
     runtime = create_async_engine(
-        parsed.set(username=role, password=None), pool_size=1, max_overflow=0
+        parsed.set(username=role, password=runtime_password), pool_size=1, max_overflow=0
     )
     maker = async_sessionmaker(runtime, expire_on_commit=False, sync_session_class=TenantSession)
     a, b = uuid.uuid4(), uuid.uuid4()
@@ -173,8 +196,8 @@ async def test_nonowner_rls_pool_abort_commit_refresh_and_foreign_keys(tenant_da
     assert tenant_id_ctx.get() is None
 
 
-async def test_migration_roundtrip_preserves_staff_and_grants():
-    url = disposable_url()
+async def test_migration_roundtrip_preserves_staff_and_grants(rls_database_url):
+    url = rls_database_url
     migrate(url, "078_password_reset", "downgrade")
     admin = create_async_engine(url)
     user_id = uuid.uuid4()
