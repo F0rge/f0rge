@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   ButtonSet,
@@ -257,9 +259,7 @@ function SkuThumb({ sku }: { sku: Sku }) {
     );
   }
   return (
-    // Cookie + 302 Tigris redirect — same as catalogue; not next/image.
-    // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
-    <img
+    <StaffImage
       className="firstout-till-thumb"
       src={skuPhotoUrl(sku.id)}
       alt=""
@@ -1311,8 +1311,7 @@ export default function TillPage() {
               <div>
                 <strong>Seller</strong>
                 {companySettings?.has_logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
-                  <img
+                  <StaffImage
                     className="firstout-company-logo"
                     src={settingsLogoUrl()}
                     alt=""

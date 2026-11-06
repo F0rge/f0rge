@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   FileUploaderDropContainer,
@@ -36,6 +38,7 @@ import {
   type DocumentSequence,
   type Location,
 } from "@/lib/api";
+import { LabelSettings } from "@/app/settings/label-settings";
 import { CommunicationsSettings } from "@/app/settings/communications-settings";
 import { PaymentRemindersSettings } from "@/app/settings/payment-reminders-settings";
 import { useAuth } from "@/lib/auth";
@@ -370,6 +373,7 @@ export default function SettingsPage() {
             <Tab>Documents</Tab>
             <Tab>Locations</Tab>
             <Tab>Operations</Tab>
+            <Tab>Labels</Tab>
             <Tab>Communications</Tab>
             {canConfigureReminders ? <Tab>Payment reminders</Tab> : null}
           </TabList>
@@ -442,8 +446,7 @@ export default function SettingsPage() {
                       existing logo.
                     </p>
                     {hasLogo ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
-                      <img
+                      <StaffImage
                         className="firstout-company-logo"
                         src={`${settingsLogoUrl()}?v=${logoVersion}`}
                         alt="Company logo"
@@ -697,6 +700,7 @@ export default function SettingsPage() {
               </Tile>
             </TabPanel>
 
+            <TabPanel><Tile><LabelSettings settings={settings} canMutate={canMutate} /></Tile></TabPanel>
             <TabPanel>
               <Tile>
                 <CommunicationsSettings />

@@ -57,6 +57,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
+import { StaffOrganizationSwitcher } from "@/components/staff-provider";
 import { useAuth } from "@/lib/auth";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import { can } from "@/lib/permissions";
@@ -160,6 +161,7 @@ export function AppShell({ children }: AppShellProps) {
   );
   const isPublic =
     pathname === "/login" ||
+    pathname.startsWith("/clerk-login") ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
     pathname.startsWith("/trade");
@@ -305,6 +307,7 @@ export function AppShell({ children }: AppShellProps) {
               <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
             </HeaderName>
             <HeaderGlobalBar>
+              <StaffOrganizationSwitcher />
               <HeaderSearch />
               <span className="firstout-tour-anchor" data-tour="header-page-tour">
                 <PageTourButton />

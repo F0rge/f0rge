@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   Checkbox,
@@ -563,7 +565,7 @@ function CataloguePageContent() {
                                       }}
                                     >
                                       {entry.photo_storage_key ? (
-                                        <img
+                                        <StaffImage
                                           src={skuPhotoUrl(entry.id)}
                                           alt={entry.name}
                                           width={48}

@@ -1,3 +1,4 @@
+import { staffFetch } from "./staff-fetch";
 const REVOKE_MS = 60_000;
 
 function filenameFromDisposition(header: string | null, fallback: string): string {
@@ -20,7 +21,7 @@ export async function downloadApiFile(
   mode: "save" | "open" = "save",
 ): Promise<void> {
   const { ApiError, callName, formatHttpError, parseErrorMessage } = await import("./api");
-  const response = await fetch(path, { credentials: "include" });
+  const response = await staffFetch(path, { credentials: "include" });
   const call = callName("GET", path);
   if (!response.ok) {
     throw new ApiError(

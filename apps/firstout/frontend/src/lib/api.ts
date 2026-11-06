@@ -1,3 +1,4 @@
+import { staffFetch } from "./staff-fetch";
 import { downloadApiFile } from "./download";
 import {
   normalizePick,
@@ -253,7 +254,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
   let response: Response;
   try {
-    response = await fetch(`/api/v1${path}`, {
+    response = await staffFetch(`/api/v1${path}`, {
       ...options,
       credentials: "include",
       headers,
@@ -533,7 +534,7 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   const call = callName("POST", path);
   let response: Response;
   try {
-    response = await fetch(`/api/v1${path}`, {
+    response = await staffFetch(`/api/v1${path}`, {
       method: "POST",
       credentials: "include",
       body: formData,
@@ -3503,7 +3504,7 @@ export type DocumentSequenceUpdate = {
   padding?: number;
 };
 
-export type AppSettings = {
+export type AppSettings = import("./label-settings").LabelSettings & {
   vat_rate: string;
   vat_percent: string;
   home_currency: string;
@@ -3650,7 +3651,7 @@ export function openCommsSend(result: CommsSendResult): void {
   }
 }
 
-export function updateSettings(payload: {
+export function updateSettings(payload: Partial<import("./label-settings").LabelSettings> & {
   vat_rate?: string;
   home_currency?: string;
   always_prefer_warehouse?: boolean;
