@@ -249,18 +249,17 @@ class BootstrapService:
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.user_crud = UserCRUD(db)
-        self.team_crud = TeamCRUD(db)
 
     async def seed_if_empty(self) -> None:
-        if await self.user_crud.count() > 0:
+        if await self.db.scalar(select(User.id).limit(1)) is not None:
             return
 
         async with unit_of_work(self.db):
-            team: Optional[Team] = await self.team_crud.get_first()
+            team: Optional[Team] = await self.db.scalar(select(Team).limit(1))
             if team is None:
                 team = Team(name=self.DEFAULT_TEAM_NAME)
-                await self.team_crud.add_and_flush(team)
+                self.db.add(team)
+                await self.db.flush()
 
             owner = User(
                 team_id=team.id,
@@ -269,7 +268,8 @@ class BootstrapService:
                 display_name="Owner",
                 role=UserRole.OWNER,
             )
-            await self.user_crud.add_and_flush(owner)
+            self.db.add(owner)
+            await self.db.flush()
             self.db.add(
                 Membership(
                     user_id=owner.id,

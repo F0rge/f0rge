@@ -27,7 +27,11 @@ def jwks_client(issuer: str) -> jwt.PyJWKClient:
 
 
 async def verify_clerk_token(token: str) -> ClerkIdentity:
-    if not settings.clerk_enabled or not settings.clerk_issuer.startswith("https://"):
+    if (
+        settings.tenant_isolation_mode != "enforced"
+        or not settings.clerk_enabled
+        or not settings.clerk_issuer.startswith("https://")
+    ):
         raise HTTPException(401, "Clerk authentication unavailable")
     try:
         key = await asyncio.to_thread(

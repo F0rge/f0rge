@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import UserCRUD
+from app.crud.user import IdentityLookup, UserCRUD
 from app.models.user import User
 from app.permissions import role_slug
 from app.services.staff_identity import resolve_membership, staff_identity_ctx
@@ -140,7 +140,7 @@ class AuthService:
     async def login(
         self, email: str, password: str, response: Response, request: Optional[Request] = None
     ) -> dict[str, str]:
-        user = await self.crud.get_by_email(email)
+        user = await IdentityLookup(self.db).for_password_login(email)
         if user is None or not verify_password(password, user.password_hash):
             raise UnauthorizedError("Invalid email or password")
         if user.is_disabled:

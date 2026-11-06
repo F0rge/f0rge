@@ -34,19 +34,3 @@ export function frontendHost(
   const slug = normalized.slice(0, -suffix.length);
   return SLUG.test(slug) && !RESERVED_SLUGS.has(slug) ? normalized : null;
 }
-
-export function frontendHeaders(
-  original: Headers,
-  allowLocal = false,
-  secret?: string,
-): Headers | null {
-  const host = frontendHost(original.get("host"), allowLocal);
-  if (!host) return null;
-  const headers = new Headers(original);
-  headers.delete("x-forwarded-host");
-  headers.delete("forwarded");
-  headers.delete("x-firstout-proxy-secret");
-  headers.set("x-firstout-frontend-host", host);
-  if (secret) headers.set("x-firstout-proxy-secret", secret);
-  return headers;
-}

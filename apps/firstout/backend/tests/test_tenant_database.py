@@ -64,7 +64,11 @@ async def rls_database_url(request):
 
 
 @pytest_asyncio.fixture
-async def tenant_database(rls_database_url):
+async def tenant_database(rls_database_url, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
+    monkeypatch.setattr(settings, "frontend_proxy_secret", "synthetic-proxy-secret")
     url = rls_database_url
     parsed = make_url(url)
     migrate(url, "head")
@@ -90,6 +94,15 @@ async def tenant_database(rls_database_url):
         parsed.set(username=role, password=runtime_password), pool_size=1, max_overflow=0
     )
     maker = async_sessionmaker(runtime, expire_on_commit=False, sync_session_class=TenantSession)
+    from app.commands.tenant_cutover import activate_rls
+    from app.runtime_database import verify_isolation_stage, verify_runtime_role
+
+    async with async_sessionmaker(admin)() as owner, maker() as runtime_session:
+        await activate_rls(owner, runtime_session)
+        await owner.commit()
+        await runtime_session.rollback()
+        await verify_runtime_role(runtime_session)
+        await verify_isolation_stage(runtime_session)
     a, b = uuid.uuid4(), uuid.uuid4()
     async with admin.begin() as conn:
         for team in (a, b):
@@ -107,6 +120,7 @@ async def tenant_database(rls_database_url):
             for table in (
                 "tax_invoices",
                 "skus",
+                "customer_portal_users",
                 "customers",
                 "memberships",
                 "cin7_import_runs",
@@ -258,7 +272,7 @@ async def test_migration_roundtrip_preserves_staff_and_grants(rls_database_url):
                     "SELECT count(*) FROM pg_class WHERE relkind='r' AND relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity"
                 )
             )
-            == 81
+            == 0
         )
     migrate(url, "078_password_reset", "downgrade")
     migrate(url, "head")
@@ -502,3 +516,444 @@ async def test_duplicate_sku_invoice_keys_and_authenticated_uuid_idor(tenant_dat
             app.dependency_overrides.pop(get_db, None)
         else:
             app.dependency_overrides[get_db] = previous
+
+
+async def test_http_directory_media_trade_inverse_and_public_isolation(
+    tenant_database, monkeypatch
+):
+    """Real HTTP dependencies execute against migrated, forced, non-owner RLS."""
+    import hashlib
+    import hmac
+    import jwt
+    from httpx import ASGITransport, AsyncClient
+    from app.config import settings
+    from app.database import get_db
+    from app.main import app
+    from app.models.customer import Customer
+    from app.models.customer_portal_user import CustomerPortalUser
+    from app.models.membership import Membership
+    from app.models.sku import Sku
+    from app.models.user import User
+    from app.services import object_storage
+    from app.services.auth import create_access_token
+    from app.services.customer_portal import CUSTOMER_COOKIE_NAME, create_customer_access_token
+
+    _, _, maker, a, b = tenant_database
+    users, skus, portal_tokens = {}, {}, {}
+    for team in (a, b):
+        async with organisation_session(maker, team) as session:
+            user = User(
+                team_id=team,
+                email=f"http-{team}@example.com",
+                password_hash="synthetic",
+                role="owner",
+            )
+            customer = Customer(name=f"Trade {team}", customer_type="trade")
+            sku = Sku(
+                our_ref=f"HTTP-{team}",
+                our_barcode=f"HTTP-{team}",
+                name="HTTP synthetic",
+                design="plain",
+                fabric="plain",
+                retail_ex_vat=100,
+                storefront_published=True,
+            )
+            sku.photo_storage_key = object_storage.save_bytes(
+                "http/photo.jpg", b"synthetic-image-" + str(team).encode()
+            )
+            session.add_all([user, customer, sku])
+            await session.flush()
+            session.add(
+                Membership(
+                    user_id=user.id,
+                    team_id=team,
+                    role="owner",
+                    permission_source="legacy",
+                    is_legacy_home=True,
+                )
+            )
+            portal = CustomerPortalUser(
+                customer_id=customer.id,
+                email=f"trade-{team}@example.com",
+                password_hash="synthetic",
+            )
+            session.add(portal)
+            await session.commit()
+            users[team], skus[team] = user.id, sku.id
+            portal_tokens[team] = create_customer_access_token(portal.id, 1)
+
+    async def runtime_get_db():
+        async with organisation_session(maker) as session:
+            yield session
+
+    monkeypatch.setattr(settings, "ops_commerce_token", "synthetic-public-token")
+    monkeypatch.setattr(settings, "ops_commerce_company_id", str(a))
+    monkeypatch.setattr(settings, "ops_commerce_allowed_host", "test")
+    previous = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = runtime_get_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            for own, foreign in ((a, b), (b, a)):
+                client.cookies.clear()
+                client.cookies.set("firstout_session", create_access_token(users[own], 1))
+                signed_headers = {
+                    "x-firstout-frontend-host": f"proof-{own.hex}.app.firstout.co.za",
+                }
+                unsigned = await client.get("/api/v1/users", headers=signed_headers)
+                assert unsigned.status_code == 400, unsigned.text
+                signed_headers["x-firstout-proxy-signature"] = hmac.new(
+                    settings.frontend_proxy_secret.encode(),
+                    signed_headers["x-firstout-frontend-host"].encode(),
+                    hashlib.sha256,
+                ).hexdigest()
+                directory = await client.get("/api/v1/users", headers=signed_headers)
+                assert directory.status_code == 200, directory.text
+                assert {row["id"] for row in directory.json()} == {str(users[own])}
+                assert "password_hash" not in directory.text
+                from types import SimpleNamespace
+                from unittest.mock import AsyncMock
+
+                monkeypatch.setattr(
+                    "app.middleware.auth.verify_clerk_token",
+                    AsyncMock(
+                        return_value=SimpleNamespace(
+                            user_id="unknown-clerk-subject",
+                            org_id=f"org-{own}",
+                            org_slug=f"proof-{own.hex}",
+                            org_role="admin",
+                            email=f"http-{own}@example.com",
+                        )
+                    ),
+                )
+                mismatched = await client.get(
+                    "/api/v1/auth/me",
+                    headers={"Authorization": "Bearer unknown-subject-with-existing-email"},
+                )
+                assert mismatched.status_code == 401, mismatched.text
+                assert (await client.get("/api/v1/auth/me")).status_code == 200
+                update = await client.patch(
+                    f"/api/v1/users/{users[foreign]}", json={"display_name": "Forbidden"}
+                )
+                assert update.status_code == 404, update.text
+                own_media = await client.get(f"/api/v1/skus/{skus[own]}/photo")
+                assert own_media.status_code == 200, own_media.text
+                assert own_media.content == b"synthetic-image-" + str(own).encode()
+                foreign_media = await client.get(f"/api/v1/skus/{skus[foreign]}/photo")
+                assert foreign_media.status_code == 404, foreign_media.text
+
+                client.cookies.clear()
+                client.cookies.set(CUSTOMER_COOKIE_NAME, portal_tokens[own])
+                assert (await client.get("/api/v1/portal/me")).status_code == 200
+                # Inverse: a non-home user's otherwise valid old cookie must NOT
+                # inherit the home tenant's visibility when its claim is missing.
+                claims = jwt.decode(portal_tokens[own], settings.jwt_secret, algorithms=["HS256"])
+                claims.pop("team_id")
+                client.cookies.set(
+                    CUSTOMER_COOKIE_NAME, jwt.encode(claims, settings.jwt_secret, algorithm="HS256")
+                )
+                rejected = await client.get("/api/v1/portal/me")
+                assert rejected.status_code in (401, 404), rejected.text
+                assert str(own) not in rejected.text
+
+            client.cookies.clear()
+            headers = {"Authorization": "Bearer synthetic-public-token", "x-ops-company-id": str(a)}
+            public = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
+            assert public.status_code == 200, public.text
+            assert {row["source_sku_id"] for row in public.json()["products"]} == {str(skus[a])}
+            headers["x-ops-company-id"] = str(b)
+            rejected = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
+            assert rejected.status_code == 403, rejected.text
+            assert (await client.get("/api/v1/ops-commerce/v1/products")).status_code == 401
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous
+
+
+async def test_default_location_cross_tenant_foreign_key(tenant_database):
+    from app.models.location import Location
+    from app.models.membership import Membership
+    from app.models.user import User
+
+    _, _, maker, a, b = tenant_database
+    async with organisation_session(maker, b) as session:
+        location = Location(name="Foreign warehouse", type="warehouse")
+        session.add(location)
+        await session.commit()
+        foreign_location = location.id
+    async with organisation_session(maker, a) as session:
+        user = User(
+            team_id=a, email=f"location-{a}@example.com", password_hash="synthetic", role="owner"
+        )
+        session.add(user)
+        await session.commit()
+        user_id = user.id
+        session.add(
+            Membership(
+                user_id=user_id,
+                team_id=a,
+                role="owner",
+                is_legacy_home=True,
+                default_location_id=foreign_location,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await session.commit()
+        await session.rollback()
+        # Legacy profile defaults are also an ownership edge, not just membership defaults.
+        await session.execute(
+            sa.text("UPDATE users SET default_location_id=:location WHERE id=:id"),
+            {"location": foreign_location, "id": user_id},
+        )
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+
+async def test_prod_shaped_boot_staff_proxy_and_cutover_rollback(rls_database_url, monkeypatch):
+    """Current owner URL + safe head + absent secrets preserves real staff login."""
+    from httpx import ASGITransport, AsyncClient
+    from app.commands.tenant_cutover import activate_rls, deactivate_rls
+    from app.config import settings
+    from app.database import get_db
+    from app.main import app
+    from app.runtime_database import verify_isolation_stage, verify_runtime_role
+    from app.services.auth import hash_password
+
+    # The module's synthetic tenants have been removed by fixture teardown.
+    migrate(rls_database_url, "078_password_reset", "downgrade")
+    migrate(rls_database_url, "head")
+    engine = create_async_engine(rls_database_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False, sync_session_class=TenantSession)
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "single_home")
+    monkeypatch.setattr(settings, "frontend_proxy_secret", "")
+    monkeypatch.setattr(settings, "cookie_secure", True)
+    monkeypatch.setattr(settings, "clerk_enabled", False)
+    monkeypatch.setattr(settings, "tenant_signup_enabled", False)
+    monkeypatch.setattr(settings, "clerk_import_enabled", False)
+    monkeypatch.setattr("app.database.async_session_maker", maker)
+    monkeypatch.setattr("app.main.async_session_maker", maker)
+    user_id = uuid.uuid4()
+    runtime_password = "synthetic-" + uuid.uuid4().hex
+    async with engine.begin() as conn:
+        if not await conn.scalar(
+            sa.text("SELECT 1 FROM pg_roles WHERE rolname='firstout_astra_runtime'")
+        ):
+            await conn.execute(
+                sa.text("CREATE ROLE firstout_astra_runtime LOGIN NOSUPERUSER NOBYPASSRLS")
+            )
+        await conn.execute(
+            sa.text(f"ALTER ROLE firstout_astra_runtime PASSWORD '{runtime_password}'")
+        )
+        await conn.execute(sa.text("GRANT USAGE ON SCHEMA public TO firstout_astra_runtime"))
+        await conn.execute(
+            sa.text(
+                "GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO firstout_astra_runtime"
+            )
+        )
+        await conn.execute(
+            sa.text(
+                "GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO firstout_astra_runtime"
+            )
+        )
+        assert await conn.scalar(
+            sa.text("SELECT rolsuper FROM pg_roles WHERE rolname=current_user")
+        )
+        home = await conn.scalar(sa.text("SELECT id FROM teams WHERE slug='firstout'"))
+        await conn.execute(
+            sa.text(
+                "INSERT INTO users(id,team_id,email,password_hash,role,is_disabled,token_version,created_at,updated_at) VALUES (:id,:team,:email,:password,'owner',false,0,now(),now())"
+            ),
+            {
+                "id": user_id,
+                "team": home,
+                "email": f"compat-{user_id}@example.com",
+                "password": hash_password("synthetic-compat-password"),
+            },
+        )
+        await conn.execute(
+            sa.text(
+                "INSERT INTO memberships(id,user_id,team_id,role,permission_source,is_disabled,is_legacy_home,created_at,updated_at) VALUES (:id,:user,:team,'owner','legacy',false,true,now(),now())"
+            ),
+            {"id": uuid.uuid4(), "user": user_id, "team": home},
+        )
+
+    async def compatible_get_db():
+        async with organisation_session(maker) as session:
+            yield session
+
+    previous = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = compatible_get_db
+    try:
+        async with app.router.lifespan_context(app):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="https://api.firstout.co.za"
+            ) as client:
+                headers = {"x-firstout-frontend-host": "firstout.co.za"}
+                login = await client.post(
+                    "/api/v1/auth/login",
+                    json={
+                        "email": f"compat-{user_id}@example.com",
+                        "password": "synthetic-compat-password",
+                    },
+                    headers=headers,
+                )
+                assert login.status_code == 200, login.text
+                assert "firstout_session" in login.cookies
+                me = await client.get("/api/v1/auth/me", headers=headers)
+                assert me.status_code == 200, me.text
+                assert "users.manage" in me.json()["permissions"]
+                # An untrusted forwarded origin is ignored, never used to switch tenants.
+                spoofed = await client.get(
+                    "/api/v1/auth/me",
+                    headers={"x-firstout-frontend-host": "attacker.app.firstout.co.za"},
+                )
+                assert spoofed.status_code == 200, spoofed.text
+        async with maker() as owner, maker() as unsafe_runtime:
+            monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
+            monkeypatch.setattr(settings, "frontend_proxy_secret", "synthetic-proxy-secret")
+            with pytest.raises(RuntimeError, match="non-owner"):
+                await activate_rls(owner, unsafe_runtime)
+            await owner.rollback()
+            assert not await owner.scalar(
+                sa.text(
+                    "SELECT bool_or(relrowsecurity) FROM pg_class WHERE relnamespace='public'::regnamespace"
+                )
+            )
+        runtime = create_async_engine(
+            make_url(rls_database_url).set(
+                username="firstout_astra_runtime", password=runtime_password
+            )
+        )
+        try:
+            async with maker() as owner, async_sessionmaker(runtime)() as runtime_session:
+                await activate_rls(owner, runtime_session)
+                await owner.commit()
+                await runtime_session.rollback()
+                await verify_runtime_role(runtime_session)
+                # The same app must boot and serve existing staff after switching
+                # its real connection factory to the non-owner runtime role.
+                import hashlib
+                import hmac
+                from app.services.auth import create_access_token
+
+                runtime_maker = async_sessionmaker(
+                    runtime, expire_on_commit=False, sync_session_class=TenantSession
+                )
+                monkeypatch.setattr("app.database.async_session_maker", runtime_maker)
+                monkeypatch.setattr("app.main.async_session_maker", runtime_maker)
+
+                async def enforced_get_db():
+                    async with organisation_session(runtime_maker) as session:
+                        yield session
+
+                app.dependency_overrides[get_db] = enforced_get_db
+                async with app.router.lifespan_context(app):
+                    async with AsyncClient(
+                        transport=ASGITransport(app=app), base_url="https://api.firstout.co.za"
+                    ) as client:
+                        client.cookies.set("firstout_session", create_access_token(user_id, 1))
+                        headers = {"x-firstout-frontend-host": "firstout.co.za"}
+                        unsigned = await client.get("/api/v1/auth/me", headers=headers)
+                        assert unsigned.status_code == 400, unsigned.text
+                        headers["x-firstout-proxy-signature"] = "forged"
+                        assert (
+                            await client.get("/api/v1/auth/me", headers=headers)
+                        ).status_code == 400
+                        headers["x-firstout-proxy-signature"] = hmac.new(
+                            settings.frontend_proxy_secret.encode(),
+                            b"firstout.co.za",
+                            hashlib.sha256,
+                        ).hexdigest()
+                        authenticated = await client.get("/api/v1/auth/me", headers=headers)
+                        assert authenticated.status_code == 200, authenticated.text
+                        assert "users.manage" in authenticated.json()["permissions"]
+                monkeypatch.setattr("app.database.async_session_maker", maker)
+                monkeypatch.setattr("app.main.async_session_maker", maker)
+                monkeypatch.setattr(settings, "tenant_isolation_mode", "single_home")
+                with pytest.raises(RuntimeError, match="RLS is already active"):
+                    await verify_isolation_stage(owner)
+                await owner.rollback()
+                await deactivate_rls(owner)
+                await owner.commit()
+                await verify_isolation_stage(owner)
+        finally:
+            await runtime.dispose()
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous
+        async with engine.begin() as conn:
+            await conn.execute(
+                sa.text("DELETE FROM memberships WHERE user_id=:id"), {"id": user_id}
+            )
+            await conn.execute(sa.text("DELETE FROM users WHERE id=:id"), {"id": user_id})
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("change", ["missing", "permissive"])
+async def test_enforced_startup_rejects_policy_tampering(tenant_database, change):
+    from app.runtime_database import verify_runtime_role
+
+    admin, runtime, _, _, _ = tenant_database
+    async with async_sessionmaker(admin)() as owner, async_sessionmaker(runtime)() as session:
+        if change == "missing":
+            await owner.execute(sa.text("DROP POLICY organisation_isolation ON accounts"))
+        else:
+            await owner.execute(sa.text("CREATE POLICY unwanted_bypass ON accounts USING (true)"))
+        await owner.commit()
+        try:
+            with pytest.raises(RuntimeError, match="sole canonical"):
+                await verify_runtime_role(session)
+        finally:
+            if change == "missing":
+                await owner.execute(
+                    sa.text(
+                        "CREATE POLICY organisation_isolation ON accounts FOR ALL USING (team_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (team_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)"
+                    )
+                )
+            else:
+                await owner.execute(sa.text("DROP POLICY unwanted_bypass ON accounts"))
+            await owner.commit()
+            await session.rollback()
+            await verify_runtime_role(session)
+
+
+async def test_rollback_refuses_additional_tenants_without_disabling_rls(
+    tenant_database, monkeypatch
+):
+    from app.commands.tenant_cutover import deactivate_rls
+    from app.config import settings
+
+    admin, _, _, _, _ = tenant_database
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "single_home")
+    async with async_sessionmaker(admin)() as owner:
+        protected = sa.text(
+            "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity"
+        )
+        before = await owner.scalar(protected)
+        assert before == 81
+        with pytest.raises(RuntimeError, match="additional tenants"):
+            await deactivate_rls(owner)
+        await owner.rollback()
+        assert await owner.scalar(protected) == before
+
+
+async def test_activation_requires_every_dml_grant(tenant_database):
+    from app.commands.tenant_cutover import activate_rls
+    from app.runtime_database import verify_runtime_role
+
+    admin, runtime, _, _, _ = tenant_database
+    async with async_sessionmaker(admin)() as owner, async_sessionmaker(runtime)() as session:
+        await owner.execute(sa.text("REVOKE DELETE ON accounts FROM firstout_astra_runtime"))
+        await owner.commit()
+        try:
+            with pytest.raises(RuntimeError, match="DML grants"):
+                await activate_rls(owner, session)
+            await owner.rollback()
+        finally:
+            await owner.execute(sa.text("GRANT DELETE ON accounts TO firstout_astra_runtime"))
+            await owner.commit()
+            await session.rollback()
+            await verify_runtime_role(session)

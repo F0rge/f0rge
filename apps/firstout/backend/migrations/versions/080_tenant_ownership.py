@@ -146,7 +146,7 @@ def _tenant_foreign_keys(*, reverse: bool = False) -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     if reverse:
-        for table in TENANT_TABLES:
+        for table in (*TENANT_TABLES, "users", "memberships"):
             for fk in inspector.get_foreign_keys(table):
                 if fk["name"].startswith("tenant_fk_"):
                     op.drop_constraint(fk["name"], table, type_="foreignkey")
@@ -156,7 +156,7 @@ def _tenant_foreign_keys(*, reverse: bool = False) -> None:
                     op.drop_constraint(constraint["name"], table, type_="unique")
         return
     targets = set()
-    for table in TENANT_TABLES:
+    for table in (*TENANT_TABLES, "users", "memberships"):
         for fk in inspector.get_foreign_keys(table):
             target = fk["referred_table"]
             if target not in TENANT_TABLES or "team_id" in fk["constrained_columns"]:

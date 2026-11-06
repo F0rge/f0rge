@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import datetime
 import json
+import hmac
 import time
 import uuid
 from types import SimpleNamespace
@@ -53,6 +54,7 @@ def test_hosts_and_mismatch():
 
 
 def test_proxy_host_secret(monkeypatch):
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
     monkeypatch.setattr(settings, "frontend_proxy_secret", "synthetic-proxy")
     headers = [
         (b"host", b"api.firstout.co.za"),
@@ -61,7 +63,14 @@ def test_proxy_host_secret(monkeypatch):
     request = Request({"type": "http", "headers": headers})
     with pytest.raises(HTTPException):
         request_tenant_slug(request)
-    headers.append((b"x-firstout-proxy-secret", b"synthetic-proxy"))
+    headers.append(
+        (
+            b"x-firstout-proxy-signature",
+            hmac.digest(b"synthetic-proxy", b"firstout.app.firstout.co.za", "sha256")
+            .hex()
+            .encode(),
+        )
+    )
     assert request_tenant_slug(Request({"type": "http", "headers": headers})) == "firstout"
 
 
@@ -70,6 +79,7 @@ async def test_signed_clerk_jwt_and_bad_signature(monkeypatch):
     from app.services import clerk
 
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
     monkeypatch.setattr(settings, "clerk_enabled", True)
     monkeypatch.setattr(settings, "clerk_issuer", "https://synthetic.clerk.accounts.dev")
     monkeypatch.setattr(settings, "clerk_authorized_parties", ["https://app.firstout.co.za"])

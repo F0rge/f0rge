@@ -10,17 +10,107 @@ This PR stage authorizes local synthetic tests and a PR into `main` only. **Do n
 4. Restore onto a disposable isolated instance using a separate `PGSERVICE=firstout-restore` and `pg_restore --exit-on-error --no-owner --dbname=firstout_restore firstout-before-mt.dump`. Ensure this service points only at the disposable instance. Start the pre-change API against the restore with outbound mail, WhatsApp, storage writes and scheduled reminders disabled. Verify a synthetic account login, representative document reads, and totals/counts. Record commands, exit codes and checks without credentials. An untested dump does not pass this gate.
 5. Rehearse upgrade, downgrade and reapply on that disposable restore. Compare staff inventory before/after: identical identity UUID, password digest (compare inside DB without exporting), token version and disabled state; every inventoried grant remains on the original membership. Test existing cookies. Do not deploy if any access path is removed.
 
-## Runtime roles and isolation
+## Explicit stages: compatibility first, enforcement by operator cutover
 
-Use separate migration and runtime connections. The runtime role must be `NOSUPERUSER NOBYPASSRLS`, must not own any application table, and must not inherit the migration owner role. Grant only schema usage and application DML/sequence access. Verify `pg_roles` and `pg_class` ownership using an operator connection; never print connection URLs. Test using the actual runtime connection topology, including any transaction pooler and configured direct connection selection.
+`TENANT_ISOLATION_MODE=single_home` is the default. It boots against the current
+production `postgres` URL, with no Clerk configuration and no proxy secret. It
+logs that **database tenant isolation is NOT enforced**. Startup refuses a second
+team, any home slug other than `firstout`, enabled Clerk/import/signup, or any
+already-active tenant RLS. Request authentication also rejects other teams.
+This stage serves only the existing home and preserves `firstout_session` login,
+existing cookies, forgot-password and staff access. It is not a multi-tenant mode.
+`COOKIE_SECURE` controls cookies only and never selects the database security mode.
 
-Apply schema and backfill revisions after `078_password_reset`, then enable the separately reversible FORCE RLS revision only after the synthetic non-owner isolation matrix passes. Cross-tenant migration data work uses `f0rge_db.rls.migration_bypass`; runtime code must never set the migrator service role. Confirm policies on every tenant-owned table, composite tenant foreign keys, scoped uniqueness, and no-context raw SQL denial. Exercise commit/refresh, failed transaction rollback and pool reuse. Every request and detached job must use the tenant session helper, including CLI import with explicit `--team-id`.
+Without `FRONTEND_PROXY_SECRET`, the API ignores `x-firstout-frontend-host` and
+validates the direct API/apex host. That untrusted header never selects a tenant;
+direct tenant hosts are unavailable in single-home mode. With a secret configured,
+Next strips supplied forwarding/signature headers and sends HMAC-SHA256 of the
+normalized frontend host as `x-firstout-proxy-signature`; the API requires the
+matching signature. Configure the same server-only secret on both services during
+an approved coordinated change and test before enforcement. A one-sided secret
+change can fail proxy requests; it is not an approved intermediate serving state.
+The signature authenticates a host assertion, not user identity or arbitrary
+request content. Membership checks remain required.
+
+### Routine preDeploy: schema preparation, no RLS activation
+
+Railway retains `DATABASE_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}" alembic
+upgrade head`. Revisions 079 and 080 preserve home identity/grants and backfill
+business `team_id`, scoped keys and composite tenant foreign keys. This is a real
+schema/data migration: the inventory and restored-backup rehearsal above remain
+required before authorizing deployment. Revision 080 changes **row ownership
+columns**, not PostgreSQL table owners or role credentials.
+
+**081 installs the policies only; it does not ENABLE or FORCE RLS.** These revisions
+are unreleased on the verified production shape. They are deliberately corrected
+before release. No environment-conditioned no-op is stamped as an applied security
+migration. `alembic upgrade head` does not activate or deactivate existing RLS,
+including on subsequent deploys. A database already running the earlier PR's 081
+with FORCE RLS must use enforced mode or the explicit single-home rollback below;
+startup never silently disables its protection.
+
+### Separately authorized cutover (never part of preDeploy)
+
+1. Complete the backup restore, staff cookie/login, permission comparison and
+   Alembic upgrade/reversal rehearsal on a disposable production restore. Save
+   aggregate evidence without credentials. Live backup access is still blocked
+   in the HOLD evidence; do not repeat private-network dump attempts or open a
+   TCP proxy as part of this fix round.
+2. Provision a dedicated runtime role `NOSUPERUSER NOBYPASSRLS`, owning no
+   application table, with no membership in owner/superuser/BYPASSRLS roles.
+   Grant schema usage and only required application DML/sequence privileges.
+   Keep `MIGRATION_DATABASE_URL` restricted to the operator/preDeploy owner
+   connection. Never switch the serving runtime credential yet.
+3. Rehearse both database URLs on the exact intended topology. The command
+   compares database name and server address/port, but this is not a substitute
+   for verifying endpoint identity (especially Unix sockets or poolers). Ensure
+   the role has every required SELECT/INSERT/UPDATE/DELETE grant. Identity tables
+   remain application-scoped; a shared legacy-login runtime still needs password
+   verification access. Do not describe their broad DB grants as RLS isolation.
+4. Provision and verify the matching proxy secret, keep Clerk/signup/import off,
+   and prepare `TENANT_ISOLATION_MODE=enforced` plus the new runtime URL. Stop
+   serving traffic and pause workers for the short cutover boundary. Do not run
+   the compatibility API concurrently with activation: its owner credential
+   would bypass RLS and must not serve multi-tenant traffic.
+5. In a controlled operator environment (URLs in secret environment, never argv),
+   with the prepared **runtime** `DATABASE_URL`, explicit owner
+   `MIGRATION_DATABASE_URL`, `TENANT_ISOLATION_MODE=enforced`, and proxy secret:
+
+   ```bash
+   cd apps/firstout/backend
+   uv run python -m app.commands.tenant_cutover activate
+   ```
+
+   The command checks the actual runtime role, table-owner membership, canonical
+   prepared policies, same DB and all DML grants before transactional ENABLE/FORCE.
+   It commits activation and verifies it through the runtime connection. A failure
+   before commit rolls back activation. A verification/connection failure after
+   commit leaves RLS active: inspect it; never assume rollback occurred.
+6. Switch the stopped API to the verified runtime URL and enforced mode, then
+   restart. Startup requires a proxy secret, non-owner/non-bypass runtime role,
+   exactly the canonical tenant policies, and ENABLE + FORCE on every business
+   table. It refuses to boot on mismatch even with `COOKIE_SECURE=false`.
+   Repeat actual legacy staff login/cookie, two-tenant HTTP, asset and job checks
+   before restoring traffic or creating a second tenant. Enabling Clerk and new
+   tenant provisioning remains a later independently approved gate.
+
+### Threat model
+
+RLS with mutable `app.tenant_id` protects against application mistakes such as
+missing tenant filters and foreign-UUID access when the runtime is a non-owner
+`NOBYPASSRLS` role. Composite foreign keys prevent cross-tenant references.
+The application selects the GUC after authenticating membership; transactions and
+pool cleanup prevent context leakage. This does **not** protect compromised DB
+credentials capable of setting another tenant GUC, arbitrary SQL execution,
+superusers, BYPASSRLS roles, or owners able to alter policies. There is no claim of
+SQL-injection immunity. Directory identities/memberships are application-scoped,
+with narrow pre-authentication lookup paths; they are not covered by business RLS.
 
 ## Clerk dual-auth rollout
 
 Confirm Organisations, membership-required sessions, and required token claims are available on the already authorized Clerk plan. If an additional paid feature is required, stop and record `RISK.md`; do not upgrade. Use standard org roles plus Firstout's local permission catalogue rather than purchasing custom roles. Disable frontend organisation creation for imported members; never enable Clerk Billing.
 
-Configure the issuer/JWKS, authorized parties, publishable key and Svix signing secret through secret storage. Keep secrets out of source, browser bundles (except the publishable key), test evidence and logs. Set the same server-only `FRONTEND_PROXY_SECRET` on frontend and API before enabling the new proxy. Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` at frontend build time and `CLERK_SECRET_KEY` server-side when enabling Clerk. `FIRSTOUT_ALLOW_LOCAL_HOSTS=true` is only for local production-shaped smoke tests. The proxy overwrites browser-provided forwarding headers and the API validates the strict host before comparing it with signed membership. Keep legacy login and forgot-password available.
+Configure the issuer/JWKS, authorized parties, publishable key and Svix signing secret through secret storage. Keep secrets out of source, browser bundles (except the publishable key), test evidence and logs. After enforcement cutover, retain the same server-only `FRONTEND_PROXY_SECRET` on frontend and API. Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` at frontend build time and `CLERK_SECRET_KEY` server-side when enabling Clerk. `FIRSTOUT_ALLOW_LOCAL_HOSTS=true` is only for local production-shaped smoke tests. The proxy overwrites browser-provided forwarding headers and the API validates the strict host before comparing it with signed membership. Keep legacy login and forgot-password available.
 
 Rehearse import only with synthetic users and a fake provider or a confirmed Clerk test instance. Import bcrypt digest with external_id equal to Firstout UUID. Never link by email string, never reset passwords as an import strategy, never import the storefront system actor. Disabled users must be locked before completing the import. Failed imports leave local login and grants intact. Preserve local home memberships when Clerk deletion webhooks arrive. A roster is not login proof.
 
@@ -40,7 +130,18 @@ Billing remains disabled and provider test mode only. Signup is a gated scaffold
 
 Stop the rollout on any lost legacy login/grant, cross-tenant read/write, missing asset, invalid runtime role, or unexplained migration difference. Disable new Clerk/signup entry points while retaining legacy login; pause background jobs. Do not delete imported users, memberships, hashes or token versions. Revert application deployment to the recorded compatible SHA only after checking schema compatibility.
 
-The RLS revision can be downgraded separately during isolated rehearsal, but disabling RLS is not a safe production workaround for a tenant leak. For a destructive migration failure, halt writes, restore the tested encrypted backup into a replacement isolated instance, validate inventory, documents and sign-ins, then perform a separately approved connection cutover. Retain the failed database for investigation. Down-migrating scoped uniqueness can fail once tenants share natural keys; never delete conflicting rows to force downgrade. Restore is the recovery path in that case.
+Before any additional tenant exists, an approved rollback can stop traffic/jobs,
+set the operator environment to `TENANT_ISOLATION_MODE=single_home` with all
+Clerk/signup/import flags false, and run
+`uv run python -m app.commands.tenant_cutover deactivate` using the owner URL.
+This refuses unless only the original Firstout team exists, transactionally
+removes ENABLE/FORCE while retaining prepared policies, and checks compatibility.
+Then restore the compatibility runtime settings and verify staff access before
+resuming traffic. Rehearse activate → deactivate → activate on a disposable DB.
+Do not downgrade schema just to roll back enforcement. Once any additional tenant
+exists, this compatibility rollback is forbidden: keep enforced mode, repair or
+restore to an isolated replacement. Disabling RLS is never a production workaround
+for a tenant leak. For a destructive migration failure, halt writes, restore the tested encrypted backup into a replacement isolated instance, validate inventory, documents and sign-ins, then perform a separately approved connection cutover. Retain the failed database for investigation. Down-migrating scoped uniqueness can fail once tenants share natural keys; never delete conflicting rows to force downgrade. Restore is the recovery path in that case.
 
 ## Evidence checklist
 

@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import settings
 from app.models.membership import Membership
 from app.models.team import Team
 from app.models.user import User
@@ -45,6 +46,10 @@ async def resolve_membership(
     if row is None or user.is_disabled:
         raise HTTPException(401, "Invalid membership")
     membership, team = row
+    if settings.tenant_isolation_mode == "single_home" and (
+        team.slug != "firstout" or clerk_org_id is not None
+    ):
+        raise HTTPException(403, "Tenant cutover is not active")
     if (membership.is_disabled and not membership.is_legacy_home) or team.status != "active":
         raise HTTPException(403, "Membership unavailable")
     # Existing home role edits remain authoritative during dual-auth; the migration

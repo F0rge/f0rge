@@ -5,7 +5,15 @@ from typing import Optional
 import uuid
 
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
-from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import (
+    ForeignKeyConstraint,
+    Boolean,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +38,11 @@ class Membership(UUIDPkMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "default_location_id"],
+            ["locations.team_id", "locations.id"],
+            name="fk_memberships_default_location_tenant",
+        ),
         UniqueConstraint("user_id", "team_id", name="uq_memberships_user_team"),
         Index(
             "uq_memberships_legacy_home",

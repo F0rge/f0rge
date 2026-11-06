@@ -5,7 +5,7 @@ import uuid
 
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, text
+from sqlalchemy import ForeignKeyConstraint, Boolean, ForeignKey, Integer, String, text
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,14 @@ class User(UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "default_location_id"],
+            ["locations.team_id", "locations.id"],
+            name="fk_users_default_location_tenant",
+        ),
     )
 
     team: Mapped["Team"] = relationship(back_populates="users")

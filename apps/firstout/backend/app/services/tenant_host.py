@@ -43,19 +43,25 @@ def tenant_slug_from_host(host: str, *, allow_local: bool = False) -> Optional[s
 def request_tenant_slug(request: Request) -> Optional[str]:
     direct = request.headers.get("host", "")
     forwarded = request.headers.get("x-firstout-frontend-host")
-    # Next overwrites both headers. A shared proxy secret prevents public API clients
-    # from presenting an unsigned frontend origin; never trust X-Forwarded-Host.
-    if forwarded is not None:
-        supplied = request.headers.get("x-firstout-proxy-secret", "")
-        if not settings.frontend_proxy_secret or not hmac.compare_digest(
-            supplied, settings.frontend_proxy_secret
-        ):
+    direct_slug = tenant_slug_from_host(direct, allow_local=not settings.cookie_secure)
+    slug = direct_slug
+    if forwarded is not None and settings.frontend_proxy_secret:
+        supplied = request.headers.get("x-firstout-proxy-signature", "")
+        expected = hmac.digest(
+            settings.frontend_proxy_secret.encode(), forwarded.encode(), "sha256"
+        ).hex()
+        if not hmac.compare_digest(supplied, expected):
             raise HTTPException(400, "Untrusted frontend host")
-        tenant_slug_from_host(direct, allow_local=not settings.cookie_secure)
-        return tenant_slug_from_host(forwarded, allow_local=not settings.cookie_secure)
-    if request.headers.get("x-forwarded-host"):
+        slug = tenant_slug_from_host(forwarded, allow_local=not settings.cookie_secure)
+    elif settings.tenant_isolation_mode == "enforced" and forwarded is not None:
+        raise HTTPException(400, "Untrusted frontend host")
+    elif request.headers.get("x-forwarded-host") and forwarded is None:
         raise HTTPException(400, "Untrusted forwarded host")
-    return tenant_slug_from_host(direct, allow_local=not settings.cookie_secure)
+    # Without a secret the legacy Next header is ignored, never used to select a
+    # tenant. Only the original home can be served before explicit cutover.
+    if settings.tenant_isolation_mode == "single_home" and slug is not None:
+        raise HTTPException(403, "Tenant hosts require enforced tenancy")
+    return slug
 
 
 def require_matching_host(slug: Optional[str], team_slug: str) -> None:

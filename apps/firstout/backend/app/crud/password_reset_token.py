@@ -7,15 +7,17 @@ from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.user import ScopedDirectoryCRUD, require_directory_tenant
+from app.models.membership import Membership
 from app.models.password_reset_token import PasswordResetToken
-from f0rge_db.crud import BaseCRUD
 
 
-class PasswordResetTokenCRUD(BaseCRUD):
+class PasswordResetTokenCRUD(ScopedDirectoryCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
     async def get_by_hash_for_update(self, token_hash: str) -> Optional[PasswordResetToken]:
+        """Pre-auth capability lookup by high-entropy token hash, never enumeration."""
         result = await self.db.execute(
             select(PasswordResetToken)
             .where(PasswordResetToken.token_hash == token_hash)
@@ -29,6 +31,11 @@ class PasswordResetTokenCRUD(BaseCRUD):
             .where(
                 PasswordResetToken.user_id == user_id,
                 PasswordResetToken.used_at.is_(None),
+                PasswordResetToken.user_id.in_(
+                    select(Membership.user_id).where(
+                        Membership.team_id == require_directory_tenant()
+                    )
+                ),
             )
             .values(used_at=now)
         )

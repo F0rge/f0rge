@@ -1,6 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse, type NextFetchEvent } from "next/server";
-import { frontendHeaders } from "./lib/tenant-host";
+import { frontendHeaders } from "./lib/frontend-headers";
 
 function forward(request: NextRequest) {
   const headers = frontendHeaders(

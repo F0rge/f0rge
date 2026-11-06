@@ -5,6 +5,8 @@ import datetime
 import json
 from unittest.mock import AsyncMock
 
+import pytest
+
 from sqlalchemy import select
 from svix.webhooks import Webhook
 from app.config import settings
@@ -208,3 +210,40 @@ async def test_role_seed_does_not_reduce_existing_grants(async_db):
     await RoleSeedService(async_db).seed()
     await async_db.refresh(role, ["permissions"])
     assert "till.sell" in {permission.key for permission in role.permissions}
+
+
+async def test_unknown_clerk_subject_cannot_link_existing_email(
+    owner_client, async_db, monkeypatch
+):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
+    user = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
+    team = await async_db.get(Team, user.team_id)
+    user.clerk_user_id = "user_real_staff"
+    team.clerk_org_id = "org_real_staff"
+    await async_db.flush()
+    # Even a verified token with the same email must resolve only by its sub.
+    monkeypatch.setattr(
+        "app.middleware.auth.verify_clerk_token",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                user_id="user_unknown_subject",
+                org_id=team.clerk_org_id,
+                org_slug=team.slug,
+                org_role="admin",
+                email=user.email,
+            )
+        ),
+    )
+    response = await owner_client.get(
+        "/api/v1/auth/me", headers={"Authorization": "Bearer unknown-sub"}
+    )
+    assert response.status_code == 401
+    assert user.clerk_user_id == "user_real_staff"
+    assert (await owner_client.get("/api/v1/auth/me")).status_code == 200
+
+
+@pytest.fixture(autouse=True)
+def enforced_tenant_mode(monkeypatch):
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")

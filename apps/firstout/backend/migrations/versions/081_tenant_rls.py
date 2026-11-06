@@ -1,4 +1,4 @@
-"""Separately reversible FORCE RLS gate for all Firstout business rows.
+"""Prepare tenant policies; activation is a separate operator cutover.
 
 Revision ID: 081_tenant_rls
 Revises: 080_tenant_ownership
@@ -99,11 +99,10 @@ TENANT_TABLES = (
 
 
 def upgrade() -> None:
-    # Deploy gate verifies DATABASE_URL is non-owner NOSUPERUSER NOBYPASSRLS.
-    # Migration connection remains separate; no role credentials are embedded here.
+    # Unreleased revision: routine preDeploy prepares policies only. Never gate an
+    # Alembic revision with a skipped/no-op upgrade: activation is outside Alembic.
+    # app.commands.tenant_cutover verifies the runtime role before ENABLE/FORCE.
     for table in TENANT_TABLES:
-        op.execute(sa.text(f'ALTER TABLE "{table}" ENABLE ROW LEVEL SECURITY'))
-        op.execute(sa.text(f'ALTER TABLE "{table}" FORCE ROW LEVEL SECURITY'))
         condition = "team_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid"
         op.execute(
             sa.text(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { frontendHeaders, frontendHost, RESERVED_SLUGS } from "./tenant-host";
+import { frontendHost, RESERVED_SLUGS } from "./tenant-host";
+import { frontendHeaders } from "./frontend-headers";
 
 describe("tenant host forwarding", () => {
   it("accepts only exact named hosts and valid tenant slugs", () => {
@@ -38,6 +39,7 @@ describe("tenant host forwarding", () => {
         "x-forwarded-host": "other.app.firstout.co.za",
         forwarded: "host=other.app.firstout.co.za",
         "x-firstout-proxy-secret": "attacker",
+        "x-firstout-proxy-signature": "attacker",
       }),
       false,
       "synthetic-proxy",
@@ -45,7 +47,10 @@ describe("tenant host forwarding", () => {
     expect(headers?.get("x-firstout-frontend-host")).toBe(
       "firstout.app.firstout.co.za",
     );
-    expect(headers?.get("x-firstout-proxy-secret")).toBe("synthetic-proxy");
+    expect(headers?.has("x-firstout-proxy-secret")).toBe(false);
+    expect(headers?.get("x-firstout-proxy-signature")).toBe(
+      "7061cdfcf2daa8fec87459cafcbf2df8598b860538178f777476867df59d6f68",
+    );
     expect(headers?.has("x-forwarded-host")).toBe(false);
     expect(headers?.has("forwarded")).toBe(false);
     expect(

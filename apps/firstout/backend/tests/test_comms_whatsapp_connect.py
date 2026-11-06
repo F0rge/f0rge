@@ -125,7 +125,13 @@ async def test_webhook_valid_signature_updates_outbox(
 
     @asynccontextmanager
     async def scoped_session(team_id=None):
-        yield async_db
+        from f0rge_db.organisation import tenant_id_ctx
+
+        token = tenant_id_ctx.set(team_id)
+        try:
+            yield async_db
+        finally:
+            tenant_id_ctx.reset(token)
 
     monkeypatch.setattr("app.routers.whatsapp_webhook.tenant_session", scoped_session)
     secret = "app-secret"

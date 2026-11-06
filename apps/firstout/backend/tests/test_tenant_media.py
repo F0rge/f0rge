@@ -89,3 +89,8 @@ async def test_remote_media_returns_authenticated_bytes_without_redirect(
     remote.assert_called_once_with(key)
     assert (await owner_client.get(endpoint)).status_code == 401
     remote.assert_called_once_with(key)
+
+
+@pytest.fixture(autouse=True)
+def enforced_tenant_mode(monkeypatch):
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")

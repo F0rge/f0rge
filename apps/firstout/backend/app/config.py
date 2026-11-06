@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -13,6 +15,7 @@ class Settings(BaseSettings):
     clerk_authorized_parties: list[str] = []
     clerk_webhook_secret: str = ""
     clerk_import_enabled: bool = False
+    tenant_isolation_mode: Literal["single_home", "enforced"] = "single_home"
     frontend_proxy_secret: str = ""
     billing_disabled: bool = True
     billing_test_mode: bool = True

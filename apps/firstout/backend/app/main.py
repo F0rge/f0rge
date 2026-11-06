@@ -137,10 +137,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Identity bootstrap precedes domain seeding; all business work runs with an
     # explicit organisation, including recovery after process restarts.
     async with tenant_session() as directory:
-        if settings.cookie_secure:
-            from app.runtime_database import verify_runtime_role
+        from app.runtime_database import verify_isolation_stage
 
-            await verify_runtime_role(directory)
+        await verify_isolation_stage(directory)
         await BootstrapService(directory).seed_if_empty()
         teams = list(await directory.scalars(select(Team).where(Team.status == "active")))
         team_ids = [(team.id, team.slug) for team in teams]

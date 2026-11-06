@@ -5,7 +5,16 @@ import enum
 
 from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, Index, String, text
+from sqlalchemy import (
+    UniqueConstraint,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    Index,
+    String,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -36,6 +45,7 @@ class Location(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     archived_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("team_id", "id", name="uq_locations_team_id_id"),
         Index(
             "ix_locations_name_active_lower",
             text("lower(name)"),

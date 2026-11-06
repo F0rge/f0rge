@@ -431,7 +431,11 @@ async def test_invoiced_refund_is_bounded_by_completed_return_credit_note(
     async_client: AsyncClient,
     async_db: AsyncSession,
     refund_ops_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # This test deliberately authenticates a second tenant; compatibility mode
+    # correctly rejects that until the explicit enforcement stage.
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
     payload, handoff, sku_id = await _import_stocked_handoff(
         owner_client, async_db, refund_ops_headers
     )

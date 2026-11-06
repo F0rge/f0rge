@@ -4,8 +4,6 @@ import uuid
 from typing import Optional
 
 from fastapi import Cookie, Depends, Header, HTTPException, status
-from sqlalchemy import select
-from app.models.user import User
 from app.services.clerk import verify_clerk_token
 from app.services.staff_identity import staff_identity_ctx, resolve_membership
 from app.services.tenant_host import request_tenant_slug, require_matching_host
@@ -15,7 +13,7 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from f0rge_db.auth_context import user_id_ctx
-from app.crud.user import UserCRUD
+from app.crud.user import IdentityLookup
 from app.database import get_db
 from app.services.auth import (
     JWT_COOKIE_NAME,
@@ -104,16 +102,14 @@ async def get_current_user_id(
             user_id, version = decode_access_token_claims(bearer)
         except UnauthorizedError:
             claims = await verify_clerk_token(bearer)
-            user = (
-                await db.execute(select(User).where(User.clerk_user_id == claims.user_id))
-            ).scalar_one_or_none()
+            user = await IdentityLookup(db).by_clerk_subject(claims.user_id)
             if user is None or user.is_disabled:
                 raise HTTPException(401, "Invalid session")
             identity = await resolve_membership(db, user, clerk_org_id=claims.org_id)
             if claims.org_slug != identity.team_slug:
                 raise HTTPException(403, "Organisation slug mismatch")
         else:
-            user = await UserCRUD(db).get_by_id(user_id)
+            user = await IdentityLookup(db).by_session_subject(user_id)
             if user is None or user.is_disabled or int(user.token_version) != version:
                 raise HTTPException(401, "Invalid session")
             identity = await resolve_membership(db, user)
@@ -122,7 +118,7 @@ async def get_current_user_id(
             user_id, version = decode_access_token_claims(firstout_session)
         except UnauthorizedError as exc:
             raise HTTPException(401, "Invalid session") from exc
-        user = await UserCRUD(db).get_by_id(user_id)
+        user = await IdentityLookup(db).by_session_subject(user_id)
         if user is None or user.is_disabled or int(user.token_version) != version:
             raise HTTPException(401, "Invalid session")
         identity = await resolve_membership(db, user)
