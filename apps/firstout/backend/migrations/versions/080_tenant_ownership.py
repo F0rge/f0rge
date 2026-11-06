@@ -205,9 +205,12 @@ def upgrade() -> None:
             op.create_index(f"ix_{table}_team_id", table, ["team_id"])
         _scope_keys(table)
     _tenant_foreign_keys()
+    # Scoped uniqueness no longer supplies a leading sku_id lookup index.
+    op.create_index("ix_sku_stock_sku_lookup", "sku_stock", ["sku_id"])
 
 
 def downgrade() -> None:
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_sku_stock_sku_lookup"))
     _tenant_foreign_keys(reverse=True)
     # Refuses safely if new tenants have duplicate natural keys: restore backup instead.
     for table in reversed(TENANT_TABLES):

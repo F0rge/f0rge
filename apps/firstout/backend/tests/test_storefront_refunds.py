@@ -19,7 +19,8 @@ from f0rge_testing import async_url
 
 from app.config import settings
 from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.database import Base, get_db
+from app.database import Base, TenantSession, get_db
+from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
 from app.main import app
 from app.models.account import Account
 from app.models.credit_note import CreditNote
@@ -32,6 +33,8 @@ from app.models.sales_order import SalesOrder
 from app.models.stock_return import StockReturnDisposition, StockReturnStatus
 from app.models.team import Team
 from app.models.user import User
+from app.models.membership import Membership
+from tests.conftest import independent_request_sessions
 from app.services.auth import hash_password
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
@@ -448,30 +451,47 @@ async def test_invoiced_refund_is_bounded_by_completed_return_credit_note(
     invoice_line_id = invoice_line.id
     assert location_id is not None
 
-    other_team = Team(name=f"Refund scope fixture {uuid4()}")
+    other_team = Team(name=f"Refund scope fixture {uuid4()}", slug=f"refund-{uuid4().hex}")
     async_db.add(other_team)
     await async_db.flush()
     foreign_email = f"refund-scope-{uuid4()}@example.com"
+    foreign_user = User(
+        team_id=other_team.id,
+        email=foreign_email,
+        password_hash=hash_password("refund-scope-password"),
+        role="books",
+    )
+    async_db.add(foreign_user)
+    await async_db.flush()
     async_db.add(
-        User(
+        Membership(
+            user_id=foreign_user.id,
             team_id=other_team.id,
-            email=foreign_email,
-            password_hash=hash_password("refund-scope-password"),
             role="books",
+            permission_source="legacy",
+            is_legacy_home=True,
         )
     )
     await async_db.flush()
-    owner_client.cookies.clear()
-    foreign_login = await owner_client.post(
-        "/api/v1/auth/login",
-        json={"email": foreign_email, "password": "refund-scope-password"},
-    )
-    assert foreign_login.status_code == 200
-    foreign_scope = await owner_client.post(
-        f"/api/v1/storefront/orders/{handoff_id}/refunds",
-        json={"idempotency_key": str(uuid4()), "amount_minor": 1000},
-    )
-    assert foreign_scope.status_code == 404
+    async with independent_request_sessions(async_db) as maker:
+        token = tenant_id_ctx.set(other_team.id)
+        try:
+            async with maker() as seed_session:
+                await apply_tenant_context(seed_session, other_team.id)
+                await RoleSeedService(seed_session).seed()
+        finally:
+            tenant_id_ctx.reset(token)
+        owner_client.cookies.clear()
+        foreign_login = await owner_client.post(
+            "/api/v1/auth/login",
+            json={"email": foreign_email, "password": "refund-scope-password"},
+        )
+        assert foreign_login.status_code == 200
+        foreign_scope = await owner_client.post(
+            f"/api/v1/storefront/orders/{handoff_id}/refunds",
+            json={"idempotency_key": str(uuid4()), "amount_minor": 1000},
+        )
+        assert foreign_scope.status_code == 404
 
     owner_client.cookies.clear()
     till_login = await owner_client.post(
@@ -1044,8 +1064,8 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
     admin = await asyncpg.connect(
         user=base_url.username,
         password=base_url.password,
-        host=base_url.host,
-        port=base_url.port,
+        host=base_url.query.get("host", base_url.host),
+        port=int(base_url.query.get("port") or base_url.port or 5432),
         database=base_url.database,
     )
     await admin.execute(f'CREATE DATABASE "{database_name}"')
@@ -1058,10 +1078,18 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
             await connection.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
             await connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
             await connection.run_sync(Base.metadata.create_all)
-        maker = async_sessionmaker(race_engine, expire_on_commit=False, class_=AsyncSession)
+        maker = async_sessionmaker(
+            race_engine,
+            expire_on_commit=False,
+            class_=AsyncSession,
+            sync_session_class=TenantSession,
+        )
         async with maker() as session:
-            await RoleSeedService(session).seed()
             await BootstrapService(session).seed_if_empty()
+            company_id = await session.scalar(select(Team.id))
+            tenant_token = tenant_id_ctx.set(company_id)
+            await apply_tenant_context(session, company_id)
+            await RoleSeedService(session).seed()
             await LocationSeedService(session).seed_if_empty()
             await RoleUserSeedService(session).seed()
             await StorefrontSystemActorService(session).ensure()
@@ -1076,6 +1104,7 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
             await session.commit()
             company_id = await session.scalar(select(Team.id))
             assert company_id is not None
+            tenant_id_ctx.reset(tenant_token)
 
         monkeypatch.setattr(settings, "ops_commerce_company_id", str(company_id), raising=False)
         monkeypatch.setattr(

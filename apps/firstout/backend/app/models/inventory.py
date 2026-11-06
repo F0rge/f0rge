@@ -15,6 +15,7 @@ from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 class SkuStock(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "sku_stock"
+    __table_args__ = (Index("ix_sku_stock_sku_lookup", "sku_id"),)
 
     sku_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

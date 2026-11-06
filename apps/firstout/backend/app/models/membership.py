@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 import uuid
 
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
@@ -24,7 +26,7 @@ class Membership(UUIDPkMixin, TimestampMixin, Base):
     permission_source: Mapped[str] = mapped_column(String(32), nullable=False, default="legacy")
     is_disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_legacy_home: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    default_location_id: Mapped[uuid.UUID | None] = mapped_column(
+    default_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
     __table_args__ = (

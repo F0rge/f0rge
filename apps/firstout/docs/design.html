@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Firstout multi-tenancy — solution design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #f3eee4;
+      --paper-2: #fffdf8;
+      --ink: #1c1915;
+      --ink-soft: #4a433a;
+      --line: #d7cfc0;
+      --accent: #8c3b1e;
+      --accent-2: #1f4d3a;
+      --good: #1f4d3a;
+      --warn: #8a5a12;
+      --bad: #8c1e1e;
+      --chip: #ebe4d6;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #efe6d4 0%, transparent 55%),
+        var(--paper);
+      font: 17px/1.55 "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 40px 28px 96px; }
+    header.hero {
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      padding: 36px 40px 32px;
+      margin-bottom: 28px;
+    }
+    .kicker {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin: 0 0 14px; font-size: 12px; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--ink-soft);
+    }
+    .chip {
+      display: inline-block; background: var(--chip); border: 1px solid var(--line);
+      padding: 2px 8px; letter-spacing: .04em;
+    }
+    h1 {
+      font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+      font-weight: 600; font-size: 42px; line-height: 1.15;
+      margin: 0 0 12px; letter-spacing: -0.02em;
+    }
+    .lede { font-size: 20px; line-height: 1.45; color: var(--ink-soft); margin: 0 0 18px; max-width: 46rem; }
+    .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 20px; margin-top: 8px; }
+    .meta div { font-size: 13px; color: var(--ink-soft); }
+    .meta strong { display: block; color: var(--ink); font-size: 14px; }
+    nav.toc {
+      background: var(--paper-2); border: 1px solid var(--line);
+      padding: 20px 28px; margin: 0 0 32px;
+    }
+    nav.toc h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; color: var(--ink-soft); }
+    nav.toc ol { margin: 0; padding-left: 20px; columns: 2; gap: 28px; }
+    nav.toc a { color: var(--accent); text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    h2 {
+      font-family: "Source Serif 4", Georgia, serif;
+      font-size: 28px; line-height: 1.25; margin: 48px 0 14px;
+      padding-top: 8px; border-top: 1px solid var(--line);
+    }
+    h3 { font-size: 18px; margin: 28px 0 8px; }
+    h4 { font-size: 15px; margin: 20px 0 8px; }
+    p, li { color: var(--ink); }
+    a { color: var(--accent); }
+    code, .path {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.86em; background: #efe8db; padding: 0.08em 0.35em;
+    }
+    pre {
+      background: #231f1b; color: #f4efe6; padding: 16px 18px; overflow-x: auto;
+      font: 13px/1.45 "IBM Plex Mono", ui-monospace, monospace;
+    }
+    pre code { background: none; color: inherit; padding: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14.5px; background: var(--paper-2); margin: 12px 0 20px; }
+    th, td { text-align: left; vertical-align: top; padding: 9px 11px; border: 1px solid var(--line); }
+    th { background: #ebe3d3; font-weight: 600; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--paper-2);
+      padding: 14px 18px; margin: 16px 0 22px;
+    }
+    .callout.good { border-color: var(--good); }
+    .callout.warn { border-color: var(--warn); }
+    .callout.bad { border-color: var(--bad); }
+    .callout strong.label { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; color: var(--ink-soft); }
+    .diagram {
+      background: var(--paper-2); border: 1px solid var(--line);
+      padding: 16px 12px 8px; margin: 16px 0 24px; overflow-x: auto;
+    }
+    .diagram figcaption { font-size: 13px; color: var(--ink-soft); padding: 4px 12px 10px; }
+    @media (max-width: 760px) {
+      nav.toc ol { columns: 1; }
+      header.hero, .wrap { padding-left: 16px; padding-right: 16px; }
+      h1 { font-size: 32px; }
+    }
+    ul.tight li { margin: 0.25em 0; }
+    .rec { background: #e8efe9; border: 1px solid #c3d4c8; padding: 16px 18px; margin: 12px 0 22px; }
+    footer { margin-top: 56px; font-size: 13px; color: var(--ink-soft); border-top: 1px solid var(--line); padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <p class="kicker">
+        <span class="chip">Design only</span>
+        <span class="chip">No implementation this pass</span>
+        <span>F0rge / Firstout · revised</span>
+      </p>
+      <h1>Firstout multi-tenancy</h1>
+      <p class="lede">One organisation per customer, many locations inside it, Postgres row-level security as the last line of defence, Clerk for login and organisation switching, and a wildcard hostname for each tenant. No current user loses access.</p>
+      <div class="meta">
+        <div><strong>Status</strong> Revised proposal — not implemented in this pass</div>
+        <div><strong>Updated</strong> Friday 6 Nov 2026, 17:51 Europe/Luxembourg (UTC+1)</div>
+        <div><strong>Leo (17:45)</strong> Pro added; add Clerk and the wildcard to the design; keep every user’s current access</div>
+        <div><strong>Code</strong> Grounded in <span class="path">F0rge/f0rge@main</span> (read-only earlier today)</div>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>Contents</h2>
+      <ol>
+        <li><a href="#summary">Executive summary</a></li>
+        <li><a href="#today">What Firstout is today</a></li>
+        <li><a href="#shape">Tenant shape</a></li>
+        <li><a href="#isolation">Isolation options</a></li>
+        <li><a href="#clerk">Clerk auth and Organisations</a></li>
+        <li><a href="#access">Keeping current access</a></li>
+        <li><a href="#sessions">Legacy sessions vs tenants</a></li>
+        <li><a href="#context">Tenant context and Host checks</a></li>
+        <li><a href="#pitfalls">Pitfalls</a></li>
+        <li><a href="#architecture">Target architecture</a></li>
+        <li><a href="#model">Data model changes</a></li>
+        <li><a href="#migration">Data backfill and DB safety</a></li>
+        <li><a href="#dns">Subdomains, DNS and TLS</a></li>
+        <li><a href="#billing">Signup and billing</a></li>
+        <li><a href="#branding">Branding storage</a></li>
+        <li><a href="#labels">Tag and label printing</a></li>
+        <li><a href="#testing">Testing and security checks</a></li>
+        <li><a href="#rollout">Phased rollout and effort</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#questions">Open questions</a></li>
+        <li><a href="#sources">Sources</a></li>
+      </ol>
+    </nav>
+
+    <section id="summary">
+      <h2>1. Executive summary</h2>
+      <div class="rec">
+        <p><strong>A tenant is an organisation, not a store.</strong> Reuse Firstout’s <span class="path">teams</span> table. Locations such as Kramerville and Bedfordview stay branches inside that organisation.</p>
+        <p><strong>Isolation is a shared Postgres database plus <span class="path">team_id</span> plus FORCE row-level security.</strong> Application filters stay; RLS is the safety net. Tenant context is set only after a verified membership is known. Which Postgres GUC style to use (transaction-local vs session-scoped) is chosen by passing pool-lifecycle and commit/refresh tests — not by defaulting to session-scoped settings.</p>
+        <p><strong>Login moves to Clerk, with Clerk Organisations as tenants.</strong> Leo does not want Firstout to handle passwords. Clerk owns sign-in, sessions, memberships, and the organisation switcher. Signed Clerk session claims carry the active organisation id, which maps to the local <span class="path">teams</span> row. Firstout’s fine-grained permission catalogue stays authoritative so no current grant is dropped.</p>
+        <p><strong>Current access is preserved with a staged dual-auth transition.</strong> Existing <span class="path">firstout_session</span> cookies keep working. Users are inventoried first, then imported into Clerk with bcrypt password digests where Clerk accepts them. There is no email-only automatic linking and no forced password reset. A Clerk roster is not proof that people can sign in — that needs real sign-in evidence.</p>
+        <p><strong>Railway Pro is the chosen plan.</strong> Keep the existing frontend hosts and add both <span class="path">app.firstout.co.za</span> and <span class="path">*.app.firstout.co.za</span> with Railway’s wildcard certificate. Hostnames are resolved from a trusted forwarded host, checked against an exact suffix and a strict slug, and must match the signed Clerk organisation (or, for a legacy session, that user’s original team). The Host header is never authorisation by itself. No extra paid add-on beyond Railway Pro without a fresh yes. Billing is built behind a flag and test mode only until the merchant of record is chosen.</p>
+      </div>
+    </section>
+
+    <section id="today">
+      <h2>2. What Firstout is today</h2>
+      <p>Firstout is the Gauteng furniture-retailer back office in the F0rge monorepo. Nested instructions: <span class="path">apps/firstout/AGENTS.md</span>. IBM Carbon UI (not <span class="path">@f0rge/ui</span>). FastAPI on Python 3.11, async SQLAlchemy + asyncpg. Next.js 16.4.3 App Router with a same-origin rewrite of <span class="path">/api/*</span> to <span class="path">API_URL</span>.</p>
+      <table>
+        <thead><tr><th>Piece</th><th>Fact (verified 6 Nov 2026 unless noted)</th></tr></thead>
+        <tbody>
+          <tr><td>Auth today</td><td>Custom JWT cookie <span class="path">firstout_session</span> (email + bcrypt password). Payload is <span class="path">sub</span>, <span class="path">ver</span>, <span class="path">iat</span>, <span class="path">exp</span> — no tenant claim. Trade portal uses a separate <span class="path">firstout_customer_session</span>.</td></tr>
+          <tr><td>Permissions</td><td>Catalogue in <span class="path">app/permissions.py</span>. Five presets (owner, buyer, warehouse, till, books) plus custom roles. Owner is immutable. <span class="path">has_permission</span> is what the API actually checks.</td></tr>
+          <tr><td>Team today</td><td>One <span class="path">teams</span> row (bootstrap name “Firstout”). <span class="path">users.team_id</span> is required and single-valued. Email is globally unique. Only <span class="path">users</span>, <span class="path">team_settings</span>, and <span class="path">document_sequences</span> have <span class="path">team_id</span>.</td></tr>
+          <tr><td>RLS today</td><td><span class="path">register_rls_hook()</span> sets <span class="path">app.user_id</span> from <span class="path">f0rge_db</span>. Firstout migrations have no <span class="path">ENABLE ROW LEVEL SECURITY</span>.</td></tr>
+          <tr><td>Railway</td><td>Project <span class="path">Firstout</span>. Live environment named <span class="path">production</span>. <span class="path">firstout-api</span> at <span class="path">api.firstout.co.za</span>; frontend at <span class="path">firstout.co.za</span> and <span class="path">www.firstout.co.za</span>. Leo has since added Railway Pro (his words, 6 Nov 17:45). This document treats Pro as chosen; it does not itself change Railway.</td></tr>
+          <tr><td>Migrations</td><td>001 through 078 (<span class="path">078_password_reset</span>).</td></tr>
+          <tr><td>Printing</td><td>In-browser SKU and bin labels (JsBarcode + <span class="path">printHtml</span>). Not the DasKasas tag-printer.</td></tr>
+        </tbody>
+      </table>
+      <p>Cin7 import, payment-reminder ticker, WhatsApp webhook, and object storage behave as described in the 6 Nov draft: global one-job Cin7 lock, detached workers with no tenant context, storage prefix <span class="path">firstout</span>, uploads at <span class="path">cin7-imports/{id}.zip</span>.</p>
+    </section>
+
+    <section id="shape">
+      <h2>3. Tenant shape: organisation, then locations</h2>
+      <p>A tenant is an organisation (the existing <span class="path">teams</span> row). Stores and warehouses are <span class="path">locations</span>. That scales to a second showroom without splitting stock, books, or users. Clerk Organisations map 1:1 onto those teams. Users may belong to several organisations; memberships and roles live per organisation, and the Clerk <span class="path">OrganizationSwitcher</span> (plus a matching local membership) is how they change shop.</p>
+      <div class="diagram">
+        <svg viewBox="0 0 920 250" width="100%" height="250" role="img" aria-label="Organisation above locations">
+          <rect x="1" y="1" width="918" height="248" fill="#fffdf8" stroke="#d7cfc0"/>
+          <rect x="270" y="22" width="380" height="58" fill="#1f4d3a"/>
+          <text x="460" y="46" text-anchor="middle" fill="#f3eee4" font-size="16" font-family="IBM Plex Sans, sans-serif">Clerk Organisation = Firstout team</text>
+          <text x="460" y="66" text-anchor="middle" fill="#d7e6dc" font-size="12" font-family="IBM Plex Sans, sans-serif">slug · memberships · branding · books · catalogue</text>
+          <line x1="460" y1="80" x2="460" y2="112" stroke="#8c3b1e" stroke-width="2"/>
+          <line x1="150" y1="112" x2="770" y2="112" stroke="#8c3b1e" stroke-width="2"/>
+          <line x1="150" y1="112" x2="150" y2="130" stroke="#8c3b1e" stroke-width="2"/>
+          <line x1="460" y1="112" x2="460" y2="130" stroke="#8c3b1e" stroke-width="2"/>
+          <line x1="770" y1="112" x2="770" y2="130" stroke="#8c3b1e" stroke-width="2"/>
+          <rect x="40" y="130" width="220" height="64" fill="#fffdf8" stroke="#8c3b1e"/>
+          <text x="150" y="158" text-anchor="middle" font-size="14" font-family="IBM Plex Sans, sans-serif">Warehouse</text>
+          <text x="150" y="178" text-anchor="middle" font-size="12" fill="#4a433a" font-family="IBM Plex Sans, sans-serif">e.g. Kramerville</text>
+          <rect x="350" y="130" width="220" height="64" fill="#fffdf8" stroke="#8c3b1e"/>
+          <text x="460" y="158" text-anchor="middle" font-size="14" font-family="IBM Plex Sans, sans-serif">Showroom</text>
+          <text x="460" y="178" text-anchor="middle" font-size="12" fill="#4a433a" font-family="IBM Plex Sans, sans-serif">e.g. Bedfordview</text>
+          <rect x="660" y="130" width="220" height="64" fill="#fffdf8" stroke="#8c3b1e"/>
+          <text x="770" y="158" text-anchor="middle" font-size="14" font-family="IBM Plex Sans, sans-serif">Later showroom</text>
+          <text x="770" y="178" text-anchor="middle" font-size="12" fill="#4a433a" font-family="IBM Plex Sans, sans-serif">same stock, books, users</text>
+        </svg>
+        <figcaption>Figure 1. Clerk Organisation ↔ local team. Locations stay Firstout locations.</figcaption>
+      </div>
+    </section>
+
+    <section id="isolation">
+      <h2>4. Isolation options</h2>
+      <p>Under ten tenants in year one, so operational cost and migration risk matter more than theoretical isolation theatre. These are the four realistic options:</p>
+      <table>
+        <thead><tr><th>Option</th><th>How it works</th><th>Verdict for Firstout</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Shared database, <span class="path">team_id</span> only</td>
+            <td>Add a column and remember to filter in every query.</td>
+            <td>Too easy to leak. One missed <span class="path">.where(team_id=…)</span> (or a raw SQL helper) exposes another shop. Not enough by itself.</td>
+          </tr>
+          <tr>
+            <td>Shared database, <span class="path">team_id</span> + FORCE RLS</td>
+            <td>Same column, plus Postgres policies <span class="path">USING (team_id = current_setting('app.tenant_id', true)::uuid)</span> so even a buggy query returns nothing. Application filters stay as defence in depth.</td>
+            <td><strong>Recommended.</strong> Fits the existing one-database Railway service, 78-migration history, and shared types. Needs careful GUC lifecycle (see §9).</td>
+          </tr>
+          <tr>
+            <td>Schema per tenant</td>
+            <td><span class="path">tenant_acme.skus</span>, search_path switching, N copies of every migration.</td>
+            <td>Heavy for fewer than ten tenants and for Alembic 001–078. Cross-tenant reporting and support become painful. Reject for year one.</td>
+          </tr>
+          <tr>
+            <td>Database per tenant</td>
+            <td>Separate Postgres (or extra Railway Postgres plugins) and connection routing.</td>
+            <td>Cost and ops grow linearly. Would be a new paid Railway resource without a fresh yes. Reject for year one.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Extend <span class="path">f0rge_db</span> with an organisation-scoped helper rather than misusing <span class="path">enable_tenant_isolation</span>, which hard-codes a <span class="path">user_id</span> column for Marrow. Do not put Firstout domain types in the shared library. Policies should read <span class="path">app.tenant_id</span>, not <span class="path">app.user_id</span>.</p>
+    </section>
+
+    <section id="clerk">
+      <h2>5. Clerk auth and Organisations</h2>
+      <p>Leo’s preference (6 Nov, via Chief of Staff): he does not want Firstout handling passwords and logins. Clerk is already connected for the workspace. “Add both to the design” means Clerk <em>and</em> the Railway Pro wildcard — not Cloudflare Access, which was considered and rejected for customer login.</p>
+
+      <h3>What Clerk owns</h3>
+      <ul>
+        <li>Sign-up, sign-in, password storage, reset, optional social login and 2FA.</li>
+        <li>Clerk Organisations: one Organisation per Firstout team. Memberships, invitations, and the built-in <span class="path">OrganizationSwitcher</span> (with <span class="path">hidePersonal</span>).</li>
+        <li>The signed session token. When an Organisation is active, Clerk already exposes <span class="path">orgId</span>, <span class="path">orgSlug</span>, and <span class="path">orgRole</span> (Next.js <span class="path">auth()</span> / <span class="path">useAuth()</span>). Customize the session token if needed so FastAPI also receives <span class="path">org_id</span>, <span class="path">org_slug</span>, and the Firstout user id stored as Clerk <span class="path">external_id</span>.</li>
+      </ul>
+
+      <h3>What Firstout still owns</h3>
+      <ul>
+        <li>The permission catalogue and <span class="path">has_permission</span> checks (<span class="path">catalogue.mutate</span>, <span class="path">till.sell</span>, and the rest).</li>
+        <li>Custom roles created in-app, default locations, disabled flags, document sequences, settings, and all shop data.</li>
+        <li>The trade portal cookie <span class="path">firstout_customer_session</span>. That is a customer login, not staff Organisations. It stays as it is in this design so trade customers are not accidentally locked out. Moving it to Clerk later would be a separate yes.</li>
+      </ul>
+
+      <h3>Recommended Clerk configuration</h3>
+      <ul>
+        <li>Enable Organisations. Prefer <strong>Membership required</strong> so staff always have an active org after sign-in (Clerk’s <span class="path">choose-organization</span> session task). Use <span class="path">OrganizationSwitcher</span> with <span class="path">hidePersonal</span> and <span class="path">afterSelectOrganizationUrl</span> pointing at <span class="path">https://:slug.app.firstout.co.za</span>.</li>
+        <li>Disable frontend org creation for imported members (<span class="path">createOrganizationEnabled: false</span>). New tenants are created through Firstout’s signup/provisioning path, which calls Clerk’s Backend API.</li>
+        <li>Next.js 16: <span class="path">@clerk/nextjs</span>, <span class="path">ClerkProvider</span> inside <span class="path">&lt;body&gt;</span>, and <span class="path">proxy.ts</span> (not the older <span class="path">middleware.ts</span> name). Appearance should follow Carbon, not shadcn / <span class="path">@f0rge/ui</span>.</li>
+        <li>FastAPI verifies the Clerk session JWT against Clerk’s JWKS. Do not invent a second session store. During dual-auth it also still accepts a valid <span class="path">firstout_session</span>.</li>
+        <li>Webhooks on a public API route (for example <span class="path">POST /api/v1/webhooks/clerk</span>), verified with Clerk/Svix (<span class="path">verifyWebhook</span> / signing secret). Handle <span class="path">user.*</span>, <span class="path">organization.*</span>, and <span class="path">organizationMembership.*</span>. Use <span class="path">svix-id</span> as an idempotency key. Webhooks are eventually consistent — do not use them as the synchronous source of truth for the request that just signed in; read the session token or call the Backend API instead.</li>
+        <li>API calls from the browser should send a fresh Clerk token from <span class="path">getToken()</span> in the <span class="path">Authorization</span> header. Clerk documents that the session cookie is a singleton and can disagree with the active organisation in another tab.</li>
+      </ul>
+
+      <h3>Roles: Clerk coarse map, Firstout fine grants</h3>
+      <p>Clerk default roles are only <span class="path">org:admin</span> and <span class="path">org:member</span>. Custom roles (up to 10 per instance) can mirror the five presets: <span class="path">org:owner</span> or <span class="path">org:admin</span> ↔ owner, plus <span class="path">org:buyer</span>, <span class="path">org:warehouse</span>, <span class="path">org:till</span>, <span class="path">org:books</span>. Firstout custom roles that do not fit that list stay stored locally; their Clerk membership can use <span class="path">org:member</span> plus the local role id.</p>
+      <div class="callout warn">
+        <strong class="label">Do not replace has_permission with Clerk has()</strong>
+        Clerk’s <span class="path">has({ permission })</span> is for Clerk’s own System Permissions (<span class="path">org:sys_memberships:manage</span>, and so on) and any custom Clerk permissions you create. Firstout already has a richer catalogue. If Clerk Billing were later turned on, Clerk would gate custom permissions by plan features and could suddenly return false. Keep shop authorisation on Firstout’s <span class="path">roles</span> / <span class="path">role_permissions</span>. Map Clerk org roles onto those slugs for new invites, but never reduce a pre-existing user’s permission keys to match a coarser Clerk default.
+      </div>
+    </section>
+
+    <section id="access">
+      <h2>6. Keeping current access</h2>
+      <p>Leo: “Do not remove any users current access.” That is a hard constraint, not a hope.</p>
+
+      <h3>1. Inventory first</h3>
+      <p>Before any import or schema cut, snapshot every staff user: id, email, display name, role slug, exact permission keys, <span class="path">is_disabled</span>, <span class="path">token_version</span>, <span class="path">default_location_id</span>, <span class="path">team_id</span>, and team name. Store that snapshot as a migration artefact (no passwords in it). This is the rollback reference for grants.</p>
+
+      <h3>2. Dual-auth (trickle migration)</h3>
+      <p>Clerk’s own migration guide describes export/import versus a trickle migration that keeps both systems running. Firstout uses trickle:</p>
+      <ul>
+        <li>FastAPI accepts a valid <span class="path">firstout_session</span> <em>or</em> a valid Clerk session.</li>
+        <li>Existing cookies are not revoked by the Clerk rollout. Clerk notes that switching session systems “will likely end” old sessions unless you handle that on purpose — we handle it by leaving the current cookie path in place until cutover criteria are met.</li>
+        <li>Unmigrated users keep using email + password against Firstout, including the existing forgot-password flow.</li>
+        <li>Once a user has a linked Clerk identity and has actually signed in with Clerk, new logins prefer Clerk. The old cookie still works until it expires or the user signs out.</li>
+        <li>Do not turn off custom login until the evidence bar in §6.5 is met.</li>
+      </ul>
+
+      <h3>3. Import passwords the supported way</h3>
+      <p>Firstout hashes with bcrypt (<span class="path">bcrypt.hashpw</span> in <span class="path">app/services/auth.py</span>). Clerk’s Backend API <span class="path">CreateUser</span> accepts <span class="path">password_digest</span> plus <span class="path">password_hasher: "bcrypt"</span>, and can store the Firstout user UUID as <span class="path">external_id</span>. See <a href="https://clerk.com/docs/guides/development/migrating/overview">Clerk: Migrating</a> and the <a href="https://clerk.com/docs/reference/backend/user/create-user">CreateUser</a> reference. CreateUser is rate-limited; import with backoff.</p>
+      <p>Disabled users are imported as locked or banned in Clerk so they do not gain a working login. The storefront system actor, if present, is not given a staff Clerk login.</p>
+
+      <h3>4. Linking rules (safe only)</h3>
+      <ul>
+        <li><strong>Allowed:</strong> create the Clerk user with that person’s imported bcrypt digest and <span class="path">external_id</span>, then store <span class="path">users.clerk_user_id</span>.</li>
+        <li><strong>Allowed:</strong> link later if the person completes a Clerk sign-in whose email Clerk has verified, and that verified email matches exactly one Firstout user who is not already linked.</li>
+        <li><strong>Forbidden:</strong> automatically linking a Clerk account to a Firstout user only because the email strings match, without a verified Clerk identity or a successful hash import.</li>
+        <li><strong>Forbidden:</strong> forcing a password reset as the migration path.</li>
+        <li><strong>Forbidden:</strong> emailing everyone a “set your password” link as the default.</li>
+      </ul>
+      <p>If hash import fails for someone (unsupported hash prefix, empty hash, Clerk API error), they keep Firstout login. They are not locked out to “fix” the import.</p>
+
+      <h3>5. Roster checks are not sign-in proof</h3>
+      <div class="callout bad">
+        <strong class="label">Evidence bar</strong>
+        “N users exist in Clerk” or “N rows have clerk_user_id set” does <em>not</em> prove anyone can still sign in. Production cutover of custom login requires real sign-in evidence for pre-existing active staff: at least the owner and each distinct live role (till, books, warehouse, buyer, and any custom role actually in use), using the same password they already have or another verified Clerk factor they completed themselves. Automated tests may prove the bcrypt-import mechanism with fixture users; they do not stand in for those live sign-ins. Record who signed in, when (Europe/Luxembourg), and which path (legacy cookie, Clerk with imported hash, or verified-email link).
+      </div>
+    </section>
+
+    <section id="sessions">
+      <h2>7. How existing sessions do not open other tenants</h2>
+      <p>Today’s JWT has no tenant claim. After backfill, every current user has exactly one original membership — the existing “Firstout” team. A still-valid <span class="path">firstout_session</span> is bound to <em>that</em> membership only:</p>
+      <ul>
+        <li>Resolve the user from <span class="path">sub</span> + <span class="path">ver</span> as today (disabled users and version mismatches still fail).</li>
+        <li>Set tenant context from the user’s <strong>legacy home membership</strong> (the backfilled original <span class="path">team_id</span>), never from the Host header, never from a query parameter, and never from “any membership this email might later gain.”</li>
+        <li>If the request’s validated host slug is present and does <em>not</em> belong to that home team, reject the request (404/403). Do not silently serve another tenant’s data, and do not “helpfully” switch the legacy session over.</li>
+        <li>Switching tenants is allowed only with a signed Clerk session whose <span class="path">org_id</span> is an organisation the user is a member of. That issues a new Clerk token via <span class="path">OrganizationSwitcher</span> / <span class="path">getToken()</span>. A legacy cookie cannot switch.</li>
+        <li>RLS still applies. Even a buggy query cannot read another team’s rows once FORCE RLS is on and the GUC is the home team (or the Clerk org’s mapped team).</li>
+      </ul>
+      <p>So a legitimate old session keeps working for the shop that user already uses. Changing the hostname to <span class="path">acme.app.firstout.co.za</span> while holding that cookie does not open Acme.</p>
+    </section>
+
+    <section id="context">
+      <h2>8. Tenant context and Host checks</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 980 310" width="100%" height="310" role="img" aria-label="Request path with Clerk and host checks">
+          <rect x="1" y="1" width="978" height="308" fill="#fffdf8" stroke="#d7cfc0"/>
+          <rect x="20" y="24" width="150" height="64" fill="#1c1915"/>
+          <text x="95" y="50" text-anchor="middle" fill="#f3eee4" font-size="13" font-family="IBM Plex Sans, sans-serif">Browser</text>
+          <text x="95" y="70" text-anchor="middle" fill="#d7cfc0" font-size="11" font-family="IBM Plex Sans, sans-serif">acme.app.firstout.co.za</text>
+          <polygon points="182,56 206,56 206,46 238,76 206,106 206,96 182,96" fill="#8c3b1e"/>
+          <rect x="250" y="24" width="170" height="64" fill="#8c3b1e"/>
+          <text x="335" y="50" text-anchor="middle" fill="#fff" font-size="13" font-family="IBM Plex Sans, sans-serif">Next.js</text>
+          <text x="335" y="70" text-anchor="middle" fill="#f3eee4" font-size="11" font-family="IBM Plex Sans, sans-serif">forward validated Host</text>
+          <polygon points="432,56 456,56 456,46 488,76 456,106 456,96 432,96" fill="#8c3b1e"/>
+          <rect x="500" y="24" width="190" height="64" fill="#1f4d3a"/>
+          <text x="595" y="46" text-anchor="middle" fill="#fff" font-size="13" font-family="IBM Plex Sans, sans-serif">FastAPI</text>
+          <text x="595" y="64" text-anchor="middle" fill="#d7e6dc" font-size="11" font-family="IBM Plex Sans, sans-serif">Clerk JWT or legacy cookie</text>
+          <text x="595" y="80" text-anchor="middle" fill="#d7e6dc" font-size="11" font-family="IBM Plex Sans, sans-serif">org id → team; Host must match</text>
+          <polygon points="702,56 726,56 726,46 758,76 726,106 726,96 702,96" fill="#8c3b1e"/>
+          <rect x="770" y="24" width="130" height="64" fill="#231f1b"/>
+          <text x="835" y="50" text-anchor="middle" fill="#f3eee4" font-size="13" font-family="IBM Plex Sans, sans-serif">Postgres</text>
+          <text x="835" y="70" text-anchor="middle" fill="#d7cfc0" font-size="11" font-family="IBM Plex Sans, sans-serif">FORCE RLS</text>
+          <text x="36" y="130" font-size="13" font-family="IBM Plex Sans, sans-serif">1. Parse a trusted host: exact apex/www, or {slug}.app.firstout.co.za with a strict slug.</text>
+          <text x="36" y="154" font-size="13" font-family="IBM Plex Sans, sans-serif">2. Authenticate: verify Clerk JWT (JWKS) or firstout_session. Host is not a credential.</text>
+          <text x="36" y="178" font-size="13" font-family="IBM Plex Sans, sans-serif">3. Clerk path: map org_id → teams.clerk_org_id and require membership. Legacy path: home team only.</text>
+          <text x="36" y="202" font-size="13" font-family="IBM Plex Sans, sans-serif">4. If a tenant host is present, its slug must equal that team’s slug. Mismatch → reject.</text>
+          <text x="36" y="226" font-size="13" font-family="IBM Plex Sans, sans-serif">5. Set tenant context (GUC) from that team id. Permissions still come from Firstout roles.</text>
+          <text x="36" y="250" font-size="13" font-family="IBM Plex Sans, sans-serif">6. Always clear tenant GUCs before the connection returns to the pool. Prove this with tests.</text>
+          <text x="36" y="274" font-size="13" font-family="IBM Plex Sans, sans-serif">Direct calls to api.firstout.co.za have no tenant host; authorisation is the signed org (or legacy home team) alone.</text>
+        </svg>
+        <figcaption>Figure 2. Host is a consistency check. The signed Clerk organisation (or the legacy home team) is authorisation.</figcaption>
+      </div>
+
+      <h3>Trusted forwarded host</h3>
+      <p>The staff UI talks same-origin to <span class="path">{slug}.app.firstout.co.za/api/…</span>. Next rewrites that to <span class="path">API_URL</span> (today <span class="path">api.firstout.co.za</span>). A naive rewrite makes the API see <span class="path">Host: api.firstout.co.za</span>, so the API <em>cannot</em> read the tenant from its own Host header.</p>
+      <p>The Next server must copy the incoming browser host — after validating it — into a hop-by-hop header such as <span class="path">X-Firstout-Frontend-Host</span>. Only the Next server sets that header, overwriting any client-supplied value. The API:</p>
+      <ul>
+        <li>Does not treat that header as proof of tenancy.</li>
+        <li>Accepts it only as the hostname to compare against the already-authorised team slug.</li>
+        <li>If someone spoofs <span class="path">acme.app…</span> while their Clerk org is Beta, the check fails. Spoofing cannot grant access.</li>
+        <li>If the header is absent (Swagger, bearer scripts), skip the host comparison and rely solely on the signed org / legacy home team.</li>
+      </ul>
+      <p>Validation of any host value, whether from the frontend request or a forwarded header:</p>
+      <ul>
+        <li>Configure trusted proxy behaviour explicitly (Railway’s <span class="path">X-Forwarded-Host</span> / <span class="path">X-Forwarded-Proto</span>). Do not trust forwarded host headers from arbitrary clients on a directly reachable API.</li>
+        <li>Allow only: <span class="path">firstout.co.za</span>, <span class="path">www.firstout.co.za</span>, <span class="path">app.firstout.co.za</span>, or <span class="path">{slug}.app.firstout.co.za</span>.</li>
+        <li>Slug: lowercase DNS label, <span class="path">^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$</span>, compared as a full string equality to <span class="path">{slug}.app.firstout.co.za</span>. Reject suffix tricks such as <span class="path">app.firstout.co.za.evil.com</span> or extra dots.</li>
+        <li>Reserved slugs: <span class="path">www</span>, <span class="path">api</span>, <span class="path">app</span>, <span class="path">admin</span>, <span class="path">mail</span>, <span class="path">status</span>, <span class="path">support</span>, <span class="path">billing</span>, <span class="path">signup</span>, <span class="path">login</span>, <span class="path">static</span>, <span class="path">cdn</span>, <span class="path">trade</span>.</li>
+      </ul>
+    </section>
+
+    <section id="pitfalls">
+      <h2>9. Pitfalls</h2>
+      <h3>Connection pooling and tenant GUCs</h3>
+      <p><span class="path">f0rge_db</span> currently uses session-scoped <span class="path">set_config('app.user_id', …, false)</span> because transaction-local settings are cleared on <span class="path">COMMIT</span> and that broke <span class="path">refresh()</span> after writes. It also re-applies the GUC on SQLAlchemy <span class="path">after_begin</span>, and <span class="path">RESET</span>s on the way back to the pool.</p>
+      <div class="callout warn">
+        <strong class="label">Do not default to session-scoped tenant settings</strong>
+        Session-scoped GUCs leak to the next request if RESET is skipped, which is especially dangerous with a pooler. Implementation must run a matrix before choosing a mechanism:
+      </div>
+      <ol>
+        <li>Write, commit, then <span class="path">refresh()</span> still sees the row.</li>
+        <li>A connection used for tenant A, returned to the pool, then used for tenant B, cannot see A’s GUC or A’s rows.</li>
+        <li>A failed/aborted transaction does not poison the next request on that connection.</li>
+        <li>If both <span class="path">DATABASE_URL</span> and <span class="path">DIRECT_DATABASE_URL</span> are in play, test the URL the API will actually use. Do not print those values.</li>
+      </ol>
+      <p>Pick the option that passes. If transaction-local <span class="path">SET LOCAL</span> (or <span class="path">set_config(..., true)</span>) plus the existing <span class="path">after_begin</span> re-apply passes commit/refresh <em>and</em> the pool tests, prefer it. Session-scoped settings are acceptable only with the same pool tests passing and RESET covered on every session factory (request <span class="path">get_db</span>, Cin7 <span class="path">_run_detached</span>, payment-reminder ticker, CLI import).</p>
+
+      <h3>Migrations, owners, support</h3>
+      <p>FORCE RLS; the app role must not be table owner and must not have <span class="path">BYPASSRLS</span>. Cross-tenant backfills use <span class="path">f0rge_db.rls.migration_bypass</span>. Support access is an explicit impersonation path with an audit row, not a connection as table owner. Verify the live role setup before forcing RLS — it was not queried in the research pass.</p>
+
+      <h3>Background jobs</h3>
+      <p>Payment reminders, Cin7 detached jobs, CLI import, and the WhatsApp webhook must set tenant context from the job or phone-number mapping, never from leftover GUCs. Cin7’s global one-job lock becomes one active job per team. Storage keys move under <span class="path">tenants/{team_id}/…</span>.</p>
+
+      <h3>Clerk webhooks vs access</h3>
+      <p>During dual-auth, <span class="path">user.deleted</span> or <span class="path">organizationMembership.deleted</span> must not strip a pre-existing user’s local access. Sync the Clerk link; do not delete the Firstout user or their home membership to “match Clerk.” After cutover, document a separate policy for intentional removals.</p>
+
+      <h3>Unique constraints and IDs</h3>
+      <p>Most Firstout tables today are globally unique with no <span class="path">team_id</span>. After backfill they become unique per team. At minimum rewrite uniqueness for:</p>
+      <ul>
+        <li>SKU <span class="path">our_ref</span> and barcodes</li>
+        <li>Location names (and any other location unique keys)</li>
+        <li>Customer display names / trade identifiers as they are unique today</li>
+        <li>Role slugs per team (presets are cloned or scoped, not shared across shops)</li>
+        <li>Document numbers (invoices, quotes, and similar) — <span class="path">document_sequences</span> is already per team</li>
+        <li>Account codes and other books unique keys</li>
+        <li>Trade-portal customer emails if they are globally unique today</li>
+        <li>Cin7 “one active import” lock: one active job <em>per team</em>, not one globally</li>
+      </ul>
+      <p>Primary keys stay UUIDs, so id-based URLs do not become guessable across tenants; isolation tests must still treat a foreign UUID as 404, not 403 with a leaky body.</p>
+      <p>Notable paths for implementers: <span class="path">apps/firstout/backend/app/services/auth.py</span> (bcrypt, JWT), <span class="path">app/permissions.py</span>, auth middleware, models for <span class="path">team</span>/<span class="path">user</span>/<span class="path">role</span>/<span class="path">team_settings</span>/<span class="path">document_sequence</span>/<span class="path">location</span>/<span class="path">sku</span>/<span class="path">customer</span>/<span class="path">cin7_import_run</span>, <span class="path">database.py</span> <span class="path">register_rls_hook</span>, Cin7 jobs and storage prefix <span class="path">cin7-imports/{id}.zip</span>, Next <span class="path">next.config.ts</span> rewrite of <span class="path">/api</span> to <span class="path">API_URL</span>, frontend <span class="path">sku-label-print.ts</span>, <span class="path">print-bin-labels.ts</span>, <span class="path">print-html.ts</span>.</p>
+
+      <h3>No extra paid add-on</h3>
+      <p>Railway Pro is approved. Do not buy Cloudflare Advanced Certificate Manager, Clerk plan upgrades, or other add-ons without a fresh yes. Prefer DNS-only (grey cloud) for the nested wildcard so Railway can issue the certificate without Cloudflare ACM. If Clerk Organisations or custom roles turn out to require a paid Clerk plan beyond what is already connected, stop and report rather than upgrading.</p>
+    </section>
+
+    <section id="architecture">
+      <h2>10. Target architecture</h2>
+      <ul>
+        <li>One Railway project, one API, one frontend, one Postgres, one bucket — same services as today.</li>
+        <li><span class="path">https://firstout.co.za</span> and <span class="path">www.firstout.co.za</span> — marketing, signup entry, legacy host for the original shop during migration.</li>
+        <li><span class="path">https://app.firstout.co.za</span> — Clerk primary (sign-in, choose-organisation). A wildcard does not cover this parent name, so it is a separate custom domain.</li>
+        <li><span class="path">https://{slug}.app.firstout.co.za</span> — tenant back office. New slugs need no per-tenant DNS.</li>
+        <li><span class="path">https://api.firstout.co.za</span> — API, webhooks, Swagger. Unchanged hostname, different service from the frontend wildcard (Railway overlap rule).</li>
+        <li>Reserved <span class="path">admin.app.firstout.co.za</span> if platform support UI is built later.</li>
+        <li>Trade portal remains <span class="path">/trade/…</span> on the tenant host, still using <span class="path">firstout_customer_session</span>.</li>
+        <li>Clerk cookies for staff should be scoped to <span class="path">.app.firstout.co.za</span> so tenant hosts share a session without placing that cookie on the marketing apex. Configure Clerk allowed redirect origins for the apex plus a tight pattern for tenant hosts.</li>
+      </ul>
+    </section>
+
+    <section id="model">
+      <h2>11. Data model changes</h2>
+      <table>
+        <thead><tr><th>Table</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td><span class="path">teams</span></td><td>Add unique <span class="path">slug</span>, <span class="path">status</span>, <span class="path">clerk_org_id</span> (unique, nullable until linked), billing ids (unused while billing is flagged off).</td></tr>
+          <tr><td><span class="path">users</span></td><td>Identity row: email, password hash (kept through dual-auth), display name, token version, <span class="path">clerk_user_id</span>. Drop <span class="path">team_id</span> only after memberships are live. Do not delete hashes until custom login is retired.</td></tr>
+          <tr><td><span class="path">memberships</span> (new)</td><td><span class="path">(user_id, team_id)</span> unique. Firstout role slug or <span class="path">role_id</span>, permission source, <span class="path">is_disabled</span>, <span class="path">default_location_id</span>, <span class="path">is_legacy_home</span> for the original team. Clerk membership is synced here but must not erase richer local grants.</td></tr>
+          <tr><td><span class="path">roles</span> / permissions</td><td>Presets cloned or kept and mapped to Clerk org roles as above. Existing permission rows are preserved exactly from the inventory.</td></tr>
+          <tr><td>Every tenant-owned table</td><td>Add <span class="path">team_id</span>, backfill from the single existing team, then NOT NULL + RLS.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="migration">
+      <h2>12. Data backfill and database safety</h2>
+      <ol>
+        <li><strong>Backup.</strong> Take a full Postgres backup of the live Firstout database before any multi-tenant migration. Restore that backup onto a disposable instance and confirm the app can start against it. A file that was never restored is not a rollback plan.</li>
+        <li><strong>Inventory</strong> users and roles (see §6). Confirm no unexpected extra teams.</li>
+        <li>Add slug/status/<span class="path">clerk_org_id</span> on <span class="path">teams</span>. Backfill the existing “Firstout” team as slug <span class="path">firstout</span>, status <span class="path">active</span>.</li>
+        <li>Create <span class="path">memberships</span> from current <span class="path">users.team_id</span>, role, permissions, default location, and disabled flag. Mark each as <span class="path">is_legacy_home</span>. No role is rewritten.</li>
+        <li>Add nullable <span class="path">team_id</span> to tenant-owned tables, backfill from that single team, then NOT NULL. Rewrite global unique indexes to <span class="path">(team_id, …)</span>. New Alembic revisions after <span class="path">078_password_reset</span> — do not edit already-applied files.</li>
+        <li>Import users into Clerk with bcrypt digests and <span class="path">external_id</span>. Create the matching Clerk Organisation and memberships. Link ids locally. Failures leave Firstout login intact.</li>
+        <li>Turn on dual-auth. Only later, after sign-in evidence, stop issuing new <span class="path">firstout_session</span> cookies. Keep accepting old ones until they expire.</li>
+        <li>Enable FORCE RLS only after the app and every worker always set tenant context, and after isolation tests pass against a non-bypass role. This step must be separately reversible.</li>
+      </ol>
+      <p>Rollback: restore the tested backup if a migration or import goes wrong. Down-migrations are optional extra safety and are not a substitute for a tested restore. Cross-tenant SQL inside migrations uses <span class="path">migration_bypass</span>.</p>
+    </section>
+
+    <section id="dns">
+      <h2>13. Subdomains, DNS and TLS</h2>
+      <p>Railway supports wildcard custom domains (<a href="https://docs.railway.com/networking/domains/working-with-domains">Working with domains</a>). A subdomain and a wildcard cannot overlap across services (<a href="https://docs.railway.com/networking/public-networking/specs-and-limits">Specs &amp; limits</a>), so the wildcard cannot be <span class="path">*.firstout.co.za</span> while <span class="path">api.firstout.co.za</span> lives on <span class="path">firstout-api</span>.</p>
+      <div class="callout good">
+        <strong class="label">Railway Pro — chosen</strong>
+        Leo added a Pro subscription (6 Nov 17:45). Hobby’s two-domain cap no longer applies to this design (Pro allows 20 custom domains per service by default). Keep <span class="path">firstout.co.za</span> and <span class="path">www.firstout.co.za</span>, and add both <span class="path">app.firstout.co.za</span> and <span class="path">*.app.firstout.co.za</span> on <span class="path">firstout-frontend</span>. Railway issues the wildcard certificate when the wildcard CNAME, <span class="path">_acme-challenge</span> CNAME, and TXT record are all present.
+      </div>
+      <p>New tenant slugs need no Cloudflare or Railway change. The app stores the slug; unknown slugs 404.</p>
+      <ul>
+        <li>Cloudflare: keep <span class="path">_acme-challenge</span> DNS-only. Prefer DNS-only for <span class="path">*.app.firstout.co.za</span> as well, so Railway’s Let’s Encrypt wildcard certificate is used and Cloudflare Advanced Certificate Manager (a paid add-on) is not required.</li>
+        <li>Existing apex/www proxy settings can stay as they are if they already work (Railway asked for SSL/TLS Full when orange-clouded).</li>
+        <li>Custom hostnames such as <span class="path">stock.acme.com</span> (Cloudflare for SaaS) are out of scope and may involve extra cost — not in this build.</li>
+      </ul>
+    </section>
+
+    <section id="billing">
+      <h2>14. Signup and billing</h2>
+      <p>Self-serve signup can still create a Clerk user, a Clerk Organisation, a local team, cloned role presets, and empty locations (not a copy of Kramerville/Bedfordview).</p>
+      <div class="callout warn">
+        <strong class="label">No live charges yet</strong>
+        The merchant of record is still undecided (Stripe if F0rge bills from a Stripe country such as Luxembourg; Paystack if a South African company bills — see Stripe’s global page routing ZA to Paystack). Build any billing flow behind a feature flag and provider test mode only. Do not create live products, do not take real payments, and do not enable Clerk Billing (it can gate permissions). Status stays usable for the first tenant and for invited test tenants without a paid invoice.
+      </div>
+    </section>
+
+    <section id="branding">
+      <h2>15. Branding storage</h2>
+      <p>Unchanged: <span class="path">team_settings</span> already has legal and trading names, address, VAT, bank lines, and a logo. Password-reset and outbound mail for unmigrated users still use the shop mailbox; after Clerk cutover, Clerk sends login mail. PDF logos stay on Firstout settings. Do not put tenant CSS in <span class="path">libs/ui</span>.</p>
+    </section>
+
+    <section id="labels">
+      <h2>16. Tag and label printing</h2>
+      <p>Unchanged: Firstout prints SKU and bin labels in the browser (<span class="path">sku-label-print.ts</span>, <span class="path">print-bin-labels.ts</span>, <span class="path">print-html.ts</span>). Per-tenant setup is label size and which fields/logo to show, stored on <span class="path">team_settings</span>. Do not route tenants through DasKasas (<span class="path">apps/dk/tag-printer</span>, no auth, no database).</p>
+    </section>
+
+    <section id="testing">
+      <h2>17. Testing and security checks</h2>
+      <ul>
+        <li>All previous isolation tests: two tenants, same <span class="path">our_ref</span> / invoice number; UUID IDOR returns 404; raw SQL without a GUC sees nothing; WITH CHECK blocks cross-tenant inserts; Cin7 and reminders stay inside one team.</li>
+        <li>GUC pool-lifecycle and commit/refresh matrix (§9).</li>
+        <li>Legacy session cannot read a second tenant by changing Host or the forwarded-host header.</li>
+        <li>Clerk session for org A rejected on host B; <span class="path">getToken()</span> org matches membership.</li>
+        <li>Host parser rejects malformed suffixes and reserved slugs.</li>
+        <li>Permission snapshot: after backfill, every inventoried user still has the same permission keys (automated comparison against the snapshot).</li>
+        <li>Bcrypt import fixture: a test user whose digest was imported into a Clerk test instance (or Clerk’s documented hasher test) can sign in without a reset. This proves the mechanism, not production staff access.</li>
+        <li>Disabled users cannot sign in via Clerk or Firstout.</li>
+        <li>Webhook signature failures return 400; forged membership deletions during dual-auth do not strip local home memberships.</li>
+      </ul>
+    </section>
+
+    <section id="rollout">
+      <h2>18. Phased rollout and rough effort</h2>
+      <p>Implementation is out of scope for this document pass. When it proceeds, this is the order. Figures are engineer-weeks.</p>
+      <table>
+        <thead><tr><th>Phase</th><th>What ships</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td>0. Safety</td><td>User/role inventory; full DB backup; tested restore on a disposable copy; written rollback.</td><td>About 1 week</td></tr>
+          <tr><td>1. Schema spine</td><td>Slug, Clerk ids, memberships, backfill “Firstout”. No login change.</td><td>About 1 week</td></tr>
+          <tr><td>2. Stamp <span class="path">team_id</span></td><td>Columns, backfill, unique indexes. Largest migration.</td><td>2–3 weeks</td></tr>
+          <tr><td>3. Dual-auth + import</td><td>Clerk Organisations, session claims, bcrypt import, safe linking, both session types accepted.</td><td>2 weeks</td></tr>
+          <tr><td>4. Hosts</td><td>Add <span class="path">app.firstout.co.za</span> and <span class="path">*.app.firstout.co.za</span> (implementation-time Railway/DNS, not this pass). Trusted host checks. OrganizationSwitcher.</td><td>1 week plus DNS</td></tr>
+          <tr><td>5. RLS</td><td>FORCE policies after GUC tests and leak tests pass.</td><td>2 weeks</td></tr>
+          <tr><td>6. Billing scaffold</td><td>Flag + test mode only. No live products.</td><td>About 1 week</td></tr>
+          <tr><td>7. Evidence and cutover</td><td>Real staff sign-in evidence; then stop issuing new custom sessions. Labels/branding polish.</td><td>About 1 week</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="risks">
+      <h2>19. Risks</h2>
+      <ul>
+        <li>Claiming import success without live sign-in evidence.</li>
+        <li>Email-only linking, or a forced reset, locking people out or attaching the wrong identity.</li>
+        <li>Replacing Firstout permissions with Clerk defaults and silently dropping grants.</li>
+        <li>Trusting Host or <span class="path">X-Forwarded-Host</span> as authorisation, or forgetting that Next rewrites hide the browser Host from the API.</li>
+        <li>Session-scoped GUCs leaking across a pool.</li>
+        <li>Webhook handlers deleting local access during dual-auth.</li>
+        <li>Clerk plan limits (custom roles, Organisations, MRU) appearing only at implementation time — stop rather than purchase.</li>
+        <li>Turning on live billing before a merchant of record is chosen.</li>
+        <li>Breaking the trade portal by folding it into Clerk Organisations without a separate design.</li>
+      </ul>
+    </section>
+
+    <section id="questions">
+      <h2>20. Open questions</h2>
+      <p><strong>Resolved:</strong> Railway Pro (Leo added it). Auth provider is Clerk with Organisations, not a new custom JWT and not Cloudflare Access. Wildcard host pattern remains <span class="path">{slug}.app.firstout.co.za</span>. Billing stays off live charges until the merchant is chosen. Current access must be preserved.</p>
+      <ol>
+        <li>Who invoices tenants — still undecided; do not go live on Stripe or Paystack until this is answered.</li>
+        <li>May the original shop keep using <span class="path">https://firstout.co.za</span> as a legacy host after others get slugs? (Recommended: yes, during dual-auth.)</li>
+        <li>Preferred slug for the first tenant (recommended: <span class="path">firstout</span>).</li>
+        <li>Are year-one tenants SA-only for VAT/VAT201?</li>
+        <li>Is platform-admin impersonation wanted in v1?</li>
+        <li>Should signup stay invite-only until RLS and sign-in evidence land, even though the scaffolding is self-serve?</li>
+        <li>When, if ever, should the trade portal move to Clerk?</li>
+        <li>If Clerk requires a paid feature we do not already have, may we pause rather than upgrade? (This design says yes — pause and ask.)</li>
+      </ol>
+    </section>
+
+    <section id="sources">
+      <h2>21. Sources</h2>
+      <p>Firstout code and Railway facts are those gathered earlier today on <span class="path">main</span> (read-only <span class="path">gh api</span>, no clone). Leo’s words verified in the Chief of Staff transcript, 6 Nov 2026, 17:45 Europe/Luxembourg: “Ive added pro sub. Add both to design. Then have codex astra 6 implement the design and you test it and then deploy to main. Do not remove any users current access.” “Both” is Clerk plus the Pro wildcard (Chief of Staff’s confirmation in the same exchange).</p>
+      <h3>Clerk</h3>
+      <ul>
+        <li>Skills: <span class="path">clerk-setup</span>, <span class="path">clerk-orgs</span> (including roles and permissions), <span class="path">clerk-webhooks</span></li>
+        <li><a href="https://clerk.com/docs/guides/development/migrating/overview">Migration overview</a> (trickle vs export/import; <span class="path">external_id</span>; rate limits; old sessions)</li>
+        <li><a href="https://clerk.com/docs/reference/backend/user/create-user">CreateUser</a> — <span class="path">passwordDigest</span> / <span class="path">passwordHasher</span> including <span class="path">bcrypt</span></li>
+        <li><a href="https://clerk.com/docs/guides/organizations/overview">Organisations</a>, roles and permissions, <span class="path">OrganizationSwitcher</span>, session <span class="path">orgId</span> / <span class="path">getToken()</span></li>
+        <li>Webhook verification and org/membership events</li>
+      </ul>
+      <h3>Still not verified</h3>
+      <ul>
+        <li>Live Postgres owner / <span class="path">BYPASSRLS</span> / pooler (values not read).</li>
+        <li>Live Cloudflare records.</li>
+        <li>Whether the connected Clerk instance already has Organisations enabled, and whether any needed Clerk feature is paid.</li>
+        <li>That every production bcrypt hash is a format Clerk’s <span class="path">bcrypt</span> hasher accepts (expected <span class="path">$2b$</span> / <span class="path">$2a$</span>, but must be checked at import time).</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p>This file is a design. This pass does not change Firstout, Railway, Cloudflare, or Clerk configuration, and it does not take payments. Implementation, testing, and deploy to main are a later step and must follow the access, backup, and billing gates above.</p>
+    </footer>
+  </div>
+</body>
+</html>

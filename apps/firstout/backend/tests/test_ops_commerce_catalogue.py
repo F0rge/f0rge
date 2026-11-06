@@ -11,7 +11,6 @@ from httpx import ASGITransport
 from sqlalchemy import text, update
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from testcontainers.postgres import PostgresContainer
 
 from app.config import settings
 from app.database import Base, get_db
@@ -20,7 +19,6 @@ from app.models.inventory import LocationStock
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.sku import Sku
 from app.models.team import Team
-from f0rge_testing import async_url
 
 
 @pytest.mark.asyncio
@@ -224,59 +222,59 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
 
 @pytest.mark.asyncio
 async def test_service_credential_cannot_select_another_database_backed_instance(
+    second_postgres_url: str,
     async_client: AsyncClient,
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     first_company = (await async_db.execute(select(Team.id))).scalar_one()
-    with PostgresContainer("postgres:16") as second_postgres:
-        second_engine = create_async_engine(async_url(second_postgres))
-        async with second_engine.begin() as conn:
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-            await conn.run_sync(Base.metadata.create_all)
+    second_engine = create_async_engine(second_postgres_url)
+    async with second_engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        await conn.run_sync(Base.metadata.create_all)
+    async with async_sessionmaker(second_engine, expire_on_commit=False)() as session:
+        other_company = Team(name="Other operational instance")
+        session.add(other_company)
+        await session.commit()
+
+    async def second_get_db():
         async with async_sessionmaker(second_engine, expire_on_commit=False)() as session:
-            other_company = Team(name="Other operational instance")
-            session.add(other_company)
-            await session.commit()
+            yield session
 
-        async def second_get_db():
-            async with async_sessionmaker(second_engine, expire_on_commit=False)() as session:
-                yield session
+    app.dependency_overrides[get_db] = second_get_db
+    monkeypatch.setattr(settings, "ops_commerce_company_id", str(other_company.id))
+    monkeypatch.setattr(settings, "ops_commerce_token", "second-instance-token")
+    monkeypatch.setattr(settings, "ops_commerce_allowed_host", "other-instance.test")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://other-instance.test"
+    ) as second_client:
+        route = "/api/v1/ops-commerce/v1/products"
+        first_token = await second_client.get(
+            route,
+            headers={
+                "Authorization": "Bearer first-instance-token",
+                "X-Ops-Company-ID": str(first_company),
+            },
+        )
+        assert first_token.status_code == 401
+        wrong_company = await second_client.get(
+            route,
+            headers={
+                "Authorization": "Bearer second-instance-token",
+                "X-Ops-Company-ID": str(first_company),
+            },
+        )
+        assert wrong_company.status_code == 403
+        correct = await second_client.get(
+            route,
+            headers={
+                "Authorization": "Bearer second-instance-token",
+                "X-Ops-Company-ID": str(other_company.id),
+            },
+        )
+        assert correct.status_code == 200
+        assert correct.json() == {"company_id": str(other_company.id), "products": []}
 
-        app.dependency_overrides[get_db] = second_get_db
-        monkeypatch.setattr(settings, "ops_commerce_company_id", str(other_company.id))
-        monkeypatch.setattr(settings, "ops_commerce_token", "second-instance-token")
-        monkeypatch.setattr(settings, "ops_commerce_allowed_host", "other-instance.test")
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://other-instance.test"
-        ) as second_client:
-            route = "/api/v1/ops-commerce/v1/products"
-            first_token = await second_client.get(
-                route,
-                headers={
-                    "Authorization": "Bearer first-instance-token",
-                    "X-Ops-Company-ID": str(first_company),
-                },
-            )
-            assert first_token.status_code == 401
-            wrong_company = await second_client.get(
-                route,
-                headers={
-                    "Authorization": "Bearer second-instance-token",
-                    "X-Ops-Company-ID": str(first_company),
-                },
-            )
-            assert wrong_company.status_code == 403
-            correct = await second_client.get(
-                route,
-                headers={
-                    "Authorization": "Bearer second-instance-token",
-                    "X-Ops-Company-ID": str(other_company.id),
-                },
-            )
-            assert correct.status_code == 200
-            assert correct.json() == {"company_id": str(other_company.id), "products": []}
-
-        app.dependency_overrides.clear()
-        await second_engine.dispose()
+    app.dependency_overrides.clear()
+    await second_engine.dispose()

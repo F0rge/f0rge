@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 os.environ.setdefault(
     "DATABASE_URL",
@@ -27,7 +28,7 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 import app.models  # noqa: F401, E402
 
 from app.config import settings  # noqa: E402
-from app.database import Base, get_db  # noqa: E402
+from app.database import Base, TenantSession, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.auth import JWT_COOKIE_NAME  # noqa: E402
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
@@ -41,7 +42,43 @@ from app.services.users import BootstrapService  # noqa: E402
 OWNER_EMAIL = settings.seed_owner_email
 OWNER_PASSWORD = settings.seed_owner_password
 
-postgres_container = postgres_container_fixture("postgres:16")
+_container_fixture = postgres_container_fixture("postgres:16")
+_bootstrap_team_id = None
+
+if os.environ.get("FIRSTOUT_TEST_DATABASE_URL"):
+
+    @pytest.fixture(scope="session")
+    def postgres_container():
+        from sqlalchemy.engine import make_url
+
+        url = make_url(os.environ["FIRSTOUT_TEST_DATABASE_URL"])
+        if url.host not in (None, "localhost", "127.0.0.1") or not url.database.startswith(
+            "firstout_"
+        ):
+            raise RuntimeError("Only a disposable local firstout_* test database is allowed")
+
+        class LocalPostgres:
+            def get_connection_url(self):
+                return os.environ["FIRSTOUT_TEST_DATABASE_URL"]
+
+        return LocalPostgres()
+else:
+    postgres_container = _container_fixture
+
+
+@pytest.fixture(autouse=True)
+def tenant_test_context(request):
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
+    request.getfixturevalue("async_engine")
+    from f0rge_db.organisation import tenant_id_ctx
+
+    token = tenant_id_ctx.set(_bootstrap_team_id)
+    try:
+        yield
+    finally:
+        tenant_id_ctx.reset(token)
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +101,10 @@ def patch_async_session_maker(
     if request.node.get_closest_marker("no_db"):
         return
     async_engine = request.getfixturevalue("async_engine")
-    maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    maker = async_sessionmaker(
+        async_engine, expire_on_commit=False, class_=AsyncSession, sync_session_class=TenantSession
+    )
+    monkeypatch.setattr("app.database.engine", async_engine)
     monkeypatch.setattr("app.database.async_session_maker", maker)
     monkeypatch.setattr("app.main.async_session_maker", maker)
 
@@ -73,14 +113,24 @@ def patch_async_session_maker(
 async def async_engine(
     postgres_container: PostgresContainer,
 ) -> AsyncIterator[AsyncEngine]:
-    engine = create_async_engine(async_url(postgres_container), echo=False)
+    global _bootstrap_team_id
+    url = os.environ.get("FIRSTOUT_TEST_DATABASE_URL") or async_url(postgres_container)
+    engine = create_async_engine(url, echo=False)
     async with engine.begin() as conn:
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS citext"))
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.create_all)
-    async with async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)() as session:
-        await RoleSeedService(session).seed()
+    async with async_sessionmaker(
+        engine, expire_on_commit=False, class_=AsyncSession, sync_session_class=TenantSession
+    )() as session:
+        from app.models.team import Team
+        from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
+
         await BootstrapService(session).seed_if_empty()
+        _bootstrap_team_id = await session.scalar(sa.select(Team.id).limit(1))
+        token = tenant_id_ctx.set(_bootstrap_team_id)
+        await apply_tenant_context(session, _bootstrap_team_id)
+        await RoleSeedService(session).seed()
         await LocationSeedService(session).seed_if_empty()
         await RoleUserSeedService(session).seed()
         await StorefrontSystemActorService(session).ensure()
@@ -90,6 +140,7 @@ async def async_engine(
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
         await TillSeedService(session).seed_if_empty()
+        tenant_id_ctx.reset(token)
     try:
         yield engine
     finally:
@@ -98,7 +149,7 @@ async def async_engine(
 
 @pytest_asyncio.fixture
 async def async_db(async_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
-    async with savepoint_session(async_engine) as session:
+    async with savepoint_session(async_engine, sync_session_class=TenantSession) as session:
         yield session
 
 
@@ -129,3 +180,51 @@ def assert_firstout_session_cookie(resp: httpx.Response) -> None:
     assert JWT_COOKIE_NAME in set_cookie
     assert "HttpOnly" in set_cookie
     assert "SameSite=lax" in set_cookie or "SameSite=Lax" in set_cookie
+
+
+@pytest_asyncio.fixture
+async def second_postgres_url(postgres_container):
+    import uuid
+    from sqlalchemy.engine import make_url
+
+    base_url = async_url(postgres_container)
+    parsed = make_url(base_url)
+    name = "firstout_test_second_" + uuid.uuid4().hex
+    admin = create_async_engine(parsed.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    async with admin.connect() as conn:
+        await conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
+    try:
+        yield parsed.set(database=name).render_as_string(hide_password=False)
+    finally:
+        async with admin.connect() as conn:
+            await conn.execute(sa.text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+        await admin.dispose()
+
+
+@asynccontextmanager
+async def independent_request_sessions(shared_db: AsyncSession):
+    """Cross-tenant tests use separate request sessions on the fixture transaction.
+
+    Production never switches a session's tenant; the default test fixture reuses
+    its one session for convenience, so tenant-switch scenarios need this scope.
+    """
+    maker = async_sessionmaker(
+        shared_db.bind,
+        expire_on_commit=False,
+        sync_session_class=TenantSession,
+        join_transaction_mode="create_savepoint",
+    )
+
+    async def request_db():
+        async with maker() as session:
+            yield session
+
+    previous = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = request_db
+    try:
+        yield maker
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous

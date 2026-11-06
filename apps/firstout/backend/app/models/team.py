@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from typing import TYPE_CHECKING
 
 from sqlalchemy import String
@@ -19,7 +21,7 @@ class Team(UUIDPkMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(
         String(24), nullable=False, default="active", server_default="active"
     )
-    clerk_org_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    clerk_org_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 

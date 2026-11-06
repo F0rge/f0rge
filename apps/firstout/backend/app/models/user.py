@@ -30,7 +30,7 @@ class User(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    clerk_user_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    clerk_user_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
