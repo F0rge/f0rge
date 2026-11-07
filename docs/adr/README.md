@@ -18,7 +18,7 @@ The decisions were reconstructed from the 7 November 2026 architecture conversat
 
 ## New work versus what is already here
 
-New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Leo approves every production release. Do not enable auto-merge. A pull request into `main` carries the full ADR checklist below. Checking a box is not proof, and this repo does not yet have a mechanical checker.
+New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Leo approves every production release. Do not enable auto-merge. Until an `adr-coverage` check exists, the filled 66-row checklist (recorded, enforcement, implementation, exception) belongs in the pull-request description. The table below is the index, not that checklist. Checking a box is not proof, and this repo does not yet have a mechanical checker.
 
 Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor, storefront/Vellano, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, Turso, SQLite, and Fly files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
 
@@ -28,7 +28,7 @@ Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor
 
 These are not decisions. Do not invent a selection.
 
-- Airflow hosting, executor, capacity, and secure routes between Railway, a separate Airflow project, and the home Pi. Cloud independence from the home Pi was not accepted.
+- Airflow hosting, executor, capacity, and secure routes between Railway, a separate Airflow project, and the home Pi. Cloud independence from the home Pi was not accepted. Namespaces, pools, and experimental multi-team mode are not hard tenant isolation; that limit is recorded on `P-060`, not as a new decision.
 - How a separate Airflow project would reach app APIs. Railway private DNS does not cross projects. Do not share app databases to solve that.
 - Airflow bundle packaging and whether a git bundle pin also pins helpers, the Rust API, or retained inputs. It does not.
 - Durable queue and the lighter scheduler. Apalis was a candidate, not a standard. Diesel transaction participation is unproven because Diesel is not in the tree.
@@ -41,7 +41,7 @@ These are not decisions. Do not invent a selection.
 
 Leo approves every production release, bound to a commit and an artifact digest once that mechanism exists. It does not exist yet. Do not enable auto-merge. Do not merge or deploy without that approval. Existing GitHub workflows and host docs still describe automatic paths. Those paths are not an approved exception, and editing these records does not turn them off or authorize them.
 
-Every pull request into `main` includes this checklist for all 66 IDs: recorded, enforcement, implementation, exception. Honest values are pass, partial, pending, not-applicable, or approved-exception. A human still has to judge rationale. There is no `adr-coverage` job in CI.
+Every pull request into `main` includes this checklist for all 66 IDs: recorded, enforcement, implementation, exception. Honest values are pass, partial, fail, pending, not-applicable, or approved-exception. `fail` means the change contradicts an accepted decision or a conditional was treated as mandatory. A human still has to judge rationale. There is no `adr-coverage` job in CI. The filled checklist for this change stays in the pull-request description.
 
 ## Index
 

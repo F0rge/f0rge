@@ -27,33 +27,31 @@ Review checklist for infrastructure diffs. Load this when reviewing a PR that to
 
 - **Migrations are not a startup free-for-all.** Legacy Fly toml files still contain `release_command`. Current Marrow `railway.toml` files contain `preDeployCommand`. Do not add a new Fly deploy. Do not treat either command as Leo's approval to run a production migration. Runtime database credentials stay least-privilege. Destructive migrations still need an explicit recovery note.
 
-- **MPG role DDL on Fly.** Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps; roles are provisioned via `fly mpg users create`, not migration-side DDL on Fly.
+- **MPG role DDL on Fly (historical inventory).** Older notes say `FLY_MPG_SKIP_ROLE_DDL=1` and `fly mpg users create`. Do not run those commands. Creating roles or changing production database access needs a separate explicit approval. It is not part of reviewing this file.
 
 - **Secrets in repo.** Block any hardcoded `FLY_API_TOKEN`, database passwords, or JWT secrets.
 
-- **Custom domain without cert plan.** New `marrow-health.com` hostnames need `fly certs add` + Cloudflare DNS-only (grey cloud) + ACME CNAME until issued.
+- **Custom domain certificates (historical inventory).** Older notes mention `fly certs add` and Cloudflare DNS changes for `marrow-health.com`. Do not change DNS or certificates from this playbook. A new hostname still needs Leo's approval under the ADR domain rule, as a separate operation.
 
 ## Fly deploy conventions (historical inventory, not a live check and not a release approval)
 
 | Env | Branch | Apps | Workflow |
 |---|---|---|---|
-| Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | `ci.yml` (deploy job) |
+| Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | older `ci.yml` deploy job |
 
-Deploy order: API (alembic via `release_command`) → MCP (serial); frontend parallel. Jobs: `plan`, `deploy api`, `deploy mcp`, `deploy frontend`, `smoke`. `workflow_dispatch` supports `component=all|api|mcp|frontend`.
-
-MPG cluster: `nlkxjo5m3240y93v` (`f0rge-db`, org `f0rge`). Databases: `marrow` (prod), `marrow_dev` (dev).
+This table is historical inventory. It is not the current workflow and not permission to deploy. Older notes describe API then MCP, with frontend in parallel, alembic via `release_command`, jobs named `plan`, `deploy api`, `deploy mcp`, `deploy frontend`, and `smoke`, plus `workflow_dispatch` component choices. They also name MPG cluster `nlkxjo5m3240y93v` and databases `marrow` and `marrow_dev`. Do not treat `marrow_dev` as a current branch or as permission to provision it.
 
 Full reference: [README.md](../../README.md#cicd), `.cursor/rules/infra.mdc`.
 
 ## New env var checklist
 
 - [ ] `apps/marrow/backend/.env.example` updated
-- [ ] `fly secrets set` on `marrow-dev` / `marrow` documented if required
+- [ ] Do not run `fly secrets set`. Production secret changes are a separate explicit approval, not a checklist step.
 - [ ] Degrades gracefully when missing
 
 ## Smoke URLs
 
-There is no dev environment (`api-dev` / `app-dev` are retired). Smoke production after merge to `main`:
+Hostnames `api-dev` and `app-dev` are described as retired names. Do not smoke production after a merge. A production smoke is a separately authorized operation, not an automatic next step, and a merge is not Leo's release approval:
 
 - https://api.marrow-health.com/api/v1/health
 - https://marrow-health.com/

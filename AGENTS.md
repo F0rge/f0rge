@@ -77,7 +77,7 @@ Do not open a `develop` branch workflow. A remote `develop` ref may still exist;
 - **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
 - **Hotfixes are just PRs into `main`** (`hotfix/<desc>` or `fix/<desc>`), same CI and squash merge.
 - Never force-push `main`. Force-pushing your own feature branch is fine when needed.
-- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names only, or are retired. They do not imply a develop branch, and nothing deploys from one.
+- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names in committed files. They do not authorize a `develop` branch workflow. Committed files do not describe a deploy workflow for those names. That is not a live host check.
 
 - PRs into `main` run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build + prod-shaped frontend build) and `e2e-smoke.yml`.
 - After CI is green on a push to `main`, `.github/workflows/deploy.yml` is configured to smoke Marrow and Firstout URLs and to call Coolify webhooks for dk. That configuration is not Leo's release approval and this file does not turn it off.

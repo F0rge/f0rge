@@ -2,7 +2,7 @@
 
 # Airflow — Agent Instructions
 
-> **Pending migration.** The repo has no `develop` branch workflow (main only, see root `AGENTS.md`). The `airflow`, `marrow_dev`, and `dk` bundles below still set `tracking_ref: develop` in `docker-compose.yml`; repoint them to `main` (or retire `marrow_dev`) in a separate change to the live Airflow config.
+> **Inventory, not a work order.** Use the `main`-only workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. The `airflow`, `marrow_dev`, and `dk` bundles below still set `tracking_ref: develop` in `docker-compose.yml`. That is read-only inventory. Do not repoint the live scheduler from this document.
 
 The text below documents a shared Airflow 3 compose layout on the Pi. Airflow hosting, connectivity, and independence from the home Pi are still open. This file does not accept that layout as the decision. Do not treat it as permission to SSH, redeploy, or share app databases.
 
@@ -21,6 +21,8 @@ CeleryExecutor + Redis. DAGs come from GitHub via **GitDagBundle** (not host bin
 | `apps/dk/dags` | dk-owned DAGs (`dk_*`) — GitDagBundle `dk` |
 
 ## Boot (rpi)
+
+The commands in this section are a historical runbook. They are not the default for an agent, and they are not permission to SSH to the Pi or to run them against the live stack. Running them needs an explicit approved operations task.
 
 ```bash
 cd ~/development/f0rge/apps/airflow

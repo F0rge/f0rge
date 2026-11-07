@@ -41,12 +41,7 @@ cd apps/dk/tag-printer/frontend && npm run dev -- --port 3002
 
 ## CI deploy
 
-Manifest entry in `.github/deploy/manifest.yml`. On `main` push after CI green,
-`deploy-reusable.yml` fires Coolify manual webhooks. Each app is signed with
-its own secret: `COOLIFY_WEBHOOK_DASKASAS_BACKEND` and
-`COOLIFY_WEBHOOK_DASKASAS_FRONTEND`. Each value must match that Coolify app's
-manual GitHub webhook secret. `watch_paths` prevent marrow-only merges from
-rebuilding dk containers.
+`.github/deploy/manifest.yml` documents a Coolify webhook path. On a push to `main` after CI is green, `deploy-reusable.yml` is written to call those webhooks. That is the documented current configuration. It is not Leo's release approval, a merge is not that approval, and this file does not turn the path off. Each app is signed with its own secret name: `COOLIFY_WEBHOOK_DASKASAS_BACKEND` and `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`. `watch_paths` are how that workflow avoids rebuilding dk for unrelated changes.
 
 Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`
 
@@ -61,4 +56,4 @@ Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`
 
 ## Branches
 
-Main only: there is no `develop` branch workflow and no develop environment. Branch off `main`, open PRs into `main`, squash merge; do not merge or deploy without Leo's release approval. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).
+Use the `main`-only workflow. A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Branch off `main`. Do not merge or deploy without Leo's release approval. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).

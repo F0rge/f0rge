@@ -82,7 +82,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Decision:** Default domain is <app-folder>.leo-figueiredo.com under a standard naming rule; other domains need Leo approval.
 - **Proposed enforcement (not installed):** Domain derivation validator checks normalization/collisions; release policy compares requested domains with default or approved exception.
 - **Gate and limit:** Static + infra + human: derived-domain and approval record. Existing custom domains must be inventoried, not removed automatically.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** None.
+- **Static evidence at `f155a2ba` (not normative, not a live check):** Custom-domain strings are already inventory in `.github/deploy/manifest.yml`, `apps/dk/tag-printer/AGENTS.md`, and root `AGENTS.md` (for example `marrow-health.com`, `firstout.co.za`, and `tags.leo-figueiredo.com`). No domain-derivation checker exists. None of those names is an approved exception.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).
 - **Risk noted in that assessment:** medium.

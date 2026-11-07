@@ -626,7 +626,7 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 
 ## Railway
 
-> **Main only.** Firstout has no develop branch workflow and no separate develop environment. The single Railway environment below is *named* `develop` for historical reasons, but its services track git `main` and it is the live environment. A merge to `main` is not Leo's production release approval. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. The Railway environment below is *named* `develop` in committed notes. Those notes say its services track git `main`. That is not a live host check. A merge to `main` is not Leo's production release approval. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Production has no Firstout services; the Marrow project has no Firstout config.
 

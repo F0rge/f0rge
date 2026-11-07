@@ -17,4 +17,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Branches
 
-Main only: there is no `develop` branch workflow and no develop environment. Branch off `main`, open PRs into `main`, squash merge; do not merge or deploy without Leo's release approval. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).
+Use the `main`-only workflow. A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Branch off `main`. Do not merge or deploy without Leo's release approval. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).
