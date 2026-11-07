@@ -1,7 +1,8 @@
 name: Deploy
 
-# Runs after CI succeeds on push/dispatch to main (the only deployed branch).
-# Manual redeploy via workflow_dispatch (does not re-run lint/test — use CI for that).
+# Fail closed. A successful CI run, a merge, or a manual dispatch does not
+# authorize a rollout. This file does not call the reusable deploy workflow
+# and does not receive production secrets. See .github/deploy/RELEASE-GATE.md.
 
 on:
   workflow_run:
@@ -68,26 +69,26 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "base_branch=$ENV" >> "$GITHUB_OUTPUT"
           echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
-          echo "Deploy $COMPONENT @ $SHA → $ENV"
+          echo "Refusing rollout of $COMPONENT @ $SHA. Event is not approval."
 
-  deploy:
-    name: deploy
+  deny-rollout:
+    name: deny rollout
     needs: guard
-    concurrency:
-      group: deploy-${{ needs.guard.outputs.environment }}
-      cancel-in-progress: false
-    uses: ./.github/workflows/deploy-reusable.yml
-    with:
-      environment: ${{ needs.guard.outputs.environment }}
-      sha: ${{ needs.guard.outputs.sha }}
-      base_branch: ${{ needs.guard.outputs.base_branch }}
-      component: ${{ needs.guard.outputs.component }}
-    secrets:
-      COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
-      COOLIFY_WEBHOOK_DASKASAS_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_BACKEND }}
-      COOLIFY_WEBHOOK_DASKASAS_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_FRONTEND }}
-      COOLIFY_WEBHOOK_BUYCYCLE: ${{ secrets.COOLIFY_WEBHOOK_BUYCYCLE }}
-      COOLIFY_WEBHOOK_ENVMON_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_BACKEND }}
-      COOLIFY_WEBHOOK_ENVMON_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_FRONTEND }}
-      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
-      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fail closed before any host webhook
+        working-directory: .github/deploy
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SHA: ${{ needs.guard.outputs.sha }}
+          TARGET: ${{ needs.guard.outputs.component }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import json,os,release_gate; evidence={"event_name":os.environ["EVENT_NAME"],"sha":os.environ["SHA"],"target":os.environ["TARGET"],"ci_event":os.environ["EVENT_NAME"],"ci_conclusion":"success","actor":""}; print(json.dumps(release_gate.decide(evidence))); raise SystemExit(1)'

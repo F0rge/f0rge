@@ -1,0 +1,47 @@
+name: Release gate
+
+# Fail closed. This workflow does not deploy and has no production secrets.
+# workflow_dispatch on this file still cannot authorize a rollout.
+# pull_request and push do not run it, so a PR cannot execute it with credentials.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Documented target name. Naming it does not authorize a deploy.
+        required: true
+        type: string
+      sha:
+        description: Full commit SHA. A branch or tag name is rejected.
+        required: true
+        type: string
+      digest:
+        description: sha256 digest of the already tested immutable artifact.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deny:
+    name: deny rollout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Refuse without an external approval binding
+        working-directory: .github/deploy
+        env:
+          TARGET: ${{ inputs.target }}
+          SHA: ${{ inputs.sha }}
+          DIGEST: ${{ inputs.digest }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import json,os,release_gate; evidence={"event_name":"workflow_dispatch","ref_kind":"sha","sha":os.environ["SHA"],"digest":os.environ["DIGEST"],"target":os.environ["TARGET"],"actor":os.environ["ACTOR"],"ci_conclusion":"","ci_event":"workflow_dispatch"}; print(json.dumps(release_gate.decide(evidence)))'
+          echo "Rollout is disabled. A dispatch is not Leo's approval of this digest."
+          exit 1
