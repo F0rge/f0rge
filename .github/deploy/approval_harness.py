@@ -1,32 +1,31 @@
 """No-effect check of a release tuple.
 
-evaluate() can return permit for one simulated receipt. That object is a
-test stand-in for a GitHub environment review read by a credential that is
-not user 38779415. Constructing it does not call GitHub and does not prove
-a person acted.
+A permit is possible only for a SimulatedBoundary plus a MemoryReplayStore.
+Those are test doubles. A dict, a JSON file, or a source-string cannot
+become one. This module does not call GitHub or Railway.
 
-execute() does not call a provider, read a secret, or change configuration.
-EFFECTS_ENABLED is a constant False. A permit does not turn it on.
+execute() can name a planned reuse and still performs no provider call
+while EFFECTS_ENABLED is false. A permit does not prove a person acted
+and does not prove a running image digest.
 """
 
 from __future__ import annotations
 
 import hashlib
-import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 APPROVER_USER_ID = 38779415
 REPOSITORY = "F0rge/f0rge"
 TRUSTED_CI_WORKFLOW = ".github/workflows/ci.yml"
 TRUSTED_CHECKS = ("ci", "playwright smoke")
-TRUSTED_RECEIPT_SOURCE = "github_environment_api_read_by_non_approver_app"
 EFFECTS_ENABLED = False
 
-_SHA = re.compile(r"^[0-9a-f]{40}$")
-_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+# GitHub environment reviews have no caller-chosen lifetime. This harness
+# accepts a review only at evaluation time, inside a short clock window.
+MAX_REVIEW_AGE = timedelta(minutes=15)
+MAX_FUTURE_SKEW = timedelta(minutes=2)
 
-# GitHub environment ids from the 2026-11-07 15:57:28 box read. Names are exact.
 GITHUB_ENVIRONMENT_IDS = {
     "Marrow / production": 19158860710,
     "Firstout / production": 24561991680,
@@ -34,13 +33,9 @@ GITHUB_ENVIRONMENT_IDS = {
     "DasKasas / production": 24635670941,
 }
 
-# Railway project d58a2884 is named DasKasas and runs the storefront services.
-# It is not GitHub environment "DasKasas / production", and it is not dk on Coolify.
 RAILWAY_STOREFRONT_PROJECT = "d58a2884-d366-4230-9555-8b7bb4e42d4f"
 RAILWAY_STOREFRONT_ENVIRONMENT = "d73ff2d5-816d-4bc8-85b4-71a85b0398fa"
 
-# Service identity for a same-build reuse plan. Deployment ids of live builds
-# are not an allow-list: those builds are ca3bc0fb, not a later commit.
 BINDINGS: dict[tuple[str, str], dict[str, str]] = {
     ("Marrow / production", "marrow-api"): {
         "railway_project_id": "a633a271-5bb0-461e-8eb5-1acb9e126a59",
@@ -94,10 +89,73 @@ UNMAPPED_SERVICES = frozenset(
     }
 )
 
+RECEIPT_FIELDS = frozenset(
+    {
+        "repository",
+        "head_repository",
+        "ref",
+        "deployment_branch_policy",
+        "sha",
+        "built_from_sha",
+        "ci_workflow_path",
+        "workflow_path",
+        "event_name",
+        "fork",
+        "ci_run_id",
+        "ci_run_attempt",
+        "checks",
+        "artifact_sha256",
+        "approved_artifact_sha256",
+        "github_environment_name",
+        "github_environment_id",
+        "service",
+        "railway_project_id",
+        "railway_environment_id",
+        "service_id",
+        "deployment_id",
+        "approved_deployment_id",
+        "promotion",
+        "approver_user_id",
+        "requester_id",
+        "prevent_self_review",
+        "can_admins_bypass",
+        "admin_bypass_used",
+        "rebuild",
+        "ref_kind",
+        "reviewed_at",
+        "expires_at",
+        "approval_id",
+        "approval_tuple",
+    }
+)
+
+
+class SimulatedBoundary:
+    """Test double. Not a GitHub response and not a trust root."""
+
+
+class MemoryReplayStore:
+    """In-process replay memory for tests. Not caller-supplied JSON."""
+
+    def __init__(self) -> None:
+        self._seen: dict[str, str] = {}
+
+    def seen(self, approval_id: str) -> bool:
+        return approval_id in self._seen
+
+    def commit(self, approval_id: str, digest: str) -> None:
+        self._seen[approval_id] = digest
+
 
 def _add(reasons: list[str], reason: str) -> None:
     if reason not in reasons:
         reasons.append(reason)
+
+
+def _exact_int(value: object) -> int | None:
+    if type(value) is int:
+        return value
+    return None
 
 
 def _parse_time(value: object) -> datetime | None:
@@ -113,76 +171,106 @@ def _parse_time(value: object) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _canon(value: object) -> str:
+    if type(value) is int:
+        return f"int:{value}"
+    if type(value) is str:
+        return f"str:{value}"
+    if type(value) is bool:
+        return f"bool:{value}"
+    return f"other:{type(value).__name__}"
+
+
 def tuple_digest(receipt: dict[str, Any]) -> str:
-    """Bind an approval id to the fields a later change must invalidate."""
+    """Canonical binding. Identity, time, environment id, and check attempt are included."""
+    checks = receipt.get("checks") if isinstance(receipt.get("checks"), dict) else {}
     parts = [
-        str(receipt.get("repository") or ""),
-        str(receipt.get("sha") or ""),
-        str(receipt.get("ci_workflow_path") or ""),
-        str(receipt.get("ci_run_id") or ""),
-        str(receipt.get("ci_run_attempt") or ""),
-        str(receipt.get("artifact_sha256") or ""),
-        str(receipt.get("github_environment_name") or ""),
-        str(receipt.get("service") or ""),
-        str(receipt.get("railway_project_id") or ""),
-        str(receipt.get("railway_environment_id") or ""),
-        str(receipt.get("service_id") or ""),
-        str(receipt.get("deployment_id") or ""),
-        str(receipt.get("promotion") or ""),
+        _canon(receipt.get("repository")),
+        _canon(receipt.get("head_repository")),
+        _canon(receipt.get("sha")),
+        _canon(receipt.get("built_from_sha")),
+        _canon(receipt.get("ci_workflow_path")),
+        _canon(receipt.get("workflow_path")),
+        _canon(receipt.get("event_name")),
+        _canon(receipt.get("fork")),
+        _canon(receipt.get("ci_run_id")),
+        _canon(receipt.get("ci_run_attempt")),
+        _canon(receipt.get("artifact_sha256")),
+        _canon(receipt.get("approved_artifact_sha256")),
+        _canon(receipt.get("github_environment_name")),
+        _canon(receipt.get("github_environment_id")),
+        _canon(receipt.get("service")),
+        _canon(receipt.get("railway_project_id")),
+        _canon(receipt.get("railway_environment_id")),
+        _canon(receipt.get("service_id")),
+        _canon(receipt.get("deployment_id")),
+        _canon(receipt.get("approved_deployment_id")),
+        _canon(receipt.get("promotion")),
+        _canon(receipt.get("approver_user_id")),
+        _canon(receipt.get("requester_id")),
+        _canon(receipt.get("prevent_self_review")),
+        _canon(receipt.get("can_admins_bypass")),
+        _canon(receipt.get("admin_bypass_used")),
+        _canon(receipt.get("reviewed_at")),
+        _canon(receipt.get("expires_at")),
+        _canon(receipt.get("ref")),
+        _canon(receipt.get("deployment_branch_policy")),
     ]
-    checks = receipt.get("checks") or {}
     for name in TRUSTED_CHECKS:
-        item = checks.get(name) or {}
-        parts.append(name)
-        parts.append(str(item.get("conclusion") or ""))
-        parts.append(str(item.get("run_id") or ""))
+        item = checks.get(name) if isinstance(checks.get(name), dict) else {}
+        parts.append(f"check:{name}")
+        parts.append(_canon(item.get("conclusion")))
+        parts.append(_canon(item.get("run_id")))
+        parts.append(_canon(item.get("attempt")))
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
-def evaluate(receipt: dict[str, Any] | None, boundary: dict[str, Any] | None, *, now: datetime) -> dict[str, Any]:
-    """Return permit or deny. Neither result performs an effect."""
+def evaluate(
+    receipt: dict[str, Any] | None,
+    boundary: object,
+    store: object,
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    """Return permit or deny. A permit also consumes the approval id in the store."""
     data = receipt or {}
-    trust = boundary or {}
     reasons: list[str] = []
-
-    if trust.get("kind") != "simulated":
+    if type(boundary) is not SimulatedBoundary:
         _add(reasons, "live_receipt_not_fetched")
-    if trust.get("receipt_source") != TRUSTED_RECEIPT_SOURCE:
-        _add(reasons, "receipt_source_untrusted")
-    if trust.get("receipt_credential_is_approver_user") is True:
-        _add(reasons, "agent_held_approver_credential")
-    if trust.get("receipt_credential_is_agent_held_user_token") is True:
-        _add(reasons, "agent_held_approver_credential")
-    if data.get("approved") is True and trust.get("kind") != "simulated":
-        _add(reasons, "boolean_is_not_approval")
-    if data.get("approval_file") or data.get("signature_key_holder") == "agent":
-        _add(reasons, "agent_minted_approval")
+    if type(store) is not MemoryReplayStore:
+        _add(reasons, "replay_store_untrusted")
+    if not isinstance(data, dict):
+        _add(reasons, "receipt_not_object")
+        data = {}
+    unknown = sorted(set(data) - RECEIPT_FIELDS)
+    if unknown or "consumed_approval_ids" in data or "receipt_source" in data or "approved" in data:
+        _add(reasons, "unexpected_field")
 
-    approver = data.get("approver_user_id")
-    requester = data.get("requester_id")
+    approver = _exact_int(data.get("approver_user_id"))
+    requester = _exact_int(data.get("requester_id"))
+    if approver is None or requester is None or _exact_int(data.get("github_environment_id")) is None:
+        _add(reasons, "id_type_invalid")
+    if _exact_int(data.get("ci_run_id")) is None or _exact_int(data.get("ci_run_attempt")) is None:
+        _add(reasons, "id_type_invalid")
     if approver != APPROVER_USER_ID:
         _add(reasons, "reviewer_not_required_human")
-    if data.get("approver_kind") != "human_user":
-        _add(reasons, "approver_not_human_user")
-    if data.get("requester_kind") != "github_app":
-        _add(reasons, "requester_not_separate_app")
-    if requester in {None, "", APPROVER_USER_ID} or requester == approver:
+    if requester is None or requester == APPROVER_USER_ID or requester == approver:
         _add(reasons, "requester_is_approver")
     if data.get("prevent_self_review") is not True:
         _add(reasons, "self_review_not_prevented")
     if data.get("can_admins_bypass") is not False or data.get("admin_bypass_used") is True:
         _add(reasons, "admin_bypass")
 
-    environment = str(data.get("github_environment_name") or "")
-    service = str(data.get("service") or "")
-    if environment not in GITHUB_ENVIRONMENT_IDS:
+    environment = data.get("github_environment_name")
+    service = data.get("service")
+    if not isinstance(environment, str) or environment not in GITHUB_ENVIRONMENT_IDS:
         _add(reasons, "environment_not_candidate")
-    elif data.get("github_environment_id") != GITHUB_ENVIRONMENT_IDS[environment]:
+    elif data.get("github_environment_id") != GITHUB_ENVIRONMENT_IDS.get(environment):
         _add(reasons, "environment_id_mismatch")
-    if service in UNMAPPED_SERVICES or environment == "DasKasas / production":
+    if not isinstance(service, str) or service in UNMAPPED_SERVICES or environment == "DasKasas / production":
         _add(reasons, "target_unmapped")
-    binding = BINDINGS.get((environment, service))
-    if binding is None and "target_unmapped" not in reasons:
+    binding = BINDINGS.get((environment, service)) if isinstance(environment, str) and isinstance(service, str) else None
+    if binding is None and "target_unmapped" not in reasons and "environment_not_candidate" not in reasons:
         _add(reasons, "target_unmapped")
     if binding is not None:
         for key in ("railway_project_id", "railway_environment_id", "service_id"):
@@ -193,51 +281,84 @@ def evaluate(receipt: dict[str, Any] | None, boundary: dict[str, Any] | None, *,
         _add(reasons, "untrusted_repository")
     if data.get("ref") != "refs/heads/main" or data.get("deployment_branch_policy") != "main":
         _add(reasons, "ref_not_main")
-    sha = str(data.get("sha") or "")
-    if not _SHA.fullmatch(sha) or data.get("built_from_sha") != sha:
+    sha = data.get("sha")
+    if not isinstance(sha, str) or len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
+        _add(reasons, "sha_not_exact")
+    elif data.get("built_from_sha") != sha:
         _add(reasons, "sha_not_exact")
     if data.get("ci_workflow_path") != TRUSTED_CI_WORKFLOW:
         _add(reasons, "ci_workflow_untrusted")
+    if data.get("workflow_path") is None:
+        _add(reasons, "workflow_path_missing")
+    elif data.get("workflow_path") != TRUSTED_CI_WORKFLOW:
+        _add(reasons, "untrusted_workflow")
     if data.get("event_name") != "workflow_dispatch":
         _add(reasons, "event_untrusted")
-    if data.get("fork") is True or data.get("workflow_path") not in {None, TRUSTED_CI_WORKFLOW}:
+    if data.get("fork") is not False:
         _add(reasons, "untrusted_workflow")
-    digest = str(data.get("artifact_sha256") or "")
-    if not _DIGEST.fullmatch(digest) or data.get("approved_artifact_sha256") != digest:
+    digest = data.get("artifact_sha256")
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 71
+        or not digest.startswith("sha256:")
+        or any(c not in "0123456789abcdef" for c in digest[7:])
+        or data.get("approved_artifact_sha256") != digest
+    ):
         _add(reasons, "artifact_mismatch")
-    checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
-    run_id = data.get("ci_run_id")
-    attempt = data.get("ci_run_attempt")
-    if not isinstance(run_id, int) or isinstance(run_id, bool) or not isinstance(attempt, int) or isinstance(attempt, bool):
-        _add(reasons, "ci_run_not_exact")
-    for name in TRUSTED_CHECKS:
-        item = checks.get(name) if isinstance(checks.get(name), dict) else {}
-        if item.get("conclusion") != "success" or item.get("run_id") != run_id or item.get("attempt") != attempt:
-            _add(reasons, "check_not_success")
-    if data.get("promotion") != "railway_existing_deployment_reuse":
-        _add(reasons, "promotion_not_same_build_reuse")
+
+    run_id = _exact_int(data.get("ci_run_id"))
+    attempt = _exact_int(data.get("ci_run_attempt"))
+    checks = data.get("checks") if isinstance(data.get("checks"), dict) else None
+    if checks is None or set(checks) != set(TRUSTED_CHECKS):
+        _add(reasons, "check_not_success")
+    else:
+        for name in TRUSTED_CHECKS:
+            item = checks.get(name)
+            if not isinstance(item, dict):
+                _add(reasons, "check_not_success")
+                continue
+            if set(item) != {"conclusion", "run_id", "attempt"}:
+                _add(reasons, "check_not_success")
+                continue
+            if (
+                item.get("conclusion") != "success"
+                or item.get("run_id") != run_id
+                or item.get("attempt") != attempt
+            ):
+                _add(reasons, "check_not_success")
     if data.get("promotion") == "oci_digest":
         _add(reasons, "oci_digest_receipt_unverified")
-    deployment_id = str(data.get("deployment_id") or "")
-    if not deployment_id or data.get("approved_deployment_id") != deployment_id:
+    elif data.get("promotion") != "railway_existing_deployment_reuse":
+        _add(reasons, "promotion_not_same_build_reuse")
+    deployment_id = data.get("deployment_id")
+    if not isinstance(deployment_id, str) or not deployment_id or data.get("approved_deployment_id") != deployment_id:
         _add(reasons, "deployment_id_mismatch")
-    if data.get("rebuild") is True or data.get("tag") in {"latest", "main"} or data.get("ref_kind") == "tag":
+    if data.get("rebuild") is not False or data.get("ref_kind") != "sha":
         _add(reasons, "rebuild_or_mutable_tag")
 
+    reviewed = _parse_time(data.get("reviewed_at"))
     expires = _parse_time(data.get("expires_at"))
     moment = now.astimezone(timezone.utc)
-    if expires is None or expires <= moment:
-        _add(reasons, "approval_expired")
-    approval_id = str(data.get("approval_id") or "")
-    if not approval_id:
+    if reviewed is None or expires is None:
+        _add(reasons, "review_time_invalid")
+    else:
+        if expires <= reviewed or expires - reviewed > MAX_REVIEW_AGE:
+            _add(reasons, "expiry_window_too_long")
+        if moment < reviewed - MAX_FUTURE_SKEW or moment > expires:
+            _add(reasons, "approval_expired")
+
+    approval_id = data.get("approval_id")
+    if not isinstance(approval_id, str) or not approval_id:
         _add(reasons, "approval_id_missing")
-    consumed = trust.get("consumed_approval_ids") or ()
-    if approval_id and approval_id in consumed:
-        _add(reasons, "approval_replayed")
-    if approval_id and data.get("approval_tuple") != tuple_digest(data):
+        approval_id = ""
+    if data.get("approval_tuple") != tuple_digest(data):
         _add(reasons, "approval_tuple_mismatch")
+    if isinstance(store, MemoryReplayStore) and approval_id and store.seen(approval_id):
+        _add(reasons, "approval_replayed")
 
     permit = not reasons
+    if permit and isinstance(store, MemoryReplayStore) and approval_id:
+        store.commit(approval_id, str(data.get("approval_tuple")))
     return {
         "permit": permit,
         "reasons": reasons,
@@ -247,13 +368,23 @@ def evaluate(receipt: dict[str, Any] | None, boundary: dict[str, Any] | None, *,
     }
 
 
-def execute(decision: dict[str, Any], sink: Any | None = None) -> dict[str, Any]:
-    """Record no provider call. The sink is accepted so tests can prove it stays unused."""
-    del sink
-    if EFFECTS_ENABLED:
-        raise RuntimeError("live promotion is not part of this harness")
+def plan_effects(decision: dict[str, Any]) -> list[str]:
+    """Name the provider call a permit would require. This does not perform it."""
+    if decision.get("permit") is True:
+        return ["reuse_existing_deployment"]
+    return []
+
+
+def execute(decision: dict[str, Any], sink: Any) -> dict[str, Any]:
+    """Call the sink only when the hard switch is on. That switch is off."""
+    planned = plan_effects(decision)
+    executed = False
+    if EFFECTS_ENABLED and planned:
+        sink.deploy(planned)
+        executed = True
     return {
-        "executed": False,
-        "reason": "live_promotion_disabled",
-        "permit": bool(decision.get("permit")),
+        "executed": executed,
+        "planned": planned,
+        "permit": decision.get("permit") is True,
+        "reason": None if executed else "live_promotion_disabled",
     }
