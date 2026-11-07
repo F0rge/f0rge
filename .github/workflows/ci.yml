@@ -50,7 +50,7 @@ jobs:
       - name: Coolify payload builder
         # discover can't import `.github/` (the dot). Run the module from its dir.
         working-directory: .github/deploy
-        run: python3 -m unittest test_coolify_payload.py
+        run: python3 -m unittest test_coolify_payload.py test_approval_harness.py
 
       - name: Nx project registration guard
         run: bash .github/scripts/check-nx-projects.sh
