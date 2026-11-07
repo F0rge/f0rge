@@ -4,7 +4,9 @@
 
 A permit requires a `SimulatedBoundary` instance and a `MemoryReplayStore` instance. A dict, a JSON object, or a source string is not that boundary. Caller fields named `receipt_source`, `approved`, or `consumed_approval_ids` are rejected. User ids must be real integers. The string `"38779415"` does not match the reviewer. `workflow_path` is required.
 
-GitHub does not give an environment review a caller-chosen lifetime. This harness accepts `reviewed_at` and `expires_at` only when the window is at most 15 minutes and `now` falls inside it, with two minutes of future clock skew. A far-future expiry is denied. Replay uses the store object, not a list inside the receipt. The canonical digest includes the approver, the requester, the environment id, both timestamps, and each check attempt. Changing any of those without recomputing the digest is a deny.
+GitHub does not give an environment review a caller-chosen lifetime. This harness accepts `reviewed_at` and `expires_at` only when the window is at most 15 minutes and `now` falls inside it, with two minutes of future clock skew. A far-future expiry is denied. Replay uses the in-process store, keyed by the canonical tuple digest, not by the caller-chosen approval id. A new id for the same tuple is a replay inside that process. This is not a durable live replay proof. The digest includes the approver, the requester, the environment id, both timestamps, and each check attempt. Changing any of those without recomputing the digest is a deny.
+
+`plan_effects()` returns the immutable command `evaluate()` minted, with the repository, SHA, artifact, deployment id, Railway project, environment, service, run, attempt, and tuple. A bare `{"permit": true}` has no command. `execute()` does not call the sink while `EFFECTS_ENABLED` is false.
 
 GitHub's own review record, if one is later fetched, binds a workflow run and an environment. It does not bind an artifact sha256 or a Railway deployment id. Those equalities in this fixture are not that record. `live_human_approval_proved` and `provider_digest_proved` stay false.
 

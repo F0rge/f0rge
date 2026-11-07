@@ -95,7 +95,7 @@ class ApprovalHarnessTest(unittest.TestCase):
         self.assertIn(reason, result["reasons"])
         self.assertFalse(result["live_human_approval_proved"])
         self.assertFalse(result["provider_digest_proved"])
-        self.assertEqual(effect["planned"], [])
+        self.assertIsNone(effect["planned"])
         self.assertFalse(effect["executed"])
 
     def test_simulated_matching_tuple_permits_and_plans_without_calling_sink(self) -> None:
@@ -112,8 +112,31 @@ class ApprovalHarnessTest(unittest.TestCase):
         self.assertFalse(result["provider_digest_proved"])
         self.assertFalse(approval_harness.EFFECTS_ENABLED)
         effect = approval_harness.execute(result, sink)
-        self.assertEqual(effect["planned"], ["reuse_existing_deployment"])
+        planned = effect["planned"]
+        self.assertEqual(
+            planned,
+            {
+                "repository": "F0rge/f0rge",
+                "sha": SHA,
+                "artifact_sha256": DIGEST,
+                "deployment_id": "dep-fixture-not-a-live-deploy",
+                "railway_project_id": "a633a271-5bb0-461e-8eb5-1acb9e126a59",
+                "railway_environment_id": "ff59293a-ac24-4e1c-8d19-0756bc577016",
+                "service": "marrow-api",
+                "service_id": "e4b05e39-4717-45fc-9df5-e86e3113422f",
+                "ci_run_id": RUN_ID,
+                "ci_run_attempt": ATTEMPT,
+                "approval_tuple": result["bound"].approval_tuple,
+            },
+        )
         self.assertFalse(effect["executed"])
+        self.assertEqual(sink.deploy_calls, 0)
+        forged = dict(result)
+        forged["sha"] = "b" * 40
+        self.assertEqual(approval_harness.plan_effects(forged).sha, SHA)
+        self.assertIsNone(approval_harness.plan_effects({"permit": True}))
+        bare = approval_harness.execute({"permit": True}, sink)
+        self.assertIsNone(bare["planned"])
         self.assertEqual(sink.deploy_calls, 0)
 
     def test_firstout_and_storefront_commerce_bindings_permit(self) -> None:
@@ -183,9 +206,14 @@ class ApprovalHarnessTest(unittest.TestCase):
         stale["approval_tuple"] = approval_harness.tuple_digest(stale)
         self.assert_denied(stale, "approval_expired")
         store = approval_harness.MemoryReplayStore()
-        first, _ = self.decide(_receipt(), store=store)
+        original = _receipt()
+        first, _ = self.decide(original, store=store)
         self.assertTrue(first["permit"])
         self.assert_denied(_receipt(), "approval_replayed", store=store)
+        renamed = dict(original)
+        renamed["approval_id"] = "approval-fixture-2"
+        self.assertEqual(renamed["approval_tuple"], original["approval_tuple"])
+        self.assert_denied(renamed, "approval_replayed", store=store)
         swapped = _receipt(approver_user_id=1)
         self.assert_denied(swapped, "reviewer_not_required_human")
         self.assertNotEqual(approval_harness.tuple_digest(_receipt()), approval_harness.tuple_digest(swapped))
@@ -225,7 +253,7 @@ class ApprovalHarnessTest(unittest.TestCase):
     def test_denied_decision_plans_nothing(self) -> None:
         result, effect = self.decide({})
         self.assertFalse(result["permit"])
-        self.assertEqual(effect["planned"], [])
+        self.assertIsNone(effect["planned"])
         self.assertFalse(effect["executed"])
 
 

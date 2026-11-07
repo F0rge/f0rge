@@ -135,16 +135,55 @@ class SimulatedBoundary:
 
 
 class MemoryReplayStore:
-    """In-process replay memory for tests. Not caller-supplied JSON."""
+    """Fixture replay memory keyed by the canonical tuple digest.
+
+    A new approval_id for the same tuple is still a replay. This object is
+    process-local and is not a durable live replay proof.
+    """
 
     def __init__(self) -> None:
-        self._seen: dict[str, str] = {}
+        self._seen: set[str] = set()
 
-    def seen(self, approval_id: str) -> bool:
-        return approval_id in self._seen
+    def seen(self, tuple_identity: str) -> bool:
+        return tuple_identity in self._seen
 
-    def commit(self, approval_id: str, digest: str) -> None:
-        self._seen[approval_id] = digest
+    def commit(self, tuple_identity: str) -> None:
+        self._seen.add(tuple_identity)
+
+
+class BoundCommand:
+    """Immutable plan produced only by evaluate. Not a provider call."""
+
+    __slots__ = (
+        "repository",
+        "sha",
+        "artifact_sha256",
+        "deployment_id",
+        "railway_project_id",
+        "railway_environment_id",
+        "service",
+        "service_id",
+        "ci_run_id",
+        "ci_run_attempt",
+        "approval_tuple",
+        "_token",
+    )
+
+    def __init__(self, token: object, **fields: object) -> None:
+        if token is not _PLAN_TOKEN:
+            raise RuntimeError("bound commands are minted only by evaluate")
+        for name, value in fields.items():
+            object.__setattr__(self, name, value)
+        object.__setattr__(self, "_token", token)
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise AttributeError("bound command is immutable")
+
+    def as_dict(self) -> dict[str, object]:
+        return {name: getattr(self, name) for name in self.__slots__ if name != "_token"}
+
+
+_PLAN_TOKEN = object()
 
 
 def _add(reasons: list[str], reason: str) -> None:
@@ -353,38 +392,69 @@ def evaluate(
         approval_id = ""
     if data.get("approval_tuple") != tuple_digest(data):
         _add(reasons, "approval_tuple_mismatch")
-    if isinstance(store, MemoryReplayStore) and approval_id and store.seen(approval_id):
+    identity = data.get("approval_tuple")
+    if (
+        isinstance(store, MemoryReplayStore)
+        and isinstance(identity, str)
+        and identity
+        and store.seen(identity)
+    ):
         _add(reasons, "approval_replayed")
 
     permit = not reasons
-    if permit and isinstance(store, MemoryReplayStore) and approval_id:
-        store.commit(approval_id, str(data.get("approval_tuple")))
+    bound = None
+    if permit and isinstance(store, MemoryReplayStore) and isinstance(identity, str):
+        store.commit(identity)
+        bound = BoundCommand(
+            _PLAN_TOKEN,
+            repository=data.get("repository"),
+            sha=data.get("sha"),
+            artifact_sha256=data.get("artifact_sha256"),
+            deployment_id=data.get("deployment_id"),
+            railway_project_id=data.get("railway_project_id"),
+            railway_environment_id=data.get("railway_environment_id"),
+            service=data.get("service"),
+            service_id=data.get("service_id"),
+            ci_run_id=data.get("ci_run_id"),
+            ci_run_attempt=data.get("ci_run_attempt"),
+            approval_tuple=identity,
+        )
     return {
         "permit": permit,
         "reasons": reasons,
+        "bound": bound,
         "effects_enabled": EFFECTS_ENABLED,
         "live_human_approval_proved": False,
         "provider_digest_proved": False,
+        "replay_store_durable": False,
     }
 
 
-def plan_effects(decision: dict[str, Any]) -> list[str]:
-    """Name the provider call a permit would require. This does not perform it."""
-    if decision.get("permit") is True:
-        return ["reuse_existing_deployment"]
-    return []
+def plan_effects(decision: object) -> BoundCommand | None:
+    """Return the immutable command evaluate minted, or nothing.
+
+    A bare {"permit": true} is not a plan. This does not call a provider.
+    """
+    if not isinstance(decision, dict):
+        return None
+    bound = decision.get("bound")
+    if type(bound) is not BoundCommand:
+        return None
+    if decision.get("permit") is not True:
+        return None
+    return bound
 
 
 def execute(decision: dict[str, Any], sink: Any) -> dict[str, Any]:
     """Call the sink only when the hard switch is on. That switch is off."""
     planned = plan_effects(decision)
     executed = False
-    if EFFECTS_ENABLED and planned:
+    if EFFECTS_ENABLED and planned is not None:
         sink.deploy(planned)
         executed = True
     return {
         "executed": executed,
-        "planned": planned,
-        "permit": decision.get("permit") is True,
+        "planned": None if planned is None else planned.as_dict(),
+        "permit": isinstance(decision, dict) and decision.get("permit") is True,
         "reason": None if executed else "live_promotion_disabled",
     }
