@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # FastAPI Backend Review Playbook
 
 ## What this is
@@ -188,7 +190,7 @@ Source of truth: `docs/architecture/ai_seams.md`.
 
 ## Migration safety
 
-- Fly deploy runs migrations via `[deploy] release_command` in `fly.toml` / `fly.prod.toml` (`alembic upgrade head` as `MIGRATION_DATABASE_URL`). See `.cursor/rules/infra.mdc`.
+- Legacy Fly toml files contain `[deploy] release_command`. Current Marrow `railway.toml` files contain `preDeployCommand`. Neither is permission to migrate production. See `.cursor/rules/infra.mdc`.
 - `RUN_MIGRATIONS=1` + `docker-entrypoint.sh` is optional for **local Docker image** builds only — do not set on MCP or embedding-worker containers.
 - After `alembic revision --autogenerate -m "..."`, always audit the generated file. Autogenerate misses: index renames, `server_default` changes, `CHECK` constraint adds/drops, and extension-level DDL. Hand-write those `op.execute()` calls.
 - Migration 004 introduced `HEALTHTRACKER_RO_PASSWORD` env var requirement. Any new migration that references Postgres roles must document the required env var in the migration file's docstring and in `apps/marrow/backend/.env.example`. See `project_mcp_migrations.md`.

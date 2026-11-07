@@ -1,6 +1,8 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # `@f0rge/ui` — Shared UI Kit
 
-This package is the **only** UI kit for f0rge apps. Apps consume; never reverse-import.
+This package is the legacy shared kit for existing apps, not actual Primer and not the new-app design system. Apps consume it only where they already do; never reverse-import. Firstout's Carbon UI is legacy inventory, not an approved exception.
 
 ## Adding primitives
 
