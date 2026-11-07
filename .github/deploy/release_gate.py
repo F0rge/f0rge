@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Mapping
 from typing import Any
 
 DECISION = "deny"
@@ -48,8 +49,13 @@ def decide(evidence: dict[str, Any] | None) -> dict[str, Any]:
     event = str(data.get("event_name") or "")
     if event in {"pull_request", "pull_request_target", "workflow_run", "schedule", "push"}:
         add("event_cannot_authorize")
-    if event in {"workflow_dispatch", "workflow_dispatch_rerun"} or data.get("rerun") is True:
+    # workflow_dispatch is a real GitHub event. A UI rerun keeps that same
+    # event name and increases run_attempt. There is no workflow_dispatch_rerun event.
+    if event == "workflow_dispatch":
         add("manual_or_rerun_cannot_authorize")
+    attempt = data.get("run_attempt")
+    if data.get("rerun") is True or _attempt_number(attempt) > 1:
+        add("run_attempt_cannot_authorize")
     if data.get("ref_kind") in {"branch", "tag"} or data.get("mutable_tag") is True:
         add("mutable_ref")
 
@@ -107,6 +113,61 @@ def decide(evidence: dict[str, Any] | None) -> dict[str, Any]:
     if DECISION != "deny" or BINDING not in reasons:
         raise RuntimeError("release gate lost its fail-closed outcome")
     return {"decision": DECISION, "reasons": reasons}
+
+
+def _attempt_number(value: object) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return 0
+
+
+def evidence_from_env(env: Mapping[str, str]) -> dict[str, Any]:
+    """Build evidence from the keys the workflows actually set.
+
+    Missing CI keys stay missing. This function does not invent a successful
+    CI run, a digest, or an approval.
+    """
+
+    def get(key: str) -> str:
+        value = env.get(key)
+        return "" if value is None else str(value)
+
+    evidence: dict[str, Any] = {
+        "event_name": get("EVENT_NAME"),
+        "sha": get("SHA"),
+        "target": get("TARGET"),
+        "actor": get("ACTOR"),
+    }
+    if get("DIGEST"):
+        evidence["digest"] = get("DIGEST")
+    if get("REF_KIND"):
+        evidence["ref_kind"] = get("REF_KIND")
+    if get("RUN_ATTEMPT").isdigit():
+        evidence["run_attempt"] = int(get("RUN_ATTEMPT"))
+    for source, dest in (
+        ("CI_CONCLUSION", "ci_conclusion"),
+        ("CI_EVENT", "ci_event"),
+        ("CI_HEAD_SHA", "ci_head_sha"),
+        ("CI_HEAD_BRANCH", "ci_head_branch"),
+        ("CI_WORKFLOW_PATH", "ci_workflow_path"),
+    ):
+        if get(source):
+            evidence[dest] = get(source)
+    return evidence
+
+
+def deny_from_env(env: Mapping[str, str]) -> int:
+    """Print the denial and return 1. There is no zero exit."""
+    result = decide(evidence_from_env(env))
+    json.dump(result, sys.stdout)
+    sys.stdout.write("\n")
+    if result.get("decision") != DECISION or BINDING not in result.get("reasons", []):
+        raise RuntimeError("release gate lost its fail-closed outcome")
+    return 1
 
 
 def main() -> int:

@@ -50,19 +50,27 @@ jobs:
     steps:
       - name: Resolve deploy target
         id: out
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_SHA: ${{ inputs.sha }}
+          INPUT_COMPONENT: ${{ inputs.component }}
+          REF_SHA: ${{ github.sha }}
+          UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          UPSTREAM_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV="${{ inputs.environment }}"
-            SHA="${{ inputs.sha }}"
-            COMPONENT="${{ inputs.component }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            ENV="$INPUT_ENVIRONMENT"
+            SHA="$INPUT_SHA"
+            COMPONENT="$INPUT_COMPONENT"
             # Empty SHA → tip of the ref this workflow was dispatched against.
             if [ -z "$SHA" ]; then
-              SHA="${{ github.sha }}"
+              SHA="$REF_SHA"
             fi
           else
-            ENV="${{ github.event.workflow_run.head_branch }}"
-            SHA="${{ github.event.workflow_run.head_sha }}"
+            ENV="$UPSTREAM_BRANCH"
+            SHA="$UPSTREAM_SHA"
             COMPONENT="auto"
           fi
           echo "environment=$ENV" >> "$GITHUB_OUTPUT"
@@ -89,6 +97,13 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           SHA: ${{ needs.guard.outputs.sha }}
           TARGET: ${{ needs.guard.outputs.component }}
+          ACTOR: ${{ github.actor }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_EVENT: ${{ github.event.workflow_run.event }}
+          CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          CI_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          CI_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
         run: |
           set -euo pipefail
-          python3 -c 'import json,os,release_gate; evidence={"event_name":os.environ["EVENT_NAME"],"sha":os.environ["SHA"],"target":os.environ["TARGET"],"ci_event":os.environ["EVENT_NAME"],"ci_conclusion":"success","actor":""}; print(json.dumps(release_gate.decide(evidence))); raise SystemExit(1)'
+          python3 -c 'import os, release_gate; raise SystemExit(release_gate.deny_from_env(os.environ))'

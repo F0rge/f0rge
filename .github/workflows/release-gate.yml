@@ -36,12 +36,13 @@ jobs:
       - name: Refuse without an external approval binding
         working-directory: .github/deploy
         env:
+          EVENT_NAME: ${{ github.event_name }}
           TARGET: ${{ inputs.target }}
           SHA: ${{ inputs.sha }}
           DIGEST: ${{ inputs.digest }}
           ACTOR: ${{ github.actor }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          REF_KIND: sha
         run: |
           set -euo pipefail
-          python3 -c 'import json,os,release_gate; evidence={"event_name":"workflow_dispatch","ref_kind":"sha","sha":os.environ["SHA"],"digest":os.environ["DIGEST"],"target":os.environ["TARGET"],"actor":os.environ["ACTOR"],"ci_conclusion":"","ci_event":"workflow_dispatch"}; print(json.dumps(release_gate.decide(evidence)))'
-          echo "Rollout is disabled. A dispatch is not Leo's approval of this digest."
-          exit 1
+          python3 -c 'import os, release_gate; raise SystemExit(release_gate.deny_from_env(os.environ))'
