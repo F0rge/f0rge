@@ -1,6 +1,6 @@
 # Railway environment variables (marrow)
 
-Marrow deploys to **production** from git branch `main` only (`.github/deploy/manifest.yml` + Railway autodeploy). GitHub Actions smoke uses the production URLs below. There is no develop environment and no `develop` branch workflow; PRs go into `main` and merging deploys.
+Committed files describe Marrow production from git branch `main` (`.github/deploy/manifest.yml` and Railway config). That description is not a live trigger check and not Leo's approval to release. The smoke URLs below are the ones those files name. Do not open pull requests against `develop`. Canonical decisions: [`docs/adr/README.md`](../../../../docs/adr/README.md).
 
 Shared monorepo services. Do **not** set Root Directory. Point each service's
 Config File at the matching `railway*.toml`.

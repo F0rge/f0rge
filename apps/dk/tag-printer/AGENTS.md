@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # dk tag printer — Agent Instructions
 
 DasKasas price tag tool. Deploy target: **Coolify on Pi** (prod only). No Fly apps.
@@ -59,4 +61,4 @@ Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`
 
 ## Branches
 
-Main only: there is no `develop` branch workflow and no develop environment. Branch off `main`, open PRs into `main`, squash merge; merging deploys. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).
+Main only: there is no `develop` branch workflow and no develop environment. Branch off `main`, open PRs into `main`, squash merge; do not merge or deploy without Leo's release approval. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).

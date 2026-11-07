@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Firstout — Agent Instructions
 
 Gauteng furniture retailer back office (stock, books, till). Sibling app next to Marrow and dk. **Never** nest this under `apps/marrow/`. **Never** a new repo.
@@ -624,7 +626,7 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 
 ## Railway
 
-> **Main only.** Firstout has no develop branch workflow and no separate develop environment. The single Railway environment below is *named* `develop` for historical reasons, but its services track git `main` and it is the live environment. Merging to `main` deploys it. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+> **Main only.** Firstout has no develop branch workflow and no separate develop environment. The single Railway environment below is *named* `develop` for historical reasons, but its services track git `main` and it is the live environment. A merge to `main` is not Leo's production release approval. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Production has no Firstout services; the Marrow project has no Firstout config.
 

@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # DevOps Review Playbook
 
 ## What this is
@@ -23,7 +25,7 @@ Review checklist for infrastructure diffs. Load this when reviewing a PR that to
 - **Whitelist `.dockerignore`** — must use `*` + `!apps/...` + `!libs/**` pattern. Block on blacklist-only dockerignore that ships the whole repo.
 - **No root `uv.lock`** — block on any PR creating `<root>/uv.lock`. Per-project locks only.
 
-- **Migration added without Fly release_command path.** Any PR adding `apps/marrow/backend/migrations/versions/` MUST leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running `alembic upgrade head` via `MIGRATION_DATABASE_URL`. Runtime `DATABASE_URL` stays least-privilege (`healthtracker-app`).
+- **Migrations are not a startup free-for-all.** Legacy Fly toml files still contain `release_command`. Current Marrow `railway.toml` files contain `preDeployCommand`. Do not add a new Fly deploy. Do not treat either command as Leo's approval to run a production migration. Runtime database credentials stay least-privilege. Destructive migrations still need an explicit recovery note.
 
 - **MPG role DDL on Fly.** Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps; roles are provisioned via `fly mpg users create`, not migration-side DDL on Fly.
 
@@ -31,7 +33,7 @@ Review checklist for infrastructure diffs. Load this when reviewing a PR that to
 
 - **Custom domain without cert plan.** New `marrow-health.com` hostnames need `fly certs add` + Cloudflare DNS-only (grey cloud) + ACME CNAME until issued.
 
-## Fly deploy conventions (historical; Marrow now deploys on Railway from `main` only, no develop env)
+## Fly deploy conventions (historical inventory, not a live check and not a release approval)
 
 | Env | Branch | Apps | Workflow |
 |---|---|---|---|

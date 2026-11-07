@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Shared Conventions — All Reviewers
 
 Hard rules every reviewing agent must honour, regardless of domain. Block-level findings here apply to backend, frontend, devops, and qa-engineer alike.
@@ -75,9 +77,9 @@ Canonical playbooks: `.cursor/review-context/`.
 
 ## Branch & PR conventions
 
-- Trunk-based: `main` is the only long-lived and only deployed branch. There is no `develop` branch or develop environment. Block any PR targeting `develop`.
+- Trunk-based: pull requests go to `main`. A remote `develop` ref may still exist; block any PR targeting it. It is not an approved long-lived branch.
 - Short-lived branches off `main`: `feat/…`, `fix/…`, `chore/…`, `docs/…`, `refactor/…`, `test/…`, `hotfix/…`.
-- PRs into `main` only, `.github/workflows/ci.yml` green, squash merge. Merging deploys.
+- PRs into `main` only, `.github/workflows/ci.yml` green, squash merge after review. A merge is not Leo's production release approval. Do not enable auto-merge.
 - Hotfixes are ordinary PRs into `main`.
 - Direct push to `main` is only acceptable for single-file edits on personal config.
 
