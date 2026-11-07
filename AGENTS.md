@@ -145,7 +145,7 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
 | `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
 | `ui-kit.mdc` | `libs/ui/**`, `apps/**/frontend/**` — design-system imports, tokens, primitives |
-| `infra.mdc` | `**/fly*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-compose*.yml` |
+| `infra.mdc` | `**/railway*.toml`, `**/fly*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
 | `qa-gate.mdc` | tests, workflows |
 | `data-pipelines.mdc` | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
