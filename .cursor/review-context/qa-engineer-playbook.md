@@ -23,7 +23,7 @@ Cite the originating memory file in every block-level comment so future-Leo can 
 - **Class-of-bug audit missing** — when a fix names a pattern (tz-aware bind, `scalar_one_or_none` on non-unique WHERE, `field || undefined` + `exclude_unset`, etc.), the PR must either fix every sibling occurrence in the same diff or open a tracked follow-up issue. Block if neither. See `feedback_audit_class_of_bug.md` (root-cause: 2026-05-17 two prod outages from missing sibling audit on `photos.meal_time`).
 - **`.env.example` not updated for new required env vars** — block on any new entry in `apps/marrow/backend/app/config.py` (e.g. `HEALTHTRACKER_RO_PASSWORD`, `SETTINGS_ENCRYPTION_KEY`, `MCP_READONLY_DATABASE_URL`) that isn't mirrored in `apps/marrow/backend/.env.example`. Redeploys silently break without it. See `mcp_server_issue_49_findings.md`.
 - **`ruff format` regression** — if a touched file used to pass `ruff format --check` and no longer does, block. CI enforces format via `nx affected -t format-check` / `nx run-many -t format-check` in `ci.yml`.
-- **Migration path** — New migrations stay compatible and are not an excuse to add a Fly app. Legacy Fly files and current Railway `preDeployCommand` lines are inventory. Production migration still needs Leo's release approval. See `.cursor/rules/infra.mdc` and `docs/adr/README.md`.
+- **Migration path** — New migrations stay compatible. Railway `preDeployCommand` lines are configuration inventory; production migration still needs Leo's release approval. See `.cursor/rules/infra.mdc` and `docs/adr/README.md`.
 - **pgvector extension order** — block any new test fixture or context that calls `Base.metadata.create_all` on a fresh Postgres without first executing `CREATE EXTENSION IF NOT EXISTS vector`. The `embedding.embedding VECTOR(1024)` column will crash `create_all`. See `project_byok_pgvector.md`.
 - **BYOK key resolution missed** — block any new AI/LLM call site that imports `settings.openrouter_api_key` directly instead of calling `resolve_llm_credentials(db)`. Lab extraction has this as an open follow-up; new code must not repeat it. See `project_byok_pgvector_gate.md`.
 - **Embedding vector dim != 1024** — block any new embedding column, request, or response that uses a dim other than 1024. The column is locked. See `project_ai_seams.md`.
@@ -64,7 +64,7 @@ The bot can't run local servers or drive Playwright. Instead, when the review co
 - MCP / embedding / OpenRouter changes → gate locally; there is no dev environment (`api-dev` / `app-dev` are retired).
 - dnd-kit changes → use real `page.mouse` not synthetic events; mobile path requires real-device verify (CDP `Input.dispatchTouchEvent` does NOT activate dnd-kit `TouchSensor`). See `qa-engineer/issue_78_findings.md`.
 - New `Dialog` / overlay / fixed-position UI → `elementsFromPoint(cx, cy)` z-index audit. The capsule lives at z:40, Dialog at z:50, bottom nav at z:50. Pattern in `qa-engineer/issue_pr100_findings.md`.
-- New env var → confirm Fly secrets on `marrow-dev` and `marrow` API apps.
+- New env var → verify example and operations documentation, then confirm the correct service variables within an explicitly authorized release.
 
 For Playwright auth bypass: `POST /api/v1/auth/signup` or `/auth/login`, then `addCookies({ name: 'ht_session', value: <jwt>, httpOnly: true })` — `document.cookie = ...` from `browser_evaluate` does not stick. Recipe in `tests/conftest.py` `authed_client` fixture.
 
@@ -124,11 +124,9 @@ Per `project_datetime_tz_convention.md`:
 
 ## DevOps / infra patterns
 
-These three bullets are historical Fly inventory. They are not permission to change DNS, create roles, or migrate production.
-
-- **Fly migrations** — `fly.toml` files contain `[deploy] release_command` for `alembic upgrade head`. Current Marrow Railway files use `preDeployCommand`. Runtime credentials stay least-privilege. See `.cursor/rules/infra.mdc`.
-- **MPG on Fly** — older notes name cluster `nlkxjo5m3240y93v` and `FLY_MPG_SKIP_ROLE_DDL=1`. Do not run `fly mpg` from an agent task.
-- **Custom domains** — older notes name Cloudflare DNS and `fly certs add`. Do not change DNS from an agent task.
+- **Migrations** — Marrow Railway files use `preDeployCommand`. Runtime credentials remain least-privilege; production migrations require Leo's release approval. See `.cursor/rules/infra.mdc`.
+- **Database roles** — verify migration and runtime privileges separately; role creation requires an authorized operations task.
+- **Custom domains** — verify the current provider target and DNS/certificate behavior within the approved scope.
 
 ---
 

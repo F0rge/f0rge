@@ -39,7 +39,7 @@ Solo plans where the orchestrator implements every chunk are **not acceptable**.
 | `nx.json`, `**/project.json`, Workspaces, Nx, CI, Railway/Coolify deploy | `devops` |
 | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**`, ETL | `data-engineer` |
 | ML prompts, classification, vision analysis | `data-scientist` |
-| Docker, `.github/`, Fly deploy | `devops` |
+| Docker, `.github/`, deployment configuration | `devops` |
 | QA gate, test matrix, e2e evidence | `qa-engineer` |
 | Read-only codebase recon | `explore` |
 | Architecture / plan-only pass | Plan **mode** (not a sub-agent) |

@@ -5,7 +5,7 @@ Revises: 038
 Create Date: 2026-07-12 00:00:00.000000
 
 Set app.service_role inside create_notification SECURITY DEFINER so cross-user
-inserts pass social_notifier policy on managed Postgres (Fly MPG).
+inserts pass social_notifier policy on managed Postgres.
 """
 
 from __future__ import annotations

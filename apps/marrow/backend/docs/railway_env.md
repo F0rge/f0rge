@@ -43,11 +43,11 @@ image again after the bucket variables are set.
 `f0rge_db.resolve_database_url` already rewrites `postgres://` / `postgresql://`
 to `postgresql+asyncpg://`.
 
-## Secrets to copy from Fly
+## Managed secret inventory
 
 `JWT_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `HEALTHTRACKER_APP_PASSWORD`,
 `HEALTHTRACKER_RO_PASSWORD`, `OPENROUTER_API_KEY`, `HEALTH_IMPORT_TOKEN`,
-APNS keys, `DEFAULT_STORAGE_USER_ID`, optional `SENTRY_DSN`.
+APNS keys, `DEFAULT_STORAGE_USER_ID`, optional `SENTRY_DSN`. Keep existing values in the approved secret store; changes require an authorized operations task.
 `OPENWEATHERMAP_API_KEY` is unused (weather is Open-Meteo, no key).
 `OPENWEATHERMAP_CITY` still sets the geocode city (default Luxembourg).
 
@@ -60,7 +60,7 @@ APNS keys, `DEFAULT_STORAGE_USER_ID`, optional `SENTRY_DSN`.
 | `DIETARY_DATA_DIR` | `/app/data-seed` |
 | `MCP_SERVER_HOST` / `MCP_SERVER_PORT` | `0.0.0.0` / `8005` |
 | `API_URL` (frontend **build arg**) | Public API URL for Next rewrites |
-| `FLY_MPG_SKIP_ROLE_DDL` | Set `1` after running `scripts/railway_bootstrap_roles.sql` (roles already exist) |
+| `SKIP_DATABASE_ROLE_DDL` | Set `1` after running `scripts/railway_bootstrap_roles.sql` (roles already exist) |
 | `FOOD_ANALYSIS_VIA_AIRFLOW` | `true` to enqueue meal classify on Pi Airflow instead of BackgroundTasks |
 | `AIRFLOW_URL` | `https://airflow.leo-figueiredo.com` (same UI for both envs) |
 | `AIRFLOW_USERNAME` / `AIRFLOW_PASSWORD` | FAB user used to mint `/auth/token` |

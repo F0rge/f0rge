@@ -1,6 +1,6 @@
 name: CI
 
-# PR + push + workflow_dispatch on main (the only branch; no develop): parallel backend/frontend via
+# PR + push on main, plus workflow_dispatch: parallel backend/frontend via
 # `nx affected` (no detect job) → `ci` gate. Deploy is a separate workflow
 # (deploy.yml) after this succeeds on push.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
@@ -47,10 +47,10 @@ jobs:
       - name: Assert no root uv.lock
         run: bash .github/scripts/assert-no-root-uv-lock.sh
 
-      - name: Coolify payload builder
+      - name: Deploy planner and Coolify payload checks
         # discover can't import `.github/` (the dot). Run the module from its dir.
         working-directory: .github/deploy
-        run: python3 -m unittest test_coolify_payload.py
+        run: uv run --no-project --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py
 
       - name: Nx project registration guard
         run: bash .github/scripts/check-nx-projects.sh
@@ -187,6 +187,7 @@ jobs:
           fi
 
       # Unit tests run for main alongside lint/typecheck/build + codegen:check.
+      # Container tests build local images and run offline probes; they never publish or deploy.
       - name: nx affected (frontend)
         env:
           TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
@@ -194,15 +195,15 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx run-many -t=lint,typecheck,test,build,codegen:check,storybook-build --projects=tag:platform:ts
+              npx nx run-many -t=lint,typecheck,test,build,codegen:check,storybook-build,container-test --projects=tag:platform:ts
             else
-              npx nx run-many -t=lint,typecheck,build,codegen:check,storybook-build --projects=tag:platform:ts
+              npx nx run-many -t=lint,typecheck,build,codegen:check,storybook-build,container-test --projects=tag:platform:ts
             fi
           else
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx affected -t=lint,typecheck,test,build,codegen:check,storybook-build --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,typecheck,test,build,codegen:check,storybook-build,container-test --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
             else
-              npx nx affected -t=lint,typecheck,build,codegen:check,storybook-build --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,typecheck,build,codegen:check,storybook-build,container-test --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
             fi
           fi
 

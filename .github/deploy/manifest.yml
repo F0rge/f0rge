@@ -76,8 +76,8 @@ components:
       app_uuid: zk8s00gk0g88cc08gkswkc44
       webhook_secret_env: COOLIFY_WEBHOOK_ENVMON_FRONTEND
 
-  # Firstout: own Railway project (not zoological-fulfillment).
-  # main only (Railway env is named develop but tracks main). Public hosts are firstout.co.za and api.firstout.co.za.
+  # Firstout: own Railway project (not Marrow).
+  # main only; Railway production environment. Public hosts are firstout.co.za and api.firstout.co.za.
   firstout-backend:
     nx: firstout-backend
     target: railway

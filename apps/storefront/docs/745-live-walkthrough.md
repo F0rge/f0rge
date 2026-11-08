@@ -1,7 +1,9 @@
 # Issue #745 live walkthrough
 
+> Historical verification: names and commands below use the current DasKasas naming. The recorded runs and screenshots predate the rename; this edit does not rerun them.
+
 This walkthrough was performed against disposable local Firstout, Medusa and
-Vellano instances, with separate PostgreSQL databases and Redis. The published
+DasKasas instances, with separate PostgreSQL databases and Redis. The published
 catalogue contained an Arc sofa, an Alba chair and a two-finish Arc group. A
 separate wall sconce remained in draft. The catalogue data and locally generated
 test images are not launch assets.
@@ -26,7 +28,7 @@ test images are not launch assets.
 
 ## Verification
 
-`vellano-web` Playwright catalogue and discovery specs ran against the live
+`daskasas-web` Playwright catalogue and discovery specs ran against the live
 local stack with all four fixture IDs set. Automated accessibility-related
 assertions cover browser roles, keyboard focus, live status text and the gallery
 button's pressed state. They do not explicitly assert image `alt` attributes:

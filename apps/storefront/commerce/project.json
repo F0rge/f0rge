@@ -1,5 +1,5 @@
 {
-  "name": "vellano-commerce",
+  "name": "daskasas-commerce",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "sourceRoot": "apps/storefront/commerce/src",
@@ -23,7 +23,13 @@
     "integration": {
       "executor": "nx:run-commands",
       "options": { "cwd": "apps/storefront/commerce", "command": "node scripts/verify-live.mjs" }
+    },
+    "container-test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": ["default", "^default", "{workspaceRoot}/package.json", "{workspaceRoot}/package-lock.json", "{workspaceRoot}/vendor/braces/**"],
+      "options": { "command": "node apps/storefront/commerce/scripts/check-container.mjs" }
     }
   },
-  "tags": ["platform:ts", "scope:vellano"]
+  "tags": ["platform:ts", "scope:daskasas"]
 }

@@ -1,7 +1,14 @@
-# Vellano foundation
+# DasKasas storefront
 
 Separate applications for Medusa commerce (`commerce`) and the Next.js public site (`web`).
 Firstout is the operational system; its versioned Ops Commerce API is the only source adapter.
+
+The storefront belongs to Railway project **DasKasas**
+(`d58a2884-d366-4230-9555-8b7bb4e42d4f`), environment **production**
+(`d73ff2d5-816d-4bc8-85b4-71a85b0398fa`). Its app services are `storefront`
+and `storefront-commerce`. Nx calls them `daskasas-web` and `daskasas-commerce`.
+Repository paths and npm package names retain `storefront` so build and service
+references remain stable. Hosting identity is separate from the customer brand.
 
 The Medusa setup began from the [official DTC starter](https://github.com/medusajs/dtc-starter)
 at commit `e3a237c` (September 2026). The commerce configuration and bootstrap flow use
@@ -30,7 +37,7 @@ Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and
 same Clerk secret key in commerce, plus `STOREFRONT_CLERK_ISSUER` to the exact
 issuer shown by Clerk and `STOREFRONT_CLERK_AUDIENCE=storefront`. Commerce can
 use `CLERK_JWT_KEY` instead of the secret key for networkless signature
-verification. Keep all private keys server-side. Vellano exchanges its
+verification. Keep all private keys server-side. DasKasas exchanges its
 server-verified Clerk session for a short-lived Medusa token and never sends
 that token to the browser. Saved addresses use Medusa's authenticated `/me`
 routes; cart ownership is tied to the Medusa customer ID and is not detached on
@@ -44,7 +51,7 @@ Medusa environment; secrets must stay server-side. The source starts unpublished
 staff opt in a priced SKU by setting `storefront_published` on the staff API.
 
 Run Medusa migrations and the first-time bootstrap script before the source sync.
-Vellano supports guest checkout for collection and configured
+DasKasas supports guest checkout for collection and configured
 Gauteng delivery. It applies the configured South African VAT rate to
 VAT-inclusive ZAR prices and calculates delivery from server-owned zone/rate
 configuration. No launch delivery rates are checked in. The included payment
@@ -74,14 +81,14 @@ npm run dev
 ```
 
 The bootstrap creates a publishable key; copy it from Medusa Admin into the
-Vellano web environment. Start `npm run dev` in `apps/storefront/web` and
+DasKasas web environment. Start `npm run dev` in `apps/storefront/web` and
 visit `http://localhost:3004`. The sync job repeats every minute while Medusa
 runs. It serializes runs with the Redis-backed Medusa lock and applies only
 newer source revisions. Keep the machine token only in server environments.
 
 To verify the live boundary, set `STOREFRONT_TEST_SKU_ID` to a published SKU UUID,
-then run `npx nx run vellano-commerce:integration` and
-`npx nx run vellano-web:e2e`. The integration target checks the real Ops
+then run `npx nx run daskasas-commerce:integration` and
+`npx nx run daskasas-web:e2e`. The integration target checks the real Ops
 and Medusa APIs, including price/stock parity, field allowlisting, and denial
 of a bad service token. The browser target checks navigation and direct 404s.
 The Firstout database-backed isolation test is in
@@ -109,8 +116,18 @@ The test payment provider is unavailable on public production or hosted
 deployments, even if `NODE_ENV` is misconfigured. For local checkout QA only,
 set `STOREFRONT_TEST_PAYMENT_ENABLED=true` and
 `STOREFRONT_RUNTIME_KIND=local` in the commerce environment while Medusa runs
-with `NODE_ENV=development`, then rerun the bootstrap. Keep both values off in
-Railway. Checkout preparation persists an order-confirmation capability before
+with `NODE_ENV=development` and `HOST=127.0.0.1`, then rerun the bootstrap.
+The npm `dev` and `start` scripts pass `--host 127.0.0.1` explicitly. Direct
+Medusa server commands must also specify a single loopback `--host`/`-H`; public,
+duplicate, or ambiguous bind options reject test-payment activation.
+The database, Redis, public shop URL, all CORS origins, and any Firstout Ops URL
+must use loopback hosts; the local values in `commerce/.env.example` satisfy this
+contract. Missing or public addresses are treated as hosted. Keep test payment
+off in Railway. The supported commerce image carries a root-owned hosted marker
+outside the writable app directory, so runtime environment changes cannot enable
+simulated payments in a release image. This is a release-artifact control, not a
+claim to detect arbitrary proxies exposing a local development server.
+Checkout preparation persists an order-confirmation capability before
 returning the payment session; only its hash is stored with the cart and paid
 order, and the browser receives the capability in an httpOnly cookie. A paid
 callback can create the order after the browser closes, and duplicate events
@@ -132,10 +149,10 @@ success, recovery, delivery, and database assertions.
 For the bag browser test, set `STOREFRONT_TEST_BAG_MULTI_SKU_ID` to a published
 SKU with at least two units and `STOREFRONT_TEST_LAST_UNIT_SKU_ID` to one with
 exactly one free unit. Set `STOREFRONT_TEST_MEDUSA_PUBLISHABLE_KEY` to the local
-public key to test direct cart denial. Run `npx nx run vellano-web:e2e`
+public key to test direct cart denial. Run `npx nx run daskasas-web:e2e`
 against the disposable live stack. See `docs/746-live-walkthrough.md`.
 
-Vellano uses published Medusa Store API products. Home and
+DasKasas uses published Medusa Store API products. Home and
 collections lead to `/shop`, where search, category, collection, availability,
 price and sort state live in the URL. Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
@@ -152,12 +169,12 @@ For discovery browser coverage, publish two representative SKUs, a draft SKU,
 and a two-variant group in a disposable local environment. Set
 `STOREFRONT_TEST_SKU_ID`, `STOREFRONT_TEST_OTHER_SKU_ID`,
 `STOREFRONT_TEST_DRAFT_SKU_ID`, and `STOREFRONT_TEST_GROUP_HANDLE`, then run
-`npx nx run vellano-web:e2e`. The tests skip fixture-dependent cases when
+`npx nx run daskasas-web:e2e`. The tests skip fixture-dependent cases when
 their corresponding IDs are absent.
 
-## Vellano UI foundation
+## Storefront UI foundation
 
-Vellano customizes the repository's `@f0rge/ui` components, built
+DasKasas customizes the repository's `@f0rge/ui` components, built
 with [shadcn/ui](https://ui.shadcn.com/) and [Base UI](https://base-ui.com/).
 Both are free under the MIT license ([shadcn/ui license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md),
 [Base UI license](https://github.com/mui/base-ui/blob/master/LICENSE)); the mobile
@@ -180,18 +197,18 @@ section reveals, a short gallery fade and gentle card lift add feedback without 
 motion dependency. Content remains visible before JavaScript loads, focus cancels
 section motion, and reduced-motion preferences disable these animations.
 
-## Private Railway preview
+## Railway hosting
 
 The isolated private-preview build, server-only access credentials, cost
-estimate, verification steps, and rollback procedure are documented in
+estimate, verification steps, and recovery procedure are documented in
 [`docs/759-private-hosting.md`](docs/759-private-hosting.md). The checked-in
-Dockerfiles and Railway config files are scaffolding only: this change creates
-no Railway services, database, Redis instance, DNS, or hosted credentials. Do
-not connect these configs to the Firstout or Marrow Railway projects.
+Dockerfiles and Railway config files belong to the existing DasKasas project.
+Verify live service configuration and release evidence before deploying. Do not
+connect these configs to the Firstout or Marrow Railway projects.
 
 ## Optional analytics
 
-Optional Vellano analytics stays off until a visitor accepts it. The browser
+Optional DasKasas analytics stays off until a visitor accepts it. The browser
 adapter sends typed browsing and commerce events to PostHog Cloud EU. Purchases
 and refunds are emitted by the server confirmation path, once per opaque order
 or refund id. Session replay is consent-gated, sampled at 10% of eligible

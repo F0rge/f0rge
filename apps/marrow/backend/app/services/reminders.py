@@ -4,7 +4,7 @@ An in-process asyncio loop (weather_background_loop pattern) that, once a
 minute, checks every user's active dose-tracked treatments against their
 local-time reminder slots and inserts a ``dose_reminder`` notification per
 missed slot. The partial unique index on ``notifications.dedupe_key`` plus
-ON CONFLICT DO NOTHING is the multi-instance lock — Fly can run several
+ON CONFLICT DO NOTHING is the multi-instance lock — hosts can run several
 machines and exactly one insert wins. APNs delivery runs only after the
 tick's transaction commits so network I/O never holds it open.
 """

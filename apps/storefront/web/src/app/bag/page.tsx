@@ -69,7 +69,7 @@ export default function BagPage() {
   const held = bag?.hold?.status === "active" && Date.parse(bag.hold.expires_at) > Date.now();
   const feedback = error ? purchaseFeedback(error, true) : null;
   return <div className="content bag-page">
-    <p className="eyebrow">Vellano / your selection</p>
+    <p className="eyebrow">DasKasas / your selection</p>
     <h1>Your bag</h1>
     {feedback && <p ref={errorRef} id="bag-error" role={feedback.role} tabIndex={feedback.tabIndex} className="bag-error">{feedback.message}</p>}
     {!bag && error && <Button type="button" className="bag-retry" onClick={() => void loadBag()}>Retry loading bag</Button>}

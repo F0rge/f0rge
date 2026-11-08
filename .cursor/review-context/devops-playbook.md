@@ -1,57 +1,35 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Existing app commands and safety rules remain applicable. Leo approves every production release. Do not enable auto-merge or deploy without that approval.
 
 # DevOps Review Playbook
 
-## What this is
+Review infrastructure, CI, Docker, Railway/Coolify configuration, and migration delivery changes. Read `.cursor/rules/infra.mdc`, inspect the diff, and return concrete findings.
 
-Review checklist for infrastructure diffs. Load this when reviewing a PR that touches infrastructure, CI, Docker, Fly deploy, or migrations. Scan the diff, apply the rules below, return JSON findings.
+## Scope
 
-## Scope — files YOU review
+- `.github/**`, `**/railway*.toml`, Dockerfiles, compose and entrypoint files.
+- Nx registration, root build/dependency configuration, `.dockerignore`, and `.gitignore`.
+- Migration deployment compatibility and database roles; app behavior belongs to the backend reviewer.
+- Domain, certificate, storage, and hosting changes.
 
-- `.github/workflows/**`
-- `**/fly*.toml`
-- `apps/marrow/backend/Dockerfile`, `apps/marrow/backend/docker-entrypoint.sh`
-- `apps/marrow/backend/migrations/versions/*.py` (migration safety + deploy compatibility ONLY)
-- `apps/marrow/backend/migrations/env.py`, `apps/marrow/backend/alembic.ini`
-- `apps/marrow/frontend/Dockerfile`, `apps/marrow/frontend/next.config.*`
-- Root scripts affecting deploy (no `start.sh` in repo)
-- `.dockerignore`, `.gitignore`
-- Anything affecting Fly apps, MPG, Cloudflare DNS (`marrow-health.com`), CI workflows
-- NOT app code under `apps/marrow/backend/app/**` or `apps/marrow/frontend/app/**`
+## Checks
 
-## Hard rules — instant block findings
+- Docker builds use the repository root when they consume shared libraries. A narrowed context must still include every dependency.
+- Marrow `.dockerignore` files use an allowlist so unrelated apps, credentials, and local data stay outside the build context.
+- Keep per-project Python locks; reject a root `uv.lock`.
+- Marrow Railway configs use `preDeployCommand` for migrations. The command is configuration, not production approval. Runtime database credentials remain least-privilege; destructive migrations need a recovery plan.
+- Role creation and production access changes require explicit authorization. Preserve migration-role and runtime-role separation.
+- Reject committed deployment credentials, database passwords, and JWT secrets.
+- Domain/certificate changes need an authorized operations task. New domains follow the canonical ADR naming/approval rules.
+- CI status does not establish production approval, the running artifact, or successful app behavior. Verify the exact release and actual checks executed; preserve release holds.
 
-- **Root build context** — Docker builds must use repo root as context (`docker build -f apps/marrow/backend/Dockerfile .`). Block on `working-directory` in fly deploy that hides `libs/`.
-- **Whitelist `.dockerignore`** — must use `*` + `!apps/...` + `!libs/**` pattern. Block on blacklist-only dockerignore that ships the whole repo.
-- **No root `uv.lock`** — block on any PR creating `<root>/uv.lock`. Per-project locks only.
+## New environment variables
 
-- **Migrations are not a startup free-for-all.** Legacy Fly toml files still contain `release_command`. Current Marrow `railway.toml` files contain `preDeployCommand`. Do not add a new Fly deploy. Do not treat either command as Leo's approval to run a production migration. Runtime database credentials stay least-privilege. Destructive migrations still need an explicit recovery note.
+- Update the relevant `.env.example` and operations reference.
+- Document missing-value behavior and test that it is safe.
+- Change production variables only within the explicitly authorized release/operations scope.
 
-- **MPG role DDL on Fly (historical inventory).** Older notes say `FLY_MPG_SKIP_ROLE_DDL=1` and `fly mpg users create`. Do not run those commands. Creating roles or changing production database access needs a separate explicit approval. It is not part of reviewing this file.
+## Verification
 
-- **Secrets in repo.** Block any hardcoded `FLY_API_TOKEN`, database passwords, or JWT secrets.
+Use [the deploy manifest](../../.github/deploy/manifest.yml) and app-local Railway/Coolify configuration to identify the affected services. Confirm current provider identity before an authorized operation. A queued deployment or HTTP 200 alone does not prove successful rollout; verify the running version and affected user journey.
 
-- **Custom domain certificates (historical inventory).** Older notes mention `fly certs add` and Cloudflare DNS changes for `marrow-health.com`. Do not change DNS or certificates from this playbook. A new hostname still needs Leo's approval under the ADR domain rule, as a separate operation.
-
-## Fly deploy conventions (historical inventory, not a live check and not a release approval)
-
-| Env | Branch | Apps | Workflow |
-|---|---|---|---|
-| Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | older `ci.yml` deploy job |
-
-This table is historical inventory. It is not the current workflow and not permission to deploy. Older notes describe API then MCP, with frontend in parallel, alembic via `release_command`, jobs named `plan`, `deploy api`, `deploy mcp`, `deploy frontend`, and `smoke`, plus `workflow_dispatch` component choices. They also name MPG cluster `nlkxjo5m3240y93v` and databases `marrow` and `marrow_dev`. Do not treat `marrow_dev` as a current branch or as permission to provision it.
-
-Full reference: [README.md](../../README.md#cicd), `.cursor/rules/infra.mdc`.
-
-## New env var checklist
-
-- [ ] `apps/marrow/backend/.env.example` updated
-- [ ] Do not run `fly secrets set`. Production secret changes are a separate explicit approval, not a checklist step.
-- [ ] Degrades gracefully when missing
-
-## Smoke URLs
-
-Hostnames `api-dev` and `app-dev` are described as retired names. Do not smoke production after a merge. A production smoke is a separately authorized operation, not an automatic next step, and a merge is not Leo's release approval:
-
-- https://api.marrow-health.com/api/v1/health
-- https://marrow-health.com/
+Marrow production smoke targets are `https://api.marrow-health.com/api/v1/health` and `https://marrow-health.com/`. Firstout and DasKasas use their own projects and service checks; do not substitute Marrow health for a sibling app.

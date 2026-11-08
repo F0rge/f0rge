@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Dump Fly MPG (marrow / marrow_dev) and restore into Railway Postgres.
-# Prerequisites: flyctl auth, psql/pg_dump/pg_restore, Railway DATABASE_PUBLIC_URL.
+# Dump the source database (marrow / marrow_dev) into Railway Postgres.
+# Prerequisites: source database access, psql/pg_dump/pg_restore, target public URL.
 #
 # Usage:
 #   ./apps/marrow/backend/scripts/railway_pg_migrate.sh develop
@@ -15,11 +15,11 @@ mkdir -p "$OUT_DIR"
 
 case "$ENV" in
   develop)
-    FLY_DB="marrow_dev"
+    SOURCE_DB="marrow_dev"
     DUMP="$OUT_DIR/marrow_dev_${STAMP}.dump"
     ;;
   production)
-    FLY_DB="marrow"
+    SOURCE_DB="marrow"
     DUMP="$OUT_DIR/marrow_${STAMP}.dump"
     ;;
   *)
@@ -30,11 +30,10 @@ esac
 
 : "${RAILWAY_DATABASE_URL:?Set RAILWAY_DATABASE_URL to the target public Postgres URL}"
 
-echo "==> Dumping Fly MPG database $FLY_DB"
-# Prefer fly mpg proxy or attached DATABASE_URL. Override FLY_DATABASE_URL if needed.
-: "${FLY_DATABASE_URL:?Set FLY_DATABASE_URL to a Fly MPG connection string for $FLY_DB}"
+echo "==> Dumping source database $SOURCE_DB"
+: "${SOURCE_DATABASE_URL:?Set SOURCE_DATABASE_URL to the source Postgres URL for $SOURCE_DB}"
 
-pg_dump -Fc --no-acl --no-owner -d "$FLY_DATABASE_URL" -f "$DUMP"
+pg_dump -Fc --no-acl --no-owner -d "$SOURCE_DATABASE_URL" -f "$DUMP"
 echo "Wrote $DUMP"
 
 echo "==> Restoring into Railway (drops existing objects in public schema first is NOT done — use empty DB)"

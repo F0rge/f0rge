@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("onboarding_completed_at", sa.DateTime(), nullable=True),
     )
     bind = op.get_bind()
-    # Fly MPG runs alembic as schema_admin with FORCE RLS enabled — without
+    # Managed Postgres can run alembic as schema_admin with FORCE RLS enabled — without
     # app.user_id set, tenant policies hide all rows and break cross-user backfill.
     bind.execute(sa.text("ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY"))
     bind.execute(

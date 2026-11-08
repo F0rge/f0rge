@@ -62,7 +62,7 @@ test('draft product is absent from discovery and direct navigation', async ({ pa
 
 test('catalogue metadata and non-production robots policy describe public routes', async ({ page }) => {
   await page.goto('/shop')
-  await expect(page).toHaveTitle(/Shop furniture \| Vellano/)
+  await expect(page).toHaveTitle(/Shop furniture \| DasKasas/)
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'http://localhost:3004/shop')
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /furniture collection/)

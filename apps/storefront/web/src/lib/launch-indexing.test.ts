@@ -5,14 +5,14 @@ const production = {
   STOREFRONT_INDEXING_ENABLED: "true",
   RAILWAY_ENVIRONMENT_NAME: "production",
   STOREFRONT_PRIVATE_PREVIEW: "off",
-  NEXT_PUBLIC_BASE_URL: "https://vellano.example",
+  NEXT_PUBLIC_BASE_URL: "https://daskasas.example",
 };
 
 describe("storefront indexing", () => {
   it("stays non-indexable without an explicit production decision", () => {
     expect(storefrontIndexable({})).toBe(false);
     expect(storefrontIndexable({ ...production, RAILWAY_ENVIRONMENT_NAME: "develop" })).toBe(false);
-    expect(storefrontIndexable({ ...production, NEXT_PUBLIC_BASE_URL: "http://vellano.example" })).toBe(false);
+    expect(storefrontIndexable({ ...production, NEXT_PUBLIC_BASE_URL: "http://daskasas.example" })).toBe(false);
     expect(storefrontIndexable({ ...production, STOREFRONT_PRIVATE_PREVIEW: "on" })).toBe(false);
     expect(storefrontIndexable({ ...production, STOREFRONT_INDEXING_ENABLED: "false" })).toBe(false);
   });
@@ -57,7 +57,7 @@ describe("storefront indexing", () => {
   });
 
   it("uses the configured public origin for canonical urls", () => {
-    expect(canonicalUrl("https://vellano.example", "/product/chair")).toBe("https://vellano.example/product/chair");
-    expect(canonicalUrl("https://vellano.example/", "/shop?collection=seating")).toBe("https://vellano.example/shop?collection=seating");
+    expect(canonicalUrl("https://daskasas.example", "/product/chair")).toBe("https://daskasas.example/product/chair");
+    expect(canonicalUrl("https://daskasas.example/", "/shop?collection=seating")).toBe("https://daskasas.example/shop?collection=seating");
   });
 });

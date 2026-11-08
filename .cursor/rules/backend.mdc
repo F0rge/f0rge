@@ -8,7 +8,7 @@ alwaysApply: false
 
 # FastAPI Backend Standards
 
-These rules apply to legacy Marrow Python. They are not the new-app backend standard (Rust, Actix, Diesel, PostgreSQL). Fly `release_command` notes below are historical inventory. Current Marrow config files use a Railway `preDeployCommand`. Neither path is Leo's approval to migrate or deploy.
+These rules apply to legacy Marrow Python. They are not the new-app backend standard (Rust, Actix, Diesel, PostgreSQL). Current Marrow config files use a Railway `preDeployCommand`. That configuration is not Leo's approval to migrate or deploy.
 
 Target **Python 3.11**. Package manager: **`uv`** (never pip). Lint/format: **`ruff`**. Shared libs stay valid on 3.10 (environment-monitor, buycycle, and airflow).
 
@@ -108,7 +108,7 @@ Self-review before every PR:
 
 ## Alembic migrations under FORCE RLS
 
-Fly MPG runs `alembic upgrade` as `schema_admin` — **NOBYPASSRLS**. User-owned tables use FORCE ROW LEVEL SECURITY with `tenant_isolation` (`user_id = app.user_id`).
+Run `alembic upgrade` with the designated migration role. User-owned tables use FORCE ROW LEVEL SECURITY with `tenant_isolation` (`user_id = app.user_id`); test migration behavior under a **NOBYPASSRLS** table owner.
 
 ### Cross-tenant data migrations (default)
 
@@ -134,7 +134,7 @@ Long-lived policies (`provisioner`, `worker`, `mcp_auth`) are created in dedicat
 
 **Never leave `app.user_id` as `''`.** FORCE RLS evaluates every PERMISSIVE policy; `tenant_isolation` does `current_setting('app.user_id')::uuid` and throws `invalid input syntax for type uuid: ""` even when a service-role policy would allow the row. `apply_service_role` stamps the nil UUID sentinel (`MIGRATION_DUMMY_USER_ID`). Teardown must `RESET app.user_id` (`clear_tenant_session`) — never `set_config('app.user_id', '', ...)`.
 
-**MCP Fly secrets:** `DATABASE_URL` = `healthtracker-app` (token auth / main engine); `MCP_READONLY_DATABASE_URL` = `healthtracker-ro` (tools). Do not point both at the RO role. MCP VMs need ≥512 MB (`fly.mcp*.toml`) — 256 MB OOMs under light load.
+**MCP database access:** `DATABASE_URL` uses the app role for token auth and the main engine; `MCP_READONLY_DATABASE_URL` uses the read-only tools role. Do not point both at the read-only role. See `apps/marrow/backend/docs/railway_env.md` for current service configuration.
 
 ### Regression coverage
 
@@ -175,7 +175,7 @@ uv run pytest tests/ -v --tb=short
 
 For deep backend work, delegate to the `fastapi-backend` sub-agent in `~/.cursor/agents/`.
 
-## Health Tracker specifics
+## Marrow specifics
 
 - **Domain exceptions:** `NotFoundError`, `ValidationError`, `ConflictError` from `f0rge_core.exceptions` — mapped by `register_exception_handlers(app)` from `f0rge_core.handlers`. Never `HTTPException` in routers or services.
 - **API prefix:** `/api/v1`

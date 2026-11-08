@@ -1,14 +1,14 @@
 import { expect, test } from '@playwright/test'
 
-test('Vellano desktop navigation exposes shopping and the brand home link', async ({ page }) => {
+test('DasKasas desktop navigation exposes shopping and the brand home link', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/shop')
-  await expect(page.locator('.site-header').getByRole('link', { name: 'Vellano home' })).toBeVisible()
+  await expect(page.locator('.site-header').getByRole('link', { name: 'DasKasas home' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Shop all' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden()
-  await page.locator('.site-header').getByRole('link', { name: 'Vellano home' }).click()
+  await page.locator('.site-header').getByRole('link', { name: 'DasKasas home' }).click()
   await expect(page).toHaveURL(/\/$/)
-  await expect(page).toHaveTitle(/Vellano/)
+  await expect(page).toHaveTitle(/DasKasas/)
 })
 
 for (const width of [390, 320]) {
@@ -23,7 +23,7 @@ for (const width of [390, 320]) {
     const trigger = page.getByRole('button', { name: 'Open menu' })
     await trigger.focus()
     await page.keyboard.press('Enter')
-    const dialog = page.getByRole('dialog', { name: /^Vellano$/i })
+    const dialog = page.getByRole('dialog', { name: /^DasKasas$/i })
     await expect(dialog).toBeVisible()
     await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true)
     await expect(dialog.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Collections' })).toBeVisible()
@@ -55,7 +55,7 @@ for (const width of [1440, 390]) {
     await page.goto('/shop')
     if (width < 1050) {
       await page.getByRole('button', { name: 'Open menu' }).click()
-      const dialog = page.getByRole('dialog', { name: /^Vellano$/i })
+      const dialog = page.getByRole('dialog', { name: /^DasKasas$/i })
       await dialog.getByRole('link', { name: 'Our approach' }).click()
       await expect(dialog).toBeHidden()
     } else {
@@ -66,7 +66,7 @@ for (const width of [1440, 390]) {
     await expect(heading).toBeInViewport()
     await expect.poll(() => heading.evaluate((element) => {
       const header = document.querySelector('.site-header')
-      if (!header) throw new Error('Vellano header is missing')
+      if (!header) throw new Error('DasKasas header is missing')
       return element.getBoundingClientRect().top >= header.getBoundingClientRect().bottom
     })).toBe(true)
     const header = page.locator('.site-header')

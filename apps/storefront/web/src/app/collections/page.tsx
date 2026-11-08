@@ -6,12 +6,12 @@ import { StorefrontMotion } from "@/components/storefront-motion";
 import { ProductCard } from "../product-card";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Collections", description: "Explore furniture collections from Vellano.", alternates: { canonical: "/collections" } };
+export const metadata: Metadata = { title: "Collections", description: "Explore furniture collections from DasKasas.", alternates: { canonical: "/collections" } };
 
 export default async function CollectionsPage() {
   const products = await listStoreProducts();
   const collections = merchandisingCollections(products).sort((a, b) => a.title.localeCompare(b.title));
-  return <StorefrontMotion><div className="content collections-page"><p className="eyebrow">Vellano / collections</p><h1>Explore by collection.</h1>
+  return <StorefrontMotion><div className="content collections-page"><p className="eyebrow">DasKasas / collections</p><h1>Explore by collection.</h1>
     {collections.length ? collections.map((collection) => {
       const pieces = products.filter((product) => productInCollection(product, collection.handle));
       return <section data-reveal key={collection.id} className="collection-section"><div className="section-heading"><h2>{collection.title}</h2><Link href={`/shop?collection=${encodeURIComponent(collection.handle)}`} className="text-link">View {pieces.length} {pieces.length === 1 ? "piece" : "pieces"} ↗</Link></div><div className="product-grid">{pieces.slice(0, 3).map((product) => <ProductCard key={product.id} product={product} />)}</div></section>;

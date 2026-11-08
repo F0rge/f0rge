@@ -2,7 +2,7 @@
 
 Uses an isolated module-scoped Postgres container (same pattern as
 test_migration_006) and runs the full migration chain via Alembic CLI —
-the same path Fly release_command uses in production.
+the same Alembic path used by the configured pre-deploy migration step.
 """
 
 from __future__ import annotations

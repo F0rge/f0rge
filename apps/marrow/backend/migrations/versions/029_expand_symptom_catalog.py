@@ -73,7 +73,7 @@ def upgrade() -> None:
     if not rows:
         return
     bind = op.get_bind()
-    # Fly MPG runs alembic with FORCE RLS — tenant policies block inserts unless
+    # Managed Postgres can run alembic with FORCE RLS — tenant policies block inserts unless
     # app.user_id matches the reference user we're seeding for.
     bind.execute(
         sa.text("SELECT set_config('app.user_id', :user_id, true)"),

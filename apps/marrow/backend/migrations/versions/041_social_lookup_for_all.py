@@ -6,7 +6,7 @@ Create Date: 2026-07-12 00:00:00.000000
 
 Match provisioner_copy / social_notifier: social_lookup must be FOR ALL so
 is_group_member / is_group_owner SECURITY DEFINER helpers can read under
-FORCE RLS on Fly MPG.
+FORCE RLS on managed Postgres.
 """
 
 from __future__ import annotations

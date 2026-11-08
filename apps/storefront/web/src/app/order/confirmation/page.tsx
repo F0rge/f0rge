@@ -114,7 +114,7 @@ export default function OrderConfirmationPage() {
   }, [load]);
 
   return <div className="content confirmation-page" data-storefront-no-capture="">
-    <p className="eyebrow">Vellano / private order confirmation</p>
+    <p className="eyebrow">DasKasas / private order confirmation</p>
     {!result && !unavailable && <p role="status">Checking your order…</p>}
     {unavailable && <div role="alert"><h1>Confirmation temporarily unavailable</h1><p>Refresh this page to check again. Open your private confirmation link or return in the browser you used at checkout.</p><Button type="button" onClick={() => void load()}>Check again</Button></div>}
     {result?.status === "captured" && result.order && <>

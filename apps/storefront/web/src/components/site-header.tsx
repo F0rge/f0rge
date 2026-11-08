@@ -18,7 +18,7 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return <header className="site-header">
-    <Link href="/" className="wordmark" aria-label="Vellano home"><Wordmark /></Link>
+    <Link href="/" className="wordmark" aria-label="DasKasas home"><Wordmark /></Link>
     <nav className="desktop-navigation" aria-label="Main navigation">
       {links.map((link) => <Link key={link.href} href={link.href} aria-current={pathname === link.href ? "page" : undefined}>{link.label}</Link>)}
     </nav>

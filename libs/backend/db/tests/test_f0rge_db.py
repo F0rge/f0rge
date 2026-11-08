@@ -48,27 +48,27 @@ def test_resolve_asyncpg_scheme() -> None:
 
 
 def test_pgbouncer_rewritten_to_direct() -> None:
-    pooled = "postgres://fly-user:secret@pgbouncer.abc123.flympg.net/fly-db"
+    pooled = "postgres://app-user:secret@pgbouncer.abc123.postgres.example/app-db"
     direct = resolve_database_url(pooled)
-    assert "direct.abc123.flympg.net" in direct
+    assert "direct.abc123.postgres.example" in direct
     assert "pgbouncer." not in direct
 
 
 def test_direct_url_override() -> None:
-    pooled = "postgres://fly-user:secret@pgbouncer.abc123.flympg.net/fly-db"
-    explicit = "postgres://fly-user:secret@direct.abc123.flympg.net/fly-db"
+    pooled = "postgres://app-user:secret@pgbouncer.abc123.postgres.example/app-db"
+    explicit = "postgres://app-user:secret@direct.abc123.postgres.example/app-db"
     assert resolve_database_url(pooled, direct_url=explicit) == (
-        "postgresql+asyncpg://fly-user:secret@direct.abc123.flympg.net/fly-db"
+        "postgresql+asyncpg://app-user:secret@direct.abc123.postgres.example/app-db"
     )
 
 
 def test_pooler_disables_statement_cache() -> None:
-    pooled = "postgres://u:p@pgbouncer.cluster.flympg.net/db"
+    pooled = "postgres://u:p@pgbouncer.cluster.postgres.example/db"
     assert asyncpg_connect_args(pooled) == {"statement_cache_size": 0}
 
 
 def test_direct_host_keeps_statement_cache() -> None:
-    direct = "postgres://u:p@direct.cluster.flympg.net/db"
+    direct = "postgres://u:p@direct.cluster.postgres.example/db"
     assert asyncpg_connect_args(direct) == {}
 
 

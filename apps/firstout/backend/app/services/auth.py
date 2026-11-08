@@ -17,7 +17,6 @@ from app.services.permissions import PermissionService
 from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
 JWT_COOKIE_NAME = "firstout_session"
-MIN_PASSWORD_LENGTH = 8
 
 
 def hash_password(password: str) -> str:
@@ -38,11 +37,6 @@ def clear_session_cookie(response: Response) -> None:
         path="/",
         secure=settings.cookie_secure,
     )
-
-
-def validate_password(password: str) -> None:
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise ValidationError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
 
 
 class AuthService:

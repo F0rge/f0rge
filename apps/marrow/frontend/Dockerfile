@@ -24,8 +24,8 @@ COPY apps/marrow/frontend ./apps/marrow/frontend
 ARG API_URL=http://backend:8000
 ENV API_URL=$API_URL
 
-# ponytail: cap the build heap so `next build` GCs instead of getting OOM-killed
-# on the remote Fly builder when it races the backend build. Raise if needed.
+# Cap the build heap so `next build` collects garbage within the builder's
+# memory budget. Raise only after checking available build resources.
 ENV NODE_OPTIONS=--max-old-space-size=1536
 RUN npm run typecheck -w frontend
 RUN npm run build -w frontend

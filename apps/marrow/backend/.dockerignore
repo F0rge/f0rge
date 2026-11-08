@@ -1,4 +1,4 @@
-# Repo-root build context (CI runs `flyctl deploy .` from the repo root).
+# Railway and local Docker builds use the repository root as build context.
 # Exclude everything, then descend and whitelist ONLY this app + shared libs so
 # the sibling frontend app never bloats the backend build context. Each `apps/*`
 # / `apps/marrow/*` line re-excludes the level below a re-included parent — this

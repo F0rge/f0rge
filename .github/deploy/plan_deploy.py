@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Resolve deploy plan from manifest.yml + nx affected projects."""
 
 from __future__ import annotations
@@ -21,10 +20,34 @@ from coolify_payload import coolify_diff_base
 
 def _nx_affected(base: str, head: str) -> set[str]:
     out = subprocess.check_output(
-        ["npx", "nx", "show", "projects", "--affected", f"--base={base}", f"--head={head}", "--json"],
+        [
+            "npx",
+            "nx",
+            "show",
+            "projects",
+            "--affected",
+            f"--base={base}",
+            f"--head={head}",
+            "--json",
+        ],
         text=True,
     )
     return set(json.loads(out))
+
+
+def _validate_targets(manifest: dict[str, Any]) -> None:
+    """Reject unsupported destinations before emitting any executable plan."""
+    for name, spec in manifest["components"].items():
+        target = spec.get("target")
+        if target not in {"railway", "coolify"}:
+            raise ValueError(f"Unsupported deploy target {target!r} for {name}")
+        configuration = spec.get(target)
+        if configuration is None:
+            raise ValueError(f"Missing {target} configuration for {name}")
+        if not isinstance(configuration, dict):
+            raise TypeError(
+                f"Invalid {target} configuration for {name}: expected a mapping"
+            )
 
 
 def main() -> None:
@@ -32,6 +55,7 @@ def main() -> None:
     component_mode = os.environ.get("COMPONENT", "auto")
     manifest_path = Path(__file__).with_name("manifest.yml")
     manifest = yaml.safe_load(manifest_path.read_text())
+    _validate_targets(manifest)
 
     diff_base = ""
     if component_mode != "auto":
@@ -56,7 +80,7 @@ def main() -> None:
                 spec["nx"]
                 for spec in manifest["components"].values()
                 if environment in spec.get("branches", [])
-                and spec.get("target") in {"fly", "railway"}
+                and spec.get("target") == "railway"
                 and spec["nx"].startswith("marrow-")
             }
         else:
@@ -70,17 +94,20 @@ def main() -> None:
         coolify_affected = affected
         if diff_base != nx_base:
             coolify_affected = _nx_affected(diff_base, nx_head)
-            print(f"coolify affected vs parent {diff_base[:12]}: {sorted(coolify_affected)}")
+            print(
+                f"coolify affected vs parent {diff_base[:12]}: {sorted(coolify_affected)}"
+            )
         deploy_api = deploy_mcp = deploy_frontend = False
         coolify = []
         for _name, spec in manifest["components"].items():
             if environment not in spec.get("branches", []):
                 continue
-            if spec["nx"] not in (coolify_affected if spec["target"] == "coolify" else affected):
+            if spec["nx"] not in (
+                coolify_affected if spec["target"] == "coolify" else affected
+            ):
                 continue
-            if spec["target"] in {"fly", "railway"}:
-                # fly kept for legacy manifests; railway is the live target.
-                block = spec.get(spec["target"]) or spec.get("railway") or spec.get("fly")
+            if spec["target"] == "railway":
+                block = spec["railway"]
                 role = block["role"]
                 url = _health_url_for_env(block, environment)
                 is_marrow = spec["nx"].startswith("marrow-")
@@ -132,8 +159,7 @@ def main() -> None:
     }
     if github_output:
         with open(github_output, "a", encoding="utf-8") as fh:
-            for key, value in outputs.items():
-                fh.write(f"{key}={value}\n")
+            fh.writelines(f"{key}={value}\n" for key, value in outputs.items())
     else:
         print(json.dumps(outputs, indent=2))
 
@@ -159,9 +185,9 @@ def _health_urls(manifest: dict, environment: str) -> dict[str, str]:
     marrow_urls: dict[str, str] = {}
     for spec in manifest["components"].values():
         target = spec.get("target")
-        if target not in {"fly", "railway"}:
+        if target != "railway":
             continue
-        primary = spec.get(target) or spec.get("railway") or spec.get("fly") or {}
+        primary = spec.get("railway") or {}
         dest = marrow_urls if spec.get("nx", "").startswith("marrow-") else other_urls
         for block in [primary, *spec.get("also_deploys", [])]:
             if "role" not in block:

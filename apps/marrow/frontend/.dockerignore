@@ -1,4 +1,4 @@
-# Repo-root build context (CI runs `flyctl deploy .` from the repo root).
+# Repo-root build context for the frontend image.
 # Exclude everything, then descend and whitelist ONLY this app + shared libs so
 # the sibling backend app never bloats the frontend build context. The explicit
 # per-level `apps/*` / `apps/marrow/*` excludes are what make nested whitelisting

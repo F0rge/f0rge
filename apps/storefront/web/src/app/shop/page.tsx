@@ -7,7 +7,7 @@ import { ProductCard } from "../product-card";
 import { SearchResultsTracker } from "@/components/analytics/search-results-tracker";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Shop furniture", description: "Discover Vellano's considered furniture collection.", alternates: { canonical: "/shop" } };
+export const metadata: Metadata = { title: "Shop furniture", description: "Discover DasKasas's considered furniture collection.", alternates: { canonical: "/shop" } };
 
 type Search = { q?: string; category?: string; collection?: string; availability?: string; min?: string; max?: string; sort?: string };
 type Props = { searchParams: Promise<Record<keyof Search, string | string[] | undefined>> };
@@ -59,7 +59,7 @@ export default async function ShopPage({ searchParams }: Props) {
   const advancedFiltersActive = Boolean(params.category || params.collection || params.availability || params.min || params.max);
   const sortOrder = params.sort === "price-asc" ? "price_asc" : params.sort === "price-desc" ? "price_desc" : "default";
   return <div className="content shop-page">
-    <p className="eyebrow">Vellano / shop</p><h1>The collection.</h1>
+    <p className="eyebrow">DasKasas / shop</p><h1>The collection.</h1>
     <p className="intro">Thoughtfully chosen pieces for rooms made to be lived in.</p>
     <form action="/shop" method="get" className="catalogue-filters" role="search">
       <div className="search-field"><label htmlFor="catalogue-search">Search furniture</label><input id="catalogue-search" name="q" type="search" defaultValue={params.q || ""} placeholder="Search pieces or materials" /></div>

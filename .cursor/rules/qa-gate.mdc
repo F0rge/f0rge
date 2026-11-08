@@ -62,7 +62,7 @@ Start backend, hit health + changed endpoints. Frontend must build.
 
 Curl + build-passes is **not enough** for user-facing features. Drive the golden path through the actual UI. Test at least one error path. Check backend logs for hidden 500s.
 
-**Health Tracker auth bypass (required for e2e):**
+**Marrow test authentication (required for e2e):**
 
 1. Start backend on port 8000 and frontend on port 3000.
 2. `POST /api/v1/auth/signup` or `/auth/login` with valid credentials (see `tests/conftest.py` `authed_client` fixture).
@@ -90,7 +90,7 @@ For every new `app/config.py` setting:
 
 - [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Do not change production secrets from this checklist. Fly secret commands are legacy notes, not permission.
+- [ ] Production secret changes require an explicitly authorized operations task; this checklist only verifies configuration coverage.
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing
 

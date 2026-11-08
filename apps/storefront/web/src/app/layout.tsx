@@ -12,7 +12,7 @@ import "./style.css";
 
 const instrumentSerif = localFont({
   src: "../fonts/InstrumentSerif-Regular.ttf",
-  variable: "--vellano-serif",
+  variable: "--daskasas-serif",
   display: "swap",
 });
 
@@ -22,7 +22,7 @@ const skin = collectorSkinAttribute(currentCustomerPolicies()?.collector_skin ??
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
-  title: { default: "Vellano | Considered furniture", template: "%s | Vellano" },
+  title: { default: "DasKasas | Considered furniture", template: "%s | DasKasas" },
   description: "Considered furniture for a home, thoughtfully yours.",
   alternates: { canonical: "/" },
   robots: { index: indexable, follow: indexable },

@@ -1,12 +1,12 @@
-# Health Tracker — Agent Instructions
+# F0rge — Agent Instructions
 
 **Extends `~/.cursor/rules/leo-system-wide.mdc`** — global preferences, stack defaults, git workflow, boundaries, and sub-agent delegation live there. This file holds project-specific rules only.
 
-Personal daily symptom check-in app for Leo's health research vault.
+Personal Nx monorepo for Marrow, Firstout, DasKasas storefront and tag printer, Buycycle, Environment Monitor, and Airflow.
 
 ## Canonical decisions
 
-Accepted and conditional decisions live in [`docs/adr/README.md`](docs/adr/README.md). After this change is reviewed, approved, and merged, those records are canonical. The planning Page is not a second policy copy.
+Accepted and conditional decisions in [`docs/adr/README.md`](docs/adr/README.md) are canonical. The planning Page is not a second policy copy.
 
 New apps use the accepted stack in that index: Rust, Actix Web, Diesel, PostgreSQL, standalone React, strict TypeScript, Vite, actual Primer, and TanStack Query, Router, and Form. `C-001` and `C-002` stay conditional. Apps already in this repo are legacy migration inventory, not approved exceptions, and these records do not migrate them.
 
@@ -23,7 +23,7 @@ New apps follow [`docs/adr/README.md`](docs/adr/README.md). The list below is th
 
 ## Environments
 
-Marrow's committed config names Railway project **zoological-fulfillment** (`a633a271-…`). Those files are not a live check. Do not use a `develop` branch workflow. A remote `develop` ref may still exist and is not an approved branch (see [Git flow](#git-flow-trunk-based-main-only)). dk tag-printer's committed config names Coolify on the Pi.
+Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `zoological-fulfillment`). The database service is **Postgres** (`d76d2b40-…`). These identifiers are inventory; verify current provider state before operations. Do not use a `develop` branch workflow. A remote `develop` ref may still exist and is not an approved branch (see [Git flow](#git-flow-trunk-based-main-only)). dk tag-printer's committed config names Coolify on the Pi.
 
 ### Production (`main`)
 
@@ -32,7 +32,7 @@ Marrow's committed config names Railway project **zoological-fulfillment** (`a63
 | API + worker | `marrow-api` / `marrow-worker` | https://api.marrow-health.com |
 | MCP | `marrow-mcp` | https://mcp.marrow-health.com |
 | Frontend | `marrow-frontend` | https://marrow-health.com |
-| Postgres | `pgvector` | via `DATABASE_URL` |
+| Postgres | `Postgres` (`d76d2b40-…`) | via `DATABASE_URL` |
 | Redis | `Redis` | via `REDIS_URL` |
 | Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
@@ -63,7 +63,11 @@ Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested 
 
 ## apps/firstout
 
-Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout/AGENTS.md). **Own Railway project** — do **not** add Firstout services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow project. Live hosts (tracking `main`): https://firstout.co.za and https://api.firstout.co.za (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
+Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout/AGENTS.md). **Own Railway project** — do **not** add Firstout services, Postgres, or buckets to the Marrow project (`a633a271-…`). Live hosts (tracking `main`): https://firstout.co.za and https://api.firstout.co.za (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
+
+## apps/storefront
+
+DasKasas public storefront and Medusa commerce service. Nx projects: `daskasas-web` and `daskasas-commerce`; source remains under `apps/storefront/`. Railway project `DasKasas` (`d58a2884-d366-4230-9555-8b7bb4e42d4f`), environment `production` (`d73ff2d5-816d-4bc8-85b4-71a85b0398fa`), services `storefront` and `storefront-commerce`. Keep its data and infrastructure separate from Firstout and Marrow. These identifiers are inventory, not release permission; verify current provider state before operations. See [`apps/storefront/README.md`](apps/storefront/README.md).
 
 ## Git flow (trunk-based, main only)
 
@@ -73,7 +77,7 @@ Do not open a `develop` branch workflow. A remote `develop` ref may still exist;
 - **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches may keep their tool prefix (`cursor/…`). Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
 - **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
 - **Squash merge** with a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
-- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, Vellano) and Coolify for dk. That is not a live check. A merge to `main` is not by itself a production release approval.
+- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check. A merge to `main` is not by itself a production release approval.
 - **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
 - **Hotfixes are just PRs into `main`** (`hotfix/<desc>` or `fix/<desc>`), same CI and squash merge.
 - Never force-push `main`. Force-pushing your own feature branch is fine when needed.
@@ -102,7 +106,7 @@ No root-level `start.sh` — local dev is the Postgres container plus separate b
 - Backend API: http://localhost:8000/api/v1
 - Frontend: http://localhost:3000
 - Shared libs: `libs/backend/{core,db,storage,testing}/`, `libs/ui/`
-- Database: Railway pgvector in deployed envs; local tests use disposable Postgres via `testcontainers` (see `apps/marrow/backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
+- Database: Railway PostgreSQL with pgvector in deployed envs; local tests use disposable Postgres via `testcontainers` (see `apps/marrow/backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
 - Photo storage: Railway Buckets in deployed envs; `apps/marrow/backend/photos/` locally
 
 ## Shared libraries
@@ -127,7 +131,7 @@ Canonical reference for what lives in `libs/` and the non-duplication mandate. S
 - Use `from __future__ import annotations` in all Python files
 - Frontend: TypeScript strict, Tailwind for styling; primitives from `@f0rge/ui`; forms from `@f0rge/ui/forms`; token skins in app CSS; Storybook is the catalogue — see `.cursor/rules/ui-kit.mdc`
 - API prefix: /api/v1
-- Auth cookie name: ht_session
+- Marrow auth cookie name: ht_session
 
 ## Nx conventions
 
@@ -145,7 +149,7 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
 | `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
 | `ui-kit.mdc` | `libs/ui/**`, `apps/**/frontend/**` — design-system imports, tokens, primitives |
-| `infra.mdc` | `**/railway*.toml`, `**/fly*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
+| `infra.mdc` | `**/railway*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
 | `qa-gate.mdc` | tests, workflows |
 | `data-pipelines.mdc` | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 

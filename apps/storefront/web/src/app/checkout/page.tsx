@@ -156,7 +156,7 @@ export default function CheckoutPage() {
   const feedback = error ? purchaseFeedback(error, true) : null;
   const total = checkout ? Number(checkout.amount) : bag?.total || 0;
   return <div className="content checkout-page" data-storefront-no-capture="">
-    <p className="eyebrow">Vellano / secure checkout</p>
+    <p className="eyebrow">DasKasas / secure checkout</p>
     <h1>Review your order</h1>
     <p className="checkout-intro">Confirm your details and choose how to receive your pieces. Review the final total, including VAT, before payment.</p>
     <div className="checkout-layout">

@@ -41,19 +41,19 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   let channelId = salesChannels[0]?.id;
   if (!channelId) {
     const { result } = await createSalesChannelsWorkflow(container).run({
-      input: { salesChannelsData: [{ name: "Vellano", description: "Vellano retail website" }] },
+      input: { salesChannelsData: [{ name: "DasKasas", description: "DasKasas retail website" }] },
     });
     channelId = result[0].id;
   }
   await updateSalesChannelsWorkflow(container).run({
-    input: { selector: { id: channelId }, update: { name: "Vellano", description: "Vellano retail website" } },
+    input: { selector: { id: channelId }, update: { name: "DasKasas", description: "DasKasas retail website" } },
   });
 
   const { data: stores } = await query.graph({ entity: "store", fields: ["id", "supported_currencies.*"] });
   if (!stores.length) {
     await createStoresWorkflow(container).run({
       input: { stores: [{
-        name: "Vellano",
+        name: "DasKasas",
         supported_currencies: [{ currency_code: "zar", is_default: true, is_tax_inclusive: true }],
         default_sales_channel_id: channelId,
       }] },
@@ -65,12 +65,12 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
       throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE,
         "Store has multiple currencies; set ZAR tax-inclusive in Medusa Admin before syncing Firstout");
     }
-    // Medusa creates a new store with EUR as its only currency. Vellano uses ZAR
+    // Medusa creates a new store with EUR as its only currency. DasKasas uses ZAR
     // exclusively, so normalize that default whenever bootstrap runs.
     await updateStoresWorkflow(container).run({ input: {
       selector: { id: store.id },
       update: {
-        name: "Vellano",
+        name: "DasKasas",
         supported_currencies: [{ currency_code: "zar", is_default: true, is_tax_inclusive: true }],
       },
     } });
@@ -81,7 +81,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   });
   if (!keys.length) {
     const { result: [key] } = await createApiKeysWorkflow(container).run({
-      input: { api_keys: [{ title: "Vellano public key", type: "publishable", created_by: "" }] },
+      input: { api_keys: [{ title: "DasKasas public key", type: "publishable", created_by: "" }] },
     });
     await linkSalesChannelsToApiKeyWorkflow(container).run({
       input: { id: key.id, add: [channelId] },
@@ -90,7 +90,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   for (const key of keys) {
     if (key.title === "Storefront public key") {
       await updateApiKeysWorkflow(container).run({
-        input: { selector: { id: key.id }, update: { title: "Vellano public key" } },
+        input: { selector: { id: key.id }, update: { title: "DasKasas public key" } },
       });
     }
   }
@@ -188,7 +188,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   if (!shippingSet) {
     await createLocationFulfillmentSetWorkflow(container).run({ input: {
       location_id: locationId,
-      fulfillment_set_data: { name: "Vellano shipping", type: "shipping" },
+      fulfillment_set_data: { name: "DasKasas shipping", type: "shipping" },
     } });
     const { data: refreshed } = await query.graph({
       entity: "stock_location", fields: ["id", "fulfillment_sets.id", "fulfillment_sets.name", "fulfillment_sets.type", "fulfillment_sets.service_zones.id", "fulfillment_sets.service_zones.name"],
@@ -232,5 +232,5 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   }));
   if (newOptions.length) await createShippingOptionsWorkflow(container).run({ input: newOptions });
 
-  logger.info("Vellano bootstrap complete. Set the public API key from Medusa Admin.");
+  logger.info("DasKasas bootstrap complete. Set the public API key from Medusa Admin.");
 }

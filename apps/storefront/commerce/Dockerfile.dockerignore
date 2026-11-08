@@ -1,5 +1,6 @@
 **/.git
 **/node_modules
+**/.medusa
 **/.next
 **/.env
 **/.env.*
@@ -7,3 +8,6 @@
 **/.venv
 **/__pycache__
 .nx
+**/*.tsbuildinfo
+**/coverage
+**/.DS_Store
