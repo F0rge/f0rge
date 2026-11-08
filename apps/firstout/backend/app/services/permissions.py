@@ -42,7 +42,7 @@ class PermissionService:
                     Membership.user_id == user_id, Membership.team_id == team_id
                 )
             )
-            if member is None or (member.is_disabled and not member.is_legacy_home):
+            if member is None or member.is_disabled:
                 return frozenset()
             slug = role_slug(user.role) if member.is_legacy_home else member.role
         role = await self.role_crud.get_by_slug(slug)

@@ -132,6 +132,25 @@ async def test_owner_can_edit_and_disable_user(owner_client: AsyncClient) -> Non
     assert body["is_disabled"] is True
 
 
+async def test_disabled_legacy_home_owner_cannot_count_as_remaining_owner(
+    owner_client: AsyncClient,
+) -> None:
+    created = await owner_client.post(
+        "/api/v1/users",
+        json={"email": "disabled-owner@example.com", "password": "owner-password", "role": "owner"},
+    )
+    assert created.status_code == 201
+    disabled = await owner_client.patch(
+        f"/api/v1/users/{created.json()['id']}", json={"is_disabled": True}
+    )
+    assert disabled.status_code == 200 and disabled.json()["is_disabled"] is True
+    owner_id = (await owner_client.get("/api/v1/auth/me")).json()["id"]
+    for update in ({"is_disabled": True}, {"role": "buyer"}):
+        rejected = await owner_client.patch(f"/api/v1/users/{owner_id}", json=update)
+        assert rejected.status_code == 409
+    assert (await owner_client.get("/api/v1/auth/me")).status_code == 200
+
+
 async def test_profile_self_edit(owner_client: AsyncClient) -> None:
     resp = await owner_client.patch(
         "/api/v1/profile",

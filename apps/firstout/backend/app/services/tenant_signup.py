@@ -75,7 +75,8 @@ class TenantSignupService:
         return {"name": data.name, "slug": data.slug, "billing": "disabled", "provisioned": False}
 
     async def me(self, identity: ClerkSession) -> dict:
-        require_signup()
+        if settings.tenant_isolation_mode != "enforced" or not settings.clerk_enabled:
+            raise ValidationError("Organisation access is not enabled")
         profile = await self.provider.user(identity.user_id)
         email = verified_primary_email(profile)
         await self.reconcile_invitations(identity.user_id, profile)
