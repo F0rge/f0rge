@@ -84,6 +84,13 @@ R175 local delivery with the persisted address and total. Secure/HttpOnly cookie
 were retained. These are local simulator results, not live payment-provider
 certification.
 
+Private cart/order reads in the browser tests use same-origin browser `fetch`.
+Playwright's separate API request context did not carry the production Secure
+cookie correctly on HTTP loopback; it saw an empty cart while the browser saw
+the real cart. Keep cookie security enabled and use the browser context for
+authenticated positive checks. Direct unauthenticated API requests remain useful
+for the denial cases.
+
 The commerce suite passed 201 tests (20 explicitly gated integration tests were
 skipped); lint had no errors and typecheck passed. The Firstout catalogue seam
 passed its two contract tests. The local fixture also rejected non-disposable
