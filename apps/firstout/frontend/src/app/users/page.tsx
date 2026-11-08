@@ -34,6 +34,8 @@ import {
   type User,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { clerkEnabled } from "@/components/staff-provider";
+import { userEditPayload } from "@/lib/user-edit";
 
 const TABLE_HEADERS = [
   { key: "email", header: "Email" },
@@ -193,19 +195,7 @@ export default function UsersPage() {
     setSaving(true);
     setError(null);
     try {
-      const payload: Parameters<typeof updateUser>[1] = {
-        email: editForm.email,
-        display_name: editForm.display_name,
-        role: editForm.role,
-      };
-      if (editForm.password) {
-        payload.password = editForm.password;
-      }
-      const nextDefault = editForm.default_location_id || null;
-      if (nextDefault !== (editUser.default_location_id ?? null)) {
-        payload.default_location_id = nextDefault;
-      }
-      await updateUser(editUser.id, payload);
+      await updateUser(editUser.id, userEditPayload(editUser, editForm));
       setEditUser(null);
       await loadUsers();
     } catch (err) {
@@ -233,9 +223,9 @@ export default function UsersPage() {
       <div className="firstout-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Users</h1>
-          <p className="cds--type-body-01">Create and manage back-office accounts.</p>
+          <p className="cds--type-body-01">Manage back-office accounts{clerkEnabled ? " and invite staff from organisation settings." : "."}</p>
         </div>
-        <Button data-tour="user-new" onClick={() => setCreateOpen(true)}>Create user</Button>
+        {clerkEnabled ? <Button href="/organisation">Invite staff</Button> : <Button data-tour="user-new" onClick={() => setCreateOpen(true)}>Create user</Button>}
       </div>
 
       {error ? (
@@ -307,7 +297,7 @@ export default function UsersPage() {
       )}
 
       <Modal
-        open={createOpen}
+        open={createOpen && !clerkEnabled}
         modalHeading="Create user"
         primaryButtonText={saving ? "Creating…" : "Create"}
         secondaryButtonText="Cancel"

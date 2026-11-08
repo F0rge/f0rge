@@ -57,6 +57,8 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
+import { clerkEnabled, StaffOrganizationSwitcher, useStaffSession } from "@/components/staff-provider";
+import { isPublicAuthPath, missingSessionDestination } from "@/lib/auth-routes";
 import { useAuth } from "@/lib/auth";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import { can } from "@/lib/permissions";
@@ -132,6 +134,7 @@ const ICONS = {
   "/roles": UserAdmin,
   "/profile": User,
   "/settings": Settings,
+  "/organisation": UserAdmin,
 } as const;
 
 type NavHref = keyof typeof ICONS;
@@ -148,6 +151,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
+  const { signedIn: clerkSignedIn } = useStaffSession();
   const expanded = useSyncExternalStore(
     subscribeSideNavExpanded,
     getSideNavExpandedSnapshot,
@@ -158,17 +162,13 @@ export function AppShell({ children }: AppShellProps) {
     getNarrowViewportSnapshot,
     getNarrowViewportServerSnapshot,
   );
-  const isPublic =
-    pathname === "/login" ||
-    pathname === "/forgot-password" ||
-    pathname === "/reset-password" ||
-    pathname.startsWith("/trade");
+  const isPublic = isPublicAuthPath(pathname);
 
   useEffect(() => {
     if (!loading && !user && !isPublic) {
-      router.replace("/login");
+      router.replace(missingSessionDestination(clerkSignedIn));
     }
-  }, [loading, user, isPublic, router]);
+  }, [loading, user, isPublic, clerkSignedIn, router]);
 
   useEffect(() => {
     if (narrow) {
@@ -207,7 +207,8 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   const adminItems = ADMIN_NAV_ITEMS.filter(
-    (item) => !("permission" in item) || can(user, item.permission),
+    (item) => (item.href !== "/organisation" || clerkEnabled) &&
+      (!("permission" in item) || can(user, item.permission)),
   );
   const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
     ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders")
@@ -305,6 +306,7 @@ export function AppShell({ children }: AppShellProps) {
               <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
             </HeaderName>
             <HeaderGlobalBar>
+              <StaffOrganizationSwitcher />
               <HeaderSearch />
               <span className="firstout-tour-anchor" data-tour="header-page-tour">
                 <PageTourButton />

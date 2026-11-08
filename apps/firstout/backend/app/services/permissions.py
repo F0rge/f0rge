@@ -3,7 +3,11 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from f0rge_db.organisation import tenant_id_ctx
+from app.models.membership import Membership
 
+from app.services.staff_identity import staff_identity_ctx
 from app.crud.role import RoleCRUD
 from app.crud.user import UserCRUD
 from app.permissions import PERMISSION_CATALOG, SLUG_OWNER, role_slug
@@ -27,9 +31,20 @@ class PermissionService:
 
     async def _key_set(self, user_id: uuid.UUID) -> frozenset[str]:
         user = await self.user_crud.get_by_id(user_id)
-        if user is None:
+        if user is None or user.is_disabled:
             return frozenset()
-        slug = role_slug(user.role)
+        identity = staff_identity_ctx.get()
+        slug = identity.role if identity and identity.user_id == user_id else role_slug(user.role)
+        team_id = tenant_id_ctx.get()
+        if team_id is not None:
+            member = await self.db.scalar(
+                select(Membership).where(
+                    Membership.user_id == user_id, Membership.team_id == team_id
+                )
+            )
+            if member is None or (member.is_disabled and not member.is_legacy_home):
+                return frozenset()
+            slug = role_slug(user.role) if member.is_legacy_home else member.role
         role = await self.role_crud.get_by_slug(slug)
         if slug == SLUG_OWNER or (role is not None and role.is_owner_preset):
             return frozenset(PERMISSION_CATALOG)

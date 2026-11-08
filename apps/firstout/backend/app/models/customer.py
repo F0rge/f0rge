@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 # Stored national digits: drop 0027 / a full 27 prefix, then one leading 0.
@@ -38,7 +39,7 @@ PHONE_NATIONAL_SQL = (
 )
 
 
-class Customer(UUIDPkMixin, TimestampMixin, Base):
+class Customer(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "customers"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)

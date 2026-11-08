@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import UUIDPkMixin
 
 
@@ -39,7 +40,7 @@ class JournalStatus(str, enum.Enum):
     VOIDED = "voided"
 
 
-class JournalEntry(UUIDPkMixin, Base):
+class JournalEntry(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "journal_entries"
 
     document_type: Mapped[JournalDocumentType] = mapped_column(
@@ -100,7 +101,7 @@ class JournalEntry(UUIDPkMixin, Base):
     )
 
 
-class JournalLine(UUIDPkMixin, Base):
+class JournalLine(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "journal_lines"
 
     entry_id: Mapped[uuid.UUID] = mapped_column(

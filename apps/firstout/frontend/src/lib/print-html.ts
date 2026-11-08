@@ -1,7 +1,8 @@
-export function printHtml(html: string): void {
+export function printHtml(html: string, reservedWindow?: Window | null): void {
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
-  const printWindow = window.open(url, "_blank");
+  const printWindow = reservedWindow ?? window.open(url, "_blank");
+  if (reservedWindow) reservedWindow.location.href = url;
   if (!printWindow) {
     URL.revokeObjectURL(url);
     window.alert("Allow pop-ups to print.");
@@ -18,7 +19,7 @@ export function printHtml(html: string): void {
   };
 
   printWindow.addEventListener("load", triggerPrint);
-  if (printWindow.document.readyState === "complete") {
+  if (!reservedWindow && printWindow.document.readyState === "complete") {
     triggerPrint();
   }
   printWindow.addEventListener("afterprint", () => {

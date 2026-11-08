@@ -8,9 +8,17 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cin7_import_run import Cin7ImportRun
+from f0rge_db.organisation import tenant_id_ctx
 
-# Stable key so every Cin7 import takes the same transaction-scoped lock.
+# Stable namespace; each organisation has an independent transaction lock.
 ADVISORY_LOCK_KEY = 872014
+
+
+def _lock_key() -> str:
+    team_id = tenant_id_ctx.get()
+    if team_id is None:
+        raise RuntimeError("Cin7 import requires tenant context")
+    return f"firstout:cin7:{team_id}"
 
 
 class Cin7ImportRunCRUD:
@@ -31,14 +39,15 @@ class Cin7ImportRunCRUD:
 
     async def acquire_lock(self) -> None:
         await self.db.execute(
-            text("SELECT pg_advisory_xact_lock(:key)"), {"key": ADVISORY_LOCK_KEY}
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 872014))"),
+            {"key": _lock_key()},
         )
 
     async def try_lock(self) -> bool:
         """Take the import lock without waiting. False means another transaction holds it."""
         locked = await self.db.scalar(
-            text("SELECT pg_try_advisory_xact_lock(:key)"),
-            {"key": ADVISORY_LOCK_KEY},
+            text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 872014))"),
+            {"key": _lock_key()},
         )
         return bool(locked)
 

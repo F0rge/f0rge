@@ -9,10 +9,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class Cin7ImportRun(UUIDPkMixin, TimestampMixin, Base):
+class Cin7ImportRun(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """Audit log and job row for an admin Cin7 import.
 
     ``active_lock`` is true only while the run is queued or running. Postgres

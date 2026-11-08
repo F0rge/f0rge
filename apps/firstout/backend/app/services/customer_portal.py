@@ -7,6 +7,7 @@ from fastapi import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from f0rge_db.organisation import tenant_id_ctx
 from app.crud.customer_portal_user import CustomerPortalUserCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.team_settings import TeamSettingsCRUD
@@ -47,6 +48,9 @@ def create_customer_access_token(portal_user_id: uuid.UUID, ttl_hours: int) -> s
         "iat": now,
         "exp": now + datetime.timedelta(hours=ttl_hours),
     }
+    team_id = tenant_id_ctx.get()
+    if team_id is not None:
+        payload["team_id"] = str(team_id)
     return jwt.encode(payload, _require_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 

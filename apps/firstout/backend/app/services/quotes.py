@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.staff_identity import staff_identity_ctx
+
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
@@ -260,7 +262,8 @@ class QuotesService:
         user = await self.user_crud.get_by_id(user_id)
         if user is None:
             return ""
-        return user.role
+        identity = staff_identity_ctx.get()
+        return identity.role if identity and identity.user_id == user.id else user.role
 
     def _resolve_discount(
         self,

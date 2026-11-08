@@ -10,10 +10,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class RepeatingInvoice(UUIDPkMixin, TimestampMixin, Base):
+class RepeatingInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "repeating_invoices"
 
     customer_id: Mapped[uuid.UUID] = mapped_column(
@@ -51,7 +52,7 @@ class RepeatingInvoice(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class RepeatingInvoiceLine(UUIDPkMixin, Base):
+class RepeatingInvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "repeating_invoice_lines"
 
     schedule_id: Mapped[uuid.UUID] = mapped_column(

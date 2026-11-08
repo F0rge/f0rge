@@ -56,6 +56,7 @@ export const SALES_NAV_ITEMS = [
 ] as const;
 
 export const ADMIN_NAV_ITEMS = [
+  { href: "/organisation", label: "Organisation", permission: "users.manage" as const },
   { href: "/users", label: "Users", permission: "users.manage" as const },
   { href: "/roles", label: "Roles", permission: "users.manage" as const },
   { href: "/audit", label: "Audit" },

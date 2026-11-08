@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
+
 import asyncio
 import datetime
 import hashlib
@@ -13,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.password_reset_token import PasswordResetTokenCRUD
 from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import UserCRUD
+from app.crud.user import IdentityLookup
 from app.exceptions import RateLimitedError
 from app.models.password_reset_token import PasswordResetToken
 from app.schemas.auth import PasswordResetConfirmRequest, PasswordResetMessage
@@ -107,7 +109,7 @@ def client_ip(request: Request) -> str:
 class PasswordResetService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.users = UserCRUD(db)
+        self.users = IdentityLookup(db)
         self.tokens = PasswordResetTokenCRUD(db)
         self.team_settings = TeamSettingsCRUD(db)
 
@@ -141,7 +143,7 @@ class PasswordResetService:
         if token.expires_at <= datetime.datetime.utcnow():
             raise ValidationError(EXPIRED_TOKEN)
 
-        user = await self.users.get_by_id(token.user_id)
+        user = await self.users.by_session_subject(token.user_id)
         if user is None:
             raise ValidationError(INVALID_TOKEN)
         if user.is_disabled:
@@ -149,6 +151,8 @@ class PasswordResetService:
                 token.used_at = datetime.datetime.utcnow()
             raise ValidationError(DISABLED_ACCOUNT)
 
+        tenant_id_ctx.set(user.team_id)
+        await apply_tenant_context(self.db, user.team_id)
         now = datetime.datetime.utcnow()
         async with unit_of_work(self.db):
             await self.tokens.invalidate_unused(user.id, now)
@@ -183,15 +187,19 @@ class PasswordResetService:
             raise RateLimitedError()
 
     async def _issue(self, email: str, background: BackgroundTasks) -> None:
-        user = await self.users.get_by_email(email)
+        user = await self.users.for_password_reset(email)
         if user is None or user.is_disabled:
             return
+        tenant_id_ctx.set(user.team_id)
+        await apply_tenant_context(self.db, user.team_id)
         team_settings = await self.team_settings.get_or_create_for_team(user.team_id)
         config = mailbox_or_none(team_settings)
         if config is None:
             return
 
         raw = secrets.token_urlsafe(32)
+        tenant_id_ctx.set(user.team_id)
+        await apply_tenant_context(self.db, user.team_id)
         now = datetime.datetime.utcnow()
         async with unit_of_work(self.db):
             await self.tokens.invalidate_unused(user.id, now)

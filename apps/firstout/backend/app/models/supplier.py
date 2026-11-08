@@ -6,10 +6,11 @@ from sqlalchemy import Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class Supplier(UUIDPkMixin, TimestampMixin, Base):
+class Supplier(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "suppliers"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)

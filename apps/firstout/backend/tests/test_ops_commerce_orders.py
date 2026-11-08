@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from tests.conftest import independent_request_sessions
 from app.models.inventory import LocationStock
 from app.models.location_bin import BinStock
 from app.models.delivery import DeliveryStatus
@@ -962,14 +963,15 @@ async def test_machine_order_receipts_require_scoped_durable_handoff_and_order(
     unauthenticated = await owner_client.post(path, json=request)
     assert unauthenticated.status_code == 401
     async with unit_of_work(async_db):
-        other_company = Team(name="Other receipt company")
+        other_company = Team(name="Other receipt company", slug="other-receipt-company")
         async_db.add(other_company)
         await async_db.flush()
     monkeypatch.setattr(settings, "ops_commerce_company_id", str(other_company.id))
     other_headers = {**ops_headers, "X-Ops-Company-ID": str(other_company.id)}
-    other = await owner_client.post(
-        path, json={"external_order_ids": [external_id]}, headers=other_headers
-    )
+    async with independent_request_sessions(async_db):
+        other = await owner_client.post(
+            path, json={"external_order_ids": [external_id]}, headers=other_headers
+        )
     assert other.json() == {"items": [{"external_order_id": external_id, "status": "missing"}]}
     monkeypatch.setattr(settings, "ops_commerce_company_id", ops_headers["X-Ops-Company-ID"])
     async with unit_of_work(async_db):

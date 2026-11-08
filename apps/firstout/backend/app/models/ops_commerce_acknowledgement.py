@@ -7,10 +7,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class OpsCommerceAcknowledgement(UUIDPkMixin, TimestampMixin, Base):
+class OpsCommerceAcknowledgement(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """A channel line whose stock deduction was committed in the same Ops transaction.
 
     The future paid-order importer owns writes. This table has no public mutation route.

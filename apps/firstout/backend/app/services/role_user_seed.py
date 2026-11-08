@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.user import TeamCRUD, UserCRUD
 from app.models.user import User, UserRole
+from app.models.membership import Membership
 from app.services.auth import hash_password
 from app.services.user_default_location import bedfordview_default_location_id
 from f0rge_db.crud import unit_of_work
@@ -45,6 +46,17 @@ class RoleUserSeedService:
                     default_location_id=default_location_id,
                 )
                 await self.user_crud.add_and_flush(user)
+                self.db.add(
+                    Membership(
+                        user_id=user.id,
+                        team_id=team.id,
+                        role=role.value,
+                        permission_source="legacy",
+                        is_legacy_home=True,
+                        is_disabled=False,
+                        default_location_id=default_location_id,
+                    )
+                )
 
             if bedfordview_id is not None:
                 for user in await self.user_crud.list_till_with_null_default():

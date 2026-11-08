@@ -22,11 +22,12 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from app.services.settlement import SettlementStatus, bill_settlement_status
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class Bill(UUIDPkMixin, TimestampMixin, Base):
+class Bill(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "bills"
 
     bill_number: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -91,7 +92,7 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class BillLine(UUIDPkMixin, Base):
+class BillLine(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "bill_lines"
 
     bill_id: Mapped[uuid.UUID] = mapped_column(

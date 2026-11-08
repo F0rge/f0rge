@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Optional, Union
 
 from fastapi import UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,8 +34,6 @@ from app.services.stock_movements import StockMovementService
 from app.services.suspect_price import average_costs_by_sku_id, tier_price_below_cost
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
 from app.services.object_storage import (
-    is_remote_storage_ref,
-    presigned_get_url,
     read_bytes,
     save_bytes,
 )
@@ -375,11 +373,6 @@ class SkuService:
             raise NotFoundError("SKU photo not found")
 
         storage_key = sku.photo_storage_key
-        if is_remote_storage_ref(storage_key):
-            url = presigned_get_url(storage_key)
-            if url:
-                return RedirectResponse(url)
-
         try:
             data = await asyncio.to_thread(read_bytes, storage_key)
         except FileNotFoundError as exc:

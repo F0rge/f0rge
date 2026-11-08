@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -11,6 +12,7 @@ import pytest
 import sqlalchemy as sa
 from f0rge_testing import async_url
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
@@ -19,6 +21,8 @@ from app.database import get_db
 from app.main import app
 from app.services.users import BootstrapService
 from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD
+
+pytestmark = pytest.mark.no_db
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -29,7 +33,7 @@ async def test_migration_002_seed_stores_lowercase_role(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     base_url = async_url(postgres_container)
-    admin_url = f"{base_url.rsplit('/', 1)[0]}/postgres"
+    admin_url = make_url(base_url).set(database="postgres").render_as_string(hide_password=False)
     db_name = "firstout_mig002"
 
     admin_engine = create_async_engine(admin_url, echo=False, isolation_level="AUTOCOMMIT")
@@ -38,14 +42,14 @@ async def test_migration_002_seed_stores_lowercase_role(
         await conn.execute(sa.text(f'CREATE DATABASE "{db_name}"'))
     await admin_engine.dispose()
 
-    mig_url = f"{base_url.rsplit('/', 1)[0]}/{db_name}"
+    mig_url = make_url(base_url).set(database=db_name).render_as_string(hide_password=False)
     monkeypatch.setenv("DATABASE_URL", mig_url)
     monkeypatch.setattr(settings, "database_url", mig_url)
 
     subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=BACKEND_ROOT,
-        env={**os.environ, "DATABASE_URL": mig_url},
+        env={**os.environ, "DATABASE_URL": mig_url, "MIGRATION_DATABASE_URL": mig_url},
         check=True,
     )
 
