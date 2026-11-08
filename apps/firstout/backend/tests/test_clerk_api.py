@@ -102,8 +102,19 @@ async def test_import_transport_recovers_only_exact_external_uuid_not_email():
         seen.append(request)
         assert request.method == "GET"
         assert request.url.path == "/v1/users"
-        assert request.url.params["external_id[]"] == "immutable-local-uuid"
-        return httpx.Response(200, json=[existing_user])
+        assert request.url.params["external_id"] == "immutable-local-uuid"
+        assert "external_id[]" not in request.url.params
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "user_unrelated",
+                    "external_id": "other-local-uuid",
+                    "email_address": ["private@example.com"],
+                },
+                existing_user,
+            ],
+        )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         assert (
