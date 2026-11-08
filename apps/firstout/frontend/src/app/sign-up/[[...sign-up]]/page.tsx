@@ -9,7 +9,6 @@ export default function SignUpPage() {
         <p className="cds--type-body-01">Start free with up to five staff members. Verify your email, then set up your business.</p>
         <ClerkStaffSignUp />
         <Link href="/clerk-login" className="cds--link">Already have an account? Sign in</Link>
-        <Link href="/login" className="cds--link">Use existing Firstout login</Link>
       </section>
     </div>
   );

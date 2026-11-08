@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from decimal import Decimal
 
 from httpx import AsyncClient
@@ -149,30 +151,26 @@ async def test_buyer_cannot_create_warehouse_can(
     owner_client: AsyncClient,
 ) -> None:
     location_id = await _kramerville_id(owner_client)
-    buyer = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-adj@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    assert buyer.status_code == 201
-    warehouse = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "adj-warehouse@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
-    assert warehouse.status_code == 201
 
     async_client.cookies.clear()
-    login_buyer = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer-adj@example.com", "password": "buyer-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_buyer = await authenticate_as(async_client, "buyer-adj@example.com")
     assert login_buyer.status_code == 200
     forbidden = await async_client.post(
         "/api/v1/adjustments",
@@ -181,10 +179,8 @@ async def test_buyer_cannot_create_warehouse_can(
     assert forbidden.status_code == 403
 
     async_client.cookies.clear()
-    login_wh = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "adj-warehouse@example.com", "password": "warehouse-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_wh = await authenticate_as(async_client, "adj-warehouse@example.com")
     assert login_wh.status_code == 200
     allowed = await async_client.post(
         "/api/v1/adjustments",

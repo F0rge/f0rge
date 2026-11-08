@@ -5,7 +5,6 @@ import {
   DataTable,
   InlineNotification,
   Modal,
-  PasswordInput,
   Select,
   SelectItem,
   Stack,
@@ -22,23 +21,20 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   can,
-  createUser,
   isActiveLocation,
   listLocations,
   listRoles,
   listUsers,
   updateUser,
-  type CreateUserPayload,
   type Location,
   type Role,
   type User,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { clerkEnabled } from "@/components/staff-provider";
 import { userEditPayload } from "@/lib/user-edit";
 
 const TABLE_HEADERS = [
-  { key: "email", header: "Email" },
+  { key: "email", header: "Contact email" },
   { key: "display_name", header: "Display name" },
   { key: "role", header: "Role" },
   { key: "team", header: "Team" },
@@ -56,13 +52,6 @@ type UserRow = {
   actions: string;
 };
 
-const emptyCreateForm: CreateUserPayload = {
-  email: "",
-  password: "",
-  role: "buyer",
-  default_location_id: null,
-};
-
 export default function UsersPage() {
   const { user } = useAuth();
   const canManageUsers = can(user, "users.manage");
@@ -71,14 +60,10 @@ export default function UsersPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [createForm, setCreateForm] = useState<CreateUserPayload>(emptyCreateForm);
   const [editForm, setEditForm] = useState({
-    email: "",
     display_name: "",
     role: "buyer",
-    password: "",
     default_location_id: "",
   });
   const [saving, setSaving] = useState(false);
@@ -136,10 +121,8 @@ export default function UsersPage() {
   function openEdit(entry: User) {
     setEditUser(entry);
     setEditForm({
-      email: entry.email,
       display_name: entry.display_name,
       role: entry.role,
-      password: "",
       default_location_id: entry.default_location_id ?? "",
     });
   }
@@ -167,25 +150,6 @@ export default function UsersPage() {
         ))}
       </Select>
     );
-  }
-
-  async function handleCreate() {
-    setSaving(true);
-    setError(null);
-    try {
-      const payload: CreateUserPayload = {
-        ...createForm,
-        default_location_id: createForm.default_location_id || null,
-      };
-      await createUser(payload);
-      setCreateOpen(false);
-      setCreateForm(emptyCreateForm);
-      await loadUsers();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create user.");
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function handleEdit() {
@@ -223,9 +187,9 @@ export default function UsersPage() {
       <div className="firstout-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Users</h1>
-          <p className="cds--type-body-01">Manage back-office accounts{clerkEnabled ? " and invite staff from organisation settings." : "."}</p>
+          <p className="cds--type-body-01">Manage access and invite staff from organisation settings. Each person manages their sign-in details in Clerk.</p>
         </div>
-        {clerkEnabled ? <Button href="/organisation">Invite staff</Button> : <Button onClick={() => setCreateOpen(true)}>Create user</Button>}
+        <Button href="/organisation">Invite staff</Button>
       </div>
 
       {error ? (
@@ -297,60 +261,6 @@ export default function UsersPage() {
       )}
 
       <Modal
-        open={createOpen && !clerkEnabled}
-        modalHeading="Create user"
-        primaryButtonText={saving ? "Creating…" : "Create"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
-      >
-        <Stack gap={5}>
-          <TextInput
-            id="create-email"
-            labelText="Email"
-            type="email"
-            value={createForm.email}
-            onChange={(event) => setCreateForm((f) => ({ ...f, email: event.target.value }))}
-            required
-          />
-          <PasswordInput
-            id="create-password"
-            labelText="Password"
-            value={createForm.password}
-            onChange={(event) => setCreateForm((f) => ({ ...f, password: event.target.value }))}
-            required
-          />
-          <TextInput
-            id="create-display-name"
-            labelText="Display name"
-            value={createForm.display_name ?? ""}
-            onChange={(event) =>
-              setCreateForm((f) => ({ ...f, display_name: event.target.value || undefined }))
-            }
-          />
-          <Select
-            id="create-role"
-            labelText="Role"
-            value={createForm.role}
-            onChange={(event) =>
-              setCreateForm((f) => ({ ...f, role: event.target.value }))
-            }
-          >
-            {roles.map((role) => (
-              <SelectItem key={role.slug} value={role.slug} text={role.name} />
-            ))}
-          </Select>
-          {defaultLocationSelect(
-            "create-default-location",
-            "Default location",
-            createForm.default_location_id ?? "",
-            (next) => setCreateForm((f) => ({ ...f, default_location_id: next || null })),
-          )}
-        </Stack>
-      </Modal>
-
-      <Modal
         open={editUser !== null}
         className="firstout-modal--actions-end"
         modalHeading="Edit user"
@@ -361,13 +271,6 @@ export default function UsersPage() {
         onRequestSubmit={() => void handleEdit()}
       >
         <Stack gap={5}>
-          <TextInput
-            id="edit-email"
-            labelText="Email"
-            type="email"
-            value={editForm.email}
-            onChange={(event) => setEditForm((f) => ({ ...f, email: event.target.value }))}
-          />
           <TextInput
             id="edit-display-name"
             labelText="Display name"
@@ -394,13 +297,6 @@ export default function UsersPage() {
             editForm.default_location_id,
             (next) => setEditForm((f) => ({ ...f, default_location_id: next })),
           )}
-          <PasswordInput
-            id="edit-password"
-            labelText="New password"
-            helperText="Leave blank to keep current password"
-            value={editForm.password}
-            onChange={(event) => setEditForm((f) => ({ ...f, password: event.target.value }))}
-          />
         </Stack>
       </Modal>
     </Stack>

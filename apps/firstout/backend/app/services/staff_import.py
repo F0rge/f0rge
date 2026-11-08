@@ -51,7 +51,7 @@ class StaffImportService:
             )
         if unsupported:
             raise ValidationError(
-                "Unsupported staff hashes; retain legacy login and review migration"
+                "Unsupported staff hashes; stop cutover and review explicit migration"
             )
         if len(humans) > 20:
             raise ValidationError(

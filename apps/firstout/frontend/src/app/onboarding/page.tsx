@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import { Theme, Stack } from "@carbon/react";
 import { clerkEnabled } from "@/components/staff-provider";
@@ -16,7 +15,6 @@ export default function OnboardingPage() {
         <p className="cds--type-body-02">Create a free organisation or open one you already belong to.</p>
       </Stack></header>
       {clerkEnabled ? <OrganisationOnboarding /> : <p>Organisation signup is not enabled yet.</p>}
-      <Link href="/login" className="cds--link">Use existing Firstout login</Link>
     </Stack></section>
   </main></Theme>;
 }

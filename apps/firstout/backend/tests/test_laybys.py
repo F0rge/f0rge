@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from decimal import Decimal
 
 from httpx import AsyncClient
@@ -23,48 +25,36 @@ async def _create_customer(owner_client: AsyncClient) -> str:
 
 async def _create_till_user(async_client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-s6-lb@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    if create_user.status_code == 409:
-        pass
-    else:
-        assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-s6-lb@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "till-s6-lb@example.com")
     assert login_resp.status_code == 200
     return async_client
 
 
 async def _create_buyer_user(async_client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-s6-lb@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    if create_user.status_code == 409:
-        pass
-    else:
-        assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer-s6-lb@example.com", "password": "buyer-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "buyer-s6-lb@example.com")
     assert login_resp.status_code == 200
     return async_client
 

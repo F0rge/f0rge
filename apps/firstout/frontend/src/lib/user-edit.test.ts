@@ -13,10 +13,8 @@ const member: User = {
   default_location_id: "old-location",
 };
 const edit = {
-  email: member.email,
   display_name: member.display_name,
   role: "buyer",
-  password: "",
   default_location_id: "old-location",
 };
 
@@ -31,9 +29,14 @@ describe("editing a member with a shared identity", () => {
     });
   });
 
-  it("includes explicitly changed identity fields for the server to authorise", () => {
+  it("includes a changed local display preference for the server to authorise", () => {
     expect(userEditPayload(member, { ...edit, display_name: "Updated name" })).toEqual({
       role: "buyer", display_name: "Updated name",
     });
+  });
+
+  it("never forwards stale local login credentials with a membership edit", () => {
+    const staleForm = { ...edit, email: "changed@example.com", password: "unused-local-password" };
+    expect(userEditPayload(member, staleForm)).toEqual({ role: "buyer" });
   });
 });

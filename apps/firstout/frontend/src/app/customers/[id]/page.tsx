@@ -1,9 +1,10 @@
 "use client";
 
-import { Button, InlineNotification, PasswordInput, Stack, TextInput, Tile } from "@carbon/react";
+import { Button, InlineNotification, Stack, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { CustomerPortalAccessPanel } from "@/components/customer-portal-access";
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
 import { SalesHistoryTable } from "@/components/records/history-tables";
 import { PartyRecords } from "@/components/records/party-records";
@@ -17,7 +18,6 @@ import {
 import {
   canManageCustomerCredit,
   canMutateCustomers,
-  createPortalUser,
   formatZarAmount,
   getCustomer,
   listPriceLists,
@@ -63,9 +63,6 @@ export default function CustomerDetailPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [portalEmail, setPortalEmail] = useState("");
-  const [portalPassword, setPortalPassword] = useState("");
-  const [portalSaving, setPortalSaving] = useState(false);
   const [repriceOpen, setRepriceOpen] = useState(false);
   const [repriceBusy, setRepriceBusy] = useState(false);
 
@@ -77,7 +74,6 @@ export default function CustomerDetailPage() {
       setCustomer(data);
       setPriceLists(lists);
       setForm(formFromCustomer(data));
-      setPortalEmail(data.email ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load customer.");
     } finally {
@@ -137,31 +133,6 @@ export default function CustomerDetailPage() {
       setError(err instanceof Error ? err.message : "Could not reprice drafts.");
     } finally {
       setRepriceBusy(false);
-    }
-  }
-
-  async function handleCreatePortalUser() {
-    if (!customer || !canMutate) {
-      return;
-    }
-    if (!portalEmail.trim() || portalPassword.length < 8) {
-      setError("Portal email and a password of at least 8 characters are required.");
-      return;
-    }
-    setPortalSaving(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const created = await createPortalUser(customer.id, {
-        email: portalEmail.trim(),
-        password: portalPassword,
-      });
-      setPortalPassword("");
-      setSuccess(`Trade portal login created for ${created.email}.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create portal login.");
-    } finally {
-      setPortalSaving(false);
     }
   }
 
@@ -260,33 +231,7 @@ export default function CustomerDetailPage() {
           </Tile>
 
           {canMutate && customer.customer_type === "trade" ? (
-            <Tile>
-              <Stack gap={5}>
-                <h2 className="cds--type-productive-heading-03">Trade portal</h2>
-                <p className="cds--type-body-01">
-                  Creates a login for /trade. Staff still confirm draft orders before stock is held.
-                </p>
-                <TextInput
-                  id="portal-email"
-                  labelText="Portal email"
-                  value={portalEmail}
-                  onChange={(event) => setPortalEmail(event.target.value)}
-                />
-                <PasswordInput
-                  id="portal-password"
-                  labelText="Temporary password"
-                  value={portalPassword}
-                  onChange={(event) => setPortalPassword(event.target.value)}
-                />
-                <Button
-                  kind="secondary"
-                  disabled={portalSaving || !portalEmail.trim() || portalPassword.length < 8}
-                  onClick={() => void handleCreatePortalUser()}
-                >
-                  {portalSaving ? "Creating…" : "Create portal login"}
-                </Button>
-              </Stack>
-            </Tile>
+            <CustomerPortalAccessPanel key={customer.id} customerId={customer.id} defaultEmail={customer.email ?? ""} />
           ) : null}
 
           {canMutate ? (

@@ -19,8 +19,8 @@ export async function staffFetch(
   options: RequestInit = {},
 ): Promise<Response> {
   const headers = new Headers(options.headers);
-  // Customer authentication is deliberately separate from staff Organisations.
-  if (!path.startsWith("/api/v1/portal") && getStaffToken) {
+  // Every interactive API path uses the current Clerk session, including customers.
+  if (getStaffToken) {
     const token = await getStaffToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }

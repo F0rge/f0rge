@@ -14,6 +14,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -94,6 +95,7 @@ class Customer(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("team_id", "id", name="uq_customers_team_id_id"),
         CheckConstraint(
             "price_classification IN ('Stockist', 'Wholesale', 'Decorator', 'Retail')",
             name="ck_customers_price_classification",

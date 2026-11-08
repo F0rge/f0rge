@@ -30,7 +30,7 @@ async def get_signup_identity(
     scheme, _separator, token = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not token or any(char.isspace() for char in token):
         raise UnauthorizedError("A Clerk sign-in is required")
-    return await verify_clerk_session(token)
+    return await verify_clerk_session(token, require_active=True)
 
 
 def get_tenant_signup_service(

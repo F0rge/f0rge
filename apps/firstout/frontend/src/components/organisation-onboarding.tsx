@@ -8,7 +8,7 @@ import { OrganisationForm } from "./organisation-form";
 import { createOrganisation, getSignupIdentity, getSignupStatus, organisationDestination, tenantSubdomainsEnabled, type CreateOrganisation, type Organisation, type SignupIdentity, type SignupStatus } from "@/lib/organisations";
 
 export function OrganisationOnboarding() {
-  const { isLoaded, isSignedIn } = useClerkAuth({ treatPendingAsSignedOut: false });
+  const { isLoaded, isSignedIn } = useClerkAuth();
   const clerk = useClerk();
   const [identity, setIdentity] = useState<SignupIdentity | null>(null);
   const [status, setStatus] = useState<SignupStatus | null>(null);
@@ -58,9 +58,9 @@ export function OrganisationOnboarding() {
 
   if (!isLoaded) return <Loading withOverlay={false} description="Loading sign-in…" />;
   if (!isSignedIn) return <Stack gap={5}>
-    <p>Verify your email to create a business or accept an invitation.</p>
-    <Link className="cds--btn cds--btn--primary" href="/sign-up">Create your account</Link>
-    <Link className="cds--link" href="/clerk-login">Already registered? Sign in</Link>
+    <p>Sign in and finish any required verification before opening or creating a business.</p>
+    <Link className="cds--btn cds--btn--primary" href="/clerk-login">Continue sign-in</Link>
+    <Link className="cds--link" href="/sign-up">New here? Create your account</Link>
   </Stack>;
   if (loading) return <Loading withOverlay={false} description="Loading your organisations…" />;
 

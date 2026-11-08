@@ -12,7 +12,7 @@ function forward(request: NextRequest) {
   if (!headers) return new NextResponse("Unknown host", { status: 404 });
   return NextResponse.next({ request: { headers } });
 }
-// No protect(): legacy staff and trade cookies remain valid during dual-auth.
+// The API enforces staff membership and explicit customer access separately.
 const withClerk = clerkMiddleware((_auth, request) => forward(request));
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   // Railway probes use healthcheck.railway.app, outside the tenant host allowlist.
@@ -30,9 +30,7 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
     return new NextResponse("Unknown host", { status: 404 });
   }
   if (
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-    !request.nextUrl.pathname.startsWith("/trade") &&
-    !request.nextUrl.pathname.startsWith("/api/v1/portal")
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   ) {
     return withClerk(request, event);
   }

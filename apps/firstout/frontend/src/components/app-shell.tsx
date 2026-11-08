@@ -273,7 +273,7 @@ export function AppShell({ children }: AppShellProps) {
 
   async function handleLogout() {
     await logout();
-    router.push("/login");
+    router.push("/clerk-login");
   }
 
   return (

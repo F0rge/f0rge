@@ -34,7 +34,9 @@ def jwks_client(issuer: str) -> jwt.PyJWKClient:
     )
 
 
-async def verify_clerk_session(token: str, *, require_org: bool = False) -> ClerkSession:
+async def verify_clerk_session(
+    token: str, *, require_org: bool = False, require_active: bool = True
+) -> ClerkSession:
     if (
         settings.tenant_isolation_mode != "enforced"
         or not settings.clerk_enabled
@@ -53,7 +55,7 @@ async def verify_clerk_session(token: str, *, require_org: bool = False) -> Cler
             options={"require": ["exp", "iat", "nbf", "iss", "sub"], "verify_aud": False},
             leeway=5,
         )
-        if require_org and claims.get("sts") == "pending":
+        if (require_org or require_active) and claims.get("sts") == "pending":
             raise ValueError("Active Clerk session required")
         org = claims.get("o") or {}
         if not isinstance(org, dict):

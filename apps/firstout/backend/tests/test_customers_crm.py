@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -24,18 +26,11 @@ async def _create_role_client(
     role: str,
 ) -> AsyncClient:
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={"email": email, "password": password, "role": role},
-    )
-    if create_user.status_code != 409:
-        assert create_user.status_code == 201
+    await create_test_staff(owner_client, **{"email": email, "password": password, "role": role})
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, email)
     assert login_resp.status_code == 200
     return async_client
 

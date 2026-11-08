@@ -42,7 +42,7 @@ async def import_staff_user(
     if user.role == "system" or user.email == "storefront-integration@system.example.com":
         raise ValueError("The storefront actor cannot become a Clerk staff user")
     if not user.password_hash.startswith(("$2a$", "$2b$")):
-        raise ValueError("Unsupported password digest; retain legacy login")
+        raise ValueError("Unsupported password digest; stop cutover and review migration")
     payload = staff_import_payload(user)
     clerk_id = user.clerk_user_id
     if not clerk_id:

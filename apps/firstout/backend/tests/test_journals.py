@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from httpx import AsyncClient
 
 
@@ -64,21 +66,18 @@ async def test_till_cannot_create_journal(
     owner_client: AsyncClient,
 ) -> None:
     accounts = await _account_ids(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-journals@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-journals@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "till-journals@example.com")
     assert login_resp.status_code == 200
 
     resp = await async_client.post("/api/v1/journals", json=_manual_body(accounts))

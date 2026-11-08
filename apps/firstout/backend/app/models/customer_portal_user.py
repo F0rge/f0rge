@@ -26,7 +26,10 @@ class CustomerPortalUser(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
 
     customer: Mapped["Customer"] = relationship()
 
-    __table_args__ = (UniqueConstraint("email", name="uq_customer_portal_users_email"),)
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_customer_portal_users_email"),
+        UniqueConstraint("team_id", "id", name="uq_customer_portal_users_team_id_id"),
+    )
 
 
 from app.models.customer import Customer  # noqa: E402

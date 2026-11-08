@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from httpx import AsyncClient
 
 
@@ -51,21 +53,18 @@ async def test_buyer_can_mutate_suppliers(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-suppliers@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer-suppliers@example.com", "password": "buyer-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "buyer-suppliers@example.com")
     assert login_resp.status_code == 200
 
     create_resp = await async_client.post(
@@ -79,24 +78,18 @@ async def test_warehouse_can_list_but_not_create_suppliers(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "warehouse-suppliers@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": "warehouse-suppliers@example.com",
-            "password": "warehouse-password",
-        },
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "warehouse-suppliers@example.com")
     assert login_resp.status_code == 200
 
     list_resp = await async_client.get("/api/v1/suppliers")

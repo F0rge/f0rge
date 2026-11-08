@@ -1,71 +1,64 @@
-"""Team-configurable session TTL (#679)."""
+"""Historical session settings never issue or extend a local login session."""
 
 from __future__ import annotations
 
-import re
+import time
 
+import jwt
 from httpx import AsyncClient
 
-from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD
+from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD, signed_clerk_token
 
 
-def _parse_cookie_max_age(set_cookie: str) -> int:
-    match = re.search(r"Max-Age=(\d+)", set_cookie, flags=re.IGNORECASE)
-    assert match is not None, set_cookie
-    return int(match.group(1))
+async def test_historical_session_ttl_setting_remains_readable(owner_client: AsyncClient) -> None:
+    response = await owner_client.get("/api/v1/settings")
+    assert response.status_code == 200
+    assert response.json()["session_ttl_hours"] == 12
 
 
-async def test_get_settings_default_session_ttl_hours(owner_client: AsyncClient) -> None:
-    resp = await owner_client.get("/api/v1/settings")
-    assert resp.status_code == 200
-    assert resp.json()["session_ttl_hours"] == 12
-
-
-async def test_patch_session_ttl_hours_valid(owner_client: AsyncClient) -> None:
+async def test_historical_session_ttl_values_remain_validated(owner_client: AsyncClient) -> None:
     for hours in (1, 720):
-        resp = await owner_client.patch(
-            "/api/v1/settings",
-            json={"session_ttl_hours": hours},
-        )
-        assert resp.status_code == 200
-        assert resp.json()["session_ttl_hours"] == hours
-
-
-async def test_patch_session_ttl_hours_invalid(owner_client: AsyncClient) -> None:
+        response = await owner_client.patch("/api/v1/settings", json={"session_ttl_hours": hours})
+        assert response.status_code == 400 and "Clerk" in response.json()["detail"]
+        assert (await owner_client.get("/api/v1/settings")).json()["session_ttl_hours"] == 12
     for hours in (0, 721):
-        resp = await owner_client.patch(
-            "/api/v1/settings",
-            json={"session_ttl_hours": hours},
-        )
-        assert resp.status_code == 422
+        assert (
+            await owner_client.patch("/api/v1/settings", json={"session_ttl_hours": hours})
+        ).status_code == 422
 
 
-async def test_login_cookie_max_age_matches_default_ttl(async_client: AsyncClient) -> None:
-    async_client.cookies.clear()
-    resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
-    )
-    assert resp.status_code == 200
-    max_age = _parse_cookie_max_age(resp.headers.get("set-cookie", ""))
-    assert max_age == 12 * 3600
-
-
-async def test_login_uses_updated_session_ttl(
+async def test_local_ttl_does_not_restore_password_login_or_issue_cookie(
     owner_client: AsyncClient,
-    async_client: AsyncClient,
 ) -> None:
-    patch_resp = await owner_client.patch(
-        "/api/v1/settings",
-        json={"session_ttl_hours": 2},
+    assert (
+        await owner_client.patch("/api/v1/settings", json={"session_ttl_hours": 720})
+    ).status_code == 400
+    response = await owner_client.post(
+        "/api/v1/auth/login", json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD}
     )
-    assert patch_resp.status_code == 200
+    assert response.status_code == 400
+    assert "set-cookie" not in response.headers
 
-    async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
+
+async def test_local_ttl_cannot_extend_an_expired_signed_clerk_token(
+    owner_client: AsyncClient,
+) -> None:
+    assert (
+        await owner_client.patch("/api/v1/settings", json={"session_ttl_hours": 720})
+    ).status_code == 400
+    original = owner_client.headers["Authorization"].removeprefix("Bearer ")
+    claims = jwt.decode(original, options={"verify_signature": False})
+    now = int(time.time())
+    expired = signed_clerk_token(
+        claims["sub"],
+        org_id=claims["o"]["id"],
+        org_slug=claims["o"]["slg"],
+        iat=now - 120,
+        nbf=now - 120,
+        exp=now - 60,
     )
-    assert login_resp.status_code == 200
-    max_age = _parse_cookie_max_age(login_resp.headers.get("set-cookie", ""))
-    assert max_age == 2 * 3600
+    response = await owner_client.get(
+        "/api/v1/auth/me", headers={"Authorization": "Bearer " + expired}
+    )
+    assert response.status_code == 401
+    assert (await owner_client.get("/api/v1/auth/me")).status_code == 200
