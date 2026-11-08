@@ -41,6 +41,13 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  displayFabric,
+  changeSupplierCodeSku,
+  editSupplierCode,
+  prefillSupplierCode,
+  type SupplierCodeLine,
+} from "@/lib/po-supplier-code";
 
 const TABLE_HEADERS = [
   { key: "po_number", header: "PO number" },
@@ -63,15 +70,17 @@ type PoRow = {
   actions: string;
 };
 
-type PoLineForm = {
-  sku_id: string;
+type PoLineForm = SupplierCodeLine & {
   description: string;
   qty: number | "";
   factory_unit_amount: string;
 };
 
 const emptyLine = (): PoLineForm => ({
+  key: crypto.randomUUID(),
   sku_id: "",
+  supplier_code: "",
+  supplierCodeTouched: false,
   description: "",
   qty: "",
   factory_unit_amount: "",
@@ -115,7 +124,7 @@ export default function PurchaseOrdersPage() {
   const [supplierRef, setSupplierRef] = useState("");
   const [notes, setNotes] = useState("");
   const [submitForApproval, setSubmitForApproval] = useState(false);
-  const [lines, setLines] = useState<PoLineForm[]>([emptyLine(), emptyLine()]);
+  const [lines, setLines] = useState<PoLineForm[]>(() => [emptyLine(), emptyLine()]);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -184,18 +193,34 @@ export default function PurchaseOrdersPage() {
     setCreateOpen(true);
   }
 
-  function updateLine(index: number, patch: Partial<PoLineForm>) {
-    setLines((current) =>
-      current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)),
-    );
+  function updateLine(key: string, patch: Partial<PoLineForm>) {
+    setLines((current) => current.map((line) => line.key === key ? { ...line, ...patch } : line));
+  }
+
+  function onSkuPicked(key: string, skuId: string) {
+    setLines((current) => current.map((line) => line.key === key ? changeSupplierCodeSku(line, skuId) : line));
+    const sku = skus.find((item) => item.id === skuId);
+    if (sku) void prefillSupplierCode(setLines, key, supplierId, sku);
+  }
+
+  function refreshSupplierCodes(nextSupplier: string) {
+    for (const line of lines) {
+      const sku = skus.find((item) => item.id === line.sku_id);
+      if (sku && !line.supplierCodeTouched) void prefillSupplierCode(setLines, line.key, nextSupplier, sku);
+    }
+  }
+
+  function retrySupplierCode(line: PoLineForm) {
+    const sku = skus.find((item) => item.id === line.sku_id);
+    if (sku) void prefillSupplierCode(setLines, line.key, supplierId, sku);
   }
 
   function addLine() {
     setLines((current) => [...current, emptyLine()]);
   }
 
-  function removeLine(index: number) {
-    setLines((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : current));
+  function removeLine(key: string) {
+    setLines((current) => (current.length > 1 ? current.filter((line) => line.key !== key) : current));
   }
 
   const linesValid = lines.every(
@@ -203,7 +228,8 @@ export default function PurchaseOrdersPage() {
       (line.sku_id || line.description.trim()) &&
       typeof line.qty === "number" &&
       line.qty > 0 &&
-      line.factory_unit_amount.trim() !== "",
+      line.factory_unit_amount.trim() !== "" &&
+      !line.supplierCodeLookup,
   );
   const formValid = supplierId && lines.length >= 1 && linesValid;
 
@@ -223,6 +249,7 @@ export default function PurchaseOrdersPage() {
         lines: lines.map(
           (line): CreatePoLinePayload => ({
             sku_id: line.sku_id || null,
+            supplier_code: line.supplier_code.trim() || null,
             description: line.description.trim() || null,
             qty: line.qty as number,
             factory_unit_amount: line.factory_unit_amount.trim(),
@@ -411,8 +438,10 @@ export default function PurchaseOrdersPage() {
             labelText="Supplier"
             value={supplierId}
             onChange={(event) => {
-              setSupplierId(event.target.value);
+              const nextSupplier = event.target.value;
+              setSupplierId(nextSupplier);
               setProformaId("");
+              void refreshSupplierCodes(nextSupplier);
             }}
           >
             <SelectItem value="" text="Select a supplier" />
@@ -462,12 +491,14 @@ export default function PurchaseOrdersPage() {
               A line can wait without a SKU when it has a description. That order stays pending until the SKU is filled in and the order is approved.
             </p>
             <Stack gap={4}>
-              {lines.map((line, index) => (
+              {lines.map((line, index) => {
+                const fabric = displayFabric(skus.find((sku) => sku.id === line.sku_id)?.fabric);
+                return (
+                <div key={line.key}>
                 <div
-                  key={`line-${index}`}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1.3fr 1.3fr 0.6fr 0.8fr auto",
+                    gridTemplateColumns: "1.1fr 1fr 1.1fr 0.5fr 0.7fr auto",
                     gap: "0.5rem",
                     alignItems: "end",
                   }}
@@ -477,7 +508,7 @@ export default function PurchaseOrdersPage() {
                     labelText={index === 0 ? "SKU" : ""}
                     hideLabel={index > 0}
                     value={line.sku_id}
-                    onChange={(event) => updateLine(index, { sku_id: event.target.value })}
+                    onChange={(event) => onSkuPicked(line.key, event.target.value)}
                   >
                     <SelectItem value="" text="No SKU yet" />
                     {skus.map((sku) => (
@@ -489,11 +520,22 @@ export default function PurchaseOrdersPage() {
                     ))}
                   </Select>
                   <TextInput
+                    id={`po-line-supplier-code-${index}`}
+                    labelText={index === 0 ? "Supplier code" : ""}
+                    hideLabel={index > 0}
+                    value={line.supplier_code}
+                    helperText={line.supplierCodeLookup?.status === "loading" ? "Checking supplier code…" : undefined}
+                    invalid={line.supplierCodeLookup?.status === "error"}
+                    invalidText={line.supplierCodeLookup?.error}
+                    onChange={(event) => setLines((current) => current.map((row) =>
+                      row.key === line.key ? editSupplierCode(row, event.target.value) : row))}
+                  />
+                  <TextInput
                     id={`po-line-description-${index}`}
                     labelText={index === 0 ? "Description" : ""}
                     hideLabel={index > 0}
                     value={line.description}
-                    onChange={(event) => updateLine(index, { description: event.target.value })}
+                    onChange={(event) => updateLine(line.key, { description: event.target.value })}
                   />
                   <NumberInput
                     id={`po-line-qty-${index}`}
@@ -502,7 +544,7 @@ export default function PurchaseOrdersPage() {
                     min={1}
                     value={line.qty}
                     onChange={(_, { value }) =>
-                      updateLine(index, { qty: value === "" ? "" : Number(value) })
+                      updateLine(line.key, { qty: value === "" ? "" : Number(value) })
                     }
                   />
                   <TextInput
@@ -511,14 +553,14 @@ export default function PurchaseOrdersPage() {
                     hideLabel={index > 0}
                     value={line.factory_unit_amount}
                     onChange={(event) =>
-                      updateLine(index, { factory_unit_amount: event.target.value })
+                      updateLine(line.key, { factory_unit_amount: event.target.value })
                     }
                   />
                   {lines.length > 1 ? (
                     <Button
                       kind="ghost"
                       size="sm"
-                      onClick={() => removeLine(index)}
+                      onClick={() => removeLine(line.key)}
                       style={{ marginBottom: "0.25rem" }}
                     >
                       Remove
@@ -527,7 +569,17 @@ export default function PurchaseOrdersPage() {
                     <span />
                   )}
                 </div>
-              ))}
+                {line.supplierCodeLookup?.status === "error" ? (
+                  <Button kind="ghost" size="sm" onClick={() => retrySupplierCode(line)}>Retry supplier code</Button>
+                ) : null}
+                {fabric ? (
+                  <p id={`po-line-fabric-${index}`} className="cds--helper-text">
+                    Fabric / finish: {fabric}
+                  </p>
+                ) : null}
+                </div>
+                );
+              })}
             </Stack>
             <Button kind="ghost" size="sm" onClick={addLine} style={{ marginTop: "0.5rem" }}>
               Add line

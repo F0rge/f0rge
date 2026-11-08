@@ -7,6 +7,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.supplier import Supplier
+from app.models.sku_supplier_price import SkuSupplierPrice
+from f0rge_db.organisation import tenant_id_ctx
 from f0rge_db.crud import BaseCRUD
 
 
@@ -35,3 +37,14 @@ class SupplierCRUD(BaseCRUD):
             select(Supplier.id, Supplier.name).where(Supplier.id.in_(supplier_ids))
         )
         return {row[0]: row[1] for row in result.all()}
+
+    async def supplier_code_for_sku(
+        self, supplier_id: uuid.UUID, sku_id: uuid.UUID
+    ) -> Optional[str]:
+        return await self.db.scalar(
+            select(SkuSupplierPrice.supplier_sku).where(
+                SkuSupplierPrice.team_id == tenant_id_ctx.get(),
+                SkuSupplierPrice.supplier_id == supplier_id,
+                SkuSupplierPrice.sku_id == sku_id,
+            )
+        )
