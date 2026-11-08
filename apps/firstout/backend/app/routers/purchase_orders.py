@@ -88,6 +88,15 @@ async def get_purchase_order(
     return await service.get(po_id)
 
 
+@purchase_orders_router.get("/{po_id}/pdf", response_model=None)
+async def get_purchase_order_pdf(
+    po_id: uuid.UUID,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: PurchaseOrderService = Depends(get_purchase_order_service),
+) -> Response:
+    return await service.purchase_order_pdf(po_id)
+
+
 @purchase_orders_router.get("/{po_id}/packing-sheet", response_model=None)
 async def get_packing_sheet(
     po_id: uuid.UUID,
