@@ -48,8 +48,10 @@ import {
 import { useAuth } from "@/lib/auth";
 import {
   displayFabric,
-  lookupManufacturerCode,
-  supplierCodeWhenBlank,
+  changeSupplierCodeSku,
+  editSupplierCode,
+  prefillSupplierCode,
+  type SupplierCodeLine,
 } from "@/lib/po-supplier-code";
 
 type BillForm = {
@@ -66,11 +68,8 @@ const emptyBill = (currency = "USD"): BillForm => ({
   file: null,
 });
 
-type DraftLine = {
-  key: string;
+type DraftLine = SupplierCodeLine & {
   id?: string;
-  sku_id: string;
-  supplier_code: string;
   description: string;
   notes: string;
   qty: number | "";
@@ -91,6 +90,7 @@ function draftsFromOrder(order: PurchaseOrder): DraftLine[] {
     id: line.id,
     sku_id: line.sku_id ?? "",
     supplier_code: line.supplier_code ?? "",
+    supplierCodeTouched: Boolean(line.supplier_code?.trim()),
     description: line.description ?? "",
     notes: line.notes ?? "",
     qty: line.qty,
@@ -186,58 +186,25 @@ export default function PurchaseOrderDetailPage() {
     }
   }, [user, params.id, loadOrder]);
 
-  useEffect(() => {
-    if (!canEditLines || order?.status !== "pending_approval") {
-      return;
-    }
-    void listSkus()
-      .then(setSkus)
-      .catch(() => setSkus([]));
-  }, [canEditLines, order?.status, order?.id]);
-
-  const editingPending = Boolean(
-    order && order.status === "pending_approval" && canEditLines,
-  );
+  const editingPending = Boolean(order && order.status === "pending_approval" && canEditLines);
 
   useEffect(() => {
-    if (!editingPending || !order || skus.length === 0) {
-      return;
-    }
+    if (!editingPending || !order) return;
     let cancelled = false;
-    const supplierId = order.supplier_id;
-    void (async () => {
-      const filled = await Promise.all(
-        order.lines.map(async (line) => {
-          if ((line.supplier_code ?? "").trim() || !line.sku_id) {
-            return line.supplier_code ?? "";
-          }
-          const sku = skus.find((item) => item.id === line.sku_id);
-          if (!sku) {
-            return "";
-          }
-          return lookupManufacturerCode(supplierId, sku);
-        }),
-      );
-      if (cancelled) {
-        return;
+    void listSkus().then((data) => {
+      if (cancelled) return;
+      setSkus(data);
+      for (const line of order.lines) {
+        const sku = data.find((item) => item.id === line.sku_id);
+        if (sku && !line.supplier_code?.trim()) {
+          void prefillSupplierCode(setDraftLines, line.id, order.supplier_id, sku);
+        }
       }
-      setDraftLines((current) =>
-        current.map((line) => {
-          const index = order.lines.findIndex((row) => row.id === line.id);
-          if (index < 0 || line.supplier_code.trim()) {
-            return line;
-          }
-          return {
-            ...line,
-            supplier_code: supplierCodeWhenBlank(line.supplier_code, filled[index] ?? ""),
-          };
-        }),
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [editingPending, order, skus]);
+    }).catch((reason: unknown) => {
+      if (!cancelled) setError(reason instanceof Error ? reason.message : "Couldn't load SKU choices. Reload this page to try again.");
+    });
+    return () => { cancelled = true; };
+  }, [editingPending, order]);
 
   async function handleDownload() {
     if (!order) {
@@ -270,22 +237,14 @@ export default function PurchaseOrderDetailPage() {
   }
 
   function onDraftSkuPicked(key: string, skuId: string) {
-    updateDraft(key, { sku_id: skuId });
+    setDraftLines((current) => current.map((line) => line.key === key ? changeSupplierCodeSku(line, skuId) : line));
     const sku = skus.find((item) => item.id === skuId);
-    if (!sku || !order) {
-      return;
-    }
-    const supplierId = order.supplier_id;
-    void lookupManufacturerCode(supplierId, sku).then((code) => {
-      setDraftLines((current) =>
-        current.map((line) => {
-          if (line.key !== key || line.sku_id !== skuId) {
-            return line;
-          }
-          return { ...line, supplier_code: supplierCodeWhenBlank(line.supplier_code, code) };
-        }),
-      );
-    });
+    if (sku && order) void prefillSupplierCode(setDraftLines, key, order.supplier_id, sku);
+  }
+
+  function retrySupplierCode(line: DraftLine) {
+    const sku = skus.find((item) => item.id === line.sku_id);
+    if (sku && order) void prefillSupplierCode(setDraftLines, line.key, order.supplier_id, sku);
   }
 
   async function handleApprove() {
@@ -398,9 +357,10 @@ export default function PurchaseOrderDetailPage() {
     setDraftLines((current) => [
       ...current,
       {
-        key: `new-${current.length}-${Date.now()}`,
+        key: crypto.randomUUID(),
         sku_id: "",
         supplier_code: "",
+        supplierCodeTouched: false,
         description: "",
         notes: "",
         qty: "",
@@ -418,7 +378,8 @@ export default function PurchaseOrderDetailPage() {
       (line.sku_id || line.description.trim()) &&
       typeof line.qty === "number" &&
       line.qty > 0 &&
-      line.factory_unit_amount.trim() !== "",
+      line.factory_unit_amount.trim() !== "" &&
+      !line.supplierCodeLookup,
   );
 
   async function handleSaveLines() {
@@ -735,10 +696,15 @@ export default function PurchaseOrderDetailPage() {
                         labelText="Supplier code"
                         hideLabel
                         value={line.supplier_code}
-                        onChange={(event) =>
-                          updateDraft(line.key, { supplier_code: event.target.value })
-                        }
+                        helperText={line.supplierCodeLookup?.status === "loading" ? "Checking supplier code…" : undefined}
+                        invalid={line.supplierCodeLookup?.status === "error"}
+                        invalidText={line.supplierCodeLookup?.error}
+                        onChange={(event) => setDraftLines((current) => current.map((row) =>
+                          row.key === line.key ? editSupplierCode(row, event.target.value) : row))}
                       />
+                      {line.supplierCodeLookup?.status === "error" ? (
+                        <Button kind="ghost" size="sm" onClick={() => retrySupplierCode(line)}>Retry supplier code</Button>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <TextInput

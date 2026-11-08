@@ -43,8 +43,10 @@ import {
 import { useAuth } from "@/lib/auth";
 import {
   displayFabric,
-  lookupManufacturerCode,
-  supplierCodeAfterSkuPick,
+  changeSupplierCodeSku,
+  editSupplierCode,
+  prefillSupplierCode,
+  type SupplierCodeLine,
 } from "@/lib/po-supplier-code";
 
 const TABLE_HEADERS = [
@@ -68,16 +70,14 @@ type PoRow = {
   actions: string;
 };
 
-type PoLineForm = {
-  sku_id: string;
-  supplier_code: string;
-  supplierCodeTouched: boolean;
+type PoLineForm = SupplierCodeLine & {
   description: string;
   qty: number | "";
   factory_unit_amount: string;
 };
 
 const emptyLine = (): PoLineForm => ({
+  key: crypto.randomUUID(),
   sku_id: "",
   supplier_code: "",
   supplierCodeTouched: false,
@@ -124,7 +124,7 @@ export default function PurchaseOrdersPage() {
   const [supplierRef, setSupplierRef] = useState("");
   const [notes, setNotes] = useState("");
   const [submitForApproval, setSubmitForApproval] = useState(false);
-  const [lines, setLines] = useState<PoLineForm[]>([emptyLine(), emptyLine()]);
+  const [lines, setLines] = useState<PoLineForm[]>(() => [emptyLine(), emptyLine()]);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -193,77 +193,34 @@ export default function PurchaseOrdersPage() {
     setCreateOpen(true);
   }
 
-  function updateLine(index: number, patch: Partial<PoLineForm>) {
-    setLines((current) =>
-      current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)),
-    );
+  function updateLine(key: string, patch: Partial<PoLineForm>) {
+    setLines((current) => current.map((line) => line.key === key ? { ...line, ...patch } : line));
   }
 
-  function applyManufacturerCode(index: number, skuId: string, code: string) {
-    setLines((current) =>
-      current.map((line, lineIndex) => {
-        if (lineIndex !== index || line.sku_id !== skuId || line.supplierCodeTouched) {
-          return line;
-        }
-        return {
-          ...line,
-          supplier_code: supplierCodeAfterSkuPick({
-            current: line.supplier_code,
-            touched: false,
-            manufacturerCode: code,
-          }),
-        };
-      }),
-    );
-  }
-
-  function onSkuPicked(index: number, skuId: string) {
-    updateLine(index, { sku_id: skuId });
+  function onSkuPicked(key: string, skuId: string) {
+    setLines((current) => current.map((line) => line.key === key ? changeSupplierCodeSku(line, skuId) : line));
     const sku = skus.find((item) => item.id === skuId);
-    if (!sku) {
-      return;
-    }
-    void lookupManufacturerCode(supplierId, sku).then((code) => {
-      applyManufacturerCode(index, skuId, code);
-    });
+    if (sku) void prefillSupplierCode(setLines, key, supplierId, sku);
   }
 
-  async function refreshSupplierCodes(nextSupplier: string) {
-    const snapshot = lines;
-    const codes = await Promise.all(
-      snapshot.map(async (line) => {
-        if (line.supplierCodeTouched || !line.sku_id) {
-          return line.supplier_code;
-        }
-        const sku = skus.find((item) => item.id === line.sku_id);
-        if (!sku) {
-          return line.supplier_code;
-        }
-        const code = await lookupManufacturerCode(nextSupplier, sku);
-        return supplierCodeAfterSkuPick({
-          current: line.supplier_code,
-          touched: false,
-          manufacturerCode: code,
-        });
-      }),
-    );
-    setLines((current) =>
-      current.map((line, index) => {
-        const source = snapshot[index];
-        if (!source || line.supplierCodeTouched || line.sku_id !== source.sku_id) {
-          return line;
-        }
-        return { ...line, supplier_code: codes[index] ?? line.supplier_code };
-      }),
-    );
+  function refreshSupplierCodes(nextSupplier: string) {
+    for (const line of lines) {
+      const sku = skus.find((item) => item.id === line.sku_id);
+      if (sku && !line.supplierCodeTouched) void prefillSupplierCode(setLines, line.key, nextSupplier, sku);
+    }
+  }
+
+  function retrySupplierCode(line: PoLineForm) {
+    const sku = skus.find((item) => item.id === line.sku_id);
+    if (sku) void prefillSupplierCode(setLines, line.key, supplierId, sku);
   }
 
   function addLine() {
     setLines((current) => [...current, emptyLine()]);
   }
 
-  function removeLine(index: number) {
-    setLines((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : current));
+  function removeLine(key: string) {
+    setLines((current) => (current.length > 1 ? current.filter((line) => line.key !== key) : current));
   }
 
   const linesValid = lines.every(
@@ -271,7 +228,8 @@ export default function PurchaseOrdersPage() {
       (line.sku_id || line.description.trim()) &&
       typeof line.qty === "number" &&
       line.qty > 0 &&
-      line.factory_unit_amount.trim() !== "",
+      line.factory_unit_amount.trim() !== "" &&
+      !line.supplierCodeLookup,
   );
   const formValid = supplierId && lines.length >= 1 && linesValid;
 
@@ -536,7 +494,7 @@ export default function PurchaseOrdersPage() {
               {lines.map((line, index) => {
                 const fabric = displayFabric(skus.find((sku) => sku.id === line.sku_id)?.fabric);
                 return (
-                <div key={`line-${index}`}>
+                <div key={line.key}>
                 <div
                   style={{
                     display: "grid",
@@ -550,7 +508,7 @@ export default function PurchaseOrdersPage() {
                     labelText={index === 0 ? "SKU" : ""}
                     hideLabel={index > 0}
                     value={line.sku_id}
-                    onChange={(event) => onSkuPicked(index, event.target.value)}
+                    onChange={(event) => onSkuPicked(line.key, event.target.value)}
                   >
                     <SelectItem value="" text="No SKU yet" />
                     {skus.map((sku) => (
@@ -566,19 +524,18 @@ export default function PurchaseOrdersPage() {
                     labelText={index === 0 ? "Supplier code" : ""}
                     hideLabel={index > 0}
                     value={line.supplier_code}
-                    onChange={(event) =>
-                      updateLine(index, {
-                        supplier_code: event.target.value,
-                        supplierCodeTouched: true,
-                      })
-                    }
+                    helperText={line.supplierCodeLookup?.status === "loading" ? "Checking supplier code…" : undefined}
+                    invalid={line.supplierCodeLookup?.status === "error"}
+                    invalidText={line.supplierCodeLookup?.error}
+                    onChange={(event) => setLines((current) => current.map((row) =>
+                      row.key === line.key ? editSupplierCode(row, event.target.value) : row))}
                   />
                   <TextInput
                     id={`po-line-description-${index}`}
                     labelText={index === 0 ? "Description" : ""}
                     hideLabel={index > 0}
                     value={line.description}
-                    onChange={(event) => updateLine(index, { description: event.target.value })}
+                    onChange={(event) => updateLine(line.key, { description: event.target.value })}
                   />
                   <NumberInput
                     id={`po-line-qty-${index}`}
@@ -587,7 +544,7 @@ export default function PurchaseOrdersPage() {
                     min={1}
                     value={line.qty}
                     onChange={(_, { value }) =>
-                      updateLine(index, { qty: value === "" ? "" : Number(value) })
+                      updateLine(line.key, { qty: value === "" ? "" : Number(value) })
                     }
                   />
                   <TextInput
@@ -596,14 +553,14 @@ export default function PurchaseOrdersPage() {
                     hideLabel={index > 0}
                     value={line.factory_unit_amount}
                     onChange={(event) =>
-                      updateLine(index, { factory_unit_amount: event.target.value })
+                      updateLine(line.key, { factory_unit_amount: event.target.value })
                     }
                   />
                   {lines.length > 1 ? (
                     <Button
                       kind="ghost"
                       size="sm"
-                      onClick={() => removeLine(index)}
+                      onClick={() => removeLine(line.key)}
                       style={{ marginBottom: "0.25rem" }}
                     >
                       Remove
@@ -612,6 +569,9 @@ export default function PurchaseOrdersPage() {
                     <span />
                   )}
                 </div>
+                {line.supplierCodeLookup?.status === "error" ? (
+                  <Button kind="ghost" size="sm" onClick={() => retrySupplierCode(line)}>Retry supplier code</Button>
+                ) : null}
                 {fabric ? (
                   <p id={`po-line-fabric-${index}`} className="cds--helper-text">
                     Fabric / finish: {fabric}

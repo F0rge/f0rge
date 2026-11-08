@@ -11,7 +11,6 @@ from typing import Optional
 from fastapi import UploadFile
 from fastapi.responses import Response
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
@@ -533,14 +532,7 @@ class PurchaseOrderService:
         typed = _blank_to_none(given)
         if typed is not None or sku_id is None:
             return typed
-        supplier_sku = (
-            await self.db.execute(
-                select(SkuSupplierPrice.supplier_sku).where(
-                    SkuSupplierPrice.sku_id == sku_id,
-                    SkuSupplierPrice.supplier_id == supplier_id,
-                )
-            )
-        ).scalar_one_or_none()
+        supplier_sku = await self.supplier_crud.supplier_code_for_sku(supplier_id, sku_id)
         from_supplier = _blank_to_none(supplier_sku)
         if from_supplier is not None:
             return from_supplier
