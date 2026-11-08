@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.conftest import signed_clerk_token
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -101,7 +103,6 @@ async def test_no_org_signup_is_idempotent_and_bootstraps_empty_business(async_d
 async def test_new_organisation_can_save_and_clear_optional_business_details(
     async_client, async_db, monkeypatch
 ):
-    from app.services.clerk import ClerkIdentity
     from tests.conftest import independent_request_sessions
 
     token = tenant_id_ctx.set(None)
@@ -111,13 +112,10 @@ async def test_new_organisation_can_save_and_clear_optional_business_details(
         )
     finally:
         tenant_id_ctx.reset(token)
-    monkeypatch.setattr(
-        "app.middleware.auth.verify_clerk_token",
-        AsyncMock(
-            return_value=ClerkIdentity("user_new", "org_new_business", team["slug"], "member")
-        ),
-    )
-    headers = {"Authorization": "Bearer synthetic-business-settings-token"}
+    headers = {
+        "Authorization": "Bearer "
+        + signed_clerk_token("user_new", org_id="org_new_business", org_slug=team["slug"])
+    }
     async with independent_request_sessions(async_db):
         initial = await async_client.get("/api/v1/settings", headers=headers)
         assert initial.status_code == 200
@@ -273,14 +271,13 @@ async def test_invitation_cap_role_validation_revoke_and_idempotency(owner_clien
 
 
 async def test_business_apis_still_reject_unknown_clerk_subject(async_client, monkeypatch):
-    from app.services.clerk import ClerkIdentity
 
-    monkeypatch.setattr(
-        "app.middleware.auth.verify_clerk_token",
-        AsyncMock(return_value=ClerkIdentity("unknown_new", "org_new", "new", "admin")),
-    )
     response = await async_client.get(
-        "/api/v1/locations", headers={"Authorization": "Bearer verified-but-unprovisioned"}
+        "/api/v1/locations",
+        headers={
+            "Authorization": "Bearer "
+            + signed_clerk_token("unknown_new", org_id="org_new", org_slug="new")
+        },
     )
     assert response.status_code == 401
 
@@ -495,13 +492,10 @@ async def test_no_org_me_route_accepts_only_signed_identity_boundary(async_clien
 
     remote = provider()
     app.dependency_overrides[get_clerk_api] = lambda: remote
-    monkeypatch.setattr(
-        "app.dependencies.tenant_signup.verify_clerk_session",
-        AsyncMock(return_value=ClerkSession("user_new")),
-    )
     try:
         response = await async_client.get(
-            "/api/v1/tenant-signup/me", headers={"Authorization": "Bearer pending-signed-session"}
+            "/api/v1/tenant-signup/me",
+            headers={"Authorization": "Bearer " + signed_clerk_token("user_new", status="active")},
         )
         assert response.status_code == 200
         assert response.json()["email"] == "new-business-owner@example.com"
@@ -528,11 +522,9 @@ async def test_existing_org_selection_works_when_creation_is_disabled(
     app.dependency_overrides[get_clerk_api] = lambda: remote
     monkeypatch.setattr(settings, "tenant_signup_enabled", False)
     monkeypatch.setattr(settings, "billing_disabled", billing_disabled)
-    monkeypatch.setattr(
-        "app.dependencies.tenant_signup.verify_clerk_session",
-        AsyncMock(return_value=ClerkSession(owner.clerk_user_id)),
-    )
-    headers = {"Authorization": "Bearer existing-signed-session"}
+    headers = {
+        "Authorization": "Bearer " + signed_clerk_token(owner.clerk_user_id, status="active")
+    }
     try:
         response = await async_client.get("/api/v1/tenant-signup/me", headers=headers)
         assert response.status_code == 200

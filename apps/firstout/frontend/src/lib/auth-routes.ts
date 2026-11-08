@@ -6,5 +6,5 @@ export function isPublicAuthPath(pathname: string): boolean {
 }
 
 export function missingSessionDestination(clerkSignedIn: boolean): string {
-  return clerkSignedIn ? "/onboarding" : "/login";
+  return clerkSignedIn ? "/onboarding" : "/clerk-login";
 }

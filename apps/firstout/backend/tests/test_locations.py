@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from httpx import AsyncClient
 
 
@@ -94,21 +96,18 @@ async def test_buyer_can_list_but_not_mutate(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    create_resp = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-locations@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    assert create_resp.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer-locations@example.com", "password": "buyer-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "buyer-locations@example.com")
     assert login_resp.status_code == 200
 
     list_resp = await async_client.get("/api/v1/locations")
@@ -131,21 +130,18 @@ async def test_till_cannot_mutate_locations(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    create_resp = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-locations@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    assert create_resp.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-locations@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "till-locations@example.com")
     assert login_resp.status_code == 200
 
     list_resp = await async_client.get("/api/v1/locations")
@@ -162,24 +158,18 @@ async def test_warehouse_role_can_create_location(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    create_user_resp = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "warehouse-locations@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
-    assert create_user_resp.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": "warehouse-locations@example.com",
-            "password": "warehouse-password",
-        },
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "warehouse-locations@example.com")
     assert login_resp.status_code == 200
 
     create_resp = await async_client.post(

@@ -15,11 +15,10 @@ from app.models.membership import Membership
 from app.models.team import Team
 from app.models.user import User
 from app.models.clerk_webhook_event import ClerkWebhookEvent
-from app.services.clerk import ClerkIdentity
-from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD, independent_request_sessions
+from tests.conftest import OWNER_EMAIL, independent_request_sessions
 
 
-async def test_legacy_host_mismatch_retains_cookie_and_permissions(owner_client):
+async def test_signed_host_mismatch_preserves_permissions(owner_client):
     before = await owner_client.get("/api/v1/auth/me")
     assert before.status_code == 200
     mismatch = await owner_client.get(
@@ -29,44 +28,19 @@ async def test_legacy_host_mismatch_retains_cookie_and_permissions(owner_client)
     after = await owner_client.get("/api/v1/auth/me")
     assert after.status_code == 200
     assert before.json()["permissions"] == after.json()["permissions"]
-    login_wrong_host = await owner_client.post(
-        "/api/v1/auth/login",
-        json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
-        headers={"host": "other.app.firstout.co.za"},
-    )
-    assert login_wrong_host.status_code == 403
 
 
-async def test_clerk_membership_and_bad_bearer_never_falls_back(
-    owner_client, async_db, monkeypatch
-):
+async def test_clerk_membership_and_bad_bearer_never_falls_back(owner_client, async_db):
+    from app.services.auth import JWT_COOKIE_NAME
+    from tests.conftest import legacy_staff_token
+
     user = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
-    team = await async_db.get(Team, user.team_id)
-    user.clerk_user_id = "user_test_owner"
-    team.clerk_org_id = "org_test_owner"
-    await async_db.flush()
-    verifier = AsyncMock(
-        return_value=ClerkIdentity(user.clerk_user_id, team.clerk_org_id, team.slug, "member")
+    response = await owner_client.get("/api/v1/auth/me")
+    assert response.status_code == 200 and "users.manage" in response.json()["permissions"]
+    # Fixture's signed coarse org:member claim must preserve the local owner grant.
+    owner_client.cookies.set(
+        JWT_COOKIE_NAME, legacy_staff_token(user.id, token_version=user.token_version)
     )
-    monkeypatch.setattr("app.middleware.auth.verify_clerk_token", verifier)
-    response = await owner_client.get(
-        "/api/v1/auth/me", headers={"Authorization": "Bearer synthetic-clerk-token"}
-    )
-    assert response.status_code == 200
-    assert (
-        "users.manage" in response.json()["permissions"]
-    )  # Clerk member never reduces local owner.
-    mismatch = await owner_client.get(
-        "/api/v1/auth/me",
-        headers={
-            "Authorization": "Bearer synthetic-clerk-token",
-            "host": "other.app.firstout.co.za",
-        },
-    )
-    assert mismatch.status_code == 403
-    from fastapi import HTTPException
-
-    verifier.side_effect = HTTPException(401, "Invalid Clerk session")
     rejected = await owner_client.get(
         "/api/v1/auth/me", headers={"Authorization": "Bearer forged-token"}
     )
@@ -74,40 +48,23 @@ async def test_clerk_membership_and_bad_bearer_never_falls_back(
     assert (await owner_client.get("/api/v1/auth/me")).status_code == 200
 
 
-async def test_disabled_user_rejected_by_clerk(owner_client, async_db, monkeypatch):
+async def test_disabled_user_rejected_by_clerk(owner_client, async_db):
     user = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
-    team = await async_db.get(Team, user.team_id)
-    user.clerk_user_id = "user_disabled"
     user.is_disabled = True
     await async_db.flush()
-    monkeypatch.setattr(
-        "app.middleware.auth.verify_clerk_token",
-        AsyncMock(return_value=ClerkIdentity(user.clerk_user_id, "org_fake", team.slug, "admin")),
-    )
-    assert (
-        await owner_client.get(
-            "/api/v1/auth/me", headers={"Authorization": "Bearer clerk-disabled"}
-        )
-    ).status_code == 401
+    assert (await owner_client.get("/api/v1/auth/me")).status_code == 401
 
 
 @pytest.fixture
-async def legacy_staff_in_two_organisations(owner_client, async_db, monkeypatch):
+async def legacy_staff_in_two_organisations(owner_client, async_db):
     import uuid
+    from tests.conftest import create_test_staff
 
-    created = await owner_client.post(
-        "/api/v1/users",
-        json={
-            "email": "cross-org-staff@example.com",
-            "password": "cross-org-password",
-            "role": "buyer",
-        },
+    created = await create_test_staff(
+        owner_client, email="cross-org-staff@example.com", role="buyer"
     )
-    assert created.status_code == 201
-    staff = await async_db.get(User, uuid.UUID(created.json()["id"]))
-    staff.clerk_user_id = "user_cross_org"
+    staff = await async_db.get(User, uuid.UUID(created["id"]))
     home = await async_db.get(Team, staff.team_id)
-    home.clerk_org_id = "org_cross_home"
     other = Team(
         name="Independent organisation", slug="independent-org", clerk_org_id="org_cross_other"
     )
@@ -123,39 +80,28 @@ async def legacy_staff_in_two_organisations(owner_client, async_db, monkeypatch)
         )
     )
     await async_db.commit()
-    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
-    monkeypatch.setattr(settings, "clerk_enabled", True)
-    claims = {
-        "cross-home-token": ClerkIdentity(
-            staff.clerk_user_id, home.clerk_org_id, home.slug, "member"
-        ),
-        "cross-other-token": ClerkIdentity(
-            staff.clerk_user_id, other.clerk_org_id, other.slug, "member"
-        ),
-    }
-    monkeypatch.setattr(
-        "app.middleware.auth.verify_clerk_token", AsyncMock(side_effect=lambda token: claims[token])
-    )
     return staff, home, other
 
 
-async def test_legacy_home_disable_preserves_other_org_and_reenable(
+async def test_home_disable_preserves_other_org_and_reenable(
     owner_client, async_db, legacy_staff_in_two_organisations
 ):
     from app.main import app
     from app.services.permissions import PermissionService
+    from tests.conftest import signed_clerk_token
 
     staff, home, other = legacy_staff_in_two_organisations
-    home_header = {"Authorization": "Bearer cross-home-token"}
-    other_header = {"Authorization": "Bearer cross-other-token"}
+    home_header = {
+        "Authorization": "Bearer "
+        + signed_clerk_token(staff.clerk_user_id, org_id=home.clerk_org_id, org_slug=home.slug)
+    }
+    other_header = {
+        "Authorization": "Bearer "
+        + signed_clerk_token(staff.clerk_user_id, org_id=other.clerk_org_id, org_slug=other.slug)
+    }
     async with independent_request_sessions(async_db):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            assert (
-                await client.post(
-                    "/api/v1/auth/login",
-                    json={"email": staff.email, "password": "cross-org-password"},
-                )
-            ).status_code == 200
+            assert (await client.get("/api/v1/auth/me", headers=home_header)).status_code == 200
             disabled = await owner_client.patch(
                 f"/api/v1/users/{staff.id}", json={"is_disabled": True}
             )
@@ -168,14 +114,7 @@ async def test_legacy_home_disable_preserves_other_org_and_reenable(
             )
             assert member.is_disabled is True and staff.is_disabled is False
             assert await PermissionService(async_db).keys_for_user(staff.id) == []
-            assert (await client.get("/api/v1/auth/me")).status_code == 401
             assert (await client.get("/api/v1/auth/me", headers=home_header)).status_code == 401
-            assert (
-                await client.post(
-                    "/api/v1/auth/login",
-                    json={"email": staff.email, "password": "cross-org-password"},
-                )
-            ).status_code == 401
             other_me = await client.get("/api/v1/auth/me", headers=other_header)
             assert other_me.status_code == 200
             assert other_me.json()["team"]["id"] == str(other.id)
@@ -186,7 +125,6 @@ async def test_legacy_home_disable_preserves_other_org_and_reenable(
                 next(row for row in other_users.json() if row["id"] == str(staff.id))["is_disabled"]
                 is False
             )
-            # A's change cannot disable B's sole owner or bypass B's own guard.
             own_disable = await client.patch(
                 f"/api/v1/users/{staff.id}", json={"is_disabled": True}, headers=other_header
             )
@@ -195,14 +133,8 @@ async def test_legacy_home_disable_preserves_other_org_and_reenable(
                 f"/api/v1/users/{staff.id}", json={"is_disabled": False}
             )
             assert enabled.status_code == 200 and enabled.json()["is_disabled"] is False
-            assert (await client.get("/api/v1/auth/me")).status_code == 200
             assert (await client.get("/api/v1/auth/me", headers=home_header)).status_code == 200
-            assert (
-                await client.post(
-                    "/api/v1/auth/login",
-                    json={"email": staff.email, "password": "cross-org-password"},
-                )
-            ).status_code == 200
+            assert (await client.get("/api/v1/auth/me", headers=other_header)).status_code == 200
 
 
 async def test_org_reenable_cannot_clear_global_disabled_identity(
@@ -210,12 +142,13 @@ async def test_org_reenable_cannot_clear_global_disabled_identity(
 ):
     from app.main import app
     from app.services.permissions import PermissionService
+    from tests.conftest import signed_clerk_token
 
-    staff, home, _other = legacy_staff_in_two_organisations
+    staff, home, other = legacy_staff_in_two_organisations
     member = await async_db.scalar(
         select(Membership).where(Membership.user_id == staff.id, Membership.team_id == home.id)
     )
-    staff.is_disabled = True  # Simulate the preserved imported/security account gate.
+    staff.is_disabled = True
     member.is_disabled = True
     await async_db.commit()
     async with independent_request_sessions(async_db):
@@ -226,18 +159,15 @@ async def test_org_reenable_cannot_clear_global_disabled_identity(
         assert staff.is_disabled is True and member.is_disabled is False
         assert await PermissionService(async_db).keys_for_user(staff.id) == []
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            for token in ("cross-home-token", "cross-other-token"):
+            for team in (home, other):
+                token = signed_clerk_token(
+                    staff.clerk_user_id, org_id=team.clerk_org_id, org_slug=team.slug
+                )
                 assert (
                     await client.get(
                         "/api/v1/auth/me", headers={"Authorization": "Bearer " + token}
                     )
                 ).status_code == 401
-            assert (
-                await client.post(
-                    "/api/v1/auth/login",
-                    json={"email": staff.email, "password": "cross-org-password"},
-                )
-            ).status_code == 401
 
 
 async def test_signed_delete_webhook_is_idempotent_and_preserves_home(
@@ -316,38 +246,36 @@ async def test_fake_provisioning_clones_roles_without_locations_or_home_changes(
         tenant_id_ctx.reset(token)
 
 
-async def test_legacy_trade_cookie_survives_and_cannot_switch_host(owner_client):
-    import jwt
+async def test_legacy_trade_cookie_and_hs_bearer_are_rejected(owner_client, async_db):
+    import uuid
+    from app.models.customer_portal_user import CustomerPortalUser
     from app.services.customer_portal import CUSTOMER_COOKIE_NAME
+    from tests.conftest import legacy_portal_token
+    from f0rge_db.organisation import tenant_id_ctx
 
     customer = await owner_client.post(
-        "/api/v1/customers", json={"name": "Synthetic legacy trade", "customer_type": "trade"}
+        "/api/v1/customers", json={"name": "Synthetic retired trade", "customer_type": "trade"}
     )
     assert customer.status_code == 201
-    created = await owner_client.post(
-        f"/api/v1/customers/{customer.json()['id']}/portal-users",
-        json={"email": "legacy-trade@example.com", "password": "synthetic-trade-password"},
+    portal = CustomerPortalUser(
+        team_id=tenant_id_ctx.get(),
+        customer_id=uuid.UUID(customer.json()["id"]),
+        email="legacy-trade@example.com",
+        password_hash="retained-unused-digest",
+        is_disabled=False,
     )
-    assert created.status_code == 201
+    async_db.add(portal)
+    await async_db.flush()
+    token = legacy_portal_token(portal.id, team_id=portal.team_id)
+    owner_client.headers.pop("Authorization", None)
     owner_client.cookies.clear()
-    login = await owner_client.post(
-        "/api/v1/portal/login",
-        json={"email": "legacy-trade@example.com", "password": "synthetic-trade-password"},
-    )
-    assert login.status_code == 200
-    claims = jwt.decode(
-        login.cookies[CUSTOMER_COOKIE_NAME], settings.jwt_secret, algorithms=["HS256"]
-    )
-    assert claims.pop("team_id")
-    owner_client.cookies.clear()
-    owner_client.cookies.set(
-        CUSTOMER_COOKIE_NAME, jwt.encode(claims, settings.jwt_secret, algorithm="HS256")
-    )
-    assert (await owner_client.get("/api/v1/portal/me")).status_code == 200
-    assert (
-        await owner_client.get("/api/v1/portal/me", headers={"host": "other.app.firstout.co.za"})
-    ).status_code == 403
+    owner_client.cookies.set(CUSTOMER_COOKIE_NAME, token)
+    assert (await owner_client.get("/api/v1/portal/me")).status_code == 401
     assert (await owner_client.get("/api/v1/auth/me")).status_code == 401
+    owner_client.cookies.clear()
+    assert (
+        await owner_client.get("/api/v1/portal/me", headers={"Authorization": "Bearer " + token})
+    ).status_code == 401
 
 
 async def test_role_seed_does_not_reduce_existing_grants(async_db):
@@ -362,35 +290,20 @@ async def test_role_seed_does_not_reduce_existing_grants(async_db):
     assert "till.sell" in {permission.key for permission in role.permissions}
 
 
-async def test_unknown_clerk_subject_cannot_link_existing_email(
-    owner_client, async_db, monkeypatch
-):
-    from types import SimpleNamespace
+async def test_unknown_clerk_subject_cannot_link_existing_email(owner_client, async_db):
+    from tests.conftest import signed_clerk_token
 
-    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
     user = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
     team = await async_db.get(Team, user.team_id)
-    user.clerk_user_id = "user_real_staff"
-    team.clerk_org_id = "org_real_staff"
-    await async_db.flush()
-    # Even a verified token with the same email must resolve only by its sub.
-    monkeypatch.setattr(
-        "app.middleware.auth.verify_clerk_token",
-        AsyncMock(
-            return_value=SimpleNamespace(
-                user_id="user_unknown_subject",
-                org_id=team.clerk_org_id,
-                org_slug=team.slug,
-                org_role="admin",
-                email=user.email,
-            )
-        ),
+    original_subject = user.clerk_user_id
+    unknown = signed_clerk_token(
+        "user_unknown_subject", org_id=team.clerk_org_id, org_slug=team.slug, email=user.email
     )
     response = await owner_client.get(
-        "/api/v1/auth/me", headers={"Authorization": "Bearer unknown-sub"}
+        "/api/v1/auth/me", headers={"Authorization": "Bearer " + unknown}
     )
     assert response.status_code == 401
-    assert user.clerk_user_id == "user_real_staff"
+    assert user.clerk_user_id == original_subject
     assert (await owner_client.get("/api/v1/auth/me")).status_code == 200
 
 

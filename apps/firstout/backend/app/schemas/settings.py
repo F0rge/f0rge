@@ -78,5 +78,5 @@ class SettingsUpdate(BaseModel):
     max_till_discount_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
     po_approval_threshold_zar: Optional[Decimal] = Field(default=None, ge=0)
     auto_process_exact_supplier_invoices: Optional[bool] = None
-    session_ttl_hours: Optional[int] = Field(default=None, ge=1, le=720)
+    session_ttl_hours: Optional[int] = Field(default=None, ge=1, le=720, deprecated=True)
     document_sequences: Optional[list[DocumentSequenceUpdateItem]] = None

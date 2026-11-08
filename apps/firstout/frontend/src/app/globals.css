@@ -261,15 +261,21 @@ body {
   border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
 }
 
-.firstout-login-mark {
-  display: block;
-  width: 4.5rem;
-  height: auto;
-  margin-bottom: 1.5rem;
+.firstout-trade-page {
+  max-width: 64rem;
+  margin: 2rem auto;
+  padding: 1rem;
 }
 
-.firstout-login-forgot {
-  width: fit-content;
+.firstout-trade-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+}
+
+.firstout-trade-item > div:first-child {
+  flex: 1 1 16rem;
 }
 
 .firstout-auth-card {

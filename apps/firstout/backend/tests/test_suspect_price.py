@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from decimal import Decimal
 from io import BytesIO
 
@@ -80,10 +82,8 @@ async def _customer(client: AsyncClient, name: str, classification: str) -> str:
 
 async def _login(client: AsyncClient, email: str, password: str) -> None:
     client.cookies.clear()
-    logged_in = await client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
-    )
+    client.headers.pop("Authorization", None)
+    logged_in = await authenticate_as(client, email)
     assert logged_in.status_code == 200, logged_in.text
 
 

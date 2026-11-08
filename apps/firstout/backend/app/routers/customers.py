@@ -21,6 +21,9 @@ from app.schemas.customer_crm import (
     DraftRepriceResponse,
 )
 from app.schemas.customer_portal import PortalMeResponse, PortalUserCreate
+from app.schemas.customer_portal import PortalInvitationCreate
+from app.services.portal_identity import PortalIdentityService
+from app.dependencies.customer_portal import get_portal_identity_service
 from app.services.customer_portal import CustomerPortalService
 from app.services.customers_crm import CustomersCrmService
 from app.services.draft_reprice import DraftRepriceService
@@ -109,3 +112,51 @@ async def create_customer_portal_user(
     db: AsyncSession = Depends(get_db),
 ):
     return await CustomerPortalService(db).create_user(customer_id, body)
+
+
+@customers_router.post("/{customer_id}/portal-invitations", status_code=201)
+async def invite_customer_portal(
+    customer_id: uuid.UUID,
+    body: PortalInvitationCreate,
+    _: uuid.UUID = Depends(require_customers_mutate),
+    service: PortalIdentityService = Depends(get_portal_identity_service),
+):
+    return await service.invite(customer_id, str(body.email))
+
+
+@customers_router.get("/{customer_id}/portal-invitations")
+async def list_customer_portal_invitations(
+    customer_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_customers_mutate),
+    service: PortalIdentityService = Depends(get_portal_identity_service),
+):
+    return await service.invitations(customer_id)
+
+
+@customers_router.delete("/{customer_id}/portal-invitations/{invitation_id}", status_code=204)
+async def revoke_customer_portal_invitation(
+    customer_id: uuid.UUID,
+    invitation_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_customers_mutate),
+    service: PortalIdentityService = Depends(get_portal_identity_service),
+):
+    await service.revoke_invitation(customer_id, invitation_id)
+
+
+@customers_router.get("/{customer_id}/portal-access")
+async def list_customer_portal_access(
+    customer_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_customers_mutate),
+    service: PortalIdentityService = Depends(get_portal_identity_service),
+):
+    return await service.staff_access(customer_id)
+
+
+@customers_router.delete("/{customer_id}/portal-access/{access_id}", status_code=204)
+async def revoke_customer_portal_access(
+    customer_id: uuid.UUID,
+    access_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_customers_mutate),
+    service: PortalIdentityService = Depends(get_portal_identity_service),
+):
+    await service.revoke_access(customer_id, access_id)

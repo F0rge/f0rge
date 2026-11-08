@@ -22,8 +22,8 @@ This record supersedes the operational status in the [historical local test evid
 | API flags | Clerk/reconciliation ON, organisation creation ON, global staff import OFF, isolation enforced, billing disabled/test-only |
 | Provider access | Open saved in the production UI; independent anonymous Frontend API returned `mode='public'` at 14:48 UTC; fresh uninvited signup/human email verification and canonical identity checks passed |
 | Google | Disabled saved in the production UI; independent anonymous Frontend API returned `oauth_google.enabled=false` at 14:48 UTC |
-| Frontend source/deployment | Exact-GitHub `fa010dd2d2c4c2c2a9c548580787f57589053d6a`, deployment `992998b1-29a7-46af-98e7-ccfb7a780d7c`, observed SUCCESS |
-| Frontend image/health | `sha256:67532be679bb55bf8d6c88100a61c781f60e52d5075ad76568ef91d83437fb68`; `/healthz` and login returned 200 with production Clerk assets; exact B-row Enable UI replay passed |
+| Frontend source/deployment | Exact-GitHub `ae6acb696adc80ec4ccca34b425d04e29645088e`, deployment `ee674320-2f42-40a2-b44c-22e46d0ecd92`, observed SUCCESS after PR #917 |
+| Frontend image/health | `sha256:b04c10799c73e662f779ab7a768265c506ee32d3a34bba99e7485ab4e3eee69b`; `/healthz`, login and signup returned 200; 18 initial served JS/CSS assets contained no Joyride markers |
 
 The actual Firstout Railway deployment-trigger count was zero. Merging `main` did **not** automatically deploy these services. Each release explicitly selected its approved merged revision. Required GitHub checks were green before squash merge; Railway then built its own image. This was not promotion of a CI-built immutable artifact. Configuration-only deployments reused the recorded Railway image. The frontend's live repository-config path was unset; its actual healthcheck path was explicitly set to `/healthz`.
 
@@ -37,6 +37,9 @@ The CI-tested PR heads have identical source trees to their squash-merged deploy
 | #912 | `d14bfafd1012560581a3968e770d5a383218b325` | Organisation-local staff disabling, pending/active session boundaries and identity reads while creation is OFF |
 | #913 | `ac420d087bb859d27068a27abb0786a76edfb493` | Saving and clearing optional VAT/address fields |
 | #914 | `fa010dd2d2c4c2c2a9c548580787f57589053d6a` | Explicit Enable/Disable staff action; exact-source frontend deployment and normal UI re-enable replay passed |
+| #917 | `ae6acb696adc80ec4ccca34b425d04e29645088e` | Complete Firstout Joyride removal; green CI/smoke, independent source/local page QA, approved exact-source frontend deployment and served-asset checks passed |
+
+PR #917 changed no API, database, authentication configuration or production variables. Its CI-tested head `8f73ed8c9762456c63661ca35aff671bdfed8b7c` and deployed squash commit have identical committed trees. The earlier Clerk and Enable walkthroughs below remain evidence of those earlier deployments. A separate [Clerk-only cutover](clerk-only-cutover.md) is proposed for staff and customers; it has not been deployed by the Joyride release.
 
 ## Restored backup rehearsal and retention
 

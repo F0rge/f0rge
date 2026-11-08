@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 import datetime
 
 from httpx import AsyncClient
 
-from app.config import settings
 from app.schemas.audit import AuditEventItem
 from app.services.audit_hub import _as_utc
 from tests.test_ledger_invoices import _create_customer
@@ -90,10 +91,8 @@ async def test_till_user_does_not_see_cost_rows(
     assert corrected.status_code == 200
 
     async_client.cookies.clear()
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till@example.com", "password": settings.seed_till_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    login = await authenticate_as(async_client, "till@example.com")
     assert login.status_code == 200
 
     till_view = await async_client.get("/api/v1/audit/events")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 from sqlalchemy import select
@@ -13,9 +13,8 @@ from app.models.sku import Sku
 from app.models.team import Team
 from app.models.team_settings import TeamSettings
 from app.models.user import User
-from app.services.clerk import ClerkIdentity
 from app.services import object_storage
-from tests.conftest import OWNER_EMAIL
+from tests.conftest import OWNER_EMAIL, signed_clerk_token
 from tests.test_settings_logo import _tiny_jpeg
 
 
@@ -25,8 +24,6 @@ async def test_remote_media_returns_authenticated_bytes_without_redirect(
 ):
     user = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
     team = await async_db.get(Team, user.team_id)
-    user.clerk_user_id = "user_media_synthetic"
-    team.clerk_org_id = "org_media_synthetic"
     key = f"tenants/{team.id}/synthetic/{asset}.jpg"
     if asset == "sku":
         created = await owner_client.post(
@@ -47,6 +44,9 @@ async def test_remote_media_returns_authenticated_bytes_without_redirect(
         team_settings = await async_db.scalar(
             select(TeamSettings).where(TeamSettings.team_id == team.id)
         )
+        if team_settings is None:
+            team_settings = TeamSettings(team_id=team.id)
+            async_db.add(team_settings)
         team_settings.logo_storage_key = key
         endpoint = "/api/v1/settings/logo"
     await async_db.flush()
@@ -70,16 +70,14 @@ async def test_remote_media_returns_authenticated_bytes_without_redirect(
         "presigned_get_url",
         Mock(side_effect=AssertionError("Media must not redirect to S3")),
     )
-    monkeypatch.setattr(
-        "app.middleware.auth.verify_clerk_token",
-        AsyncMock(
-            return_value=ClerkIdentity(user.clerk_user_id, team.clerk_org_id, team.slug, "member")
-        ),
-    )
     owner_client.cookies.clear()
+    owner_client.headers.pop("Authorization", None)
     response = await owner_client.get(
         endpoint,
-        headers={"Authorization": "Bearer synthetic-fresh-media-token"},
+        headers={
+            "Authorization": "Bearer "
+            + signed_clerk_token(user.clerk_user_id, org_id=team.clerk_org_id, org_slug=team.slug)
+        },
         follow_redirects=False,
     )
     assert response.status_code == 200

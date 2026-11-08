@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 
 from httpx import AsyncClient
 
@@ -111,21 +113,18 @@ async def test_books_can_upload_bank_csv(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "books-bank@example.com",
             "password": "books-password",
             "role": "books",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books-bank@example.com", "password": "books-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "books-bank@example.com")
     assert login_resp.status_code == 200
 
     files = {"file": ("bank.csv", SAMPLE_CSV.encode(), "text/csv")}
@@ -137,21 +136,18 @@ async def test_till_cannot_upload_bank_csv(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-bank@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-bank@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "till-bank@example.com")
     assert login_resp.status_code == 200
 
     files = {"file": ("bank.csv", SAMPLE_CSV.encode(), "text/csv")}

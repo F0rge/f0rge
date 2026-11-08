@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 import uuid
 from typing import Optional
 
@@ -19,21 +18,12 @@ from app.models.user import User, UserRole
 from app.permissions import SLUG_OWNER, role_slug
 from app.schemas.user import ProfileUpdate, UserCreate, UserUpdate, UserResponse
 from app.schemas.team import TeamBrief
-from app.crud.password_reset_token import PasswordResetTokenCRUD
-from app.services.auth import hash_password, issue_session_cookie, validate_password
+from app.services.auth import hash_password
 from app.services.user_default_location import (
-    bedfordview_default_location_id,
     resolve_writable_default_location_id,
 )
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
-
-
-async def _apply_new_password(db: AsyncSession, user: User, password: str) -> None:
-    validate_password(password)
-    user.password_hash = hash_password(password)
-    user.token_version = int(user.token_version) + 1
-    await PasswordResetTokenCRUD(db).invalidate_unused(user.id, datetime.datetime.utcnow())
 
 
 class UserService:
@@ -44,54 +34,7 @@ class UserService:
         self.role_crud = RoleCRUD(db)
 
     async def create(self, data: UserCreate) -> User:
-        if settings.clerk_enabled and settings.tenant_isolation_mode == "enforced":
-            raise ValidationError(
-                "Invite staff from Organisation settings so they can verify their email and join with Clerk"
-            )
-        validate_password(data.password)
-        team = await self.team_crud.get_first()
-        if team is None:
-            raise ValidationError("Team not configured")
-        await self._require_known_role(data.role)
-
-        fields_set = data.model_fields_set
-        if "default_location_id" in fields_set:
-            default_location_id = await resolve_writable_default_location_id(
-                self.db,
-                data.default_location_id,
-            )
-        elif role_slug(data.role) == UserRole.TILL.value:
-            default_location_id = await bedfordview_default_location_id(self.db)
-        else:
-            default_location_id = None
-
-        user = User(
-            team_id=team.id,
-            email=data.email,
-            password_hash=hash_password(data.password),
-            display_name=data.display_name,
-            role=role_slug(data.role),
-            default_location_id=default_location_id,
-        )
-        await self.crud.add_and_flush(user)
-        self.db.add(
-            Membership(
-                user_id=user.id,
-                team_id=team.id,
-                role=user.role,
-                permission_source="legacy",
-                is_legacy_home=True,
-                is_disabled=False,
-                default_location_id=user.default_location_id,
-            )
-        )
-        try:
-            await self.crud.commit_refresh(user)
-        except IntegrityError as exc:
-            raise ConflictError("Email already registered") from exc
-        reloaded = await self.crud.get_by_id(user.id)
-        assert reloaded is not None
-        return reloaded
+        raise ValidationError("Invite staff from Organisation settings to join with Clerk")
 
     async def list(self) -> list[UserResponse]:
         users = await self.crud.list_all()
@@ -138,7 +81,7 @@ class UserService:
         if member is None:
             raise NotFoundError("User not found")
         if not member.is_legacy_home:
-            if any(key in data.model_fields_set for key in ("email", "display_name", "password")):
+            if any(key in data.model_fields_set for key in ("display_name",)):
                 raise ValidationError(
                     "Global identity changes require the legacy home administrator"
                 )
@@ -161,8 +104,6 @@ class UserService:
                 pass
             return next(record for record in await self.list() if record.id == user.id)
 
-        if data.email is not None:
-            user.email = data.email
         if data.display_name is not None:
             user.display_name = data.display_name
         if data.role is not None:
@@ -179,8 +120,6 @@ class UserService:
             # Staff administration belongs to this organisation. The global
             # identity flag remains authoritative for imported/security blocks.
             member.is_disabled = data.is_disabled
-        if data.password is not None:
-            await _apply_new_password(self.db, user, data.password)
         if "default_location_id" in data.model_fields_set:
             user.default_location_id = await resolve_writable_default_location_id(
                 self.db,
@@ -224,13 +163,8 @@ class ProfileService:
         if user is None:
             raise NotFoundError("User not found")
 
-        if data.email is not None:
-            user.email = data.email
         if data.display_name is not None:
             user.display_name = data.display_name
-        password_changed = data.password is not None
-        if data.password is not None:
-            await _apply_new_password(self.db, user, data.password)
         if "default_location_id" in data.model_fields_set:
             location_id = await resolve_writable_default_location_id(
                 self.db, data.default_location_id
@@ -253,8 +187,6 @@ class ProfileService:
             raise ConflictError("Email already registered") from exc
         reloaded = await self.crud.get_by_id(user.id)
         assert reloaded is not None
-        if password_changed:
-            await issue_session_cookie(self.db, reloaded, response)
         return reloaded
 
 

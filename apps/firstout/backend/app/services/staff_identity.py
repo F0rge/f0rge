@@ -54,8 +54,8 @@ async def resolve_membership(
         raise HTTPException(401, "Invalid membership")
     if team.status != "active":
         raise HTTPException(403, "Membership unavailable")
-    # Existing home role edits remain authoritative during dual-auth; the migration
-    # does not freeze subsequent legitimate staff administration.
+    # Original home grants remain authoritative after the authentication cutover;
+    # Clerk's coarse roles never rewrite legitimate staff administration.
     role = user.role if membership.is_legacy_home else membership.role
     location = (
         user.default_location_id if membership.is_legacy_home else membership.default_location_id

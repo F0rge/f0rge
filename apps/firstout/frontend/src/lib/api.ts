@@ -60,21 +60,7 @@ export type RoleUpdatePayload = {
   permissions?: string[];
 };
 
-export type LoginResponse = {
-  email: string;
-};
-
-export type CreateUserPayload = {
-  email: string;
-  password: string;
-  role: UserRole;
-  display_name?: string;
-  default_location_id?: string | null;
-};
-
 export type UpdateUserPayload = {
-  email?: string;
-  password?: string;
   role?: UserRole;
   display_name?: string;
   is_disabled?: boolean;
@@ -82,9 +68,7 @@ export type UpdateUserPayload = {
 };
 
 export type UpdateProfilePayload = {
-  email?: string;
   display_name?: string;
-  password?: string;
   default_location_id?: string | null;
 };
 
@@ -279,39 +263,6 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return response.json() as Promise<T>;
 }
 
-export function login(email: string, password: string): Promise<LoginResponse> {
-  return apiFetch<LoginResponse>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-}
-
-export type PasswordResetMessage = {
-  message: string;
-};
-
-export function requestPasswordReset(email: string): Promise<PasswordResetMessage> {
-  return apiFetch<PasswordResetMessage>("/auth/forgot-password", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-}
-
-export function confirmPasswordReset(
-  token: string,
-  password: string,
-  passwordConfirm: string,
-): Promise<PasswordResetMessage> {
-  return apiFetch<PasswordResetMessage>("/auth/reset-password", {
-    method: "POST",
-    body: JSON.stringify({
-      token,
-      password,
-      password_confirm: passwordConfirm,
-    }),
-  });
-}
-
 export function logout(): Promise<void> {
   return apiFetch<void>("/auth/logout", { method: "POST" });
 }
@@ -322,13 +273,6 @@ export function getMe(): Promise<AuthUser> {
 
 export function listUsers(): Promise<User[]> {
   return apiFetch<User[]>("/users");
-}
-
-export function createUser(payload: CreateUserPayload): Promise<User> {
-  return apiFetch<User>("/users", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
 }
 
 export function updateUser(id: string, payload: UpdateUserPayload): Promise<User> {
@@ -3524,6 +3468,7 @@ export type AppSettings = import("./label-settings").LabelSettings & {
   max_till_discount_percent: string | null;
   po_approval_threshold_zar: string | null;
   auto_process_exact_supplier_invoices: boolean;
+  /** Historical read-only value; session duration is managed by Clerk. */
   session_ttl_hours: number;
   payment_terms_days: number;
   default_receive_location_id: string | null;
@@ -3668,7 +3613,6 @@ export function updateSettings(payload: Partial<import("./label-settings").Label
   max_till_discount_percent?: string | null;
   po_approval_threshold_zar?: string | null;
   auto_process_exact_supplier_invoices?: boolean;
-  session_ttl_hours?: number;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
@@ -4283,6 +4227,8 @@ export function requestStorefrontRefund(
 }
 
 export type PortalMe = {
+  access_id: string;
+  organisation_id: string;
   id: string;
   email: string;
   customer_id: string;
@@ -4298,41 +4244,66 @@ export type PortalCatalogueItem = {
   unit_inc_vat: string;
 };
 
-export function portalLogin(email: string, password: string): Promise<{ email: string; customer_name: string }> {
-  return apiFetch("/portal/login", { method: "POST", body: JSON.stringify({ email, password }) });
-}
+export type PortalAccess = {
+  id: string;
+  organisation_id: string;
+  organisation_name: string;
+  customer_id: string;
+  customer_name: string;
+  email: string;
+  url: string;
+};
+export type CustomerPortalAccess = PortalAccess & { status: "active" | "revoked" };
+export type PortalInvitation = {
+  id: string;
+  email: string;
+  expires_at: string;
+  status: "pending" | "accepted" | "revoked" | "expired";
+};
+export type CreatedPortalInvitation = PortalInvitation & { invitation_url: string };
 
 export function portalLogout(): Promise<void> {
   return apiFetch("/portal/logout", { method: "POST" });
 }
-
-export function getPortalMe(): Promise<PortalMe> {
-  return apiFetch("/portal/me");
+export function listPortalOrganisations(): Promise<PortalAccess[]> {
+  return apiFetch("/portal/organisations");
 }
-
-export function listPortalCatalogue(): Promise<PortalCatalogueItem[]> {
-  return apiFetch("/portal/catalogue");
+export function acceptPortalInvitation(token: string): Promise<PortalAccess> {
+  return apiFetch("/portal/invitations/accept", { method: "POST", body: JSON.stringify({ token }) });
 }
-
-export function placePortalOrder(payload: {
+function portalAccessHeaders(accessId: string): HeadersInit {
+  if (!accessId) throw new Error("Choose a trade account first.");
+  return { "X-Firstout-Portal-Access": accessId };
+}
+export function getPortalMe(accessId: string): Promise<PortalMe> {
+  return apiFetch("/portal/me", { headers: portalAccessHeaders(accessId) });
+}
+export function listPortalCatalogue(accessId: string): Promise<PortalCatalogueItem[]> {
+  return apiFetch("/portal/catalogue", { headers: portalAccessHeaders(accessId) });
+}
+export function placePortalOrder(accessId: string, payload: {
   lines: { sku_id: string; qty: number; notes?: string }[];
   notes?: string;
 }): Promise<SalesOrder> {
-  return apiFetch("/portal/orders", { method: "POST", body: JSON.stringify(payload) });
+  return apiFetch("/portal/orders", { method: "POST", headers: portalAccessHeaders(accessId), body: JSON.stringify(payload) });
 }
-
-export function listPortalOrders(): Promise<SalesOrder[]> {
-  return apiFetch("/portal/orders");
+export function listPortalOrders(accessId: string): Promise<SalesOrder[]> {
+  return apiFetch("/portal/orders", { headers: portalAccessHeaders(accessId) });
 }
-
-export function createPortalUser(
-  customerId: string,
-  payload: { email: string; password: string },
-): Promise<PortalMe> {
-  return apiFetch(`/customers/${customerId}/portal-users`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+export function createPortalInvitation(customerId: string, email: string): Promise<CreatedPortalInvitation> {
+  return apiFetch(`/customers/${customerId}/portal-invitations`, { method: "POST", body: JSON.stringify({ email }) });
+}
+export function listPortalInvitations(customerId: string): Promise<PortalInvitation[]> {
+  return apiFetch(`/customers/${customerId}/portal-invitations`);
+}
+export function revokePortalInvitation(customerId: string, invitationId: string): Promise<void> {
+  return apiFetch(`/customers/${customerId}/portal-invitations/${invitationId}`, { method: "DELETE" });
+}
+export function listCustomerPortalAccess(customerId: string): Promise<CustomerPortalAccess[]> {
+  return apiFetch(`/customers/${customerId}/portal-access`);
+}
+export function revokeCustomerPortalAccess(customerId: string, accessId: string): Promise<void> {
+  return apiFetch(`/customers/${customerId}/portal-access/${accessId}`, { method: "DELETE" });
 }
 
 export type CustomerType = "retail" | "trade";

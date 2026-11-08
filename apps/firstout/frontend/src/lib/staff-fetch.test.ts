@@ -27,18 +27,16 @@ describe("staff transport", () => {
     );
     expect(fetch.mock.calls[1][1].headers.has("Content-Type")).toBe(false);
   });
-  it("keeps legacy cookies and excludes trade portal from staff auth", async () => {
+  it("includes Clerk authentication for customer APIs without a separate password session", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response("{}"));
     vi.stubGlobal("fetch", fetch);
     await staffFetch("/api/v1/auth/me");
     const getToken = vi.fn().mockResolvedValue("staff");
     setStaffTokenGetter(getToken);
     await staffFetch("/api/v1/portal/orders");
-    expect(getToken).not.toHaveBeenCalled();
-    for (const call of fetch.mock.calls) {
-      expect(call[1].credentials).toBe("include");
-      expect(call[1].headers.has("Authorization")).toBe(false);
-    }
+    expect(getToken).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0][1].headers.has("Authorization")).toBe(false);
+    expect(fetch.mock.calls[1][1].headers.get("Authorization")).toBe("Bearer staff");
   });
   it("fails closed on token retrieval error rather than silently falling back", async () => {
     const fetch = vi.fn();

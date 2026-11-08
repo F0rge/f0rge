@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from decimal import Decimal
 from io import BytesIO
 
@@ -101,19 +103,15 @@ async def test_till_can_create_quote_buyer_cannot(
     payload = {"customer_id": customer_id, "lines": [{"sku_id": sku_id, "qty": 1}]}
 
     async_client.cookies.clear()
-    till_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till@example.com", "password": settings.seed_till_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    till_login = await authenticate_as(async_client, "till@example.com")
     assert till_login.status_code == 200
     till_create = await async_client.post("/api/v1/quotes", json=payload)
     assert till_create.status_code == 201, till_create.text
 
     async_client.cookies.clear()
-    buyer_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer@example.com", "password": settings.seed_buyer_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    buyer_login = await authenticate_as(async_client, "buyer@example.com")
     assert buyer_login.status_code == 200
     buyer_create = await async_client.post("/api/v1/quotes", json=payload)
     assert buyer_create.status_code == 403
@@ -240,10 +238,8 @@ async def test_quote_line_price_follows_customer_and_accepts_override(
 
 async def _login(client: AsyncClient, email: str, password: str) -> None:
     client.cookies.clear()
-    resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
-    )
+    client.headers.pop("Authorization", None)
+    resp = await authenticate_as(client, email)
     assert resp.status_code == 200, resp.text
 
 

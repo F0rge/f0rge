@@ -8,6 +8,26 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+async def verify_portal_directory_grants(session: AsyncSession) -> None:
+    """Migration-owner tables require explicit DML grants to the runtime role."""
+    for table in ("public.portal_access", "public.portal_invitations"):
+        exists = await session.scalar(
+            sa.text("SELECT to_regclass(:table) IS NOT NULL"), {"table": table}
+        )
+        if not exists:
+            raise RuntimeError("Migrate customer Clerk identity directories before startup")
+        allowed = await session.scalar(
+            sa.text(
+                "SELECT bool_and(has_table_privilege(current_user, :table, privilege)) FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS privilege"
+            ),
+            {"table": table},
+        )
+        if not allowed:
+            raise RuntimeError(
+                "Runtime requires explicit DML grants on customer identity directories"
+            )
+
+
 async def verify_runtime_role(session: AsyncSession, *, require_rls: bool = True) -> None:
     role = (
         await session.execute(
@@ -31,6 +51,7 @@ async def verify_runtime_role(session: AsyncSession, *, require_rls: bool = True
             "Firstout runtime requires a non-owner NOSUPERUSER NOBYPASSRLS database role"
         )
 
+    await verify_portal_directory_grants(session)
     await verify_tenant_policies(session)
     if not require_rls:
         return

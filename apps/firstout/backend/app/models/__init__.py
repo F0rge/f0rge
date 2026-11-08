@@ -220,3 +220,4 @@ __all__ = [
 
 from app.models.clerk_webhook_event import ClerkWebhookEvent  # noqa: F401
 from app.models.tenant_onboarding import TenantInvitation, TenantProvisioningAttempt  # noqa: F401
+from app.models.portal_identity import PortalAccess, PortalInvitation  # noqa: F401

@@ -76,6 +76,10 @@ class SettingsService:
         payload = data.model_dump(exclude_unset=True)
         if not payload:
             raise ValidationError("No settings fields to update")
+        if "session_ttl_hours" in payload:
+            raise ValidationError(
+                "Clerk manages session lifetime; this legacy setting is read-only"
+            )
 
         async with unit_of_work(self.db):
             for field in (
@@ -145,8 +149,6 @@ class SettingsService:
                 settings.auto_process_exact_supplier_invoices = (
                     data.auto_process_exact_supplier_invoices
                 )
-            if data.session_ttl_hours is not None:
-                settings.session_ttl_hours = data.session_ttl_hours
             if data.document_sequences is not None:
                 await self._apply_sequence_updates(
                     (tenant_id_ctx.get() or user.team_id), data.document_sequences

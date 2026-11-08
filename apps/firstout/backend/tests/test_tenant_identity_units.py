@@ -240,7 +240,7 @@ def test_permission_inventory_comparison_never_exposes_hashes():
 
 
 @pytest.mark.parametrize("has_org", [False, True])
-async def test_pending_token_is_only_valid_for_identity_onboarding(monkeypatch, has_org):
+async def test_pending_token_is_rejected_for_identity_and_business(monkeypatch, has_org):
     from app.services import clerk
 
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -268,9 +268,15 @@ async def test_pending_token_is_only_valid_for_identity_onboarding(monkeypatch, 
     if has_org:
         claims["o"] = {"id": "org_synthetic", "slg": "firstout", "rol": "member"}
     token = jwt.encode(claims, private, algorithm="RS256")
-    assert (await clerk.verify_clerk_session(token)).user_id == "user_pending"
+    with pytest.raises(HTTPException) as pending:
+        await clerk.verify_clerk_session(token)
+    assert pending.value.status_code == 401
     with pytest.raises(HTTPException, match="Invalid Clerk session"):
         await clerk.verify_clerk_token(token)
+    claims["sts"] = "active"
+    assert (
+        await clerk.verify_clerk_session(jwt.encode(claims, private, algorithm="RS256"))
+    ).user_id == "user_pending"
     claims["azp"] = "https://untrusted.example"
     with pytest.raises(HTTPException):
         await clerk.verify_clerk_session(jwt.encode(claims, private, algorithm="RS256"))

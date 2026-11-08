@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
@@ -331,11 +333,13 @@ async def test_paid_handoff_posts_external_tender_once_and_acknowledges_stock_af
         "/api/v1/auth/login",
         json={"email": actor.email, "password": "known-test-password"},
     )
-    assert rejected_login.status_code == 401
-    from app.services.auth import JWT_COOKIE_NAME, create_access_token
+    assert rejected_login.status_code == 400
+    from app.services.auth import JWT_COOKIE_NAME
+    from tests.conftest import legacy_staff_token
 
     owner_client.cookies.clear()
-    actor_token = create_access_token(actor.id, 1)
+    owner_client.headers.pop("Authorization", None)
+    actor_token = legacy_staff_token(actor.id, token_version=actor.token_version)
     actor_session = await owner_client.get(
         "/api/v1/auth/me", cookies={JWT_COOKIE_NAME: actor_token}
     )
@@ -480,12 +484,10 @@ async def test_paid_handoff_machine_and_staff_routes_enforce_their_own_permissio
     assert await async_db.scalar(select(func.count()).select_from(TaxInvoice)) == 0
 
     await async_client.post("/api/v1/auth/logout")
+    async_client.headers.pop("Authorization", None)
     unauthenticated = await async_client.get("/api/v1/storefront/orders")
     assert unauthenticated.status_code == 401
-    books_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    books_login = await authenticate_as(async_client, "books@example.com")
     assert books_login.status_code == 200
     refund_read = await async_client.get("/api/v1/storefront/orders")
     assert refund_read.status_code == 200
@@ -541,19 +543,15 @@ async def test_collection_status_is_staff_mutable_idempotent_and_acknowledged_pe
 
     status_url = f"/api/v1/storefront/orders/{handoff['id']}/collection-status"
     await async_client.post("/api/v1/auth/logout")
-    books_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    books_login = await authenticate_as(async_client, "books@example.com")
     assert books_login.status_code == 200
     forbidden_books = await async_client.patch(status_url, json={"status": "ready_for_collection"})
     assert forbidden_books.status_code == 403
 
     await async_client.post("/api/v1/auth/logout")
-    warehouse_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse@example.com", "password": settings.seed_warehouse_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    warehouse_login = await authenticate_as(async_client, "warehouse@example.com")
     assert warehouse_login.status_code == 200
     warehouse_list = await async_client.get("/api/v1/storefront/orders")
     assert warehouse_list.status_code == 200
@@ -563,10 +561,8 @@ async def test_collection_status_is_staff_mutable_idempotent_and_acknowledged_pe
     assert warehouse_ready.json()["fulfillment_status"] == "ready_for_collection"
 
     await owner_client.post("/api/v1/auth/logout")
-    owner_login = await owner_client.post(
-        "/api/v1/auth/login",
-        json={"email": "owner@example.com", "password": settings.seed_owner_password},
-    )
+    owner_client.headers.pop("Authorization", None)
+    owner_login = await authenticate_as(owner_client, "owner@example.com")
     assert owner_login.status_code == 200
 
     ready = await owner_client.patch(status_url, json={"status": "ready_for_collection"})

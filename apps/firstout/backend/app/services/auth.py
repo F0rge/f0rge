@@ -2,35 +2,22 @@ from __future__ import annotations
 
 from typing import Optional
 
-import datetime
 import uuid
 
 import bcrypt
-import jwt
 from fastapi import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import IdentityLookup, UserCRUD
-from app.models.user import User
+from app.crud.user import UserCRUD
 from app.permissions import role_slug
-from app.services.staff_identity import resolve_membership, staff_identity_ctx
-from app.services.tenant_host import request_tenant_slug, require_matching_host
-from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
+from app.services.staff_identity import staff_identity_ctx
 from fastapi import Request
 from app.services.permissions import PermissionService
 from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
-JWT_ALGORITHM = "HS256"
 JWT_COOKIE_NAME = "firstout_session"
 MIN_PASSWORD_LENGTH = 8
-
-
-def _require_jwt_secret() -> str:
-    if not settings.jwt_secret:
-        raise ValidationError("JWT secret not configured")
-    return settings.jwt_secret
 
 
 def hash_password(password: str) -> str:
@@ -43,84 +30,6 @@ def verify_password(password: str, password_hash: str) -> bool:
     except ValueError:
         # Clerk-only identities deliberately have no local password verifier.
         return False
-
-
-def create_access_token(
-    user_id: uuid.UUID,
-    ttl_hours: int,
-    *,
-    token_version: int = 0,
-) -> str:
-    now = datetime.datetime.utcnow()
-    payload = {
-        "sub": str(user_id),
-        "ver": token_version,
-        "iat": now,
-        "exp": now + datetime.timedelta(hours=ttl_hours),
-    }
-    return jwt.encode(payload, _require_jwt_secret(), algorithm=JWT_ALGORITHM)
-
-
-def decode_access_token_claims(token: str) -> tuple[uuid.UUID, int]:
-    try:
-        payload = jwt.decode(token, _require_jwt_secret(), algorithms=[JWT_ALGORITHM])
-    except jwt.PyJWTError as exc:
-        raise UnauthorizedError("Invalid session") from exc
-
-    sub = payload.get("sub")
-    if not sub:
-        raise UnauthorizedError("Invalid session")
-    if payload.get("typ") == "customer":
-        raise UnauthorizedError("Invalid session")
-
-    try:
-        user_id = uuid.UUID(str(sub))
-    except ValueError as exc:
-        raise UnauthorizedError("Invalid session") from exc
-
-    raw_version = payload.get("ver", 0)
-    if isinstance(raw_version, bool):
-        raise UnauthorizedError("Invalid session")
-    try:
-        version = int(raw_version)
-    except (TypeError, ValueError) as exc:
-        raise UnauthorizedError("Invalid session") from exc
-    return user_id, version
-
-
-def decode_access_token(token: str) -> uuid.UUID:
-    user_id, _version = decode_access_token_claims(token)
-    return user_id
-
-
-async def issue_session_cookie(db: AsyncSession, user: User, response: Response) -> None:
-    if tenant_id_ctx.get() not in (None, user.team_id):
-        from app.database import tenant_session
-
-        async with tenant_session(user.team_id) as home_db:
-            team_settings = await TeamSettingsCRUD(home_db).get_or_create_for_team(user.team_id)
-            ttl_hours = int(team_settings.session_ttl_hours)
-    else:
-        team_settings = await TeamSettingsCRUD(db).get_or_create_for_team(user.team_id)
-        ttl_hours = int(team_settings.session_ttl_hours)
-    token = create_access_token(
-        user.id,
-        ttl_hours,
-        token_version=int(user.token_version),
-    )
-    set_session_cookie(response, token, max_age=ttl_hours * 3600)
-
-
-def set_session_cookie(response: Response, token: str, *, max_age: int) -> None:
-    response.set_cookie(
-        key=JWT_COOKIE_NAME,
-        value=token,
-        httponly=True,
-        samesite="lax",
-        path="/",
-        secure=settings.cookie_secure,
-        max_age=max_age,
-    )
 
 
 def clear_session_cookie(response: Response) -> None:
@@ -144,19 +53,7 @@ class AuthService:
     async def login(
         self, email: str, password: str, response: Response, request: Optional[Request] = None
     ) -> dict[str, str]:
-        user = await IdentityLookup(self.db).for_password_login(email)
-        if user is None or not verify_password(password, user.password_hash):
-            raise UnauthorizedError("Invalid email or password")
-        if user.is_disabled:
-            raise UnauthorizedError("Invalid email or password")
-
-        identity = await resolve_membership(self.db, user)
-        if request is not None:
-            require_matching_host(request_tenant_slug(request), identity.team_slug)
-        tenant_id_ctx.set(identity.team_id)
-        await apply_tenant_context(self.db, identity.team_id)
-        await issue_session_cookie(self.db, user, response)
-        return {"email": user.email}
+        raise ValidationError("Sign in with Clerk; local password login has been retired")
 
     async def logout(self, response: Response) -> None:
         clear_session_cookie(response)

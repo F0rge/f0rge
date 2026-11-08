@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import time
+from types import SimpleNamespace
 from contextlib import asynccontextmanager
 
 os.environ.setdefault(
@@ -15,6 +17,8 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 import sqlalchemy as sa  # noqa: E402
+import jwt  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
 from f0rge_testing import async_url, postgres_container_fixture, savepoint_session  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.ext.asyncio import (
@@ -44,6 +48,158 @@ OWNER_PASSWORD = settings.seed_owner_password
 
 _container_fixture = postgres_container_fixture("postgres:16")
 _bootstrap_team_id = None
+_test_signing_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+TEST_CLERK_ISSUER = "https://synthetic.clerk.accounts.dev"
+
+
+def legacy_staff_token(user_id, ttl_hours=1, *, token_version=0):
+    """Retired format, generated only to prove that requests reject it."""
+    now = int(time.time())
+    return jwt.encode(
+        {"sub": str(user_id), "ver": token_version, "iat": now, "exp": now + ttl_hours * 3600},
+        settings.jwt_secret,
+        algorithm="HS256",
+    )
+
+
+def legacy_portal_token(portal_user_id, ttl_hours=1, *, team_id=None):
+    """Retired customer format, never accepted by the application."""
+    from f0rge_db.organisation import tenant_id_ctx
+
+    now = int(time.time())
+    claims = {
+        "sub": str(portal_user_id),
+        "typ": "customer",
+        "iat": now,
+        "exp": now + ttl_hours * 3600,
+    }
+    team_id = team_id or tenant_id_ctx.get()
+    if team_id:
+        claims["team_id"] = str(team_id)
+    return jwt.encode(claims, settings.jwt_secret, algorithm="HS256")
+
+
+def signed_clerk_token(subject: str, *, org_id="", org_slug="", status=None, **overrides) -> str:
+    now = int(time.time())
+    claims = {
+        "iss": TEST_CLERK_ISSUER,
+        "sub": subject,
+        "iat": now,
+        "nbf": now,
+        "exp": now + 300,
+        "azp": "http://test",
+    }
+    if org_id:
+        claims["o"] = {"id": org_id, "slg": org_slug, "rol": "member"}
+    if status is not None:
+        claims["sts"] = status
+    claims.update(overrides)
+    return jwt.encode(claims, _test_signing_key, algorithm="RS256")
+
+
+class ClerkTestClient(AsyncClient):
+    test_db: AsyncSession
+
+
+async def _link_test_staff(db, user):
+    from app.models.team import Team
+
+    team = await db.get(Team, user.team_id)
+    user.clerk_user_id = user.clerk_user_id or "user_test_" + user.id.hex
+    team.clerk_org_id = team.clerk_org_id or "org_test_" + team.id.hex
+    await db.flush()
+    return team
+
+
+async def authenticate_as(client, email: str) -> httpx.Response:
+    """Explicit fixture sign-in; the actual request still verifies JWT/membership."""
+    from app.models.user import User
+
+    user = await client.test_db.scalar(sa.select(User).where(User.email == email))
+    assert user is not None, "Create owned fixture staff before authentication"
+    team = await _link_test_staff(client.test_db, user)
+    client.headers["Authorization"] = "Bearer " + signed_clerk_token(
+        user.clerk_user_id, org_id=team.clerk_org_id, org_slug=team.slug
+    )
+    return await client.get("/api/v1/auth/me")
+
+
+async def create_test_staff(
+    client,
+    *,
+    email: str,
+    password="test-password",
+    role="buyer",
+    display_name=None,
+    default_location_id=None,
+) -> dict:
+    """Owned database fixture, never a replacement response from a retired API."""
+    import uuid
+    from app.models.user import User
+    from app.models.membership import Membership
+    from app.models.team import Team
+    from app.services.auth import hash_password
+    from f0rge_db.organisation import tenant_id_ctx
+
+    team = await client.test_db.get(Team, tenant_id_ctx.get())
+    existing = await client.test_db.scalar(sa.select(User).where(User.email == email))
+    if existing is not None:
+        assert existing.team_id == team.id and existing.role == role, "Fixture identity mismatch"
+        await _link_test_staff(client.test_db, existing)
+        return _test_staff_record(existing, team)
+    user = User(
+        team_id=team.id,
+        email=email,
+        password_hash=hash_password(password),
+        role=role,
+        display_name=display_name,
+        is_disabled=False,
+        default_location_id=uuid.UUID(str(default_location_id)) if default_location_id else None,
+    )
+    client.test_db.add(user)
+    await client.test_db.flush()
+    client.test_db.add(
+        Membership(
+            user_id=user.id,
+            team_id=team.id,
+            role=role,
+            is_legacy_home=True,
+            is_disabled=False,
+            default_location_id=user.default_location_id,
+        )
+    )
+    await _link_test_staff(client.test_db, user)
+    return _test_staff_record(user, team)
+
+
+def _test_staff_record(user, team) -> dict:
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "role": user.role,
+        "display_name": user.display_name,
+        "is_disabled": user.is_disabled,
+        "team_id": str(team.id),
+        "team": {"id": str(team.id), "name": team.name},
+        "default_location_id": str(user.default_location_id) if user.default_location_id else None,
+    }
+
+
+@pytest.fixture(autouse=True)
+def clerk_test_verification(monkeypatch):
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
+    monkeypatch.setattr(settings, "clerk_enabled", True)
+    monkeypatch.setattr(settings, "clerk_issuer", TEST_CLERK_ISSUER)
+    monkeypatch.setattr(
+        settings, "clerk_authorized_parties", ["http://test", "https://app.firstout.co.za"]
+    )
+    monkeypatch.setattr(
+        "app.services.clerk.jwks_client",
+        lambda _: SimpleNamespace(
+            get_signing_key_from_jwt=lambda _: SimpleNamespace(key=_test_signing_key.public_key())
+        ),
+    )
+
 
 if os.environ.get("FIRSTOUT_TEST_DATABASE_URL"):
 
@@ -160,17 +316,15 @@ async def async_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient]:
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with ClerkTestClient(transport=transport, base_url="http://test") as client:
+        client.test_db = async_db
         yield client
     app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
 async def owner_client(async_client: AsyncClient) -> AsyncClient:
-    resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
-    )
+    resp = await authenticate_as(async_client, OWNER_EMAIL)
     assert resp.status_code == 200
     return async_client
 
