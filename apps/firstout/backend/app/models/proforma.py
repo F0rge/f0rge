@@ -8,10 +8,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class Proforma(UUIDPkMixin, TimestampMixin, Base):
+class Proforma(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "proformas"
 
     supplier_id: Mapped[uuid.UUID] = mapped_column(

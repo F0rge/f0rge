@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -30,7 +31,7 @@ class StockReturnStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class StockReturn(UUIDPkMixin, TimestampMixin, Base):
+class StockReturn(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "stock_returns"
 
     return_number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -113,7 +114,7 @@ class StockReturn(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class StockReturnLine(UUIDPkMixin, TimestampMixin, Base):
+class StockReturnLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "stock_return_lines"
 
     return_id: Mapped[uuid.UUID] = mapped_column(

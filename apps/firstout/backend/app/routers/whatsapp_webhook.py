@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 from typing import Optional
+import json
+
+from sqlalchemy import select
+from app.database import tenant_session
+from app.models.team import Team
+from app.models.team_settings import TeamSettings
+from app.exceptions import ForbiddenError
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import PlainTextResponse
@@ -27,5 +34,31 @@ async def receive_whatsapp_webhook(
     service: WhatsAppWebhookService = Depends(get_whatsapp_webhook_service),
     x_hub_signature_256: Optional[str] = Header(default=None),
 ) -> dict:
-    await service.handle_post(await request.body(), x_hub_signature_256)
+    raw = await request.body()
+    try:
+        payload = json.loads(raw)
+        phone_ids = {
+            change["value"]["metadata"]["phone_number_id"]
+            for entry in payload.get("entry", [])
+            for change in entry.get("changes", [])
+        }
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise ForbiddenError("Invalid WhatsApp tenant routing") from exc
+    if len(phone_ids) != 1 or not x_hub_signature_256:
+        raise ForbiddenError("Invalid WhatsApp tenant routing")
+    phone_id = next(iter(phone_ids))
+    async with tenant_session() as directory:
+        ids = list(await directory.scalars(select(Team.id).where(Team.status == "active")))
+    matches = []
+    for team_id in ids:
+        async with tenant_session(team_id) as db:
+            row = await db.scalar(
+                select(TeamSettings).where(TeamSettings.wa_phone_number_id == phone_id)
+            )
+            if row is not None and row.wa_app_secret_encrypted:
+                matches.append(team_id)
+    if len(matches) != 1:
+        raise ForbiddenError("Unknown WhatsApp tenant")
+    async with tenant_session(matches[0]) as db:
+        await WhatsAppWebhookService(db).handle_post(raw, x_hub_signature_256)
     return {"ok": True}

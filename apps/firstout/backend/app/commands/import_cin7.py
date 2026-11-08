@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -62,19 +63,22 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write the upsert. Without this flag the transaction is rolled back.",
     )
+    parser.add_argument(
+        "--team-id", required=True, type=uuid.UUID, help="Explicit target team UUID"
+    )
     return parser
 
 
-async def _run(export_dir: Path, commit: bool) -> int:
+async def _run(export_dir: Path, commit: bool, team_id: uuid.UUID) -> int:
     from app.config import settings
-    from app.database import async_session_maker
+    from app.database import tenant_session
     from app.services.cin7_import import format_report, run_import
 
     assert_safe_database_url(settings.database_url)
     if not export_dir.is_dir():
         print(f"Export directory does not exist: {export_dir}", file=sys.stderr)
         return 2
-    async with async_session_maker() as session:
+    async with tenant_session(team_id) as session:
         assert isinstance(session, AsyncSession)
         report = await run_import(session, export_dir)
         report.dry_run = not commit
@@ -88,7 +92,7 @@ async def _run(export_dir: Path, commit: bool) -> int:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = _parser().parse_args(argv)
-    return asyncio.run(_run(args.export_dir, args.commit))
+    return asyncio.run(_run(args.export_dir, args.commit, args.team_id))
 
 
 if __name__ == "__main__":

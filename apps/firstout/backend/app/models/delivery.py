@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -38,7 +39,7 @@ class DeliveryStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Delivery(UUIDPkMixin, TimestampMixin, Base):
+class Delivery(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "deliveries"
 
     delivery_number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -146,7 +147,7 @@ class Delivery(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class DeliveryLine(UUIDPkMixin, TimestampMixin, Base):
+class DeliveryLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "delivery_lines"
 
     delivery_id: Mapped[uuid.UUID] = mapped_column(

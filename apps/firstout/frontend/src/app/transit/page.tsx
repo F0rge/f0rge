@@ -110,7 +110,7 @@ export default function TransitPage() {
         />
       ) : null}
 
-      <div data-tour="transit-list">
+      <div>
       {loading ? (
         <p className="cds--type-body-01">Loading transit…</p>
       ) : orders.length === 0 ? (

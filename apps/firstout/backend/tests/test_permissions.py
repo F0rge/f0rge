@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from httpx import AsyncClient
 
 from app.config import settings
@@ -38,7 +40,8 @@ SHOWROOM_TILL_KEYS = [
 
 async def _login(client: AsyncClient, email: str, password: str) -> AsyncClient:
     client.cookies.clear()
-    resp = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    client.headers.pop("Authorization", None)
+    resp = await authenticate_as(client, email)
     assert resp.status_code == 200
     return client
 
@@ -128,15 +131,14 @@ async def test_custom_showroom_till_no_discount_or_cost(
     assert "till.discount" not in role["permissions"]
     assert "stock.cost.view" not in role["permissions"]
 
-    user_resp = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "showroom-till@example.com",
             "password": "showroom-password",
             "role": role["slug"],
         },
     )
-    assert user_resp.status_code == 201
 
     await _login(async_client, "showroom-till@example.com", "showroom-password")
     me = await async_client.get("/api/v1/auth/me")
@@ -233,15 +235,14 @@ async def test_cannot_delete_assigned_custom_role(
     assert created.status_code == 201
     slug = created.json()["slug"]
     role_id = created.json()["id"]
-    user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "temp-assigned@example.com",
             "password": "temp-password",
             "role": slug,
         },
     )
-    assert user.status_code == 201
     denied = await owner_client.delete(f"/api/v1/roles/{role_id}")
     assert denied.status_code == 409
 

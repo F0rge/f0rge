@@ -5,6 +5,7 @@ from typing import AsyncIterator, Callable, Iterator
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Session
 from testcontainers.postgres import PostgresContainer
 
 
@@ -40,7 +41,9 @@ def async_url(container: PostgresContainer) -> str:
 
 
 @asynccontextmanager
-async def savepoint_session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+async def savepoint_session(
+    engine: AsyncEngine, *, sync_session_class: type[Session] = Session
+) -> AsyncIterator[AsyncSession]:
     """An ``AsyncSession`` whose writes are rolled back on exit — per-test isolation.
 
     Pattern: open a connection, begin an outer transaction, bind a session to
@@ -54,6 +57,7 @@ async def savepoint_session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
             bind=conn,
             expire_on_commit=False,
             class_=AsyncSession,
+            sync_session_class=sync_session_class,
             join_transaction_mode="create_savepoint",
         )
         session = session_maker()

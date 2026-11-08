@@ -39,6 +39,7 @@ from app.services.cin7_import.report import ImportReport
 from app.services.object_storage import delete_object, read_bytes, save_bytes
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+from f0rge_db.organisation import tenant_id_ctx
 
 logger = logging.getLogger(__name__)
 
@@ -106,16 +107,19 @@ def _csv(rows: list[dict[str, str]], columns: list[str]) -> str:
 
 
 def _spawn(job_id: uuid.UUID) -> None:
-    task = asyncio.create_task(_run_detached(job_id))
+    team_id = tenant_id_ctx.get()
+    if team_id is None:
+        raise RuntimeError("Cin7 job requires tenant context")
+    task = asyncio.create_task(_run_detached(job_id, team_id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
 
-async def _run_detached(job_id: uuid.UUID) -> None:
-    from app.database import async_session_maker
+async def _run_detached(job_id: uuid.UUID, team_id: uuid.UUID) -> None:
+    from app.database import tenant_session
 
     try:
-        async with async_session_maker() as session:
+        async with tenant_session(team_id) as session:
             await Cin7ImportJobService(session).execute(job_id)
     except Exception:
         logger.exception("cin7 import job failed to start")

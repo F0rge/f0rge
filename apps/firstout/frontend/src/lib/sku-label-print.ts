@@ -1,3 +1,4 @@
+import { loadLabelSettings, labelPageCss } from "./label-settings";
 import JsBarcode from "jsbarcode";
 
 import { printHtml } from "@/lib/print-html";
@@ -18,33 +19,48 @@ function barcodeSvg(value: string): string {
   }
   try {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    JsBarcode(svg, trimmed, { format: "CODE128", displayValue: true, font: "monospace" });
+    JsBarcode(svg, trimmed, {
+      format: "CODE128",
+      displayValue: true,
+      font: "monospace",
+    });
     return svg.outerHTML;
   } catch {
     return `<div class="barcode-text">${escapeHtml(trimmed)}</div>`;
   }
 }
 
-export function printSkuLabels(targetSkus: Sku[]): void {
-  if (targetSkus.length === 0) {
+export async function printSkuLabels(targetSkus: Sku[]): Promise<void> {
+  if (targetSkus.length === 0) return;
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.alert("Allow pop-ups to print.");
     return;
   }
-  const labelsHtml = targetSkus
-    .map(
-      (sku) => `
+  try {
+    const settings = await loadLabelSettings();
+    if (targetSkus.length === 0) {
+      return;
+    }
+    const labelsHtml = targetSkus
+      .map(
+        (sku) => `
     <div class="label">
-      <div class="name">${escapeHtml(sku.name)}</div>
-      <div class="ref">${escapeHtml(sku.our_ref)}</div>
-      ${barcodeSvg(sku.our_barcode)}
+      ${settings.logo ? `<img class="label-logo" src="${settings.logo}" alt="" />` : ""}
+      ${settings.label_show_name ? `<div class="name">${escapeHtml(sku.name)}</div>` : ""}
+      ${settings.label_show_reference ? `<div class="ref">${escapeHtml(sku.our_ref)}</div>` : ""}
+      ${settings.label_show_barcode ? barcodeSvg(sku.our_barcode) : ""}
     </div>`,
-    )
-    .join("");
-  printHtml(`<!DOCTYPE html>
+      )
+      .join("");
+    printHtml(
+      `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Barcode labels</title>
   <style>
+    ${labelPageCss(settings)}
     body { font-family: "IBM Plex Sans", sans-serif; margin: 1.5rem; color: #161616; }
     .label { page-break-inside: avoid; margin-bottom: 2rem; padding: 1rem; border: 1px solid #e0e0e0; }
     .name { font-size: 1rem; margin-bottom: 0.25rem; }
@@ -55,5 +71,13 @@ export function printSkuLabels(targetSkus: Sku[]): void {
   </style>
 </head>
 <body>${labelsHtml}</body>
-</html>`);
+</html>`,
+      printWindow,
+    );
+  } catch (error) {
+    printWindow.close();
+    window.alert(
+      error instanceof Error ? error.message : "Unable to load label settings.",
+    );
+  }
 }

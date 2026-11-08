@@ -403,7 +403,6 @@ function ReturnsPageContent() {
           </Button>
           {canMutate ? (
             <Button
-              data-tour="return-new"
               onClick={() => {
                 resetCreateForm();
                 setCreateOpen(true);

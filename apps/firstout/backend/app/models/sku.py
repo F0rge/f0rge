@@ -20,10 +20,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class Sku(UUIDPkMixin, TimestampMixin, Base):
+class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "skus"
 
     our_ref: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)

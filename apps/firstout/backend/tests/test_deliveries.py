@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from decimal import Decimal
 
 from httpx import AsyncClient
@@ -13,48 +15,36 @@ from tests.test_transfers import _receive_qty_at_location
 
 async def _create_till_user(async_client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-s11-dlv@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    if create_user.status_code == 409:
-        pass
-    else:
-        assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-s11-dlv@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "till-s11-dlv@example.com")
     assert login_resp.status_code == 200
     return async_client
 
 
 async def _create_buyer_user(async_client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-s11-dlv@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    if create_user.status_code == 409:
-        pass
-    else:
-        assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer-s11-dlv@example.com", "password": "buyer-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "buyer-s11-dlv@example.com")
     assert login_resp.status_code == 200
     return async_client
 
@@ -64,24 +54,18 @@ async def _create_warehouse_user(
     owner_client: AsyncClient,
 ) -> AsyncClient:
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "warehouse-s11-dlv@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
-    if create_user.status_code == 409:
-        pass
-    else:
-        assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse-s11-dlv@example.com", "password": "warehouse-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "warehouse-s11-dlv@example.com")
     assert login_resp.status_code == 200
     return async_client
 
@@ -363,6 +347,7 @@ async def test_buyer_forbidden_warehouse_pack_unauthenticated(
     assert packed.status_code == 200
 
     async_client.cookies.clear()
+    async_client.headers.pop("Authorization", None)
     unauth = await async_client.post("/api/v1/deliveries", json=payload)
     assert unauth.status_code == 401
 

@@ -57,6 +57,8 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
+import { clerkEnabled, StaffOrganizationSwitcher, useStaffSession } from "@/components/staff-provider";
+import { isPublicAuthPath, missingSessionDestination } from "@/lib/auth-routes";
 import { useAuth } from "@/lib/auth";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import { can } from "@/lib/permissions";
@@ -78,7 +80,6 @@ import {
   isWarehousePath,
 } from "@/lib/nav";
 import { HeaderSearch } from "@/components/header-search";
-import { OverviewTourButton, PageTourButton, TourProvider } from "@/components/tour/tour-provider";
 import {
   getNarrowViewportServerSnapshot,
   getNarrowViewportSnapshot,
@@ -132,6 +133,7 @@ const ICONS = {
   "/roles": UserAdmin,
   "/profile": User,
   "/settings": Settings,
+  "/organisation": UserAdmin,
 } as const;
 
 type NavHref = keyof typeof ICONS;
@@ -148,6 +150,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
+  const { signedIn: clerkSignedIn } = useStaffSession();
   const expanded = useSyncExternalStore(
     subscribeSideNavExpanded,
     getSideNavExpandedSnapshot,
@@ -158,17 +161,13 @@ export function AppShell({ children }: AppShellProps) {
     getNarrowViewportSnapshot,
     getNarrowViewportServerSnapshot,
   );
-  const isPublic =
-    pathname === "/login" ||
-    pathname === "/forgot-password" ||
-    pathname === "/reset-password" ||
-    pathname.startsWith("/trade");
+  const isPublic = isPublicAuthPath(pathname);
 
   useEffect(() => {
     if (!loading && !user && !isPublic) {
-      router.replace("/login");
+      router.replace(missingSessionDestination(clerkSignedIn));
     }
-  }, [loading, user, isPublic, router]);
+  }, [loading, user, isPublic, clerkSignedIn, router]);
 
   useEffect(() => {
     if (narrow) {
@@ -207,7 +206,8 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   const adminItems = ADMIN_NAV_ITEMS.filter(
-    (item) => !("permission" in item) || can(user, item.permission),
+    (item) => (item.href !== "/organisation" || clerkEnabled) &&
+      (!("permission" in item) || can(user, item.permission)),
   );
   const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
     ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders")
@@ -273,61 +273,54 @@ export function AppShell({ children }: AppShellProps) {
 
   async function handleLogout() {
     await logout();
-    router.push("/login");
+    router.push("/clerk-login");
   }
 
   return (
-    <TourProvider userId={user.id}>
-      <div
-        className="firstout-shell"
-        data-nav-expanded={expanded ? "true" : "false"}
-        data-compact={narrow ? "true" : "false"}
-      >
-        <Theme theme="g100">
-          <Header aria-label="Firstout">
-            <SkipToContent />
-            {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
-            <HeaderMenuButton
-              aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
-              isActive={expanded}
-              isCollapsible
-              onClick={toggleSideNavExpanded}
-            />
-            <HeaderName
-              href="/"
-              prefix=""
-              className="firstout-brand"
-              onClick={(event) => {
-                event.preventDefault();
-                router.push("/");
-              }}
+    <div
+      className="firstout-shell"
+      data-nav-expanded={expanded ? "true" : "false"}
+      data-compact={narrow ? "true" : "false"}
+    >
+      <Theme theme="g100">
+        <Header aria-label="Firstout">
+          <SkipToContent />
+          {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
+          <HeaderMenuButton
+            aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
+            isActive={expanded}
+            isCollapsible
+            onClick={toggleSideNavExpanded}
+          />
+          <HeaderName
+            href="/"
+            prefix=""
+            className="firstout-brand"
+            onClick={(event) => {
+              event.preventDefault();
+              router.push("/");
+            }}
+          >
+            <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
+          </HeaderName>
+          <HeaderGlobalBar>
+            <StaffOrganizationSwitcher />
+            <HeaderSearch />
+            <span className="firstout-header-user" title={user.email}>
+              {user.display_name || user.email}
+            </span>
+            <HeaderGlobalAction
+              aria-label="Log out"
+              tooltipAlignment="end"
+              onClick={() => void handleLogout()}
             >
-              <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
-            </HeaderName>
-            <HeaderGlobalBar>
-              <HeaderSearch />
-              <span className="firstout-tour-anchor" data-tour="header-page-tour">
-                <PageTourButton />
-              </span>
-              <span className="firstout-tour-anchor" data-tour="header-overview-tour">
-                <OverviewTourButton />
-              </span>
-              <span className="firstout-header-user" title={user.email}>
-                {user.display_name || user.email}
-              </span>
-              <HeaderGlobalAction
-                aria-label="Log out"
-                tooltipAlignment="end"
-                onClick={() => void handleLogout()}
-              >
-                <Logout size={20} />
-              </HeaderGlobalAction>
-            </HeaderGlobalBar>
-          </Header>
+              <Logout size={20} />
+            </HeaderGlobalAction>
+          </HeaderGlobalBar>
+        </Header>
         <SideNav
           aria-label="Firstout sections"
           className="firstout-side-nav"
-          data-tour="side-nav"
           expanded={expanded}
           isRail={!narrow}
           isPersistent={!narrow}
@@ -363,6 +356,5 @@ export function AppShell({ children }: AppShellProps) {
         </main>
       </Theme>
     </div>
-    </TourProvider>
   );
 }

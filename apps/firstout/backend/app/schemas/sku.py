@@ -5,12 +5,13 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class SkuCreate(BaseModel):
     our_ref: str = Field(min_length=1, max_length=64)
-    our_barcode: str = Field(min_length=1, max_length=64)
+    # Blank means the service assigns ``csv:<our_ref>``. The column itself stays required.
+    our_barcode: Optional[str] = Field(default=None, max_length=64)
     name: str = Field(min_length=1)
     design: str = Field(min_length=1)
     fabric: str = Field(min_length=1)
@@ -21,6 +22,16 @@ class SkuCreate(BaseModel):
     opening_unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
     opening_date: Optional[datetime.date] = None
     carton_count: int = Field(default=1, ge=1)
+
+    @field_validator("our_barcode", mode="before")
+    @classmethod
+    def blank_barcode_means_generate(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned or None
+        return value
 
     @model_validator(mode="after")
     def opening_fields_together(self) -> SkuCreate:

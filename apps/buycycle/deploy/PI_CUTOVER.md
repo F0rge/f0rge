@@ -15,7 +15,7 @@ Pi: aarch64, Coolify v4.0.0-beta.473 (Scheduled Tasks available). Internal only.
 | Domains | none (leave empty, so no Traefik route) |
 | Persistent storage | volume `buycycle-data` mounted at `/data` |
 | Env | none required (defaults live in the Dockerfile). `TZ=Europe/Luxembourg` is already set |
-| Auto deploy | **off** (CI triggers it via the manual GitHub webhook) |
+| Auto deploy | **on** (`is_auto_deploy_enabled: true`). Coolify v4 blocks the manual webhook CI uses when this is off. This repo has no push webhooks, so on does not double-deploy. |
 | Health check | Dockerfile HEALTHCHECK (curls 8095/8096 inside the container) |
 
 Then:

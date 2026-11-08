@@ -338,7 +338,7 @@ export default function PurchaseOrdersPage() {
             Raise POs, mark on water, land costs, and receive stock.
           </p>
         </div>
-        {canRaise ? <Button data-tour="po-new" onClick={openCreate}>Raise PO</Button> : null}
+        {canRaise ? <Button onClick={openCreate}>Raise PO</Button> : null}
       </div>
 
       {success ? (

@@ -331,7 +331,7 @@ function QuotesPageInner() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Quotes</h1>
         {canMutate ? (
-          <Button data-tour="quote-new" onClick={() => setOpen(true)}>New quote</Button>
+          <Button onClick={() => setOpen(true)}>New quote</Button>
         ) : null}
       </div>
       {loading ? <p className="cds--type-body-01">Loading quotes…</p> : null}

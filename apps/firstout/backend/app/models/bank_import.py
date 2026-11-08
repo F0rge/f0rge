@@ -10,10 +10,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class BankImport(UUIDPkMixin, TimestampMixin, Base):
+class BankImport(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "bank_imports"
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -33,7 +34,7 @@ class BankImport(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class BankImportLine(UUIDPkMixin, TimestampMixin, Base):
+class BankImportLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "bank_import_lines"
 
     import_id: Mapped[uuid.UUID] = mapped_column(
@@ -68,7 +69,7 @@ class BankImportLine(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class BankImportLineAllocation(UUIDPkMixin, TimestampMixin, Base):
+class BankImportLineAllocation(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """One bank line can pay several invoices or bills. The first payment is also
     stored on the line so existing matched checks keep working.
     """

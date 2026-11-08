@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.models.membership import Membership
 from app.models.account import Account, AccountType, TaxTreatment
 from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.books_period import BooksPeriod, BooksPeriodStatus
@@ -97,6 +98,7 @@ from app.models.vat201_period import (
 )
 
 __all__ = [
+    "Membership",
     "Account",
     "AccountType",
     "BankImport",
@@ -215,3 +217,7 @@ __all__ = [
     "Vat201PeriodEventAction",
     "Vat201PeriodStatus",
 ]
+
+from app.models.clerk_webhook_event import ClerkWebhookEvent  # noqa: F401
+from app.models.tenant_onboarding import TenantInvitation, TenantProvisioningAttempt  # noqa: F401
+from app.models.portal_identity import PortalAccess, PortalInvitation  # noqa: F401

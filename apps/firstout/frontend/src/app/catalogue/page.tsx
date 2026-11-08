@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   Checkbox,
@@ -403,7 +405,7 @@ function CataloguePageContent() {
               >
                 Import
               </Button>
-              <Button data-tour="catalogue-new" onClick={() => router.push("/catalogue/new")}>New SKU</Button>
+              <Button onClick={() => router.push("/catalogue/new")}>New SKU</Button>
             </>
           ) : null}
         </div>
@@ -563,7 +565,7 @@ function CataloguePageContent() {
                                       }}
                                     >
                                       {entry.photo_storage_key ? (
-                                        <img
+                                        <StaffImage
                                           src={skuPhotoUrl(entry.id)}
                                           alt={entry.name}
                                           width={48}

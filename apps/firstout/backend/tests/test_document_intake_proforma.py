@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 import json
 import uuid
 from decimal import Decimal
@@ -39,16 +41,13 @@ async def _fake_extract(*_args, **_kwargs):
 
 async def _login(client: AsyncClient, email: str, password: str) -> None:
     client.cookies.clear()
-    resp = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    client.headers.pop("Authorization", None)
+    resp = await authenticate_as(client, email)
     assert resp.status_code == 200
 
 
 async def _create_user(owner: AsyncClient, email: str, role: str) -> None:
-    resp = await owner.post(
-        "/api/v1/users",
-        json={"email": email, "password": "role-password", "role": role},
-    )
-    assert resp.status_code == 201
+    await create_test_staff(owner, **{"email": email, "password": "role-password", "role": role})
 
 
 @pytest.mark.no_db

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 import csv
 import io
 import uuid
@@ -29,10 +31,8 @@ async def _transfer_to_bedfordview(
     kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse-po@example.com", "password": "warehouse-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "warehouse-po@example.com")
     assert login_resp.status_code == 200
     await _relogin_owner(owner_client)
     transfer = await complete_location_transfer(

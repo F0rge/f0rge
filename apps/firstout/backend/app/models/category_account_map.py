@@ -4,10 +4,11 @@ from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class CategoryAccountMap(UUIDPkMixin, TimestampMixin, Base):
+class CategoryAccountMap(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "category_account_maps"
 
     category: Mapped[str] = mapped_column(String(64), nullable=False)
