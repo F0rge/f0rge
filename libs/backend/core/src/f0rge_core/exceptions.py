@@ -18,6 +18,10 @@ class NotFoundError(DomainError):
     """Resource does not exist. Mapped to HTTP 404."""
 
 
+class GoneError(DomainError):
+    """Resource is gone or no longer addressable. Mapped to HTTP 410."""
+
+
 class ValidationError(DomainError):
     """Request data fails domain validation. Mapped to HTTP 400."""
 

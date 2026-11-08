@@ -1,5 +1,5 @@
 name: Setup Python uv
-description: uv + Python 3.10, optionally install pinned ruff from .github/ruff-version
+description: uv + Python 3.10 (repo default) and 3.11 (Marrow, Firstout, dk tag-printer), optionally install pinned ruff from .github/ruff-version
 
 inputs:
   install-ruff:
@@ -10,13 +10,54 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Select pinned uv version
+      id: uv-version
+      shell: bash
+      run: echo "version=0.13.7" >> "$GITHUB_OUTPUT"
+
     - uses: astral-sh/setup-uv@v3
+      id: setup-uv
+      continue-on-error: true
       with:
+        version: ${{ steps.uv-version.outputs.version }}
         enable-cache: true
 
-    - name: Pin Python 3.10
+    # Release-asset outages must not prevent the required checks from running.
+    # v3's post step only warns when download failed before cache-key state exists.
+    - name: Bootstrap pinned uv from PyPI if the release download failed
+      if: steps.setup-uv.outcome == 'failure'
       shell: bash
-      run: uv python install 3.10
+      env:
+        UV_BOOTSTRAP_VERSION: ${{ steps.uv-version.outputs.version }}
+      run: |
+        uv_bootstrap_venv="$RUNNER_TEMP/uv-bootstrap-venv"
+        uv_bootstrap_bin="$RUNNER_TEMP/uv-bootstrap-bin"
+        python3 -m venv "$uv_bootstrap_venv"
+        "$uv_bootstrap_venv/bin/python" -m pip install --disable-pip-version-check \
+          --index-url https://pypi.org/simple --only-binary=:all: --no-deps \
+          "uv==$UV_BOOTSTRAP_VERSION"
+        mkdir -p "$uv_bootstrap_bin"
+        # Expose only uv/uvx, preserving the runner's Python interpreter on PATH.
+        ln -sf "$uv_bootstrap_venv/bin/uv" "$uv_bootstrap_bin/uv"
+        ln -sf "$uv_bootstrap_venv/bin/uvx" "$uv_bootstrap_bin/uvx"
+        "$uv_bootstrap_venv/bin/uv" tool dir --bin >> "$GITHUB_PATH"
+        echo "$uv_bootstrap_bin" >> "$GITHUB_PATH"
+
+    - name: Verify pinned uv bootstrap
+      shell: bash
+      env:
+        UV_BOOTSTRAP_VERSION: ${{ steps.uv-version.outputs.version }}
+      # uv may append build/target metadata after its semantic version.
+      run: test "$(uv --version | awk '{print $2}')" = "$UV_BOOTSTRAP_VERSION"
+
+    - name: Pin Python 3.10 and 3.11
+      shell: bash
+      # Both interpreters are installed. CI sync selects 3.11 when the
+      # project .python-version says so (Marrow, Firstout, dk tag-printer).
+      # Other projects pass UV_PYTHON=3.10 so they do not pick up 3.11.
+      run: |
+        uv python install 3.10
+        uv python install 3.11
 
     - name: Install pinned ruff
       if: inputs.install-ruff == 'true'

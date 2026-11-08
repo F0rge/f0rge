@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
+from fastapi import Response
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,12 +12,14 @@ from app.config import settings
 from app.crud.role import RoleCRUD
 from app.crud.user import TeamCRUD, UserCRUD
 from app.models.team import Team
+from app.models.membership import Membership
+from f0rge_db.organisation import tenant_id_ctx
 from app.models.user import User, UserRole
 from app.permissions import SLUG_OWNER, role_slug
-from app.schemas.user import ProfileUpdate, UserCreate, UserUpdate
-from app.services.auth import hash_password, validate_password
+from app.schemas.user import ProfileUpdate, UserCreate, UserUpdate, UserResponse
+from app.schemas.team import TeamBrief
+from app.services.auth import hash_password
 from app.services.user_default_location import (
-    bedfordview_default_location_id,
     resolve_writable_default_location_id,
 )
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -30,50 +34,76 @@ class UserService:
         self.role_crud = RoleCRUD(db)
 
     async def create(self, data: UserCreate) -> User:
-        validate_password(data.password)
+        raise ValidationError("Invite staff from Organisation settings to join with Clerk")
+
+    async def list(self) -> list[UserResponse]:
+        users = await self.crud.list_all()
+        team_id = tenant_id_ctx.get()
         team = await self.team_crud.get_first()
-        if team is None:
-            raise ValidationError("Team not configured")
-        await self._require_known_role(data.role)
-
-        fields_set = data.model_fields_set
-        if "default_location_id" in fields_set:
-            default_location_id = await resolve_writable_default_location_id(
-                self.db,
-                data.default_location_id,
+        results = []
+        for user in users:
+            member = await self.db.scalar(
+                select(Membership).where(
+                    Membership.user_id == user.id, Membership.team_id == team_id
+                )
             )
-        elif role_slug(data.role) == UserRole.TILL.value:
-            default_location_id = await bedfordview_default_location_id(self.db)
-        else:
-            default_location_id = None
+            record = UserResponse.model_validate(user)
+            if member is not None:
+                record = record.model_copy(
+                    update={"is_disabled": user.is_disabled or member.is_disabled}
+                )
+            if member is not None and not member.is_legacy_home:
+                record = record.model_copy(
+                    update={
+                        "team_id": team_id,
+                        "team": TeamBrief(id=team.id, name=team.name),
+                        "role": member.role,
+                        "default_location_id": member.default_location_id,
+                    }
+                )
+            results.append(record)
+        return results
 
-        user = User(
-            team_id=team.id,
-            email=data.email,
-            password_hash=hash_password(data.password),
-            display_name=data.display_name,
-            role=role_slug(data.role),
-            default_location_id=default_location_id,
+    async def update(self, user_id: uuid.UUID, data: UserUpdate) -> UserResponse:
+        # Serialize tenant role/disabled edits before counting remaining owners.
+        await self.db.execute(
+            select(Team.id).where(Team.id == tenant_id_ctx.get()).with_for_update()
         )
-        await self.crud.add_and_flush(user)
-        try:
-            await self.crud.commit_refresh(user)
-        except IntegrityError as exc:
-            raise ConflictError("Email already registered") from exc
-        reloaded = await self.crud.get_by_id(user.id)
-        assert reloaded is not None
-        return reloaded
-
-    async def list(self) -> list[User]:
-        return await self.crud.list_all()
-
-    async def update(self, user_id: uuid.UUID, data: UserUpdate) -> User:
         user = await self.crud.get_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
 
-        if data.email is not None:
-            user.email = data.email
+        member = await self.db.scalar(
+            select(Membership).where(
+                Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get()
+            )
+        )
+        if member is None:
+            raise NotFoundError("User not found")
+        if not member.is_legacy_home:
+            if any(key in data.model_fields_set for key in ("display_name",)):
+                raise ValidationError(
+                    "Global identity changes require the legacy home administrator"
+                )
+            if data.role is not None:
+                await self._require_known_role(data.role)
+                if await self._is_owner_user(member.role) and not await self._is_owner_user(
+                    data.role
+                ):
+                    await self._reject_last_owner()
+                member.role = data.role
+            if data.is_disabled is not None:
+                if data.is_disabled and await self._is_owner_user(member.role):
+                    await self._reject_last_owner()
+                member.is_disabled = data.is_disabled
+            if "default_location_id" in data.model_fields_set:
+                member.default_location_id = await resolve_writable_default_location_id(
+                    self.db, data.default_location_id
+                )
+            async with unit_of_work(self.db):
+                pass
+            return next(record for record in await self.list() if record.id == user.id)
+
         if data.display_name is not None:
             user.display_name = data.display_name
         if data.role is not None:
@@ -87,10 +117,9 @@ class UserService:
         if data.is_disabled is not None:
             if data.is_disabled and await self._is_owner_user(role_slug(user.role)):
                 await self._reject_last_owner()
-            user.is_disabled = data.is_disabled
-        if data.password is not None:
-            validate_password(data.password)
-            user.password_hash = hash_password(data.password)
+            # Staff administration belongs to this organisation. The global
+            # identity flag remains authoritative for imported/security blocks.
+            member.is_disabled = data.is_disabled
         if "default_location_id" in data.model_fields_set:
             user.default_location_id = await resolve_writable_default_location_id(
                 self.db,
@@ -103,7 +132,7 @@ class UserService:
             raise ConflictError("Email already registered") from exc
         reloaded = await self.crud.get_by_id(user.id)
         assert reloaded is not None
-        return reloaded
+        return next(record for record in await self.list() if record.id == user.id)
 
     async def _require_known_role(self, slug: str) -> None:
         role = await self.role_crud.get_by_slug(role_slug(slug))
@@ -124,23 +153,33 @@ class ProfileService:
         self.db = db
         self.crud = UserCRUD(db)
 
-    async def update(self, user_id: uuid.UUID, data: ProfileUpdate) -> User:
+    async def update(
+        self,
+        user_id: uuid.UUID,
+        data: ProfileUpdate,
+        response: Response,
+    ) -> User:
         user = await self.crud.get_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
 
-        if data.email is not None:
-            user.email = data.email
         if data.display_name is not None:
             user.display_name = data.display_name
-        if data.password is not None:
-            validate_password(data.password)
-            user.password_hash = hash_password(data.password)
         if "default_location_id" in data.model_fields_set:
-            user.default_location_id = await resolve_writable_default_location_id(
-                self.db,
-                data.default_location_id,
+            location_id = await resolve_writable_default_location_id(
+                self.db, data.default_location_id
             )
+            member = await self.db.scalar(
+                select(Membership).where(
+                    Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get()
+                )
+            )
+            if member is None:
+                raise NotFoundError("Membership not found")
+            if not member.is_legacy_home:
+                member.default_location_id = location_id
+            else:
+                user.default_location_id = location_id
 
         try:
             await self.crud.commit_refresh(user)
@@ -156,18 +195,17 @@ class BootstrapService:
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.user_crud = UserCRUD(db)
-        self.team_crud = TeamCRUD(db)
 
     async def seed_if_empty(self) -> None:
-        if await self.user_crud.count() > 0:
+        if await self.db.scalar(select(User.id).limit(1)) is not None:
             return
 
         async with unit_of_work(self.db):
-            team: Optional[Team] = await self.team_crud.get_first()
+            team: Optional[Team] = await self.db.scalar(select(Team).limit(1))
             if team is None:
                 team = Team(name=self.DEFAULT_TEAM_NAME)
-                await self.team_crud.add_and_flush(team)
+                self.db.add(team)
+                await self.db.flush()
 
             owner = User(
                 team_id=team.id,
@@ -176,4 +214,15 @@ class BootstrapService:
                 display_name="Owner",
                 role=UserRole.OWNER,
             )
-            await self.user_crud.add_and_flush(owner)
+            self.db.add(owner)
+            await self.db.flush()
+            self.db.add(
+                Membership(
+                    user_id=owner.id,
+                    team_id=team.id,
+                    role=owner.role,
+                    permission_source="legacy",
+                    is_legacy_home=True,
+                    is_disabled=False,
+                )
+            )

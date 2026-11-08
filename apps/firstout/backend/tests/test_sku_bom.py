@@ -276,7 +276,19 @@ async def test_kit_till_short_component_returns_409(
         },
     )
     assert sale.status_code == 409
-    assert sale.json()["detail"] == "Kit requires pick"
+    detail = sale.json()["detail"]
+    assert detail["code"] == "kit_requires_pick"
+    assert len(detail["kits"]) == 1
+    block = detail["kits"][0]
+    assert block["sku_id"] == parent["id"]
+    assert block["sku_code"] == parent["our_ref"]
+    assert block["sku_name"] == parent["name"]
+    assert block["location_name"] == "Bedfordview"
+    assert block["reason"] == "missing_parts"
+    assert parent["name"] in block["message"]
+    assert parent["our_ref"] in block["message"]
+    assert "Bedfordview" in block["message"]
+    assert detail["message"] == block["message"]
 
     invoices = await owner_client.get("/api/v1/invoices")
     assert invoices.status_code == 200

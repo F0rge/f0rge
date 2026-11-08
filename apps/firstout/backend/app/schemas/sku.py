@@ -5,12 +5,13 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class SkuCreate(BaseModel):
     our_ref: str = Field(min_length=1, max_length=64)
-    our_barcode: str = Field(min_length=1, max_length=64)
+    # Blank means the service assigns ``csv:<our_ref>``. The column itself stays required.
+    our_barcode: Optional[str] = Field(default=None, max_length=64)
     name: str = Field(min_length=1)
     design: str = Field(min_length=1)
     fabric: str = Field(min_length=1)
@@ -21,6 +22,16 @@ class SkuCreate(BaseModel):
     opening_unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
     opening_date: Optional[datetime.date] = None
     carton_count: int = Field(default=1, ge=1)
+
+    @field_validator("our_barcode", mode="before")
+    @classmethod
+    def blank_barcode_means_generate(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned or None
+        return value
 
     @model_validator(mode="after")
     def opening_fields_together(self) -> SkuCreate:
@@ -61,8 +72,12 @@ class SkuUpdate(BaseModel):
     made_to_order_expires_at: Optional[datetime.datetime] = None
     reorder_min: Optional[int] = Field(default=None, ge=1)
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
+    stockist_ex_vat: Optional[Decimal] = None
+    stockist_inc_vat: Optional[Decimal] = None
     wholesale_ex_vat: Optional[Decimal] = None
     wholesale_inc_vat: Optional[Decimal] = None
+    decorator_ex_vat: Optional[Decimal] = None
+    decorator_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
     carton_count: Optional[int] = Field(default=None, ge=1)
@@ -88,13 +103,41 @@ class SkuResponse(BaseModel):
     last_landed_cost_zar: Optional[Decimal] = None
     category: Optional[str] = None
     photo_storage_key: Optional[str]
+    stockist_ex_vat: Optional[Decimal] = None
+    stockist_inc_vat: Optional[Decimal] = None
     wholesale_ex_vat: Optional[Decimal] = None
     wholesale_inc_vat: Optional[Decimal] = None
+    decorator_ex_vat: Optional[Decimal] = None
+    decorator_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
+    # On-hand weighted average. Null without stock.cost.view, or when nothing is on hand.
+    average_unit_cost_zar: Optional[Decimal] = None
+    # True when that tier's ex-VAT price is strictly under the average cost.
+    # The rand amount stays off the payload for roles that cannot see costs.
+    stockist_below_cost: bool = False
+    wholesale_below_cost: bool = False
+    decorator_below_cost: bool = False
+    retail_below_cost: bool = False
     carton_count: int
     is_kit: bool = False
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SkuUnitCostItem(BaseModel):
+    sku_id: uuid.UUID
+    unit_cost_zar: Optional[Decimal] = None
+
+
+class SkuUnitCostPage(BaseModel):
+    items: list[SkuUnitCostItem]
+    total: int = Field(ge=0)
+
+
+class SkuListPage(BaseModel):
+    items: list[SkuResponse]
+    total: int = Field(ge=0)
+    categories: list[str]

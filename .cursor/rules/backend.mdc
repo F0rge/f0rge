@@ -4,9 +4,13 @@ globs: apps/marrow/backend/**/*.py, apps/marrow/backend/migrations/**
 alwaysApply: false
 ---
 
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # FastAPI Backend Standards
 
-Target **Python 3.10** (no 3.11+ syntax). Package manager: **`uv`** (never pip). Lint/format: **`ruff`**.
+These rules apply to legacy Marrow Python. They are not the new-app backend standard (Rust, Actix, Diesel, PostgreSQL). Fly `release_command` notes below are historical inventory. Current Marrow config files use a Railway `preDeployCommand`. Neither path is Leo's approval to migrate or deploy.
+
+Target **Python 3.11**. Package manager: **`uv`** (never pip). Lint/format: **`ruff`**. Shared libs stay valid on 3.10 (environment-monitor, buycycle, and airflow).
 
 ## Architecture: Router → Service/Orchestrator → CRUD
 
@@ -67,7 +71,7 @@ SQLAlchemy 2.0 style. Always include `id`, `created_at`. Use `__table_args__` wi
 6. Type everything — all signatures and return types
 7. Never hardcode secrets — use `app/config.py` + env vars
 8. Postgres-native, async all the way: `AsyncSession`, `await`
-9. Python 3.10 only — no `match/case`, use `Union[]`/`Optional[]` not `X | Y`
+9. Python 3.11. Style: no `match/case`; use `Union[]`/`Optional[]` not `X | Y`
 
 ## New Code Order
 

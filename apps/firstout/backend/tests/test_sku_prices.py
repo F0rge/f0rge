@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from httpx import AsyncClient
 
 
@@ -22,8 +24,12 @@ async def _create_sku(owner_client: AsyncClient, suffix: str) -> dict:
 
 async def test_create_sku_prices_null(owner_client: AsyncClient) -> None:
     body = await _create_sku(owner_client, "NULL")
+    assert body["stockist_ex_vat"] is None
+    assert body["stockist_inc_vat"] is None
     assert body["wholesale_ex_vat"] is None
     assert body["wholesale_inc_vat"] is None
+    assert body["decorator_ex_vat"] is None
+    assert body["decorator_inc_vat"] is None
     assert body["retail_ex_vat"] is None
     assert body["retail_inc_vat"] is None
 
@@ -79,6 +85,7 @@ async def test_unauthenticated_patch_returns_401(
 ) -> None:
     sku = await _create_sku(owner_client, "UNAUTH")
     async_client.cookies.clear()
+    async_client.headers.pop("Authorization", None)
     resp = await async_client.patch(
         f"/api/v1/skus/{sku['id']}",
         json={"wholesale_ex_vat": "100.00"},
@@ -91,21 +98,18 @@ async def test_till_cannot_patch_prices_but_can_get(
     owner_client: AsyncClient,
 ) -> None:
     sku = await _create_sku(owner_client, "TILL")
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-price@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-price@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "till-price@example.com")
     assert login_resp.status_code == 200
 
     patch_resp = await async_client.patch(
@@ -123,21 +127,18 @@ async def test_books_cannot_patch_prices_but_can_list(
     owner_client: AsyncClient,
 ) -> None:
     await _create_sku(owner_client, "BOOKS")
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "books-price@example.com",
             "password": "books-password",
             "role": "books",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books-price@example.com", "password": "books-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "books-price@example.com")
     assert login_resp.status_code == 200
 
     list_resp = await async_client.get("/api/v1/skus")
@@ -156,21 +157,18 @@ async def test_warehouse_cannot_patch_prices(
     owner_client: AsyncClient,
 ) -> None:
     sku = await _create_sku(owner_client, "WH")
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "warehouse-price@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse-price@example.com", "password": "warehouse-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "warehouse-price@example.com")
     assert login_resp.status_code == 200
 
     patch_resp = await async_client.patch(
@@ -185,21 +183,18 @@ async def test_buyer_can_patch_prices(
     owner_client: AsyncClient,
 ) -> None:
     sku = await _create_sku(owner_client, "BUYER")
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-price@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer-price@example.com", "password": "buyer-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "buyer-price@example.com")
     assert login_resp.status_code == 200
 
     patch_resp = await async_client.patch(
@@ -266,3 +261,30 @@ async def test_list_and_get_include_price_fields(owner_client: AsyncClient) -> N
     listed = next(item for item in list_resp.json() if item["id"] == sku["id"])
     assert listed["wholesale_inc_vat"] == "115.00"
     assert listed["retail_ex_vat"] == "2000.00"
+
+
+async def test_patch_stockist_and_decorator_inc_vat(owner_client: AsyncClient) -> None:
+    sku = await _create_sku(owner_client, "TIERS")
+    resp = await owner_client.patch(
+        f"/api/v1/skus/{sku['id']}",
+        json={"stockist_inc_vat": "1150.00", "decorator_ex_vat": "450.00"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["stockist_ex_vat"] == "1000.00"
+    assert body["stockist_inc_vat"] == "1150.00"
+    assert body["decorator_ex_vat"] == "450.00"
+    assert body["decorator_inc_vat"] == "517.50"
+    assert body["retail_ex_vat"] is None
+    assert body["wholesale_ex_vat"] is None
+
+
+async def test_both_ex_and_inc_stockist_returns_validation_error(
+    owner_client: AsyncClient,
+) -> None:
+    sku = await _create_sku(owner_client, "BOTH-S")
+    resp = await owner_client.patch(
+        f"/api/v1/skus/{sku['id']}",
+        json={"stockist_ex_vat": "100.00", "stockist_inc_vat": "115.00"},
+    )
+    assert resp.status_code == 400

@@ -37,6 +37,18 @@ const SIZE_MAP = {
   lg: { box: 'size-[72px]', icon: 'size-8' },
 } as const
 
+export const MEAL_LIBRARY_LABEL = 'Library'
+export const MEAL_PHOTO_MISSING_LABEL = 'Photo missing'
+
+export type MealThumbKind = 'photo' | 'library' | 'missing'
+
+/** Library meals have no image. A failed load of a real image is `missing`. */
+export function mealThumbKind(hasImage: boolean, src: string | null): MealThumbKind {
+  if (!hasImage) return 'library'
+  if (src) return 'photo'
+  return 'missing'
+}
+
 export function photoHasImage(photo: Pick<Photo, 'has_image' | 'filename'>): boolean {
   if (photo.has_image != null) return photo.has_image
   return Boolean(photo.filename)
@@ -56,7 +68,8 @@ export function photoThumbSrc(photoId: number, bust?: number): string {
 
 /**
  * One automatic retry on image load failure (slow first /thumb after deploy /
- * lazy generation), then give up so callers can show the bowl icon.
+ * lazy generation), then give up. Callers use `mealThumbKind` so a failed
+ * image is "photo missing", and the Library badge stays on icon meals.
  */
 export function useMealImageSrc(
   photoId: number | null,

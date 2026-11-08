@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -29,7 +30,7 @@ class StocktakeStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Stocktake(UUIDPkMixin, TimestampMixin, Base):
+class Stocktake(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "stocktakes"
 
     location_id: Mapped[uuid.UUID] = mapped_column(
@@ -76,7 +77,7 @@ class Stocktake(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class StocktakeLine(UUIDPkMixin, TimestampMixin, Base):
+class StocktakeLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "stocktake_lines"
 
     stocktake_id: Mapped[uuid.UUID] = mapped_column(

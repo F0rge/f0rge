@@ -191,13 +191,21 @@ class PlaygroundBiPack:
 
     async def _stamp_partial_balance(self, invoice_id: uuid.UUID) -> None:
         await self.seed._ensure_transaction()
-        async with unit_of_work(self.db):
-            invoice = await self.db.get(TaxInvoice, invoice_id)
-            if invoice is None or invoice.amount_paid != 0:
-                return
-            part = (invoice.total_inc_vat * Decimal("0.40")).quantize(CENT)
-            if 0 < part < invoice.total_inc_vat:
-                invoice.amount_paid = part
+        invoice = await self.db.get(TaxInvoice, invoice_id)
+        if invoice is None or invoice.amount_paid != 0:
+            return
+        part = (invoice.total_inc_vat * Decimal("0.40")).quantize(CENT)
+        if not (0 < part < invoice.total_inc_vat):
+            return
+        await PaymentService(self.db).create(
+            PaymentCreate(
+                direction="in",
+                invoice_id=invoice.id,
+                amount=part,
+                currency="ZAR",
+                paid_on=invoice.issue_date,
+            )
+        )
 
     async def _backfill_partial_balances(self) -> None:
         dining = f"{BI_PACK_NOTES_PREFIX} trade dining specification"
@@ -677,8 +685,6 @@ class PlaygroundBiPack:
                     )
                 )
             elif status == "partial":
-                # PaymentService requires the remaining balance in full.
-                # Stamp amount_paid so aged receivables still show a partial balance.
                 await self._stamp_partial_balance(invoice.id)
         await self._backfill_partial_balances()
 

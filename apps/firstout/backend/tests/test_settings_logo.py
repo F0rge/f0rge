@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from io import BytesIO
 
 from httpx import AsyncClient
 from PIL import Image
 from pypdf import PdfReader
 
-from app.config import settings
 from tests.test_ledger_invoices import _create_customer, _pdf_text
 
 
@@ -42,10 +43,8 @@ async def test_upload_get_replace_logo(owner_client: AsyncClient) -> None:
 
 async def test_books_cannot_upload_logo(async_client: AsyncClient) -> None:
     async_client.cookies.clear()
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    login = await authenticate_as(async_client, "books@example.com")
     assert login.status_code == 200
 
     resp = await async_client.post(

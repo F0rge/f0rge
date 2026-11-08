@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -39,6 +39,9 @@ class InvoiceLineResponse(BaseModel):
     vat_amount: Decimal
     sort_order: int
     sku_id: Optional[uuid.UUID] = None
+    price_warning: Optional[str] = None
+    # Computed on read. Not stored, and not printed on the customer PDF.
+    suspect_price_warning: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -55,6 +58,7 @@ class InvoiceListItem(BaseModel):
     total_inc_vat: Decimal
     amount_paid: Decimal
     balance: Decimal
+    payment_status: Literal["unpaid", "partially_paid", "paid"]
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -73,6 +77,9 @@ class InvoiceResponse(BaseModel):
     total_inc_vat: Decimal
     amount_paid: Decimal
     balance: Decimal
+    payment_status: Literal["unpaid", "partially_paid", "paid"]
+    reminders_paused: bool = False
+    prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime

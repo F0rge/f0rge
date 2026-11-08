@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from app.mcp.resources.meal_guide import MEAL_PHOTO_RECIPE
 from app.prompts.ingredient_rules import MEAL_LOGGING_GUIDE
 
 
@@ -16,7 +17,7 @@ def register_prompts(server: FastMCP) -> None:
         ),
     )
     def log_meal_guide(meal_description: str = "") -> str:
-        text = MEAL_LOGGING_GUIDE
+        text = MEAL_LOGGING_GUIDE + "\n" + MEAL_PHOTO_RECIPE
         if meal_description.strip():
             text += (
                 "\n## Meal to log now\n"

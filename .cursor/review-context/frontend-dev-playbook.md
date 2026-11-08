@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Frontend Review Playbook
 
 > **Agent auto-context:** `.cursor/rules/ui-kit.mdc` (globs cover `libs/ui` + all app frontends).

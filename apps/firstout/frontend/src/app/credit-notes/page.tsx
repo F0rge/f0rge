@@ -256,7 +256,6 @@ export default function CreditNotesPage() {
         </div>
         {canMutate ? (
           <Button
-            data-tour="credit-note-new"
             onClick={() => {
               resetCreateForm();
               setCreateOpen(true);

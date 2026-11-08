@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Firstout — Agent Instructions
 
 Gauteng furniture retailer back office (stock, books, till). Sibling app next to Marrow and dk. **Never** nest this under `apps/marrow/`. **Never** a new repo.
@@ -22,7 +24,7 @@ Read `~/.cursor/agent-memory/<agent>/MEMORY.md` first. Write gotchas back when d
 
 ## Stack
 
-- Backend: FastAPI Python 3.10 + async SQLAlchemy + asyncpg + Alembic. API prefix `/api/v1`.
+- Backend: FastAPI Python 3.11 + async SQLAlchemy + asyncpg + Alembic. API prefix `/api/v1`.
 - Frontend: Next.js App Router `output: 'standalone'`.
 - Auth cookie (S1, not S0): `firstout_session` — **not** `ht_session`.
 - Import only: `f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing`. No Firstout domain in shared libs.
@@ -73,6 +75,8 @@ On startup, if the `users` table is empty the API seeds one team (`Firstout`) an
 
 Login requires `JWT_SECRET`. Cookie name is `firstout_session` (HttpOnly, SameSite=Lax, `Path=/`). Session cookie TTL is team-configurable via `team_settings.session_ttl_hours` (default **12 hours**, range 1–720); login sets JWT `exp` and cookie `Max-Age` from the current setting — no sliding refresh; changing the setting does not revoke already-issued tokens. Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
 
+Staff password reset: `/login` links to `/forgot-password`. `POST /api/v1/auth/forgot-password` always returns the same message for a missing, active, or disabled account (email match is the same CITEXT lookup as login). A live account with the shop SMTP mailbox configured receives a one-hour single-use link to `/reset-password?token=…`. Only the SHA-256 hash is stored (`password_reset_tokens`, migration `078_password_reset`). A new request invalidates older unused tokens for that user. `POST /api/v1/auth/reset-password` checks the same minimum password length as profile password change (8) plus a confirm field. Success consumes that token, invalidates the user's other reset tokens, and increments `users.token_version`. JWTs include `ver`; `get_current_user_id` rejects a mismatch or a disabled user, so older sessions stop working. Changing a password in profile or user admin bumps the same version (profile re-issues the current cookie). Disabled users cannot complete a reset. In-process limits (no shared limiter in this app): 5 requests per email and 20 per IP per hour, 10 confirm attempts per IP per 15 minutes. The link origin is `PUBLIC_APP_URL` when set, otherwise the first `CORS_ORIGINS` entry (default `http://localhost:3003`). Mail goes out through the existing shop SMTP mailbox (Settings → Communications).
+
 Copy `apps/firstout/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally. Generate `SETTINGS_ENCRYPTION_KEY` with Fernet (`cryptography.fernet.Fernet.generate_key()`) before saving an SMTP password in Settings → Communications.
 
 ### Communications (outbound SMTP)
@@ -89,7 +93,7 @@ Authorisation is a **permission catalog**, not role-tuple checks. `users.role` i
 |--------|------|
 | **owner** | all catalog keys; cannot strip; cannot demote last owner |
 | **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view` |
-| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.deliveries` (no `stock.cost.view`, no till) |
+| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.quotes`, `sales.deliveries` (no `stock.cost.view`, no till). `sales.quotes` also allows mark-sent, accept, cancel, and hold stock. |
 | **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers` (no `stock.cost.view`) |
 | **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view` (no `till.sell`) |
 
@@ -174,7 +178,7 @@ Migration: `031_two_step_transfers`.
 ## Shop-floor qty patterns (A / B / C)
 
 - **A carton_count**: same SKU ships in N cartons; qty is sellable units. Stock, till, PO qty, and books qty stay sellable. Packing sheet and invoice PDF may print a generated carton total when `carton_count > 1`.
-- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components. Till explodes the BOM: if **100% of every component** is at the posted showroom, consume there (F1). Otherwise `ConflictError("Kit requires pick")` unless a confirmed/picking/staged pick for the same kit×qty is posted (`pick_id` on the sale). Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
+- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components. Till explodes the BOM: if **100% of every component** is at the posted showroom, consume there (F1). Otherwise `KitRequiresPickError` (HTTP 409, `detail.code` `kit_requires_pick`) unless a confirmed/picking/staged pick for the same kit×qty is posted (`pick_id` or `pick_ids` on the sale). The payload names each blocked kit (`sku_id`, `sku_code`, `sku_name`, location, `reason` `missing_parts` or `split_pick`). Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
 - **C inner pack**: supplier carton of N eaches — **not in this ticket** (PO line later).
 
 ## V2-S2 stocktakes
@@ -236,7 +240,7 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 - **SKUs:** nullable `category` (max 64) on create (`SkuCreate`), PATCH (`SkuUpdate` — set or clear with `null`), and in responses.
 - **List filter:** `GET /skus?category=` — case-insensitive exact match when provided; omit to list all.
 - **CSV import:** inventory `category` column is written on create and update (same as manual create).
-- **Prices:** trade/wholesale = `wholesale_ex_vat`; retail = `retail_ex_vat` (S5, unchanged).
+- **Prices:** the customer's `price_classification` selects stockist, wholesale, decorator, or retail ex VAT (S5). Retail is shown including VAT.
 
 ## V2-S9 till
 
@@ -474,13 +478,13 @@ Location-scoped (not bin). No email. Reuse `stock.transfer` / `till.sell` / `sal
 
 **API** `/api/v1/picks`: GET list/get/pdf any authenticated (`?source_type=`). POST/PATCH/confirm/complete/cancel: any of `stock.transfer`, `till.sell`, `sales.deliveries`. Preview explodes F1 BOM, no persist, 400 if not a kit. Sales-order origin: kit lines explode; non-kit is one PickLine for the sellable SKU (no “SKU is not a kit”). Confirm requires full allocation; if `needs_confirm` and `confirm_split` is not true → 409 `"confirm_split required"`. Complete creates F2 transfers toward default staging (first warehouse in pick_priority / derived order — never a hardcoded UUID/name) and dispatches; dest on-hand rises only on receive. Non-kit sales-order picks skip F2 when stock was already held. If every allocation is already at one showroom and `collect_from_showroom` (or all already at staging), skip transfers and set `staged`. One delivery (components, no stock move) when invoice/layby/sales order exists. Till-origin skips delivery until `invoice_id` is set. Receive of the last pick transfer sets `staged` and creates that delivery. Cancel draft/confirmed only.
 
-**Till:** kit not 100% at the posted showroom and no matching pick → 409 `"Kit requires pick"` (do not decrement only Bedfordview). Matching pick: no showroom component decrement; set `pick.invoice_id`; COGS from allocation locations or showroom cost; missing cost → 409, do not steal stock.
+**Till:** kit not 100% at the posted showroom and no matching pick → 409 `detail.code` `kit_requires_pick` with one entry per blocked kit (do not decrement only Bedfordview). `reason` is `missing_parts` when a component is short everywhere, otherwise `split_pick`. Matching pick (`pick_id` or `pick_ids`): no showroom component decrement; set `pick.invoice_id`; COGS from allocation locations or showroom cost; missing cost → 409, do not steal stock.
 
 v1 is location not bin.
 
 ## S5 prices
 
-Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).
+Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for stockist, wholesale, decorator, and retail. Source of truth columns on `skus`: `stockist_ex_vat`, `wholesale_ex_vat`, `decorator_ex_vat`, `retail_ex_vat` (ex-VAT stored; inc-VAT derived on read at 15%). Cin7 PriceTier1 is Stockist, PriceTier2 is Wholesale, PriceTier3 is Decorator (all already ex VAT). Cin7 PriceTier4 is Retail including 15% VAT and is stored with `inc_to_ex`. `customers.price_classification` is Stockist, Wholesale, Decorator, or Retail (default Retail). Till, quotes, sales orders, and invoices use that tier. A hand-made price list still overrides. Lists named `Cin7 Tier N` or `Cin7 Stockist` / `Cin7 Wholesale` / `Cin7 Decorator` / `Cin7 Retail` do not. A missing tier price falls back to Retail and stores a line warning. Retail (and a walk-in) is the only classification whose unit price is shown including VAT. `customers.price_tier` stays as the Cin7 label and does not select the price. `customer_type` stays: Retail is `retail`, the other three are `trade`.
 
 - **VAT:** 15% hardcoded (V1). Home currency **ZAR**. No SARS API.
 - **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
@@ -494,7 +498,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 
 **Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Over-cap **create** without `users.manage` → **201** `pending_approval` (still allocates `po_number`); owner/manage create stays `open`. Land re-checks with the posted FX; over-cap land without `users.manage` still **409**. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not). `POST /purchase-orders/{id}/approve|reject` (`users.manage`): pending → open/rejected.
 
-**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins). Optional `customers.price_list_id` overrides with named list item prices (list → trade wholesale → retail).
+**Customer classification:** Stockist, Wholesale, and Decorator customers are charged that SKU column, shown excluding VAT, with VAT added on the document total. Retail customers and the till walk-in are charged `retail_ex_vat`, and the unit price is shown including VAT. The stored line amount stays ex VAT, so the VAT total matches the previous retail calculation. A hand-made price list still overrides the tier. Cin7-generated lists do not. Changing classification does not rewrite draft quotes or draft sales orders until `POST /api/v1/customers/{id}/reprice-drafts`. Issued invoices are never rewritten.
 
 ## S6 ledger (books)
 
@@ -609,6 +613,8 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 
 `uv run --project apps/firstout/backend python -m app.commands.import_cin7 --export-dir <dir> [--commit]` loads a Cin7 Core full export. Dry-run is the default. It upserts on natural keys (SKU, customer/supplier name, document number), so a second run of the same export changes nothing. A non-local `DATABASE_URL` needs `FIRSTOUT_CIN7_IMPORT_TARGET=firstout` (Firstout is main-only). Never commit the export: it holds customer PII. Tests use fake fixtures.
 
+Admins can run the same loader in the app. `POST /api/v1/cin7-imports` (multipart `file` zip, or `files` for the export folder) starts a dry run and returns the job. `GET /api/v1/cin7-imports/{id}` is the status poll. Commit is `POST /api/v1/cin7-imports/{id}/commit` with `{ "file_sha256" }` and is allowed only for a completed dry run of that hash with zero errors, when nothing has been imported since. One job at a time. The audit table is migration `077_cin7_import_runs`. Auth is `users.manage` (`require_owner`: the owner preset, or a custom role with that key). Anonymous is 401; any other signed-in role is 403. The summary includes `generated_barcodes`, `generated_barcodes_blank`, and `generated_barcodes_shared`. `GET /cin7-imports/{id}/barcodes.csv` lists each affected SKU with reason `blank` or `shared`. Barcode assignment is unchanged: blank and shared barcodes still become `CIN7-{ProductCode}`, and the lowest product code keeps a shared barcode. UI: `/cin7-import` (Admin nav). Uploads stay in private object storage (`cin7-imports/{id}.zip`) and are deleted after a successful commit, when the run fails, or after 7 days. API startup marks queued or running jobs failed (`interrupted by restart`) and purges those uploads, so a restart does not leave the one-job lock held. A second upload while a job holds the lock returns 409 without waiting. No new environment variables.
+
 - Workbook names may use spaces or underscores (`Sale Documents_ALLTIME.xlsx`). Only the `All` sheet is read.
 - Customers and suppliers that appear only on documents are created as stubs before contacts, SKUs, and documents.
 - Every address and contact row goes to `customer_addresses`, `customer_contacts`, `supplier_addresses`, and `supplier_contacts`, keyed by a content hash (`natural_key`). The default contact and billing address are also copied onto the customer row.
@@ -620,7 +626,7 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 
 ## Railway
 
-> **Main only.** Firstout has no develop branch workflow and no separate develop environment. The single Railway environment below is *named* `develop` for historical reasons, but its services track git `main` and it is the live environment. Merging to `main` deploys it. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. The Railway environment below is *named* `develop` in committed notes. Those notes say its services track git `main`. That is not a live host check. A merge to `main` is not Leo's production release approval. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Production has no Firstout services; the Marrow project has no Firstout config.
 
@@ -666,6 +672,9 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 | UI route | API prefix (`/api/v1`) |
 |----------|------------------------|
+| `/login` | `/auth/login` |
+| `/forgot-password` | `/auth/forgot-password` |
+| `/reset-password` | `/auth/reset-password` |
 | `/catalogue` | `/skus` |
 | `/catalogue/[id]` | `/skus/{id}` (+ `/inventory` rollup on Stock tab) |
 | `/price-lists` | `/price-lists` |
@@ -691,6 +700,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
+| `/cin7-import` | `/cin7-imports` |
 | `/returns` | `/returns` |
 | `/laybys` | `/laybys` |
 | `/customers` | `/customers` |
@@ -707,7 +717,7 @@ Still out of scope: Marrow, auto-email repeating invoices, Gmail OAuth, unoffici
 
 ## Python
 
-`uv --project apps/firstout/backend`. **Never** create a root `uv.lock`. Python 3.10 only (`from __future__ import annotations`; no `X | Y`).
+`uv --project apps/firstout/backend`. **Never** create a root `uv.lock`. Python 3.11 (`from __future__ import annotations`; `Union[]` / `Optional[]`, not `X | Y`).
 
 ## PRs
 

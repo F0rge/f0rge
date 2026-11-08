@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from urllib.parse import parse_qs, urlparse
 
 from httpx import AsyncClient
 
-from app.config import settings
 from tests.test_comms_invoice_email import _create_invoice
 
 
@@ -68,10 +69,7 @@ async def test_whatsapp_warehouse_403(
         f"/api/v1/customers/{invoice.json()['customer_id']}",
         json={"phone": "0824112001"},
     )
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse@example.com", "password": settings.seed_warehouse_password},
-    )
+    login = await authenticate_as(async_client, "warehouse@example.com")
     assert login.status_code == 200
     resp = await async_client.post(
         f"/api/v1/invoices/{invoice_id}/send",

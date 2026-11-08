@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from io import BytesIO
 from typing import Optional
 
@@ -184,31 +186,27 @@ async def test_warehouse_cannot_preview_buyer_can(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    warehouse = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "csv-warehouse@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
-    assert warehouse.status_code == 201
-    buyer = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "csv-buyer@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    assert buyer.status_code == 201
 
     csv_bytes = _inventory_csv("CSV-ROLE-REF")
     async_client.cookies.clear()
-    login_wh = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "csv-warehouse@example.com", "password": "warehouse-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_wh = await authenticate_as(async_client, "csv-warehouse@example.com")
     assert login_wh.status_code == 200
     forbidden = await async_client.post(
         "/api/v1/imports/preview",
@@ -217,10 +215,8 @@ async def test_warehouse_cannot_preview_buyer_can(
     assert forbidden.status_code == 403
 
     async_client.cookies.clear()
-    login_buyer = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "csv-buyer@example.com", "password": "buyer-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_buyer = await authenticate_as(async_client, "csv-buyer@example.com")
     assert login_buyer.status_code == 200
     allowed = await async_client.post(
         "/api/v1/imports/preview",

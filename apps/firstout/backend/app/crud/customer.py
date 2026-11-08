@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.customer import Customer
 from app.models.layby import Layby, LaybyStatus
 from app.models.tax_invoice import TaxInvoice
+from app.services.customer_match import customer_search_clause
 from app.services.payment_terms import invoice_overdue_predicate
 from f0rge_db.crud import BaseCRUD
 
@@ -40,8 +41,12 @@ class CustomerCRUD(BaseCRUD):
             await self.db.execute(select(Customer).where(Customer.id == customer_id))
         ).scalar_one_or_none()
 
-    async def list_all(self) -> list[Customer]:
-        result = await self.db.execute(select(Customer).order_by(Customer.name))
+    async def list_all(self, q: Optional[str] = None) -> list[Customer]:
+        stmt = select(Customer).order_by(Customer.name)
+        clause = customer_search_clause(q)
+        if clause is not None:
+            stmt = stmt.where(clause)
+        result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
     async def invoice_aggregates_for_customers(

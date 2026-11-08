@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   FileUploaderDropContainer,
@@ -240,7 +242,7 @@ export default function SkuDetailPage() {
           </Button>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginTop: "0.5rem" }}>
             {sku?.photo_storage_key ? (
-              <img
+              <StaffImage
                 src={skuPhotoUrl(sku.id)}
                 alt={sku.name}
                 width={80}
@@ -348,7 +350,7 @@ export default function SkuDetailPage() {
                       ) : null}
                     </div>
                   ) : sku.photo_storage_key ? (
-                    <img
+                    <StaffImage
                       src={skuPhotoUrl(sku.id)}
                       alt={sku.name}
                       width={160}

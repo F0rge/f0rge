@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Datetime / Timezone Convention
 
 This committed file is the source of truth for reviewers. It is self-contained by design — reviewers (bot or human) may have no access to any machine-local agent memory.

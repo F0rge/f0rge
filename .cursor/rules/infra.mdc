@@ -4,6 +4,8 @@ globs: **/railway*.toml, **/fly*.toml, .github/**, **/Dockerfile, **/docker-entr
 alwaysApply: false
 ---
 
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # f0rge Infrastructure
 
 Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
@@ -12,12 +14,13 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 
 | App | Target | Branches | Manifest component |
 |-----|--------|----------|-------------------|
-| marrow | Railway project `zoological-fulfillment` (autodeploy + Actions smoke) | `main` only | `marrow-backend`, `marrow-frontend` |
+| marrow | Railway project `zoological-fulfillment` (workflow files describe autodeploy plus Actions smoke; not an approved exception) | `main` only | `marrow-backend`, `marrow-frontend` |
 | firstout | **Own** Railway project `Firstout` (`c76d8df1-…`). Hosts `firstout.co.za` / `api.firstout.co.za` | `main` only | `firstout-backend`, `firstout-frontend` |
 | dk tag printer | Pi Coolify | `main` only | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 | buycycle | Pi Coolify, internal only (host ports 8095/8096, no domain); tracker = Coolify scheduled task; Turso DB on `/data` volume | `main` only | `buycycle` |
+| environment-monitor | Pi Coolify, internal only (backend 5001, frontend 5000). SQLite `/app/data/readings.db` on volume `environment-monitor_sensor_data` | `main` only | `environment-monitor-backend`, `environment-monitor-frontend` |
 
-Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow smoke: [`railway-smoke-reusable.yml`](../.github/workflows/railway-smoke-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DK_*`, `COOLIFY_WEBHOOK_BUYCYCLE`).
+Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow smoke: [`railway-smoke-reusable.yml`](../.github/workflows/railway-smoke-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DASKASAS_BACKEND`, `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`, `COOLIFY_WEBHOOK_BUYCYCLE`, `COOLIFY_WEBHOOK_ENVMON_BACKEND`, `COOLIFY_WEBHOOK_ENVMON_FRONTEND`). Each secret is that app's Coolify manual GitHub webhook secret.
 
 # Marrow Infrastructure (Railway)
 
@@ -29,7 +32,7 @@ Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/dep
 |---|---|---|---|---|
 | Production | `main` | https://marrow-health.com | https://api.marrow-health.com | https://mcp.marrow-health.com |
 
-**There is no develop environment and no `develop` branch workflow.** Every app deploys from `main` only; Railway services track `main`. Merging to `main` is deploying. Git flow: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+**Do not open pull requests against `develop`.** A remote `develop` ref may still exist; it is not an approved long-lived branch. Railway and Coolify files describe deploys from `main`. That description is configuration inventory, not a live check and not Leo's approval of a release.
 
 Railway `*.up.railway.app` hostnames also work for interim smoke.
 

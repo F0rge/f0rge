@@ -33,7 +33,13 @@ from app.services.chart_of_accounts import (
 )
 from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.payment_terms import compute_due_date
-from app.services.pricing import resolve_unit_ex_vat
+from app.services.pricing import (
+    format_pdf_unit,
+    pdf_unit_basis_note,
+    resolve_unit_price,
+    shows_prices_including_vat,
+)
+from app.services.suspect_price import annotate_line_warnings
 from app.services.settings import SettingsService
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
@@ -62,11 +68,15 @@ class InvoiceService:
             total=total,
         )
 
-    async def get(self, invoice_id: uuid.UUID) -> InvoiceResponse:
+    async def get(
+        self,
+        invoice_id: uuid.UUID,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> InvoiceResponse:
         invoice = await self.crud.get_by_id(invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
-        return self._to_response(invoice)
+        return await self._to_response(invoice, viewer_user_id)
 
     async def create(
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
@@ -84,11 +94,14 @@ class InvoiceService:
         for index, line in enumerate(data.lines):
             unit_ex_vat = line.unit_ex_vat
             sku_id = line.sku_id
+            price_warning = None
             if unit_ex_vat is None:
                 sku = await self.sku_crud.get_by_id(sku_id)
                 if sku is None:
                     raise NotFoundError("SKU not found")
-                unit_ex_vat = await resolve_unit_ex_vat(self.db, sku, customer)
+                resolved = await resolve_unit_price(self.db, sku, customer)
+                unit_ex_vat = resolved.unit_ex_vat
+                price_warning = resolved.warning
             ex_vat = (Decimal(line.qty) * unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = ex_to_inc(ex_vat)
             line_vat = inc_vat - ex_vat
@@ -105,6 +118,7 @@ class InvoiceService:
                     vat_amount=line_vat,
                     sort_order=index,
                     sku_id=sku_id,
+                    price_warning=price_warning,
                 )
             )
 
@@ -133,6 +147,7 @@ class InvoiceService:
                 vat_amount=vat_total,
                 total_inc_vat=total_inc,
                 amount_paid=Decimal(0),
+                prices_include_vat=shows_prices_including_vat(customer),
                 lines=line_models,
             )
             await self.crud.add_and_flush(invoice)
@@ -167,7 +182,7 @@ class InvoiceService:
 
         reloaded = await self.crud.get_by_id(invoice.id)
         assert reloaded is not None
-        return self._to_response(reloaded)
+        return await self._to_response(reloaded, user_id)
 
     async def build_pdf_bytes(self, invoice_id: uuid.UUID) -> tuple[bytes, str, TaxInvoice]:
         invoice = await self.crud.get_by_id(invoice_id)
@@ -182,11 +197,13 @@ class InvoiceService:
                 if sku is not None and sku.carton_count > 1:
                     cartons = line.qty * sku.carton_count
                     description = f"{description} - Ships in {cartons} cartons"
+            if line.price_warning:
+                description = f"{description} — {line.price_warning}"
             lines.append(
                 (
                     description,
                     line.qty,
-                    f"{line.unit_ex_vat:.2f}",
+                    format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
                     f"{line.ex_vat:.2f}",
                     f"{line.vat_amount:.2f}",
                     f"{line.inc_vat:.2f}",
@@ -204,6 +221,7 @@ class InvoiceService:
             vat_amount=f"{invoice.vat_amount:.2f}",
             total_inc_vat=f"{invoice.total_inc_vat:.2f}",
             seller=await SettingsService(self.db).build_seller_details(),
+            unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
         )
         return pdf_bytes, f"{invoice.invoice_number}.pdf", invoice
 
@@ -232,14 +250,18 @@ class InvoiceService:
             total_inc_vat=invoice.total_inc_vat,
             amount_paid=invoice.amount_paid,
             balance=balance,
+            payment_status=invoice.payment_status.value,
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
         )
 
-    @staticmethod
-    def _to_response(invoice: TaxInvoice) -> InvoiceResponse:
+    async def _to_response(
+        self,
+        invoice: TaxInvoice,
+        viewer_user_id: Optional[uuid.UUID] = None,
+    ) -> InvoiceResponse:
         balance = invoice.total_inc_vat - invoice.amount_paid
-        return InvoiceResponse(
+        response = InvoiceResponse(
             id=invoice.id,
             invoice_number=invoice.invoice_number,
             customer_id=invoice.customer_id,
@@ -251,6 +273,9 @@ class InvoiceService:
             total_inc_vat=invoice.total_inc_vat,
             amount_paid=invoice.amount_paid,
             balance=balance,
+            payment_status=invoice.payment_status.value,
+            reminders_paused=invoice.reminders_paused,
+            prices_include_vat=invoice.prices_include_vat,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,
@@ -262,9 +287,17 @@ class InvoiceService:
                     vat_amount=line.vat_amount,
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
+                    price_warning=line.price_warning,
                 )
                 for line in invoice.lines
             ],
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
         )
+        await annotate_line_warnings(
+            self.db,
+            response.lines,
+            viewer_user_id=viewer_user_id,
+            prices_include_vat=invoice.prices_include_vat,
+        )
+        return response

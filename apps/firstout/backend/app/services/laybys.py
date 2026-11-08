@@ -46,6 +46,7 @@ from app.services.chart_of_accounts import (
 from app.services.settings import SettingsService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
+from app.services.pricing import shows_prices_including_vat
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -257,6 +258,7 @@ class LaybysService:
                 vat_amount=vat_total,
                 total_inc_vat=total_inc,
                 amount_paid=total_inc,
+                prices_include_vat=shows_prices_including_vat(layby.customer),
                 lines=invoice_line_models,
             )
             await self.invoice_crud.add_and_flush(invoice)

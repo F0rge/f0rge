@@ -10,10 +10,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class BankImport(UUIDPkMixin, TimestampMixin, Base):
+class BankImport(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "bank_imports"
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -33,7 +34,7 @@ class BankImport(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class BankImportLine(UUIDPkMixin, TimestampMixin, Base):
+class BankImportLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "bank_import_lines"
 
     import_id: Mapped[uuid.UUID] = mapped_column(
@@ -62,6 +63,36 @@ class BankImportLine(UUIDPkMixin, TimestampMixin, Base):
     bank_import: Mapped["BankImport"] = relationship(back_populates="lines")
     matched_payment: Mapped[Optional["Payment"]] = relationship()
     matched_journal: Mapped[Optional["JournalEntry"]] = relationship()
+    allocations: Mapped[list["BankImportLineAllocation"]] = relationship(
+        back_populates="line",
+        cascade="all, delete-orphan",
+    )
+
+
+class BankImportLineAllocation(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
+    """One bank line can pay several invoices or bills. The first payment is also
+    stored on the line so existing matched checks keep working.
+    """
+
+    __tablename__ = "bank_import_line_allocations"
+
+    line_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("bank_import_lines.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    amount_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    document_number: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+
+    line: Mapped[BankImportLine] = relationship(back_populates="allocations")
+    payment: Mapped["Payment"] = relationship()
 
 
 from app.models.account import Account  # noqa: E402

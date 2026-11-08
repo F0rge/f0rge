@@ -5,11 +5,22 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Integer, Numeric, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -21,7 +32,7 @@ class QuoteStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Quote(UUIDPkMixin, TimestampMixin, Base):
+class Quote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "quotes"
 
     quote_number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -45,6 +56,12 @@ class Quote(UUIDPkMixin, TimestampMixin, Base):
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prices_include_vat: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
@@ -68,7 +85,7 @@ class Quote(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class QuoteLine(UUIDPkMixin, TimestampMixin, Base):
+class QuoteLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "quote_lines"
 
     quote_id: Mapped[uuid.UUID] = mapped_column(
@@ -84,13 +101,26 @@ class QuoteLine(UUIDPkMixin, TimestampMixin, Base):
     )
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    discount_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
     description: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     quote: Mapped[Quote] = relationship(back_populates="lines")
     sku: Mapped["Sku"] = relationship()
 
-    __table_args__ = (CheckConstraint("qty > 0", name="ck_quote_lines_qty"),)
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="ck_quote_lines_qty"),
+        CheckConstraint(
+            "discount_percent >= 0 AND discount_percent <= 100",
+            name="ck_quote_lines_discount_percent",
+        ),
+    )
 
 
 from app.models.customer import Customer  # noqa: E402

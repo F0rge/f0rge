@@ -29,6 +29,12 @@ from app.services.packing_sheet import convert_bill_to_zar
 from app.services.books_periods import assert_date_postable
 from app.services.settings import SettingsService
 from app.services.payment_pdf import build_payment_receipt_pdf
+from app.services.settlement import (
+    assert_payment_cents,
+    booked_portion,
+    cents,
+    overpayment_message,
+)
 from app.services.suppliers import SupplierService
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -43,11 +49,19 @@ class PaymentService:
         self.posting = LedgerPostingService(db)
         self.events = BooksEventService(db)
 
-    async def list(self, params: PageParams) -> Page[PaymentResponse]:
+    async def list(
+        self,
+        params: PageParams,
+        *,
+        invoice_id: Optional[uuid.UUID] = None,
+        bill_id: Optional[uuid.UUID] = None,
+    ) -> Page[PaymentResponse]:
         payments, total = await self.crud.list_page(
             limit=params.limit,
             offset=params.offset,
             q=params.q,
+            invoice_id=invoice_id,
+            bill_id=bill_id,
         )
         return Page(
             items=[self._to_response(payment) for payment in payments],
@@ -79,11 +93,12 @@ class PaymentService:
         if invoice is None:
             raise NotFoundError("Invoice not found")
 
-        remaining = invoice.total_inc_vat - invoice.amount_paid
+        amount = assert_payment_cents(data.amount)
+        remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
         if remaining <= 0:
             raise ValidationError("Invoice is already fully paid")
-        if data.amount != remaining:
-            raise ValidationError("Payment amount must equal the remaining invoice balance")
+        if amount > remaining:
+            raise ValidationError(overpayment_message(remaining, "ZAR", invoice.invoice_number))
 
         await assert_date_postable(self.db, data.paid_on)
 
@@ -91,10 +106,10 @@ class PaymentService:
             payment_number="",
             direction=PaymentDirection.IN,
             invoice_id=invoice.id,
-            amount=data.amount,
+            amount=amount,
             currency=currency,
             fx_to_zar=Decimal("1"),
-            amount_zar=data.amount,
+            amount_zar=amount,
             fx_gain_loss_zar=Decimal(0),
             paid_on=data.paid_on,
         )
@@ -107,12 +122,12 @@ class PaymentService:
                 payment.id,
                 f"Payment {payment.payment_number} received",
                 [
-                    (CODE_BANK, data.amount, Decimal(0)),
-                    (CODE_AR, Decimal(0), data.amount),
+                    (CODE_BANK, amount, Decimal(0)),
+                    (CODE_AR, Decimal(0), amount),
                 ],
                 entry_date=payment.paid_on,
             )
-            invoice.amount_paid += data.amount
+            invoice.amount_paid = cents(invoice.amount_paid + amount)
             await self.events.record(
                 BooksDocumentType.PAYMENT,
                 payment.id,
@@ -143,20 +158,33 @@ class PaymentService:
         if currency != bill.currency:
             raise ValidationError("Payment currency must match bill currency")
 
-        remaining_foreign = bill.amount_foreign
-        if bill.amount_paid_zar > 0:
+        amount = assert_payment_cents(data.amount)
+        remaining_foreign = cents(bill.amount_foreign - bill.amount_paid_foreign)
+        if remaining_foreign <= 0:
             raise ValidationError("Bill is already fully paid")
-        if data.amount != remaining_foreign:
-            raise ValidationError("Payment amount must equal the full bill amount")
+        if amount > remaining_foreign:
+            raise ValidationError(
+                overpayment_message(remaining_foreign, currency, bill.bill_number)
+            )
 
         fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
-        settlement_zar = convert_bill_to_zar(data.amount, currency, fx_to_zar)
-        booked_zar = bill.amount_zar - bill.amount_paid_zar
-        diff = settlement_zar - booked_zar
-        fx_gain_loss = booked_zar - settlement_zar
+        cleared_zar = booked_portion(
+            amount=amount,
+            amount_foreign=bill.amount_foreign,
+            amount_zar=bill.amount_zar,
+            amount_paid_foreign=bill.amount_paid_foreign,
+            amount_paid_zar=bill.amount_paid_zar,
+        )
+        if cleared_zar <= 0:
+            raise ValidationError("Payment is too small to reduce this bill.")
+        settlement_zar = cents(convert_bill_to_zar(amount, currency, fx_to_zar))
+        if settlement_zar <= 0:
+            raise ValidationError("Payment is too small to reduce this bill.")
+        diff = settlement_zar - cleared_zar
+        fx_gain_loss = cleared_zar - settlement_zar
 
         journal_lines: list[tuple[str, Decimal, Decimal]] = [
-            (CODE_AP, booked_zar, Decimal(0)),
+            (CODE_AP, cleared_zar, Decimal(0)),
             (CODE_BANK, Decimal(0), settlement_zar),
         ]
         if diff > 0:
@@ -170,7 +198,7 @@ class PaymentService:
             payment_number="",
             direction=PaymentDirection.OUT,
             bill_id=bill.id,
-            amount=data.amount,
+            amount=amount,
             currency=currency,
             fx_to_zar=fx_to_zar,
             amount_zar=settlement_zar,
@@ -188,7 +216,8 @@ class PaymentService:
                 journal_lines,
                 entry_date=payment.paid_on,
             )
-            bill.amount_paid_zar = bill.amount_zar
+            bill.amount_paid_zar = cents(bill.amount_paid_zar + cleared_zar)
+            bill.amount_paid_foreign = cents(bill.amount_paid_foreign + amount)
             await self.events.record(
                 BooksDocumentType.PAYMENT,
                 payment.id,

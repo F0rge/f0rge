@@ -3,8 +3,9 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,20 @@ from app.schemas.customer_crm import (
     CustomerCrmCreate,
     CustomerCrmResponse,
     CustomerCrmUpdate,
+    CustomerDuplicateMatch,
+)
+from app.services.draft_reprice import DraftRepriceService
+from app.services.pricing import (
+    classification_for_legacy_customer_type,
+    customer_type_for_classification,
+)
+from app.services.customer_match import (
+    NAME_UNIQUE_INDEX,
+    email_duplicate_clause,
+    fold_email,
+    fold_name,
+    name_duplicate_clause,
+    national_phone_digits,
 )
 from app.services.comms.phone import to_whatsapp_e164
 from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
@@ -33,9 +48,11 @@ PROFILE_PATCH_FIELDS = frozenset(
         "vat_number",
         "billing_address",
         "customer_type",
+        "price_classification",
         "price_tier",
         "payment_terms_days",
         "price_list_id",
+        "payment_reminders_opt_out",
     }
 )
 
@@ -51,8 +68,9 @@ class CustomersCrmService:
         overdue: Optional[bool] = None,
         active_layby: Optional[bool] = None,
         on_hold: Optional[bool] = None,
+        q: Optional[str] = None,
     ) -> list[CustomerCrmResponse]:
-        customers = await self.crud.list_all()
+        customers = await self.crud.list_all(q=q)
         responses = await self._to_responses(customers)
         if overdue is not None:
             responses = [row for row in responses if (row.overdue_invoices_count > 0) is overdue]
@@ -62,6 +80,61 @@ class CustomersCrmService:
             responses = [row for row in responses if row.on_hold is on_hold]
         return responses
 
+    async def find_duplicates(
+        self,
+        name: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+    ) -> list[CustomerDuplicateMatch]:
+        name_key = fold_name(name)
+        email_key = fold_email(email)
+        phone_key = national_phone_digits(phone)
+        filters = []
+        if name_key:
+            filters.append(name_duplicate_clause(name_key))
+        if email_key:
+            filters.append(email_duplicate_clause(email_key))
+        if phone_key:
+            filters.append(Customer.phone_national == phone_key)
+        if not filters:
+            return []
+
+        rows = (
+            (
+                await self.db.execute(
+                    select(Customer)
+                    .where(or_(*filters))
+                    .order_by(Customer.name)
+                    .limit(50)
+                    .execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        matches: list[CustomerDuplicateMatch] = []
+        for customer in rows:
+            matched: list[Literal["name", "email", "phone"]] = []
+            if name_key and fold_name(customer.name) == name_key:
+                matched.append("name")
+            if email_key and fold_email(customer.email) == email_key:
+                matched.append("email")
+            if phone_key and (customer.phone_national or "") == phone_key:
+                matched.append("phone")
+            if not matched:
+                continue
+            matches.append(
+                CustomerDuplicateMatch(
+                    id=customer.id,
+                    name=customer.name,
+                    email=customer.email,
+                    phone=customer.phone,
+                    matched_fields=matched,
+                )
+            )
+        return matches
+
     async def get(self, customer_id: uuid.UUID) -> CustomerCrmResponse:
         customer = await self.crud.get_by_id(customer_id)
         if customer is None:
@@ -70,7 +143,9 @@ class CustomersCrmService:
         return responses[0]
 
     async def create(self, data: CustomerCrmCreate) -> CustomerCrmResponse:
-        self._validate_customer_type(data.customer_type)
+        classification = data.price_classification or classification_for_legacy_customer_type(
+            data.customer_type
+        )
         await self._assert_price_list_id(data.price_list_id)
         customer = Customer(
             name=data.name,
@@ -78,17 +153,19 @@ class CustomersCrmService:
             phone=data.phone,
             vat_number=data.vat_number,
             billing_address=data.billing_address,
-            customer_type=data.customer_type,
+            customer_type=customer_type_for_classification(classification),
+            price_classification=classification,
             price_tier=data.price_tier,
             payment_terms_days=data.payment_terms_days,
             price_list_id=data.price_list_id,
+            payment_reminders_opt_out=data.payment_reminders_opt_out,
         )
         async with unit_of_work(self.db):
-            await self.crud.add_and_flush(customer)
             try:
+                await self.crud.add_and_flush(customer)
                 await self.crud.commit_refresh(customer)
             except IntegrityError as exc:
-                raise ConflictError("Customer could not be created") from exc
+                raise self._conflict_from_integrity(exc, creating=True) from exc
 
         return await self.get(customer.id)
 
@@ -104,6 +181,7 @@ class CustomersCrmService:
 
         fields_set = data.model_fields_set
         await self._assert_patch_permissions(user_id, fields_set)
+        classification_changed = False
         if "name" in fields_set and data.name is not None:
             customer.name = data.name
         if "email" in fields_set:
@@ -114,17 +192,30 @@ class CustomersCrmService:
             customer.vat_number = data.vat_number
         if "billing_address" in fields_set:
             customer.billing_address = data.billing_address
-        if "customer_type" in fields_set:
+        if "price_classification" in fields_set:
+            if data.price_classification is None:
+                raise ValidationError("price_classification cannot be null")
+            classification_changed = customer.price_classification != data.price_classification
+            customer.price_classification = data.price_classification
+            customer.customer_type = customer_type_for_classification(data.price_classification)
+        elif "customer_type" in fields_set:
             if data.customer_type is None:
                 raise ValidationError("customer_type cannot be null")
             self._validate_customer_type(data.customer_type)
+            classification = classification_for_legacy_customer_type(data.customer_type)
+            classification_changed = customer.price_classification != classification
             customer.customer_type = data.customer_type
+            customer.price_classification = classification
         if "price_tier" in fields_set:
             if data.price_tier is None:
                 raise ValidationError("price_tier cannot be null")
             customer.price_tier = data.price_tier
         if "payment_terms_days" in fields_set:
             customer.payment_terms_days = data.payment_terms_days
+        if "payment_reminders_opt_out" in fields_set:
+            if data.payment_reminders_opt_out is None:
+                raise ValidationError("payment_reminders_opt_out cannot be null")
+            customer.payment_reminders_opt_out = data.payment_reminders_opt_out
         if "price_list_id" in fields_set:
             await self._assert_price_list_id(data.price_list_id)
             customer.price_list_id = data.price_list_id
@@ -141,9 +232,18 @@ class CustomersCrmService:
             try:
                 await self.crud.commit_refresh(customer)
             except IntegrityError as exc:
-                raise ConflictError("Customer could not be updated") from exc
+                raise self._conflict_from_integrity(exc, creating=False) from exc
 
-        return await self.get(customer.id)
+        response = await self.get(customer.id)
+        if classification_changed:
+            counts = await DraftRepriceService(self.db).counts_for(customer.id)
+            return response.model_copy(
+                update={
+                    "draft_quote_count": counts.quotes,
+                    "draft_sales_order_count": counts.sales_orders,
+                }
+            )
+        return response
 
     async def _to_responses(self, customers: list[Customer]) -> list[CustomerCrmResponse]:
         if not customers:
@@ -176,7 +276,8 @@ class CustomersCrmService:
             phone=customer.phone,
             vat_number=customer.vat_number,
             billing_address=customer.billing_address,
-            customer_type=customer.customer_type,
+            customer_type=customer.customer_type,  # type: ignore[arg-type]
+            price_classification=customer.price_classification,  # type: ignore[arg-type]
             price_tier=customer.price_tier,
             credit_limit=(
                 customer.credit_limit.quantize(Decimal("0.01"))
@@ -187,6 +288,7 @@ class CustomersCrmService:
             on_hold_reason=customer.on_hold_reason,
             payment_terms_days=customer.payment_terms_days,
             price_list_id=customer.price_list_id,
+            payment_reminders_opt_out=customer.payment_reminders_opt_out,
             open_invoices_count=invoice_agg.open_count,
             open_invoices_zar=invoice_agg.open_zar.quantize(Decimal("0.01")),
             overdue_invoices_count=invoice_agg.overdue_count,
@@ -206,6 +308,15 @@ class CustomersCrmService:
         if fields_set & CREDIT_PATCH_FIELDS:
             if not await self.permissions.has_any(user_id, CREDIT_OVERRIDE_KEYS):
                 raise ForbiddenError("Credit fields require additional permission")
+
+    def _conflict_from_integrity(self, exc: IntegrityError, *, creating: bool) -> ConflictError:
+        orig = exc.orig
+        constraint = getattr(orig, "constraint_name", None)
+        text = f"{constraint or ''} {orig}"
+        if NAME_UNIQUE_INDEX in text:
+            return ConflictError("A customer with this name already exists")
+        action = "created" if creating else "updated"
+        return ConflictError(f"Customer could not be {action}")
 
     def _validate_customer_type(self, customer_type: str) -> None:
         if customer_type not in ("retail", "trade"):

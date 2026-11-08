@@ -1,3 +1,4 @@
+import { staffFetch } from "./staff-fetch";
 import { downloadApiFile } from "./download";
 import {
   normalizePick,
@@ -59,21 +60,7 @@ export type RoleUpdatePayload = {
   permissions?: string[];
 };
 
-export type LoginResponse = {
-  email: string;
-};
-
-export type CreateUserPayload = {
-  email: string;
-  password: string;
-  role: UserRole;
-  display_name?: string;
-  default_location_id?: string | null;
-};
-
 export type UpdateUserPayload = {
-  email?: string;
-  password?: string;
   role?: UserRole;
   display_name?: string;
   is_disabled?: boolean;
@@ -81,25 +68,33 @@ export type UpdateUserPayload = {
 };
 
 export type UpdateProfilePayload = {
-  email?: string;
   display_name?: string;
-  password?: string;
   default_location_id?: string | null;
 };
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly detail: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
 }
 
 export type Page<T> = { items: T[]; total: number };
 export const PAGE_SIZES = [10, 25, 50] as const;
-export type ListParams = { limit?: number; offset?: number; q?: string; status?: string };
+export type ListParams = {
+  limit?: number;
+  offset?: number;
+  q?: string;
+  status?: string;
+  invoice_id?: string;
+  bill_id?: string;
+  needs_skus?: boolean;
+};
 
 function buildListQuery(params?: ListParams): string {
   const search = new URLSearchParams();
@@ -113,56 +108,152 @@ function buildListQuery(params?: ListParams): string {
   if (status) {
     search.set("status", status);
   }
+  if (params?.invoice_id) {
+    search.set("invoice_id", params.invoice_id);
+  }
+  if (params?.bill_id) {
+    search.set("bill_id", params.bill_id);
+  }
+  if (params?.needs_skus) {
+    search.set("needs_skus", "true");
+  }
   return search.toString();
 }
 
-export async function parseErrorMessage(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as {
-      detail?: string | { msg?: string }[] | { code?: string; message?: string };
-    };
-    if (typeof body.detail === "string") {
-      return body.detail;
-    }
-    if (Array.isArray(body.detail) && body.detail[0]?.msg) {
-      return body.detail[0].msg;
-    }
-    if (body.detail && typeof body.detail === "object" && "code" in body.detail) {
-      const code = body.detail.code;
-      if (code === "comms_encryption_unconfigured") {
-        return "Communications encryption is not configured";
-      }
-      if (code === "comms_smtp_unconfigured") {
-        return "SMTP mailbox is not configured";
-      }
-      if (typeof body.detail.message === "string" && body.detail.message.trim()) {
-        return body.detail.message;
-      }
-      if (typeof code === "string") {
-        return code;
-      }
-    }
-  } catch {
-    // ignore parse errors
-  }
-  return response.statusText || "Request failed";
+const TIMEOUT_STATUSES = new Set([408, 499, 504]);
+
+export function callName(method: string, path: string): string {
+  const route = (path.split("?")[0] || path).replace(/^\/api\/v1/, "") || path;
+  return `${method.toUpperCase()} ${route}`;
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export function isTimeoutStatus(status: number): boolean {
+  return TIMEOUT_STATUSES.has(status);
+}
+
+export function isTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const name = "name" in error ? String(error.name) : "";
+  const message = "message" in error ? String(error.message) : "";
+  return name === "AbortError" || name === "TimeoutError" || /timed?\s*out/i.test(message);
+}
+
+export function formatTransportError(call: string, error: unknown): string {
+  if (isTimeoutError(error)) {
+    return `${call} timed out`;
+  }
+  return `${call} failed`;
+}
+
+export function formatHttpError(
+  call: string,
+  status: number,
+  statusText: string,
+  detail: string,
+): string {
+  if (
+    isTimeoutStatus(status) ||
+    /timed?\s*out/i.test(detail) ||
+    /timed?\s*out/i.test(statusText)
+  ) {
+    return `${call} timed out`;
+  }
+  const trimmed = detail.trim();
+  const generic =
+    !trimmed ||
+    trimmed === "Request failed" ||
+    trimmed === statusText ||
+    trimmed.toLowerCase() === "internal server error";
+  if (generic) {
+    return status ? `${call} failed (${status})` : `${call} failed`;
+  }
+  return trimmed;
+}
+
+function detailMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: unknown } | undefined;
+    if (first && typeof first.msg === "string") {
+      return first.msg;
+    }
+  }
+  if (detail && typeof detail === "object" && "code" in detail) {
+    const coded = detail as { code?: unknown; message?: unknown };
+    const code = coded.code;
+    if (code === "document_llm_unconfigured") {
+      return "Document reading is not configured. Add the OpenRouter key on the API.";
+    }
+    if (code === "comms_encryption_unconfigured") {
+      return "Communications encryption is not configured";
+    }
+    if (code === "comms_smtp_unconfigured") {
+      return "SMTP mailbox is not configured";
+    }
+    if (typeof coded.message === "string" && coded.message.trim()) {
+      return coded.message;
+    }
+    if (typeof code === "string") {
+      return code;
+    }
+  }
+  return fallback;
+}
+
+function payloadDetail(body: unknown): unknown {
+  if (body && typeof body === "object" && !Array.isArray(body) && "detail" in body) {
+    return (body as { detail: unknown }).detail;
+  }
+  return undefined;
+}
+
+async function readErrorPayload(
+  response: Response,
+): Promise<{ message: string; detail: unknown }> {
+  const fallback = response.statusText || "Request failed";
+  try {
+    const body: unknown = await response.json();
+    const detail = payloadDetail(body);
+    return { message: detailMessage(detail, fallback), detail };
+  } catch {
+    return { message: fallback, detail: undefined };
+  }
+}
+
+export async function parseErrorMessage(response: Response): Promise<string> {
+  const payload = await readErrorPayload(response);
+  return payload.message;
+}
+
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  const call = callName(options.method ?? "GET", path);
 
-  const response = await fetch(`/api/v1${path}`, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await staffFetch(`/api/v1${path}`, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+  } catch (error) {
+    throw new ApiError(0, formatTransportError(call, error));
+  }
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
+    const payload = await readErrorPayload(response);
+    throw new ApiError(
+      response.status,
+      formatHttpError(call, response.status, response.statusText, payload.message),
+      payload.detail,
+    );
   }
 
   if (response.status === 204) {
@@ -170,13 +261,6 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   }
 
   return response.json() as Promise<T>;
-}
-
-export function login(email: string, password: string): Promise<LoginResponse> {
-  return apiFetch<LoginResponse>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
 }
 
 export function logout(): Promise<void> {
@@ -189,13 +273,6 @@ export function getMe(): Promise<AuthUser> {
 
 export function listUsers(): Promise<User[]> {
   return apiFetch<User[]>("/users");
-}
-
-export function createUser(payload: CreateUserPayload): Promise<User> {
-  return apiFetch<User>("/users", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
 }
 
 export function updateUser(id: string, payload: UpdateUserPayload): Promise<User> {
@@ -256,6 +333,7 @@ export {
   canMutateQuotes,
   canMutateReturns,
   canMutateSettings,
+  canManageUsers,
   canSendComms,
   canRaisePo,
   canReceive,
@@ -397,15 +475,25 @@ export function updateLocationBin(
 }
 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
+  const call = callName("POST", path);
+  let response: Response;
+  try {
+    response = await staffFetch(`/api/v1${path}`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+  } catch (error) {
+    throw new ApiError(0, formatTransportError(call, error));
+  }
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
+    const payload = await readErrorPayload(response);
+    throw new ApiError(
+      response.status,
+      formatHttpError(call, response.status, response.statusText, payload.message),
+      payload.detail,
+    );
   }
 
   if (response.status === 204) {
@@ -419,6 +507,8 @@ export type Supplier = {
   id: string;
   name: string;
   default_currency: string;
+  vat_number: string | null;
+  address: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -426,6 +516,8 @@ export type Supplier = {
 export type CreateSupplierPayload = {
   name: string;
   default_currency?: string;
+  vat_number?: string | null;
+  address?: string | null;
 };
 
 export function listSuppliers(): Promise<Supplier[]> {
@@ -443,6 +535,7 @@ export type PriceListItem = {
   sku_id: string;
   our_ref: string;
   unit_ex_vat: string;
+  below_average_cost?: boolean;
 };
 
 export type PriceList = {
@@ -546,6 +639,219 @@ export async function downloadProformaPdf(id: string, invoiceNumber: string): Pr
   await downloadApiFile(`/api/v1/proformas/${id}/file`, `${invoiceNumber}.pdf`);
 }
 
+export type IntakeFlag = { code: string; message: string };
+
+export type IntakeSupplierMatch = {
+  supplier_id: string | null;
+  name: string;
+  vat_number: string | null;
+  address: string | null;
+  confidence: number;
+  reason: string;
+};
+
+export type IntakeSkuMatch = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  confidence: number;
+  reason: string;
+};
+
+export type IntakeCharge = { description: string; amount: string };
+
+export type IntakeReviewedLine = {
+  supplier_code: string | null;
+  description: string;
+  qty: string;
+  qty_whole: number | null;
+  unit_price: string;
+  discount_percent: string | null;
+  discount_amount: string | null;
+  net_unit_price: string;
+  vat_rate: string | null;
+  vat_amount: string | null;
+  line_total: string | null;
+  match: IntakeSkuMatch | null;
+  alternatives: IntakeSkuMatch[];
+  flags: IntakeFlag[];
+};
+
+export type ProformaReview = {
+  supplier: IntakeSupplierMatch;
+  supplier_candidates: IntakeSupplierMatch[];
+  document_number: string;
+  document_date: string | null;
+  currency: string;
+  payment_terms: string | null;
+  deposit: string | null;
+  lines: IntakeReviewedLine[];
+  charges: IntakeCharge[];
+  subtotal: string | null;
+  vat_total: string | null;
+  total: string | null;
+  computed_total: string;
+  flags: IntakeFlag[];
+  usage: { model: string; prompt_tokens: number; completion_tokens: number; total_tokens: number };
+};
+
+export type ProformaConfirmLine = {
+  supplier_code?: string | null;
+  description: string;
+  qty: number;
+  unit_price: string;
+  discount_percent?: string | null;
+  vat_rate?: string | null;
+  sku_id?: string | null;
+  skip: boolean;
+};
+
+export type ProformaConfirmPayload = {
+  supplier_id?: string | null;
+  create_supplier?: {
+    name: string;
+    vat_number?: string | null;
+    address?: string | null;
+    default_currency?: string | null;
+  } | null;
+  document_number: string;
+  document_date: string;
+  currency: string;
+  payment_terms?: string | null;
+  deposit?: string | null;
+  vat_total?: string | null;
+  total?: string | null;
+  charges: { description: string; amount: string }[];
+  lines: ProformaConfirmLine[];
+  submit_for_approval?: boolean;
+};
+
+export type ProformaConfirmResult = {
+  proforma: Proforma;
+  purchase_order: { id: string; po_number: string; status: string; proforma_id: string | null };
+};
+
+export function extractProforma(file: File): Promise<ProformaReview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<ProformaReview>("/document-intake/proformas/extract", formData);
+}
+
+export function confirmProforma(
+  file: File,
+  payload: ProformaConfirmPayload,
+): Promise<ProformaConfirmResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("payload", JSON.stringify(payload));
+  return apiUpload<ProformaConfirmResult>("/document-intake/proformas/confirm", formData);
+}
+
+export type SkuSuggestion = {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  supplier_ref: string | null;
+  category: string | null;
+  cost_price: string | null;
+  vat_rate: string | null;
+  source: string;
+};
+
+export function suggestIntakeSku(payload: {
+  description: string;
+  supplier_code?: string | null;
+  unit_price?: string | null;
+  currency?: string | null;
+  vat_rate?: string | null;
+  hint?: string | null;
+  supplier_id?: string | null;
+}): Promise<SkuSuggestion> {
+  return apiFetch<SkuSuggestion>("/document-intake/sku-suggestions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type PurchaseOrderMatch = {
+  purchase_order_id: string;
+  po_number: string;
+  status: string;
+  supplier_id: string;
+  supplier_name: string;
+};
+
+export type ProcessedSupplierBill = {
+  bill_id: string;
+  bill_number: string;
+  auto: boolean;
+  purchase_order_id: string;
+  po_number: string;
+};
+
+export type InvoiceReview = ProformaReview & {
+  po_reference: string | null;
+  proforma_number: string | null;
+  purchase_order: PurchaseOrderMatch | null;
+  purchase_order_candidates: PurchaseOrderMatch[];
+  exact: boolean;
+  differences: string[];
+  auto_process_enabled: boolean;
+  needs_fx: boolean;
+  processed: ProcessedSupplierBill | null;
+};
+
+export type InvoiceProcessPayload = {
+  supplier_id?: string | null;
+  create_supplier?: ProformaConfirmPayload["create_supplier"];
+  purchase_order_id: string;
+  document_number: string;
+  document_date: string;
+  currency: string;
+  fx_to_zar?: string | null;
+  accept_differences: boolean;
+  vat_total?: string | null;
+  total?: string | null;
+  charges: { description: string; amount: string }[];
+  lines: ProformaConfirmLine[];
+};
+
+export function extractSupplierInvoice(file: File): Promise<InvoiceReview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<InvoiceReview>("/document-intake/invoices/extract", formData);
+}
+
+export function processSupplierInvoice(
+  file: File,
+  payload: InvoiceProcessPayload,
+): Promise<ProcessedSupplierBill> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("payload", JSON.stringify(payload));
+  return apiUpload<ProcessedSupplierBill>("/document-intake/invoices/process", formData);
+}
+
+export function createIntakeSku(payload: {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  supplier_ref?: string | null;
+  category?: string | null;
+  supplier_id: string;
+  supplier_sku?: string | null;
+  latest_price?: string | null;
+}): Promise<{ sku: Sku; supplier_price_id: string }> {
+  return apiFetch("/document-intake/skus", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export type Sku = {
   id: string;
   our_ref: string;
@@ -566,10 +872,19 @@ export type Sku = {
   reorder_min: number | null;
   last_landed_cost_zar: string | null;
   photo_storage_key: string | null;
+  stockist_ex_vat: string | null;
+  stockist_inc_vat: string | null;
   wholesale_ex_vat: string | null;
   wholesale_inc_vat: string | null;
+  decorator_ex_vat: string | null;
+  decorator_inc_vat: string | null;
   retail_ex_vat: string | null;
   retail_inc_vat: string | null;
+  average_unit_cost_zar?: string | null;
+  stockist_below_cost?: boolean;
+  wholesale_below_cost?: boolean;
+  decorator_below_cost?: boolean;
+  retail_below_cost?: boolean;
   carton_count: number;
   is_kit: boolean;
   created_at: string;
@@ -583,8 +898,12 @@ export type UpdateSkuPricePayload = {
   design?: string;
   fabric?: string;
   category?: string | null;
+  stockist_ex_vat?: string | number | null;
+  stockist_inc_vat?: string | number | null;
   wholesale_ex_vat?: string | number | null;
   wholesale_inc_vat?: string | number | null;
+  decorator_ex_vat?: string | number | null;
+  decorator_inc_vat?: string | number | null;
   retail_ex_vat?: string | number | null;
   retail_inc_vat?: string | number | null;
   preferred_supplier_id?: string | null;
@@ -637,7 +956,7 @@ export function displayPrice(value: string | null | undefined): string {
 
 export type CreateSkuPayload = {
   our_ref: string;
-  our_barcode: string;
+  our_barcode?: string;
   name: string;
   design: string;
   fabric: string;
@@ -650,14 +969,50 @@ export type CreateSkuPayload = {
   carton_count?: number;
 };
 
-export function listSkus(options?: { category?: string }): Promise<Sku[]> {
+export type SkuListParams = {
+  limit?: number;
+  offset?: number;
+  q?: string;
+  category?: string;
+};
+
+export type SkuListPage = Page<Sku> & { categories: string[] };
+
+export type SkuUnitCost = {
+  sku_id: string;
+  unit_cost_zar: string | null;
+};
+
+function skuListQuery(options?: SkuListParams): string {
   const params = new URLSearchParams();
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.offset) {
+    params.set("offset", String(options.offset));
+  }
+  const q = options?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
   const category = options?.category?.trim();
   if (category) {
     params.set("category", category);
   }
   const qs = params.toString();
-  return apiFetch<Sku[]>(`/skus${qs ? `?${qs}` : ""}`);
+  return qs ? `?${qs}` : "";
+}
+
+export function listSkus(options?: { category?: string; q?: string }): Promise<Sku[]> {
+  return apiFetch<Sku[]>(`/skus${skuListQuery(options)}`);
+}
+
+export function listSkusPage(options: SkuListParams & { limit: number }): Promise<SkuListPage> {
+  return apiFetch<SkuListPage>(`/skus${skuListQuery(options)}`);
+}
+
+export function listSkuUnitCosts(options?: SkuListParams): Promise<Page<SkuUnitCost>> {
+  return apiFetch<Page<SkuUnitCost>>(`/skus/unit-costs${skuListQuery(options)}`);
 }
 
 export function getSku(id: string): Promise<Sku> {
@@ -666,6 +1021,12 @@ export function getSku(id: string): Promise<Sku> {
 
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   const body: CreateSkuPayload = { ...payload };
+  const barcode = body.our_barcode?.trim();
+  if (barcode) {
+    body.our_barcode = barcode;
+  } else {
+    delete body.our_barcode;
+  }
   const category = body.category?.trim();
   if (category) {
     body.category = category;
@@ -784,6 +1145,68 @@ export function commitCatalogueImport(formData: FormData): Promise<CatalogueImpo
   return apiUpload<CatalogueImportCommit>("/imports/commit", formData);
 }
 
+export type Cin7EntityCounts = {
+  created: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+};
+
+export type Cin7ImportSummary = {
+  entities: Record<string, Cin7EntityCounts>;
+  price_changes: Record<string, number>;
+  generated_barcodes: number;
+  generated_barcodes_blank: number;
+  generated_barcodes_shared: number;
+};
+
+export type Cin7ImportRun = {
+  id: string;
+  created_at: string;
+  finished_at: string | null;
+  user_id: string;
+  user_email: string;
+  file_sha256: string;
+  file_name: string;
+  mode: "dry_run" | "commit";
+  status: "queued" | "running" | "completed" | "failed";
+  dry_run_id: string | null;
+  summary: Cin7ImportSummary;
+  warning_count: number;
+  error_count: number;
+};
+
+export function listCin7Imports(): Promise<Cin7ImportRun[]> {
+  return apiFetch<Cin7ImportRun[]>("/cin7-imports");
+}
+
+export function getCin7Import(id: string): Promise<Cin7ImportRun> {
+  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}`);
+}
+
+export function startCin7Import(formData: FormData): Promise<Cin7ImportRun> {
+  return apiUpload<Cin7ImportRun>("/cin7-imports", formData);
+}
+
+export function commitCin7Import(id: string, fileSha256: string): Promise<Cin7ImportRun> {
+  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}/commit`, {
+    method: "POST",
+    body: JSON.stringify({ file_sha256: fileSha256 }),
+  });
+}
+
+export function downloadCin7Warnings(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/warnings.csv`, "cin7-import-warnings.csv");
+}
+
+export function downloadCin7Errors(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/errors.csv`, "cin7-import-errors.csv");
+}
+
+export function downloadCin7Barcodes(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/barcodes.csv`, "cin7-import-barcodes.csv");
+}
+
 export type PurchaseOrderStatus =
   | "pending_approval"
   | "rejected"
@@ -794,11 +1217,15 @@ export type PurchaseOrderStatus =
 
 export type PoLine = {
   id: string;
-  sku_id: string;
-  our_ref: string;
-  our_barcode: string;
+  sku_id: string | null;
+  our_ref: string | null;
+  our_barcode: string | null;
   name: string;
-  fabric: string;
+  fabric: string | null;
+  supplier_code: string | null;
+  description: string | null;
+  notes: string | null;
+  needs_sku: boolean;
   qty: number;
   factory_unit_amount: string;
   unit_cost_zar: string | null;
@@ -818,8 +1245,11 @@ export type PurchaseOrderListItem = {
   supplier_id: string;
   supplier_name: string;
   proforma_id: string | null;
+  supplier_ref: string | null;
+  notes: string | null;
   fx_to_zar: string | null;
   line_count: number;
+  needs_sku_count: number;
   received_location_id: string | null;
   ordered_at: string | null;
   on_water_at: string | null;
@@ -835,7 +1265,10 @@ export type PurchaseOrder = PurchaseOrderListItem & {
 };
 
 export type CreatePoLinePayload = {
-  sku_id: string;
+  sku_id?: string | null;
+  supplier_code?: string | null;
+  description?: string | null;
+  notes?: string | null;
   qty: number;
   factory_unit_amount: string;
 };
@@ -843,7 +1276,35 @@ export type CreatePoLinePayload = {
 export type CreatePurchaseOrderPayload = {
   supplier_id: string;
   proforma_id?: string;
+  supplier_ref?: string | null;
+  notes?: string | null;
+  submit_for_approval?: boolean;
   lines: CreatePoLinePayload[];
+};
+
+export type PurchaseOrderLineWrite = {
+  id?: string;
+  sku_id?: string | null;
+  supplier_code?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  qty: number;
+  factory_unit_amount: string;
+};
+
+export type PurchaseOrderLinesUpdate = {
+  supplier_ref?: string | null;
+  notes?: string | null;
+  lines: PurchaseOrderLineWrite[];
+};
+
+export type PoLineSkuCreate = {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  category?: string | null;
 };
 
 export type InventorySku = {
@@ -886,6 +1347,7 @@ export type TillSalePayload = {
   tender: TillTender;
   customer_id?: string;
   pick_id?: string;
+  pick_ids?: string[];
   credit_override?: boolean;
   credit_override_reason?: string;
 };
@@ -900,6 +1362,7 @@ export type TillSaleResult = {
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
+  prices_include_vat: boolean;
   lines: InvoiceLine[];
   location: {
     location_id: string;
@@ -921,6 +1384,27 @@ export function listPurchaseOrders(params?: ListParams): Promise<Page<PurchaseOr
 
 export function createPurchaseOrder(payload: CreatePurchaseOrderPayload): Promise<PurchaseOrder> {
   return apiFetch<PurchaseOrder>("/purchase-orders", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePurchaseOrderLines(
+  id: string,
+  payload: PurchaseOrderLinesUpdate,
+): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createPurchaseOrderLineSku(
+  poId: string,
+  lineId: string,
+  payload: PoLineSkuCreate,
+): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${poId}/lines/${lineId}/sku`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -1505,6 +1989,8 @@ export type InvoiceLine = {
   vat_amount: string;
   sort_order: number;
   sku_id?: string | null;
+  price_warning?: string | null;
+  suspect_price_warning?: string | null;
 };
 
 export type InvoiceListItem = {
@@ -1519,12 +2005,15 @@ export type InvoiceListItem = {
   total_inc_vat: string;
   amount_paid: string;
   balance: string;
+  payment_status: "unpaid" | "partially_paid" | "paid";
   created_at: string;
   updated_at: string;
 };
 
 export type Invoice = InvoiceListItem & {
+  prices_include_vat: boolean;
   lines: InvoiceLine[];
+  reminders_paused: boolean;
 };
 
 export type CreateInvoiceLinePayload = {
@@ -1553,6 +2042,103 @@ export function createInvoice(payload: CreateInvoicePayload): Promise<Invoice> {
 
 export function getInvoice(id: string): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`);
+}
+
+export type PaymentReminderStep = {
+  offset_days: number;
+  subject: string;
+  body: string;
+};
+
+export type PaymentReminderSettings = {
+  enabled: boolean;
+  steps: PaymentReminderStep[];
+  last_run_on: string | null;
+  placeholders: string[];
+};
+
+export type ReminderRow = {
+  invoice_id: string;
+  invoice_number: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string | null;
+  offset_days: number;
+  trigger_on: string;
+  amount_owing: string;
+  days_overdue: number;
+  status: string;
+  sent_at: string | null;
+  detail: string | null;
+  reminders_paused: boolean;
+  payment_reminders_opt_out: boolean;
+};
+
+export type ReminderAttention = {
+  invoice_id: string;
+  invoice_number: string;
+  customer_id: string;
+  customer_name: string;
+  reason: "no_email" | "no_due_date";
+};
+
+export type ReminderBoard = {
+  enabled: boolean;
+  upcoming: ReminderRow[];
+  due: ReminderRow[];
+  sent: ReminderRow[];
+  held: ReminderRow[];
+  needs_attention: ReminderAttention[];
+};
+
+export function getPaymentReminderSettings(): Promise<PaymentReminderSettings> {
+  return apiFetch<PaymentReminderSettings>("/settings/payment-reminders");
+}
+
+export function updatePaymentReminderSettings(payload: {
+  enabled: boolean;
+  steps: PaymentReminderStep[];
+}): Promise<PaymentReminderSettings> {
+  return apiFetch<PaymentReminderSettings>("/settings/payment-reminders", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getReminderBoard(): Promise<ReminderBoard> {
+  return apiFetch<ReminderBoard>("/payment-reminders");
+}
+
+export function sendReminderNow(invoiceId: string, offsetDays: number): Promise<ReminderRow> {
+  return apiFetch<ReminderRow>("/payment-reminders/send-now", {
+    method: "POST",
+    body: JSON.stringify({ invoice_id: invoiceId, offset_days: offsetDays }),
+  });
+}
+
+export function skipReminder(invoiceId: string, offsetDays: number): Promise<ReminderRow> {
+  return apiFetch<ReminderRow>("/payment-reminders/skip", {
+    method: "POST",
+    body: JSON.stringify({ invoice_id: invoiceId, offset_days: offsetDays }),
+  });
+}
+
+export function pauseInvoiceReminders(invoiceId: string): Promise<{ reminders_paused: boolean }> {
+  return apiFetch(`/payment-reminders/invoices/${invoiceId}/pause`, { method: "POST" });
+}
+
+export function resumeInvoiceReminders(invoiceId: string): Promise<{ reminders_paused: boolean }> {
+  return apiFetch(`/payment-reminders/invoices/${invoiceId}/resume`, { method: "POST" });
+}
+
+export function setCustomerReminderOptOut(
+  customerId: string,
+  optOut: boolean,
+): Promise<{ payment_reminders_opt_out: boolean }> {
+  return apiFetch(`/payment-reminders/customers/${customerId}/opt-out`, {
+    method: "POST",
+    body: JSON.stringify({ opt_out: optOut }),
+  });
 }
 
 export type RepeatingInvoiceLine = {
@@ -1673,8 +2259,12 @@ export type Bill = {
   amount_foreign: string;
   amount_zar: string;
   amount_paid_zar: string;
+  amount_paid_foreign: string;
   balance_zar: string;
+  balance_foreign: string;
+  payment_status: "unpaid" | "partially_paid" | "paid";
   pdf_storage_key: string | null;
+  purchase_order_id: string | null;
   lines: BillLine[];
   created_at: string;
   updated_at: string;
@@ -1967,8 +2557,27 @@ export function formatFxGainLoss(value: string): string {
   return `${prefix}R ${Math.abs(amount).toFixed(2)}`;
 }
 
+export type BankDocumentSuggestion = {
+  kind: "invoice" | "bill";
+  document_id: string;
+  document_number: string;
+  contact_name: string;
+  outstanding_zar: string;
+  confidence: number;
+  reason: string;
+  auto_match: boolean;
+};
+
+export type BankLineAllocation = {
+  payment_id: string;
+  payment_number?: string | null;
+  amount_zar: string;
+  document_number?: string | null;
+};
+
 export type BankImportLine = {
   id: string;
+  import_id?: string;
   transaction_date: string;
   description: string;
   reference: string | null;
@@ -1983,6 +2592,22 @@ export type BankImportLine = {
   suggested_rule_pattern?: string | null;
   suggested_account_code?: string | null;
   suggested_account_name?: string | null;
+  document_suggestions?: BankDocumentSuggestion[];
+  allocations?: BankLineAllocation[];
+};
+
+export type AutoMatchPreviewItem = {
+  import_id: string;
+  line_id: string;
+  transaction_date: string;
+  description: string;
+  amount_zar: string;
+  kind: "invoice" | "bill";
+  document_id: string;
+  document_number: string;
+  contact_name: string;
+  confidence: number;
+  reason: string;
 };
 
 export type BankRule = {
@@ -2152,6 +2777,47 @@ export function matchBankLine(
   return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match`, {
     method: "POST",
     body: JSON.stringify(target),
+  });
+}
+
+export function matchBankDocument(
+  importId: string,
+  lineId: string,
+  target: { invoice_id: string } | { bill_id: string },
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match-document`, {
+    method: "POST",
+    body: JSON.stringify(target),
+  });
+}
+
+export function splitBankLine(
+  importId: string,
+  lineId: string,
+  allocations: Array<{ invoice_id?: string; bill_id?: string; amount: string }>,
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/split`, {
+    method: "POST",
+    body: JSON.stringify({ allocations }),
+  });
+}
+
+export function previewAutoMatch(accountId?: string): Promise<{ matches: AutoMatchPreviewItem[] }> {
+  const params = new URLSearchParams();
+  if (accountId) {
+    params.set("account_id", accountId);
+  }
+  const qs = params.toString();
+  return apiFetch(`/bank-imports/auto-match/preview${qs ? `?${qs}` : ""}`, { method: "POST" });
+}
+
+export function confirmAutoMatch(lineIds: string[]): Promise<{
+  applied: AutoMatchPreviewItem[];
+  skipped: string[];
+}> {
+  return apiFetch("/bank-imports/auto-match/confirm", {
+    method: "POST",
+    body: JSON.stringify({ line_ids: lineIds }),
   });
 }
 
@@ -2782,7 +3448,7 @@ export type DocumentSequenceUpdate = {
   padding?: number;
 };
 
-export type AppSettings = {
+export type AppSettings = import("./label-settings").LabelSettings & {
   vat_rate: string;
   vat_percent: string;
   home_currency: string;
@@ -2801,6 +3467,8 @@ export type AppSettings = {
   has_logo: boolean;
   max_till_discount_percent: string | null;
   po_approval_threshold_zar: string | null;
+  auto_process_exact_supplier_invoices: boolean;
+  /** Historical read-only value; session duration is managed by Clerk. */
   session_ttl_hours: number;
   payment_terms_days: number;
   default_receive_location_id: string | null;
@@ -2928,7 +3596,7 @@ export function openCommsSend(result: CommsSendResult): void {
   }
 }
 
-export function updateSettings(payload: {
+export function updateSettings(payload: Partial<import("./label-settings").LabelSettings> & {
   vat_rate?: string;
   home_currency?: string;
   always_prefer_warehouse?: boolean;
@@ -2944,7 +3612,7 @@ export function updateSettings(payload: {
   has_logo?: boolean;
   max_till_discount_percent?: string | null;
   po_approval_threshold_zar?: string | null;
-  session_ttl_hours?: number;
+  auto_process_exact_supplier_invoices?: boolean;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
@@ -3278,8 +3946,11 @@ export type QuoteLine = {
   name: string;
   qty: number;
   unit_ex_vat: string;
+  discount_percent: string;
   description: string;
   notes: string | null;
+  price_warning?: string | null;
+  suspect_price_warning?: string | null;
 };
 
 export type QuoteListItem = {
@@ -3298,12 +3969,19 @@ export type QuoteListItem = {
 };
 
 export type Quote = QuoteListItem & {
+  prices_include_vat: boolean;
   lines: QuoteLine[];
 };
 
 export type CreateQuotePayload = {
   customer_id: string;
-  lines: { sku_id: string; qty: number; notes?: string }[];
+  lines: {
+    sku_id: string;
+    qty: number;
+    notes?: string;
+    unit_ex_vat?: string;
+    discount_percent?: string;
+  }[];
   notes?: string;
 };
 
@@ -3324,6 +4002,8 @@ export type SalesOrderLine = {
   unit_ex_vat: string;
   description: string;
   notes: string | null;
+  price_warning?: string | null;
+  suspect_price_warning?: string | null;
   held_qty: number;
   hold_location_id: string | null;
 };
@@ -3547,6 +4227,8 @@ export function requestStorefrontRefund(
 }
 
 export type PortalMe = {
+  access_id: string;
+  organisation_id: string;
   id: string;
   email: string;
   customer_id: string;
@@ -3562,44 +4244,78 @@ export type PortalCatalogueItem = {
   unit_inc_vat: string;
 };
 
-export function portalLogin(email: string, password: string): Promise<{ email: string; customer_name: string }> {
-  return apiFetch("/portal/login", { method: "POST", body: JSON.stringify({ email, password }) });
-}
+export type PortalAccess = {
+  id: string;
+  organisation_id: string;
+  organisation_name: string;
+  customer_id: string;
+  customer_name: string;
+  email: string;
+  url: string;
+};
+export type CustomerPortalAccess = PortalAccess & { status: "active" | "revoked" };
+export type PortalInvitation = {
+  id: string;
+  email: string;
+  expires_at: string;
+  status: "pending" | "accepted" | "revoked" | "expired";
+};
+export type CreatedPortalInvitation = PortalInvitation & { invitation_url: string };
 
 export function portalLogout(): Promise<void> {
   return apiFetch("/portal/logout", { method: "POST" });
 }
-
-export function getPortalMe(): Promise<PortalMe> {
-  return apiFetch("/portal/me");
+export function listPortalOrganisations(): Promise<PortalAccess[]> {
+  return apiFetch("/portal/organisations");
 }
-
-export function listPortalCatalogue(): Promise<PortalCatalogueItem[]> {
-  return apiFetch("/portal/catalogue");
+export function acceptPortalInvitation(token: string): Promise<PortalAccess> {
+  return apiFetch("/portal/invitations/accept", { method: "POST", body: JSON.stringify({ token }) });
 }
-
-export function placePortalOrder(payload: {
+function portalAccessHeaders(accessId: string): HeadersInit {
+  if (!accessId) throw new Error("Choose a trade account first.");
+  return { "X-Firstout-Portal-Access": accessId };
+}
+export function getPortalMe(accessId: string): Promise<PortalMe> {
+  return apiFetch("/portal/me", { headers: portalAccessHeaders(accessId) });
+}
+export function listPortalCatalogue(accessId: string): Promise<PortalCatalogueItem[]> {
+  return apiFetch("/portal/catalogue", { headers: portalAccessHeaders(accessId) });
+}
+export function placePortalOrder(accessId: string, payload: {
   lines: { sku_id: string; qty: number; notes?: string }[];
   notes?: string;
 }): Promise<SalesOrder> {
-  return apiFetch("/portal/orders", { method: "POST", body: JSON.stringify(payload) });
+  return apiFetch("/portal/orders", { method: "POST", headers: portalAccessHeaders(accessId), body: JSON.stringify(payload) });
 }
-
-export function listPortalOrders(): Promise<SalesOrder[]> {
-  return apiFetch("/portal/orders");
+export function listPortalOrders(accessId: string): Promise<SalesOrder[]> {
+  return apiFetch("/portal/orders", { headers: portalAccessHeaders(accessId) });
 }
-
-export function createPortalUser(
-  customerId: string,
-  payload: { email: string; password: string },
-): Promise<PortalMe> {
-  return apiFetch(`/customers/${customerId}/portal-users`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+export function createPortalInvitation(customerId: string, email: string): Promise<CreatedPortalInvitation> {
+  return apiFetch(`/customers/${customerId}/portal-invitations`, { method: "POST", body: JSON.stringify({ email }) });
+}
+export function listPortalInvitations(customerId: string): Promise<PortalInvitation[]> {
+  return apiFetch(`/customers/${customerId}/portal-invitations`);
+}
+export function revokePortalInvitation(customerId: string, invitationId: string): Promise<void> {
+  return apiFetch(`/customers/${customerId}/portal-invitations/${invitationId}`, { method: "DELETE" });
+}
+export function listCustomerPortalAccess(customerId: string): Promise<CustomerPortalAccess[]> {
+  return apiFetch(`/customers/${customerId}/portal-access`);
+}
+export function revokeCustomerPortalAccess(customerId: string, accessId: string): Promise<void> {
+  return apiFetch(`/customers/${customerId}/portal-access/${accessId}`, { method: "DELETE" });
 }
 
 export type CustomerType = "retail" | "trade";
+
+export type PriceClassification = "Stockist" | "Wholesale" | "Decorator" | "Retail";
+
+export const PRICE_CLASSIFICATIONS: PriceClassification[] = [
+  "Stockist",
+  "Wholesale",
+  "Decorator",
+  "Retail",
+];
 
 export type CustomerCrm = {
   id: string;
@@ -3610,7 +4326,10 @@ export type CustomerCrm = {
   vat_number: string | null;
   billing_address: string | null;
   customer_type: CustomerType;
+  price_classification: PriceClassification;
   price_tier: string;
+  draft_quote_count?: number;
+  draft_sales_order_count?: number;
   open_invoices_count: number;
   open_invoices_zar: string;
   overdue_invoices_count: number;
@@ -3623,6 +4342,7 @@ export type CustomerCrm = {
   on_hold_reason: string | null;
   payment_terms_days: number | null;
   price_list_id: string | null;
+  payment_reminders_opt_out: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -3631,6 +4351,15 @@ export type CustomerListFilters = {
   overdue?: boolean;
   active_layby?: boolean;
   on_hold?: boolean;
+  q?: string;
+};
+
+export type CustomerDuplicateMatch = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  matched_fields: Array<"name" | "email" | "phone">;
 };
 
 export type CreateCustomerPayload = {
@@ -3640,12 +4369,14 @@ export type CreateCustomerPayload = {
   vat_number?: string;
   billing_address?: string;
   customer_type?: CustomerType;
+  price_classification?: PriceClassification;
   price_tier?: string;
   credit_limit?: string | null;
   on_hold?: boolean;
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
   price_list_id?: string | null;
+  payment_reminders_opt_out?: boolean;
 };
 
 export type UpdateCustomerPayload = {
@@ -3655,12 +4386,14 @@ export type UpdateCustomerPayload = {
   vat_number?: string;
   billing_address?: string;
   customer_type?: CustomerType;
+  price_classification?: PriceClassification;
   price_tier?: string;
   credit_limit?: string | null;
   on_hold?: boolean;
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
   price_list_id?: string | null;
+  payment_reminders_opt_out?: boolean;
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
@@ -3679,8 +4412,34 @@ export function listCustomers(filters?: CustomerListFilters): Promise<CustomerCr
   if (filters?.on_hold) {
     params.set("on_hold", "true");
   }
+  const q = filters?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
   const qs = params.toString();
   return apiFetch<CustomerCrm[]>(qs ? `/customers?${qs}` : "/customers");
+}
+
+export function findCustomerDuplicates(query: {
+  name?: string;
+  email?: string;
+  phone?: string;
+}): Promise<CustomerDuplicateMatch[]> {
+  const params = new URLSearchParams();
+  const name = query.name?.trim();
+  const email = query.email?.trim();
+  const phone = query.phone?.trim();
+  if (name) {
+    params.set("name", name);
+  }
+  if (email) {
+    params.set("email", email);
+  }
+  if (phone) {
+    params.set("phone", phone);
+  }
+  const qs = params.toString();
+  return apiFetch<CustomerDuplicateMatch[]>(`/customers/duplicates${qs ? `?${qs}` : ""}`);
 }
 
 export function getCustomer(id: string): Promise<CustomerCrm> {
@@ -3712,6 +4471,9 @@ function buildCustomerPayload(
   }
   if (payload.customer_type) {
     body.customer_type = payload.customer_type;
+  }
+  if (payload.price_classification) {
+    body.price_classification = payload.price_classification;
   }
   const tier = payload.price_tier?.trim();
   if (tier) {
@@ -3753,6 +4515,12 @@ export function updateCustomer(
     method: "PATCH",
     body: JSON.stringify(buildCustomerPayload(payload)),
   });
+}
+
+export function repriceCustomerDrafts(
+  id: string,
+): Promise<{ quotes: number; sales_orders: number }> {
+  return apiFetch(`/customers/${id}/reprice-drafts`, { method: "POST" });
 }
 
 export type DeliveryStatus = "draft" | "packed" | "loaded" | "delivered" | "cancelled";
@@ -3896,12 +4664,7 @@ export function cancelDelivery(id: string): Promise<Delivery> {
 }
 
 export function isInvoiceFullyPaid(invoice: InvoiceListItem): boolean {
-  if (invoice.amount_paid === invoice.total_inc_vat) {
-    return true;
-  }
-  const paid = Number(invoice.amount_paid);
-  const total = Number(invoice.total_inc_vat);
-  return Number.isFinite(paid) && Number.isFinite(total) && paid === total;
+  return invoice.payment_status === "paid";
 }
 
 export type ReorderRow = {

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from f0rge_db.organisation import tenant_id_ctx
+
 import asyncio
 import logging
 import uuid
@@ -7,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from email_validator import EmailNotValidError, validate_email
@@ -36,8 +38,6 @@ from app.services.document_numbering import DocumentNumberingService
 from app.services.invoice_pdf import SellerDetails, seller_details_from_settings
 from app.services.object_storage import (
     delete_object,
-    is_remote_storage_ref,
-    presigned_get_url,
     read_bytes,
     save_bytes,
 )
@@ -66,18 +66,32 @@ class SettingsService:
 
     async def get_for_user(self, user_id: uuid.UUID) -> SettingsResponse:
         user = await self._get_user(user_id)
-        settings = await self.crud.get_or_create_for_team(user.team_id)
+        settings = await self.crud.get_or_create_for_team((tenant_id_ctx.get() or user.team_id))
         return await self._to_response(settings)
 
     async def update(self, user_id: uuid.UUID, data: SettingsUpdate) -> SettingsResponse:
         user = await self._get_user(user_id)
-        settings = await self.crud.get_or_create_for_team(user.team_id)
+        settings = await self.crud.get_or_create_for_team((tenant_id_ctx.get() or user.team_id))
 
         payload = data.model_dump(exclude_unset=True)
         if not payload:
             raise ValidationError("No settings fields to update")
+        if "session_ttl_hours" in payload:
+            raise ValidationError(
+                "Clerk manages session lifetime; this legacy setting is read-only"
+            )
 
         async with unit_of_work(self.db):
+            for field in (
+                "label_width_mm",
+                "label_height_mm",
+                "label_show_name",
+                "label_show_reference",
+                "label_show_barcode",
+                "label_show_logo",
+            ):
+                if payload.get(field) is not None:
+                    setattr(settings, field, payload[field])
             if data.vat_rate is not None:
                 if data.vat_rate <= 0 or data.vat_rate > 1:
                     raise ValidationError("vat_rate must be between 0 and 1")
@@ -131,16 +145,20 @@ class SettingsService:
                 ):
                     raise ValidationError("po_approval_threshold_zar must be >= 0")
                 settings.po_approval_threshold_zar = data.po_approval_threshold_zar
-            if data.session_ttl_hours is not None:
-                settings.session_ttl_hours = data.session_ttl_hours
+            if data.auto_process_exact_supplier_invoices is not None:
+                settings.auto_process_exact_supplier_invoices = (
+                    data.auto_process_exact_supplier_invoices
+                )
             if data.document_sequences is not None:
-                await self._apply_sequence_updates(user.team_id, data.document_sequences)
+                await self._apply_sequence_updates(
+                    (tenant_id_ctx.get() or user.team_id), data.document_sequences
+                )
 
         return await self._to_response(settings, include_warning=True)
 
     async def get_comms(self, user_id: uuid.UUID) -> CommsSettingsResponse:
         user = await self._get_user(user_id)
-        settings = await self.crud.get_or_create_for_team(user.team_id)
+        settings = await self.crud.get_or_create_for_team((tenant_id_ctx.get() or user.team_id))
         return self._to_comms_response(settings)
 
     async def update_comms(
@@ -149,7 +167,7 @@ class SettingsService:
         data: CommsSettingsUpdate,
     ) -> CommsSettingsResponse:
         user = await self._get_user(user_id)
-        settings = await self.crud.get_or_create_for_team(user.team_id)
+        settings = await self.crud.get_or_create_for_team((tenant_id_ctx.get() or user.team_id))
         payload = data.model_dump(exclude_unset=True)
         if not payload:
             raise ValidationError("No communications fields to update")
@@ -205,7 +223,7 @@ class SettingsService:
         data: CommsTestEmailRequest,
     ) -> CommsTestEmailResponse:
         user = await self._get_user(user_id)
-        settings = await self.crud.get_or_create_for_team(user.team_id)
+        settings = await self.crud.get_or_create_for_team((tenant_id_ctx.get() or user.team_id))
         config = load_smtp_config(settings)
         await send_message(
             config,
@@ -217,7 +235,7 @@ class SettingsService:
 
     async def upload_logo(self, user_id: uuid.UUID, file: UploadFile) -> SettingsResponse:
         user = await self._get_user(user_id)
-        settings = await self.crud.get_or_create_for_team(user.team_id)
+        settings = await self.crud.get_or_create_for_team((tenant_id_ctx.get() or user.team_id))
 
         content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
         if content_type and content_type not in _ALLOWED_LOGO_CONTENT_TYPES:
@@ -245,16 +263,11 @@ class SettingsService:
 
     async def serve_logo(self, user_id: uuid.UUID) -> Response:
         user = await self._get_user(user_id)
-        settings = await self.crud.get_or_create_for_team(user.team_id)
+        settings = await self.crud.get_or_create_for_team((tenant_id_ctx.get() or user.team_id))
         if not settings.logo_storage_key:
             raise NotFoundError("Logo not found")
 
         storage_key = settings.logo_storage_key
-        if is_remote_storage_ref(storage_key):
-            url = presigned_get_url(storage_key)
-            if url:
-                return RedirectResponse(url)
-
         try:
             data = await asyncio.to_thread(read_bytes, storage_key)
         except FileNotFoundError as exc:
@@ -340,6 +353,17 @@ class SettingsService:
         ]
 
         return SettingsResponse(
+            **{
+                field: getattr(settings, field)
+                for field in (
+                    "label_width_mm",
+                    "label_height_mm",
+                    "label_show_name",
+                    "label_show_reference",
+                    "label_show_barcode",
+                    "label_show_logo",
+                )
+            },
             vat_rate=vat_rate,
             vat_percent=(vat_rate * Decimal("100")).quantize(Decimal("0.01")),
             home_currency=home_currency,
@@ -360,6 +384,9 @@ class SettingsService:
             default_till_location_id=settings.default_till_location_id,
             max_till_discount_percent=settings.max_till_discount_percent,
             po_approval_threshold_zar=settings.po_approval_threshold_zar,
+            auto_process_exact_supplier_invoices=bool(
+                settings.auto_process_exact_supplier_invoices
+            ),
             session_ttl_hours=int(settings.session_ttl_hours),
             has_logo=bool(settings.logo_storage_key),
             document_sequences=sequence_rows,

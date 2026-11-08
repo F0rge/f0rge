@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from decimal import Decimal
 from io import BytesIO
 from typing import Optional
@@ -11,7 +13,6 @@ from PIL import Image
 from pypdf import PdfReader
 
 from app.services.auth import JWT_COOKIE_NAME
-from tests.conftest import assert_firstout_session_cookie
 
 from tests.pdf_fixture import MINIMAL_PDF, assert_pdf_openable
 
@@ -47,80 +48,55 @@ async def _create_sku(
 
 async def _create_buyer(client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-po@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
-    assert create_user.status_code == 201
 
     client.cookies.clear()
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "buyer-po@example.com", "password": "buyer-password"},
-    )
+    client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(client, "buyer-po@example.com")
     assert login_resp.status_code == 200
-    assert_firstout_session_cookie(login_resp)
+    assert "firstout_session" not in login_resp.cookies
     return client
 
 
 async def _create_warehouse(client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
-    client.cookies.clear()
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse-po@example.com", "password": "warehouse-password"},
-    )
-    if login_resp.status_code == 200:
-        return client
-
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "warehouse-po@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
-    assert create_user.status_code == 201
 
     client.cookies.clear()
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse-po@example.com", "password": "warehouse-password"},
-    )
+    client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(client, "warehouse-po@example.com")
     assert login_resp.status_code == 200
     return client
 
 
 async def _create_till(client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
-    client.cookies.clear()
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-po@example.com", "password": "till-password"},
-    )
-    if login_resp.status_code == 200:
-        return client
-
     await _relogin_owner(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-po@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    assert create_user.status_code == 201
 
     client.cookies.clear()
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-po@example.com", "password": "till-password"},
-    )
+    client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(client, "till-po@example.com")
     assert login_resp.status_code == 200
     return client
 
@@ -576,36 +552,26 @@ async def test_unauthenticated_po_and_receive_return_401(async_client: AsyncClie
     assert recv.status_code == 401
 
 
-async def test_login_sets_firstout_session(async_client: AsyncClient) -> None:
-    resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "owner@example.com", "password": "change-me-owner"},
-    )
+async def test_signed_clerk_session_never_sets_firstout_cookie(async_client: AsyncClient) -> None:
+    resp = await authenticate_as(async_client, "owner@example.com")
     assert resp.status_code == 200
-    assert_firstout_session_cookie(resp)
-    assert JWT_COOKIE_NAME in async_client.cookies
+    assert "firstout_session" not in resp.cookies
+    assert JWT_COOKIE_NAME not in async_client.cookies
 
 
 async def _relogin_owner(client: AsyncClient) -> None:
     from app.config import settings
 
     client.cookies.clear()
-    resp = await client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": settings.seed_owner_email,
-            "password": settings.seed_owner_password,
-        },
-    )
+    client.headers.pop("Authorization", None)
+    resp = await authenticate_as(client, settings.seed_owner_email)
     assert resp.status_code == 200
 
 
 async def _login_as(client: AsyncClient, email: str, password: str) -> AsyncClient:
     client.cookies.clear()
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
-    )
+    client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(client, email)
     assert login_resp.status_code == 200
     return client
 
@@ -615,27 +581,27 @@ async def test_role_permissions(
     owner_client: AsyncClient,
 ) -> None:
     await _relogin_owner(owner_client)
-    await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "buyer-po@example.com",
             "password": "buyer-password",
             "role": "buyer",
         },
     )
     await _relogin_owner(owner_client)
-    await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "warehouse-po@example.com",
             "password": "warehouse-password",
             "role": "warehouse",
         },
     )
     await _relogin_owner(owner_client)
-    await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-po@example.com",
             "password": "till-password",
             "role": "till",

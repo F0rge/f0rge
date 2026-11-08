@@ -48,8 +48,14 @@ class PaymentCRUD(BaseCRUD):
         limit: int,
         offset: int,
         q: Optional[str] = None,
+        invoice_id: Optional[uuid.UUID] = None,
+        bill_id: Optional[uuid.UUID] = None,
     ) -> tuple[list[Payment], int]:
         filters = []
+        if invoice_id is not None:
+            filters.append(Payment.invoice_id == invoice_id)
+        if bill_id is not None:
+            filters.append(Payment.bill_id == bill_id)
         if q:
             pattern = f"%{q}%"
             filters.append(
@@ -75,7 +81,7 @@ class PaymentCRUD(BaseCRUD):
             selectinload(Payment.invoice),
             selectinload(Payment.bill),
         )
-        if q:
+        if q or invoice_id is not None or bill_id is not None:
             stmt = (
                 stmt.outerjoin(TaxInvoice, Payment.invoice_id == TaxInvoice.id)
                 .outerjoin(Customer, TaxInvoice.customer_id == Customer.id)

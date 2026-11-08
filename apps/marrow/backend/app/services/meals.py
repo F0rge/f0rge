@@ -4,6 +4,7 @@ import asyncio
 import datetime
 from typing import Optional
 
+from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.meals import MealCRUD
@@ -27,6 +28,26 @@ from app.services.photo_storage import delete_photo, photo_exists, read_photo, s
 from app.services.photos import next_photo_filename
 from app.services.weather import attach_weather_for_date
 from f0rge_db.tenant import current_user_id
+
+
+async def _readable_source_bytes(filename: Optional[str], user_id: str) -> Optional[bytes]:
+    """Image bytes worth copying, or None when the source has no usable photo.
+
+    A null filename, a photo row whose object was never stored, and a read that
+    fails (missing or unreadable disk/bucket bytes) all return None. Re-log then
+    keeps the meal and skips the image.
+    """
+    if not filename:
+        return None
+    try:
+        if not photo_exists(filename, user_id=user_id):
+            return None
+        data = await asyncio.to_thread(read_photo, filename, user_id=user_id)
+    except (OSError, BotoCoreError, ClientError):
+        return None
+    if not data:
+        return None
+    return data
 
 
 class MealService:
@@ -240,7 +261,12 @@ class MealService:
         source_photo_id: int,
         meal_time: Optional[datetime.datetime] = None,
     ) -> PhotoResponse:
-        """Copy a confirmed source meal onto ``target_date`` as new, decoupled rows."""
+        """Copy a confirmed source meal onto ``target_date`` as new, decoupled rows.
+
+        Missing or unreadable source bytes do not fail the re-log. The clone
+        keeps the name, ingredients, and flags, and omits the image. An icon on
+        the source meal is kept when no image is copied.
+        """
         src_photo = await self.photo_crud.get_by_id_owned(source_photo_id)
         if src_photo is None:
             raise NotFoundError(f"No photo for analysis on photo {source_photo_id}")
@@ -254,28 +280,25 @@ class MealService:
         user_id_str = str(user_id)
 
         src_meal = src_photo.meal
-        icon_only = src_photo.filename is None
-        if icon_only:
-            if src_meal is None or not src_meal.icon_key:
-                raise ValidationError("Source meal has no image or icon")
-            new_filename = None
-            icon_key = src_meal.icon_key
-            platform_meal_id = src_meal.platform_meal_id
-            src_bytes = None
-        else:
-            if not photo_exists(src_photo.filename, user_id=user_id_str):
-                raise NotFoundError("Source photo file is missing on disk")
-            src_bytes = await asyncio.to_thread(read_photo, src_photo.filename, user_id=user_id_str)
-            new_filename = None
+        icon_key = src_meal.icon_key if src_meal is not None else None
+        platform_meal_id = src_meal.platform_meal_id if src_meal is not None else None
+        src_bytes = await _readable_source_bytes(src_photo.filename, user_id_str)
+        if src_bytes is not None:
+            # A copied image is the clone's representation; don't also stamp a library icon.
             icon_key = None
             platform_meal_id = None
 
         entry = await get_or_create_entry(self.db, target_date)
         now = datetime.datetime.utcnow()
         effective_meal_time = meal_time if meal_time is not None else now
-
-        if not icon_only:
-            new_filename = await next_photo_filename(self.db, entry)
+        new_filename = await next_photo_filename(self.db, entry) if src_bytes is not None else None
+        # A filename with no readable bytes is not an image. Drop the dangling
+        # original name so the clone does not claim a file it does not have.
+        original_filename = (
+            src_photo.original_filename
+            if src_bytes is not None or src_photo.filename is None
+            else None
+        )
 
         meal = Meal(
             owner_user_id=user_id,
@@ -283,7 +306,7 @@ class MealService:
             icon_key=icon_key,
             platform_meal_id=platform_meal_id,
             label=src_photo.label,
-            original_filename=src_photo.original_filename,
+            original_filename=original_filename,
             meal_time=effective_meal_time,
             created_at=now,
         )
@@ -295,7 +318,7 @@ class MealService:
             meal_id=meal.id,
             filename=new_filename,
             label=src_photo.label,
-            original_filename=src_photo.original_filename,
+            original_filename=original_filename,
             meal_time=effective_meal_time,
             created_at=now,
         )
@@ -352,7 +375,7 @@ class MealService:
         # serving a Redis-cached entry missing the clone for up to TTL (300s).
         await attach_weather_for_date(self.db, target_date)
         await invalidate_user_insights_cache(user_id, target_date)
-        if icon_only:
+        if src_bytes is None:
             new_photo.meal = meal
         # Serialize via _photo_response: raw ORM return would make the response
         # model touch the unloaded diet_tags relationship (MissingGreenlet).

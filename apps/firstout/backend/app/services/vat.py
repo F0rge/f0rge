@@ -13,6 +13,14 @@ def ex_to_inc(ex: Decimal) -> Decimal:
     return (ex * VAT_MULTIPLIER).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
+def discounted_unit_ex(unit_ex: Decimal, discount_percent: Decimal) -> Decimal:
+    """Ex-VAT unit after a line discount. The stored unit price is unchanged."""
+    return (unit_ex * (Decimal("100") - discount_percent) / Decimal("100")).quantize(
+        CENT,
+        rounding=ROUND_HALF_UP,
+    )
+
+
 def inc_to_ex(inc: Decimal) -> Decimal:
     return (inc / VAT_MULTIPLIER).quantize(CENT, rounding=ROUND_HALF_UP)
 

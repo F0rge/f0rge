@@ -1,29 +1,23 @@
 from __future__ import annotations
 
-import datetime
+from typing import Optional
+
 import uuid
 
 import bcrypt
-import jwt
 from fastapi import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.permissions import role_slug
+from app.services.staff_identity import staff_identity_ctx
+from fastapi import Request
 from app.services.permissions import PermissionService
 from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
-JWT_ALGORITHM = "HS256"
 JWT_COOKIE_NAME = "firstout_session"
 MIN_PASSWORD_LENGTH = 8
-
-
-def _require_jwt_secret() -> str:
-    if not settings.jwt_secret:
-        raise ValidationError("JWT secret not configured")
-    return settings.jwt_secret
 
 
 def hash_password(password: str) -> str:
@@ -31,47 +25,11 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
-
-
-def create_access_token(user_id: uuid.UUID, ttl_hours: int) -> str:
-    now = datetime.datetime.utcnow()
-    payload = {
-        "sub": str(user_id),
-        "iat": now,
-        "exp": now + datetime.timedelta(hours=ttl_hours),
-    }
-    return jwt.encode(payload, _require_jwt_secret(), algorithm=JWT_ALGORITHM)
-
-
-def decode_access_token(token: str) -> uuid.UUID:
     try:
-        payload = jwt.decode(token, _require_jwt_secret(), algorithms=[JWT_ALGORITHM])
-    except jwt.PyJWTError as exc:
-        raise UnauthorizedError("Invalid session") from exc
-
-    sub = payload.get("sub")
-    if not sub:
-        raise UnauthorizedError("Invalid session")
-    if payload.get("typ") == "customer":
-        raise UnauthorizedError("Invalid session")
-
-    try:
-        return uuid.UUID(str(sub))
-    except ValueError as exc:
-        raise UnauthorizedError("Invalid session") from exc
-
-
-def set_session_cookie(response: Response, token: str, *, max_age: int) -> None:
-    response.set_cookie(
-        key=JWT_COOKIE_NAME,
-        value=token,
-        httponly=True,
-        samesite="lax",
-        path="/",
-        secure=settings.cookie_secure,
-        max_age=max_age,
-    )
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except ValueError:
+        # Clerk-only identities deliberately have no local password verifier.
+        return False
 
 
 def clear_session_cookie(response: Response) -> None:
@@ -92,18 +50,10 @@ class AuthService:
         self.db = db
         self.crud = UserCRUD(db)
 
-    async def login(self, email: str, password: str, response: Response) -> dict[str, str]:
-        user = await self.crud.get_by_email(email)
-        if user is None or not verify_password(password, user.password_hash):
-            raise UnauthorizedError("Invalid email or password")
-        if user.is_disabled:
-            raise UnauthorizedError("Invalid email or password")
-
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
-        ttl_hours = int(team_settings.session_ttl_hours)
-        token = create_access_token(user.id, ttl_hours)
-        set_session_cookie(response, token, max_age=ttl_hours * 3600)
-        return {"email": user.email}
+    async def login(
+        self, email: str, password: str, response: Response, request: Optional[Request] = None
+    ) -> dict[str, str]:
+        raise ValidationError("Sign in with Clerk; local password login has been retired")
 
     async def logout(self, response: Response) -> None:
         clear_session_cookie(response)
@@ -112,12 +62,17 @@ class AuthService:
         user = await self.crud.get_by_id(user_id)
         if user is None or user.is_disabled:
             raise UnauthorizedError("Invalid session")
+        identity = staff_identity_ctx.get()
         return {
             "id": user.id,
             "email": user.email,
             "display_name": user.display_name,
-            "role": role_slug(user.role),
+            "role": identity.role if identity else role_slug(user.role),
             "permissions": await PermissionService(self.db).keys_for_user(user.id),
-            "team": {"id": user.team.id, "name": user.team.name},
-            "default_location_id": user.default_location_id,
+            "team": {"id": identity.team_id, "name": identity.team_name}
+            if identity
+            else {"id": user.team.id, "name": user.team.name},
+            "default_location_id": identity.default_location_id
+            if identity
+            else user.default_location_id,
         }
