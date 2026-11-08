@@ -11,7 +11,7 @@ from app.config import settings
 from app.models.team import Team
 from app.models.user import User
 from app.services.clerk_api import ClerkAPI, MAX_MEMBERS
-from app.services.clerk_import import import_staff_user
+from app.services.clerk_import import import_staff_user, staff_import_payload
 from f0rge_core.exceptions import ConflictError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -63,13 +63,7 @@ class StaffImportService:
         if owner is None:
             raise ValidationError("An active home owner is required")
         owner_id = owner.clerk_user_id or await self.provider.create_user(
-            {
-                "external_id": str(owner.id),
-                "email_address": [owner.email],
-                "password_digest": owner.password_hash,
-                "password_hasher": "bcrypt",
-                "create_organization_enabled": False,
-            }
+            staff_import_payload(owner)
         )
         owner_remote = await self.provider.user(owner_id)
         if owner_remote.get("external_id") != str(owner.id):

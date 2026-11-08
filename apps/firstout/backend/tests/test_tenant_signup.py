@@ -347,6 +347,20 @@ async def test_staff_import_dryrun_and_all_seven_legacy_users_keep_hashes_and_ro
     report = await service.run(team_id, commit=True)
     assert report["imported_count"] == 7
     assert remote.ensure_organisation.call_args.kwargs["max_members"] == 7
+    imported = {str(user.id): user for user in users}
+    # Includes the initial owner creation before organisation creation, then all
+    # seven member imports. Both paths must satisfy required-username instances.
+    payloads = [call.args[0] for call in remote.create_user.call_args_list]
+    assert len(payloads) == 8
+    for payload in payloads:
+        original = imported[payload["external_id"]]
+        assert payload["username"] == "fo_" + original.id.hex
+        assert payload["email_address"] == [original.email]
+        assert payload["password_digest"] == before[original.id][0]
+        assert payload["password_hasher"] == "bcrypt"
+    assert payloads[0] == next(
+        payload for payload in payloads[1:] if payload["external_id"] == payloads[0]["external_id"]
+    )
     for user in users:
         assert (user.password_hash, user.role, user.token_version, user.is_disabled) == before[
             user.id

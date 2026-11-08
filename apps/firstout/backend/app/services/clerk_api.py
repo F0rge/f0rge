@@ -160,7 +160,7 @@ class ClerkAPI:
         )
 
     async def find_external_user(self, external_id: str) -> Optional[dict]:
-        users = await self.list_all("/users", params={"external_id[]": external_id})
+        users = await self.list_all("/users", params={"external_id": external_id})
         exact = [user for user in users if user.get("external_id") == external_id]
         if len(exact) > 1:
             raise ConflictError("Clerk external identity is ambiguous")

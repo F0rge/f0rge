@@ -92,24 +92,43 @@ async def test_create_organisation_seeds_only_five_members_and_recovery_marker()
 
 async def test_import_transport_recovers_only_exact_external_uuid_not_email():
     seen = []
+    existing_user = {
+        "id": "user_existing",
+        "external_id": "immutable-local-uuid",
+        "username": "original_staff_username",
+    }
 
     def handler(request):
         seen.append(request)
         assert request.method == "GET"
         assert request.url.path == "/v1/users"
-        assert request.url.params["external_id[]"] == "immutable-local-uuid"
+        assert request.url.params["external_id"] == "immutable-local-uuid"
+        assert "external_id[]" not in request.url.params
         return httpx.Response(
-            200, json=[{"id": "user_existing", "external_id": "immutable-local-uuid"}]
+            200,
+            json=[
+                {
+                    "id": "user_unrelated",
+                    "external_id": "other-local-uuid",
+                    "email_address": ["private@example.com"],
+                },
+                existing_user,
+            ],
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         assert (
             await ClerkAPI(client, "synthetic-key").create_user(
-                {"external_id": "immutable-local-uuid", "email_address": ["private@example.com"]}
+                {
+                    "external_id": "immutable-local-uuid",
+                    "email_address": ["private@example.com"],
+                    "username": "proposed_stable_username",
+                }
             )
             == "user_existing"
         )
     assert len(seen) == 1
+    assert existing_user["username"] == "original_staff_username"
 
 
 async def test_provider_errors_never_echo_sensitive_payload_or_upstream_body():

@@ -18,6 +18,22 @@ class ClerkImportProvider(Protocol):
     async def create_membership(self, org_id: str, user_id: str, role: str) -> None: ...
 
 
+def staff_import_payload(user: User) -> dict[str, object]:
+    """Use the immutable Firstout UUID when Clerk requires a username.
+
+    This is a create-only proposal. Existing provider identities are recovered by
+    external_id and their usernames are never overwritten during retry/linking.
+    """
+    return {
+        "external_id": str(user.id),
+        "username": "fo_" + user.id.hex,
+        "email_address": [user.email],
+        "password_digest": user.password_hash,
+        "password_hasher": "bcrypt",
+        "create_organization_enabled": False,
+    }
+
+
 async def import_staff_user(
     user: User, org_id: str, provider: ClerkImportProvider, *, sleep=asyncio.sleep
 ) -> str:
@@ -27,13 +43,7 @@ async def import_staff_user(
         raise ValueError("The storefront actor cannot become a Clerk staff user")
     if not user.password_hash.startswith(("$2a$", "$2b$")):
         raise ValueError("Unsupported password digest; retain legacy login")
-    payload = {
-        "external_id": str(user.id),
-        "email_address": [user.email],
-        "password_digest": user.password_hash,
-        "password_hasher": "bcrypt",
-        "create_organization_enabled": False,
-    }
+    payload = staff_import_payload(user)
     clerk_id = user.clerk_user_id
     if not clerk_id:
         for attempt in range(5):
