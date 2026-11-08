@@ -33,6 +33,7 @@ import {
   canReceive,
   createPurchaseOrderLineSku,
   downloadPackingSheet,
+  downloadPurchaseOrder,
   getPurchaseOrder,
   landPurchaseOrder,
   listSkus,
@@ -45,6 +46,13 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  displayFabric,
+  changeSupplierCodeSku,
+  editSupplierCode,
+  prefillSupplierCode,
+  type SupplierCodeLine,
+} from "@/lib/po-supplier-code";
 
 type BillForm = {
   invoice_number: string;
@@ -60,11 +68,8 @@ const emptyBill = (currency = "USD"): BillForm => ({
   file: null,
 });
 
-type DraftLine = {
-  key: string;
+type DraftLine = SupplierCodeLine & {
   id?: string;
-  sku_id: string;
-  supplier_code: string;
   description: string;
   notes: string;
   qty: number | "";
@@ -85,6 +90,7 @@ function draftsFromOrder(order: PurchaseOrder): DraftLine[] {
     id: line.id,
     sku_id: line.sku_id ?? "",
     supplier_code: line.supplier_code ?? "",
+    supplierCodeTouched: Boolean(line.supplier_code?.trim()),
     description: line.description ?? "",
     notes: line.notes ?? "",
     qty: line.qty,
@@ -180,14 +186,25 @@ export default function PurchaseOrderDetailPage() {
     }
   }, [user, params.id, loadOrder]);
 
+  const editingPending = Boolean(order && order.status === "pending_approval" && canEditLines);
+
   useEffect(() => {
-    if (!canEditLines || order?.status !== "pending_approval") {
-      return;
-    }
-    void listSkus()
-      .then(setSkus)
-      .catch(() => setSkus([]));
-  }, [canEditLines, order?.status, order?.id]);
+    if (!editingPending || !order) return;
+    let cancelled = false;
+    void listSkus().then((data) => {
+      if (cancelled) return;
+      setSkus(data);
+      for (const line of order.lines) {
+        const sku = data.find((item) => item.id === line.sku_id);
+        if (sku && !line.supplier_code?.trim()) {
+          void prefillSupplierCode(setDraftLines, line.id, order.supplier_id, sku);
+        }
+      }
+    }).catch((reason: unknown) => {
+      if (!cancelled) setError(reason instanceof Error ? reason.message : "Couldn't load SKU choices. Reload this page to try again.");
+    });
+    return () => { cancelled = true; };
+  }, [editingPending, order]);
 
   async function handleDownload() {
     if (!order) {
@@ -202,6 +219,32 @@ export default function PurchaseOrderDetailPage() {
     } finally {
       setActionLoading(false);
     }
+  }
+
+  async function handleDownloadPurchaseOrder() {
+    if (!order) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await downloadPurchaseOrder(order.id, order.po_number);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download the purchase order.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function onDraftSkuPicked(key: string, skuId: string) {
+    setDraftLines((current) => current.map((line) => line.key === key ? changeSupplierCodeSku(line, skuId) : line));
+    const sku = skus.find((item) => item.id === skuId);
+    if (sku && order) void prefillSupplierCode(setDraftLines, key, order.supplier_id, sku);
+  }
+
+  function retrySupplierCode(line: DraftLine) {
+    const sku = skus.find((item) => item.id === line.sku_id);
+    if (sku && order) void prefillSupplierCode(setDraftLines, line.key, order.supplier_id, sku);
   }
 
   async function handleApprove() {
@@ -314,9 +357,10 @@ export default function PurchaseOrderDetailPage() {
     setDraftLines((current) => [
       ...current,
       {
-        key: `new-${current.length}-${Date.now()}`,
+        key: crypto.randomUUID(),
         sku_id: "",
         supplier_code: "",
+        supplierCodeTouched: false,
         description: "",
         notes: "",
         qty: "",
@@ -334,7 +378,8 @@ export default function PurchaseOrderDetailPage() {
       (line.sku_id || line.description.trim()) &&
       typeof line.qty === "number" &&
       line.qty > 0 &&
-      line.factory_unit_amount.trim() !== "",
+      line.factory_unit_amount.trim() !== "" &&
+      !line.supplierCodeLookup,
   );
 
   async function handleSaveLines() {
@@ -506,6 +551,17 @@ export default function PurchaseOrderDetailPage() {
           <p className="cds--type-body-01">Supplier reference {order.supplier_ref}</p>
         ) : null}
         {order.notes ? <p className="cds--type-body-01">{order.notes}</p> : null}
+        {order.status !== "rejected" ? (
+          <div style={{ marginTop: "1rem" }}>
+            <Button
+              kind="secondary"
+              disabled={actionLoading}
+              onClick={() => void handleDownloadPurchaseOrder()}
+            >
+              Download purchase order
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -603,6 +659,7 @@ export default function PurchaseOrderDetailPage() {
                   <TableHeader>SKU</TableHeader>
                   <TableHeader>Supplier code</TableHeader>
                   <TableHeader>Description</TableHeader>
+                  <TableHeader>Fabric / finish</TableHeader>
                   <TableHeader>Qty</TableHeader>
                   <TableHeader>Factory unit</TableHeader>
                   <TableHeader>Notes</TableHeader>
@@ -621,7 +678,7 @@ export default function PurchaseOrderDetailPage() {
                         labelText="SKU"
                         hideLabel
                         value={line.sku_id}
-                        onChange={(event) => updateDraft(line.key, { sku_id: event.target.value })}
+                        onChange={(event) => onDraftSkuPicked(line.key, event.target.value)}
                       >
                         <SelectItem value="" text="No SKU yet" />
                         {skus.map((sku) => (
@@ -639,10 +696,15 @@ export default function PurchaseOrderDetailPage() {
                         labelText="Supplier code"
                         hideLabel
                         value={line.supplier_code}
-                        onChange={(event) =>
-                          updateDraft(line.key, { supplier_code: event.target.value })
-                        }
+                        helperText={line.supplierCodeLookup?.status === "loading" ? "Checking supplier code…" : undefined}
+                        invalid={line.supplierCodeLookup?.status === "error"}
+                        invalidText={line.supplierCodeLookup?.error}
+                        onChange={(event) => setDraftLines((current) => current.map((row) =>
+                          row.key === line.key ? editSupplierCode(row, event.target.value) : row))}
                       />
+                      {line.supplierCodeLookup?.status === "error" ? (
+                        <Button kind="ghost" size="sm" onClick={() => retrySupplierCode(line)}>Retry supplier code</Button>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <TextInput
@@ -654,6 +716,12 @@ export default function PurchaseOrderDetailPage() {
                           updateDraft(line.key, { description: event.target.value })
                         }
                       />
+                    </TableCell>
+                    <TableCell>
+                      {displayFabric(
+                        skus.find((sku) => sku.id === line.sku_id)?.fabric ??
+                          order.lines.find((row) => row.id === line.id)?.fabric,
+                      ) ?? ""}
                     </TableCell>
                     <TableCell>
                       <NumberInput
@@ -732,6 +800,7 @@ export default function PurchaseOrderDetailPage() {
               <TableHeader>Supplier code</TableHeader>
               <TableHeader>Description</TableHeader>
               <TableHeader>Name</TableHeader>
+              <TableHeader>Fabric / finish</TableHeader>
               <TableHeader>Qty</TableHeader>
               <TableHeader>Factory unit</TableHeader>
               <TableHeader>Unit cost ZAR</TableHeader>
@@ -747,6 +816,7 @@ export default function PurchaseOrderDetailPage() {
                 <TableCell>{line.supplier_code ?? "—"}</TableCell>
                 <TableCell>{line.description ?? line.name}</TableCell>
                 <TableCell>{line.name}</TableCell>
+                <TableCell>{displayFabric(line.fabric) ?? ""}</TableCell>
                 <TableCell>{line.qty}</TableCell>
                 <TableCell>{line.factory_unit_amount}</TableCell>
                 <TableCell>{line.unit_cost_zar ?? "—"}</TableCell>
