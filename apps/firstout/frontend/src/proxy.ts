@@ -15,6 +15,11 @@ function forward(request: NextRequest) {
 // No protect(): legacy staff and trade cookies remain valid during dual-auth.
 const withClerk = clerkMiddleware((_auth, request) => forward(request));
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  // Railway probes use healthcheck.railway.app, outside the tenant host allowlist.
+  // Expose only a static liveness response; application routes keep the host guard.
+  if (request.method === "GET" && request.nextUrl.pathname === "/healthz") {
+    return NextResponse.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } });
+  }
   if (
     !frontendHeaders(
       request.headers,
