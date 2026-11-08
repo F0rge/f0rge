@@ -105,20 +105,23 @@ class UserService:
                 )
             )
             record = UserResponse.model_validate(user)
+            if member is not None:
+                record = record.model_copy(
+                    update={"is_disabled": user.is_disabled or member.is_disabled}
+                )
             if member is not None and not member.is_legacy_home:
                 record = record.model_copy(
                     update={
                         "team_id": team_id,
                         "team": TeamBrief(id=team.id, name=team.name),
                         "role": member.role,
-                        "is_disabled": user.is_disabled or member.is_disabled,
                         "default_location_id": member.default_location_id,
                     }
                 )
             results.append(record)
         return results
 
-    async def update(self, user_id: uuid.UUID, data: UserUpdate) -> User:
+    async def update(self, user_id: uuid.UUID, data: UserUpdate) -> UserResponse:
         # Serialize tenant role/disabled edits before counting remaining owners.
         await self.db.execute(
             select(Team.id).where(Team.id == tenant_id_ctx.get()).with_for_update()
@@ -173,7 +176,9 @@ class UserService:
         if data.is_disabled is not None:
             if data.is_disabled and await self._is_owner_user(role_slug(user.role)):
                 await self._reject_last_owner()
-            user.is_disabled = data.is_disabled
+            # Staff administration belongs to this organisation. The global
+            # identity flag remains authoritative for imported/security blocks.
+            member.is_disabled = data.is_disabled
         if data.password is not None:
             await _apply_new_password(self.db, user, data.password)
         if "default_location_id" in data.model_fields_set:
@@ -188,7 +193,7 @@ class UserService:
             raise ConflictError("Email already registered") from exc
         reloaded = await self.crud.get_by_id(user.id)
         assert reloaded is not None
-        return reloaded
+        return next(record for record in await self.list() if record.id == user.id)
 
     async def _require_known_role(self, slug: str) -> None:
         role = await self.role_crud.get_by_slug(role_slug(slug))

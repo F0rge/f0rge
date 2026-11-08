@@ -50,7 +50,9 @@ async def resolve_membership(
         team.slug != "firstout" or clerk_org_id is not None
     ):
         raise HTTPException(403, "Tenant cutover is not active")
-    if (membership.is_disabled and not membership.is_legacy_home) or team.status != "active":
+    if membership.is_disabled:
+        raise HTTPException(401, "Invalid membership")
+    if team.status != "active":
         raise HTTPException(403, "Membership unavailable")
     # Existing home role edits remain authoritative during dual-auth; the migration
     # does not freeze subsequent legitimate staff administration.

@@ -449,6 +449,54 @@ async def test_no_org_me_route_accepts_only_signed_identity_boundary(async_clien
         app.dependency_overrides.pop(get_clerk_api, None)
 
 
+@pytest.mark.parametrize("billing_disabled", [True, False])
+async def test_existing_org_selection_works_when_creation_is_disabled(
+    async_client, async_db, monkeypatch, billing_disabled
+):
+    from app.dependencies.tenant_signup import get_clerk_api
+    from app.main import app
+    from tests.conftest import OWNER_EMAIL
+
+    owner = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
+    owner.clerk_user_id = "user_existing_selection"
+    team = await async_db.get(Team, owner.team_id)
+    team.clerk_org_id = "org_existing_selection"
+    await async_db.flush()
+    remote = provider(subject=owner.clerk_user_id, email=owner.email)
+    app.dependency_overrides[get_clerk_api] = lambda: remote
+    monkeypatch.setattr(settings, "tenant_signup_enabled", False)
+    monkeypatch.setattr(settings, "billing_disabled", billing_disabled)
+    monkeypatch.setattr(
+        "app.dependencies.tenant_signup.verify_clerk_session",
+        AsyncMock(return_value=ClerkSession(owner.clerk_user_id)),
+    )
+    headers = {"Authorization": "Bearer existing-signed-session"}
+    try:
+        response = await async_client.get("/api/v1/tenant-signup/me", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["organisations"][0]["id"] == str(team.id)
+        assert (await async_client.get("/api/v1/tenant-signup/me")).status_code == 401
+        for path in ("/api/v1/tenant-signup", "/api/v1/tenant-signup/preview"):
+            blocked = await async_client.post(
+                path, headers=headers, json={"name": "Blocked business", "slug": "blocked-business"}
+            )
+            assert blocked.status_code == 400
+        remote.ensure_organisation.assert_not_called()
+
+        remote.user.return_value["email_addresses"][0]["verification"]["status"] = "unverified"
+        assert (
+            await async_client.get("/api/v1/tenant-signup/me", headers=headers)
+        ).status_code == 400
+        remote.user.return_value["email_addresses"][0]["verification"]["status"] = "verified"
+        owner.is_disabled = True
+        await async_db.flush()
+        assert (
+            await async_client.get("/api/v1/tenant-signup/me", headers=headers)
+        ).status_code == 401
+    finally:
+        app.dependency_overrides.pop(get_clerk_api, None)
+
+
 async def test_canonical_webhook_state_wins_over_event_order_and_preserves_home(
     async_client, async_db, monkeypatch
 ):

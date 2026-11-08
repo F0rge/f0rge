@@ -53,6 +53,8 @@ async def verify_clerk_session(token: str, *, require_org: bool = False) -> Cler
             options={"require": ["exp", "iat", "nbf", "iss", "sub"], "verify_aud": False},
             leeway=5,
         )
+        if require_org and claims.get("sts") == "pending":
+            raise ValueError("Active Clerk session required")
         org = claims.get("o") or {}
         if not isinstance(org, dict):
             raise ValueError("Invalid organisation claims")

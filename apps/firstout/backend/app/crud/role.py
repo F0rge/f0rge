@@ -72,7 +72,7 @@ class RoleCRUD(BaseCRUD):
         if active_only:
             stmt = stmt.where(
                 User.is_disabled.is_(False),
-                or_(Membership.is_legacy_home.is_(True), Membership.is_disabled.is_(False)),
+                Membership.is_disabled.is_(False),
             )
         return int((await self.db.execute(stmt)).scalar_one())
 

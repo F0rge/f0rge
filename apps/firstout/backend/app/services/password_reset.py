@@ -10,6 +10,7 @@ import time
 from urllib.parse import quote
 
 from fastapi import BackgroundTasks, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -18,6 +19,8 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import IdentityLookup
 from app.exceptions import RateLimitedError
 from app.models.password_reset_token import PasswordResetToken
+from app.models.membership import Membership
+from app.models.user import User
 from app.schemas.auth import PasswordResetConfirmRequest, PasswordResetMessage
 from app.services.auth import hash_password, validate_password
 from app.services.comms.plain_email import deliver_plain_message, mailbox_or_none
@@ -146,7 +149,7 @@ class PasswordResetService:
         user = await self.users.by_session_subject(token.user_id)
         if user is None:
             raise ValidationError(INVALID_TOKEN)
-        if user.is_disabled:
+        if await self._legacy_access_disabled(user):
             async with unit_of_work(self.db):
                 token.used_at = datetime.datetime.utcnow()
             raise ValidationError(DISABLED_ACCOUNT)
@@ -188,7 +191,7 @@ class PasswordResetService:
 
     async def _issue(self, email: str, background: BackgroundTasks) -> None:
         user = await self.users.for_password_reset(email)
-        if user is None or user.is_disabled:
+        if user is None or await self._legacy_access_disabled(user):
             return
         tenant_id_ctx.set(user.team_id)
         await apply_tenant_context(self.db, user.team_id)
@@ -218,6 +221,21 @@ class PasswordResetService:
             subject=RESET_EMAIL_SUBJECT,
             body_text=reset_email_body(link),
         )
+
+    async def _legacy_access_disabled(self, user: User) -> bool:
+        if user.is_disabled:
+            return True
+        # Only an explicitly enabled legacy home membership permits resets.
+        # Clerk-only identities must not gain a local password through this flow.
+        return (
+            await self.db.scalar(
+                select(Membership.is_disabled).where(
+                    Membership.user_id == user.id,
+                    Membership.team_id == user.team_id,
+                    Membership.is_legacy_home.is_(True),
+                )
+            )
+        ) is not False
 
     async def _pad(self, started: float) -> None:
         remaining = NEUTRAL_MIN_SECONDS - (time.monotonic() - started)
