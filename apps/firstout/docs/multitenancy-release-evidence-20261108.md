@@ -1,90 +1,128 @@
-# Firstout Clerk operational evidence — 2026-11-08
+# Firstout Clerk release evidence — 2026-11-08
 
-Status at 09:20 UTC: **release gates remain pending**. No serving database
-migration, staff import, RLS activation or Clerk feature activation has occurred.
-The user authorized the production rollout after tests, free public signup and
-explicit staff import preserving passwords and access. This record distinguishes
-completed preparation from the remaining release boundary.
+**Current checkpoint: production integration and core owned-account membership/isolation QA passed; public provider access remains restricted because the Open-signup save was blocked pending fresh action-time approval.** Fresh public signup/verification, live logo upload and real staff sign-in validation have not passed. Leo authorized this task's production release, explicit staff linking that preserves passwords/access, and free self-service. The browser's automatic approval review still required fresh confirmation for the exact production access-mode change. Billing remains disabled; no paid upgrade was purchased.
 
-## Restored production rehearsal
+This record supersedes the operational status in the [historical local test evidence](multitenancy-test-evidence.md). The [deployment runbook](multitenancy-deploy-runbook.md) describes the release and recovery procedure. Historical test results remain historical.
 
-All production data stayed inside the existing Firstout Railway project and
-Postgres service. No public database proxy or workstation dump was created.
+## Verified production boundary
 
-| Check | Observed result |
+| Item | Observed state |
 |---|---|
-| Serving source | PostgreSQL 18.6; revision `078_password_reset`; one home team; 85 public tables |
-| Staff inventory | Seven enabled humans: four owner, two books, one buyer; zero disabled or system identities |
-| Encrypted archive | 7,881,904 bytes; custom PostgreSQL archive, 616 TOC entries |
-| Archive SHA-256 | `f080c65a77b673f22a622e861b1b55f18f03e0d7571cc152f77d3ad72903231c` |
-| Restore | `pg_restore --exit-on-error --no-owner --no-privileges` succeeded into isolated `firstout_clerk_rehearsal_20261108` |
-| Baseline comparison | All 85 table counts and exact staff, password, token, role and permission comparisons matched inside the database |
-| Migration cycle | `078 → 082 → 078 → 082` passed using actual Railway API CPython 3.11.18 over its private database connection |
-| Cutover cycle | `activate → deactivate → activate` passed with a dedicated scratch LOGIN role: NOSUPERUSER, NOBYPASSRLS, no owner membership, no owned application tables |
-| Tenant policies | 82 business tables ENABLE + FORCE RLS; no-context role read returned zero rows, authenticated home context returned five roles |
-| Legacy grants | Zero mismatches for home role, disabled state, default location or legacy permission source |
-| Auth HTTP | Synthetic legacy password login, HttpOnly cookie, identity and protected role read passed through current routes/middleware with the restricted runtime |
-| Existing cookie format | Cookie minted for a synthetic identity by the installed pre-change auth issuer was accepted by the new auth implementation |
-| Rejection checks | Signed wrong tenant host returned 403; token-version revoked cookie returned 401 |
-| Final preservation | Exact stable user/password/token/role-permission comparison still matched after migrations, cutover and removal of the synthetic identity |
-| Serving database after rehearsal | Still revision 078 with zero active tenant RLS tables |
+| Railway project | `Firstout`, `c76d8df1-d839-454c-a94a-79b930deaf38`; never Marrow |
+| Environment | `production`, `9f7b0c34-bd95-442b-b746-a9791dcc2895` |
+| API service | `firstout-api`, `77a83033-b75e-4da1-88d0-b6db39bcedaf` |
+| Frontend service | `firstout-frontend`, `10838be1-7a37-4dfc-810a-8805d040d5d7` |
+| Postgres service | `a1a6695d-b8fb-4c79-92a6-664b48bc07e4`; PostgreSQL 18.6 |
+| Latest API source | `ac420d087bb859d27068a27abb0786a76edfb493` (PR #913) |
+| Latest API deployment | `77585adb-037b-4856-b3ab-a30652c05aff`, observed healthy |
+| API image | `sha256:4c0239745bf4a062cca3693ac753ef4b456702a521295c685111ea5e6d221150` |
+| Source verification | Actual 456-file operator/runtime source manifest exactly matched the clean CI-tested source; manifest SHA-256 `dc62199f1aa5aa2757a64b4936221d9eabe2b0a91ab9471ec4aab44955b80214` |
+| Serving schema | Revisions 079–082 applied; current revision 082; 82 canonical business tables have ENABLE and FORCE RLS |
+| Runtime | `firstout_app`: NOSUPERUSER, NOBYPASSRLS, no owned application table or owner/bypass membership |
+| API flags | Clerk/reconciliation ON, organisation creation ON, global staff import OFF, isolation enforced, billing disabled/test-only |
+| Provider access | Clerk remains invite-only at this checkpoint; the API creation flag alone does not open public signup |
+| Frontend source/deployment | Exact-GitHub `fa010dd2d2c4c2c2a9c548580787f57589053d6a`, deployment `992998b1-29a7-46af-98e7-ccfb7a780d7c`, observed SUCCESS |
+| Frontend image/health | `sha256:67532be679bb55bf8d6c88100a61c781f60e52d5075ad76568ef91d83437fb68`; `/healthz` and login returned 200 with production Clerk assets; exact B-row Enable UI replay passed |
 
-The encrypted archive and restricted comparison files are in
-`/var/lib/postgresql/data/firstout-clerk-backups/20261108-905` on the existing
-Firstout Postgres volume, outside `PGDATA`. Directory mode is 0700; archive,
-encryption material and comparison files are 0600. Retain through rollout and
-the staff access validation period; the release owner must set the final retention
-date before cleanup. Encryption material remains on the same restricted volume,
-so this is a tested rollback artifact, not an independent disaster-recovery copy.
-Do not publish or copy its contents into the repository.
+The actual Firstout Railway deployment-trigger count was zero. Merging `main` did **not** automatically deploy these services. Each release explicitly selected its approved merged revision. Required GitHub checks were green before squash merge; Railway then built its own image. This was not promotion of a CI-built immutable artifact. Configuration-only deployments reused the recorded Railway image. The frontend's live repository-config path was unset; its actual healthcheck path was explicitly set to `/healthz`.
 
-Source-only rehearsal package SHA-256:
-`e17e22d83d97d135e90ea1ea56610be8c437aa726a76f3ad285df2c899e8616a`.
-It contained only backend application/migration code, `alembic.ini` and shared
-core/db/storage Python sources; no `.env`, virtualenv, photos or storage data.
-The remote scratch code/operator environment is restricted under
-`/tmp/firstout-clerk-905` on the API service. Its credentials target only the
-disposable rehearsal database. Do not use that role or URL for production.
+The CI-tested PR heads have identical source trees to their squash-merged deployed commits. Verification runs: [PR #911 CI](https://github.com/F0rge/f0rge/actions/runs/42470797675), [PR #912 CI](https://github.com/F0rge/f0rge/actions/runs/42473947221), [PR #913 CI](https://github.com/F0rge/f0rge/actions/runs/42476700175), [PR #914 CI](https://github.com/F0rge/f0rge/actions/runs/42481324364) and [smoke](https://github.com/F0rge/f0rge/actions/runs/42481324406). These links establish source checks, not binary artifact promotion.
 
-## Clerk, Railway and domains
+| PR | Merged main source | Purpose |
+|---|---|---|
+| #905 | `4dbc9190a3e780fa042a6153b97f6408a4eab958` | Multi-tenancy/onboarding and schema preparation; initial feature flags OFF |
+| #910 | `71c7e01975b4fb1061a3d824be105f581e33b3ee` | Exact GET `/healthz` liveness for Railway's probe Host; other unknown-host routes remain denied |
+| #911 | `071dc4ee13d8c721109e9bd6bc37c83aeaee1eb5` | Staff provider payload/recovery and pinned CI bootstrap |
+| #912 | `d14bfafd1012560581a3968e770d5a383218b325` | Organisation-local staff disabling, pending/active session boundaries and identity reads while creation is OFF |
+| #913 | `ac420d087bb859d27068a27abb0786a76edfb493` | Saving and clearing optional VAT/address fields |
+| #914 | `fa010dd2d2c4c2c2a9c548580787f57589053d6a` | Explicit Enable/Disable staff action; exact-source frontend deployment and normal UI re-enable replay passed |
 
-- Production Clerk issuer `https://clerk.firstout.co.za` has verified DNS and TLS.
-  Organisations require membership; slugs are enabled; frontend creation and
-  billing remain disabled. Public access is still invite-only pending activation.
-- Production API `CLERK_SECRET_KEY` is staged in Railway. The Next.js runtime
-  secret is staged as `${{firstout-api.CLERK_SECRET_KEY}}`, without reading the key
-  back or baking it into a frontend image. Neither staged change is deployed.
-- Actual Railway workspace plan is Pro, allowing the additional domains without
-  a paid change. Existing apex/www/API records remain untouched.
-- `app.firstout.co.za` and `*.app.firstout.co.za` were attached to the existing
-  frontend service. Four exact Railway-supplied DNS records were added in
-  Cloudflare: app/wildcard traffic CNAMEs, ACME challenge CNAME and ownership TXT,
-  all DNS-only. Both domains have propagated DNS, verified ownership and valid
-  completed Railway TLS certificates expiring 2027-02-06.
-- Canonical host operation keeps `NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED=false`
-  until wildcard routing/TLS smoke passes.
-- Existing development Clerk secret is no longer revealable in the dashboard and
-  has no local env copy. No new key was created or rotated for QA. Hosted Clerk
-  signup is therefore not claimed as a premerge passing test.
+## Restored backup rehearsal and retention
 
-## Remaining release boundary
+Production payloads stayed in the existing Firstout hosting boundary. No public database TCP proxy or workstation dump was used. Archives were streamed into encryption, decrypted and restored there using `pg_restore --exit-on-error --no-owner --no-privileges`. Each rehearsal compared every table count and exact staff/hash/token/role/grant state inside the database, emitting aggregate comparisons only.
 
-1. Finish full Python 3.11 suite, review and remote CI; preserve the explicit
-   hosted-Clerk test limitation until real provider verification passes.
-2. Deploy compatible code with Clerk/signup/reconciliation flags off. Verify
-   health, legacy login path, build-time public key and server-only runtime keys.
-3. Configure the signed webhook, matching proxy secret and dedicated production
-   runtime/migration URLs; verify grants and exact serving topology. The scratch
-   role is not a production credential.
-4. Stop serving traffic during explicit RLS activation and runtime credential
-   switch. Never serve multi-tenant traffic concurrently through the owner URL.
-5. Verify real Clerk transport/hosted flow using an isolated synthetic organisation
-   before public signup. Import all seven humans by explicit Firstout UUID and
-   bcrypt digest; preserve local identities, legacy passwords, grants and disabled
-   status. The existing home org cap is seven; new organisations remain at five.
-6. Enable public verified-email onboarding and reconciliation only after those
-   checks pass; run live tenant separation and legacy-path smoke. Staff perform
-   their own existing-password sign-ins before any legacy retirement.
+The initial `20261108-905` rehearsal captured revision 078, one home team and 85 tables. Its 7,881,904-byte custom archive had 616 TOC entries and SHA-256 `f080c65a77b673f22a622e861b1b55f18f03e0d7571cc152f77d3ad72903231c`. Restore into the isolated `firstout_clerk_rehearsal_20261108` passed. The actual API CPython 3.11.18 runtime completed `078 → 082 → 078 → 082` and `activate → deactivate → activate` against the disposable restore, with exact preservation, synthetic legacy login/cookie checks, wrong-host 403 and revoked-token 401. The serving database was still 078 at that historical checkpoint; it is now 082.
 
-Native dashboard configuration currently requires the user to unlock the Mac;
-computer use cannot bypass that operating-system handoff. Billing remains off.
+Later tested same-boundary snapshots were taken before migration, enforcement and import:
+
+| Directory | Source state | Encrypted bytes | Archive SHA-256 |
+|---|---|---:|---|
+| `release-20261108T093241Z` | 078, 85 tables | 7,881,904 | `03a452e5cea9f3e35791d8cfec17224570419188c6fbdeb408b16e3b518e261d` |
+| `enforce-20261108T095328Z` | 082, 89 tables | 8,241,344 | `fd3946de8ff902bd5ea6f45836f2fe61ee6ea150fa8da3391c7d508e3ad777a4` |
+| `import-20261108T103616Z` | 082, 89 tables | 8,264,352 | `cf78ae91eb67afc4e6141a8aa9e735d569864365dd76cd2f46803625cd4cb995` |
+
+All snapshots, including `20261108-905`, remain under `/var/lib/postgresql/data/firstout-clerk-backups` on the existing Postgres volume, outside `PGDATA`. Directories are 0700; archives, encryption material and comparison files are 0600. **Retention owner: Leo. Keep through 2026-11-22 and until staff access validation is complete, whichever is later.** No backup has been deleted. The encryption material and restore artifacts share the same hosting volume: these are tested rollback artifacts, **not independent disaster-recovery copies**. Never commit their payloads or keys.
+
+The original source-only rehearsal package SHA-256 was `e17e22d83d97d135e90ea1ea56610be8c437aa726a76f3ad285df2c899e8616a`. It contained application/migration/shared Python source only, excluding `.env`, environments, photos and storage data. The restricted `/tmp/firstout-clerk-905` operator scratch environment targets the disposable database; its role/URL is not a serving production credential.
+
+## Isolation and existing staff preservation
+
+The API/frontend were stopped for the coordinated runtime/proxy/RLS cutover. The exact `app.commands.tenant_cutover activate` command used separately verified owner/runtime connections to the same private database over a temporary strict loopback-only SSH tunnel; the tunnel was closed afterward. The migration connection remains separate from the restricted serving runtime. No-context runtime reads returned zero business rows; Firstout context returned five roles. Startup verifies the canonical 82-policy topology.
+
+A short API freeze preceded the approved seven-human import: four owners, two books staff and one buyer. There were zero disabled/system identities in that roster. All seven original UUIDs were explicitly linked to Clerk with their existing bcrypt passwords and matching verified primary emails. Newly created provider users received stable opaque usernames because the instance requires usernames. No email-only linking, forced reset, staff impersonation or real staff notification was used. Existing home memberships/grants were retained. The existing organisation cap is seven; new organisations retain the five-member default.
+
+Exact baseline comparisons of UUID/password/token/role/permissions passed after import, after later API deployments and again after all private UI tests. The final aggregate gate confirmed revision 082, one original home, all seven original identities linked, zero UUID/password/token/grant/home-role/permission mismatches and all 82 FORCE RLS checks. This proves preservation, not personal sign-in: **real staff must still perform their own sign-ins before legacy authentication is retired.**
+
+A separate owned temporary buyer exercised live legacy authentication through the Clerk-enabled Next proxy: login 200 and Secure/HttpOnly cookie, identity/catalogue 200, owner-only roles 403, signed mismatched wildcard Host 403, token-version revocation 401. Only those exact synthetic identity/membership rows were removed; the original seven-person baseline was rechecked afterward. Legacy `firstout_session` remains host-only; Clerk manages its own cookies. No custom Clerk cookie-domain setting is claimed.
+
+## Clerk configuration, domains and secrets
+
+- Issuer `https://clerk.firstout.co.za` has verified DNS/TLS. Organisation membership is required, slugs enabled and browser-side organisation creation disabled; Firstout's server controls provisioning.
+- API and Next runtime Clerk keys are configured in Railway secret storage. Next references `${{firstout-api.CLERK_SECRET_KEY}}`; the shared HMAC secret also uses a server-only reference. Only the publishable key is passed at frontend build time. No key was rotated for this work.
+- Canonical app, apex and www are approved authorized parties. Actual Clerk frontend responses accepted those three origins. No issuer, signature, `azp`, TLS or session-state guard was relaxed for QA.
+- `app.firstout.co.za` and `*.app.firstout.co.za` are attached to the existing frontend. The exact Railway-supplied traffic/ACME/ownership records were installed DNS-only; both domains have propagated ownership and completed Railway TLS expiring 2027-02-06. The existing workspace was already Pro; no paid upgrade was made. Apex/www/API records were retained. Navigation remains canonical with `NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED=false`.
+- The membership webhook is enabled at `https://api.firstout.co.za/api/v1/webhooks/clerk` for `organizationMembership.created`, `.updated` and `.deleted` only. Its existing signing secret matched the healthy receiver before enablement. Configuration used the authorized app-scoped Svix portal, followed by logout.
+- Google is **enabled but incomplete**: the exact production dashboard reports **Setup required**, blank custom OAuth credentials, and that it will not work until credentials are added. A disable confirmation was prepared, but automatic approval review rejected that specific production-provider change without action-time approval. Nothing was changed and no alternate API path was used. Optional Google cleanup still requires that specific approval; email/password is the verified provider path.
+
+## Hosted owned-account checks
+
+The owned nonstaff test account entered through its exact nonce-marked instance invitation and the normal Clerk username/password form. Provider checks confirmed a verified primary email, accepted invitation, zero initial organisations and a pending session without an active organisation. The browser reached creation-disabled onboarding without a redirect loop. This invitation path proves mailbox control through its email link; it does not independently prove fresh public signup/OTP.
+
+After PR #912, owned pending-session `GET /api/v1/tenant-signup/me` returned 200 at 11:23:48 UTC while creation was OFF. Only then was `TENANT_SIGNUP_ENABLED=true` applied. Deployment `a560a120-c142-4683-a0c4-f4f4b477440e` reused the exact d14bfafd image; the actual process and direct/proxied public status agreed on creation ON, five places/new organisation, billing OFF/test-only, import OFF and enforced isolation. Provider access was still invite-only.
+
+Owned organisation A, `qa-owned-mw7p1cav2gcgjk-a`, was created through the UI: local team `60e58d01-5d3d-4435-9a3c-bcc802c4ba06`, Clerk organisation `org_3Lp3wrslvVa6pOaP6xPgEuJwAhf`. Create returned 201 at 11:30:23 UTC; authenticated identity immediately returned 200. Canonical checks confirmed the active session/org, no pending tasks, owner `org:admin`, enabled local nonlegacy owner membership, five scoped roles and one location.
+
+The real `organizationMembership.created` event `msg_3Lp3wsyjzv9BSN9UU6WbfBaGdPr` reached the receiver with HTTP 200 at 11:30:23 UTC. This establishes actual provider-signed delivery. It does not by itself prove invitation acceptance, revocation or multi-organisation isolation.
+
+After PR #913, normal UI business-details Save and reload with optional blank VAT/address passed. Its targeted CPython 3.11 onboarding/settings/logo regression suite passed 31 tests; those local logo tests are distinct from the still-unverified live upload below. The initial 422 was fixed and is not represented as a successful earlier test. Owned buyer invitation revoke/reissue also passed: the initial invitation was revoked, and its replacement private alias, local marker and provider `org:member` role matched. These were owned test resources, not invitations to real staff.
+
+The normal UI rejected organisation A's sole-owner demotion with “Cannot demote last owner”; the edit was canceled with no change. Owned account B accepted the current replacement buyer invitation through the normal hosted username/password signup and reached onboarding with the expected private test alias and organisation A. That invitation path establishes mailbox control through its link, not an independent OTP challenge.
+
+Account B reached organisation A's Home using the correct username. Its Admin menu contained only Audit/Profile/Settings; direct `/organisation` access was rejected with “Only an organisation owner can configure this workspace.” Canonical checks confirmed the accepted invitation's provider `org:member` and enabled, nonlegacy local buyer membership, provider-sourced and not globally banned. Its real `organizationMembership.created` event `msg_3Lp7WHDpyhMAZeUhnU7JkcrV7Db` reached the receiver with HTTP 200 at 11:59:45.128 UTC, and its signature-verified receipt was committed.
+
+Account B then created its own organisation, `qa-owned-mw7p1cav2gcgjk-b`, through the normal UI. It automatically entered that organisation's settings with owner navigation, one member and a five-place cap. Its trading name was blank rather than copied from organisation A. Normal switching B → A → B restored buyer controls in A and owner controls in B. With B active, B's own seeded customer detail loaded; opening the known A customer UUID in that same session showed “Customer not found / Not found” with no A content. Narrow request logs confirmed the B-owned customer read returned 200 at 12:07:21.486 UTC and the A-foreign UUID read returned 404 at 12:07:36.991 UTC. These are the observed private UI and correlated endpoint results, not a claim about every endpoint.
+
+The real B owner-membership event `msg_3Lp7oL88Tb5cG4adLWa4N22mJZP` reached the receiver with HTTP 200 at 12:02:08.880 UTC, and its signature-verified receipt was committed.
+
+The live five-place cap passed through normal UI: A's two members plus three exact owned pending invitations filled all places. A fourth invitation submitted from a second, naturally stale form was rejected with “This organisation supports 5 staff including the owner.” No request tampering was used. The invitation POST returned 400 at 12:25:13.543 UTC. The exact overflow alias had zero local rows and zero provider invitations across all three statuses; the guard precedes the provider-invitation call. This does not claim mail-log inspection. Exactly the three capacity-test invitations were revoked locally and canonically, with matching markers.
+
+The scoped-disable database/provider check passed: B's membership in A was disabled while its owner membership in B remained enabled; the global identity remained enabled and Clerk reported `banned=false`. A normal B password login then passed, and onboarding listed only B, with disabled A absent. B opened its own workspace as owner with its saved details intact. The provider switcher still showed A, but selecting it was rejected back to onboarding with only B: no A data and no global logout. B then reopened Home successfully.
+
+**Live QA P2 fixed: disabled staff could not be re-enabled.** The disabled row had no usable Enable action. The independently reviewed one-file fix adds Enable with an explicit `is_disabled:false` request, preserving self/saving guards, disabled-row Edit policy and backend authority. [PR #914](https://github.com/F0rge/f0rge/pull/914), tested at head `23b81be419b34991d442aff1acb5d97b95b4a5eb`, squash-merged as `fa010dd2d2c4c2c2a9c548580787f57589053d6a` after green CI/smoke and independent QA review. An independent full-tree diff of those two revisions was empty. Its exact GitHub source frontend deployment succeeded with the image recorded above, without a dirty-workspace upload or API/provider/variable changes. Local typecheck passed; ESLint reported zero errors and eight existing image warnings; the six existing member-edit/transport tests passed. After hard reload and checking actor A/organisation A, normal UI Enable on B's exact disabled row restored Active plus Edit/Disable. A's self-Disable guard remained in place. The correlated `PATCH /users/{B}` returned 200 at 12:52:03.614 UTC. Independent checks confirmed B's A membership enabled as buyer, its B membership enabled as owner, the global local identity enabled and Clerk `banned=false`. No other membership change or API/operator workaround was used.
+
+Read-only cleanup preflight identified the exact two owned private test users and organisations, their creators/memberships and the seven-person original-home exclusion; the runtime/RLS boundary was correct. Automatic approval review rejected the destructive cleanup before process creation because deleting production Clerk identities/organisations and mutating local rows lacked explicit authorization for those exact deletions/scope. That attempt made no database/provider/quarantine/checkpoint change, and no retry was used.
+
+The distinct safer, reversible local-only archive completed and passed verification: exactly two owned QA teams were suspended, two owned QA user flags and three owned QA membership flags were disabled. Only those columns changed; timestamps, password hashes, token versions, roles and other values were preserved. The complete prior-flag checkpoint is mode 0600. All Clerk users, organisations and sessions, plus all database data/audit rows, remain retained; destructive deletion was not performed. A normal hard reload of held account A's `/users` page redirected to `/onboarding` with explicit “Account is disabled” and no protected application content. This required no mutation or logout and proves denial despite the retained provider profile/session. Final checks again confirmed revision 082, one original home, all seven original staff linked, zero staff/home-grant mismatches and all 82 FORCE RLS checks. Archiving the test resources does not retire legacy access or validate real staff sign-ins.
+
+An owned-A email-code login reached “Check your email,” and the exact new message was delivered. The Gmail connector withheld the one-time code; no raw-message, HTML or mailbox-UI workaround and no code entry were used. Official 60-second sign-in tickets were used only to restore synthetic A after its automation password was lost. Those restorations are not an email-code or password-login PASS. Once public access is approved and signup reaches verification, the human must enter the code directly in the signup UI.
+
+The normal logo file chooser hung and was interrupted with no upload. A separately approved bounded owned-session API proof stopped at its mandatory canonical `azp` guard after real-JWKS verification of a 60-second default Clerk token, before any Firstout upload. No JWT template, forged claims, authentication relaxation or picker retry was used. **Live logo upload/protected preview remains unverified.** Local synthetic logo/API isolation tests are distinct evidence.
+
+After the private gates and Enable replay passed, saving Clerk access mode from Invite-only to Open was attempted under the task's release authorization. Automatic approval review rejected the write: “Saving Open signup materially expands production authentication access, and browser policy requires confirmation at action time even when previously pre-approved; no fresh confirmation is present.” Actual provider access remains **Invite-only**. Open is selected but unsaved; no retry or API workaround was used. Fresh exact-action approval was requested. Fresh public test metadata is staged only; no uninvited public signup has been submitted.
+
+## Verification status and remaining gates
+
+| Gate | Current result |
+|---|---|
+| Owned invitation acceptance and buyer access | Hosted acceptance, canonical provider/local buyer mapping, limited menu and owner-page rejection passed; signature-verified webhook receipt committed |
+| Organisation switching and foreign-UUID isolation | B → A → B UI controls passed; B-owned customer 200 and A-foreign UUID 404 independently correlated with narrow logs |
+| Five-place member cap | Normal full-capacity display/stale-form rejection passed; HTTP 400 and zero overflow provider/local invitations confirmed; exact three test invitations revoked |
+| Organisation-local disabling and restoration | Disable scope/sign-in/B access/A rejection and exact B-row normal UI re-enable passed; correlated PATCH 200 and independent local/provider restoration scope passed |
+| Public provider access and fresh public signup/verification | Open-mode save blocked by automatic approval review pending fresh exact-action confirmation; actual mode remains Invite-only. Fresh public signup not submitted; later OTP requires direct human code entry |
+| Owned private QA archive | Reversible local archive and actual retained-session “Account is disabled” denial passed; all provider/data/audit rows retained; original-seven/RLS preservation rechecked. Destructive deletion was rejected and not performed |
+| Live logo upload and protected preview | Unverified; picker interrupted and alternative API proof stopped at strict `azp` validation |
+| Real staff owner/role sign-ins | Pending human validation; legacy login remains enabled |
+| Optional Google provider cleanup | Pending exact action-time approval; connection remains enabled/incomplete |
+| Independent disaster recovery | Not established by the same-volume rollback rehearsals |
+
+Do not relabel these pending gates as PASS from a roster, source manifest, synthetic JWT test, successful import or healthy deployment. Final QA outcomes must update this checkpoint before a completion claim.

@@ -1,5 +1,7 @@
 # Clerk integration QA — 2026-11-08
 
+> **Historical local QA record.** For the current production deployment, imported staff/RLS preservation, hosted checks and remaining gates, read [the 2026-11-08 release evidence](multitenancy-release-evidence-20261108.md). The HOLD/pre-activation statements below describe their original checkpoints, not the current serving state.
+
 Snapshot: `7bc0c808` plus the frontend public-build Docker arguments. QA uses synthetic identities and disposable local PostgreSQL only. **Local code and compatibility checks PASS. Activation HOLD: actual Clerk provider/hosted onboarding and release gates remain pending.** Historical evidence below does not satisfy those pending gates.
 
 | Gate | Result |

@@ -433,7 +433,7 @@
         <li><span class="path">https://api.firstout.co.za</span> — API, webhooks, Swagger. Unchanged hostname, different service from the frontend wildcard (Railway overlap rule).</li>
         <li>Reserved <span class="path">admin.app.firstout.co.za</span> if platform support UI is built later.</li>
         <li>Trade portal remains <span class="path">/trade/…</span> on the tenant host, still using <span class="path">firstout_customer_session</span>.</li>
-        <li>Clerk cookies for staff should be scoped to <span class="path">.app.firstout.co.za</span> so tenant hosts share a session without placing that cookie on the marketing apex. Configure Clerk allowed redirect origins for the apex plus a tight pattern for tenant hosts.</li>
+        <li>Legacy <span class="path">firstout_session</span> remains host-only. Clerk manages its own cookies; no custom <span class="path">.app.firstout.co.za</span> cookie-domain configuration was applied. Restrict Clerk origins to the approved hosts. This is the historical architecture document; see the <a href="multitenancy-release-evidence-20261108.md">current release evidence</a> for deployed state and remaining gates.</li>
       </ul>
     </section>
 
