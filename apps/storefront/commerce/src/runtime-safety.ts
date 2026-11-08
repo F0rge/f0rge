@@ -11,6 +11,9 @@ function loopbackUrl(value: string | undefined, protocols: string[]): boolean {
   if (!value?.trim()) return false;
   try {
     const url = new URL(value);
+    // pg connection-string options can override the URL's loopback hostname.
+    // Local payment QA needs a plain connection URL, never query overrides.
+    if (["postgres:", "postgresql:"].includes(url.protocol) && (url.search || url.hash)) return false;
     return protocols.includes(url.protocol) && LOOPBACK_HOSTS.has(url.hostname);
   } catch {
     return false;
@@ -23,8 +26,9 @@ function loopbackOrigins(value: string | undefined): boolean {
 
 function explicitLocalCommand(): boolean {
   const [, , command, ...args] = process.argv;
-  // These supported commands do not open a Medusa HTTP listener.
-  if (["exec", "db:migrate", "db:create", "db:sync"].includes(command)) return true;
+  // These supported commands do not open a Medusa HTTP listener. db:migrate
+  // forks the two exact child commands below to finish search/script migrations.
+  if (["exec", "db:migrate", "db:migrate:search", "db:migrate:scripts", "db:create", "db:sync"].includes(command)) return true;
   if (command !== "start" && command !== "develop") return false;
 
   // CLI flags override HOST. Require the actual server command's explicit

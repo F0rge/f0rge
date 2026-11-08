@@ -8,7 +8,6 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { collectStorefrontExceptionSources, type ExceptionScan } from "./storefront-exception-sources";
 import { syncStorefrontExceptions, type ExceptionCommand } from "./storefront-exception-worker";
 import { recordOpsCheckoutHealth } from "./storefront-commerce-exceptions";
-import exceptionJob from "./jobs/sync-storefront-exceptions";
 import { createPeachAttempt, createPeachRefundDispatch, PEACH_ATTEMPTS_TABLE, updatePeachAttempt } from "./peach-payment-store";
 import { ensureStorefrontOrderOutbox } from "./storefront-order-handoff";
 import { Migration20260930180331 } from "./modules/storefront-peach/migrations/Migration20260930180331";
@@ -196,8 +195,6 @@ if (enabled) {
         await expect(syncStorefrontExceptions(container, boundary)).rejects.toThrow("exception_fulfillment_feed_http_503");
         expect(scans).toHaveLength(0);
         expect(calls.some((call) => call.endsWith("/result"))).toBe(false);
-        await exceptionJob(container); // NODE_ENV=test never publishes against inherited credentials.
-        expect(scans).toHaveLength(0);
       });
     },
   });

@@ -49,6 +49,10 @@ describe("test payment activation", () => {
     { HOST: undefined },
     { DATABASE_URL: "postgres://test:test@db.internal/storefront" },
     { DATABASE_URL: "postgres://localhost.evil.example/storefront" },
+    { DATABASE_URL: "postgres://localhost/storefront?host=remote.example.com" },
+    { DATABASE_URL: "postgres://localhost/storefront?hostaddr=203.0.113.10" },
+    { DATABASE_URL: "postgres://localhost/storefront?service=production" },
+    { DATABASE_URL: "postgres://localhost/storefront#override" },
     { REDIS_URL: "redis://redis.internal:6379" },
     { REDIS_URL: undefined },
     { STOREFRONT_PUBLIC_URL: "https://shop.example" },
@@ -88,5 +92,15 @@ describe("test payment activation", () => {
       process.argv = [originalArgv[0], "medusa", ...args];
       expect(testPaymentEnabled(local)).toBe(true);
     }
+  });
+
+  test.each(["db:migrate:search", "db:migrate:scripts"])("accepts Medusa's non-listening migration child %s only in isolated local mode", (command) => {
+    process.argv = [originalArgv[0], "medusa", command];
+    expect(testPaymentEnabled(local)).toBe(true);
+    expect(() => testPaymentEnabled({ ...local, STOREFRONT_RUNTIME_KIND: "hosted" })).toThrow(/disabled on hosted/i);
+    expect(() => testPaymentEnabled({ ...local, DATABASE_URL: "postgres://db.example.com/storefront" })).toThrow(/disabled on hosted/i);
+    const actualExists = jest.requireActual("node:fs").existsSync;
+    jest.mocked(existsSync).mockImplementation((path) => path === "/usr/local/share/daskasas/hosted-artifact" || actualExists(path));
+    expect(() => testPaymentEnabled(local)).toThrow(/disabled on hosted/i);
   });
 });

@@ -47,8 +47,12 @@ Local ports: Firstout API 8003, Medusa 9000, public site 3004. Use separate
 PostgreSQL databases for Firstout and Medusa, plus Redis for Medusa. Configure
 `OPS_COMMERCE_TOKEN`, `OPS_COMMERCE_COMPANY_ID` (the Firstout team UUID) and
 `OPS_COMMERCE_ALLOWED_HOST` on Firstout. Configure the matching values in the
-Medusa environment; secrets must stay server-side. The source starts unpublished;
-staff opt in a priced SKU by setting `storefront_published` on the staff API.
+Medusa environment; secrets must stay server-side. The source starts unpublished.
+Firstout's former merchandising API was removed; publication now requires an
+explicit operator-approved selection of existing, priced source SKUs. Do not
+publish all inventory or restore the removed API to fill an empty shop.
+See [`docs/catalogue-checkout-verification.md`](docs/catalogue-checkout-verification.md)
+for the source-feed checks and isolated checkout walkthrough.
 
 Run Medusa migrations and the first-time bootstrap script before the source sync.
 DasKasas supports guest checkout for collection and configured
@@ -122,8 +126,10 @@ Medusa server commands must also specify a single loopback `--host`/`-H`; public
 duplicate, or ambiguous bind options reject test-payment activation.
 The database, Redis, public shop URL, all CORS origins, and any Firstout Ops URL
 must use loopback hosts; the local values in `commerce/.env.example` satisfy this
-contract. Missing or public addresses are treated as hosted. Keep test payment
-off in Railway. The supported commerce image carries a root-owned hosted marker
+contract. Missing or public addresses are treated as hosted. Local database URLs
+must be free of query parameters and fragments: connection options can override
+the parsed loopback host. Keep test payment off in Railway. The supported
+commerce image carries a root-owned hosted marker
 outside the writable app directory, so runtime environment changes cannot enable
 simulated payments in a release image. This is a release-artifact control, not a
 claim to detect arbitrary proxies exposing a local development server.
@@ -137,7 +143,10 @@ for the test payment attempt. Final order creation independently reserves the
 stock or records a paid exception if it can no longer do so.
 
 For live checkout QA, use a disposable local Medusa database and a published
-test SKU. Set `STOREFRONT_TEST_CHECKOUT_SKU_ID` in the Playwright process,
+test SKU. Name its database `daskasas_checkout_<fixture>` and set
+`STOREFRONT_LOCAL_CHECKOUT_QA=true`; the suite rejects remote web/commerce/database
+targets and unrelated databases before opening a connection or changing a cart.
+Set `STOREFRONT_TEST_CHECKOUT_SKU_ID` in the Playwright process,
 along with its public Medusa key, the BFF secret, and the same disposable
 Medusa `DATABASE_URL`. Configure a disposable zone and provide
 `STOREFRONT_TEST_DELIVERY_CITY`, `STOREFRONT_TEST_DELIVERY_SUBURB`, and
