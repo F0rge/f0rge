@@ -17,7 +17,11 @@ COPY package.json package-lock.json ./
 COPY apps/firstout/frontend ./apps/firstout/frontend
 
 ARG API_URL=http://localhost:8003
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED=false
 ENV API_URL=$API_URL
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED=$NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED
 ENV NODE_OPTIONS=--max-old-space-size=1536
 RUN npm run typecheck -w firstout-frontend
 RUN npm run build -w firstout-frontend

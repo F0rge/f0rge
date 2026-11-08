@@ -933,7 +933,13 @@ async def test_rollback_refuses_additional_tenants_without_disabling_rls(
             "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity"
         )
         before = await owner.scalar(protected)
-        assert before == 81
+        assert before == 82
+        assert await owner.scalar(
+            sa.text(
+                "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class "
+                "WHERE oid='public.tenant_invitations'::regclass"
+            )
+        )
         with pytest.raises(RuntimeError, match="additional tenants"):
             await deactivate_rls(owner)
         await owner.rollback()

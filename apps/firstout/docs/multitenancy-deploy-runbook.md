@@ -1,13 +1,18 @@
 # Firstout multi-tenancy deployment gates
 
-This PR stage authorizes local synthetic tests and a PR into `main` only. **Do not merge or deploy without Engineering gates and Chief of Staff (CoS) approval.** Merging `main` deploys production. No live database, Clerk import, DNS, Railway setting, billing product or payment is changed by the implementation run.
+Merging `main` deploys production. The 2026-11-08 release is authorized to activate
+Clerk, explicitly link existing staff, and enable public free self-service after
+the verification gates below pass. This authorization does not waive failed CI,
+restore, isolation, or access checks. Billing stays disabled; no paid upgrade is
+authorized. Current operational proof and remaining gates are recorded in
+[the release evidence](multitenancy-release-evidence-20261108.md).
 
 ## Inventory and backup before any production migration
 
 1. Freeze schema changes and identify the Firstout database, never Marrow. Record the current application SHA and Alembic revision. Confirm exactly one bootstrap team before backfill. Extra teams require an explicit data ownership mapping; do not guess.
 2. Run the staff inventory utility against the existing revision in a controlled operator session. Keep its JSON in restricted evidence storage: UUID, email, display name, role slug, sorted exact permissions, disabled state, token version, default location, home team UUID and name. **No hashes, tokens, credentials or connection strings in evidence.** Include custom roles and disabled identities; distinguish the storefront system actor.
-3. Set `PGSERVICE=firstout-backup` using a restricted local service/password file. Run `pg_dump --format=custom --file=firstout-before-mt.dump`. Encrypt and restrict the dump: it contains sensitive identity and business data. Record SHA-256, time and retention owner, never commit it.
-4. Restore onto a disposable isolated instance using a separate `PGSERVICE=firstout-restore` and `pg_restore --exit-on-error --no-owner --dbname=firstout_restore firstout-before-mt.dump`. Ensure this service points only at the disposable instance. Start the pre-change API against the restore with outbound mail, WhatsApp, storage writes and scheduled reminders disabled. Verify a synthetic account login, representative document reads, and totals/counts. Record commands, exit codes and checks without credentials. An untested dump does not pass this gate.
+3. Capture `pg_dump --format=custom` inside the existing Firstout hosting boundary. Stream it directly into encryption; use a dedicated directory outside `PGDATA`, mode 0700, with archive and encryption material mode 0600. Do not export the production payload to a workstation or add a public TCP proxy. Record SHA-256, time, location and retention owner, never commit the archive or key.
+4. Decrypt and restore using `pg_restore --exit-on-error --no-owner --no-privileges` into a named disposable database inside that same boundary. Verify the selected target before running it. Disable outbound mail, WhatsApp, storage writes, LLM calls and scheduled reminders. Compare every table's row count and exact staff state inside the database, outputting aggregate results only. Verify a synthetic account login, representative reads and pre-change cookie compatibility through the restored database. Record commands, exit codes and checks without credentials. An untested dump does not pass this gate.
 5. Rehearse upgrade, downgrade and reapply on that disposable restore. Compare staff inventory before/after: identical identity UUID, password digest (compare inside DB without exporting), token version and disabled state; every inventoried grant remains on the original membership. Test existing cookies. Do not deploy if any access path is removed.
 
 ## Explicit stages: compatibility first, enforcement by operator cutover
@@ -53,9 +58,8 @@ startup never silently disables its protection.
 
 1. Complete the backup restore, staff cookie/login, permission comparison and
    Alembic upgrade/reversal rehearsal on a disposable production restore. Save
-   aggregate evidence without credentials. Live backup access is still blocked
-   in the HOLD evidence; do not repeat private-network dump attempts or open a
-   TCP proxy as part of this fix round.
+   aggregate evidence without credentials. Use authenticated private service SSH;
+   do not open a public database TCP proxy for this operation.
 2. Provision a dedicated runtime role `NOSUPERUSER NOBYPASSRLS`, owning no
    application table, with no membership in owner/superuser/BYPASSRLS roles.
    Grant schema usage and only required application DML/sequence privileges.
@@ -110,7 +114,25 @@ with narrow pre-authentication lookup paths; they are not covered by business RL
 
 Confirm Organisations, membership-required sessions, and required token claims are available on the already authorized Clerk plan. If an additional paid feature is required, stop and record `RISK.md`; do not upgrade. Use standard org roles plus Firstout's local permission catalogue rather than purchasing custom roles. Disable frontend organisation creation for imported members; never enable Clerk Billing.
 
-Configure the issuer/JWKS, authorized parties, publishable key and Svix signing secret through secret storage. Keep secrets out of source, browser bundles (except the publishable key), test evidence and logs. After enforcement cutover, retain the same server-only `FRONTEND_PROXY_SECRET` on frontend and API. Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` at frontend build time and `CLERK_SECRET_KEY` server-side when enabling Clerk. `FIRSTOUT_ALLOW_LOCAL_HOSTS=true` is only for local production-shaped smoke tests. The proxy overwrites browser-provided forwarding headers and the API validates the strict host before comparing it with signed membership. Keep legacy login and forgot-password available.
+Configure the issuer/JWKS, authorized parties, publishable key and Svix signing secret through secret storage. Keep secrets out of source, browser bundles (except the publishable key), test evidence and logs. After enforcement cutover, retain the same server-only `FRONTEND_PROXY_SECRET` on frontend and API. Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` at frontend build time; the Dockerfile exposes this public argument explicitly. The Next.js server and API both require runtime `CLERK_SECRET_KEY`. The frontend may reference `${{firstout-api.CLERK_SECRET_KEY}}`; never add that secret as a Docker build argument or Next public environment variable. `FIRSTOUT_ALLOW_LOCAL_HOSTS=true` is only for local production-shaped smoke tests. The proxy overwrites browser-provided forwarding headers and the API validates the strict host before comparing it with signed membership. Keep legacy login and forgot-password available.
+
+Use `https://app.firstout.co.za` as the canonical self-service host. Leave
+`NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED=false` unless wildcard DNS and TLS are
+verified. Signed active-organisation sessions work on the canonical host without
+wildcard routing. Configure the webhook at
+`https://api.firstout.co.za/api/v1/webhooks/clerk`, subscribing to
+`organizationMembership.created`, `organizationMembership.updated` and
+`organizationMembership.deleted`. Stage its signing secret before enabling
+`CLERK_WEBHOOK_RECONCILE_ENABLED`; signed events remain quarantined while that
+flag is false. Webhook reconciliation checks current provider membership and
+never disables an imported legacy home membership.
+
+At activation, enable public verified-email signup in Clerk while keeping
+frontend organisation creation disabled: Firstout's onboarding API provisions
+the organisation, owner membership, settings and first location. New organisations
+have five staff places. The existing home organisation retains all seven human
+staff with a per-organisation cap of seven, within Clerk's documented free
+maximum of twenty; do not silently omit staff or purchase an upgrade.
 
 Rehearse import only with synthetic users and a fake provider or a confirmed Clerk test instance. Import bcrypt digest with external_id equal to Firstout UUID. Never link by email string, never reset passwords as an import strategy, never import the storefront system actor. Disabled users must be locked before completing the import. Failed imports leave local login and grants intact. Preserve local home memberships when Clerk deletion webhooks arrive. A roster is not login proof.
 
@@ -124,7 +146,9 @@ Keep `firstout.co.za` and `www.firstout.co.za`. Add `app.firstout.co.za` and `*.
 
 New storage references use `tenants/{team_id}/…`. Retain existing references until a separately audited object-copy migration verifies content and updates owning rows; never delete old objects before validation. Back up the object inventory alongside the database. Test tenant-specific branding, label dimensions/fields, Cin7 concurrent locks and reminders. WhatsApp status callbacks require a unique configured phone-number mapping and verified signature. Trade portal stays on its own customer cookie, outside Clerk Organisations.
 
-Billing remains disabled and provider test mode only. Signup is a gated scaffold until provisioning and merchant choice are separately approved. No live Stripe/Paystack products or charges.
+Billing remains disabled and provider test mode only. Public free organisation
+signup is enabled only after enforced isolation and the Clerk integration gates
+pass. No live Stripe/Paystack products or charges are created.
 
 ## Rollback
 
@@ -145,4 +169,10 @@ for a tenant leak. For a destructive migration failure, halt writes, restore the
 
 ## Evidence checklist
 
-Local results: `/workspace/firstout-multitenancy/proof/TEST-RESULTS.md`, `test-summary.json`, browser notes/screenshots and `PR.json`. These synthetic artifacts do not establish production readiness. Required later evidence: restored production backup rehearsal, real staff permission inventory comparison, actual runtime-role/pool topology tests, paid-plan confirmation, wildcard TLS, and real staff sign-ins. Engineering and CoS must approve those gates before merge/deploy.
+Keep current local results in [test evidence](multitenancy-test-evidence.md) and
+operational results in [release evidence](multitenancy-release-evidence-20261108.md).
+Historical synthetic artifacts do not establish production readiness. Required
+release evidence includes a restored production backup rehearsal, exact staff
+permission preservation, actual runtime-role topology, confirmed plan capability,
+Clerk hosted integration, green CI, and live post-deploy smoke. Real staff perform
+their own sign-ins; keep legacy login available until those access checks pass.
