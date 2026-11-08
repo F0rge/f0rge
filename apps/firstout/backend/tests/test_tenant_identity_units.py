@@ -21,7 +21,7 @@ from app.services.tenant_host import (
     require_matching_host,
 )
 from app.services.clerk import verify_clerk_token
-from app.services.clerk_import import import_staff_user, ImportRateLimited
+from app.services.clerk_import import import_staff_user, ImportRateLimited, staff_import_payload
 from app.routers.clerk_webhooks import verify_webhook
 
 pytestmark = pytest.mark.no_db
@@ -168,11 +168,53 @@ async def test_import_disabled_and_digest_preserved(monkeypatch):
     assert await import_staff_user(user, "org_fake", provider, sleep=sleep) == "user_fake"
     payload = provider.create_user.call_args.args[0]
     assert payload["external_id"] == str(user.id)
+    assert payload["username"] == "fo_" + user.id.hex
+    assert provider.create_user.call_args_list[0].args[0] == payload
     assert payload["password_hasher"] == "bcrypt"
     assert verify_password("synthetic-password", payload["password_digest"])
     provider.ban_user.assert_awaited_once_with("user_fake")
     assert user.is_disabled
     sleep.assert_awaited_once_with(1)
+
+
+def test_staff_import_username_is_stable_when_profile_changes():
+    user = SimpleNamespace(
+        id=uuid.UUID("42cda4d1-c635-4fa8-8313-b249848ec80c"),
+        email="before@example.com",
+        password_hash="synthetic-bcrypt-digest",
+    )
+    first = staff_import_payload(user)
+    user.email = "after@example.com"
+    second = staff_import_payload(user)
+    assert first["username"] == second["username"] == "fo_42cda4d1c6354fa88313b249848ec80c"
+    assert len(first["username"]) == 35
+    assert first["external_id"] == second["external_id"] == str(user.id)
+    assert first["password_digest"] == second["password_digest"] == user.password_hash
+    assert first["email_address"] == ["before@example.com"]
+    assert second["email_address"] == ["after@example.com"]
+    assert first["create_organization_enabled"] is False
+
+
+async def test_already_linked_staff_does_not_replace_provider_username(monkeypatch):
+    from app.services.auth import hash_password
+
+    user = SimpleNamespace(
+        id=uuid.uuid4(),
+        email="linked@example.com",
+        role="buyer",
+        password_hash=hash_password("existing-password"),
+        is_disabled=False,
+        clerk_user_id="user_already_linked",
+    )
+    provider = SimpleNamespace(
+        create_user=AsyncMock(), ban_user=AsyncMock(), create_membership=AsyncMock()
+    )
+    monkeypatch.setattr(settings, "clerk_import_enabled", True)
+    assert await import_staff_user(user, "org_existing", provider) == "user_already_linked"
+    provider.create_user.assert_not_called()
+    provider.create_membership.assert_awaited_once_with(
+        "org_existing", "user_already_linked", "org:member"
+    )
 
 
 def test_permission_inventory_comparison_never_exposes_hashes():
