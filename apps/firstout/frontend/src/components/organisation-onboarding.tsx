@@ -5,6 +5,7 @@ import { Button, InlineNotification, Loading, Stack, Tile } from "@carbon/react"
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { OrganisationForm } from "./organisation-form";
+import { activateWorkspace } from "@/lib/workspace-activation";
 import { createOrganisation, getSignupIdentity, getSignupStatus, organisationDestination, tenantSubdomainsEnabled, type CreateOrganisation, type Organisation, type SignupIdentity, type SignupStatus } from "@/lib/organisations";
 
 export function OrganisationOnboarding() {
@@ -33,10 +34,7 @@ export function OrganisationOnboarding() {
     setError(null);
     try {
       const destination = organisationDestination(organisation.slug, window.location.host, settings ? "/organisation" : "/");
-      await clerk.setActive({
-        organization: organisation.clerk_org_id,
-        navigate: ({ decorateUrl }) => { window.location.assign(decorateUrl(destination)); },
-      });
+      await activateWorkspace(clerk, organisation.clerk_org_id, destination);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to open this organisation. Try again.");
       setSubmitting(false);
