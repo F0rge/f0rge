@@ -337,3 +337,4 @@ app.include_router(records.records_router)
 
 app.include_router(clerk_webhooks.router)
 app.include_router(tenant_signup.router)
+app.include_router(tenant_signup.organisations_router)

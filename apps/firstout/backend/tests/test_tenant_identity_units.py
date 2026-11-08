@@ -192,3 +192,37 @@ def test_permission_inventory_comparison_never_exposes_hashes():
     assert compare(before, after) == []
     assert compare(before, [dict(before[0], permissions=[])])
     assert compare(before, [dict(before[0], token_version=8)])
+
+
+async def test_pending_no_org_token_is_only_valid_for_identity_onboarding(monkeypatch):
+    from app.services import clerk
+
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
+    monkeypatch.setattr(settings, "clerk_enabled", True)
+    monkeypatch.setattr(settings, "clerk_issuer", "https://synthetic.clerk.accounts.dev")
+    monkeypatch.setattr(settings, "clerk_authorized_parties", ["https://app.firstout.co.za"])
+    monkeypatch.setattr(
+        clerk,
+        "jwks_client",
+        lambda _: SimpleNamespace(
+            get_signing_key_from_jwt=lambda _: SimpleNamespace(key=private.public_key())
+        ),
+    )
+    now = int(time.time())
+    claims = {
+        "iss": settings.clerk_issuer,
+        "sub": "user_pending",
+        "exp": now + 60,
+        "iat": now,
+        "nbf": now,
+        "azp": "https://app.firstout.co.za",
+        "sts": "pending",
+    }
+    token = jwt.encode(claims, private, algorithm="RS256")
+    assert (await clerk.verify_clerk_session(token)).user_id == "user_pending"
+    with pytest.raises(HTTPException, match="Invalid Clerk session"):
+        await clerk.verify_clerk_token(token)
+    claims["azp"] = "https://untrusted.example"
+    with pytest.raises(HTTPException):
+        await clerk.verify_clerk_session(jwt.encode(claims, private, algorithm="RS256"))

@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     clerk_issuer: str = ""
     clerk_authorized_parties: list[str] = []
     clerk_webhook_secret: str = ""
+    clerk_secret_key: str = ""
+    clerk_webhook_reconcile_enabled: bool = False
     clerk_import_enabled: bool = False
     tenant_isolation_mode: Literal["single_home", "enforced"] = "single_home"
     frontend_proxy_secret: str = ""

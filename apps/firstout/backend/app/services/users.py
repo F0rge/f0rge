@@ -44,6 +44,10 @@ class UserService:
         self.role_crud = RoleCRUD(db)
 
     async def create(self, data: UserCreate) -> User:
+        if settings.clerk_enabled and settings.tenant_isolation_mode == "enforced":
+            raise ValidationError(
+                "Invite staff from Organisation settings so they can verify their email and join with Clerk"
+            )
         validate_password(data.password)
         team = await self.team_crud.get_first()
         if team is None:
@@ -115,22 +119,26 @@ class UserService:
         return results
 
     async def update(self, user_id: uuid.UUID, data: UserUpdate) -> User:
+        # Serialize tenant role/disabled edits before counting remaining owners.
+        await self.db.execute(
+            select(Team.id).where(Team.id == tenant_id_ctx.get()).with_for_update()
+        )
         user = await self.crud.get_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
 
-        if tenant_id_ctx.get() is not None and user.team_id != tenant_id_ctx.get():
+        member = await self.db.scalar(
+            select(Membership).where(
+                Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get()
+            )
+        )
+        if member is None:
+            raise NotFoundError("User not found")
+        if not member.is_legacy_home:
             if any(key in data.model_fields_set for key in ("email", "display_name", "password")):
                 raise ValidationError(
                     "Global identity changes require the legacy home administrator"
                 )
-            member = await self.db.scalar(
-                select(Membership).where(
-                    Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get()
-                )
-            )
-            if member is None:
-                raise NotFoundError("User not found")
             if data.role is not None:
                 await self._require_known_role(data.role)
                 if await self._is_owner_user(member.role) and not await self._is_owner_user(
@@ -146,7 +154,8 @@ class UserService:
                 member.default_location_id = await resolve_writable_default_location_id(
                     self.db, data.default_location_id
                 )
-            await self.db.commit()
+            async with unit_of_work(self.db):
+                pass
             return next(record for record in await self.list() if record.id == user.id)
 
         if data.email is not None:
@@ -221,14 +230,14 @@ class ProfileService:
             location_id = await resolve_writable_default_location_id(
                 self.db, data.default_location_id
             )
-            if tenant_id_ctx.get() not in (None, user.team_id):
-                member = await self.db.scalar(
-                    select(Membership).where(
-                        Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get()
-                    )
+            member = await self.db.scalar(
+                select(Membership).where(
+                    Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get()
                 )
-                if member is None:
-                    raise NotFoundError("Membership not found")
+            )
+            if member is None:
+                raise NotFoundError("Membership not found")
+            if not member.is_legacy_home:
                 member.default_location_id = location_id
             else:
                 user.default_location_id = location_id

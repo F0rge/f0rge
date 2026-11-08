@@ -12,6 +12,14 @@ from app.services.tenant_host import SLUG_PATTERN, RESERVED_SLUGS
 
 
 @dataclass(frozen=True)
+class ClerkSession:
+    user_id: str
+    org_id: str = ""
+    org_slug: str = ""
+    org_role: str = ""
+
+
+@dataclass(frozen=True)
 class ClerkIdentity:
     user_id: str
     org_id: str
@@ -26,7 +34,7 @@ def jwks_client(issuer: str) -> jwt.PyJWKClient:
     )
 
 
-async def verify_clerk_token(token: str) -> ClerkIdentity:
+async def verify_clerk_session(token: str, *, require_org: bool = False) -> ClerkSession:
     if (
         settings.tenant_isolation_mode != "enforced"
         or not settings.clerk_enabled
@@ -51,18 +59,26 @@ async def verify_clerk_token(token: str) -> ClerkIdentity:
         org_id = org.get("id") or claims.get("org_id") or claims.get("orgId")
         slug = org.get("slg") or claims.get("org_slug") or claims.get("orgSlug")
         role = org.get("rol") or claims.get("org_role") or ""
-        if not all(isinstance(value, str) and value for value in [claims["sub"], org_id, slug]):
+        if not isinstance(claims["sub"], str) or not claims["sub"]:
+            raise ValueError("Invalid subject")
+        if require_org and not all(isinstance(value, str) and value for value in [org_id, slug]):
             raise ValueError("Active organisation required")
-        valid_slug = bool(SLUG_PATTERN.fullmatch(slug)) and slug not in RESERVED_SLUGS
-        if not valid_slug:
+        if slug and (
+            not isinstance(slug, str) or not SLUG_PATTERN.fullmatch(slug) or slug in RESERVED_SLUGS
+        ):
             raise ValueError("Invalid organisation slug")
-        canonical_tenant_origin = f"https://{slug}.app.firstout.co.za"
+        canonical_tenant_origin = f"https://{slug}.app.firstout.co.za" if slug else None
         authorized_party = claims.get("azp")
         if not settings.clerk_authorized_parties or not (
             authorized_party in settings.clerk_authorized_parties
             or (canonical_tenant_origin is not None and authorized_party == canonical_tenant_origin)
         ):
             raise ValueError("Unauthorized party")
-        return ClerkIdentity(claims["sub"], org_id, slug, role)
+        return ClerkSession(claims["sub"], org_id or "", slug or "", role)
     except (jwt.PyJWTError, ValueError, TypeError, KeyError) as exc:
         raise HTTPException(401, "Invalid Clerk session") from exc
+
+
+async def verify_clerk_token(token: str) -> ClerkIdentity:
+    session = await verify_clerk_session(token, require_org=True)
+    return ClerkIdentity(session.user_id, session.org_id, session.org_slug, session.org_role)

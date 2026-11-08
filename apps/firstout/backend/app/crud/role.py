@@ -21,25 +21,36 @@ class RoleCRUD(BaseCRUD):
     async def get_by_id(self, role_id: uuid.UUID) -> Optional[Role]:
         return (
             await self.db.execute(
-                select(Role).options(selectinload(Role.permissions)).where(Role.id == role_id)
+                select(Role)
+                .options(selectinload(Role.permissions))
+                .where(Role.id == role_id, Role.team_id == tenant_id_ctx.get())
             )
         ).scalar_one_or_none()
 
     async def get_by_slug(self, slug: str) -> Optional[Role]:
         return (
             await self.db.execute(
-                select(Role).options(selectinload(Role.permissions)).where(Role.slug == slug)
+                select(Role)
+                .options(selectinload(Role.permissions))
+                .where(Role.slug == slug, Role.team_id == tenant_id_ctx.get())
             )
         ).scalar_one_or_none()
 
     async def list_all(self) -> list[Role]:
         result = await self.db.execute(
-            select(Role).options(selectinload(Role.permissions)).order_by(Role.name)
+            select(Role)
+            .options(selectinload(Role.permissions))
+            .where(Role.team_id == tenant_id_ctx.get())
+            .order_by(Role.name)
         )
         return list(result.scalars().all())
 
     async def list_owner_slugs(self) -> list[str]:
-        result = await self.db.execute(select(Role.slug).where(Role.is_owner_preset.is_(True)))
+        result = await self.db.execute(
+            select(Role.slug).where(
+                Role.is_owner_preset.is_(True), Role.team_id == tenant_id_ctx.get()
+            )
+        )
         slugs = list(result.scalars().all())
         if UserRole.OWNER.value not in slugs:
             slugs.append(UserRole.OWNER.value)

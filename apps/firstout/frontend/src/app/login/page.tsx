@@ -90,7 +90,10 @@ export default function LoginPage() {
                 </Button>
               </Stack>
             </form>
-            {clerkEnabled ? <Link href="/clerk-login" className="cds--link">Sign in with your organisation</Link> : null}
+            {clerkEnabled ? <>
+              <Link href="/clerk-login" className="cds--link">Sign in with your organisation</Link>
+              <Link href="/sign-up" className="cds--link">Create a free organisation</Link>
+            </> : null}
           </Stack>
         </section>
       </div>

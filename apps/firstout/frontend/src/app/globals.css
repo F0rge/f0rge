@@ -272,6 +272,85 @@ body {
   width: fit-content;
 }
 
+.firstout-auth-card {
+  max-width: 32rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.firstout-auth-card .cl-rootBox,
+.firstout-auth-card .cl-cardBox,
+.firstout-auth-card .cl-card {
+  width: 100%;
+  max-width: 100%;
+}
+
+.firstout-header-create {
+  align-self: center;
+  margin-inline: 1rem;
+  color: var(--cds-text-on-color);
+  white-space: nowrap;
+}
+
+.firstout-onboarding-page {
+  min-height: 100vh;
+  padding: 3rem 1.5rem;
+  background: var(--cds-background);
+}
+
+.firstout-onboarding-content {
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+.firstout-organisation-content {
+  width: 100%;
+  max-width: 56rem;
+}
+
+.firstout-organisation-form-grid,
+.firstout-organisation-workspaces {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.firstout-organisation-workspaces p {
+  overflow-wrap: anywhere;
+}
+
+.firstout-organisation-logo {
+  width: auto;
+  max-width: 12rem;
+  height: auto;
+  max-height: 6rem;
+  object-fit: contain;
+}
+
+.firstout-organisation-table {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.firstout-organisation-table caption {
+  padding-block: 1rem;
+  text-align: left;
+}
+
+.firstout-organisation-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+}
+
+@media (max-width: 42rem) {
+  .firstout-onboarding-page { padding: 2rem 1rem; }
+  .firstout-organisation-form-grid,
+  .firstout-organisation-workspaces { grid-template-columns: minmax(0, 1fr); }
+  .firstout-header-create { margin-inline: 0.5rem; white-space: normal; max-width: 6rem; }
+}
+
 .firstout-brand.cds--header__name {
   display: inline-flex;
   align-items: center;

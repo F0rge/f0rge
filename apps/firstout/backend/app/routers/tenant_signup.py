@@ -1,38 +1,82 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from app.config import settings
-from app.services.tenant_host import validate_slug
+import uuid
+
+from fastapi import APIRouter, Depends, Response
+
+from app.dependencies.tenant_signup import (
+    get_organisation_service,
+    get_signup_identity,
+    get_tenant_signup_service,
+)
+from app.middleware.auth import get_current_user_id
+from app.schemas.tenant_signup import OrganisationInvitationCreate, SignupIntent
+from app.services.clerk import ClerkSession
+from app.services.tenant_signup import OrganisationService, TenantSignupService, signup_status
 
 router = APIRouter(prefix="/api/v1/tenant-signup", tags=["tenant-signup"])
-
-
-class SignupIntent(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    slug: str
+organisations_router = APIRouter(prefix="/api/v1/organisations/current", tags=["organisations"])
 
 
 @router.get("/status")
-async def signup_status() -> dict:
-    return {
-        "enabled": settings.tenant_signup_enabled,
-        "billing_disabled": settings.billing_disabled,
-        "billing_test_mode": settings.billing_test_mode,
-        "mode": "invite-only",
-    }
+async def status() -> dict:
+    return signup_status()
 
 
 @router.post("/preview")
-async def signup_preview(body: SignupIntent) -> dict:
-    if not settings.tenant_signup_enabled:
-        raise HTTPException(503, "Tenant signup is invite-only during isolation rollout")
-    if not settings.billing_disabled or not settings.billing_test_mode:
-        raise HTTPException(503, "Live billing is not implemented")
-    return {
-        "name": body.name,
-        "slug": validate_slug(body.slug),
-        "billing": "disabled",
-        "provisioned": False,
-        "next_step": "Engineering-approved Clerk test provisioning",
-    }
+async def preview(
+    body: SignupIntent, service: TenantSignupService = Depends(get_tenant_signup_service)
+) -> dict:
+    return await service.preview(body)
+
+
+@router.get("/me")
+async def me(
+    identity: ClerkSession = Depends(get_signup_identity),
+    service: TenantSignupService = Depends(get_tenant_signup_service),
+) -> dict:
+    return await service.me(identity)
+
+
+@router.post("", status_code=201)
+async def create(
+    body: SignupIntent,
+    identity: ClerkSession = Depends(get_signup_identity),
+    service: TenantSignupService = Depends(get_tenant_signup_service),
+) -> dict:
+    return await service.create(identity, body)
+
+
+@organisations_router.get("")
+async def current(
+    _user: uuid.UUID = Depends(get_current_user_id),
+    service: OrganisationService = Depends(get_organisation_service),
+) -> dict:
+    return await service.current()
+
+
+@organisations_router.get("/invitations")
+async def invitations(
+    _user: uuid.UUID = Depends(get_current_user_id),
+    service: OrganisationService = Depends(get_organisation_service),
+) -> list[dict]:
+    return await service.invitations()
+
+
+@organisations_router.post("/invitations", status_code=201)
+async def invite(
+    body: OrganisationInvitationCreate,
+    _user: uuid.UUID = Depends(get_current_user_id),
+    service: OrganisationService = Depends(get_organisation_service),
+) -> dict:
+    return await service.invite(body)
+
+
+@organisations_router.delete("/invitations/{invitation_id}", status_code=204)
+async def revoke(
+    invitation_id: uuid.UUID,
+    _user: uuid.UUID = Depends(get_current_user_id),
+    service: OrganisationService = Depends(get_organisation_service),
+) -> Response:
+    await service.revoke(invitation_id)
+    return Response(status_code=204)

@@ -1,8 +1,4 @@
-"""Explicit migration service; never invoked at startup or from webhooks.
-
-Inject a fake provider in tests. Operators must explicitly enable import later;
-this implementation has no production API transport or credential discovery.
-"""
+"""Explicit migration service; never invoked at startup or from webhooks."""
 
 from __future__ import annotations
 
@@ -27,8 +23,6 @@ async def import_staff_user(
 ) -> str:
     if not settings.clerk_import_enabled:
         raise RuntimeError("Clerk import is disabled")
-    if user.clerk_user_id:
-        return user.clerk_user_id
     if user.role == "system" or user.email == "storefront-integration@system.example.com":
         raise ValueError("The storefront actor cannot become a Clerk staff user")
     if not user.password_hash.startswith(("$2a$", "$2b$")):
@@ -40,14 +34,16 @@ async def import_staff_user(
         "password_hasher": "bcrypt",
         "create_organization_enabled": False,
     }
-    for attempt in range(5):
-        try:
-            clerk_id = await provider.create_user(payload)
-            break
-        except ImportRateLimited:
-            if attempt == 4:
-                raise
-            await sleep(min(2**attempt, 16))
+    clerk_id = user.clerk_user_id
+    if not clerk_id:
+        for attempt in range(5):
+            try:
+                clerk_id = await provider.create_user(payload)
+                break
+            except ImportRateLimited:
+                if attempt == 4:
+                    raise
+                await sleep(min(2**attempt, 16))
     if user.is_disabled:
         await provider.ban_user(clerk_id)
     # Preserve richer local role grants; org:member is identity membership only.
