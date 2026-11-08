@@ -10,6 +10,7 @@ import {
   ApiError,
 } from '@f0rge/ui/api'
 import type { Entry, EntryCreate, EntryStats } from '../types'
+import { dayEntryRefetchOptions } from '../day-entry-query'
 import { invalidateSignals } from './signals'
 
 export function useEntryStats() {
@@ -43,6 +44,7 @@ export function useEntry(date: string) {
     },
     enabled: !!date,
     retry: false,
+    ...dayEntryRefetchOptions,
   })
 }
 

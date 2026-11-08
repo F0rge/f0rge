@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import UUIDPkMixin
 
 
@@ -28,6 +29,7 @@ class CommsDocumentType(str, enum.Enum):
     INVOICE = "invoice"
     CREDIT_NOTE = "credit_note"
     LAYBY = "layby"
+    PAYMENT_REMINDER = "payment_reminder"
 
 
 class CommsStatus(str, enum.Enum):
@@ -37,7 +39,7 @@ class CommsStatus(str, enum.Enum):
     OPENED = "opened"
 
 
-class CommsMessage(UUIDPkMixin, Base):
+class CommsMessage(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "comms_messages"
 
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -110,7 +112,7 @@ class CommsMessage(UUIDPkMixin, Base):
             name="ck_comms_messages_provider",
         ),
         CheckConstraint(
-            "document_type IN ('invoice', 'credit_note', 'layby')",
+            "document_type IN ('invoice', 'credit_note', 'layby', 'payment_reminder')",
             name="ck_comms_messages_document_type",
         ),
         CheckConstraint(

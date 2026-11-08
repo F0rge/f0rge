@@ -10,6 +10,7 @@ from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.services.diet_flags import (
+    _aggregate,
     compute_effective_counts,
     compute_photo_signal,
     compute_signal_from_analyses,
@@ -190,6 +191,48 @@ async def test_histamine_load_sum_with_flag(async_db: AsyncSession) -> None:
 
     assert signal.scores.histamine_load == 7
     assert "high-histamine" in signal.flags
+
+
+def test_histamine_load_includes_subthreshold_scores_sources_do_not() -> None:
+    """2026-10-17: load is 8, the high-histamine source line lists 2 names.
+
+    coffee 1 + spaghetti 1 + bacon 3 + parmesan 3. Scores of 1 stay in the
+    dose sum and stay off the source line (threshold is 2). The check-in pill
+    must count ``sources``, not ``histamine_load``.
+    """
+    rows = [
+        ("water", 0, {}),
+        ("oat milk", None, {}),
+        ("coffee", 1, {}),
+        ("spaghetti", 1, {"fodmap_oligos": "high", "contains_gluten": True}),
+        ("bacon", 3, {}),
+        ("egg", 0, {}),
+        ("parmesan", 3, {"contains_dairy": True}),
+        ("cream", 0, {"contains_dairy": True, "fodmap_lactose": "moderate"}),
+        ("black pepper", 0, {}),
+        ("salt", 0, {}),
+    ]
+    ingredients = [
+        PhotoIngredient(
+            id=index,
+            analysis_id=0,
+            name=name,
+            confidence=1.0,
+            histamine_score=score,
+            **extra,
+        )
+        for index, (name, score, extra) in enumerate(rows, start=1)
+    ]
+
+    signal = _aggregate(ingredients)
+
+    assert signal.scores.histamine_load == 8
+    assert signal.sources["high-histamine"] == ["bacon", "parmesan"]
+    assert signal.scores.fodmap_count == len(signal.sources["high-fodmap"]) == 1
+    assert signal.sources["high-fodmap"] == ["spaghetti"]
+    assert signal.scores.gluten_count == len(signal.sources["gluten"]) == 1
+    assert signal.scores.dairy_count == len(signal.sources["dairy"]) == 2
+    assert signal.sources["dairy"] == ["parmesan", "cream"]
 
 
 async def test_histamine_load_sum_without_flag(async_db: AsyncSession) -> None:

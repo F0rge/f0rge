@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
 from f0rge_testing import async_url
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 from app.config import settings
+
+pytestmark = pytest.mark.no_db
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -23,7 +27,7 @@ async def test_migration_004_creates_catalogue_tables(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     base_url = async_url(postgres_container)
-    admin_url = f"{base_url.rsplit('/', 1)[0]}/postgres"
+    admin_url = make_url(base_url).set(database="postgres").render_as_string(hide_password=False)
     db_name = "firstout_mig004"
 
     admin_engine = create_async_engine(admin_url, echo=False, isolation_level="AUTOCOMMIT")
@@ -32,14 +36,14 @@ async def test_migration_004_creates_catalogue_tables(
         await conn.execute(sa.text(f'CREATE DATABASE "{db_name}"'))
     await admin_engine.dispose()
 
-    mig_url = f"{base_url.rsplit('/', 1)[0]}/{db_name}"
+    mig_url = make_url(base_url).set(database=db_name).render_as_string(hide_password=False)
     monkeypatch.setenv("DATABASE_URL", mig_url)
     monkeypatch.setattr(settings, "database_url", mig_url)
 
     subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=BACKEND_ROOT,
-        env={**os.environ, "DATABASE_URL": mig_url},
+        env={**os.environ, "DATABASE_URL": mig_url, "MIGRATION_DATABASE_URL": mig_url},
         check=True,
     )
 

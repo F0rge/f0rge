@@ -1,0 +1,9 @@
+[project]
+name = "environment-monitor-backend"
+version = "1.7.0"
+description = "Environment monitor sensor API. The image installs requirements.txt with pip; this file lets Nx uv-sync the project in CI."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.uv]
+package = false

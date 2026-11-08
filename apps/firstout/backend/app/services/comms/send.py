@@ -183,6 +183,35 @@ class CommsSendService:
             pdf_filename=filename,
         )
 
+    async def send_payment_reminder(
+        self,
+        *,
+        invoice_id: uuid.UUID,
+        to_address: str,
+        subject: str,
+        body_text: str,
+        actor_user_id: Optional[uuid.UUID],
+    ) -> uuid.UUID:
+        settings = await self._team_settings()
+        pdf_bytes, filename, _invoice = await self.invoices.build_pdf_bytes(invoice_id)
+        try:
+            sent = await self._send_smtp(
+                document_type=CommsDocumentType.PAYMENT_REMINDER,
+                document_id=invoice_id,
+                to_address=to_address,
+                actor_user_id=actor_user_id,
+                settings=settings,
+                subject=subject,
+                body_text=body_text,
+                pdf_bytes=pdf_bytes,
+                pdf_filename=filename,
+            )
+        except CommsSmtpUnconfiguredError as exc:
+            raise ConflictError("Email is not set up yet") from exc
+        except CommsSmtpFailedError as exc:
+            raise ConflictError("The reminder email could not be sent") from exc
+        return sent.id
+
     async def _send_whatsapp(
         self,
         *,
@@ -305,7 +334,7 @@ class CommsSendService:
         document_type: CommsDocumentType,
         document_id: uuid.UUID,
         to_address: str,
-        actor_user_id: uuid.UUID,
+        actor_user_id: Optional[uuid.UUID],
         settings: TeamSettings,
         subject: str,
         body_text: str,

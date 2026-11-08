@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from decimal import Decimal
 from typing import Optional
 
@@ -19,7 +21,8 @@ from tests.test_transfers import complete_location_transfer
 
 async def _login(client: AsyncClient, email: str, password: str) -> AsyncClient:
     client.cookies.clear()
-    resp = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    client.headers.pop("Authorization", None)
+    resp = await authenticate_as(client, email)
     assert resp.status_code == 200
     return client
 

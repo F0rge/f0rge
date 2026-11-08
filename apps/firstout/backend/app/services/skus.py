@@ -4,10 +4,10 @@ import asyncio
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,18 +20,68 @@ from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.permissions import STOCK_COST_VIEW
 from app.services.permissions import PermissionService
-from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
+from app.schemas.sku import (
+    SkuCreate,
+    SkuListPage,
+    SkuResponse,
+    SkuUnitCostItem,
+    SkuUnitCostPage,
+    SkuUpdate,
+)
+from app.services.inventory import InventoryService
+from app.services.sku_barcode import csv_style_barcode
 from app.services.stock_movements import StockMovementService
+from app.services.suspect_price import average_costs_by_sku_id, tier_price_below_cost
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
 from app.services.object_storage import (
-    is_remote_storage_ref,
-    presigned_get_url,
     read_bytes,
     save_bytes,
 )
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 from f0rge_storage.images import resize_image
+
+
+# Stored ex VAT. Inc-VAT inputs use the same 15% conversion as wholesale and retail.
+_PRICE_COLUMNS = (
+    ("stockist_ex_vat", "stockist_ex_vat", "stockist_inc_vat"),
+    ("wholesale_ex_vat", "wholesale_ex_vat", "wholesale_inc_vat"),
+    ("decorator_ex_vat", "decorator_ex_vat", "decorator_inc_vat"),
+    ("retail_ex_vat", "retail_ex_vat", "retail_inc_vat"),
+)
+
+
+def _apply_stored_ex_vat(
+    sku: Sku,
+    data: SkuUpdate,
+    fields_set: set[str],
+    *,
+    column: str,
+    ex_field: str,
+    inc_field: str,
+) -> None:
+    if ex_field in fields_set and inc_field in fields_set:
+        raise ValidationError(f"Cannot set both {ex_field} and {inc_field}")
+    if ex_field in fields_set:
+        value = getattr(data, ex_field)
+        if value is not None:
+            validate_non_negative_price(value, ex_field)
+        setattr(sku, column, value)
+        return
+    if inc_field in fields_set:
+        value = getattr(data, inc_field)
+        if value is None:
+            setattr(sku, column, None)
+        else:
+            validate_non_negative_price(value, inc_field)
+            setattr(sku, column, inc_to_ex(value))
+
+
+def _blank_to_none(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 class SkuService:
@@ -45,10 +95,49 @@ class SkuService:
         self.stock_movements = StockMovementService(db)
 
     async def list(
-        self, category: Optional[str] = None, user_id: Optional[uuid.UUID] = None
-    ) -> list[SkuResponse]:
-        skus = await self.crud.list_all(category=category)
-        return await self._to_responses(skus, user_id)
+        self,
+        category: Optional[str] = None,
+        user_id: Optional[uuid.UUID] = None,
+        *,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        q: Optional[str] = None,
+    ) -> Union[list[SkuResponse], SkuListPage]:
+        category = _blank_to_none(category)
+        q = _blank_to_none(q)
+        if limit is None:
+            skus = await self.crud.list_all(category=category, q=q)
+            return await self._to_responses(skus, user_id)
+        skus, total = await self.crud.list_filtered(
+            category=category, q=q, limit=limit, offset=offset
+        )
+        return SkuListPage(
+            items=await self._to_responses(skus, user_id),
+            total=total,
+            categories=await self.crud.list_categories(),
+        )
+
+    async def list_unit_costs(
+        self,
+        user_id: Optional[uuid.UUID] = None,
+        *,
+        category: Optional[str] = None,
+        q: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> SkuUnitCostPage:
+        category = _blank_to_none(category)
+        q = _blank_to_none(q)
+        skus, total = await self.crud.list_filtered(
+            category=category, q=q, limit=limit, offset=offset
+        )
+        costs = await InventoryService(self.db).unit_costs_by_sku_id(
+            [sku.id for sku in skus], user_id
+        )
+        return SkuUnitCostPage(
+            items=[SkuUnitCostItem(sku_id=sku.id, unit_cost_zar=costs.get(sku.id)) for sku in skus],
+            total=total,
+        )
 
     async def get(self, sku_id: uuid.UUID, user_id: Optional[uuid.UUID] = None) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
@@ -175,32 +264,15 @@ class SkuService:
             assert data.carton_count is not None
             sku.carton_count = data.carton_count
 
-        if "wholesale_ex_vat" in fields_set and "wholesale_inc_vat" in fields_set:
-            raise ValidationError("Cannot set both wholesale_ex_vat and wholesale_inc_vat")
-        if "retail_ex_vat" in fields_set and "retail_inc_vat" in fields_set:
-            raise ValidationError("Cannot set both retail_ex_vat and retail_inc_vat")
-
-        if "wholesale_ex_vat" in fields_set:
-            if data.wholesale_ex_vat is not None:
-                validate_non_negative_price(data.wholesale_ex_vat, "wholesale_ex_vat")
-            sku.wholesale_ex_vat = data.wholesale_ex_vat
-        elif "wholesale_inc_vat" in fields_set:
-            if data.wholesale_inc_vat is None:
-                sku.wholesale_ex_vat = None
-            else:
-                validate_non_negative_price(data.wholesale_inc_vat, "wholesale_inc_vat")
-                sku.wholesale_ex_vat = inc_to_ex(data.wholesale_inc_vat)
-
-        if "retail_ex_vat" in fields_set:
-            if data.retail_ex_vat is not None:
-                validate_non_negative_price(data.retail_ex_vat, "retail_ex_vat")
-            sku.retail_ex_vat = data.retail_ex_vat
-        elif "retail_inc_vat" in fields_set:
-            if data.retail_inc_vat is None:
-                sku.retail_ex_vat = None
-            else:
-                validate_non_negative_price(data.retail_inc_vat, "retail_inc_vat")
-                sku.retail_ex_vat = inc_to_ex(data.retail_inc_vat)
+        for column, ex_field, inc_field in _PRICE_COLUMNS:
+            _apply_stored_ex_vat(
+                sku,
+                data,
+                fields_set,
+                column=column,
+                ex_field=ex_field,
+                inc_field=inc_field,
+            )
 
         try:
             await self.crud.commit_refresh(sku)
@@ -222,7 +294,10 @@ class SkuService:
             ) from exc
 
     async def create(self, data: SkuCreate, user_id: uuid.UUID) -> SkuResponse:
-        await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, data.our_barcode)
+        barcode = data.our_barcode
+        if barcode is None:
+            barcode = await self._allocate_csv_barcode(data.our_ref)
+        await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, barcode)
 
         if data.opening_location_id is not None:
             location = await self.location_crud.get_by_id(data.opening_location_id)
@@ -233,7 +308,7 @@ class SkuService:
 
         sku = Sku(
             our_ref=data.our_ref,
-            our_barcode=data.our_barcode,
+            our_barcode=barcode,
             name=data.name,
             design=data.design,
             fabric=data.fabric,
@@ -274,7 +349,12 @@ class SkuService:
         if not raw_bytes:
             raise ValidationError("Photo file is required")
 
-        image_bytes = await asyncio.to_thread(resize_image, raw_bytes)
+        try:
+            image_bytes = await asyncio.to_thread(resize_image, raw_bytes)
+        except OSError as exc:
+            raise ValidationError(
+                "That file isn't a readable image. Use a JPEG, PNG, or WebP."
+            ) from exc
         relative_path = f"skus/{sku_id}.jpg"
         try:
             storage_key = await asyncio.to_thread(save_bytes, relative_path, image_bytes)
@@ -293,11 +373,6 @@ class SkuService:
             raise NotFoundError("SKU photo not found")
 
         storage_key = sku.photo_storage_key
-        if is_remote_storage_ref(storage_key):
-            url = presigned_get_url(storage_key)
-            if url:
-                return RedirectResponse(url)
-
         try:
             data = await asyncio.to_thread(read_bytes, storage_key)
         except FileNotFoundError as exc:
@@ -323,6 +398,7 @@ class SkuService:
         landed_costs = await self.unit_cost_audit_crud.latest_landed_costs_by_sku_ids(sku_ids)
         supplier_names = await self.supplier_crud.names_by_ids(supplier_ids)
         kit_ids = await self.bom_crud.parent_ids_with_bom(sku_ids)
+        average_costs = await average_costs_by_sku_id(self.db, sku_ids)
 
         return [
             self._to_response(
@@ -334,6 +410,19 @@ class SkuService:
                 ),
                 last_landed_cost_zar=None if hide_cost else landed_costs.get(sku.id),
                 is_kit=sku.id in kit_ids,
+                average_unit_cost_zar=None if hide_cost else average_costs.get(sku.id),
+                stockist_below_cost=tier_price_below_cost(
+                    sku.stockist_ex_vat, average_costs.get(sku.id)
+                ),
+                wholesale_below_cost=tier_price_below_cost(
+                    sku.wholesale_ex_vat, average_costs.get(sku.id)
+                ),
+                decorator_below_cost=tier_price_below_cost(
+                    sku.decorator_ex_vat, average_costs.get(sku.id)
+                ),
+                retail_below_cost=tier_price_below_cost(
+                    sku.retail_ex_vat, average_costs.get(sku.id)
+                ),
             )
             for sku in skus
         ]
@@ -345,6 +434,11 @@ class SkuService:
         preferred_supplier_name: Optional[str] = None,
         last_landed_cost_zar: Optional[Decimal] = None,
         is_kit: bool = False,
+        average_unit_cost_zar: Optional[Decimal] = None,
+        stockist_below_cost: bool = False,
+        wholesale_below_cost: bool = False,
+        decorator_below_cost: bool = False,
+        retail_below_cost: bool = False,
     ) -> SkuResponse:
         return SkuResponse(
             id=sku.id,
@@ -366,15 +460,31 @@ class SkuService:
             last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
             photo_storage_key=sku.photo_storage_key,
+            stockist_ex_vat=sku.stockist_ex_vat,
+            stockist_inc_vat=inc_vat_or_none(sku.stockist_ex_vat),
             wholesale_ex_vat=sku.wholesale_ex_vat,
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
+            decorator_ex_vat=sku.decorator_ex_vat,
+            decorator_inc_vat=inc_vat_or_none(sku.decorator_ex_vat),
             retail_ex_vat=sku.retail_ex_vat,
             retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            average_unit_cost_zar=average_unit_cost_zar,
+            stockist_below_cost=stockist_below_cost,
+            wholesale_below_cost=wholesale_below_cost,
+            decorator_below_cost=decorator_below_cost,
+            retail_below_cost=retail_below_cost,
             carton_count=sku.carton_count,
             is_kit=is_kit,
             created_at=sku.created_at,
             updated_at=sku.updated_at,
         )
+
+    async def _allocate_csv_barcode(self, our_ref: str) -> str:
+        for attempt in range(1, 1000):
+            candidate = csv_style_barcode(our_ref, attempt)
+            if await self.crud.get_by_our_barcode(candidate) is None:
+                return candidate
+        raise ConflictError("Could not allocate a unique barcode")
 
     async def _ensure_unique_fields(
         self,

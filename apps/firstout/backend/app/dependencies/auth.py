@@ -26,6 +26,7 @@ from app.permissions import (
     USERS_MANAGE,
 )
 from app.services.auth import AuthService
+from app.services.password_reset import PasswordResetService
 from app.services.permissions import PermissionService
 from app.services.bills import BillService
 from app.services.books_events import BooksEventService
@@ -36,6 +37,7 @@ from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
+from app.services.payment_reminders import PaymentReminderService
 from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.journal_imports import JournalImportService
 from app.services.journals import JournalService
@@ -45,6 +47,7 @@ from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
 from app.services.bank_rules import BankRuleService
 from app.services.catalogue_imports import CatalogueImportService
+from app.services.cin7_import_jobs import Cin7ImportJobService
 from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
@@ -52,6 +55,8 @@ from app.services.comms.outbox import CommsOutboxService
 from app.services.comms.send import CommsSendService
 from app.services.comms.whatsapp import WhatsAppWebhookService
 from app.services.settings import SettingsService
+from app.services.document_intake.invoice_flow import InvoiceIntakeService
+from app.services.document_intake.service import DocumentIntakeService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
 from app.services.purchase_orders import PurchaseOrderService
@@ -79,6 +84,10 @@ from app.services.audit_hub import AuditHubService
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(db)
+
+
+def get_password_reset_service(db: AsyncSession = Depends(get_db)) -> PasswordResetService:
+    return PasswordResetService(db)
 
 
 def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
@@ -113,6 +122,14 @@ def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
     return ProformaService(db)
 
 
+def get_document_intake_service(db: AsyncSession = Depends(get_db)) -> DocumentIntakeService:
+    return DocumentIntakeService(db)
+
+
+def get_invoice_intake_service(db: AsyncSession = Depends(get_db)) -> InvoiceIntakeService:
+    return InvoiceIntakeService(db)
+
+
 def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
     return SkuService(db)
 
@@ -143,6 +160,10 @@ def get_search_service(db: AsyncSession = Depends(get_db)) -> SearchService:
 
 def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
     return SettingsService(db)
+
+
+def get_payment_reminder_service(db: AsyncSession = Depends(get_db)) -> PaymentReminderService:
+    return PaymentReminderService(db)
 
 
 def get_comms_outbox_service(db: AsyncSession = Depends(get_db)) -> CommsOutboxService:
@@ -221,6 +242,12 @@ def get_catalogue_import_service(
     db: AsyncSession = Depends(get_db),
 ) -> CatalogueImportService:
     return CatalogueImportService(db)
+
+
+def get_cin7_import_job_service(
+    db: AsyncSession = Depends(get_db),
+) -> Cin7ImportJobService:
+    return Cin7ImportJobService(db)
 
 
 def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
@@ -370,6 +397,13 @@ async def require_catalogue_mutate(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (CATALOGUE_MUTATE,))
+
+
+async def require_po_line_edit(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (CATALOGUE_MUTATE, USERS_MANAGE))
 
 
 async def require_returns_mutate(

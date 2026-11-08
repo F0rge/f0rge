@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -34,7 +35,7 @@ class SalesOrderStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
+class SalesOrder(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "sales_orders"
 
     so_number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -79,6 +80,12 @@ class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prices_include_vat: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
     fulfillment_promise: Mapped[Optional[dict]] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=True
     )
@@ -116,7 +123,7 @@ class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class SalesOrderLine(UUIDPkMixin, TimestampMixin, Base):
+class SalesOrderLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "sales_order_lines"
 
     sales_order_id: Mapped[uuid.UUID] = mapped_column(
@@ -134,6 +141,7 @@ class SalesOrderLine(UUIDPkMixin, TimestampMixin, Base):
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     fulfillment_promise: Mapped[Optional[dict]] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=True
     )
@@ -155,7 +163,7 @@ class SalesOrderLine(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class SalesOrderPayment(UUIDPkMixin, TimestampMixin, Base):
+class SalesOrderPayment(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "sales_order_payments"
 
     sales_order_id: Mapped[uuid.UUID] = mapped_column(

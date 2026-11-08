@@ -22,6 +22,7 @@ class BankImportCRUD(BaseCRUD):
                 .options(
                     selectinload(BankImport.account),
                     selectinload(BankImport.lines).selectinload(BankImportLine.matched_payment),
+                    selectinload(BankImport.lines).selectinload(BankImportLine.allocations),
                 )
                 .where(BankImport.id == import_id)
             )
@@ -42,7 +43,10 @@ class BankImportCRUD(BaseCRUD):
         return (
             await self.db.execute(
                 select(BankImportLine)
-                .options(selectinload(BankImportLine.matched_payment))
+                .options(
+                    selectinload(BankImportLine.matched_payment),
+                    selectinload(BankImportLine.allocations),
+                )
                 .where(BankImportLine.id == line_id)
             )
         ).scalar_one_or_none()
@@ -56,7 +60,10 @@ class BankImportLineCRUD(BaseCRUD):
         return (
             await self.db.execute(
                 select(BankImportLine)
-                .options(selectinload(BankImportLine.matched_payment))
+                .options(
+                    selectinload(BankImportLine.matched_payment),
+                    selectinload(BankImportLine.allocations),
+                )
                 .where(BankImportLine.id == line_id)
             )
         ).scalar_one_or_none()
@@ -65,7 +72,11 @@ class BankImportLineCRUD(BaseCRUD):
         stmt = (
             select(BankImportLine)
             .join(BankImport, BankImportLine.import_id == BankImport.id)
-            .options(selectinload(BankImportLine.bank_import))
+            .options(
+                selectinload(BankImportLine.bank_import),
+                selectinload(BankImportLine.matched_payment),
+                selectinload(BankImportLine.allocations),
+            )
             .where(
                 BankImportLine.matched_payment_id.is_(None),
                 BankImportLine.matched_journal_id.is_(None),

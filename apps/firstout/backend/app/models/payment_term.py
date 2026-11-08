@@ -4,10 +4,11 @@ from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class PaymentTerm(UUIDPkMixin, TimestampMixin, Base):
+class PaymentTerm(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "payment_terms"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)

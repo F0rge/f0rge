@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from decimal import Decimal
 from typing import Optional
@@ -7,6 +8,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     ForeignKey,
     Integer,
     LargeBinary,
@@ -20,6 +22,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 DEFAULT_VAT_RATE = Decimal("0.15")
@@ -31,13 +34,31 @@ DEFAULT_PAYMENT_TERMS_DAYS = 30
 DEFAULT_SESSION_TTL_HOURS = 12
 
 
-class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
+class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "team_settings"
 
     team_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("teams.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    label_width_mm: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=100, server_default="100"
+    )
+    label_height_mm: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=60, server_default="60"
+    )
+    label_show_name: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    label_show_reference: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    label_show_barcode: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    label_show_logo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     vat_rate: Mapped[Decimal] = mapped_column(
         Numeric(5, 4),
@@ -109,6 +130,12 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         Numeric(14, 2),
         nullable=True,
     )
+    auto_process_exact_supplier_invoices: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     session_ttl_hours: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -138,6 +165,17 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         default="en",
         server_default=text("'en'"),
+    )
+    payment_reminders_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    payment_reminder_steps: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    payment_reminders_last_run_on: Mapped[Optional[datetime.date]] = mapped_column(
+        Date,
+        nullable=True,
     )
 
     team: Mapped["Team"] = relationship()

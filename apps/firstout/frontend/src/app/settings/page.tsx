@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   FileUploaderDropContainer,
@@ -24,6 +26,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  canManageUsers,
   canMutateSettings,
   getSettings,
   isActiveLocation,
@@ -35,7 +38,9 @@ import {
   type DocumentSequence,
   type Location,
 } from "@/lib/api";
+import { LabelSettings } from "@/app/settings/label-settings";
 import { CommunicationsSettings } from "@/app/settings/communications-settings";
+import { PaymentRemindersSettings } from "@/app/settings/payment-reminders-settings";
 import { useAuth } from "@/lib/auth";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -76,7 +81,7 @@ function SettingsSaveButton({
     );
   }
   return (
-    <Button kind="primary" data-tour="settings-save" disabled={saving} onClick={onSave}>
+    <Button kind="primary" disabled={saving} onClick={onSave}>
       {saving ? "Saving…" : "Save settings"}
     </Button>
   );
@@ -85,6 +90,7 @@ function SettingsSaveButton({
 export default function SettingsPage() {
   const { user } = useAuth();
   const canMutate = canMutateSettings(user);
+  const canConfigureReminders = canManageUsers(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [vatPercent, setVatPercent] = useState("15");
   const [currency, setCurrency] = useState("ZAR");
@@ -99,7 +105,6 @@ export default function SettingsPage() {
   const [paymentTermsDays, setPaymentTermsDays] = useState(30);
   const [maxTillDiscountPercent, setMaxTillDiscountPercent] = useState("");
   const [poApprovalThresholdZar, setPoApprovalThresholdZar] = useState("");
-  const [sessionTtlHours, setSessionTtlHours] = useState(12);
   const [hasLogo, setHasLogo] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoVersion, setLogoVersion] = useState(0);
@@ -107,6 +112,7 @@ export default function SettingsPage() {
   const [defaultTillLocationId, setDefaultTillLocationId] = useState("");
   const [documentSequences, setDocumentSequences] = useState<DocumentSequence[]>([]);
   const [preferWarehouse, setPreferWarehouse] = useState(true);
+  const [autoProcessExactInvoices, setAutoProcessExactInvoices] = useState(false);
   const [pickPriority, setPickPriority] = useState<string[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [addLocationId, setAddLocationId] = useState("");
@@ -139,12 +145,12 @@ export default function SettingsPage() {
     setPaymentTermsDays(data.payment_terms_days);
     setMaxTillDiscountPercent(data.max_till_discount_percent ?? "");
     setPoApprovalThresholdZar(data.po_approval_threshold_zar ?? "");
-    setSessionTtlHours(data.session_ttl_hours);
     setHasLogo(data.has_logo);
     setDefaultReceiveLocationId(data.default_receive_location_id ?? "");
     setDefaultTillLocationId(data.default_till_location_id ?? "");
     setDocumentSequences(data.document_sequences);
     setPreferWarehouse(data.always_prefer_warehouse);
+    setAutoProcessExactInvoices(data.auto_process_exact_supplier_invoices);
     setPickPriority(data.pick_priority);
   }
 
@@ -196,7 +202,6 @@ export default function SettingsPage() {
         po_approval_threshold_zar: poApprovalThresholdZar.trim()
           ? poApprovalThresholdZar.trim()
           : null,
-        session_ttl_hours: sessionTtlHours,
         default_receive_location_id: defaultReceiveLocationId || null,
         default_till_location_id: defaultTillLocationId || null,
         document_sequences: documentSequences.map((row) => ({
@@ -205,6 +210,7 @@ export default function SettingsPage() {
           padding: row.padding,
         })),
         always_prefer_warehouse: preferWarehouse,
+        auto_process_exact_supplier_invoices: autoProcessExactInvoices,
         pick_priority: pickPriority,
       });
       applySettings(updated);
@@ -364,7 +370,9 @@ export default function SettingsPage() {
             <Tab>Documents</Tab>
             <Tab>Locations</Tab>
             <Tab>Operations</Tab>
+            <Tab>Labels</Tab>
             <Tab>Communications</Tab>
+            {canConfigureReminders ? <Tab>Payment reminders</Tab> : null}
           </TabList>
           <TabPanels>
             <TabPanel>
@@ -435,8 +443,7 @@ export default function SettingsPage() {
                       existing logo.
                     </p>
                     {hasLogo ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
-                      <img
+                      <StaffImage
                         className="firstout-company-logo"
                         src={`${settingsLogoUrl()}?v=${logoVersion}`}
                         alt="Company logo"
@@ -595,6 +602,20 @@ export default function SettingsPage() {
                     onToggle={(checked) => setPreferWarehouse(checked)}
                     disabled={!canMutate || saving}
                   />
+                  <Toggle
+                    id="auto-process-exact-invoices"
+                    labelText="Auto-process exact supplier invoices"
+                    labelA="Off"
+                    labelB="On"
+                    toggled={autoProcessExactInvoices}
+                    onToggle={(checked) => setAutoProcessExactInvoices(checked)}
+                    disabled={!canMutate || saving}
+                  />
+                  <p className="cds--type-helper-text-01">
+                    Off by default. When on, an invoice that matches its purchase order exactly is
+                    posted like a typed-in bill, without a second click. Anything that differs still
+                    waits for you. A posted bill is reversed with a journal.
+                  </p>
                   {pickPrioritySection}
                   <SettingsSaveButton
                     canMutate={canMutate}
@@ -652,21 +673,7 @@ export default function SettingsPage() {
                       }
                     }}
                   />
-                  <NumberInput
-                    id="session-ttl-hours"
-                    label="Session duration (hours)"
-                    helperText="Does not revoke sessions already issued."
-                    value={sessionTtlHours}
-                    min={1}
-                    max={720}
-                    step={1}
-                    disabled={!canMutate || saving}
-                    onChange={(_, { value }) => {
-                      if (typeof value === "number") {
-                        setSessionTtlHours(value);
-                      }
-                    }}
-                  />
+                  <p className="cds--type-body-01">Clerk manages sign-in session duration and security.</p>
                   <SettingsSaveButton
                     canMutate={canMutate}
                     saving={saving}
@@ -676,11 +683,20 @@ export default function SettingsPage() {
               </Tile>
             </TabPanel>
 
+            <TabPanel><Tile><LabelSettings settings={settings} canMutate={canMutate} /></Tile></TabPanel>
             <TabPanel>
               <Tile>
                 <CommunicationsSettings />
               </Tile>
             </TabPanel>
+
+            {canConfigureReminders ? (
+              <TabPanel>
+                <Tile>
+                  <PaymentRemindersSettings />
+                </Tile>
+              </TabPanel>
+            ) : null}
           </TabPanels>
         </Tabs>
       ) : null}

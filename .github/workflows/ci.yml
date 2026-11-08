@@ -47,6 +47,11 @@ jobs:
       - name: Assert no root uv.lock
         run: bash .github/scripts/assert-no-root-uv-lock.sh
 
+      - name: Coolify payload builder
+        # discover can't import `.github/` (the dot). Run the module from its dir.
+        working-directory: .github/deploy
+        run: python3 -m unittest test_coolify_payload.py
+
       - name: Nx project registration guard
         run: bash .github/scripts/check-nx-projects.sh
 
@@ -65,7 +70,15 @@ jobs:
           fi
           for p in $PROJECTS; do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            uv sync --frozen --project "$ROOT"
+            # Nested projects do not inherit a repo-root pin. A project
+            # .python-version selects the interpreter (Marrow, Firstout, and
+            # dk tag-printer are 3.11). Every other project stays on 3.10.
+            if [ -f "$ROOT/.python-version" ]; then
+              PY=$(tr -d '[:space:]' < "$ROOT/.python-version")
+            else
+              PY=3.10
+            fi
+            UV_PYTHON="$PY" uv sync --frozen --project "$ROOT"
           done
 
       - name: uv pip audit (high severity)
@@ -168,7 +181,7 @@ jobs:
             esac
           fi
           if [ "$NEED" = "true" ]; then
-            uv sync --frozen --project apps/marrow/backend
+            UV_PYTHON=3.11 uv sync --frozen --project apps/marrow/backend
           else
             echo "marrow-frontend not affected — skip backend sync for codegen"
           fi

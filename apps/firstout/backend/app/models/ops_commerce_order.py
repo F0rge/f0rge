@@ -18,10 +18,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class OpsCommerceOrder(UUIDPkMixin, TimestampMixin, Base):
+class OpsCommerceOrder(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """Immutable accepted Storefront order and gateway snapshot with mutable delivery status."""
 
     __tablename__ = "ops_commerce_orders"

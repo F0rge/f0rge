@@ -287,8 +287,134 @@ async def test_till_kit_requires_pick_does_not_drop_showroom_stock(
         },
     )
     assert sale.status_code == 409
-    assert sale.json()["detail"] == "Kit requires pick"
+    detail = sale.json()["detail"]
+    assert detail["code"] == "kit_requires_pick"
+    assert len(detail["kits"]) == 1
+    block = detail["kits"][0]
+    assert block["sku_id"] == kit["parent"]["id"]
+    assert block["sku_code"] == kit["parent"]["our_ref"]
+    assert block["sku_name"] == kit["parent"]["name"]
+    assert block["location_id"] == bedford_id
+    assert block["location_name"] == "Bedfordview"
+    assert block["qty"] == 1
+    assert block["reason"] == "split_pick"
+    assert "Create a pick" in block["message"]
+    assert kit["parent"]["our_ref"] in block["message"]
     assert await _on_hand_or_zero(owner_client, kit["table"]["id"], bedford_id) == 1
+
+
+async def test_till_kit_blocks_list_each_kit_split_and_missing(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
+    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    split_kit = await _kit(
+        owner_client,
+        "PCK-MULTI-SPLIT",
+        table_location_id=bedford_id,
+        table_qty=1,
+        chair_location_id=kramerville_id,
+        chair_qty=4,
+    )
+    missing_kit = await _kit(
+        owner_client,
+        "PCK-MULTI-MISS",
+        table_location_id=bedford_id,
+        table_qty=1,
+    )
+    ready_kit = await _kit(
+        owner_client,
+        "PCK-MULTI-READY",
+        table_location_id=bedford_id,
+        table_qty=1,
+        chair_location_id=bedford_id,
+        chair_qty=4,
+    )
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [
+                {"sku_id": ready_kit["parent"]["id"], "qty": 1},
+                {"sku_id": split_kit["parent"]["id"], "qty": 1},
+                {"sku_id": missing_kit["parent"]["id"], "qty": 1},
+            ],
+            "tender": "cash",
+        },
+    )
+    assert sale.status_code == 409
+    detail = sale.json()["detail"]
+    assert detail["code"] == "kit_requires_pick"
+    by_code = {kit["sku_code"]: kit for kit in detail["kits"]}
+    assert set(by_code) == {
+        split_kit["parent"]["our_ref"],
+        missing_kit["parent"]["our_ref"],
+    }
+    assert by_code[split_kit["parent"]["our_ref"]]["reason"] == "split_pick"
+    assert by_code[missing_kit["parent"]["our_ref"]]["reason"] == "missing_parts"
+    assert ready_kit["parent"]["our_ref"] not in by_code
+    assert split_kit["parent"]["name"] in detail["message"]
+    assert missing_kit["parent"]["name"] in detail["message"]
+    assert await _on_hand_or_zero(owner_client, ready_kit["table"]["id"], bedford_id) == 1
+    assert await _on_hand_or_zero(owner_client, ready_kit["chairs"]["id"], bedford_id) == 4
+
+
+async def test_till_two_confirmed_picks_sell_both_kits(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
+    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    first = await _kit(
+        owner_client,
+        "PCK-TWO-A",
+        table_location_id=kramerville_id,
+        table_qty=1,
+        chair_location_id=kramerville_id,
+        chair_qty=4,
+    )
+    second = await _kit(
+        owner_client,
+        "PCK-TWO-B",
+        table_location_id=kramerville_id,
+        table_qty=1,
+        chair_location_id=kramerville_id,
+        chair_qty=4,
+    )
+    pick_ids = []
+    for kit in (first, second):
+        created = await owner_client.post(
+            "/api/v1/picks",
+            json={"sku_id": kit["parent"]["id"], "qty": 1},
+        )
+        assert created.status_code == 201, created.text
+        confirmed = await owner_client.post(
+            f"/api/v1/picks/{created.json()['id']}/confirm",
+            json={},
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        pick_ids.append(created.json()["id"])
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [
+                {"sku_id": first["parent"]["id"], "qty": 1},
+                {"sku_id": second["parent"]["id"], "qty": 1},
+            ],
+            "tender": "cash",
+            "pick_ids": pick_ids,
+        },
+    )
+    assert sale.status_code == 201, sale.text
+    assert {line["sku_id"] for line in sale.json()["lines"]} == {
+        first["parent"]["id"],
+        second["parent"]["id"],
+    }
+    assert await _on_hand_or_zero(owner_client, first["table"]["id"], kramerville_id) == 1
 
 
 async def test_till_kit_100_percent_showroom_still_sells(

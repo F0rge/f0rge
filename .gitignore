@@ -70,3 +70,12 @@ apps/buycycle/**/*.csv
 apps/buycycle/**/*.env
 apps/buycycle/data/
 apps/buycycle/site/
+
+# Environment monitor (public repo: never commit the sensor DB, exports, or env)
+apps/environment-monitor/**/*.db
+apps/environment-monitor/**/*.db-*
+apps/environment-monitor/**/*.sqlite*
+apps/environment-monitor/**/*.csv
+apps/environment-monitor/**/.env
+apps/environment-monitor/**/.env.*
+apps/environment-monitor/**/data/

@@ -8,8 +8,27 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class BankDocumentSuggestion(BaseModel):
+    kind: Literal["invoice", "bill"]
+    document_id: uuid.UUID
+    document_number: str
+    contact_name: str
+    outstanding_zar: Decimal
+    confidence: int
+    reason: str
+    auto_match: bool = False
+
+
+class BankLineAllocationResponse(BaseModel):
+    payment_id: uuid.UUID
+    payment_number: Optional[str] = None
+    amount_zar: Decimal
+    document_number: Optional[str] = None
+
+
 class BankImportLineResponse(BaseModel):
     id: uuid.UUID
+    import_id: uuid.UUID
     transaction_date: datetime.date
     description: str
     reference: Optional[str]
@@ -23,6 +42,8 @@ class BankImportLineResponse(BaseModel):
     suggested_rule_pattern: Optional[str] = None
     suggested_account_code: Optional[str] = None
     suggested_account_name: Optional[str] = None
+    document_suggestions: list[BankDocumentSuggestion] = Field(default_factory=list)
+    allocations: list[BankLineAllocationResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -79,6 +100,60 @@ class BankApplyRuleRequest(BaseModel):
 
 class BankRecodeRequest(BaseModel):
     account_id: uuid.UUID
+
+
+class BankMatchDocumentRequest(BaseModel):
+    invoice_id: Optional[uuid.UUID] = None
+    bill_id: Optional[uuid.UUID] = None
+
+    @model_validator(mode="after")
+    def exactly_one_document(self) -> BankMatchDocumentRequest:
+        if (self.invoice_id is None) == (self.bill_id is None):
+            raise ValueError("Provide exactly one of invoice_id or bill_id")
+        return self
+
+
+class BankSplitAllocation(BaseModel):
+    invoice_id: Optional[uuid.UUID] = None
+    bill_id: Optional[uuid.UUID] = None
+    amount: Decimal
+
+    @model_validator(mode="after")
+    def exactly_one_document(self) -> BankSplitAllocation:
+        if (self.invoice_id is None) == (self.bill_id is None):
+            raise ValueError("Provide exactly one of invoice_id or bill_id")
+        return self
+
+
+class BankSplitRequest(BaseModel):
+    allocations: list[BankSplitAllocation] = Field(min_length=2)
+
+
+class AutoMatchPreviewItem(BaseModel):
+    import_id: uuid.UUID
+    line_id: uuid.UUID
+    transaction_date: datetime.date
+    description: str
+    amount_zar: Decimal
+    kind: Literal["invoice", "bill"]
+    document_id: uuid.UUID
+    document_number: str
+    contact_name: str
+    confidence: int
+    reason: str
+
+
+class AutoMatchPreview(BaseModel):
+    matches: list[AutoMatchPreviewItem]
+
+
+class AutoMatchConfirmRequest(BaseModel):
+    line_ids: list[uuid.UUID] = Field(min_length=1)
+
+
+class AutoMatchConfirmResult(BaseModel):
+    applied: list[AutoMatchPreviewItem]
+    skipped: list[str]
 
 
 class AgedBucket(BaseModel):

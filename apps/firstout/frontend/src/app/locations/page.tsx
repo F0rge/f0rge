@@ -161,7 +161,7 @@ export default function LocationsPage() {
           </p>
         </div>
         {canMutate ? (
-          <Button data-tour="location-new" onClick={() => setCreateOpen(true)}>Add location</Button>
+          <Button onClick={() => setCreateOpen(true)}>Add location</Button>
         ) : null}
       </div>
 

@@ -27,6 +27,7 @@ from app.services.chart_of_accounts import (
 )
 from app.services.comms.phone import to_whatsapp_e164
 from app.services.invoice_pdf import build_tax_invoice_pdf
+from app.services.pricing import format_pdf_unit, pdf_unit_basis_note
 from app.services.books_periods import assert_date_postable
 from app.services.settings import SettingsService
 from f0rge_core.exceptions import ConflictError, NotFoundError
@@ -91,17 +92,21 @@ class CreditNoteService:
             raise NotFoundError("Credit note not found")
         invoice = credit_note.invoice
         customer = invoice.customer
-        lines = [
-            (
-                line.description,
-                line.qty,
-                f"{line.unit_ex_vat:.2f}",
-                f"{line.ex_vat:.2f}",
-                f"{line.vat_amount:.2f}",
-                f"{line.inc_vat:.2f}",
+        lines = []
+        for line in invoice.lines:
+            description = line.description
+            if line.price_warning:
+                description = f"{description} — {line.price_warning}"
+            lines.append(
+                (
+                    description,
+                    line.qty,
+                    format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
+                    f"{line.ex_vat:.2f}",
+                    f"{line.vat_amount:.2f}",
+                    f"{line.inc_vat:.2f}",
+                )
             )
-            for line in invoice.lines
-        ]
         pdf_bytes = build_tax_invoice_pdf(
             invoice_number=credit_note.credit_note_number,
             issue_date=credit_note.issue_date.isoformat(),
@@ -116,6 +121,7 @@ class CreditNoteService:
             original_invoice_number=invoice.invoice_number,
             credit_reason=credit_note.reason,
             seller=await SettingsService(self.db).build_seller_details(),
+            unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
         )
         return pdf_bytes, f"{credit_note.credit_note_number}.pdf", credit_note
 

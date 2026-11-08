@@ -1,0 +1,16 @@
+{
+  "name": "environment-monitor-backend",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/environment-monitor/backend",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/environment-monitor/backend",
+        "command": "python3 test_aggregation.py"
+      }
+    }
+  },
+  "tags": ["platform:py", "scope:envmon", "deploy-target:coolify"]
+}

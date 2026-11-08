@@ -5,7 +5,8 @@ import { Loader2, X } from 'lucide-react'
 import { cn } from '@f0rge/ui'
 import { ConfirmActionDialog } from '@/components/people/confirm-action-dialog'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { MealIconThumb, photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
+import { mealThumbKind, photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
+import { MealThumbFallback } from '@/components/checkin/meal-thumb-fallback'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
 import type { Photo } from '@/lib/api/types'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
@@ -26,6 +27,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
 
   const hasImage = photoHasImage(photo)
   const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
+  const thumbKind = mealThumbKind(hasImage, thumbSrc)
 
   const isAnalyzing =
     hasImage && (analysis?.status === 'pending' || analysis?.status === 'analyzing')
@@ -57,7 +59,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="relative aspect-square w-full">
-          {hasImage && thumbSrc ? (
+          {thumbKind === 'photo' && thumbSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={thumbSrc}
@@ -66,16 +68,11 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
               onError={onThumbError}
             />
           ) : (
-            <>
-              <MealIconThumb
-                iconKey={photo.icon_key ?? 'bowl'}
-                size="lg"
-                className="size-full rounded-none"
-              />
-              <span className="absolute left-1.5 top-1.5 rounded-full bg-background/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
-                Library
-              </span>
-            </>
+            <MealThumbFallback
+              kind={thumbKind === 'missing' ? 'missing' : 'library'}
+              iconKey={photo.icon_key}
+              showBadge
+            />
           )}
         </div>
         <div className="p-2.5">

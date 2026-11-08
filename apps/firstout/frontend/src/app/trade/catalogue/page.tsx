@@ -1,92 +1,62 @@
 "use client";
 
-import { Button, InlineNotification, NumberInput, Stack, Theme } from "@carbon/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Button, InlineNotification, Loading, Select, SelectItem, Stack } from "@carbon/react";
+import { useAuth as useClerkAuth } from "@clerk/nextjs";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { listPortalOrganisations, type PortalAccess } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { portalAccessUrl, tradeAuthUrl } from "@/lib/trade-auth";
+import { ClerkAccountButton } from "@/components/clerk-account-button";
+import { TradeCatalogue } from "@/components/trade-catalogue";
 
-import {
-  ApiError,
-  formatZarAmount,
-  getPortalMe,
-  listPortalCatalogue,
-  placePortalOrder,
-  portalLogout,
-  type PortalCatalogueItem,
-  type PortalMe,
-} from "@/lib/api";
-
-export default function TradeCataloguePage() {
+function TradePortal() {
+  const { isLoaded, isSignedIn } = useClerkAuth();
+  const { logout } = useAuth();
   const router = useRouter();
-  const [me, setMe] = useState<PortalMe | null>(null);
-  const [items, setItems] = useState<PortalCatalogueItem[]>([]);
-  const [qty, setQty] = useState<Record<string, number>>({});
+  const search = useSearchParams();
+  const requestedAccess = search.get("access");
+  const [access, setAccess] = useState<PortalAccess[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    void getPortalMe()
-      .then(async (user) => {
-        setMe(user);
-        setItems(await listPortalCatalogue());
-      })
-      .catch(() => router.replace("/trade/login"));
-  }, [router]);
+    if (!isLoaded || !isSignedIn) return;
+    let cancelled = false;
+    listPortalOrganisations()
+      .then((data) => { if (!cancelled) setAccess(data); })
+      .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : "Could not load trade accounts."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isLoaded, isSignedIn]);
 
-  if (!me) {
-    return null;
-  }
+  if (!isLoaded) return <Loading withOverlay={false} description="Loading sign-in…" />;
+  if (!isSignedIn) return <main className="firstout-onboarding-page"><Stack gap={5}>
+    <h1 className="cds--type-productive-heading-04">Trade portal</h1>
+    <p>Sign in with your Clerk account to open your approved trade accounts.</p>
+    <Button href={tradeAuthUrl("login", requestedAccess ? portalAccessUrl(requestedAccess) : "/trade/catalogue")}>Sign in</Button>
+  </Stack></main>;
+  const selected = requestedAccess ? access.find((entry) => entry.id === requestedAccess) : access.length === 1 ? access[0] : undefined;
+  return <main className="firstout-trade-page"><Stack gap={6}>
+    <div className="firstout-page-header">
+      <h1 className="cds--type-productive-heading-04">Trade portal</h1>
+      <div className="firstout-catalogue-actions">
+        <ClerkAccountButton />
+        <Button kind="ghost" onClick={() => void logout().then(() => router.replace("/trade/login"))}>Sign out</Button>
+      </div>
+    </div>
+    {error ? <InlineNotification kind="error" title="Trade accounts" subtitle={error} hideCloseButton /> : null}
+    {loading ? <Loading withOverlay={false} description="Loading trade accounts…" /> : <>
+      {access.length ? <Select id="trade-account" labelText="Business and customer account" value={selected?.id ?? ""} onChange={(event) => router.push(event.target.value ? portalAccessUrl(event.target.value) : "/trade/catalogue")}>
+        <SelectItem value="" text="Choose an approved account" />
+        {access.map((entry) => <SelectItem key={entry.id} value={entry.id} text={`${entry.organisation_name} — ${entry.customer_name}`} />)}
+      </Select> : <p>No trade access has been approved for this account. Ask the business for an invitation link and open it using the invited email.</p>}
+      {requestedAccess && !selected ? <InlineNotification kind="error" title="Account unavailable" subtitle="This trade account is not available to your sign-in. Choose an approved account." hideCloseButton /> : null}
+      {selected ? <TradeCatalogue key={selected.id} access={selected} /> : null}
+    </>}
+  </Stack></main>;
+}
 
-  return (
-    <Theme theme="g10">
-      <main style={{ maxWidth: "48rem", margin: "2rem auto", padding: "1rem" }}>
-        <Stack gap={5}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <h1>Catalogue — {me.customer_name}</h1>
-            <Button
-              kind="ghost"
-              onClick={() =>
-                void portalLogout().then(() => router.replace("/trade/login"))
-              }
-            >
-              Sign out
-            </Button>
-          </div>
-          {error ? <InlineNotification kind="error" title={error} hideCloseButton /> : null}
-          {success ? <InlineNotification kind="success" title={success} hideCloseButton /> : null}
-          {items.map((item) => (
-            <div key={item.id} style={{ display: "flex", gap: "1rem", alignItems: "end" }}>
-              <div style={{ flex: 1 }}>
-                <strong>{item.our_ref}</strong> {item.name}
-                <div>{formatZarAmount(item.unit_inc_vat)} inc VAT</div>
-              </div>
-              <NumberInput
-                id={`qty-${item.id}`}
-                label="Qty"
-                min={1}
-                value={qty[item.id] ?? 1}
-                onChange={(_, { value }) =>
-                  setQty((current) => ({ ...current, [item.id]: value === "" ? 1 : Number(value) }))
-                }
-              />
-              <Button
-                size="sm"
-                onClick={() => {
-                  setError(null);
-                  void placePortalOrder({
-                    lines: [{ sku_id: item.id, qty: qty[item.id] ?? 1 }],
-                  })
-                    .then((order) => setSuccess(`Draft order ${order.so_number} placed`))
-                    .catch((err) =>
-                      setError(err instanceof ApiError ? err.message : "Could not place order"),
-                    );
-                }}
-              >
-                Order
-              </Button>
-            </div>
-          ))}
-        </Stack>
-      </main>
-    </Theme>
-  );
+export default function TradeCataloguePage() {
+  return <Suspense fallback={<p>Loading trade portal…</p>}><TradePortal /></Suspense>;
 }

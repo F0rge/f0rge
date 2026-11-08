@@ -6,10 +6,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class Role(UUIDPkMixin, TimestampMixin, Base):
+class Role(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "roles"
 
     slug: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
@@ -24,7 +25,7 @@ class Role(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class RolePermission(Base):
+class RolePermission(TenantOwnedMixin, Base):
     __tablename__ = "role_permissions"
 
     role_id: Mapped[uuid.UUID] = mapped_column(

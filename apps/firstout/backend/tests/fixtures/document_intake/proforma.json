@@ -1,0 +1,43 @@
+{
+  "document_kind": "proforma",
+  "supplier": {
+    "name": "Cape Textile Co",
+    "vat_number": "4987654321",
+    "address": "12 Main Road, Cape Town"
+  },
+  "document_number": "PF-2041",
+  "document_date": "2026-03-01",
+  "currency": "ZAR",
+  "po_reference": null,
+  "proforma_number": "PF-2041",
+  "lines": [
+    {
+      "supplier_code": "CUSH-RED",
+      "description": "Red linen cushion 45cm",
+      "qty": "10",
+      "unit_price": "145.00",
+      "discount_percent": "0",
+      "discount_amount": null,
+      "vat_rate": "0.15",
+      "vat_amount": "217.50",
+      "line_total": "1450.00"
+    },
+    {
+      "supplier_code": "CUSH-NAV",
+      "description": "Navy linen cushion 45cm",
+      "qty": "4",
+      "unit_price": "160.00",
+      "discount_percent": "10",
+      "discount_amount": null,
+      "vat_rate": "0.15",
+      "vat_amount": "86.40",
+      "line_total": "576.00"
+    }
+  ],
+  "charges": [{ "description": "Shipping", "amount": "120.00" }],
+  "subtotal": "2026.00",
+  "vat_total": "303.90",
+  "total": "2449.90",
+  "payment_terms": "50% deposit, balance before dispatch",
+  "deposit": "50%"
+}

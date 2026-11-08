@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   Checkbox,
@@ -22,15 +24,16 @@ import {
 } from "@carbon/react";
 import { Barcode, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 import {
   canMutateCatalogue,
   canViewCostAudit,
   formatPriceAmount,
   getSkuLeadTimes,
-  listInventory,
+  listSkuUnitCosts,
   listSkus,
+  listSkusPage,
   skuPhotoUrl,
   type Sku,
   type SkuLeadTimeRow,
@@ -50,8 +53,10 @@ const TABLE_HEADERS = [
   { key: "lead_time_days", header: "Lead time" },
   { key: "reorder_min", header: "Reorder min" },
   { key: "cost_zar", header: "Cost (ZAR)" },
+  { key: "stockist_inc_vat", header: "Stockist Price" },
+  { key: "wholesale_inc_vat", header: "Wholesale Price" },
+  { key: "decorator_inc_vat", header: "Decorator Price" },
   { key: "retail_inc_vat", header: "Retail Price" },
-  { key: "wholesale_inc_vat", header: "Trade Price" },
   { key: "our_barcode", header: "Our barcode" },
   { key: "actions", header: "Actions" },
 ] as const;
@@ -65,8 +70,10 @@ type SkuRow = {
   lead_time_days: string;
   reorder_min: string;
   cost_zar: string;
-  retail_inc_vat: string;
+  stockist_inc_vat: string;
   wholesale_inc_vat: string;
+  decorator_inc_vat: string;
+  retail_inc_vat: string;
   our_barcode: string;
   select: string;
   actions: string;
@@ -100,47 +107,110 @@ function CataloguePageContent() {
   const searchParams = useSearchParams();
   const canMutate = canMutateCatalogue(user);
   const canViewCost = canViewCostAudit(user);
+  const urlQuery = searchParams.get("q")?.trim() ?? searchParams.get("barcode")?.trim() ?? "";
   const [skus, setSkus] = useState<Sku[]>([]);
+  const [total, setTotal] = useState(0);
+  const [categories, setCategories] = useState<string[]>([]);
   const [skuLeadTimes, setSkuLeadTimes] = useState<SkuLeadTimeRow[]>([]);
   const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
+  const [costUnavailable, setCostUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchFilter, setSearchFilter] = useState("");
+  const [searchInput, setSearchInput] = useState(urlQuery);
+  const [searchFilter, setSearchFilter] = useState(urlQuery);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [selectedById, setSelectedById] = useState<Map<string, Sku>>(() => new Map());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-
-  const loadSkus = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [skuData, inventoryData, leadReport] = await Promise.all([
-        listSkus(),
-        listInventory(),
-        getSkuLeadTimes().catch(() => ({ rows: [] as SkuLeadTimeRow[] })),
-      ]);
-      setSkus(skuData);
-      setSkuLeadTimes(leadReport.rows);
-      const costs = new Map<string, string>();
-      for (const entry of inventoryData) {
-        if (entry.unit_cost_zar) {
-          costs.set(entry.sku_id, entry.unit_cost_zar);
-        }
-      }
-      setUnitCostBySku(costs);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load catalogue.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const searchTimer = useRef<number | null>(null);
+  const [trackedUrlQuery, setTrackedUrlQuery] = useState(urlQuery);
+  if (urlQuery !== trackedUrlQuery) {
+    setTrackedUrlQuery(urlQuery);
+    setSearchInput(urlQuery);
+    setSearchFilter(urlQuery);
+    setPage(1);
+  }
 
   useEffect(() => {
-    if (user) {
-      void loadSkus();
+    if (!user) {
+      return;
     }
-  }, [user, loadSkus]);
+    let cancelled = false;
+    const request = {
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+      q: searchFilter,
+      category: categoryFilter ?? undefined,
+    };
+    listSkusPage(request)
+      .then((skuPage) => {
+        if (cancelled) {
+          return;
+        }
+        setSkus(skuPage.items);
+        setTotal(skuPage.total);
+        setCategories(skuPage.categories);
+        setError(null);
+        setLoading(false);
+        if (!canViewCost) {
+          setUnitCostBySku(new Map());
+          setCostUnavailable(false);
+          return;
+        }
+        listSkuUnitCosts(request)
+          .then((costs) => {
+            if (cancelled) {
+              return;
+            }
+            const next = new Map<string, string>();
+            for (const entry of costs.items) {
+              if (entry.unit_cost_zar) {
+                next.set(entry.sku_id, entry.unit_cost_zar);
+              }
+            }
+            setUnitCostBySku(next);
+            setCostUnavailable(false);
+          })
+          .catch(() => {
+            if (cancelled) {
+              return;
+            }
+            setUnitCostBySku(new Map());
+            setCostUnavailable(true);
+          });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load catalogue.");
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewCost, categoryFilter, page, pageSize, searchFilter, user]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    let cancelled = false;
+    void getSkuLeadTimes()
+      .then((report) => {
+        if (!cancelled) {
+          setSkuLeadTimes(report.rows);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSkuLeadTimes([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (searchParams.get("new") !== "1") {
@@ -150,51 +220,29 @@ function CataloguePageContent() {
   }, [searchParams, router]);
 
   useEffect(() => {
-    const query = searchParams.get("q")?.trim() ?? searchParams.get("barcode")?.trim();
-    if (query) {
-      setSearchFilter(query);
+    return () => {
+      if (searchTimer.current !== null) {
+        window.clearTimeout(searchTimer.current);
+      }
+    };
+  }, []);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current !== null) {
+      window.clearTimeout(searchTimer.current);
     }
-  }, [searchParams]);
+    searchTimer.current = window.setTimeout(() => {
+      const next = value.trim();
+      setSearchFilter(next);
+      setPage(1);
+      setLoading(true);
+    }, 250);
+  }
 
-  const categories = useMemo(() => {
-    const values = new Set<string>();
-    for (const sku of skus) {
-      const category = sku.category?.trim();
-      if (category) {
-        values.add(category);
-      }
-    }
-    return Array.from(values).sort((a, b) => a.localeCompare(b));
-  }, [skus]);
+  const pagedSkus = skus;
 
-  const filteredSkus = useMemo(() => {
-    const query = searchFilter.trim().toLowerCase();
-    return skus.filter((sku) => {
-      if (categoryFilter && sku.category?.trim() !== categoryFilter) {
-        return false;
-      }
-      if (!query) {
-        return true;
-      }
-      return (
-        sku.name.toLowerCase().includes(query) ||
-        sku.our_ref.toLowerCase().includes(query) ||
-        sku.our_barcode.toLowerCase().includes(query)
-      );
-    });
-  }, [skus, categoryFilter, searchFilter]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [searchFilter, categoryFilter]);
-
-  const pagedSkus = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredSkus.slice(start, start + pageSize);
-  }, [filteredSkus, page, pageSize]);
-
-  const allFilteredSelected =
-    filteredSkus.length > 0 && filteredSkus.every((sku) => selectedIds.has(sku.id));
+  const allPageSelected = skus.length > 0 && skus.every((sku) => selectedById.has(sku.id));
 
   const tableHeaders = canViewCost
     ? TABLE_HEADERS
@@ -210,48 +258,122 @@ function CataloguePageContent() {
     preferred_supplier: entry.preferred_supplier_name?.trim() || "—",
     lead_time_days: formatLeadTime(entry.lead_time_days),
     reorder_min: entry.reorder_min !== null ? String(entry.reorder_min) : "—",
-    cost_zar: formatCatalogueMoney(unitCostBySku.get(entry.id) ?? null),
-    retail_inc_vat: formatIncVatPrice(entry.retail_inc_vat),
+    cost_zar: costUnavailable
+      ? "Unavailable"
+      : formatCatalogueMoney(unitCostBySku.get(entry.id) ?? null),
+    stockist_inc_vat: formatIncVatPrice(entry.stockist_inc_vat),
     wholesale_inc_vat: formatIncVatPrice(entry.wholesale_inc_vat),
+    decorator_inc_vat: formatIncVatPrice(entry.decorator_inc_vat),
+    retail_inc_vat: formatIncVatPrice(entry.retail_inc_vat),
     our_barcode: entry.our_barcode,
     select: entry.id,
     actions: entry.id,
   }));
 
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
+  function toggleSelect(sku: Sku) {
+    setSelectedById((prev) => {
+      const next = new Map(prev);
+      if (next.has(sku.id)) {
+        next.delete(sku.id);
       } else {
-        next.add(id);
+        next.set(sku.id, sku);
       }
       return next;
     });
   }
 
-  function toggleSelectAllFiltered() {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allFilteredSelected) {
-        for (const sku of filteredSkus) {
+  function toggleSelectPage() {
+    setSelectedById((prev) => {
+      const next = new Map(prev);
+      if (allPageSelected) {
+        for (const sku of skus) {
           next.delete(sku.id);
         }
       } else {
-        for (const sku of filteredSkus) {
-          next.add(sku.id);
+        for (const sku of skus) {
+          next.set(sku.id, sku);
         }
       }
       return next;
     });
   }
 
-  function handlePrintLabels() {
-    const targetSkus =
-      selectedIds.size > 0
-        ? filteredSkus.filter((sku) => selectedIds.has(sku.id))
-        : filteredSkus;
-    printSkuLabels(targetSkus);
+  async function handlePrintLabels() {
+    try {
+      const targetSkus =
+        selectedById.size > 0
+          ? Array.from(selectedById.values())
+          : await listSkus({
+              category: categoryFilter ?? undefined,
+              q: searchFilter,
+            });
+      printSkuLabels(targetSkus);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load catalogue.");
+    }
+  }
+
+  async function handleExport() {
+    try {
+      const matching = await listSkus({
+        category: categoryFilter ?? undefined,
+        q: searchFilter,
+      });
+      let costs = unitCostBySku;
+      if (canViewCost) {
+        try {
+          const costPage = await listSkuUnitCosts({
+            category: categoryFilter ?? undefined,
+            q: searchFilter,
+          });
+          costs = new Map();
+          for (const entry of costPage.items) {
+            if (entry.unit_cost_zar) {
+              costs.set(entry.sku_id, entry.unit_cost_zar);
+            }
+          }
+        } catch {
+          costs = new Map();
+        }
+      }
+      downloadCsv(
+        "firstout-catalogue.csv",
+        [
+          "Our ref",
+          "Name",
+          "Category",
+          "Cartons",
+          "Preferred supplier",
+          "Lead time",
+          "Reorder min",
+          ...(canViewCost ? ["Cost (ZAR)"] : []),
+          "Stockist inc VAT",
+          "Wholesale inc VAT",
+          "Decorator inc VAT",
+          "Retail inc VAT",
+          "Our barcode",
+        ],
+        matching.map((sku) => [
+          sku.our_ref,
+          sku.name,
+          sku.category?.trim() || "",
+          String(skuCartonCount(sku)),
+          sku.preferred_supplier_name?.trim() || "",
+          formatLeadTime(sku.lead_time_days),
+          sku.reorder_min !== null ? String(sku.reorder_min) : "",
+          ...(canViewCost
+            ? [costUnavailable && costs.size === 0 ? "Unavailable" : (costs.get(sku.id) ?? "")]
+            : []),
+          sku.stockist_inc_vat ?? "",
+          sku.wholesale_inc_vat ?? "",
+          sku.decorator_inc_vat ?? "",
+          sku.retail_inc_vat ?? "",
+          sku.our_barcode,
+        ]),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load catalogue.");
+    }
   }
 
   return (
@@ -267,37 +389,9 @@ function CataloguePageContent() {
           <Button
             kind="secondary"
             renderIcon={DocumentExport}
-            disabled={filteredSkus.length === 0}
+            disabled={total === 0}
             onClick={() => {
-              downloadCsv(
-                "firstout-catalogue.csv",
-                [
-                  "Our ref",
-                  "Name",
-                  "Category",
-                  "Cartons",
-                  "Preferred supplier",
-                  "Lead time",
-                  "Reorder min",
-                  ...(canViewCost ? ["Cost (ZAR)"] : []),
-                  "Retail inc VAT",
-                  "Trade inc VAT",
-                  "Our barcode",
-                ],
-                filteredSkus.map((sku) => [
-                  sku.our_ref,
-                  sku.name,
-                  sku.category?.trim() || "",
-                  String(skuCartonCount(sku)),
-                  sku.preferred_supplier_name?.trim() || "",
-                  formatLeadTime(sku.lead_time_days),
-                  sku.reorder_min !== null ? String(sku.reorder_min) : "",
-                  ...(canViewCost ? [unitCostBySku.get(sku.id) ?? ""] : []),
-                  sku.retail_inc_vat ?? "",
-                  sku.wholesale_inc_vat ?? "",
-                  sku.our_barcode,
-                ]),
-              );
+              void handleExport();
             }}
           >
             Export CSV
@@ -311,7 +405,7 @@ function CataloguePageContent() {
               >
                 Import
               </Button>
-              <Button data-tour="catalogue-new" onClick={() => router.push("/catalogue/new")}>New SKU</Button>
+              <Button onClick={() => router.push("/catalogue/new")}>New SKU</Button>
             </>
           ) : null}
         </div>
@@ -327,9 +421,19 @@ function CataloguePageContent() {
         />
       ) : null}
 
-      {loading ? (
+      {costUnavailable ? (
+        <InlineNotification
+          kind="warning"
+          title="Cost unavailable"
+          subtitle="Unit costs could not be loaded. The catalogue is shown without costs."
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
+
+      {loading && skus.length === 0 ? (
         <p className="cds--type-body-01">Loading catalogue…</p>
-      ) : skus.length === 0 ? (
+      ) : error && skus.length === 0 ? null : !loading && total === 0 && !searchFilter && !categoryFilter ? (
         <InlineNotification
           kind="info"
           title="No SKUs"
@@ -346,8 +450,8 @@ function CataloguePageContent() {
                 labelText="Filter SKUs"
                 hideLabel
                 placeholder="Filter SKUs…"
-                value={searchFilter}
-                onChange={(event) => setSearchFilter(event.target.value)}
+                value={searchInput}
+                onChange={(event) => onSearchChange(event.target.value)}
                 size="md"
               />
               <div className="firstout-catalogue-toolbar__divider" aria-hidden />
@@ -355,7 +459,11 @@ function CataloguePageContent() {
                 <Button
                   kind={categoryFilter === null ? "primary" : "ghost"}
                   size="sm"
-                  onClick={() => setCategoryFilter(null)}
+                  onClick={() => {
+                    setCategoryFilter(null);
+                    setPage(1);
+                    setLoading(true);
+                  }}
                 >
                   All
                 </Button>
@@ -364,7 +472,11 @@ function CataloguePageContent() {
                     key={category}
                     kind={categoryFilter === category ? "primary" : "ghost"}
                     size="sm"
-                    onClick={() => setCategoryFilter(category)}
+                    onClick={() => {
+                      setCategoryFilter(category);
+                      setPage(1);
+                      setLoading(true);
+                    }}
                   >
                     {category}
                   </Button>
@@ -389,12 +501,11 @@ function CataloguePageContent() {
                               id="catalogue-select-all"
                               labelText="Select all"
                               hideLabel
-                              checked={allFilteredSelected}
+                              checked={allPageSelected}
                               indeterminate={
-                                !allFilteredSelected &&
-                                filteredSkus.some((sku) => selectedIds.has(sku.id))
+                                !allPageSelected && skus.some((sku) => selectedById.has(sku.id))
                               }
-                              onChange={() => toggleSelectAllFiltered()}
+                              onChange={() => toggleSelectPage()}
                             />
                           ) : (
                             header.header
@@ -437,8 +548,8 @@ function CataloguePageContent() {
                                       id={`catalogue-select-${entry.id}`}
                                       labelText={`Select ${entry.our_ref}`}
                                       hideLabel
-                                      checked={selectedIds.has(entry.id)}
-                                      onChange={() => toggleSelect(entry.id)}
+                                      checked={selectedById.has(entry.id)}
+                                      onChange={() => toggleSelect(entry)}
                                     />
                                   </TableCell>
                                 );
@@ -454,7 +565,7 @@ function CataloguePageContent() {
                                       }}
                                     >
                                       {entry.photo_storage_key ? (
-                                        <img
+                                        <StaffImage
                                           src={skuPhotoUrl(entry.id)}
                                           alt={entry.name}
                                           width={48}
@@ -487,8 +598,10 @@ function CataloguePageContent() {
                               }
                               if (
                                 cell.info.header === "cost_zar" ||
-                                cell.info.header === "retail_inc_vat" ||
-                                cell.info.header === "wholesale_inc_vat"
+                                cell.info.header === "stockist_inc_vat" ||
+                                cell.info.header === "wholesale_inc_vat" ||
+                                cell.info.header === "decorator_inc_vat" ||
+                                cell.info.header === "retail_inc_vat"
                               ) {
                                 return (
                                   <TableCell key={cell.id} style={{ textAlign: "right" }}>
@@ -556,10 +669,11 @@ function CataloguePageContent() {
             page={page}
             pageSize={pageSize}
             pageSizes={[10, 25, 50]}
-            totalItems={filteredSkus.length}
+            totalItems={total}
             onChange={({ page: nextPage, pageSize: nextSize }) => {
               setPage(nextPage);
               setPageSize(nextSize);
+              setLoading(true);
             }}
           />
         </div>

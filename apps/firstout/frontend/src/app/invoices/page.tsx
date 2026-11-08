@@ -3,12 +3,11 @@
 import {
   Button,
   DataTable,
+  Tag,
   InlineNotification,
   Modal,
   NumberInput,
   Pagination,
-  Select,
-  SelectItem,
   Stack,
   Table,
   TableBody,
@@ -22,8 +21,10 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 
+import { CustomerPicker } from "@/components/customer-picker";
 import {
   canMutateBooks,
+  canViewCostAudit,
   computeInvoicePreview,
   createInvoice,
   downloadInvoicePdf,
@@ -32,12 +33,15 @@ import {
   getCustomer,
   listCustomers,
   listInvoices,
+  parsePriceInput,
   sumInvoiceLinesExVat,
   type CreateInvoiceLinePayload,
   type CustomerCrm,
   type InvoiceListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { suspectUnitPriceWarning } from "@/lib/quote-sku-price";
+import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
 
 const TABLE_HEADERS = [
   { key: "invoice_number", header: "Number" },
@@ -45,8 +49,10 @@ const TABLE_HEADERS = [
   { key: "issue_date", header: "Issue date" },
   { key: "subtotal_ex_vat", header: "Ex VAT" },
   { key: "vat_amount", header: "VAT" },
-  { key: "total_inc_vat", header: "Inc VAT" },
-  { key: "balance", header: "Balance" },
+  { key: "total_inc_vat", header: "Total" },
+  { key: "amount_paid", header: "Paid" },
+  { key: "balance", header: "Balance owing" },
+  { key: "payment_status", header: "Status" },
   { key: "actions", header: "" },
 ] as const;
 
@@ -58,7 +64,9 @@ type InvoiceRow = {
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
+  amount_paid: string;
   balance: string;
+  payment_status: string;
   actions: string;
 };
 
@@ -91,6 +99,7 @@ function InvoicesPageContent() {
   const searchParams = useSearchParams();
   const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const { user } = useAuth();
+  const canViewCost = canViewCostAudit(user);
   const canMutate = canMutateBooks(user);
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
@@ -253,7 +262,9 @@ function InvoicesPageContent() {
     subtotal_ex_vat: formatZarAmount(entry.subtotal_ex_vat),
     vat_amount: formatZarAmount(entry.vat_amount),
     total_inc_vat: formatZarAmount(entry.total_inc_vat),
+    amount_paid: formatZarAmount(entry.amount_paid),
     balance: formatZarAmount(entry.balance),
+    payment_status: settlementStatusLabel(entry.payment_status),
     actions: entry.id,
   }));
 
@@ -266,7 +277,6 @@ function InvoicesPageContent() {
         </div>
         {canMutate ? (
           <Button
-            data-tour="invoice-new"
             onClick={() => {
               resetCreateForm();
               setCreateOpen(true);
@@ -346,6 +356,20 @@ function InvoicesPageContent() {
                       style={{ cursor: "pointer" }}
                     >
                       {row.cells.map((cell) => {
+                        if (cell.info.header === "payment_status") {
+                          const invoice = invoices.find((entry) => entry.id === row.id);
+                          return (
+                            <TableCell key={cell.id}>
+                              {invoice ? (
+                                <Tag type={settlementTagType(invoice.payment_status)} size="sm">
+                                  {settlementStatusLabel(invoice.payment_status)}
+                                </Tag>
+                              ) : (
+                                cell.value
+                              )}
+                            </TableCell>
+                          );
+                        }
                         if (cell.info.header === "actions") {
                           const invoice = invoices.find((entry) => entry.id === row.id);
                           return (
@@ -411,17 +435,12 @@ function InvoicesPageContent() {
         size="lg"
       >
         <Stack gap={5}>
-          <Select
+          <CustomerPicker
             id="invoice-customer"
-            labelText="Customer"
-            value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
-          >
-            <SelectItem value="" text="Select a customer" />
-            {customers.map((customer) => (
-              <SelectItem key={customer.id} value={customer.id} text={customer.name} />
-            ))}
-          </Select>
+            customers={customers}
+            selectedId={customerId}
+            onChange={setCustomerId}
+          />
           <TextInput
             id="invoice-issue-date"
             labelText="Issue date"
@@ -433,7 +452,16 @@ function InvoicesPageContent() {
           <div>
             <p className="cds--label">Lines</p>
             <Stack gap={4}>
-              {lines.map((line, index) => (
+              {lines.map((line, index) => {
+                const suspect = suspectUnitPriceWarning({
+                  unitExVat: parsePriceInput(line.unit_ex_vat),
+                  averageUnitCostZar: null,
+                  catalogueBelowCost: false,
+                  unitMatchesCatalogue: false,
+                  canViewCost,
+                  pricesIncludeVat: false,
+                });
+                return (
                 <div
                   key={`line-${index}`}
                   style={{
@@ -474,8 +502,19 @@ function InvoicesPageContent() {
                   ) : (
                     <span />
                   )}
+                  {suspect ? (
+                    <InlineNotification
+                      kind="warning"
+                      lowContrast
+                      hideCloseButton
+                      title="Check this price"
+                      subtitle={suspect}
+                      style={{ gridColumn: "1 / -1", minWidth: 0, maxWidth: "100%" }}
+                    />
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
             </Stack>
             <Button kind="ghost" size="sm" onClick={addLine} style={{ marginTop: "0.5rem" }}>
               Add line

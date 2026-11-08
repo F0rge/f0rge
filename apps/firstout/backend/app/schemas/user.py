@@ -17,18 +17,16 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
+    model_config = ConfigDict(extra="forbid")
     display_name: Optional[str] = None
     role: Optional[str] = Field(default=None, min_length=1, max_length=32)
     is_disabled: Optional[bool] = None
-    password: Optional[str] = Field(default=None, min_length=8)
     default_location_id: Optional[uuid.UUID] = None
 
 
 class ProfileUpdate(BaseModel):
-    email: Optional[EmailStr] = None
+    model_config = ConfigDict(extra="forbid")
     display_name: Optional[str] = None
-    password: Optional[str] = Field(default=None, min_length=8)
     default_location_id: Optional[uuid.UUID] = None
 
 

@@ -18,10 +18,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class OpsCommerceRefund(UUIDPkMixin, TimestampMixin, Base):
+class OpsCommerceRefund(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """A durable Storefront refund command and its verified financial outcome."""
 
     __tablename__ = "ops_commerce_refunds"
@@ -89,7 +90,7 @@ class OpsCommerceRefund(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class OpsCommerceRefundEvent(UUIDPkMixin, TimestampMixin, Base):
+class OpsCommerceRefundEvent(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """Append-only, signature-verified Peach refund observation, including out-of-band events."""
 
     __tablename__ = "ops_commerce_refund_events"

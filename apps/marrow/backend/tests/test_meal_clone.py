@@ -16,6 +16,7 @@ import uuid
 
 import pytest
 import pytest_asyncio
+from botocore.exceptions import ClientError
 from httpx import AsyncClient
 from PIL import Image
 from sqlalchemy import select
@@ -29,6 +30,7 @@ from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
+from app.schemas.photo import PhotoResponse
 from app.services.diet_flags import compute_photo_signal
 from app.services.meals import MealService
 from app.services.photo_storage import delete_photo, save_photo
@@ -97,7 +99,7 @@ async def _ensure_entry(
 async def _add_meal(
     db: AsyncSession,
     entry: Entry,
-    filename: str,
+    filename: str | None,
     *,
     dish_name: str | None = "Spinach omelette",
     status: str = "confirmed",
@@ -106,15 +108,21 @@ async def _add_meal(
     write_file: bool = True,
     color: str = "blue",
 ) -> Photo:
-    """Create a Photo + PhotoAnalysis + one PhotoIngredient, writing the file to disk."""
+    """Create a Photo + PhotoAnalysis + one PhotoIngredient.
+
+    ``filename=None`` is a meal row with no photo. ``write_file=False`` keeps a
+    filename on the row but does not store bytes.
+    """
     if write_file:
+        if filename is None:
+            raise AssertionError("write_file requires a filename")
         save_photo(_jpg_bytes(color), filename, user_id=str(entry.user_id))
     photo = Photo(
         user_id=entry.user_id,
         entry_id=entry.id,
         filename=filename,
         label="Lunch",
-        original_filename="source.jpg",
+        original_filename="source.jpg" if filename else None,
         created_at=datetime.datetime.utcnow(),
     )
     db.add(photo)
@@ -426,11 +434,166 @@ async def test_clone_unconfirmed_source_raises_validation(async_db: AsyncSession
         await MealService(async_db).clone(TARGET_DAY, src.id)
 
 
-async def test_clone_source_file_missing_raises_not_found(async_db: AsyncSession, storage) -> None:
+def _s3_error(code: str, status: int, operation: str) -> ClientError:
+    return ClientError(
+        {
+            "Error": {"Code": code, "Message": code},
+            "ResponseMetadata": {"HTTPStatusCode": status},
+        },
+        operation,
+    )
+
+
+class _MemoryBucket:
+    """Minimal S3 stand-in. Missing keys 404; ``get_error`` forces an unreadable GET."""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+        self.puts: list[str] = []
+        self.heads: list[str] = []
+        self.gets: list[str] = []
+        self.get_error: ClientError | None = None
+
+    def head_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+        self.heads.append(Key)
+        if Key not in self.objects:
+            raise _s3_error("404", 404, "HeadObject")
+        return {}
+
+    def get_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+        self.gets.append(Key)
+        if self.get_error is not None:
+            raise self.get_error
+        if Key not in self.objects:
+            raise _s3_error("NoSuchKey", 404, "GetObject")
+        return {"Body": io.BytesIO(self.objects[Key])}
+
+    def put_object(self, Bucket: str, Key: str, Body: bytes) -> dict:  # noqa: N803
+        self.puts.append(Key)
+        self.objects[Key] = Body if isinstance(Body, bytes) else bytes(Body)
+        return {}
+
+    def get_paginator(self, name: str):  # noqa: ARG002
+        objects = self.objects
+
+        class _Paginator:
+            def paginate(self, **kwargs: object) -> list[dict]:
+                prefix = str(kwargs.get("Prefix", ""))
+                contents = [{"Key": key} for key in objects if key.startswith(prefix)]
+                return [{"Contents": contents}]
+
+        return _Paginator()
+
+
+def _use_bucket(monkeypatch: pytest.MonkeyPatch, stub: _MemoryBucket) -> None:
+    from app.services import object_storage
+
+    monkeypatch.setattr(settings, "bucket_name", "test-bucket")
+    monkeypatch.setattr(settings, "aws_access_key_id", "test-key")
+    monkeypatch.setattr(settings, "aws_secret_access_key", "test-secret")
+    monkeypatch.setattr(settings, "aws_endpoint_url_s3", "http://storage.test")
+    monkeypatch.setattr(object_storage, "_s3_client", lambda: stub)
+
+
+def _assert_cloned_without_image(cloned: PhotoResponse, src: Photo) -> None:
+    assert cloned.id != src.id
+    assert cloned.filename is None
+    assert cloned.has_image is False
+    assert cloned.icon_key is None
+    assert os.listdir(settings.photo_dir) == []
+
+
+async def _assert_name_ingredients_and_flags(db: AsyncSession, cloned_id: int) -> None:
+    target = await _get_entry(db, TARGET_DAY)
+    assert target is not None
+    signal = compute_photo_signal(target)
+    assert "high-histamine" in signal.flags
+    assert "dairy" in signal.flags
+    copy = next(photo for photo in target.photos if photo.id == cloned_id)
+    assert copy.filename is None
+    assert copy.analysis is not None
+    assert copy.analysis.dish_name == "Spinach omelette"
+    assert any(ing.name == "Feta" for ing in copy.analysis.ingredients)
+
+
+async def test_clone_without_photo_copies_name_ingredients_and_flags(
+    async_db: AsyncSession, storage
+) -> None:
+    """MCP-style meal: photo row, has_photo false, no icon. Re-log must succeed."""
+    src_entry = await _ensure_entry(async_db, SRC_DAY)
+    src = await _add_meal(async_db, src_entry, None, write_file=False)
+
+    cloned = await MealService(async_db).clone(TARGET_DAY, src.id)
+
+    _assert_cloned_without_image(cloned, src)
+    await _assert_name_ingredients_and_flags(async_db, cloned.id)
+
+
+async def test_clone_photo_row_without_file_skips_image(async_db: AsyncSession, storage) -> None:
+    """Filename is stored, but the file was never written. Do not require an icon."""
     src_entry = await _ensure_entry(async_db, SRC_DAY)
     src = await _add_meal(async_db, src_entry, f"{SRC_DAY}_photo-1.jpg", write_file=False)
-    with pytest.raises(NotFoundError):
-        await MealService(async_db).clone(TARGET_DAY, src.id)
+
+    cloned = await MealService(async_db).clone(TARGET_DAY, src.id)
+
+    _assert_cloned_without_image(cloned, src)
+    await _assert_name_ingredients_and_flags(async_db, cloned.id)
+    assert src.filename == f"{SRC_DAY}_photo-1.jpg"
+
+
+async def test_clone_missing_bucket_bytes_skips_image(
+    async_db: AsyncSession, storage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Photo row names an object the bucket does not have. Copy the meal, not the error."""
+    stub = _MemoryBucket()
+    _use_bucket(monkeypatch, stub)
+    src_entry = await _ensure_entry(async_db, SRC_DAY)
+    filename = f"{SRC_DAY}_photo-1.jpg"
+    src = await _add_meal(async_db, src_entry, filename, write_file=False)
+
+    cloned = await MealService(async_db).clone(TARGET_DAY, src.id)
+
+    _assert_cloned_without_image(cloned, src)
+    await _assert_name_ingredients_and_flags(async_db, cloned.id)
+    assert stub.heads
+    assert stub.puts == []
+
+
+async def test_clone_unreadable_bucket_bytes_skips_image(
+    async_db: AsyncSession, storage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stub = _MemoryBucket()
+    stub.get_error = _s3_error("InternalError", 500, "GetObject")
+    _use_bucket(monkeypatch, stub)
+    src_entry = await _ensure_entry(async_db, SRC_DAY)
+    filename = f"{SRC_DAY}_photo-1.jpg"
+    stub.objects[f"{src_entry.user_id}/{filename}"] = _jpg_bytes("red")
+    src = await _add_meal(async_db, src_entry, filename, write_file=False)
+
+    cloned = await MealService(async_db).clone(TARGET_DAY, src.id)
+
+    _assert_cloned_without_image(cloned, src)
+    assert stub.gets
+    assert stub.puts == []
+
+
+async def test_clone_copies_photo_when_bucket_has_bytes(
+    async_db: AsyncSession, storage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A readable bucket object is still copied. The no-bucket MCP guard is unchanged."""
+    stub = _MemoryBucket()
+    _use_bucket(monkeypatch, stub)
+    src_entry = await _ensure_entry(async_db, SRC_DAY)
+    filename = f"{SRC_DAY}_photo-1.jpg"
+    jpeg = _jpg_bytes("red")
+    stub.objects[f"{src_entry.user_id}/{filename}"] = jpeg
+    src = await _add_meal(async_db, src_entry, filename, write_file=False)
+
+    cloned = await MealService(async_db).clone(TARGET_DAY, src.id)
+
+    assert cloned.has_image is True
+    assert cloned.filename is not None
+    assert stub.objects[f"{src_entry.user_id}/{cloned.filename}"] == jpeg
 
 
 async def test_clone_never_invokes_vision_client(
@@ -499,6 +662,33 @@ async def test_clone_endpoint_strips_meal_time_tz(
 
     assert resp.status_code == 201
     assert resp.json()["meal_time"] == "2026-06-10T12:30:00"
+
+
+async def test_clone_endpoint_without_photo_returns_201(
+    async_db: AsyncSession, storage, authed_client: AsyncClient
+) -> None:
+    user_id = await authed_user_id(authed_client)
+    src_entry = await _ensure_entry(async_db, SRC_DAY, user_id=user_id)
+    src = await _add_meal(async_db, src_entry, None, write_file=False)
+
+    resp = await authed_client.post(
+        f"/api/v1/entries/{TARGET_DAY}/meals/clone", json={"source_photo_id": src.id}
+    )
+
+    assert resp.status_code == 201
+    assert "Source meal has no image or icon" not in resp.text
+    body = resp.json()
+    assert body["has_image"] is False
+    assert body["filename"] is None
+    assert body["icon_key"] is None
+
+    day = await authed_client.get(f"/api/v1/entries/{TARGET_DAY.isoformat()}")
+    assert day.status_code == 200
+    cloned = next(photo for photo in day.json()["photos"] if photo["id"] == body["id"])
+    assert cloned["has_image"] is False
+    assert cloned["filename"] is None
+    assert "high-histamine" in cloned["derived_diet_tags"]
+    assert "dairy" in cloned["derived_diet_tags"]
 
 
 async def test_clone_endpoint_requires_auth(

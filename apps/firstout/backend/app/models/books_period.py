@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -18,7 +19,7 @@ class BooksPeriodStatus(str, enum.Enum):
     LOCKED = "locked"
 
 
-class BooksPeriod(UUIDPkMixin, TimestampMixin, Base):
+class BooksPeriod(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "books_periods"
 
     period_from: Mapped[datetime.date] = mapped_column(Date, nullable=False)

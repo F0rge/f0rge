@@ -14,6 +14,8 @@ patch_app() {
   local dockerfile="$2"
   local watch_paths="$3"
   echo "Patching $uuid …"
+  # Coolify v4 blocks the manual webhook when auto-deploy is off. This repo
+  # has no GitHub push webhooks, so leaving it on does not double-deploy.
   curl -sf -X PATCH "${API}/applications/${uuid}" \
     -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
     -H "Content-Type: application/json" \
@@ -28,7 +30,7 @@ patch_app() {
         base_directory: "/",
         dockerfile_location: $dockerfile,
         watch_paths: $watch,
-        is_auto_deploy_enabled: false
+        is_auto_deploy_enabled: true
       }')"
   echo "OK: $uuid"
 }
@@ -46,4 +48,4 @@ patch_app "f080ossg88ows8k8csw40c4s" \
 echo "Done. Verify Coolify env vars:"
 echo "  backend CORS_ORIGINS=https://tags.leo-figueiredo.com"
 echo "  frontend NEXT_PUBLIC_API_URL=https://tags-api.leo-figueiredo.com (build-time)"
-echo "Set GitHub secrets COOLIFY_BASE_URL, COOLIFY_WEBHOOK_DK_BACKEND, COOLIFY_WEBHOOK_DK_FRONTEND"
+echo "Set GitHub secrets COOLIFY_BASE_URL, COOLIFY_WEBHOOK_DASKASAS_BACKEND, COOLIFY_WEBHOOK_DASKASAS_FRONTEND"

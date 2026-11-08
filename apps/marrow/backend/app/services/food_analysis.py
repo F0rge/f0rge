@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -176,10 +177,25 @@ class FoodAnalysisService:
     async def retry_analysis(
         self, photo_id: int, background_tasks: BackgroundTasks
     ) -> PhotoAnalysis:
+        """Reset the meal analysis in place and enqueue classification again.
+
+        The row keeps its id. In-flight classify runs still address this id;
+        deleting it made their complete/fail callbacks 404 and fail the DAG.
+        """
         existing = await self.get_analysis(photo_id)
-        if existing:
-            await self.delete_analysis(existing.id)
-        new_analysis = await self.create_pending_analysis(photo_id)
+        if existing is not None:
+            existing.ingredients.clear()
+            existing.status = "pending"
+            existing.error_message = None
+            existing.dish_name = None
+            existing.cuisine = None
+            existing.dish_confidence = None
+            existing.raw_response = None
+            existing.model_id = settings.openrouter_model
+            existing.updated_at = datetime.datetime.utcnow()
+            analysis = await self.analysis_crud.commit_refresh(existing)
+        else:
+            analysis = await self.create_pending_analysis(photo_id)
         photo = await PhotoCRUD(self.db).get_by_id(photo_id)
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
@@ -191,7 +207,7 @@ class FoodAnalysisService:
             background_tasks,
             orchestrator_run=self.orchestrator.run,
         )
-        return new_analysis
+        return analysis
 
     async def add_ingredient_to_photo(
         self, photo_id: int, data: IngredientCreate

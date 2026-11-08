@@ -25,11 +25,15 @@ on:
     secrets:
       COOLIFY_BASE_URL:
         required: false
-      COOLIFY_WEBHOOK_DK_BACKEND:
+      COOLIFY_WEBHOOK_DASKASAS_BACKEND:
         required: false
-      COOLIFY_WEBHOOK_DK_FRONTEND:
+      COOLIFY_WEBHOOK_DASKASAS_FRONTEND:
         required: false
       COOLIFY_WEBHOOK_BUYCYCLE:
+        required: false
+      COOLIFY_WEBHOOK_ENVMON_BACKEND:
+        required: false
+      COOLIFY_WEBHOOK_ENVMON_FRONTEND:
         required: false
       SMOKE_EMAIL:
         required: false
@@ -50,6 +54,7 @@ jobs:
       deploy_mcp: ${{ steps.plan.outputs.deploy_mcp }}
       deploy_frontend: ${{ steps.plan.outputs.deploy_frontend }}
       coolify_matrix: ${{ steps.plan.outputs.coolify_matrix }}
+      coolify_diff_base: ${{ steps.plan.outputs.coolify_diff_base }}
       api_health_url: ${{ steps.plan.outputs.api_health_url }}
       frontend_health_url: ${{ steps.plan.outputs.frontend_health_url }}
       mcp_health_url: ${{ steps.plan.outputs.mcp_health_url }}
@@ -116,15 +121,25 @@ jobs:
       group: coolify-${{ matrix.component.app_uuid }}
       cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
+        with:
+          # Parent fallback needs the deployed commit's parent (depth >= 2).
+          # Full history so an older nx-set-shas base is present too.
+          fetch-depth: 0
+          ref: ${{ inputs.sha }}
+
       - name: Trigger Coolify deploy webhook
         id: coolify
         env:
           COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
-          WEBHOOK_SECRET_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
-          WEBHOOK_SECRET_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
+          WEBHOOK_SECRET_DASKASAS_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_BACKEND }}
+          WEBHOOK_SECRET_DASKASAS_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_FRONTEND }}
           WEBHOOK_SECRET_BUYCYCLE: ${{ secrets.COOLIFY_WEBHOOK_BUYCYCLE }}
+          WEBHOOK_SECRET_ENVMON_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_BACKEND }}
+          WEBHOOK_SECRET_ENVMON_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_FRONTEND }}
           SECRET_ENV: ${{ matrix.component.webhook_secret_env }}
           SHA: ${{ inputs.sha }}
+          DIFF_BASE: ${{ needs.plan.outputs.coolify_diff_base }}
           BRANCH: main
           APP_NAME: ${{ matrix.component.name }}
           APP_UUID: ${{ matrix.component.app_uuid }}
@@ -132,9 +147,11 @@ jobs:
           set -euo pipefail
           echo "skipped=false" >> "$GITHUB_OUTPUT"
           case "$SECRET_ENV" in
-            COOLIFY_WEBHOOK_DK_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_BACKEND" ;;
-            COOLIFY_WEBHOOK_DK_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_FRONTEND" ;;
+            COOLIFY_WEBHOOK_DASKASAS_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_DASKASAS_BACKEND" ;;
+            COOLIFY_WEBHOOK_DASKASAS_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_DASKASAS_FRONTEND" ;;
             COOLIFY_WEBHOOK_BUYCYCLE) WEBHOOK_SECRET="$WEBHOOK_SECRET_BUYCYCLE" ;;
+            COOLIFY_WEBHOOK_ENVMON_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_ENVMON_BACKEND" ;;
+            COOLIFY_WEBHOOK_ENVMON_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_ENVMON_FRONTEND" ;;
             *) echo "Unknown webhook secret env: $SECRET_ENV"; exit 1 ;;
           esac
           # Secrets missing → Coolify path not configured; skip rather than fail the release.
@@ -151,10 +168,18 @@ jobs:
           esac
           # `commits` is required: Coolify reads commits.*.added before checking the
           # signature, and foreaches the result — omitting the key 500s the endpoint.
-          PAYLOAD=$(jq -nc \
-            --arg ref "refs/heads/${BRANCH}" \
-            --arg sha "$SHA" \
-            '{ref: $ref, after: $sha, commits: [], repository: {full_name: "F0rge/f0rge", name: "f0rge"}}')
+          # One entry covers the same base..sha range plan_deploy used, so watch
+          # paths see the real changed files instead of [].
+          if [ -z "${DIFF_BASE:-}" ]; then
+            echo "::error::Coolify diff base is empty; plan_deploy did not emit coolify_diff_base"
+            exit 1
+          fi
+          PAYLOAD=$(python3 .github/deploy/coolify_payload.py --sha "$SHA" --base "$DIFF_BASE" --branch "$BRANCH")
+          # Each matrix row signs with that component's secret only. Coolify still
+          # checks every app on this repo+branch, so siblings answer
+          # "Invalid signature." That does not fail the job. This app must queue
+          # a deployment, or return the exact watch-path ignore (skipped).
+          # "Deployments disabled." on this app fails the job.
           SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
           RESPONSE=$(curl -sS --fail-with-body -w '\nHTTP %{http_code}' \
             -X POST "${COOLIFY_BASE_URL%/}/webhooks/source/github/events/manual" \
@@ -168,32 +193,36 @@ jobs:
           }
           echo "$RESPONSE"
           BODY=$(printf '%s\n' "$RESPONSE" | sed '$d')
+          HTTP_STATUS=$(printf '%s\n' "$RESPONSE" | tail -n1 | awk '{print $2}')
 
-          # App reports Deployments disabled → not deploying through Coolify right now.
-          if echo "$BODY" | jq -e --arg uuid "$APP_UUID" '
-            [.. | objects
-              | select((.uuid? // .id? // .application_id? // .application_uuid? // "") == $uuid)
-              | .message? // ""
-            ] | any(test("Deployments disabled"; "i"))
-          ' >/dev/null 2>&1; then
-            echo "::notice::Skipping Coolify deploy for $APP_NAME — deployments disabled on Coolify"
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Coolify answers 200 even when it queues nothing (per-app failures land in the
-          # body), so a 2xx is not proof of a deploy — assert this app was actually queued.
-          if ! echo "$BODY" | jq -e --arg uuid "$APP_UUID" '
-            [.. | objects
-              | select((.uuid? // .id? // .application_id? // .application_uuid? // "") == $uuid)
-              | .status?
-            ] | any(. == "queued")
-          ' >/dev/null 2>&1 \
-            && ! echo "$BODY" | jq -e '.status == "queued"' >/dev/null 2>&1; then
-            echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
+          # Coolify answers 2xx even when it queues nothing. classify_coolify_response
+          # maps a queued deploy to success, the exact watch-path ignore sentence
+          # to skipped, and every other non-queue reply to failed. That includes
+          # this app's exact "Deployments disabled." (CLI exits 1). curl
+          # --fail-with-body already failed the step on non-2xx.
+          if ! CLASS=$(printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --classify --http-status "$HTTP_STATUS" --app-uuid "$APP_UUID"); then
+            if printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --deployments-disabled --app-uuid "$APP_UUID"; then
+              echo "::error::Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify."
+              echo "Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
+            fi
             exit 1
           fi
-          echo "Triggered Coolify deploy for $APP_NAME"
+          case "$CLASS" in
+            success)
+              echo "Triggered Coolify deploy for $APP_NAME"
+              ;;
+            skipped)
+              echo "SKIPPED ${APP_NAME}: Coolify ignored (watch paths)" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "skipped=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            *)
+              echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
+              exit 1
+              ;;
+          esac
 
       - name: Smoke health
         # Internal-only targets (e.g. buycycle on the Pi) have no health_url: runners can't reach them,

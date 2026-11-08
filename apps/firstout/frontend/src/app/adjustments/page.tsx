@@ -255,7 +255,6 @@ export default function AdjustmentsPage() {
                 onChange={(event) => setNotes(event.target.value)}
               />
               <Button
-                data-tour="adjustment-start"
                 disabled={submitting || !locationId || !reason}
                 onClick={() => void handleStart()}
               >

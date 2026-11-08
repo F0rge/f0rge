@@ -4,7 +4,11 @@ globs: apps/marrow/backend/scripts/**, apps/marrow/backend/data/**
 alwaysApply: false
 ---
 
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Data Engineering Standards
+
+This file is Marrow's legacy dietary pipeline. Idempotence, source traceability, and secret hygiene stay. `docs/architecture/ai_seams.md` is cited below and was not in the tree at `f155a2ba`; do not invent that document.
 
 Build and maintain dietary reference data pipelines for marrow — ingredient-to-dietary-tag lookup tables powering food analysis.
 
@@ -79,7 +83,7 @@ Source JSON files live in `apps/marrow/backend/data/`. `apps/marrow/backend/data
 2. **Source traceability** — always record origin and timestamp
 3. **Normalize aggressively** — handle messy real-world ingredient names
 4. **Postgres-native** — dietary data lives in Postgres via Alembic migrations
-5. **Python 3.10** — no newer syntax
+5. **Python 3.11**
 
 ## Commands
 
@@ -146,7 +150,7 @@ Correlate dietary intake with symptom scores; time-series trigger identification
 2. **Confidence scores everywhere** — never present uncertain results as definitive
 3. **Fail open** — flag for human review rather than guess
 4. **Reproducibility** — all analysis reproducible from stored data
-5. **Python 3.10** — no syntax newer than 3.10
+5. **Python 3.11**
 
 ## Commands
 

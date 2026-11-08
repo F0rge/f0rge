@@ -5,7 +5,9 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.account import AccountCRUD
 from app.crud.bank_import import BankImportCRUD, BankImportLineCRUD
@@ -13,20 +15,32 @@ from app.crud.bank_rule import BankRuleCRUD
 from app.crud.journal import JournalCRUD
 from app.crud.payment import PaymentCRUD
 from app.models.account import Account
-from app.models.bank_import import BankImport, BankImportLine
+from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.bank_rule import BankRule
+from app.models.bill import Bill
+from app.models.tax_invoice import TaxInvoice
 from app.models.journal import JournalDocumentType, JournalStatus
 from app.schemas.bank_import import (
+    AutoMatchConfirmRequest,
+    AutoMatchConfirmResult,
+    AutoMatchPreview,
+    AutoMatchPreviewItem,
     BankApplyRuleRequest,
+    BankDocumentSuggestion,
     BankImportLineResponse,
     BankImportMatchRequest,
     BankImportResponse,
     BankImportSummary,
+    BankLineAllocationResponse,
+    BankMatchDocumentRequest,
     BankRecodeRequest,
+    BankSplitRequest,
     BankUnmatchedCount,
 )
 from app.schemas.journal import JournalCreate, JournalLineCreate
-from app.schemas.payment import PaymentResponse
+from app.schemas.payment import PaymentCreate, PaymentResponse
+from app.services.bank_match_rank import OpenDocument, rank_documents, unique_auto_match
+from app.services.settlement import cents
 from app.services.bank_csv import parse_bank_csv
 from app.services.chart_of_accounts import CODE_BANK
 from app.services.journals import JournalService
@@ -342,8 +356,10 @@ class BankImportService:
 
         suggested = await self._suggest_payment(line)
         rule = await self._suggest_rule(line, rules)
+        suggestions = await self._document_suggestions(line)
         return BankImportLineResponse(
             id=line.id,
+            import_id=line.import_id,
             transaction_date=line.transaction_date,
             description=line.description,
             reference=line.reference,
@@ -357,6 +373,15 @@ class BankImportService:
             suggested_rule_pattern=rule.pattern if rule else None,
             suggested_account_code=rule.target_account.code if rule else None,
             suggested_account_name=rule.target_account.name if rule else None,
+            document_suggestions=suggestions,
+            allocations=[
+                BankLineAllocationResponse(
+                    payment_id=allocation.payment_id,
+                    amount_zar=allocation.amount_zar,
+                    document_number=allocation.document_number,
+                )
+                for allocation in getattr(line, "allocations", []) or []
+            ],
         )
 
     async def _suggest_rule(
@@ -401,3 +426,319 @@ class BankImportService:
     @staticmethod
     def _is_matched(line: BankImportLine) -> bool:
         return line.matched_payment_id is not None or line.matched_journal_id is not None
+
+    async def match_document(
+        self,
+        import_id: uuid.UUID,
+        line_id: uuid.UUID,
+        data: BankMatchDocumentRequest,
+        user_id: uuid.UUID,
+    ) -> BankImportLineResponse:
+        bank_import = await self._require_import(import_id)
+        line = self._require_unmatched_line(bank_import, line_id)
+        payment, number = await self._create_document_payment(
+            line,
+            invoice_id=data.invoice_id,
+            bill_id=data.bill_id,
+            amount=cents(abs(line.amount_zar)),
+            user_id=user_id,
+        )
+        await self._reconcile_payments(line, [(payment.id, payment.amount_zar, number)])
+        reloaded = await self.line_crud.get_by_id(line_id)
+        assert reloaded is not None
+        return await self._line_to_response(reloaded)
+
+    async def split_line(
+        self,
+        import_id: uuid.UUID,
+        line_id: uuid.UUID,
+        data: BankSplitRequest,
+        user_id: uuid.UUID,
+    ) -> BankImportLineResponse:
+        bank_import = await self._require_import(import_id)
+        line = self._require_unmatched_line(bank_import, line_id)
+        bank_abs = cents(abs(line.amount_zar))
+        total = cents(sum((cents(item.amount) for item in data.allocations), Decimal(0)))
+        if total != bank_abs:
+            raise ValidationError(f"Split amounts must add up to the bank line of {bank_abs}.")
+        money_in = line.amount_zar > 0
+        await self._assert_split_fits(data, money_in=money_in)
+        created: list[tuple[uuid.UUID, Decimal, str]] = []
+        for item in data.allocations:
+            if money_in and item.invoice_id is None:
+                raise ValidationError("Money in can only be split across customer invoices.")
+            if not money_in and item.bill_id is None:
+                raise ValidationError("Money out can only be split across supplier bills.")
+            payment, number = await self._create_document_payment(
+                line,
+                invoice_id=item.invoice_id,
+                bill_id=item.bill_id,
+                amount=cents(item.amount),
+                user_id=user_id,
+            )
+            created.append((payment.id, payment.amount_zar, number))
+        await self._reconcile_payments(line, created)
+        reloaded = await self.line_crud.get_by_id(line_id)
+        assert reloaded is not None
+        return await self._line_to_response(reloaded)
+
+    async def auto_match_preview(self, account_id: Optional[uuid.UUID] = None) -> AutoMatchPreview:
+        lines = await self.line_crud.list_unmatched(account_id)
+        documents = await self._open_documents()
+        matches: list[AutoMatchPreviewItem] = []
+        for line in lines:
+            ranked = rank_documents(
+                amount_zar=line.amount_zar,
+                transaction_date=line.transaction_date,
+                description=line.description,
+                reference=line.reference,
+                documents=documents,
+            )
+            chosen = unique_auto_match(ranked)
+            if chosen is None:
+                continue
+            matches.append(self._preview_item(line, chosen))
+        return AutoMatchPreview(matches=matches)
+
+    async def auto_match_confirm(
+        self,
+        data: AutoMatchConfirmRequest,
+        user_id: uuid.UUID,
+    ) -> AutoMatchConfirmResult:
+        applied: list[AutoMatchPreviewItem] = []
+        skipped: list[str] = []
+        documents = await self._open_documents()
+        for line_id in data.line_ids:
+            line = await self.line_crud.get_by_id(line_id)
+            if line is None or self._is_matched(line):
+                skipped.append(f"{line_id} is no longer unmatched")
+                continue
+            ranked = rank_documents(
+                amount_zar=line.amount_zar,
+                transaction_date=line.transaction_date,
+                description=line.description,
+                reference=line.reference,
+                documents=documents,
+            )
+            chosen = unique_auto_match(ranked)
+            if chosen is None:
+                skipped.append(f"{line_id} is not an exact reference match")
+                continue
+            invoice_id = chosen.document.document_id if chosen.document.kind == "invoice" else None
+            bill_id = chosen.document.document_id if chosen.document.kind == "bill" else None
+            payment, number = await self._create_document_payment(
+                line,
+                invoice_id=invoice_id,
+                bill_id=bill_id,
+                amount=cents(abs(line.amount_zar)),
+                user_id=user_id,
+            )
+            await self._reconcile_payments(line, [(payment.id, payment.amount_zar, number)])
+            applied.append(self._preview_item(line, chosen))
+            documents = [doc for doc in documents if doc.document_id != chosen.document.document_id]
+        return AutoMatchConfirmResult(applied=applied, skipped=skipped)
+
+    async def _create_document_payment(
+        self,
+        line: BankImportLine,
+        *,
+        invoice_id: Optional[uuid.UUID],
+        bill_id: Optional[uuid.UUID],
+        amount: Decimal,
+        user_id: uuid.UUID,
+    ):
+        payments = PaymentService(self.db)
+        if invoice_id is not None:
+            if line.amount_zar <= 0:
+                raise ValidationError("A customer invoice can only match money in.")
+            payment = await payments.create(
+                PaymentCreate(
+                    direction="in",
+                    invoice_id=invoice_id,
+                    amount=amount,
+                    currency="ZAR",
+                    paid_on=line.transaction_date,
+                ),
+                user_id,
+            )
+            invoice = await self.db.get(TaxInvoice, invoice_id)
+            number = invoice.invoice_number if invoice is not None else payment.payment_number
+            return payment, number
+        if bill_id is None:
+            raise ValidationError("Choose an invoice or a bill.")
+        if line.amount_zar >= 0:
+            raise ValidationError("A supplier bill can only match money out.")
+        bill = await self.db.get(Bill, bill_id)
+        if bill is None:
+            raise NotFoundError("Bill not found")
+        pay_amount = amount
+        if bill.currency.upper() != "ZAR":
+            remaining_zar = cents(bill.amount_zar - bill.amount_paid_zar)
+            if amount != remaining_zar:
+                raise ValidationError(
+                    "A foreign bill can only be matched when the bank line equals the rand still owing."
+                )
+            pay_amount = cents(bill.amount_foreign - bill.amount_paid_foreign)
+        payment = await payments.create(
+            PaymentCreate(
+                direction="out",
+                bill_id=bill.id,
+                amount=pay_amount,
+                currency=bill.currency,
+                fx_to_zar=bill.fx_to_zar,
+                paid_on=line.transaction_date,
+            ),
+            user_id,
+        )
+        return payment, bill.bill_number
+
+    async def _reconcile_payments(
+        self,
+        line: BankImportLine,
+        created: list[tuple[uuid.UUID, Decimal, str]],
+    ) -> None:
+        now = datetime.datetime.utcnow()
+        async with unit_of_work(self.db):
+            line.matched_payment_id = created[0][0]
+            for payment_id, amount_zar, number in created:
+                payment = await self.payment_crud.get_by_id(payment_id)
+                if payment is None:
+                    raise NotFoundError("Payment not found")
+                payment.is_reconciled = True
+                payment.reconciled_at = now
+                self.db.add(
+                    BankImportLineAllocation(
+                        line_id=line.id,
+                        payment_id=payment_id,
+                        amount_zar=amount_zar,
+                        document_number=number,
+                    )
+                )
+            await self.crud.commit_refresh(line)
+
+    async def _assert_split_fits(self, data: BankSplitRequest, *, money_in: bool) -> None:
+        totals: dict[uuid.UUID, Decimal] = {}
+        for item in data.allocations:
+            document_id = item.invoice_id if money_in else item.bill_id
+            if document_id is None:
+                continue
+            totals[document_id] = cents(totals.get(document_id, Decimal(0)) + cents(item.amount))
+        for document_id, amount in totals.items():
+            if money_in:
+                invoice = await self.db.get(TaxInvoice, document_id)
+                if invoice is None:
+                    raise NotFoundError("Invoice not found")
+                remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+            else:
+                bill = await self.db.get(Bill, document_id)
+                if bill is None:
+                    raise NotFoundError("Bill not found")
+                if bill.currency.upper() != "ZAR":
+                    raise ValidationError(
+                        "Split a foreign bill from the single match, not a split."
+                    )
+                remaining = cents(bill.amount_foreign - bill.amount_paid_foreign)
+            if amount > remaining:
+                label = invoice.invoice_number if money_in else bill.bill_number
+                raise ValidationError(f"Split is more than the {remaining} still owing on {label}.")
+
+    async def _document_suggestions(self, line: BankImportLine) -> list[BankDocumentSuggestion]:
+        if self._is_matched(line):
+            return []
+        ranked = rank_documents(
+            amount_zar=line.amount_zar,
+            transaction_date=line.transaction_date,
+            description=line.description,
+            reference=line.reference,
+            documents=await self._open_documents(),
+        )
+        auto = unique_auto_match(ranked)
+        return [
+            BankDocumentSuggestion(
+                kind=item.document.kind,  # type: ignore[arg-type]
+                document_id=item.document.document_id,
+                document_number=item.document.number,
+                contact_name=item.document.contact_name,
+                outstanding_zar=item.document.outstanding_zar,
+                confidence=item.confidence,
+                reason=item.reason,
+                auto_match=auto is not None
+                and auto.document.document_id == item.document.document_id,
+            )
+            for item in ranked
+        ]
+
+    async def _open_documents(self) -> list[OpenDocument]:
+        cached = getattr(self, "_open_document_cache", None)
+        if cached is not None:
+            return cached
+        invoices = (
+            (
+                await self.db.execute(
+                    select(TaxInvoice)
+                    .options(selectinload(TaxInvoice.customer))
+                    .where(TaxInvoice.is_archive.is_(False))
+                    .where(TaxInvoice.total_inc_vat > TaxInvoice.amount_paid)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        bills = (
+            (
+                await self.db.execute(
+                    select(Bill)
+                    .options(selectinload(Bill.supplier))
+                    .where(Bill.is_archive.is_(False))
+                    .where(Bill.amount_zar > Bill.amount_paid_zar)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        documents = [
+            OpenDocument(
+                kind="invoice",
+                document_id=invoice.id,
+                number=invoice.invoice_number,
+                contact_name=invoice.customer.name,
+                outstanding_zar=cents(invoice.total_inc_vat - invoice.amount_paid),
+                issue_date=invoice.issue_date,
+                currency="ZAR",
+                outstanding_foreign=cents(invoice.total_inc_vat - invoice.amount_paid),
+                fx_to_zar=Decimal("1"),
+            )
+            for invoice in invoices
+        ]
+        documents.extend(
+            OpenDocument(
+                kind="bill",
+                document_id=bill.id,
+                number=bill.bill_number,
+                contact_name=bill.supplier.name,
+                outstanding_zar=cents(bill.amount_zar - bill.amount_paid_zar),
+                issue_date=bill.issue_date,
+                currency=bill.currency,
+                outstanding_foreign=cents(bill.amount_foreign - bill.amount_paid_foreign),
+                fx_to_zar=bill.fx_to_zar,
+            )
+            for bill in bills
+        )
+        self._open_document_cache = documents
+        return documents
+
+    @staticmethod
+    def _preview_item(line: BankImportLine, chosen) -> AutoMatchPreviewItem:
+        return AutoMatchPreviewItem(
+            import_id=line.import_id,
+            line_id=line.id,
+            transaction_date=line.transaction_date,
+            description=line.description,
+            amount_zar=line.amount_zar,
+            kind=chosen.document.kind,  # type: ignore[arg-type]
+            document_id=chosen.document.document_id,
+            document_number=chosen.document.number,
+            contact_name=chosen.document.contact_name,
+            confidence=chosen.confidence,
+            reason=chosen.reason,
+        )

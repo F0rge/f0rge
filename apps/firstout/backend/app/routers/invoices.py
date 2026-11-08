@@ -42,10 +42,10 @@ async def create_invoice(
 @invoices_router.get("/{invoice_id}", response_model=InvoiceResponse)
 async def get_invoice(
     invoice_id: uuid.UUID,
-    _: uuid.UUID = Depends(get_current_user_id),
+    user_id: uuid.UUID = Depends(get_current_user_id),
     service: InvoiceService = Depends(get_invoice_service),
 ):
-    return await service.get(invoice_id)
+    return await service.get(invoice_id, user_id)
 
 
 @invoices_router.get("/{invoice_id}/pdf", response_model=None)

@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class PortalLoginRequest(BaseModel):
@@ -23,6 +23,8 @@ class PortalMeResponse(BaseModel):
     customer_id: uuid.UUID
     customer_name: str
     price_tier: str
+    access_id: Optional[uuid.UUID] = None
+    organisation_id: Optional[uuid.UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,6 +40,16 @@ class PortalUserCreate(BaseModel):
         if "@" not in cleaned:
             raise ValueError("email must contain @")
         return cleaned
+
+
+class PortalInvitationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+
+
+class PortalInvitationAccept(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=32, max_length=256)
 
 
 class PortalCatalogueItem(BaseModel):

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import Response
 
 from app.dependencies.auth import (
@@ -20,10 +21,12 @@ payments_router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
 @payments_router.get("", response_model=Page[PaymentResponse])
 async def list_payments(
     params: PageParams = Depends(get_page_params),
+    invoice_id: Optional[uuid.UUID] = Query(None),
+    bill_id: Optional[uuid.UUID] = Query(None),
     _: uuid.UUID = Depends(get_current_user_id),
     service: PaymentService = Depends(get_payment_service),
 ):
-    return await service.list(params)
+    return await service.list(params, invoice_id=invoice_id, bill_id=bill_id)
 
 
 @payments_router.post("", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)

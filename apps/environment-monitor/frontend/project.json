@@ -1,0 +1,16 @@
+{
+  "name": "environment-monitor-frontend",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/environment-monitor/frontend",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/environment-monitor/frontend",
+        "command": "npm ci && npm run build"
+      }
+    }
+  },
+  "tags": ["platform:ts", "scope:envmon", "deploy-target:coolify"]
+}

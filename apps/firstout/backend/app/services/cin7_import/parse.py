@@ -5,13 +5,24 @@ import datetime
 import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
+
+from app.services.vat import inc_to_ex
 
 CURRENCIES = {"ZAR", "USD", "EUR", "GBP", "AUD", "CNY"}
-# Cin7 product exports number price tiers and do not name them. Tier 1 is
-# stored as retail and tier 2 as wholesale until a human confirms the map.
-RETAIL_TIER = 1
+# Cin7 numbers the tiers. The owner confirmed:
+# 1 Stockist ex VAT, 2 Wholesale ex VAT, 3 Decorator ex VAT, 4 Retail inc VAT.
+STOCKIST_TIER = 1
 WHOLESALE_TIER = 2
+DECORATOR_TIER = 3
+RETAIL_TIER = 4
+# (tier number, price-list name, whether the Cin7 figure already includes VAT)
+NAMED_PRICE_TIERS = (
+    (STOCKIST_TIER, "Cin7 Stockist", False),
+    (WHOLESALE_TIER, "Cin7 Wholesale", False),
+    (DECORATOR_TIER, "Cin7 Decorator", False),
+    (RETAIL_TIER, "Cin7 Retail", True),
+)
 FILL_DOWN_KEYS = {"sku", "product", "productname", "productsku"}
 BARCODE_LIMIT = 64
 
@@ -31,6 +42,95 @@ def clip(value: Optional[str], limit: int) -> Optional[str]:
 
 def as_bool(value: str) -> bool:
     return value.strip().lower() in {"true", "yes", "1"}
+
+
+class NamedSkuPrices(NamedTuple):
+    stockist_ex_vat: Optional[Decimal]
+    wholesale_ex_vat: Optional[Decimal]
+    decorator_ex_vat: Optional[Decimal]
+    retail_ex_vat: Optional[Decimal]
+
+
+def tier_price_list_name(tier: int) -> str:
+    for number, name, _includes_vat in NAMED_PRICE_TIERS:
+        if number == tier:
+            return name
+    return f"Cin7 Tier {tier}"
+
+
+def tier_amount_ex_vat(raw: Optional[Decimal], tier: int) -> Optional[Decimal]:
+    """Positive Cin7 tier amount as ex VAT. Blank and zero are no price.
+
+    Tiers 1-3 are already ex VAT. Tier 4 (retail) includes 15% VAT and is
+    converted with the same half-up cent rounding as every other SKU price.
+    """
+    if raw is None or raw <= 0:
+        return None
+    for number, _name, includes_vat in NAMED_PRICE_TIERS:
+        if number == tier and includes_vat:
+            return inc_to_ex(raw)
+    return raw
+
+
+def named_sku_prices(row: dict[str, str]) -> NamedSkuPrices:
+    amounts = {
+        tier: tier_amount_ex_vat(money(row.get(f"PriceTier{tier}")), tier)
+        for tier, _name, _includes_vat in NAMED_PRICE_TIERS
+    }
+    return NamedSkuPrices(
+        stockist_ex_vat=amounts[STOCKIST_TIER],
+        wholesale_ex_vat=amounts[WHOLESALE_TIER],
+        decorator_ex_vat=amounts[DECORATOR_TIER],
+        retail_ex_vat=amounts[RETAIL_TIER],
+    )
+
+
+def _odd_price_detail(amount: Decimal, includes_vat: bool) -> Optional[str]:
+    """A positive stored price that is still not a usable tier amount.
+
+    Amounts below 1 are placeholders (0.01, 0.87). Retail includes 15% VAT;
+    a figure that does not survive inc-to-ex and back to the same cent is odd.
+    """
+    reasons: list[str] = []
+    if amount < 1:
+        reasons.append("price is below 1")
+    if includes_vat:
+        ex_vat = inc_to_ex(amount)
+        restored = (ex_vat * Decimal("1.15")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if restored != amount:
+            reasons.append("including VAT does not round-trip to the same cent")
+    if not reasons:
+        return None
+    return "; ".join(reasons)
+
+
+def price_warnings(row: dict[str, str]) -> list[dict[str, str]]:
+    """Missing or odd named-tier prices. Does not change the stored amount."""
+    code = row.get("ProductCode", "").strip()
+    found: list[dict[str, str]] = []
+    for tier, name, includes_vat in NAMED_PRICE_TIERS:
+        amount = money(row.get(f"PriceTier{tier}"))
+        if amount is None or amount <= 0:
+            found.append(
+                {
+                    "kind": "missing_tier",
+                    "product_code": code,
+                    "tier": name,
+                    "detail": f"PriceTier{tier} has no positive price",
+                }
+            )
+            continue
+        detail = _odd_price_detail(amount, includes_vat)
+        if detail:
+            found.append(
+                {
+                    "kind": "odd_price",
+                    "product_code": code,
+                    "tier": name,
+                    "detail": detail,
+                }
+            )
+    return found
 
 
 def money(value: object, places: str = "0.01") -> Optional[Decimal]:
@@ -167,6 +267,33 @@ def assign_barcodes(
         claimed.add(chosen)
         assigned[code] = (chosen, generated)
     return assigned
+
+
+def generated_barcode_rows(
+    pairs: list[tuple[str, str]],
+    assigned: dict[str, tuple[str, bool]],
+) -> list[dict[str, str]]:
+    """SKUs ``assign_barcodes`` would rewrite, with blank or shared as the reason.
+
+    Reads the assignment. Does not choose a different barcode.
+    """
+    last_raw: dict[str, str] = {}
+    for code, raw in sorted(pairs, key=lambda item: item[0]):
+        last_raw[code] = raw.strip()
+    rows: list[dict[str, str]] = []
+    for code in sorted(assigned):
+        chosen, was_generated = assigned[code]
+        if not was_generated:
+            continue
+        raw = last_raw.get(code, "")
+        rows.append(
+            {
+                "product_code": code,
+                "reason": "blank" if raw == "" else "shared",
+                "generated_barcode": chosen,
+            }
+        )
+    return rows
 
 
 def _generated_barcode(code: str, claimed: set[str]) -> str:

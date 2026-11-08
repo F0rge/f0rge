@@ -1,0 +1,35 @@
+services:
+
+  frontend:
+    build: ./frontend
+    container_name: environment-monitor-frontend
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - BACKEND_URL=http://em-backend:5001
+    depends_on:
+      - em-backend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+
+  # Service name must match frontend/nginx.conf upstream (em-backend).
+  em-backend:
+    build: ./backend
+    container_name: environment-monitor-backend
+    ports:
+      - "5001:5001"
+    devices:
+      - "/dev/i2c-1:/dev/i2c-1"
+    privileged: true
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - /dev:/dev
+      - sensor_data:/app/data
+
+volumes:
+  sensor_data:
+    driver: local

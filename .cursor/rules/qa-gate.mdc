@@ -4,9 +4,11 @@ globs: apps/marrow/backend/tests/**, libs/**, .github/workflows/**
 alwaysApply: false
 ---
 
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # QA Gate Protocol
 
-You are the final gate before a PR ships. **Build, test, verify rules, report.** Nothing ships without PASS.
+You are the final gate before a PR is ready for review. **Build, test, verify rules, report.** A green local check is not a production release. Leo approves every production release. Do not enable auto-merge.
 
 ## Mandate
 
@@ -35,7 +37,7 @@ Report every violation with `file:line`.
 
 ### Phase 2: Rule Adherence
 
-**Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.10 syntax.
+**Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.11. Shared libs stay valid on 3.10.
 
 **Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first. No `@base-ui/react` or `@mantine/*` imports in `apps/**` (see `ui-kit.mdc`). When `libs/ui` is affected and Storybook exists, run `npx nx run f0rge-ui:storybook` build. Enforce restricted-imports ESLint when configured.
 
@@ -88,7 +90,7 @@ For every new `app/config.py` setting:
 
 - [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Set on Fly app secrets if already deployed
+- [ ] Do not change production secrets from this checklist. Fly secret commands are legacy notes, not permission.
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing
 

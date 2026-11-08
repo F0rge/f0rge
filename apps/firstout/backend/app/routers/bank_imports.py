@@ -11,12 +11,17 @@ from app.dependencies.auth import (
     require_books_mutate,
 )
 from app.schemas.bank_import import (
+    AutoMatchConfirmRequest,
+    AutoMatchConfirmResult,
+    AutoMatchPreview,
     BankApplyRuleRequest,
     BankImportLineResponse,
     BankImportMatchRequest,
     BankImportResponse,
     BankImportSummary,
+    BankMatchDocumentRequest,
     BankRecodeRequest,
+    BankSplitRequest,
     BankUnmatchedCount,
 )
 from app.services.bank_imports import BankImportService
@@ -63,6 +68,24 @@ async def list_unmatched_counts(
     return await service.unmatched_counts()
 
 
+@bank_imports_router.post("/auto-match/preview", response_model=AutoMatchPreview)
+async def preview_auto_match(
+    account_id: Optional[uuid.UUID] = None,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: BankImportService = Depends(get_bank_import_service),
+):
+    return await service.auto_match_preview(account_id)
+
+
+@bank_imports_router.post("/auto-match/confirm", response_model=AutoMatchConfirmResult)
+async def confirm_auto_match(
+    body: AutoMatchConfirmRequest,
+    user_id: uuid.UUID = Depends(require_books_mutate),
+    service: BankImportService = Depends(get_bank_import_service),
+):
+    return await service.auto_match_confirm(body, user_id)
+
+
 @bank_imports_router.get("/{import_id}", response_model=BankImportResponse)
 async def get_bank_import(
     import_id: uuid.UUID,
@@ -84,6 +107,34 @@ async def match_bank_line(
     service: BankImportService = Depends(get_bank_import_service),
 ):
     return await service.match_line(import_id, line_id, body)
+
+
+@bank_imports_router.post(
+    "/{import_id}/lines/{line_id}/match-document",
+    response_model=BankImportLineResponse,
+)
+async def match_bank_line_document(
+    import_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: BankMatchDocumentRequest,
+    user_id: uuid.UUID = Depends(require_books_mutate),
+    service: BankImportService = Depends(get_bank_import_service),
+):
+    return await service.match_document(import_id, line_id, body, user_id)
+
+
+@bank_imports_router.post(
+    "/{import_id}/lines/{line_id}/split",
+    response_model=BankImportLineResponse,
+)
+async def split_bank_line(
+    import_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: BankSplitRequest,
+    user_id: uuid.UUID = Depends(require_books_mutate),
+    service: BankImportService = Depends(get_bank_import_service),
+):
+    return await service.split_line(import_id, line_id, body, user_id)
 
 
 @bank_imports_router.post(

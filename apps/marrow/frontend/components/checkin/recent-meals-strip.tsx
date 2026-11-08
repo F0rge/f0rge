@@ -7,7 +7,8 @@ import { useCloneMeal, useRecentMeals } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
-import { MealIconThumb, useMealThumbSrc } from './meal-icon-thumb'
+import { mealThumbKind, useMealThumbSrc } from './meal-icon-thumb'
+import { MealThumbFallback } from './meal-thumb-fallback'
 import { LogAgainSheet } from './log-again-sheet'
 
 // Relative "when last eaten" label. Builds both dates at local midnight (from
@@ -34,7 +35,7 @@ function RecentMealChip({
   onClick: () => void
 }) {
   const { src, onError } = useMealThumbSrc(meal.source_photo_id)
-  const showPhoto = meal.has_image !== false && src != null
+  const thumbKind = mealThumbKind(meal.has_image !== false, src)
 
   return (
     <button
@@ -45,7 +46,7 @@ function RecentMealChip({
       className="flex w-28 flex-none flex-col gap-1.5 rounded-xl border border-border bg-background p-2 text-left transition-colors hover:border-primary disabled:opacity-60"
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
-        {showPhoto ? (
+        {thumbKind === 'photo' && src ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={src}
@@ -55,10 +56,10 @@ function RecentMealChip({
             onError={onError}
           />
         ) : (
-          <MealIconThumb
-            iconKey={meal.icon_key ?? 'bowl'}
+          <MealThumbFallback
+            kind={thumbKind === 'missing' ? 'missing' : 'library'}
+            iconKey={meal.icon_key}
             size="md"
-            className="size-full rounded-lg"
           />
         )}
         {loading && (

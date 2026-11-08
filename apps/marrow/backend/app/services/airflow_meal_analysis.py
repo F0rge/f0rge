@@ -12,7 +12,7 @@ from app.config import settings
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
-from f0rge_core.exceptions import NotFoundError, UnauthorizedError, ValidationError
+from f0rge_core.exceptions import GoneError, NotFoundError, UnauthorizedError, ValidationError
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.airflow_meal import (
@@ -125,7 +125,7 @@ class AirflowMealAnalysisService:
 
         analysis = await self.analysis_crud.get_by_id(analysis_id)
         if analysis is None:
-            raise NotFoundError("Analysis not found")
+            raise GoneError("superseded")
 
         vision = VisionResult(
             dish_name=body.dish_name,
@@ -202,7 +202,7 @@ class AirflowMealAnalysisService:
 
         analysis = await self.analysis_crud.get_by_id(analysis_id)
         if analysis is None:
-            raise NotFoundError("Analysis not found")
+            raise GoneError("superseded")
         if not user_id_raw:
             user_id_ctx.set(analysis.user_id)
             await apply_session_user_id(self.db, analysis.user_id)
