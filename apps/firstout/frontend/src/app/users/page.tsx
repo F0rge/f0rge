@@ -205,14 +205,14 @@ export default function UsersPage() {
     }
   }
 
-  async function handleDisable(entry: User) {
+  async function handleStatusChange(entry: User, isDisabled: boolean) {
     setSaving(true);
     setError(null);
     try {
-      await updateUser(entry.id, { is_disabled: true });
+      await updateUser(entry.id, { is_disabled: isDisabled });
       await loadUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to disable user.");
+      setError(err instanceof Error ? err.message : `Failed to ${isDisabled ? "disable" : "enable"} user.`);
     } finally {
       setSaving(false);
     }
@@ -273,12 +273,12 @@ export default function UsersPage() {
                                     Edit
                                   </Button>
                                   <Button
-                                    kind="danger--ghost"
+                                    kind={entry.is_disabled ? "ghost" : "danger--ghost"}
                                     size="sm"
-                                    disabled={saving || entry.is_disabled || entry.id === user.id}
-                                    onClick={() => void handleDisable(entry)}
+                                    disabled={saving || entry.id === user.id}
+                                    onClick={() => void handleStatusChange(entry, !entry.is_disabled)}
                                   >
-                                    Disable
+                                    {entry.is_disabled ? "Enable" : "Disable"}
                                   </Button>
                                 </Stack>
                               </TableCell>
