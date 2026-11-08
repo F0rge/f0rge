@@ -98,6 +98,68 @@ async def test_no_org_signup_is_idempotent_and_bootstraps_empty_business(async_d
         tenant_id_ctx.reset(token)
 
 
+async def test_new_organisation_can_save_and_clear_optional_business_details(
+    async_client, async_db, monkeypatch
+):
+    from app.services.clerk import ClerkIdentity
+    from tests.conftest import independent_request_sessions
+
+    token = tenant_id_ctx.set(None)
+    try:
+        team = await TenantSignupService(async_db, provider()).create(
+            ClerkSession("user_new"), SignupIntent(name="New business", slug="settings-business")
+        )
+    finally:
+        tenant_id_ctx.reset(token)
+    monkeypatch.setattr(
+        "app.middleware.auth.verify_clerk_token",
+        AsyncMock(
+            return_value=ClerkIdentity("user_new", "org_new_business", team["slug"], "member")
+        ),
+    )
+    headers = {"Authorization": "Bearer synthetic-business-settings-token"}
+    async with independent_request_sessions(async_db):
+        initial = await async_client.get("/api/v1/settings", headers=headers)
+        assert initial.status_code == 200
+        assert initial.json()["address"] == initial.json()["vat_number"] == ""
+        saved = await async_client.patch(
+            "/api/v1/settings",
+            headers=headers,
+            json={
+                "legal_name": "New legal business",
+                "trading_name": "New trading business",
+                "address": "Synthetic business address",
+                "vat_number": "",
+            },
+        )
+        assert saved.status_code == 200 and saved.json()["vat_number"] == ""
+        persisted = await async_client.get("/api/v1/settings", headers=headers)
+        assert persisted.status_code == 200
+        assert persisted.json()["legal_name"] == "New legal business"
+        assert persisted.json()["address"] == "Synthetic business address"
+        assert persisted.json()["vat_number"] == ""
+
+        populated = await async_client.patch(
+            "/api/v1/settings", headers=headers, json={"vat_number": "4123456789"}
+        )
+        assert populated.status_code == 200 and populated.json()["vat_number"] == "4123456789"
+        cleared = await async_client.patch(
+            "/api/v1/settings", headers=headers, json={"address": "", "vat_number": ""}
+        )
+        assert cleared.status_code == 200
+        persisted = await async_client.get("/api/v1/settings", headers=headers)
+        assert persisted.status_code == 200
+        assert persisted.json()["address"] == persisted.json()["vat_number"] == ""
+        assert persisted.json()["legal_name"] == "New legal business"
+        blank_name = await async_client.patch(
+            "/api/v1/settings",
+            headers=headers,
+            json={"legal_name": "", "address": "", "vat_number": ""},
+        )
+        assert blank_name.status_code == 422
+        assert [error["loc"] for error in blank_name.json()["detail"]] == [["body", "legal_name"]]
+
+
 async def test_signup_rejects_existing_email_without_immutable_clerk_link(async_db):
     existing = await async_db.scalar(select(User).limit(1))
     remote = provider(email=existing.email)

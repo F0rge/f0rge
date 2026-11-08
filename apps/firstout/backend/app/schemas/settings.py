@@ -66,8 +66,8 @@ class SettingsUpdate(BaseModel):
     pick_priority: Optional[list[uuid.UUID]] = None
     legal_name: Optional[str] = Field(default=None, min_length=1)
     trading_name: Optional[str] = None
-    address: Optional[str] = Field(default=None, min_length=1)
-    vat_number: Optional[str] = Field(default=None, min_length=1)
+    address: Optional[str] = None
+    vat_number: Optional[str] = None
     cipc_number: Optional[str] = None
     bank_name: Optional[str] = None
     bank_account: Optional[str] = None
