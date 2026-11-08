@@ -9,7 +9,7 @@ test('signup → check-in golden path', async ({ page }) => {
   await page.goto('/signup')
   await page.getByLabel('Email').fill(email)
   await page.getByLabel('Handle').fill(handle)
-  await page.getByLabel('Password').fill(password)
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Create account' }).click()
 
   await expect(page).toHaveURL(/\/checkin/, { timeout: 30_000 })
