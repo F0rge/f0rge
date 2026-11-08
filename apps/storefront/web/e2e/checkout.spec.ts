@@ -1,10 +1,29 @@
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
+import { assertLocalCheckoutEnvironment } from "./local-checkout-environment";
 
 const skuId = process.env.STOREFRONT_TEST_CHECKOUT_SKU_ID || process.env.STOREFRONT_TEST_SKU_ID;
 const backendUrl = process.env.MEDUSA_BACKEND_URL || "http://127.0.0.1:9000";
 const publishableKey = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY;
 const bffSecret = process.env.STOREFRONT_BFF_SECRET;
+
+test.beforeEach(async ({ context }) => {
+  await context.route("**/*", async (route) => {
+    const host = new URL(route.request().url()).hostname;
+    if (["localhost", "127.0.0.1", "::1", "[::1]"].includes(host)) await route.continue();
+    else await route.abort("blockedbyclient");
+  });
+});
+
+async function browserGet<T>(page: import("@playwright/test").Page, path: string) {
+  // Chromium sends Secure cookies on trusted loopback origins; APIRequestContext
+  // does not. Read private state through the same browser that drives checkout.
+  const result = await page.evaluate(async (url) => {
+    const response = await fetch(url);
+    return { status: response.status, cacheControl: response.headers.get("cache-control"), body: await response.json() as unknown };
+  }, path);
+  return { ...result, body: result.body as T };
+}
 
 async function openHeldCheckout(page: import("@playwright/test").Page) {
   await page.goto("/product/" + skuId);
@@ -19,6 +38,7 @@ test("a guest collection checkout resolves after the browser closes and duplicat
   test.setTimeout(150_000);
   test.skip(!skuId || !publishableKey || !bffSecret || !process.env.DATABASE_URL,
     "Set storefront test SKU, Medusa publishable key, BFF secret, and disposable Medusa DATABASE_URL for live checkout QA");
+  assertLocalCheckoutEnvironment(process.env);
   const database = new Client({ connectionString: process.env.DATABASE_URL });
   await database.connect();
   try {
@@ -35,7 +55,17 @@ test("a guest collection checkout resolves after the browser closes and duplicat
     await expect(page.getByTestId("test-payment-panel")).toBeVisible();
     await expect(page.getByTestId("checkout-total")).toContainText("R");
 
-    const bag = await (await page.request.get("/api/bag")).json() as { id: string };
+    const bag = (await browserGet<{ id: string }>(page, "/api/bag")).body;
+    const unauthorizedPayment = await request.post(backendUrl + "/store/carts/" + bag.id + "/storefront-test-payment", {
+      headers: { "x-publishable-api-key": publishableKey! },
+      data: { session_id: prepared.checkout.session_id, outcome: "success", event_id: "untrusted-callback-001" },
+    });
+    expect(unauthorizedPayment.status()).toBe(403);
+    const crossOriginPayment = await page.request.post("/api/checkout/payment", {
+      headers: { origin: "https://untrusted.example.com" },
+      data: { session_id: prepared.checkout.session_id, outcome: "success" },
+    });
+    expect(crossOriginPayment.status()).toBe(403);
     const existingOrders = await database.query(
       "SELECT COUNT(*)::int AS count FROM order_cart WHERE cart_id = $1 AND deleted_at IS NULL", [bag.id],
     );
@@ -123,17 +153,18 @@ test("a guest collection checkout resolves after the browser closes and duplicat
       await confirmation.goto("/order/confirmation");
       await expect(confirmation.getByRole("heading", { name: "Thank you. Your order is confirmed." })).toBeVisible();
       await expect(confirmation.getByText("Private order reference")).toBeVisible();
-      const changedAddress = await restoredContext.request.post("http://127.0.0.1:3004/api/checkout/prepare", {
-        headers: { origin: "http://127.0.0.1:3004" },
-        data: {
-          email: "changed@example.com", first_name: "Changed", last_name: "Address", phone: "+27110000009",
-          fulfillment_type: "collection",
-        },
+      const changedAddress = await confirmation.evaluate(async () => {
+        const response = await fetch("/api/checkout/prepare", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email: "changed@example.com", first_name: "Changed", last_name: "Address", phone: "+27110000009",
+            fulfillment_type: "collection",
+          }),
+        });
+        return response.status;
       });
-      expect(changedAddress.status()).toBe(409);
-      const privateApi = await confirmation.request.get("/api/order/confirmation");
-      expect(privateApi.headers()["cache-control"]).toContain("no-store");
-      const persisted = await privateApi.json() as {
+      expect(changedAddress).toBe(409);
+      const privateApi = await browserGet<{
         status: string;
         order: {
           currency_code: string;
@@ -144,7 +175,10 @@ test("a guest collection checkout resolves after the browser closes and duplicat
           email: string;
           address: { first_name: string; city: string } | null;
         };
-      };
+      }>(confirmation, "/api/order/confirmation");
+      expect(privateApi.status).toBe(200);
+      expect(privateApi.cacheControl).toContain("no-store");
+      const persisted = privateApi.body;
       expect(persisted.status).toBe("captured");
       expect(persisted.order.currency_code).toBe("zar");
       expect(persisted.order.tax_total).toBeGreaterThan(0);
@@ -161,6 +195,7 @@ test("a guest collection checkout resolves after the browser closes and duplicat
 
 test("declined, cancelled, pending, and unknown results remain recoverable without creating an order", async ({ page }) => {
   test.skip(!skuId || !process.env.DATABASE_URL, "Set a published checkout SKU and disposable Medusa DATABASE_URL for live payment-state QA");
+  assertLocalCheckoutEnvironment(process.env);
   const database = new Client({ connectionString: process.env.DATABASE_URL });
   await database.connect();
   try {
@@ -172,7 +207,7 @@ test("declined, cancelled, pending, and unknown results remain recoverable witho
     await page.getByLabel("Collection", { exact: true }).check();
     await page.getByRole("button", { name: "Review total and continue" }).click();
     await expect(page.getByTestId("test-payment-panel")).toBeVisible();
-    const bag = await (await page.request.get("/api/bag")).json() as { id: string };
+    const bag = (await browserGet<{ id: string }>(page, "/api/bag")).body;
 
     for (const [button, status] of [
       ["Simulate decline", "declined"],
@@ -182,8 +217,9 @@ test("declined, cancelled, pending, and unknown results remain recoverable witho
     ]) {
       await page.getByRole("button", { name: button }).click();
       await expect(page.getByTestId("payment-status")).toContainText(status);
-      const confirmation = await page.request.get("/api/order/confirmation");
-      expect((await confirmation.json()).status).toBe(status);
+      const confirmation = await browserGet<{ status: string }>(page, "/api/order/confirmation");
+      expect(confirmation.status).toBe(200);
+      expect(confirmation.body.status).toBe(status);
     }
     await page.goto("/order/confirmation");
     await expect(page.getByRole("heading", { name: "Payment result is unknown" })).toBeVisible();
@@ -199,6 +235,7 @@ test("declined, cancelled, pending, and unknown results remain recoverable witho
 test("a configured Gauteng delivery rate is paid and saved in the order", async ({ page }) => {
   test.skip(!skuId || !process.env.STOREFRONT_TEST_DELIVERY_CITY || !process.env.STOREFRONT_TEST_DELIVERY_SUBURB ||
     !process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE, "Set a disposable test Gauteng zone and published SKU for delivery QA");
+  assertLocalCheckoutEnvironment(process.env);
   await openHeldCheckout(page);
   await page.getByLabel("Email").fill("delivery-guest@example.com");
   await page.getByLabel("First name").fill("Delivery");
@@ -209,7 +246,7 @@ test("a configured Gauteng delivery rate is paid and saved in the order", async 
   await page.getByLabel("City").fill(process.env.STOREFRONT_TEST_DELIVERY_CITY!);
   await page.getByLabel("Province").fill("Gauteng");
   await page.getByLabel("Postal code").fill(process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE!);
-  const bagBefore = await (await page.request.get("/api/bag")).json() as { total: number };
+  const bagBefore = (await browserGet<{ total: number }>(page, "/api/bag")).body;
   const preparedResponse = page.waitForResponse((response) => response.url().includes("/api/checkout/prepare"));
   await page.getByRole("button", { name: "Review total and continue" }).click();
   const prepared = await (await preparedResponse).json() as { checkout: { amount: number } };
@@ -219,10 +256,10 @@ test("a configured Gauteng delivery rate is paid and saved in the order", async 
   expect(after).toContain(new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2 }).format(prepared.checkout.amount));
   await page.getByRole("button", { name: "Simulate success" }).click();
   await expect(page.getByRole("heading", { name: "Thank you. Your order is confirmed." })).toBeVisible();
-  const confirmation = await (await page.request.get("/api/order/confirmation")).json() as {
+  const confirmation = (await browserGet<{
     status: string;
     order: { total: number; shipping_total: number; fulfillment_type: string; address: { address_1: string; postal_code: string } };
-  };
+  }>(page, "/api/order/confirmation")).body;
   expect(confirmation.status).toBe("captured");
   expect(confirmation.order.fulfillment_type).toBe("delivery");
   expect(confirmation.order.total).toBe(prepared.checkout.amount);
