@@ -225,9 +225,9 @@ class PasswordResetService:
     async def _legacy_access_disabled(self, user: User) -> bool:
         if user.is_disabled:
             return True
-        # Password resets serve the retained legacy home login only. Disabling
-        # that membership must still prevent reset mail and token completion.
-        return bool(
+        # Only an explicitly enabled legacy home membership permits resets.
+        # Clerk-only identities must not gain a local password through this flow.
+        return (
             await self.db.scalar(
                 select(Membership.is_disabled).where(
                     Membership.user_id == user.id,
@@ -235,7 +235,7 @@ class PasswordResetService:
                     Membership.is_legacy_home.is_(True),
                 )
             )
-        )
+        ) is not False
 
     async def _pad(self, started: float) -> None:
         remaining = NEUTRAL_MIN_SECONDS - (time.monotonic() - started)

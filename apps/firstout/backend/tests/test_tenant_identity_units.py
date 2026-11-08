@@ -75,7 +75,8 @@ def test_proxy_host_secret(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_signed_clerk_jwt_and_bad_signature(monkeypatch):
+@pytest.mark.parametrize("session_status", [None, "active"])
+async def test_signed_clerk_jwt_and_bad_signature(monkeypatch, session_status):
     from app.services import clerk
 
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -100,6 +101,8 @@ async def test_signed_clerk_jwt_and_bad_signature(monkeypatch):
         "azp": "https://app.firstout.co.za",
         "o": {"id": "org_synthetic", "slg": "firstout", "rol": "member"},
     }
+    if session_status is not None:
+        claims["sts"] = session_status
     identity = await verify_clerk_token(jwt.encode(claims, private, algorithm="RS256"))
     assert identity.org_id == "org_synthetic"
     claims["azp"] = "https://firstout.app.firstout.co.za"
@@ -236,7 +239,8 @@ def test_permission_inventory_comparison_never_exposes_hashes():
     assert compare(before, [dict(before[0], token_version=8)])
 
 
-async def test_pending_no_org_token_is_only_valid_for_identity_onboarding(monkeypatch):
+@pytest.mark.parametrize("has_org", [False, True])
+async def test_pending_token_is_only_valid_for_identity_onboarding(monkeypatch, has_org):
     from app.services import clerk
 
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -261,6 +265,8 @@ async def test_pending_no_org_token_is_only_valid_for_identity_onboarding(monkey
         "azp": "https://app.firstout.co.za",
         "sts": "pending",
     }
+    if has_org:
+        claims["o"] = {"id": "org_synthetic", "slg": "firstout", "rol": "member"}
     token = jwt.encode(claims, private, algorithm="RS256")
     assert (await clerk.verify_clerk_session(token)).user_id == "user_pending"
     with pytest.raises(HTTPException, match="Invalid Clerk session"):

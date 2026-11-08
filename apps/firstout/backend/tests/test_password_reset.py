@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.password_reset_token import PasswordResetToken
+from app.models.membership import Membership
+from app.models.user import User
 from app.services.auth import JWT_COOKIE_NAME
 from app.services.password_reset import (
     CONFIRM_MESSAGE,
@@ -124,6 +126,62 @@ async def test_disabled_user_gets_the_same_response_and_no_email(
     assert resp.json()["message"] == NEUTRAL_MESSAGE
     assert len(_FakeSMTP.instances) == before
     assert await _tokens(async_db) == []
+
+
+@pytest.mark.parametrize("has_nonlegacy_membership", [False, True])
+async def test_identity_without_legacy_home_cannot_reset_local_password(
+    owner_client: AsyncClient, async_db: AsyncSession, has_nonlegacy_membership: bool
+) -> None:
+    from f0rge_db.organisation import tenant_id_ctx
+
+    await _configure_smtp(owner_client)
+    user = User(
+        team_id=tenant_id_ctx.get(),
+        email="clerk-only-reset@example.com",
+        clerk_user_id="user_clerk_only_reset",
+        password_hash="!clerk-only",
+        token_version=0,
+        role="buyer",
+        is_disabled=False,
+    )
+    async_db.add(user)
+    await async_db.flush()
+    if has_nonlegacy_membership:
+        async_db.add(
+            Membership(
+                user_id=user.id,
+                team_id=user.team_id,
+                role="buyer",
+                is_legacy_home=False,
+                is_disabled=False,
+            )
+        )
+        await async_db.flush()
+    requested = await owner_client.post("/api/v1/auth/forgot-password", json={"email": user.email})
+    assert requested.status_code == 200 and requested.json()["message"] == NEUTRAL_MESSAGE
+    assert _FakeSMTP.instances == []
+    assert await _tokens(async_db) == []
+
+    # A previously issued capability cannot create a password after home access
+    # disappears, including an identity that still has an enabled Clerk membership.
+    token = "synthetic-existing-no-home-token"
+    stored = PasswordResetToken(
+        user_id=user.id,
+        token_hash=hash_reset_token(token),
+        expires_at=datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+    )
+    async_db.add(stored)
+    await async_db.flush()
+    reset = await owner_client.post(
+        "/api/v1/auth/reset-password",
+        json={"token": token, "password": "must-not-apply", "password_confirm": "must-not-apply"},
+    )
+    assert reset.status_code == 400
+    assert reset.json()["detail"] == "This account is disabled."
+    await async_db.refresh(user)
+    await async_db.refresh(stored)
+    assert user.password_hash == "!clerk-only" and user.token_version == 0
+    assert stored.used_at is not None
 
 
 async def test_token_is_hashed_single_use_and_replaced(
