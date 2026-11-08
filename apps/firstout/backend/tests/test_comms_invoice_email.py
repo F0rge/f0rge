@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from typing import Optional
 
 import pytest
@@ -32,7 +34,7 @@ def _comms_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> AsyncClient:
-    resp = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    resp = await authenticate_as(client, email)
     assert resp.status_code == 200
     return client
 

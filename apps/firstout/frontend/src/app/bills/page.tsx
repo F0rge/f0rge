@@ -239,7 +239,6 @@ export default function BillsPage() {
               Read a supplier invoice
             </Button>
             <Button
-              data-tour="bill-new"
               onClick={() => {
                 resetCreateForm();
                 setCreateOpen(true);

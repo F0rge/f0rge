@@ -54,6 +54,8 @@ class QuoteLineResponse(BaseModel):
     description: str
     notes: Optional[str]
     price_warning: Optional[str] = None
+    # Computed on read. Not stored, and not printed on the customer PDF.
+    suspect_price_warning: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

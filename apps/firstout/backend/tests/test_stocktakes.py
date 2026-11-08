@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from httpx import AsyncClient
 
 
@@ -176,21 +178,18 @@ async def test_till_role_cannot_start_stocktake(
     owner_client: AsyncClient,
 ) -> None:
     location_id = await _kramerville_id(owner_client)
-    create_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-stocktakes@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    assert create_user.status_code == 201
 
     async_client.cookies.clear()
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-stocktakes@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(async_client, "till-stocktakes@example.com")
     assert login_resp.status_code == 200
 
     started = await async_client.post("/api/v1/stocktakes", json={"location_id": location_id})

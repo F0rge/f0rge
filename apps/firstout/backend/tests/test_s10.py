@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from decimal import Decimal
 from io import BytesIO
 
@@ -278,21 +280,18 @@ async def test_invoice_pdf_contains_patched_legal_name(owner_client: AsyncClient
 async def test_settings_mutate_owner_only(
     owner_client: AsyncClient, async_client: AsyncClient
 ) -> None:
-    books_resp = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "books-s10@example.com",
             "password": "books-password",
             "role": "books",
         },
     )
-    assert books_resp.status_code == 201
 
     async_client.cookies.clear()
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books-s10@example.com", "password": "books-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login = await authenticate_as(async_client, "books-s10@example.com")
     assert login.status_code == 200
 
     patch = await async_client.patch(
@@ -312,21 +311,18 @@ async def test_cost_audit_forbidden_for_till(
     await _create_supplier(owner_client)
     sku = await _create_sku(owner_client, "TILL-REF", "TILL-BAR")
 
-    till_user = await owner_client.post(
-        "/api/v1/users",
-        json={
+    await create_test_staff(
+        owner_client,
+        **{
             "email": "till-s10@example.com",
             "password": "till-password",
             "role": "till",
         },
     )
-    assert till_user.status_code == 201
 
     async_client.cookies.clear()
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till-s10@example.com", "password": "till-password"},
-    )
+    async_client.headers.pop("Authorization", None)
+    login = await authenticate_as(async_client, "till-s10@example.com")
     assert login.status_code == 200
 
     audit = await async_client.get(f"/api/v1/skus/{sku['id']}/cost-audit")

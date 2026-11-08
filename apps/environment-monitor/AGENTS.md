@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # apps/environment-monitor
 
 Room sensor dashboard (temperature and humidity). Two Coolify apps on the Pi, Dockerfiles built from `F0rge/f0rge` `main`. Source import of `leothesouthafrican/environment-monitor` `cursor/primer-theme-266b` at `39afb06a0cc603f3aaa4bb692041f0ebe8fa82f5`.

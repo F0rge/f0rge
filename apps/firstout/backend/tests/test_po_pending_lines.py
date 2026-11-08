@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import create_test_staff
+
 import json
 import uuid
 from decimal import Decimal
@@ -30,11 +32,7 @@ async def _user(
     role: str,
 ) -> AsyncClient:
     await _relogin_owner(owner_client)
-    created = await owner_client.post(
-        "/api/v1/users",
-        json={"email": email, "password": password, "role": role},
-    )
-    assert created.status_code == 201
+    await create_test_staff(owner_client, **{"email": email, "password": password, "role": role})
     return await _login_as(client, email, password)
 
 

@@ -240,7 +240,6 @@ export default function RepeatingInvoicesPage() {
         </div>
         {canMutate ? (
           <Button
-            data-tour="repeating-new"
             onClick={() => {
               resetCreateForm();
               setCreateOpen(true);

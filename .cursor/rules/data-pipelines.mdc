@@ -4,7 +4,11 @@ globs: apps/marrow/backend/scripts/**, apps/marrow/backend/data/**
 alwaysApply: false
 ---
 
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Data Engineering Standards
+
+This file is Marrow's legacy dietary pipeline. Idempotence, source traceability, and secret hygiene stay. `docs/architecture/ai_seams.md` is cited below and was not in the tree at `f155a2ba`; do not invent that document.
 
 Build and maintain dietary reference data pipelines for marrow — ingredient-to-dietary-tag lookup tables powering food analysis.
 

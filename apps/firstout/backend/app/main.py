@@ -8,13 +8,15 @@ from typing import AsyncIterator, Optional, cast
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.types import ExceptionHandler
 from f0rge_core.exceptions import ConflictError
 from f0rge_core.handlers import register_exception_handlers
 
 from app.config import settings
-from app.database import async_session_maker
+from app.database import async_session_maker, tenant_session  # noqa: F401 — fixture compatibility
+from app.models.team import Team
 from app.exceptions import (
     CommsEncryptionUnconfiguredError,
     CommsSmtpFailedError,
@@ -22,10 +24,13 @@ from app.exceptions import (
     DocumentLlmUnconfiguredError,
     ForbiddenError,
     KitRequiresPickError,
+    RateLimitedError,
 )
 from app.middleware.auth import AuthContextMiddleware
 from app.middleware.slow_request import SlowRequestMiddleware
 from app.routers import (
+    clerk_webhooks,
+    tenant_signup,
     records,
     accounts,
     adjustments,
@@ -37,6 +42,7 @@ from app.routers import (
     books_events,
     books_periods,
     catalogue_imports,
+    cin7_imports,
     category_maps,
     comms,
     customer_portal,
@@ -79,6 +85,7 @@ from app.routers import (
     whatsapp_webhook,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
+from app.services.cin7_import_jobs import Cin7ImportJobService
 from app.services.locations import LocationSeedService
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
@@ -110,8 +117,13 @@ async def _payment_reminder_loop(stop: asyncio.Event) -> None:
     """Daily overdue-invoice emails. Standalone: Nia and its schedule loop are gone."""
     while not stop.is_set():
         try:
-            async with async_session_maker() as session:
-                await PaymentReminderService(session).tick()
+            async with tenant_session() as directory:
+                team_ids = list(
+                    await directory.scalars(select(Team.id).where(Team.status == "active"))
+                )
+            for team_id in team_ids:
+                async with tenant_session(team_id) as session:
+                    await PaymentReminderService(session).tick()
         except Exception:
             logger.exception("payment reminder tick failed")
         try:
@@ -122,19 +134,32 @@ async def _payment_reminder_loop(stop: asyncio.Event) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    async with async_session_maker() as session:
-        await RoleSeedService(session).seed()
-        await BootstrapService(session).seed_if_empty()
-        await LocationSeedService(session).seed_if_empty()
-        await seed_boot_fixtures(session)
-        coa = ChartOfAccountsSeedService(session)
-        await coa.seed_if_empty()
-        await coa.ensure_opening_equity()
-        await coa.ensure_customer_deposits()
-        await coa.ensure_storefront_gateway_clearing()
-        await coa.ensure_category_chart()
-        await coa.ensure_bank_accounts()
-        await PlaygroundSeedService(session).seed_if_enabled()
+    # Identity bootstrap precedes domain seeding; all business work runs with an
+    # explicit organisation, including recovery after process restarts.
+    async with tenant_session() as directory:
+        from app.runtime_database import verify_isolation_stage
+
+        await verify_isolation_stage(directory)
+        await BootstrapService(directory).seed_if_empty()
+        teams = list(await directory.scalars(select(Team).where(Team.status == "active")))
+        team_ids = [(team.id, team.slug) for team in teams]
+    for team_id, slug in team_ids:
+        async with tenant_session(team_id) as session:
+            await RoleSeedService(session).seed()
+            # Existing Firstout defaults never become another customer's shops.
+            if slug == "firstout":
+                await LocationSeedService(session).seed_if_empty()
+                await seed_boot_fixtures(session)
+            coa = ChartOfAccountsSeedService(session)
+            await coa.seed_if_empty()
+            await coa.ensure_opening_equity()
+            await coa.ensure_customer_deposits()
+            await coa.ensure_storefront_gateway_clearing()
+            await coa.ensure_category_chart()
+            await coa.ensure_bank_accounts()
+            if slug == "firstout":
+                await PlaygroundSeedService(session).seed_if_enabled()
+            await Cin7ImportJobService(session).recover_on_startup()
     stop = asyncio.Event()
     ticker: Optional[asyncio.Task] = None
     if settings.payment_reminder_ticker:
@@ -159,6 +184,14 @@ app = FastAPI(
 )
 
 register_exception_handlers(app)
+
+
+async def _rate_limited_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RateLimitedError)
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": exc.detail},
+    )
 
 
 async def _forbidden_handler(_: Request, exc: Exception) -> JSONResponse:
@@ -217,6 +250,7 @@ async def _document_llm_unconfigured_handler(_: Request, exc: Exception) -> JSON
 app.add_exception_handler(KitRequiresPickError, cast(ExceptionHandler, _kit_requires_pick_handler))
 app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handler))
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+app.add_exception_handler(RateLimitedError, cast(ExceptionHandler, _rate_limited_handler))
 app.add_exception_handler(
     DocumentLlmUnconfiguredError,
     cast(ExceptionHandler, _document_llm_unconfigured_handler),
@@ -258,6 +292,7 @@ app.include_router(skus.skus_router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
+app.include_router(cin7_imports.cin7_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
@@ -298,3 +333,8 @@ app.include_router(comms.comms_router)
 app.include_router(whatsapp_webhook.whatsapp_webhook_router)
 app.include_router(cost_audit.cost_audit_router)
 app.include_router(records.records_router)
+
+
+app.include_router(clerk_webhooks.router)
+app.include_router(tenant_signup.router)
+app.include_router(tenant_signup.organisations_router)

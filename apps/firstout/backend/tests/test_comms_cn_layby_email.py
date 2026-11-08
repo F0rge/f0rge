@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from typing import Optional
 
 import pytest
@@ -89,10 +91,7 @@ async def test_credit_note_warehouse_403(
 ) -> None:
     await _configure_smtp(owner_client)
     credit_id = await _create_credit_note(owner_client)
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse@example.com", "password": settings.seed_warehouse_password},
-    )
+    login = await authenticate_as(async_client, "warehouse@example.com")
     assert login.status_code == 200
     resp = await async_client.post(
         f"/api/v1/credit-notes/{credit_id}/send",
@@ -175,10 +174,7 @@ async def test_layby_warehouse_send_403(
         json=_layby_payload(customer.json()["id"], bedford_id, sku_id, hold_stock=False),
     )
     assert created.status_code == 201
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse@example.com", "password": settings.seed_warehouse_password},
-    )
+    login = await authenticate_as(async_client, "warehouse@example.com")
     assert login.status_code == 200
     resp = await async_client.post(
         f"/api/v1/laybys/{created.json()['id']}/send",

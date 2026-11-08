@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
@@ -8,7 +10,21 @@ class Settings(BaseSettings):
     direct_database_url: str = ""
     cors_origins: list[str] = ["http://localhost:3003"]
     jwt_secret: str = ""
+    clerk_enabled: bool = False
+    clerk_issuer: str = ""
+    clerk_authorized_parties: list[str] = []
+    clerk_webhook_secret: str = ""
+    clerk_secret_key: str = ""
+    clerk_webhook_reconcile_enabled: bool = False
+    clerk_import_enabled: bool = False
+    tenant_isolation_mode: Literal["single_home", "enforced"] = "single_home"
+    frontend_proxy_secret: str = ""
+    billing_disabled: bool = True
+    billing_test_mode: bool = True
+    tenant_signup_enabled: bool = False
     cookie_secure: bool = False
+    # Origin for links in email (password reset). Empty uses the first CORS origin.
+    public_app_url: str = ""
     seed_owner_email: str = "owner@example.com"
     seed_owner_password: str = "change-me-owner"
     seed_till_password: str = "change-me-till"

@@ -177,7 +177,7 @@ export default function ProformasPage() {
             <Button kind="secondary" href="/proformas/read">
               Read a proforma
             </Button>
-            <Button data-tour="proforma-new" onClick={openCreate}>
+            <Button onClick={openCreate}>
               File proforma invoice
             </Button>
           </div>

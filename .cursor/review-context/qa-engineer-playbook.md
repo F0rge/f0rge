@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # QA Review Playbook (committed copy)
 
 ## What this is
@@ -21,7 +23,7 @@ Cite the originating memory file in every block-level comment so future-Leo can 
 - **Class-of-bug audit missing** — when a fix names a pattern (tz-aware bind, `scalar_one_or_none` on non-unique WHERE, `field || undefined` + `exclude_unset`, etc.), the PR must either fix every sibling occurrence in the same diff or open a tracked follow-up issue. Block if neither. See `feedback_audit_class_of_bug.md` (root-cause: 2026-05-17 two prod outages from missing sibling audit on `photos.meal_time`).
 - **`.env.example` not updated for new required env vars** — block on any new entry in `apps/marrow/backend/app/config.py` (e.g. `HEALTHTRACKER_RO_PASSWORD`, `SETTINGS_ENCRYPTION_KEY`, `MCP_READONLY_DATABASE_URL`) that isn't mirrored in `apps/marrow/backend/.env.example`. Redeploys silently break without it. See `mcp_server_issue_49_findings.md`.
 - **`ruff format` regression** — if a touched file used to pass `ruff format --check` and no longer does, block. CI enforces format via `nx affected -t format-check` / `nx run-many -t format-check` in `ci.yml`.
-- **Migration without Fly release_command path** — PRs adding files under `apps/marrow/backend/migrations/versions/` must leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running alembic via `MIGRATION_DATABASE_URL`. See `.cursor/rules/infra.mdc`.
+- **Migration path** — New migrations stay compatible and are not an excuse to add a Fly app. Legacy Fly files and current Railway `preDeployCommand` lines are inventory. Production migration still needs Leo's release approval. See `.cursor/rules/infra.mdc` and `docs/adr/README.md`.
 - **pgvector extension order** — block any new test fixture or context that calls `Base.metadata.create_all` on a fresh Postgres without first executing `CREATE EXTENSION IF NOT EXISTS vector`. The `embedding.embedding VECTOR(1024)` column will crash `create_all`. See `project_byok_pgvector.md`.
 - **BYOK key resolution missed** — block any new AI/LLM call site that imports `settings.openrouter_api_key` directly instead of calling `resolve_llm_credentials(db)`. Lab extraction has this as an open follow-up; new code must not repeat it. See `project_byok_pgvector_gate.md`.
 - **Embedding vector dim != 1024** — block any new embedding column, request, or response that uses a dim other than 1024. The column is locked. See `project_ai_seams.md`.
@@ -57,7 +59,7 @@ The bot can't run local servers or drive Playwright. Instead, when the review co
 - [ ] Confirm `git status` is clean and any temp servers/worktrees are torn down (per global post-merge hygiene rule).
 
 **Add when diff includes:**
-- Migration files → verify against a local Postgres testcontainer before merge; after merge to `main` (which deploys), check `alembic_version` via API health.
+- Migration files → verify against a local Postgres testcontainer before merge; after a separately approved production release, check `alembic_version` via API health.
 - Any `Mapped[datetime]` schema change → verify against local Postgres (testcontainer), not SQLite.
 - MCP / embedding / OpenRouter changes → gate locally; there is no dev environment (`api-dev` / `app-dev` are retired).
 - dnd-kit changes → use real `page.mouse` not synthetic events; mobile path requires real-device verify (CDP `Input.dispatchTouchEvent` does NOT activate dnd-kit `TouchSensor`). See `qa-engineer/issue_78_findings.md`.
@@ -122,9 +124,11 @@ Per `project_datetime_tz_convention.md`:
 
 ## DevOps / infra patterns
 
-- **Fly migrations** — `[deploy] release_command` in `fly.toml` / `fly.prod.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app). See `.cursor/rules/infra.mdc`.
-- **MPG on Fly** — cluster `nlkxjo5m3240y93v` (`f0rge-db`, org `f0rge`); `FLY_MPG_SKIP_ROLE_DDL=1`; roles via `fly mpg users create`.
-- **Custom domains** — `marrow-health.com` DNS on Cloudflare (grey cloud); certs via `fly certs add`.
+These three bullets are historical Fly inventory. They are not permission to change DNS, create roles, or migrate production.
+
+- **Fly migrations** — `fly.toml` files contain `[deploy] release_command` for `alembic upgrade head`. Current Marrow Railway files use `preDeployCommand`. Runtime credentials stay least-privilege. See `.cursor/rules/infra.mdc`.
+- **MPG on Fly** — older notes name cluster `nlkxjo5m3240y93v` and `FLY_MPG_SKIP_ROLE_DDL=1`. Do not run `fly mpg` from an agent task.
+- **Custom domains** — older notes name Cloudflare DNS and `fly certs add`. Do not change DNS from an agent task.
 
 ---
 

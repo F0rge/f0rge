@@ -26,6 +26,7 @@ from app.services.cin7_import.load import run_import
 from app.services.cin7_import.parse import (
     assign_barcodes,
     fill_down,
+    generated_barcode_rows,
     named_sku_prices,
     realign_status_row,
 )
@@ -438,6 +439,22 @@ def test_assign_barcodes_keeps_one_shared_code_and_generates_the_rest() -> None:
     assert assigned["VASE-1"][1] is True
     assert assigned["CHAIR-1"] == ("CIN7-CHAIR-1", True)
     assert len({barcode for barcode, _generated in assigned.values()}) == 3
+    rows = generated_barcode_rows(
+        [("LAMP-1", "SHARED"), ("VASE-1", "SHARED"), ("CHAIR-1", "")],
+        assigned,
+    )
+    assert rows == [
+        {
+            "product_code": "CHAIR-1",
+            "reason": "blank",
+            "generated_barcode": "CIN7-CHAIR-1",
+        },
+        {
+            "product_code": "VASE-1",
+            "reason": "shared",
+            "generated_barcode": assigned["VASE-1"][0],
+        },
+    ]
 
 
 @pytest.mark.no_db

@@ -4,16 +4,26 @@
 
 Personal daily symptom check-in app for Leo's health research vault.
 
+## Canonical decisions
+
+Accepted and conditional decisions live in [`docs/adr/README.md`](docs/adr/README.md). After this change is reviewed, approved, and merged, those records are canonical. The planning Page is not a second policy copy.
+
+New apps use the accepted stack in that index: Rust, Actix Web, Diesel, PostgreSQL, standalone React, strict TypeScript, Vite, actual Primer, and TanStack Query, Router, and Form. `C-001` and `C-002` stay conditional. Apps already in this repo are legacy migration inventory, not approved exceptions, and these records do not migrate them.
+
+Leo approves every production release. Do not enable auto-merge. Do not merge or deploy unless that approval is in the task. Workflow files that still describe automatic deploys are existing configuration, not permission and not an approved exception.
+
 ## Stack
 
-- Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.11
-- Frontend: Next.js 16 + React 19 + Tailwind 4 + shadcn/ui
-- Auth: JWT in `ht_session` httpOnly cookie (email + password)
-- Deploy: Railway (API, worker, MCP, frontend) + Railway pgvector Postgres + Redis + Buckets for photos
+New apps follow [`docs/adr/README.md`](docs/adr/README.md). The list below is the legacy Marrow app as it exists today, not the new-app standard and not an approved exception.
+
+- Legacy backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.11
+- Legacy frontend: Next.js 16 + React 19 + Tailwind 4 + the current `@f0rge/ui` kit (shadcn-style, not Primer)
+- Auth today: JWT in `ht_session` httpOnly cookie (email + password). This is one app's private-person mode, not a repo-wide vendor choice.
+- Documented host files: Railway configs for the API, worker, MCP, and frontend, plus Postgres, Redis, and a photo bucket. Those files are not a live grant check and not a release approval.
 
 ## Environments
 
-Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). **Production** deploys from git branch `main` only. There is no develop environment and no `develop` branch workflow (see [Git flow](#git-flow-trunk-based-main-only)). dk tag-printer stays on Coolify/Pi.
+Marrow's committed config names Railway project **zoological-fulfillment** (`a633a271-…`). Those files are not a live check. Do not use a `develop` branch workflow. A remote `develop` ref may still exist and is not an approved branch (see [Git flow](#git-flow-trunk-based-main-only)). dk tag-printer's committed config names Coolify on the Pi.
 
 ### Production (`main`)
 
@@ -26,7 +36,7 @@ Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). **Pr
 | Redis | `Redis` | via `REDIS_URL` |
 | Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
-Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. Railway autodeploys production; GitHub Actions smoke runs on `main` only. See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
+Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. Railway and GitHub workflow files describe automatic production paths. Those paths are not an approved exception and are not Leo's release approval. GitHub Actions smoke is configured to run on `main` only. See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
 ## apps/buycycle
 
 Internal buycycle deal-finder dashboards on the Pi (Coolify, ports 8095/8096, no domain). See [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md). Public repo: never commit its DBs, data or feed key.
@@ -57,20 +67,20 @@ Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout
 
 ## Git flow (trunk-based, main only)
 
-There is **no `develop` branch workflow and no develop environment**. `main` is the only long-lived branch and the only deployed branch. Merging to `main` is deploying.
+Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. Leo approves every production release. A merge to `main` is not that approval. Do not enable auto-merge.
 
 - **Trunk-based development.** Everyone integrates into `main` continuously.
 - **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches may keep their tool prefix (`cursor/…`). Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
 - **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
 - **Squash merge** with a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
-- **`main` is the only deployed branch.** Railway services (Marrow, Firstout, Vellano) track `main`; Coolify deploys dk from `main`. A merge to `main` ships to the live environment.
+- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, Vellano) and Coolify for dk. That is not a live check. A merge to `main` is not by itself a production release approval.
 - **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
 - **Hotfixes are just PRs into `main`** (`hotfix/<desc>` or `fix/<desc>`), same CI and squash merge.
 - Never force-push `main`. Force-pushing your own feature branch is fine when needed.
-- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names only, or are retired. They do not imply a develop branch, and nothing deploys from one.
+- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names in committed files. They do not authorize a `develop` branch workflow. Committed files do not describe a deploy workflow for those names. That is not a live host check.
 
 - PRs into `main` run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build + prod-shaped frontend build) and `e2e-smoke.yml`.
-- After CI is green on push to `main`, the manifest-driven deploy workflow smokes Marrow and Firstout on Railway and deploys dk tag printer to Coolify.
+- After CI is green on a push to `main`, `.github/workflows/deploy.yml` is configured to smoke Marrow and Firstout URLs and to call Coolify webhooks for dk. That configuration is not Leo's release approval and this file does not turn it off.
 
 ## Running locally
 
@@ -135,7 +145,7 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
 | `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
 | `ui-kit.mdc` | `libs/ui/**`, `apps/**/frontend/**` — design-system imports, tokens, primitives |
-| `infra.mdc` | `**/fly*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-compose*.yml` |
+| `infra.mdc` | `**/railway*.toml`, `**/fly*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
 | `qa-gate.mdc` | tests, workflows |
 | `data-pipelines.mdc` | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
@@ -151,7 +161,7 @@ Agent-ready GitHub issue authoring (scope split, decision surfacing, parent/sub-
 
 ## Shipping features
 
-End-to-end workflow (prompt or GitHub issue → feature branch → PR into `main` → CI green → squash merge, which deploys): `.cursor/skills/ship-feature/SKILL.md`.
+Use a short-lived branch and a pull request into `main`. Review and green CI are not a production release. Leo approves every production release. Do not enable auto-merge. `.cursor/skills/ship-feature/SKILL.md` is not in this repo; do not invent it.
 
 ## PR review context
 

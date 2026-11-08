@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -27,7 +28,7 @@ class UnitCostAuditSource(str, enum.Enum):
     STOREFRONT = "storefront"
 
 
-class UnitCostAudit(UUIDPkMixin, TimestampMixin, Base):
+class UnitCostAudit(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "unit_cost_audit"
 
     sku_id: Mapped[uuid.UUID] = mapped_column(

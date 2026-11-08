@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.crud.user import UserCRUD
 from app.models.user import UserRole
 from app.services.locations import LocationSeedService
@@ -15,20 +16,15 @@ from app.services.user_default_location import bedfordview_default_location_id
 
 
 @pytest.mark.parametrize(
-    ("email", "role", "password_setting"),
-    ROLE_USER_SPECS,
+    ("email", "role"),
+    [(email, role) for email, role, _ in ROLE_USER_SPECS],
 )
 async def test_role_users_exist_after_session_seed(
     async_client: AsyncClient,
     email: str,
     role: UserRole,
-    password_setting: str,
 ) -> None:
-    password = getattr(settings, password_setting)
-    resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
-    )
+    resp = await authenticate_as(async_client, email)
     assert resp.status_code == 200
     me_resp = await async_client.get("/api/v1/auth/me")
     assert me_resp.status_code == 200
@@ -37,11 +33,7 @@ async def test_role_users_exist_after_session_seed(
 
 
 async def test_till_seed_user_has_bedfordview_default(async_client: AsyncClient) -> None:
-    password = settings.seed_till_password
-    login_resp = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till@example.com", "password": password},
-    )
+    login_resp = await authenticate_as(async_client, "till@example.com")
     assert login_resp.status_code == 200
 
     locations_resp = await async_client.get("/api/v1/locations")

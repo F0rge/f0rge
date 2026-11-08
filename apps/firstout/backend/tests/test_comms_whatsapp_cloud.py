@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 import json
 from typing import Any, Optional
 
@@ -159,10 +161,7 @@ async def test_cloud_warehouse_403(
 ) -> None:
     await _connect_cloud(owner_client)
     invoice_id = await _mobile_invoice(owner_client)
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse@example.com", "password": settings.seed_warehouse_password},
-    )
+    login = await authenticate_as(async_client, "warehouse@example.com")
     assert login.status_code == 200
     resp = await async_client.post(
         f"/api/v1/invoices/{invoice_id}/send",

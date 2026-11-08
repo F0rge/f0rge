@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from decimal import Decimal
 
 from httpx import AsyncClient
@@ -12,10 +14,8 @@ from tests.test_purchase_orders import _location_id_by_name
 
 async def _login(client: AsyncClient, email: str, password: str) -> None:
     client.cookies.clear()
-    response = await client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
-    )
+    client.headers.pop("Authorization", None)
+    response = await authenticate_as(client, email)
     assert response.status_code == 200
 
 
