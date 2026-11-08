@@ -728,7 +728,7 @@ export default function BankReconciliationPage() {
       ) : null}
 
       {canMutate ? (
-        <div data-tour="bank-upload">
+        <div>
           <p className="cds--label">Upload bank CSV</p>
           <p className="cds--helper-text">
             SA bank CSV with Date, Description, and Amount (or Debit/Credit) columns. Posted to the

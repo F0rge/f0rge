@@ -163,14 +163,14 @@ export default function HomePage() {
 
   return (
     <Stack gap={6} className="firstout-home">
-      <div data-tour="home-intro">
+      <div>
         <h1 className="cds--type-productive-heading-04">Home</h1>
         <p className="cds--type-body-01">
           Stock cockpit — overview of operations, inventory, and laybys.
         </p>
       </div>
 
-      <div className="firstout-home-actions" data-tour="home-actions">
+      <div className="firstout-home-actions">
         <Button kind="primary" renderIcon={Add} onClick={() => router.push("/catalogue/new")}>
           New stock
         </Button>
@@ -195,7 +195,7 @@ export default function HomePage() {
         </Button>
       </div>
 
-      <div data-tour="home-kpis">
+      <div>
       {loading ? <Loading withOverlay={false} description="Loading summary…" /> : null}
       {error ? (
         <InlineNotification kind="error" title="Home summary" subtitle={error} hideCloseButton />
@@ -263,7 +263,7 @@ export default function HomePage() {
       ) : null}
       </div>
 
-      <div data-tour="home-attention">
+      <div>
       {summary ? (
           <div className="firstout-home-tables">
             <div>

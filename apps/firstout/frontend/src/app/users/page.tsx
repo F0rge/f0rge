@@ -225,7 +225,7 @@ export default function UsersPage() {
           <h1 className="cds--type-productive-heading-04">Users</h1>
           <p className="cds--type-body-01">Manage back-office accounts{clerkEnabled ? " and invite staff from organisation settings." : "."}</p>
         </div>
-        {clerkEnabled ? <Button href="/organisation">Invite staff</Button> : <Button data-tour="user-new" onClick={() => setCreateOpen(true)}>Create user</Button>}
+        {clerkEnabled ? <Button href="/organisation">Invite staff</Button> : <Button onClick={() => setCreateOpen(true)}>Create user</Button>}
       </div>
 
       {error ? (

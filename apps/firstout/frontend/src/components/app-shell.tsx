@@ -80,7 +80,6 @@ import {
   isWarehousePath,
 } from "@/lib/nav";
 import { HeaderSearch } from "@/components/header-search";
-import { OverviewTourButton, PageTourButton, TourProvider } from "@/components/tour/tour-provider";
 import {
   getNarrowViewportServerSnapshot,
   getNarrowViewportSnapshot,
@@ -278,58 +277,50 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <TourProvider userId={user.id}>
-      <div
-        className="firstout-shell"
-        data-nav-expanded={expanded ? "true" : "false"}
-        data-compact={narrow ? "true" : "false"}
-      >
-        <Theme theme="g100">
-          <Header aria-label="Firstout">
-            <SkipToContent />
-            {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
-            <HeaderMenuButton
-              aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
-              isActive={expanded}
-              isCollapsible
-              onClick={toggleSideNavExpanded}
-            />
-            <HeaderName
-              href="/"
-              prefix=""
-              className="firstout-brand"
-              onClick={(event) => {
-                event.preventDefault();
-                router.push("/");
-              }}
+    <div
+      className="firstout-shell"
+      data-nav-expanded={expanded ? "true" : "false"}
+      data-compact={narrow ? "true" : "false"}
+    >
+      <Theme theme="g100">
+        <Header aria-label="Firstout">
+          <SkipToContent />
+          {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
+          <HeaderMenuButton
+            aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
+            isActive={expanded}
+            isCollapsible
+            onClick={toggleSideNavExpanded}
+          />
+          <HeaderName
+            href="/"
+            prefix=""
+            className="firstout-brand"
+            onClick={(event) => {
+              event.preventDefault();
+              router.push("/");
+            }}
+          >
+            <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
+          </HeaderName>
+          <HeaderGlobalBar>
+            <StaffOrganizationSwitcher />
+            <HeaderSearch />
+            <span className="firstout-header-user" title={user.email}>
+              {user.display_name || user.email}
+            </span>
+            <HeaderGlobalAction
+              aria-label="Log out"
+              tooltipAlignment="end"
+              onClick={() => void handleLogout()}
             >
-              <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
-            </HeaderName>
-            <HeaderGlobalBar>
-              <StaffOrganizationSwitcher />
-              <HeaderSearch />
-              <span className="firstout-tour-anchor" data-tour="header-page-tour">
-                <PageTourButton />
-              </span>
-              <span className="firstout-tour-anchor" data-tour="header-overview-tour">
-                <OverviewTourButton />
-              </span>
-              <span className="firstout-header-user" title={user.email}>
-                {user.display_name || user.email}
-              </span>
-              <HeaderGlobalAction
-                aria-label="Log out"
-                tooltipAlignment="end"
-                onClick={() => void handleLogout()}
-              >
-                <Logout size={20} />
-              </HeaderGlobalAction>
-            </HeaderGlobalBar>
-          </Header>
+              <Logout size={20} />
+            </HeaderGlobalAction>
+          </HeaderGlobalBar>
+        </Header>
         <SideNav
           aria-label="Firstout sections"
           className="firstout-side-nav"
-          data-tour="side-nav"
           expanded={expanded}
           isRail={!narrow}
           isPersistent={!narrow}
@@ -365,6 +356,5 @@ export function AppShell({ children }: AppShellProps) {
         </main>
       </Theme>
     </div>
-    </TourProvider>
   );
 }
