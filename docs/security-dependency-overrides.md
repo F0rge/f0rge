@@ -76,6 +76,6 @@ Commerce's direct `zod` dependency is 4.6.7. The other fixes are root overrides:
 | `qs` | 6.16.1 | Clears GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx. Express 4.22.2 still requests `~6.15.1`; the override is what installs the fixed minor. |
 | `body-parser@^1` | 1.20.9 | Patches the 1.x copy Express 4 installs. The `@^1` selector leaves `@modelcontextprotocol/sdk`'s body-parser 2.x alone. |
 | `zod@^4.0.0` | 4.6.7 | Lifts Medusa's exact 4.2.0 copies and the hoisted Zod 4.4.3. Zod 3 under `shadcn` (`^3.24.1`) does not match. Medusa re-exports Zod from `@medusajs/deps/zod`. |
-| `bullmq` → `uuid` | 11.1.1 | BullMQ 5.13.0 (pinned by Medusa) only calls `uuid.v4()`. Uuid 11 still ships that function for `require()`. `@nxlv/python` keeps uuid 9. |
+| `bullmq` → `uuid` | 11.1.1 | BullMQ 5.13.0 (pinned by Medusa) only calls `uuid.v4()`. Uuid 11 still ships that function for `require()`. The root production dependency hoists `uuid@11.1.1` so `@medusajs/core-flows` can `require("uuid")` in the commerce image. `@nxlv/python` keeps nested uuid 9. |
 | `@rushstack/node-core-library` → `ajv` | 8.20.0 | The production copy under MikroORM's `umzug` was ajv 8.13.0. Ajv 6 stays for ESLint. |
 | `postcss-selector-parser@^7` | 7.1.7 | Patches the 7.1.x copy (shadcn). The 6.x copies under Tailwind 3 / `postcss-nested` stay on 6.1.5: Tailwind 3 requires `postcss-selector-parser/dist/util/unesc`, which a major bump to 7.x would drop. GHSA-rj75-hqrm-r3gf therefore remains moderate and does not fail `--audit-level=high`. |
