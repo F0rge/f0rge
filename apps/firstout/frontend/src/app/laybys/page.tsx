@@ -634,7 +634,6 @@ function LaybysPageContent() {
         </div>
         {canMutate ? (
           <Button
-            data-tour="layby-new"
             onClick={() => {
               resetCreateForm();
               setCreateOpen(true);

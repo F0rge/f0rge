@@ -979,7 +979,7 @@ export default function TillPage() {
                     disabled={!skuId}
                   />
 
-                  <Button data-tour="till-add" kind="secondary" disabled={!addValid} onClick={handleAddToCart}>
+                  <Button kind="secondary" disabled={!addValid} onClick={handleAddToCart}>
                     Add to cart
                   </Button>
                 </Stack>
