@@ -10,7 +10,7 @@ function withPlaceholders(text: string) {
 
 export function PolicyArticle({ page, section }: { page: PolicyView; section: string }) {
   return <article className="content policy-page">
-    <p className="eyebrow">Vellano</p>
+    <p className="eyebrow">DasKasas</p>
     <h1>{page.title}</h1>
     {page.blocks.map((block, index) => {
       if (block.type === "notice") return <p key={`${section}-notice-${index}`} className="policy-draft-notice" role="note">{block.text}</p>;

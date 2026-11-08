@@ -1,7 +1,7 @@
 # Customer history and guest-order claim walkthrough — 2026-10-01
 
 The issue #751 server boundary was exercised with a fresh disposable local
-PostgreSQL database and Redis instance. Medusa migrations and Vellano
+PostgreSQL database and Redis instance. Medusa migrations and DasKasas
 bootstrap ran against that database. Two synthetic Clerk identities were
 signed with an ephemeral RSA key using the configured test issuer and audience;
 an unverified identity was also exercised. No Clerk tenant, customer data,

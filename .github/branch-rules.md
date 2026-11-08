@@ -26,8 +26,8 @@ Do not open a `develop` branch workflow. A remote `develop` ref may still exist;
 - **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches may keep their tool prefix (`cursor/…`). Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
 - **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
 - **Squash merge** with a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
-- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, Vellano) and Coolify for dk. That is not a live check. A merge to `main` is not by itself a production release approval.
+- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check. A merge to `main` is not by itself a production release approval.
 - **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
 - **Hotfixes are just PRs into `main`** (`hotfix/<desc>` or `fix/<desc>`), same CI and squash merge.
 - Never force-push `main`. Force-pushing your own feature branch is fine when needed.
-- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names only, or are retired. They do not imply a develop branch, and nothing deploys from one.
+- PRs target `main`. Historical host/environment names do not authorize another branch workflow. Airflow still has committed `develop` bundle references; reconcile their consumers separately before changing or deleting that ref.

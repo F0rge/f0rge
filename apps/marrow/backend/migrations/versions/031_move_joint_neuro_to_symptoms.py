@@ -8,7 +8,7 @@ Retire core entry columns joint_pain / neuro as user-facing scales. Relabel the
 existing bulk symptom joint_pain, add neuro_symptoms to every user's catalog
 (archived except Leo), and backfill symptoms_json from legacy column values.
 
-RLS note: Fly MPG runs ``alembic upgrade`` as ``schema_admin`` — a NOBYPASSRLS
+RLS note: ``alembic upgrade`` can run as ``schema_admin`` — a NOBYPASSRLS
 owner — and symptom_catalog / entries use FORCE ROW LEVEL SECURITY. A single
 cross-tenant ``INSERT ... SELECT FROM users`` is rejected (WITH CHECK) and the
 cross-tenant UPDATEs would silently touch 0 rows. So every statement is scoped

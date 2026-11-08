@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Marrow frontend
 
-## Getting Started
+Daily symptom check-in UI built with Next.js, React, strict TypeScript and the
+shared `@f0rge/ui` kit. The app uses Plus Jakarta Sans and Marrow's token skin.
+This is an existing app; the [ADR index](../../../docs/adr/README.md) defines the
+stack for new apps.
 
-First, run the development server:
+## Run locally
+
+Install the npm workspaces once from the repository root:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+npx nx run marrow-frontend:dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>. Start Marrow's PostgreSQL database and API separately
+using the [root instructions](../../../AGENTS.md#running-locally). Requests under
+`/api` are proxied to the API at `http://localhost:8000` by default; `API_URL`
+overrides that address.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run from the repository root:
 
-## Learn More
+```bash
+npx nx run-many -t lint typecheck test build --projects marrow-frontend
+npx nx run marrow-frontend:codegen:check
+npx nx run marrow-frontend:e2e
+```
 
-To learn more about Next.js, take a look at the following resources:
+The browser checks need the running API and frontend. API types are generated
+from Marrow's backend contract; do not edit generated files by hand. Shared UI
+primitives and forms live in `libs/ui`; inspect them with
+`npx nx run f0rge-ui:storybook`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Build and release
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The [Dockerfile](Dockerfile) uses the repository root as its build context and
+produces Next.js standalone output. The npm workspace is named `frontend`, while
+its Nx project is named `marrow-frontend`; existing Docker and CI commands use
+both identifiers.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[railway.toml](railway.toml) describes the frontend service configuration. See the
+[deployment guidance](../../../.github/deploy/README.md) for the release workflow.
+Production releases require Leo's approval.

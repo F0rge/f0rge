@@ -68,7 +68,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Decision:** Small shared Rust plumbing libraries; app-specific business rules, database models and migrations stay app-local.
 - **Proposed enforcement (not installed):** Cargo graph rules prevent shared infrastructure crates importing app crates; ownership checks flag app models/migrations in shared packages; reviewer checks abstraction size.
 - **Gate and limit:** Static + human: resolved dependency graph and model/migration ownership report. Shared mechanism is not a shared business-model mega-library.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** CI grep rejects Python imports of apps from libs/backend and TypeScript imports of apps from libs. Nx boundary tags cover shared, marrow, dk, firstout, and vellano only.
+- **Static evidence at `f155a2ba` (not normative, not a live check):** CI grep rejects Python imports of apps from libs/backend and TypeScript imports of apps from libs. Nx boundary tags cover the shared libraries and the Marrow, dk, Firstout, and storefront apps only.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).
 - **Risk noted in that assessment:** medium.

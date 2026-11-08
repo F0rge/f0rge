@@ -23,9 +23,9 @@ def create_engine_and_sessionmaker(
     direct_database_url: str = "",
     echo: bool = False,
 ) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
-    """Build an AsyncEngine + async_sessionmaker from a raw (Fly/local) DATABASE_URL.
+    """Build an AsyncEngine + async_sessionmaker from a raw hosted or local DATABASE_URL.
 
-    Normalizes the URL for asyncpg (direct-host rewrite for pooled Fly MPG URLs)
+    Normalizes the URL for asyncpg (direct-host rewrite for recognized pooler URLs)
     and disables the statement cache when stuck behind a transaction pooler.
     """
     kwargs: dict = {"echo": echo}

@@ -1,19 +1,29 @@
-# Vellano private Railway preview
+# DasKasas storefront hosting
 
-> **Main only.** There is no `develop` branch workflow. The Railway environment named `develop` below is a name only; its services track `main`. Use `--base=origin/main` for affected checks.
+> **Main only.** Pull requests target `main`. Use `--base=origin/main` for affected checks. The dated audit below describes an earlier hosting arrangement, not the current destination.
 
-Issue #759 asks for a private hosted Vellano with isolated Medusa data
+Issue #759 asks for a private hosted DasKasas with isolated Medusa data
 services, a real Firstout SKU round-trip, health checks, a rollback path, and a
 monthly total below USD 50.
 
-**Status:** an existing Vellano web service is running in the Vellano
-`develop` environment, but the isolated preview required by #759 is not
-provisioned or verified. No hosted SKU round-trip or cost telemetry is
-available. Keep #759 open until the isolated topology, hosted checks, and
-measured monthly cost are recorded. A dedicated Firstout machine credential
-and Clerk/Peach development credentials still require an owner.
+## Current destination (8 November 2026)
 
-### Read-only hosted audit (2026-09-30 UTC)
+Provider metadata identifies the existing **DasKasas** project. Use these identities
+when checking a release; do not create another project from the older proposal.
+
+| Resource | Current identity |
+| --- | --- |
+| Project | `DasKasas` — `d58a2884-d366-4230-9555-8b7bb4e42d4f` |
+| Environment | `production` — `d73ff2d5-816d-4bc8-85b4-71a85b0398fa` |
+| Web service | `storefront` — Nx `daskasas-web` |
+| Commerce service | `storefront-commerce` — Nx `daskasas-commerce` |
+
+Metadata confirms destination identity, not application health, isolation grants,
+SKU parity, provider interoperability, or cost. Refresh those checks for each
+release and record the exact source and deployed artifact. The remaining acceptance
+items below still require their own evidence; this update does not certify them.
+
+### Historical hosted audit (2026-09-30 UTC; superseded destination)
 
 Railway metadata was checked with explicit project and environment IDs; no
 variables or logs were read, and no infrastructure was changed. The project is
@@ -41,13 +51,12 @@ or replace its data services as part of this runbook.
 
 ## Isolation and access rules
 
-- Create a new Railway project named **F0rge Vellano Preview**, with one
-  environment named **private-preview**. Do not reuse the Firstout/Vellano or
-  Marrow projects, their services, their databases, Redis instances, buckets,
-  or credentials.
-- Start with one web service, one shared-mode Medusa service, one dedicated
-  Postgres service, and one dedicated Redis service. Do not create a separate
-  staging stack for this preview.
+- Use the existing DasKasas project and `production` environment listed above.
+  Do not reuse the Firstout or Marrow projects, their services, their databases,
+  Redis instances, buckets, or credentials.
+- Confirm the existing web and Medusa services have their own PostgreSQL and
+  Redis services. Do not provision duplicates or a separate staging stack from
+  this runbook.
 - Generate an HTTPS Railway hostname for the **web** service only. Do not add
   custom DNS or generate a public domain for Medusa, Postgres, or Redis. The
   web server connects to Medusa over Railway's private network.
@@ -72,30 +81,40 @@ or replace its data services as part of this runbook.
 ## Railway service configuration
 
 For both app services, keep Railway's Root Directory at the repository root.
-The Docker build context must remain the repository root.
+The live web service uses Railpack with these commands:
+
+```bash
+npm ci && npm run build -w @f0rge/storefront-web
+npx next start apps/storefront/web --port ${PORT:-3004}
+```
+
+Its checked-in Dockerfile is an alternative build path, not the current live
+builder. Commerce uses its Dockerfile; Docker build contexts remain the repository
+root. Do not switch either provider build path implicitly during cleanup.
 
 | Service | Build configuration | Domain | Health check |
 | --- | --- | --- | --- |
-| vellano-web | `RAILWAY_DOCKERFILE_PATH=apps/storefront/web/Dockerfile` | Railway HTTPS hostname; Basic Auth protected | /api/health |
-| vellano-commerce | `RAILWAY_DOCKERFILE_PATH=apps/storefront/commerce/Dockerfile` | Private network only | /health |
-| storefront-postgres | Railway PostgreSQL plugin | Private network only | Railway-managed |
-| storefront-redis | Railway Redis plugin | Private network only | Railway-managed |
+| storefront | Railpack with the root build/start commands above | Verify existing hostname and access control | /api/health |
+| storefront-commerce | `RAILWAY_DOCKERFILE_PATH=apps/storefront/commerce/Dockerfile` | Verify scoped ingress and private app connectivity | /health |
+| Dedicated PostgreSQL | Confirm the existing service and app-only references | Private network only | Railway-managed |
+| Dedicated Redis | Confirm the existing service and app-only references | Private network only | Railway-managed |
 
-Create new app services with the Dockerfile path above and set Medusa's
-pre-deploy command to `node /app/node_modules/.bin/medusa db:migrate`. Its
-runtime working directory is the compiled `.medusa/server` folder. Do not
-select the checked-in `railway.toml` files for new services: Railway's new
-service flow no longer uses legacy Config as Code files ([Railway documentation](https://docs.railway.com/config-as-code)). Use Railway service
+The committed commerce configuration names the pre-deploy command
+`node /app/node_modules/.bin/medusa db:migrate`. Verify the configured service
+matches the reviewed release plan before running a migration. Its runtime working
+directory is the compiled `.medusa/server` folder. Confirm each existing service's
+Dockerfile and config-file path instead of changing provider settings implicitly.
+Use Railway service
 references for the private database and Redis URLs; never paste connection
 strings into source, CI logs, or this runbook. Hosted Medusa fails closed unless
 its dedicated database and Redis URLs exist and its JWT, cookie, and BFF
 secrets each contain at least 32 characters. Configure the remaining
 service-native Medusa settings from
 [the commerce environment example](../commerce/.env.example), using the
-dedicated Vellano services and the generated web origin.
+dedicated DasKasas services and the generated web origin.
 
 Set values in Railway's protected variable editor or an approved secret
-manager. This table lists only the Vellano integration variables and their
+manager. This table lists only the DasKasas integration variables and their
 intent; it contains no credential values.
 
 | Service | Variable names | Notes |
@@ -105,25 +124,24 @@ intent; it contains no credential values.
 
 Firstout checks a static machine credential and the exact hostname of its own
 API request. The allowed hostname belongs to the Firstout API ingress, not the
-Vellano web host. There is no token-issuance endpoint in the repository. An
-owner must provision a distinct Vellano machine token through the approved
+DasKasas web host. There is no token-issuance endpoint in the repository. An
+owner must provision a distinct DasKasas machine token through the approved
 Firstout environment path. Do not reuse another integration's token or change
 the Firstout hostname allowlist for this preview.
 
-## Provisioning and smoke sequence
+## Release and smoke sequence
 
-After the dedicated Ops credential is available, an owner can create the
-project and services in this order:
+After the dedicated Ops credential and exact release approval are available:
 
-1. Create the new project and private-preview environment. Add its own Postgres
-   and Redis services, then create the commerce and web services from this
-   repository. Confirm the project and service names before the first deploy.
-2. Select each app service's config file above. Do not set a subdirectory Root
-   Directory. Configure private data-service references and Medusa's
-   server-only variables. Keep FIRSTOUT_OPS_TOKEN only on commerce.
-3. Generate the web service's Railway HTTPS hostname. Set that exact origin in
-   NEXT_PUBLIC_BASE_URL and the required Medusa CORS settings. Set strong
-   Basic Auth credentials on the web service. Do not configure custom DNS.
+1. Confirm the DasKasas project, production environment, and existing service
+   identities above. Record current deployments and recovery options. Check that
+   its data services are separate from Firstout and Marrow.
+2. Verify each app service's Dockerfile/config path and repository-root build
+   context. Verify private data-service references and Medusa's server-only
+   variables. Keep FIRSTOUT_OPS_TOKEN only on commerce.
+3. Verify the existing web origin matches NEXT_PUBLIC_BASE_URL and Medusa CORS.
+   Confirm the required access control before release. Hostname, DNS, credentials,
+   and public-selling changes require their own approved scope.
 4. Deploy Medusa and confirm its /health check succeeds. Run the documented
    first-time bootstrap and source sync from the Medusa service context:
 
@@ -166,7 +184,7 @@ hosted walkthrough is complete based on CI or /api/health alone.
 
 ## CI and local checks
 
-Vellano TypeScript projects carry the existing platform:ts tag, so
+DasKasas TypeScript projects carry the existing platform:ts tag, so
 Nx-affected CI runs lint, typecheck, and build for changed projects. This
 change adds no deploy workflow or deploy manifest entry: deployment remains an
 owner-controlled action after reviewing the private project. Before
@@ -200,7 +218,7 @@ with low average resource use and no separate staging stack.
 
 The resource estimate applies USD 10/GB-month for memory, USD 20/vCPU-month,
 USD 0.15/GB-month for the database volume, and USD 0.05/GB for egress. It is
-**not an all-in Vellano forecast**. The following lines must be included
+**not an all-in DasKasas forecast**. The following lines must be included
 before claiming the USD 50/month target:
 
 Railway's Hobby plan has a USD 5 monthly minimum that includes the first USD 5
@@ -225,7 +243,7 @@ Confirm actual invoice treatment and record Railway's observed usage after a
 representative month. Current product sync does not provision product media
 storage. The estimate has not been verified against a provisioned service, and
 workspace-level billing controls are not a project-level hard cap. Do not
-claim Vellano is under USD 50/month until every required line above is
+claim DasKasas is under USD 50/month until every required line above is
 measured or explicitly budgeted. If telemetry approaches the target, stop the
 preview and review resource settings with the owner.
 
@@ -236,7 +254,7 @@ Pricing references: [Railway plans](https://docs.railway.com/pricing/plans),
 ## Rollback
 
 This preview is isolated from Firstout and Marrow data. If a deployment fails,
-revert the changed commit or select the last known-good Vellano deployment
+revert the changed commit or select the last known-good DasKasas deployment
 in Railway; restore the previous web/Medusa image pair and verify both health
 checks. If schema rollback is unsafe, roll forward from a database backup
 instead of deleting or reusing the database. If the private boundary fails,

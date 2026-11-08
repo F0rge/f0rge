@@ -107,6 +107,6 @@ See global `~/.cursor/rules/leo-system-wide.mdc` § "Post-Merge Hygiene".
 Every new `Settings` attribute in `apps/marrow/backend/app/config.py` requires:
 1. A matching line in `apps/marrow/backend/.env.example`.
 2. If required (no safe default), documentation of how to obtain the value.
-3. Do not run `fly secrets set` or change production secrets from this checklist. A production secret change needs a separate explicit approval.
+3. Production secret changes need explicit approval; this checklist only verifies configuration coverage.
 
 Block on missing `.env.example` entry. See `mcp_server_issue_49_findings.md`.

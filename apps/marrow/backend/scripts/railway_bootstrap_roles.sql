@@ -70,5 +70,5 @@ BEGIN
 END
 $$;
 
--- After this script: set FLY_MPG_SKIP_ROLE_DDL=1 on Railway services so
+-- After this script: set SKIP_DATABASE_ROLE_DDL=1 on Railway services so
 -- migrations 004/019 skip role DDL (roles already exist).

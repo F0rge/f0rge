@@ -43,30 +43,18 @@ These need Leo's Apple ID + payment and cannot be automated:
 
 ---
 
-## 3. Fly secrets (backend push config)
+## 3. Backend push configuration
 
 The backend reads `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` (the PEM
 *content* of the .p8, not a path), `APNS_TOPIC` (defaults to `com.f0rge.marrow`),
 and `APNS_USE_SANDBOX`. Unset → push disabled with a startup warning; in-app
 notifications still work.
 
-Run from the repo root (where `AuthKey_XXXX.p8` was downloaded):
-
-```bash
-# Prod app (marrow) — serves TestFlight/App Store builds
-fly secrets set --app marrow \
-  APNS_KEY_ID=XXXXXXXXXX \
-  APNS_TEAM_ID=ABCDE12345 \
-  APNS_USE_SANDBOX=false \
-  APNS_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
-
-# Dev app (marrow-dev) — serves Xcode cable builds
-fly secrets set --app marrow-dev \
-  APNS_KEY_ID=XXXXXXXXXX \
-  APNS_TEAM_ID=ABCDE12345 \
-  APNS_USE_SANDBOX=true \
-  APNS_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
-```
+For an approved production configuration change, set these variables on the
+Railway `marrow-api` service using the approved secret store. Keep the private
+key out of the repository and logs. Production TestFlight/App Store builds use
+`APNS_USE_SANDBOX=false`; a separate local backend serving cable builds uses
+`APNS_USE_SANDBOX=true`.
 
 ### Which APNs environment? (critical — wrong one = silent push failure)
 
@@ -82,13 +70,14 @@ The entitlement stays `development` in `Config/Marrow.entitlements`; Xcode flips
 it to `production` automatically when signing for distribution — don't hand-edit it.
 
 Recommended standing config:
-- **marrow** (prod): `APNS_USE_SANDBOX=false` — it only ever serves TestFlight builds.
-- **marrow-dev**: `APNS_USE_SANDBOX=true` for day-to-day cable testing.
+- **Railway `marrow-api` production:** `APNS_USE_SANDBOX=false` for TestFlight/App Store builds.
+- **Separate local backend:** `APNS_USE_SANDBOX=true` for cable testing.
 
 **Gotcha:** a TestFlight build pointed at the dev API (i.e. a Debug archive) is a
-rare combo — TestFlight builds are Release/prod by default. If you ever knowingly
-distribute a dev-API build via TestFlight, flip `marrow-dev` to
-`APNS_USE_SANDBOX=false` for that window, or its pushes will 400 (BadDeviceToken).
+rare combo — TestFlight builds are Release/prod by default. A separately
+configured backend serving a TestFlight build still needs
+`APNS_USE_SANDBOX=false`, or pushes return BadDeviceToken. Keep cable-test
+configuration separate from production.
 
 ---
 

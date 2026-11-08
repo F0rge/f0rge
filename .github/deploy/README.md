@@ -4,25 +4,31 @@ Single source of truth for **which Nx projects deploy where**. The orchestrator
 (`.github/workflows/deploy-reusable.yml`) reads this file, intersects with `nx
 affected`, and delegates to Railway smoke or Coolify executors.
 
-Marrow ships via **Railway GitHub autodeploy**; Actions only plans + smokes.
+Committed configuration describes **Railway deployment plus Actions smoke** for Marrow. Check current provider triggers before an authorized release; this file does not enable them or grant production approval.
 dk tag-printer, buycycle, and environment-monitor run on Coolify (Pi). Firstout is a **separate Railway
-project** (not Marrow `zoological-fulfillment`),
-**`main` only**. Hosts: `firstout.co.za` /
+project** (not Marrow),
+**`main` only**, in Railway environment `production`
+(`9f7b0c34-bd95-442b-b746-a9791dcc2895`). Hosts: `firstout.co.za` /
 `api.firstout.co.za` (Swagger at `/docs`).
 
-## Add app #3
+DasKasas storefront is a separate Railway project (`d58a2884-d366-4230-9555-8b7bb4e42d4f`),
+production environment `d73ff2d5-816d-4bc8-85b4-71a85b0398fa`, with services
+`storefront` and `storefront-commerce`. Its `apps/storefront/` Railway configs are
+outside this manifest; verify both services separately for an approved release.
+
+## Add an app
 
 1. Land code under `apps/<name>/` with `project.json` tags `platform:py` or
    `platform:ts` (and optional `deploy-target:*`).
 2. Add a `components.<id>` block below.
-3. For **Railway (marrow)**: set `target: railway`, `railway.role`
+3. For **Railway smoke**: set `target: railway`, `railway.role`
    (`api` | `frontend`), and per-env `railway.health_url` (smoke target).
    MCP URLs go under `also_deploys`.
 4. For **Coolify (Pi)**: set `target: coolify`, `coolify.app_uuid`, and
    `webhook_secret_env` (name of a GitHub Actions secret holding the app's
    `manual_webhook_secret_github` value).
-5. Set `branches` — e.g. `[main]`. `main` is the only deployed branch;
-   there is no develop environment.
+5. Set `branches: [main]`. PRs target `main`; existing remote refs and historical
+   environment names are separate inventory.
 6. Add repo secrets if new Coolify webhooks are needed:
    - `COOLIFY_BASE_URL` (e.g. `https://coolify.taxpilot.lu`)
    - `COOLIFY_WEBHOOK_<APP>_*` per component
@@ -38,9 +44,6 @@ project** (not Marrow `zoological-fulfillment`),
 | `COOLIFY_WEBHOOK_ENVMON_BACKEND` | environment-monitor-backend (Pi; skips while unset) |
 | `COOLIFY_WEBHOOK_ENVMON_FRONTEND` | environment-monitor-frontend (Pi; skips while unset) |
 | `SMOKE_EMAIL` / `SMOKE_PASSWORD` | Optional Railway auth smoke |
-
-`FLY_API_TOKEN` is unused after the Railway cutover (safe to delete from GitHub
-secrets after the 48h Fly rollback window).
 
 ## Coolify monorepo settings (per app)
 
@@ -65,12 +68,11 @@ ignores that answer on apps it did not select. The selected app must queue a
 deployment, or return the exact watch-path ignore. `Invalid signature` on the
 selected app fails the job.
 
-Leave Coolify **Auto Deploy** on (`is_auto_deploy_enabled: true`) for every
-app this workflow deploys. In Coolify v4, `is_auto_deploy_enabled=false` also
-blocks the manual webhook CI posts, so the reply is `Deployments disabled.`
-and the job fails. This repo has no GitHub push webhooks, so leaving
-auto-deploy on does not deploy twice. Deploy stays CI-gated:
-`deploy-reusable.yml` runs on `main` only after CI succeeds.
+An explicitly approved release through this legacy webhook path requires the
+selected app to accept manual webhooks. Coolify v4 reports `Deployments disabled.`
+when `is_auto_deploy_enabled=false`; the job treats that response as failure.
+Preserve existing release holds. Changing provider trigger settings needs an
+authorized operations task; do not enable them merely to make this workflow pass.
 
 Internal-only Coolify components (e.g. `buycycle`, `environment-monitor-*`, `host: pi`) omit `health_url`:
 runners can't reach the Pi, so the job relies on Coolify's `queued` response and
@@ -86,7 +88,7 @@ writes that line to the job summary.
 HTTP 2xx with this selected app's message exactly equal to `Deployments disabled.`
 **fails** the job. `classify_coolify_response` returns `failed` for that
 sentence (not `skipped`). The error names the app and its Coolify uuid and
-tells you to turn Auto Deploy on for that app. A sibling's copy of that
+reports that the app does not accept this deployment path. A sibling's copy of that
 sentence does not count. Any other 2xx that does not queue a deployment, and
 any non-2xx, fails the job. Missing secrets and placeholder uuids still skip,
 so an unconfigured Pi app does not fail the marrow Railway smoke.

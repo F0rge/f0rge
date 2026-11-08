@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Sync Tigris (Fly) photos → Railway Bucket (S3-compatible).
+# Sync photos from a source S3-compatible bucket to Railway Bucket.
 #
-# Requires AWS CLI v2. Source = Fly Tigris credentials; dest = Railway bucket creds.
+# Requires AWS CLI v2 and separately scoped source/destination bucket credentials.
 #
 # Usage:
 #   export SRC_AWS_ACCESS_KEY_ID=... SRC_AWS_SECRET_ACCESS_KEY=... SRC_BUCKET=f0rge-marrow-dev-photos
+#   export SRC_ENDPOINT=...          # Exact S3 endpoint for the source bucket
 #   export DST_AWS_ACCESS_KEY_ID=... DST_AWS_SECRET_ACCESS_KEY=... DST_BUCKET=...
 #   ./apps/marrow/backend/scripts/railway_bucket_sync.sh
 set -euo pipefail
@@ -12,11 +13,11 @@ set -euo pipefail
 : "${SRC_AWS_ACCESS_KEY_ID:?}"
 : "${SRC_AWS_SECRET_ACCESS_KEY:?}"
 : "${SRC_BUCKET:?}"
+: "${SRC_ENDPOINT:?Set SRC_ENDPOINT to the source S3 endpoint}"
 : "${DST_AWS_ACCESS_KEY_ID:?}"
 : "${DST_AWS_SECRET_ACCESS_KEY:?}"
 : "${DST_BUCKET:?}"
 
-SRC_ENDPOINT="${SRC_ENDPOINT:-https://fly.storage.tigris.dev}"
 DST_ENDPOINT="${DST_ENDPOINT:-https://t3.storageapi.dev}"
 SRC_REGION="${SRC_REGION:-auto}"
 DST_REGION="${DST_REGION:-auto}"

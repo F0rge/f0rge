@@ -73,7 +73,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     <div ref={attentionRef} className="product-attention-region" aria-hidden="true" />
     <div className="product-page">
     <div className="gallery">
-      <div className="product-image hero-study">{image ? <img key={image} className="gallery-image" src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={1000} fetchPriority="high" /> : <span className="image-placeholder" aria-hidden="true">Vellano</span>}</div>
+      <div className="product-image hero-study">{image ? <img key={image} className="gallery-image" src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={1000} fetchPriority="high" /> : <span className="image-placeholder" aria-hidden="true">DasKasas</span>}</div>
       <p className="sr-only" aria-live="polite">{imagePosition ? `Image ${imagePosition} of ${gallery.length} for ${product.title}` : `No image for ${product.title}`}</p>
       {gallery.length > 1 && <div className="gallery-thumbnails" aria-label="Product images">{gallery.map((url, index) => <Button key={url} type="button" className={url === image ? "active" : ""} onClick={() => {
         setActiveImage(url);
@@ -82,7 +82,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     </div>
     <div className="product-copy">
       <Link href="/shop" className="back-link">← All pieces</Link>
-      <p className="eyebrow">Vellano / furniture</p>
+      <p className="eyebrow">DasKasas / furniture</p>
       <h1>{product.title}</h1>
       {description && <p>{description}</p>}
       {options.length > 0 && <div className="variant-options">{options.map((option) => {

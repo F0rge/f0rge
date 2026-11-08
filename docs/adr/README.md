@@ -20,7 +20,7 @@ The decisions were reconstructed from the 7 November 2026 architecture conversat
 
 New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Leo approves every production release. Do not enable auto-merge. Until an `adr-coverage` check exists, the filled 66-row checklist (recorded, enforcement, implementation, exception) belongs in the pull-request description. The table below is the index, not that checklist. Checking a box is not proof, and this repo does not yet have a mechanical checker.
 
-Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor, storefront/Vellano, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, Turso, SQLite, and Fly files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
+Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, Turso, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
 
 `C-001` (generated Zod from a Rust contract into TanStack Form) and `C-002` (Vitest, Storybook browser tests, Playwright journeys) stay conditional.
 

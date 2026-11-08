@@ -2,7 +2,7 @@
 
 # dk tag printer — Agent Instructions
 
-DasKasas price tag tool. Deploy target: **Coolify on Pi** (prod only). No Fly apps.
+DasKasas price tag tool. Deploy target: **Coolify on Pi** (prod only).
 Delegate deploy/infra work to the `devops` sub-agent.
 
 ## Local dev

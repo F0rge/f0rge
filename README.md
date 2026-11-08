@@ -1,32 +1,28 @@
-# f0rge
+# F0rge
 
-Personal Nx monorepo. Home to **marrow** (daily health check-in) and **dk tag printer** (DasKasas price tags).
+Personal Nx monorepo. Each app owns its business rules and data; reusable infrastructure lives in `libs/`.
 
 ## Structure
 
-```
-libs/
-├── backend/
-│   ├── core/       f0rge-core     exceptions + handler registration
-│   ├── db/         f0rge-db       engine/session/RLS/CRUD factories
-│   ├── storage/    f0rge-storage  object storage + image resize
-│   └── testing/    f0rge-testing  testcontainer + savepoint fixtures
-└── ui/             @f0rge/ui      shadcn primitives, API client, hooks
+| Area | Source | Nx projects |
+|---|---|---|
+| Marrow health check-in | `apps/marrow/` | `marrow-backend`, `marrow-frontend`, `marrow-ios` |
+| Firstout back office | `apps/firstout/` | `firstout-backend`, `firstout-frontend` |
+| DasKasas storefront | `apps/storefront/` | `daskasas-commerce`, `daskasas-web` |
+| DasKasas tag printer | `apps/dk/tag-printer/` | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
+| Buycycle dashboards | `apps/buycycle/` | `buycycle` |
+| Environment Monitor | `apps/environment-monitor/` | `environment-monitor-backend`, `environment-monitor-frontend` |
+| Workflow orchestration | `apps/airflow/` | `airflow` |
+| Shared backend packages | `libs/backend/{core,db,storage,testing}/` | `f0rge-core`, `f0rge-db`, `f0rge-storage`, `f0rge-testing` |
+| Shared legacy UI kit | `libs/ui/` | `f0rge-ui` |
 
-apps/marrow/
-├── backend/   FastAPI + async SQLAlchemy + Postgres (Fly MPG) — Python 3.11, uv
-└── frontend/  Next.js 16 + React 19 + Tailwind + @f0rge/ui
-
-apps/dk/tag-printer/
-├── backend/   FastAPI + pandas/fpdf — Python 3.11, uv (Pi Coolify prod)
-└── frontend/  Next.js 16 + React 19 + Tailwind 3
-```
+The 18 registered projects include existing Python, Next.js, Medusa, Swift, and sensor/dashboard apps. New apps follow [the canonical ADRs](docs/adr/README.md); those decisions do not migrate the existing apps automatically.
 
 Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Deploy conventions: [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`.github/deploy/README.md`](.github/deploy/README.md).
 
 ## Nx workspace
 
-Ten projects: `marrow-backend`, `marrow-frontend`, `marrow-ios`, `dk-tag-printer-backend`, `dk-tag-printer-frontend`, `f0rge-core`, `f0rge-db`, `f0rge-storage`, `f0rge-testing`, `f0rge-ui`. Inferred targets: Next (`build`/`dev`/`start`), ESLint (`lint`), Vitest (`test`), Playwright (`e2e`), `@nxlv/python` (`lock`/`sync` + import graph). Task cache via `targetDefaults` in `nx.json`. `defaultBase` is `main`. Conventions: [`.cursor/rules/nx.mdc`](.cursor/rules/nx.mdc).
+Project names and tags live in each `project.json`. Inferred targets cover Next, ESLint, Vitest, Playwright, and Python dependency graphs. Task caching is configured in `nx.json`, with `main` as the default base. See [Nx conventions](.cursor/rules/nx.mdc).
 
 ```bash
 npx nx graph                                   # interactive dependency graph
@@ -47,6 +43,6 @@ npx nx reset                                   # clear the Nx cache
 
 ## CI/CD
 
-- **`CI`** ([`ci.yml`](.github/workflows/ci.yml)) — parallel `backend` / `frontend` jobs each run `nx affected` filtered with `--exclude='*,!tag:platform:py|ts'` (no detect job) → `ci` gate. Required checks: `ci` + `playwright smoke` on `main` (see [`.github/branch-rules.md`](.github/branch-rules.md)). Every new project must carry a `platform:` tag or CI ignores it (guard: [`.github/scripts/check-nx-projects.sh`](.github/scripts/check-nx-projects.sh)).
-- **`Deploy`** ([`deploy.yml`](.github/workflows/deploy.yml)) — separate workflow after successful CI on push to `main`. Orchestrator ([`deploy-reusable.yml`](.github/workflows/deploy-reusable.yml)): manifest + Nx affected → Railway smoke (marrow) or Coolify webhook (dk). Marrow and Firstout: Railway autodeploy from `main` + Actions smoke. dk: prod-only on `main` via Coolify. Coolify `Deployments disabled.` on an app the plan selected fails the job (enable auto-deploy for that app in Coolify). Watch-path ignores stay a skip. See [`.github/deploy/README.md`](.github/deploy/README.md).
-- **Manual deploy**: `gh workflow run Deploy --ref main -f environment=main -f component=mcp` (`all` / `api` / `mcp` / `frontend` — marrow only).
+- **CI** ([`ci.yml`](.github/workflows/ci.yml)) runs affected lint, type, test and build checks. Required checks are `ci` and `playwright smoke` on PRs to `main`; see [branch rules](.github/branch-rules.md).
+- **Configured delivery paths:** [the deploy manifest](.github/deploy/manifest.yml) selects Railway smoke for Marrow/Firstout and Coolify webhooks for the Pi apps. The DasKasas storefront has its own Railway config and project, outside that manifest.
+- **Production control:** Leo approves every production release. Committed workflow triggers and provider config describe capability; they do not prove a workflow is enabled or grant release approval. Preserve release holds and verify the exact target before any authorized deployment. See [deploy guidance](.github/deploy/README.md).

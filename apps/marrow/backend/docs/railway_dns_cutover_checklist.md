@@ -22,5 +22,5 @@ Set records to **DNS only (grey cloud)** until Railway cert shows ACTIVE, then p
 | CNAME | `www` | `myvmlozz.up.railway.app` | for www.marrow-health.com |
 | TXT | `_railway-verify.www` | `railway-verify=623a2b5b9086ef65b91cd5fb01801f76e324ac2894dc9dd94930f056df4e25e7` | for www.marrow-health.com |
 
-Replace existing Fly A/CNAME records for api/app-dev/apex/www.
+Historical cutover replaced the prior provider A/CNAME records. Verify current Railway domain targets before any separately authorized DNS change.
 Apex `@` may need Cloudflare CNAME flattening (supported).

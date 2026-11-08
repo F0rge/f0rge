@@ -9,7 +9,7 @@ package-lock.json
 **/yarn.lock
 
 # QA evidence — the agent produces these and must read them back.
-# qa-gate.mdc Phase 4b and ship-feature Phase 6 both depend on this.
+# qa-gate.mdc Phase 4b reads this evidence.
 qa-screenshots/
 .playwright*/
 

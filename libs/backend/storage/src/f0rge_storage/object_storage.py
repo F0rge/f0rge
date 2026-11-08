@@ -163,7 +163,7 @@ class ObjectStorage:
 
         Tries the canonical ``{user_id}/…`` key first. Legacy bare keys and
         extra probes apply only when resolving for the configured reference user
-        (historical Fly/Railway uploads without per-tenant prefixes).
+        (historical uploads without per-tenant prefixes).
         """
         rel = relative_path.lstrip("/")
         if not self.enabled():
@@ -190,7 +190,7 @@ class ObjectStorage:
 
         Serve paths trust the DB filename (upload invariant: row implies object).
         Probing alternate key layouts via ``resolve_relative_key`` is for
-        reads/deletes of legacy Fly/Railway layouts — not for redirects.
+        reads/deletes of legacy object layouts — not for redirects.
         """
         if not self.enabled():
             return None

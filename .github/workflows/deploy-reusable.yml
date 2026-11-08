@@ -202,8 +202,8 @@ jobs:
           # --fail-with-body already failed the step on non-2xx.
           if ! CLASS=$(printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --classify --http-status "$HTTP_STATUS" --app-uuid "$APP_UUID"); then
             if printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --deployments-disabled --app-uuid "$APP_UUID"; then
-              echo "::error::Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify."
-              echo "Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Enable auto-deploy for this app in Coolify." >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Preserve the release hold; verify approval and target before changing provider settings."
+              echo "Coolify refused to deploy ${APP_NAME} (${APP_UUID}): Deployments disabled. Preserve the release hold; verify approval and target before changing provider settings." >> "$GITHUB_STEP_SUMMARY"
             else
               echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
             fi

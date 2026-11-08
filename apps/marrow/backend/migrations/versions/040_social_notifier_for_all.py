@@ -5,7 +5,7 @@ Revises: 039
 Create Date: 2026-07-12 00:00:00.000000
 
 Match provisioner_copy pattern: social_notifier must be FOR ALL so INSERT
-WITH CHECK passes under FORCE RLS on Fly MPG (schema_admin / NOBYPASSRLS).
+WITH CHECK passes under FORCE RLS on managed Postgres (schema_admin / NOBYPASSRLS).
 """
 
 from __future__ import annotations

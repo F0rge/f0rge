@@ -5,10 +5,14 @@ COPY package.json package-lock.json ./
 COPY vendor/braces/braces-3.0.4-f0rge.1.tgz ./vendor/braces/
 COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
 RUN npm ci --workspace=@f0rge/storefront-commerce --include-workspace-root=false
+# core-flows imports uuid without declaring it; the app pins the already-used
+# compatible version so a scoped install can load its workflows at runtime.
+RUN node -e "require('@medusajs/core-flows')"
 
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/storefront/commerce/node_modules ./apps/storefront/commerce/node_modules
 COPY package.json package-lock.json ./
 COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
 COPY apps/storefront/commerce ./apps/storefront/commerce
@@ -23,6 +27,12 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=9000
 RUN apk add --no-cache su-exec
+# Every supported release image is hosted, even if runtime variables are wrong.
+# Keep the marker root-owned and outside the application-owned directory.
+RUN mkdir -p /usr/local/share/daskasas \
+    && touch /usr/local/share/daskasas/hosted-artifact \
+    && chmod 0555 /usr/local/share/daskasas \
+    && chmod 0444 /usr/local/share/daskasas/hosted-artifact
 COPY apps/storefront/commerce/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules

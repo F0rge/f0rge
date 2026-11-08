@@ -1,4 +1,6 @@
-# Config-as-code for the Vellano web service.
+# Alternative Docker config for the DasKasas storefront web service.
+# The existing storefront service uses Railpack; retain its configured build and
+# start commands unless an approved release explicitly changes the build path.
 # Set Railway Root Directory to the repository root and use this file as the
 # service config path. Never attach this service to the Firstout or Marrow project.
 

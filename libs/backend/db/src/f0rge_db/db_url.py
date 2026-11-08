@@ -14,11 +14,11 @@ def _to_asyncpg_scheme(url: str) -> str:
 
 
 def _prefer_direct_mpg_url(url: str) -> str:
-    """Use the direct MPG host when Fly provides a pooled PgBouncer URL.
+    """Prefer the direct host for recognized managed-Postgres pooler names.
 
-    Fly Managed Postgres attach sets DATABASE_URL to PgBouncer
-    (``pgbouncer.<cluster>.flympg.net``). asyncpg prepared statements break
-    through transaction pooling, so prefer ``direct.<cluster>.flympg.net``.
+    asyncpg prepared statements can conflict with transaction pooling.
+    Preserve the existing ``pgbouncer.`` and ``.pooler.`` hostname rewrites;
+    callers can supply an explicit direct URL through ``resolve_database_url``.
     """
     parsed = urlparse(url)
     host = parsed.hostname or ""
@@ -39,7 +39,7 @@ def _uses_pooler(url: str) -> bool:
 
 
 def resolve_database_url(url: str, *, direct_url: str = "") -> str:
-    """Normalize a Fly/local DATABASE_URL for SQLAlchemy asyncpg."""
+    """Normalize a hosted or local DATABASE_URL for SQLAlchemy asyncpg."""
     if direct_url:
         return _to_asyncpg_scheme(direct_url)
     return _to_asyncpg_scheme(_prefer_direct_mpg_url(url))

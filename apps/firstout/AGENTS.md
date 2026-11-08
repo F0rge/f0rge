@@ -26,7 +26,7 @@ Read `~/.cursor/agent-memory/<agent>/MEMORY.md` first. Write gotchas back when d
 
 - Backend: FastAPI Python 3.11 + async SQLAlchemy + asyncpg + Alembic. API prefix `/api/v1`.
 - Frontend: Next.js App Router `output: 'standalone'`.
-- Auth cookie (S1, not S0): `firstout_session` — **not** `ht_session`.
+- Auth: Clerk sessions for staff and trade customers. Staff API requests require a verified active organisation and local membership; customer requests require an explicit approved portal-access binding.
 - Import only: `f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing`. No Firstout domain in shared libs.
 
 ## Local ports (locked)
@@ -57,7 +57,7 @@ cd apps/firstout/backend && uv run uvicorn app.main:app --port 8003 --reload
 cd apps/firstout/frontend && npm run dev   # :3003, rewrites /api/* → :8003
 ```
 
-### S1 auth bootstrap
+### Identity bootstrap and Clerk authentication
 
 On startup, if the `users` table is empty the API seeds one team (`Firstout`) and one owner from env:
 
@@ -73,11 +73,11 @@ On startup, if the `users` table is empty the API seeds one team (`Firstout`) an
 | `warehouse@example.com` | warehouse | `SEED_WAREHOUSE_PASSWORD` | `change-me-warehouse` |
 | `buyer@example.com` | buyer | `SEED_BUYER_PASSWORD` | `change-me-buyer` |
 
-Login requires `JWT_SECRET`. Cookie name is `firstout_session` (HttpOnly, SameSite=Lax, `Path=/`). Session cookie TTL is team-configurable via `team_settings.session_ttl_hours` (default **12 hours**, range 1–720); login sets JWT `exp` and cookie `Max-Age` from the current setting — no sliding refresh; changing the setting does not revoke already-issued tokens. Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
+Staff sign in at `/clerk-login`; `/login`, `/forgot-password`, and `/reset-password` redirect there. The backend validates the Clerk bearer token, active organisation, local membership, and tenant host. Trade customers use `/trade/login` and their separately approved customer-access binding.
 
-Staff password reset: `/login` links to `/forgot-password`. `POST /api/v1/auth/forgot-password` always returns the same message for a missing, active, or disabled account (email match is the same CITEXT lookup as login). A live account with the shop SMTP mailbox configured receives a one-hour single-use link to `/reset-password?token=…`. Only the SHA-256 hash is stored (`password_reset_tokens`, migration `078_password_reset`). A new request invalidates older unused tokens for that user. `POST /api/v1/auth/reset-password` checks the same minimum password length as profile password change (8) plus a confirm field. Success consumes that token, invalidates the user's other reset tokens, and increments `users.token_version`. JWTs include `ver`; `get_current_user_id` rejects a mismatch or a disabled user, so older sessions stop working. Changing a password in profile or user admin bumps the same version (profile re-issues the current cookie). Disabled users cannot complete a reset. In-process limits (no shared limiter in this app): 5 requests per email and 20 per IP per hour, 10 confirm attempts per IP per 15 minutes. The link origin is `PUBLIC_APP_URL` when set, otherwise the first `CORS_ORIGINS` entry (default `http://localhost:3003`). Mail goes out through the existing shop SMTP mailbox (Settings → Communications).
+Local password login and reset endpoints remain compatibility routes that return a Clerk-directed error. Logout clears historical `firstout_session` cookies, while the frontend signs out of Clerk. Preserve existing password hashes, token rows, user IDs, grants, and migrations for import verification and recovery; seed passwords do not provide a local sign-in path. The stored `session_ttl_hours` setting is retained as legacy data and does not control Clerk sessions.
 
-Copy `apps/firstout/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally. Generate `SETTINGS_ENCRYPTION_KEY` with Fernet (`cryptography.fernet.Fernet.generate_key()`) before saving an SMTP password in Settings → Communications.
+For local authentication, copy `apps/firstout/backend/.env.example` to `.env` and configure the Clerk test instance and frontend key. `CLERK_ENABLED=true`, an HTTPS `CLERK_ISSUER`, approved `CLERK_AUTHORIZED_PARTIES`, and an operator-activated `TENANT_ISOLATION_MODE=enforced` are required; disabled or incomplete configuration denies authentication. For activation or recovery, read [the multitenancy runbook](docs/multitenancy-deploy-runbook.md) and [Clerk-only cutover checks](docs/clerk-only-cutover.md); preserve the shared `FRONTEND_PROXY_SECRET`. Provider setup or an operator activation requires its own scoped approval. Generate `SETTINGS_ENCRYPTION_KEY` with Fernet (`cryptography.fernet.Fernet.generate_key()`) before saving an SMTP password in Settings → Communications.
 
 ### Communications (outbound SMTP)
 
@@ -85,7 +85,7 @@ Settings tab **Communications** (after Operations). Owner (`settings.mutate`) sa
 
 ### Permissions (F5)
 
-Authorisation is a **permission catalog**, not role-tuple checks. `users.role` is a string slug matching `roles.slug`. Five built-in roles are **presets**. Owner is immutable (`is_system`, `is_owner_preset`); `has_permission` short-circuits for owner. Custom roles are named bundles (`POST /api/v1/roles`). Cookie remains `firstout_session`.
+Authorisation is a **permission catalog**, not role-tuple checks. `users.role` is a string slug matching `roles.slug`. Five built-in roles are **presets**. Owner is immutable (`is_system`, `is_owner_preset`); `has_permission` short-circuits for owner. Custom roles are named bundles (`POST /api/v1/roles`). Clerk establishes identity; the local permission catalog remains authoritative.
 
 **Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `books.mutate`, `books.journals`.
 
@@ -107,7 +107,7 @@ Nia (the in-app assistant), Canvas (`/canvas`), lookbooks, and storefront-except
 
 Staff storefront-product admin (`/product-groups`, publication toggles on SKU update) is also removed. Medusa owns public merchandising. Keep the ops-commerce feed: `GET /api/v1/ops-commerce/v1/products` still returns names, tax-inclusive prices, and stock for published SKUs. `skus.storefront_published` and `product_groups` stay in the database because that feed filters and groups on them. `GET /api/v1/ops-commerce/v1/checkout-safety` stays and, once authorized, returns `checkout_allowed: true`. A missing or failing checkout-safety response pauses shop checkout.
 
-### Playground seed (live demo env / local demos)
+### Playground seed (disposable local demos)
 
 Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`, then BI pack `VEL-BI-V1`):
 
@@ -119,7 +119,7 @@ suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land →
 
 **Backdate limits:** till/PO/transfer services stamp "now"; the pack then writes `tax_invoices.issue_date`, `payments.paid_on`, PO lead timestamps, transfer timestamps, and dead-stock `location_stock.updated_at`. Journals and stock-movement audit rows stay at seed-run time. Books `InvoiceCreate` does not move stock — BI books invoices are AR-only (no `sku_id`) so sales-by-SKU does not claim units still on hand. SKU sales signal comes from till + completed laybys.
 
-**Railway (live env, tracks `main`):** on service `firstout-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner`. Role logins exist only when `SEED_BOOT_FIXTURES=true`. Walk stock → proforma → PO → receive → transfer → till → books.
+**Demo access:** use a disposable local database and Clerk test identities with verified links to the seeded users and memberships. Fixture passwords do not authenticate. Keep `SEED_PLAYGROUND` off in production. Walk stock → proforma → PO → receive → transfer → till → books.
 
 Local: `SEED_PLAYGROUND=true` in `apps/firstout/backend/.env`, then restart uvicorn.
 
@@ -156,7 +156,7 @@ Every location has a default **FLOOR** bin (`code=FLOOR`, `row_code=F`, `bay=1`,
 
 Internal stock move is a **document**, not a one-shot qty swap. Dest on-hand rises **only** on dest receive. In-app Transfer Note PDF (`GET /{id}/pdf`). **No email.**
 
-Endpoints (cookie `firstout_session`): `GET/POST /api/v1/transfers`, `GET /transfers/{id}`, `POST /transfers/{id}/dispatch`, `GET /transfers/{id}/pdf`, `POST /transfers/{id}/receive`, `POST /transfers/{id}/cancel`.
+Endpoints (authenticated staff): `GET/POST /api/v1/transfers`, `GET /transfers/{id}`, `POST /transfers/{id}/dispatch`, `GET /transfers/{id}/pdf`, `POST /transfers/{id}/receive`, `POST /transfers/{id}/cancel`.
 
 Numbering: `TRF-0001`. Status: `draft` | `in_transit` | `received` | `cancelled`. Cancel is a status change (no DELETE).
 
@@ -183,7 +183,7 @@ Migration: `031_two_step_transfers`.
 
 ## V2-S2 stocktakes
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Stocktakes:** `GET/POST /stocktakes`, `GET /stocktakes/{id}`, `PATCH /stocktakes/{id}/lines/{line_id}` (`{counted_qty}` ≥ 0), `POST /stocktakes/{id}/lookup` (`{barcode}` exact `our_barcode`), `POST /stocktakes/{id}/complete`, `POST /stocktakes/{id}/cancel`. No pause endpoint.
 
@@ -200,7 +200,7 @@ Complete only from `in_progress`. Lines with `counted_qty` set apply `delta = co
 
 ## V2-S3 stock adjustments
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Adjustments:** `GET/POST /adjustments`, `GET /adjustments/{id}`, `POST /adjustments/{id}/lines` (`{sku_id, qty_delta, unit_cost_zar?}`), `PATCH /adjustments/{id}/lines/{line_id}`, `DELETE /adjustments/{id}/lines/{line_id}` (204), `POST /adjustments/{id}/complete`, `POST /adjustments/{id}/cancel`.
 
@@ -223,7 +223,7 @@ Create and complete return 409 `"Location is locked for stocktake"` while a stoc
 
 ## V2-S4 CSV import
 
-Endpoints (cookie `firstout_session`): `POST /api/v1/imports/preview`, `POST /api/v1/imports/commit`. Multipart: `inventory` CSV required, `soh` CSV optional, optional JSON strings `inventory_map` / `soh_map`. No GET. **`catalogue.mutate`** (`require_catalogue_mutate`). Warehouse-only SOH import is deferred.
+Endpoints (authenticated staff): `POST /api/v1/imports/preview`, `POST /api/v1/imports/commit`. Multipart: `inventory` CSV required, `soh` CSV optional, optional JSON strings `inventory_map` / `soh_map`. No GET. **`catalogue.mutate`** (`require_catalogue_mutate`). Warehouse-only SOH import is deferred.
 
 Preview is in-memory (200 even with row errors; 400 only if a file is unreadable or empty). Commit re-parses the files; any row error → 400; otherwise one transaction: inventory then SOH.
 
@@ -252,7 +252,7 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 
 ## V2-S10 customers CRM
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Customers:** `GET/POST /customers`, `GET /customers/{id}`, `PATCH /customers/{id}`.
 
@@ -294,7 +294,7 @@ Migration: `018_v2_s13_sku_supplier`.
 
 Fulfillment tracking only — till/layby already moved stock. **No stock movement. No journal.**
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Deliveries:** `GET/POST /deliveries`, `GET /deliveries/{id}`, `POST /deliveries/{id}/pack` (optional `{carton_count}`), `POST /deliveries/{id}/load`, `PATCH /deliveries/{id}/tracking`, `POST /deliveries/{id}/complete` (optional `{delivery_date, tracking_number, carrier}`), `POST /deliveries/{id}/cancel`.
 
@@ -313,7 +313,7 @@ Nullable `skus.reorder_min` (Integer). PATCH via `SkuUpdate` — set with `ge=1`
 
 **Reorder math:** `on_hand` = SUM(`location_stock.on_hand`); `on_order` = (`sku_stock.on_order` or 0) + SUM(`po_lines.qty`) on purchase orders with status **`open`** (draft POs count; on-water qty lives in `sku_stock` only). Listed when `reorder_min IS NOT NULL` and `(on_hand + on_order) < reorder_min`. `suggested_qty = reorder_min - on_hand - on_order`.
 
-Endpoints (cookie `firstout_session`):
+Endpoints (authenticated staff):
 
 - **Reorder:** `GET /reorder`, `POST /reorder/draft-po` body `{ sku_ids: [uuid, ...] }` (min 1).
 
@@ -332,7 +332,7 @@ Frontend `/wms` warehouse console. Carbon ContentSwitcher: Receive | Count | Tra
 
 ## V2-S15 reports (stock and sales)
 
-Richer stock and sales reports under `/api/v1/reports` (cookie `firstout_session`). JSON + CSV export for each. All authenticated roles (same as existing S7 reports).
+Richer stock and sales reports under `/api/v1/reports` (authenticated staff). JSON + CSV export for each. All authenticated roles (same as existing S7 reports).
 
 - **Stock valuation:** `GET /reports/stock-valuation`, `GET /reports/stock-valuation/csv` — on-hand &gt; 0 by location × SKU (`on_hand × unit_cost_zar`).
 - **Aged stock:** `GET /reports/aged-stock`, `GET /reports/aged-stock/csv` — buckets `0-90`, `91-180`, `180+` days from `location_stock.updated_at` (180+ cutoff matches home `aged_stock_value_zar`).
@@ -347,7 +347,7 @@ Richer stock and sales reports under `/api/v1/reports` (cookie `firstout_session
 
 ## V2-S5 returns / RMA
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Returns:** `GET/POST /returns`, `GET /returns/{id}`, `POST /returns/{id}/complete`, `POST /returns/{id}/cancel`.
 
@@ -366,7 +366,7 @@ Complete restock while a stocktake is `in_progress` at that location → 409 `"L
 
 ## V2-S6 laybys
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `GET /laybys/{id}/pdf`, `POST /laybys/{id}/send`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`. Send uses `require_comms_send` (not only `sales.laybys`). Cancelled layby send is 409. Print HTML receipt remains.
 
@@ -387,7 +387,7 @@ Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold 
 
 ## V2-S7 home hub KPIs
 
-`GET /home` (cookie `firstout_session`) extends the S10 summary with hub KPIs and attention lists. Existing fields (`on_order_*`, `on_hand_*`, `home_currency`) unchanged.
+`GET /home` (authenticated staff) extends the S10 summary with hub KPIs and attention lists. Existing fields (`on_order_*`, `on_hand_*`, `home_currency`) unchanged.
 
 **KPI fields:** `aged_stock_value_zar` (on-hand value where `location_stock.updated_at` ≤ now−180 days), `open_laybys_count` / `open_laybys_balance_zar` (status `open`|`ready`), `low_stock_count` (SKUs with total on-hand 1–2 inclusive), `open_returns_count` (returns status `draft`).
 
@@ -401,7 +401,7 @@ Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold 
 
 ## S3 catalogue (suppliers, proformas, SKUs)
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Suppliers:** `GET/POST /suppliers` — `{ name, default_currency? }` (currency defaults to USD).
 - **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF streamed via `serve_stored_pdf`; no S3 302).
@@ -420,7 +420,7 @@ No purchase orders, landed cost, quantities, or wholesale/retail pricing in S3.
 
 ## S4 purchase orders (PO, packing sheet, transit, land, receive)
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Purchase orders:** `GET/POST /purchase-orders`, `GET /purchase-orders/{id}`, `GET /purchase-orders/{id}/packing-sheet` (PDF), `POST /purchase-orders/{id}/on-water`, `POST /purchase-orders/{id}/land` (multipart: `fx_to_zar`, three bill fields + PDFs).
 - **Receive:** `POST /receive` — JSON `purchase_order_id`, `location_id`.
@@ -494,7 +494,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for 
 
 **Sales orders:** `GET /orders`, `GET /orders/{id}`, `POST /orders/{id}/confirm`, `POST /orders/{id}/payments`, `POST /orders/{id}/invoice`, `POST /orders/{id}/cancel`. Number `SO-0001`. Accept quote copies lines and optionally holds stock at a **warehouse or showroom** (not layby showroom-only) via `apply_outgoing_qty` (`UnitCostAuditSource.sales_order`). Insufficient on-hand → `awaiting_stock` (no 409 except stocktake lock). Deposits `cash|eft` only: Dr 1100 Cr 2300 on `sales_order_payments` — never till `tender=deposit`. Remainder invoice posts full SO totals, applies deposits Dr 2300 Cr 1200, leaves remaining AR open; no second stock-out if already held. Mutate: `sales.orders`.
 
-**Trade portal:** `customer_portal_users` + cookie `firstout_customer_session` (`typ=customer`). Never `users.role=customer`. Staff `POST /customers/{id}/portal-users` (trade customers only). Portal `POST /portal/login|logout`, `GET /portal/me`, `GET /portal/catalogue`, `POST/GET /portal/orders` → **draft SO**, no hold until staff confirm. UI `/trade/login` and `/trade/catalogue` (no back-office rail).
+**Trade portal:** Clerk customer identities have explicit approved bindings to `customer_portal_users`; they are separate from staff users and memberships. Staff issue `POST /customers/{id}/portal-invitations`; signed-in customers accept through `POST /portal/invitations/accept` and select approved access from `GET /portal/organisations`. Business requests include the selected `X-Firstout-Portal-Access` ID. `GET /portal/me`, `GET /portal/catalogue`, and `POST/GET /portal/orders` retain their behavior: orders create a **draft SO**, with no hold until staff confirm. Local `/portal/login` rejects passwords; `/portal/logout` clears historical cookies. UI `/trade/login` and `/trade/catalogue` has no back-office rail.
 
 **Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Over-cap **create** without `users.manage` → **201** `pending_approval` (still allocates `po_number`); owner/manage create stays `open`. Land re-checks with the posted FX; over-cap land without `users.manage` still **409**. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not). `POST /purchase-orders/{id}/approve|reject` (`users.manage`): pending → open/rejected.
 
@@ -534,7 +534,7 @@ SKU `category` maps to those P&L accounts via `GET/PUT /api/v1/category-maps` (s
 
 **Numbering:** `INV-0001`, `CN-0001`, … via `document_sequences` (row lock; prefix editable in settings). Auto-posted GL keeps `journal_number` null.
 
-Endpoints (all under `/api/v1`, cookie `firstout_session`):
+Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on posted journal lines), `tax_treatment` (`none` | `vat15`), and `is_bank`. Extra bank codes 1110–1140 are seeded by `ensure_bank_accounts()`.
 - **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: `books.mutate`.
@@ -595,7 +595,7 @@ Date,Description,Reference,Amount
 2026-09-04,Unmatched deposit,REF003,500.00
 ```
 
-### Endpoints (all under `/api/v1`, cookie `firstout_session`)
+### Endpoints (all under `/api/v1`, authenticated staff)
 
 - **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `GET /bank-imports/unmatched-counts`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id" }` XOR `{ "journal_id" }`. Bank CSV is per recon account (`account_id` on `POST /bank-imports`; omit defaults to 1100). Bank rules (`GET/POST /bank-rules?bank_account_id=`, PATCH/DELETE `/{id}`) are confirm-to-apply (`POST .../apply-rule` `{ rule_id }`); recode journal-matched lines with `POST .../recode` `{ account_id }`.
 - **Reports:** `GET /reports/aged-ar?as_of=`, `GET /reports/aged-ap?as_of=`, `GET /reports/profit-loss?from=&to=`, `GET /reports/balance-sheet?as_of=`, `GET /reports/trial-balance?as_of=`, `GET /reports/journals?from=&to=&source=` (source optional), `GET /reports/cash-summary?from=&to=` — plus `/csv` on trial-balance, journals, and cash-summary.
@@ -626,33 +626,33 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 
 ## Railway
 
-> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. The Railway environment below is *named* `develop` in committed notes. Those notes say its services track git `main`. That is not a live host check. A merge to `main` is not Leo's production release approval. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Railway inspection on 8 November 2026 identified the `production` environment below; recheck live service bindings before infrastructure changes. A merge to `main` is not Leo's production release approval. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
 
-**Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Production has no Firstout services; the Marrow project has no Firstout config.
+**Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Keep Firstout services and credentials within its own project.
 
 | Resource | ID / URL |
 |----------|----------|
 | Project `Firstout` | `c76d8df1-d839-454c-a94a-79b930deaf38` |
-| Environment `develop` (name only; the live env, tracks `main`) | `7a8ce6f1-c514-4e5d-9c50-4b7918865321` |
+| Environment `production` (verified 8 November 2026) | `9f7b0c34-bd95-442b-b746-a9791dcc2895` |
 | Service `firstout-api` | `77a83033-b75e-4da1-88d0-b6db39bcedaf` |
 | Service `firstout-frontend` | `10838be1-7a37-4dfc-810a-8805d040d5d7` |
 | Postgres (own, not Marrow pgvector) | `a1a6695d-b8fb-4c79-92a6-664b48bc07e4` |
-| Bucket `firstout-dev` (Tigris, the live env) | `49435225-4849-4132-bb87-66a23c67cdf1` |
+| Historical bucket reference `firstout-dev` (verify current binding before changes) | `49435225-4849-4132-bb87-66a23c67cdf1` |
 | API | https://api.firstout.co.za (`/api/v1/health`, Swagger `/docs`) |
 | Frontend | https://firstout.co.za |
 
-- **Replicas:** 1 each (hobby tier, `sfo` region).
+- **Capacity:** verify live replicas, region, and limits in Railway before changing them.
 - **Config files:** `apps/firstout/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
 - **`watchPatterns`:** `apps/firstout/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `firstout-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
-- **Manifest:** `.github/deploy/manifest.yml` — `branches: [main]`. Smoke targets `health_url.main` (the live hosts). There is no separate production environment.
-- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). `SEED_BOOT_FIXTURES` defaults false; set true only to also seed `till@` / `books@` / `warehouse@` / `buyer@example.com`, the storefront system user, and the Walk-in customer. Leave it false on the live API. Cookie `firstout_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Manifest:** `.github/deploy/manifest.yml` — `branches: [main]`. Smoke targets `health_url.main` (the live hosts). The live environment is `production`.
+- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). `SEED_BOOT_FIXTURES` defaults false; set true only to also seed `till@` / `books@` / `warehouse@` / `buyer@example.com`, the storefront system user, and the Walk-in customer. Leave it false on the live API. These records require verified Clerk links and memberships before staff can sign in.
 - **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `firstout-api` — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
 - **WhatsApp click-to-chat:** `POST .../send {channel:whatsapp}` with Cloud API off writes outbox `whatsapp_click` / `opened` and returns a `https://wa.me/{e164}?text=...` URL. Click-to-chat cannot attach a PDF.
 - **WhatsApp Cloud API:** paste phone-number id + access token in Settings → Communications (`whatsapp_mode=cloud` when both present). Token and app secret are Fernet-encrypted; GET never returns them. Keep the existing WhatsApp Business app on the number — paste-token coexistence, no Embedded Signup. Unofficial WhatsApp libraries are banned.
 - **WhatsApp webhook:** public `GET/POST https://api.firstout.co.za/api/v1/webhooks/whatsapp` (no cookie). Meta verify token is env `WA_VERIFY_TOKEN`, not the access token. Local challenge: `curl -G 'http://localhost:8003/api/v1/webhooks/whatsapp' --data-urlencode 'hub.mode=subscribe' --data-urlencode "hub.verify_token=$WA_VERIFY_TOKEN" --data-urlencode 'hub.challenge=ok'`. HMAC `X-Hub-Signature-256` is required when an app secret is saved. Delivery statuses update `comms_messages`; inbound chat is not stored as a conversation.
 - **WhatsApp Cloud send:** when `whatsapp_mode=cloud`, `POST .../send {channel:whatsapp}` sends a pre-approved utility template then uploads the PDF (`type=document`). Template body parameters are (1) document number (2) amount inc VAT — laybys use remaining balance as the amount. First contact must use the template named in Settings (`wa_invoice_template_name`, default language `en`). 24h window / template failures return 409 with Meta's message and outbox `failed`. If Cloud is off, the same button stays click-to-chat. Graph timeout 20s; never log the Bearer token.
-- **Playground dataset:** set `SEED_PLAYGROUND=true` on `firstout-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-live-demo-env--local-demos).
-- **Object storage:** dedicated Railway Tigris bucket `firstout-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `firstout-api`: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{firstout-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
+- **Playground dataset:** use `SEED_PLAYGROUND=true` only with a disposable local database for catalogue / PO / till / books demos. Keep it off in production. See [Playground seed](#playground-seed-disposable-local-demos).
+- **Object storage:** committed notes name the dedicated `firstout-dev` bucket in this project. Verify its current provider binding before any rename; never reuse Marrow `photos` / `photos-dev` or Marrow project buckets. On `firstout-api`: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{firstout-dev.*}}`; `AWS_ENDPOINT_URL_S3` uses the bucket provider’s configured S3 endpoint; `AWS_REGION=auto`. Keep `DATABASE_URL`, the Clerk configuration, and `COOKIE_SECURE` for historical-cookie cleanup. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Verify the live bucket binding before changing storage configuration.
 
 ## V2 shell (issue #530)
 
@@ -672,9 +672,9 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 | UI route | API prefix (`/api/v1`) |
 |----------|------------------------|
-| `/login` | `/auth/login` |
-| `/forgot-password` | `/auth/forgot-password` |
-| `/reset-password` | `/auth/reset-password` |
+| `/login` | Redirects to `/clerk-login`; `/auth/login` rejects local credentials |
+| `/forgot-password` | Redirects to `/clerk-login`; `/auth/forgot-password` rejects local reset |
+| `/reset-password` | Redirects to `/clerk-login`; `/auth/reset-password` rejects local reset |
 | `/catalogue` | `/skus` |
 | `/catalogue/[id]` | `/skus/{id}` (+ `/inventory` rollup on Stock tab) |
 | `/price-lists` | `/price-lists` |
@@ -709,7 +709,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 ## Non-goals
 
-Staff may send tax invoices, credit notes, and laybys via the comms outbox (`comms_messages`) using SMTP / WhatsApp adapters. Do not auto-email repeating invoices. The app does not originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
+Staff may send tax invoices, credit notes, and laybys via the comms outbox (`comms_messages`) using SMTP / WhatsApp adapters. Do not auto-email repeating invoices. The app does not originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Preserve the Clerk identity verification and local access controls.
 
 **In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, journals, repeating invoices, bank import (multi-account + rules), reports (incl. trial balance / journal / cash), VAT201 periods, books history, transfers, till, search, home, settings.
 

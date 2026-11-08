@@ -1,12 +1,12 @@
-"""fly_app_role
+"""app_role
 
 Revision ID: e8f1a2b3c4d5
-Revises: f7e6d5c4b3a2
+Revises: 018
 Create Date: 2026-07-09 00:00:00.000000
 
 Creates ``healthtracker_app`` — a non-superuser application role for the API
-and worker. Used on Fly Managed Postgres so RLS policies (Phase 7) apply to
-the backend connection; the MPG owner role bypasses RLS.
+and worker. RLS policies (Phase 7) apply to the backend connection through
+this restricted role instead of a database owner that can bypass RLS.
 
 Set before running:
 
@@ -28,7 +28,7 @@ depends_on: Union[Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    if os.environ.get("FLY_MPG_SKIP_ROLE_DDL", "").lower() in ("1", "true", "yes"):
+    if os.environ.get("SKIP_DATABASE_ROLE_DDL", "").lower() in ("1", "true", "yes"):
         return
 
     pw = os.environ.get("HEALTHTRACKER_APP_PASSWORD")
@@ -97,7 +97,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if os.environ.get("FLY_MPG_SKIP_ROLE_DDL", "").lower() in ("1", "true", "yes"):
+    if os.environ.get("SKIP_DATABASE_ROLE_DDL", "").lower() in ("1", "true", "yes"):
         return
 
     bind = op.get_bind()

@@ -5,7 +5,10 @@ import { testPaymentEnabled } from './src/test-payment-config'
 import { peachPaymentEnabled } from './src/peach-payment-config'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
-assertHostedCommerceConfig(process.env)
+// Compilation opens no runtime services and needs no deployment credentials.
+// Actual start/develop/exec commands always validate their runtime configuration.
+const compileOnly = process.argv[2] === 'build'
+if (!compileOnly) assertHostedCommerceConfig(process.env)
 
 const modules: Record<string, unknown>[] = process.env.REDIS_URL ? [
   {
@@ -57,10 +60,10 @@ modules.push({
 })
 
 const paymentProviders: Record<string, unknown>[] = []
-if (testPaymentEnabled()) {
+if (!compileOnly && testPaymentEnabled()) {
   paymentProviders.push({ resolve: "./src/modules/storefront-test-payment", id: "local" })
 }
-if (peachPaymentEnabled()) {
+if (!compileOnly && peachPaymentEnabled()) {
   modules.push({ resolve: "./src/modules/storefront-peach" })
   paymentProviders.push({ resolve: "./src/modules/storefront-peach-payment-provider", id: "sandbox" })
 }
