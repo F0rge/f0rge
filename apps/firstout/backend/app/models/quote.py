@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -31,7 +32,7 @@ class QuoteStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Quote(UUIDPkMixin, TimestampMixin, Base):
+class Quote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "quotes"
 
     quote_number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -84,7 +85,7 @@ class Quote(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class QuoteLine(UUIDPkMixin, TimestampMixin, Base):
+class QuoteLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "quote_lines"
 
     quote_id: Mapped[uuid.UUID] = mapped_column(

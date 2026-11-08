@@ -1,3 +1,4 @@
+import { loadLabelSettings, labelPageCss } from "./label-settings";
 import JsBarcode from "jsbarcode";
 
 import { printHtml } from "@/lib/print-html";
@@ -27,27 +28,38 @@ function barcodeMarkup(code: string): string {
   }
 }
 
-export function printBinLabels(bins: LocationBin[]): void {
-  const active = bins.filter((bin) => !bin.is_archived);
-  if (active.length === 0) {
+export async function printBinLabels(bins: LocationBin[]): Promise<void> {
+  if (bins.every((bin) => bin.is_archived)) return;
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.alert("Allow pop-ups to print.");
     return;
   }
-  const labelsHtml = active
-    .map(
-      (bin) => `
+  try {
+    const settings = await loadLabelSettings();
+    const active = bins.filter((bin) => !bin.is_archived);
+    if (active.length === 0) {
+      return;
+    }
+    const labelsHtml = active
+      .map(
+        (bin) => `
     <div class="label">
-      <div class="code">${escapeHtml(bin.code)}</div>
-      <div class="meta">Row ${escapeHtml(bin.row_code)} · Bay ${bin.bay} · Level ${bin.level}</div>
-      ${barcodeMarkup(bin.code)}
+      ${settings.logo ? `<img class="label-logo" src="${settings.logo}" alt="" />` : ""}
+      ${settings.label_show_reference ? `<div class="code">${escapeHtml(bin.code)}</div>` : ""}
+      ${settings.label_show_name ? `<div class="meta">Row ${escapeHtml(bin.row_code)} · Bay ${bin.bay} · Level ${bin.level}</div>` : ""}
+      ${settings.label_show_barcode ? barcodeMarkup(bin.code) : ""}
     </div>`,
-    )
-    .join("");
-  printHtml(`<!DOCTYPE html>
+      )
+      .join("");
+    printHtml(
+      `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Bin labels</title>
   <style>
+    ${labelPageCss(settings)}
     body { font-family: "IBM Plex Sans", sans-serif; margin: 1.5rem; color: #161616; }
     .label { page-break-inside: avoid; margin-bottom: 2rem; padding: 1rem; border: 1px solid #e0e0e0; }
     .code { font-family: "IBM Plex Mono", monospace; font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
@@ -56,5 +68,13 @@ export function printBinLabels(bins: LocationBin[]): void {
   </style>
 </head>
 <body>${labelsHtml}</body>
-</html>`);
+</html>`,
+      printWindow,
+    );
+  } catch (error) {
+    printWindow.close();
+    window.alert(
+      error instanceof Error ? error.message : "Unable to load label settings.",
+    );
+  }
 }

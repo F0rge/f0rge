@@ -10,10 +10,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class CreditNote(UUIDPkMixin, TimestampMixin, Base):
+class CreditNote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "credit_notes"
 
     credit_note_number: Mapped[str] = mapped_column(String(32), nullable=False)

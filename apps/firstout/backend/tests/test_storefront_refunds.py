@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 import hashlib
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
@@ -19,7 +21,8 @@ from f0rge_testing import async_url
 
 from app.config import settings
 from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.database import Base, get_db
+from app.database import Base, TenantSession, get_db
+from f0rge_db.organisation import apply_tenant_context, tenant_id_ctx
 from app.main import app
 from app.models.account import Account
 from app.models.credit_note import CreditNote
@@ -32,6 +35,8 @@ from app.models.sales_order import SalesOrder
 from app.models.stock_return import StockReturnDisposition, StockReturnStatus
 from app.models.team import Team
 from app.models.user import User
+from app.models.membership import Membership
+from tests.conftest import independent_request_sessions, signed_clerk_token
 from app.services.auth import hash_password
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
@@ -260,10 +265,7 @@ async def test_books_refund_command_records_verified_partial_refund_once(
     refund_ops_headers: dict[str, str],
 ) -> None:
     payload, handoff = await _import_uninvoiced_handoff(owner_client, async_db, refund_ops_headers)
-    books_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    books_login = await authenticate_as(async_client, "books@example.com")
     assert books_login.status_code == 200
 
     handoffs = await async_client.get("/api/v1/storefront/orders")
@@ -380,10 +382,7 @@ async def test_out_of_band_success_does_not_claim_an_unbound_staff_intent(
     refund_ops_headers: dict[str, str],
 ) -> None:
     _, handoff = await _import_uninvoiced_handoff(owner_client, async_db, refund_ops_headers)
-    await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    await authenticate_as(async_client, "books@example.com")
     requested = await async_client.post(
         f"/api/v1/storefront/orders/{handoff.id}/refunds",
         json={"idempotency_key": str(uuid4()), "amount_minor": 50000},
@@ -428,7 +427,11 @@ async def test_invoiced_refund_is_bounded_by_completed_return_credit_note(
     async_client: AsyncClient,
     async_db: AsyncSession,
     refund_ops_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # This test deliberately authenticates a second tenant; compatibility mode
+    # correctly rejects that until the explicit enforcement stage.
+    monkeypatch.setattr(settings, "tenant_isolation_mode", "enforced")
     payload, handoff, sku_id = await _import_stocked_handoff(
         owner_client, async_db, refund_ops_headers
     )
@@ -448,36 +451,49 @@ async def test_invoiced_refund_is_bounded_by_completed_return_credit_note(
     invoice_line_id = invoice_line.id
     assert location_id is not None
 
-    other_team = Team(name=f"Refund scope fixture {uuid4()}")
+    other_team = Team(name=f"Refund scope fixture {uuid4()}", slug=f"refund-{uuid4().hex}")
     async_db.add(other_team)
     await async_db.flush()
     foreign_email = f"refund-scope-{uuid4()}@example.com"
+    foreign_user = User(
+        team_id=other_team.id,
+        email=foreign_email,
+        password_hash=hash_password("refund-scope-password"),
+        role="books",
+    )
+    async_db.add(foreign_user)
+    await async_db.flush()
     async_db.add(
-        User(
+        Membership(
+            user_id=foreign_user.id,
             team_id=other_team.id,
-            email=foreign_email,
-            password_hash=hash_password("refund-scope-password"),
             role="books",
+            permission_source="legacy",
+            is_legacy_home=True,
         )
     )
     await async_db.flush()
-    owner_client.cookies.clear()
-    foreign_login = await owner_client.post(
-        "/api/v1/auth/login",
-        json={"email": foreign_email, "password": "refund-scope-password"},
-    )
-    assert foreign_login.status_code == 200
-    foreign_scope = await owner_client.post(
-        f"/api/v1/storefront/orders/{handoff_id}/refunds",
-        json={"idempotency_key": str(uuid4()), "amount_minor": 1000},
-    )
-    assert foreign_scope.status_code == 404
+    async with independent_request_sessions(async_db) as maker:
+        token = tenant_id_ctx.set(other_team.id)
+        try:
+            async with maker() as seed_session:
+                await apply_tenant_context(seed_session, other_team.id)
+                await RoleSeedService(seed_session).seed()
+        finally:
+            tenant_id_ctx.reset(token)
+        owner_client.cookies.clear()
+        owner_client.headers.pop("Authorization", None)
+        foreign_login = await authenticate_as(owner_client, foreign_email)
+        assert foreign_login.status_code == 200
+        foreign_scope = await owner_client.post(
+            f"/api/v1/storefront/orders/{handoff_id}/refunds",
+            json={"idempotency_key": str(uuid4()), "amount_minor": 1000},
+        )
+        assert foreign_scope.status_code == 404
 
     owner_client.cookies.clear()
-    till_login = await owner_client.post(
-        "/api/v1/auth/login",
-        json={"email": "till@example.com", "password": settings.seed_till_password},
-    )
+    owner_client.headers.pop("Authorization", None)
+    till_login = await authenticate_as(owner_client, "till@example.com")
     assert till_login.status_code == 200
     unauthorized = await owner_client.post(
         f"/api/v1/storefront/orders/{handoff_id}/refunds",
@@ -486,10 +502,8 @@ async def test_invoiced_refund_is_bounded_by_completed_return_credit_note(
     assert unauthorized.status_code == 403
 
     owner_client.cookies.clear()
-    books_login = await owner_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    owner_client.headers.pop("Authorization", None)
+    books_login = await authenticate_as(owner_client, "books@example.com")
     assert books_login.status_code == 200
     before_return = await owner_client.get(f"/api/v1/storefront/orders/{handoff_id}/refunds")
     assert before_return.status_code == 200
@@ -507,10 +521,8 @@ async def test_invoiced_refund_is_bounded_by_completed_return_credit_note(
     before_return_qty = await async_db.scalar(stock_query)
     assert before_return_qty == 1
     owner_client.cookies.clear()
-    owner_login = await owner_client.post(
-        "/api/v1/auth/login",
-        json={"email": "owner@example.com", "password": settings.seed_owner_password},
-    )
+    owner_client.headers.pop("Authorization", None)
+    owner_login = await authenticate_as(owner_client, "owner@example.com")
     assert owner_login.status_code == 200
     created_return = await owner_client.post(
         "/api/v1/returns",
@@ -934,10 +946,8 @@ async def test_refund_command_feed_does_not_starve_new_work_with_old_unknown_row
     await async_db.flush()
 
     async_client.cookies.clear()
-    books_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    books_login = await authenticate_as(async_client, "books@example.com")
     assert books_login.status_code == 200
     request = await async_client.post(
         f"/api/v1/storefront/orders/{handoff.id}/refunds",
@@ -984,10 +994,8 @@ async def test_unresolved_preinvoice_refund_blocks_invoice_until_terminal_provid
     order.location_id = invoice_location_id
     await async_db.flush()
     async_client.cookies.clear()
-    books_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": "books@example.com", "password": settings.seed_books_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    books_login = await authenticate_as(async_client, "books@example.com")
     assert books_login.status_code == 200
     request = await async_client.post(
         f"/api/v1/storefront/orders/{handoff.id}/refunds",
@@ -996,10 +1004,8 @@ async def test_unresolved_preinvoice_refund_blocks_invoice_until_terminal_provid
     assert request.status_code == 200
 
     async_client.cookies.clear()
-    owner_login = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": settings.seed_owner_email, "password": settings.seed_owner_password},
-    )
+    async_client.headers.pop("Authorization", None)
+    owner_login = await authenticate_as(async_client, settings.seed_owner_email)
     assert owner_login.status_code == 200
     blocked_invoice = await async_client.post(f"/api/v1/orders/{sales_order_id}/invoice")
     assert blocked_invoice.status_code == 409
@@ -1044,8 +1050,8 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
     admin = await asyncpg.connect(
         user=base_url.username,
         password=base_url.password,
-        host=base_url.host,
-        port=base_url.port,
+        host=base_url.query.get("host", base_url.host),
+        port=int(base_url.query.get("port") or base_url.port or 5432),
         database=base_url.database,
     )
     await admin.execute(f'CREATE DATABASE "{database_name}"')
@@ -1058,10 +1064,18 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
             await connection.execute(text("CREATE EXTENSION IF NOT EXISTS citext"))
             await connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
             await connection.run_sync(Base.metadata.create_all)
-        maker = async_sessionmaker(race_engine, expire_on_commit=False, class_=AsyncSession)
+        maker = async_sessionmaker(
+            race_engine,
+            expire_on_commit=False,
+            class_=AsyncSession,
+            sync_session_class=TenantSession,
+        )
         async with maker() as session:
-            await RoleSeedService(session).seed()
             await BootstrapService(session).seed_if_empty()
+            company_id = await session.scalar(select(Team.id))
+            tenant_token = tenant_id_ctx.set(company_id)
+            await apply_tenant_context(session, company_id)
+            await RoleSeedService(session).seed()
             await LocationSeedService(session).seed_if_empty()
             await RoleUserSeedService(session).seed()
             await StorefrontSystemActorService(session).ensure()
@@ -1073,9 +1087,19 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
             await coa.ensure_category_chart()
             await coa.ensure_bank_accounts()
             await TillSeedService(session).seed_if_empty()
+            team = await session.get(Team, company_id)
+            team.clerk_org_id = "org_refund_race_" + company_id.hex
+            staff_tokens = {}
+            for email in (settings.seed_owner_email, "books@example.com"):
+                user = await session.scalar(select(User).where(User.email == email))
+                user.clerk_user_id = "user_refund_race_" + user.id.hex
+                staff_tokens[email] = signed_clerk_token(
+                    user.clerk_user_id, org_id=team.clerk_org_id, org_slug=team.slug
+                )
             await session.commit()
             company_id = await session.scalar(select(Team.id))
             assert company_id is not None
+            tenant_id_ctx.reset(tenant_token)
 
         monkeypatch.setattr(settings, "ops_commerce_company_id", str(company_id), raising=False)
         monkeypatch.setattr(
@@ -1096,13 +1120,10 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
         try:
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as setup_client:
-                login = await setup_client.post(
-                    "/api/v1/auth/login",
-                    json={
-                        "email": settings.seed_owner_email,
-                        "password": settings.seed_owner_password,
-                    },
+                setup_client.headers["Authorization"] = (
+                    "Bearer " + staff_tokens[settings.seed_owner_email]
                 )
+                login = await setup_client.get("/api/v1/auth/me")
                 assert login.status_code == 200
                 fixture_tag = uuid4().hex[:10]
                 payload, sku_id = await _paid_order_payload(setup_client, fixture_tag=fixture_tag)
@@ -1145,13 +1166,8 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
 
             async def request_refund(idempotency_key: str):
                 async with AsyncClient(transport=transport, base_url="http://test") as client:
-                    login_response = await client.post(
-                        "/api/v1/auth/login",
-                        json={
-                            "email": "books@example.com",
-                            "password": settings.seed_books_password,
-                        },
-                    )
+                    client.headers["Authorization"] = "Bearer " + staff_tokens["books@example.com"]
+                    login_response = await client.get("/api/v1/auth/me")
                     assert login_response.status_code == 200
                     return await client.post(
                         f"/api/v1/storefront/orders/{handoff_id}/refunds",
@@ -1169,13 +1185,10 @@ async def test_parallel_refund_requests_reserve_capture_balance_once(
             assert accepted.json()["amount_minor"] == 65000
 
             async with AsyncClient(transport=transport, base_url="http://test") as status_client:
-                login_response = await status_client.post(
-                    "/api/v1/auth/login",
-                    json={
-                        "email": "books@example.com",
-                        "password": settings.seed_books_password,
-                    },
+                status_client.headers["Authorization"] = (
+                    "Bearer " + staff_tokens["books@example.com"]
                 )
+                login_response = await status_client.get("/api/v1/auth/me")
                 assert login_response.status_code == 200
                 status = await status_client.get(f"/api/v1/storefront/orders/{handoff_id}/refunds")
             assert status.status_code == 200

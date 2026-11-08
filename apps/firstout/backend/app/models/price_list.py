@@ -8,10 +8,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class PriceList(UUIDPkMixin, TimestampMixin, Base):
+class PriceList(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "price_lists"
 
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
@@ -23,7 +24,7 @@ class PriceList(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class PriceListItem(UUIDPkMixin, TimestampMixin, Base):
+class PriceListItem(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "price_list_items"
 
     price_list_id: Mapped[uuid.UUID] = mapped_column(

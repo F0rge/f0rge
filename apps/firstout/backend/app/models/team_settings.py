@@ -22,6 +22,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 DEFAULT_VAT_RATE = Decimal("0.15")
@@ -33,13 +34,31 @@ DEFAULT_PAYMENT_TERMS_DAYS = 30
 DEFAULT_SESSION_TTL_HOURS = 12
 
 
-class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
+class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "team_settings"
 
     team_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("teams.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    label_width_mm: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=100, server_default="100"
+    )
+    label_height_mm: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=60, server_default="60"
+    )
+    label_show_name: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    label_show_reference: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    label_show_barcode: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    label_show_logo: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     vat_rate: Mapped[Decimal] = mapped_column(
         Numeric(5, 4),

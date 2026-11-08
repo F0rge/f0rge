@@ -10,10 +10,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class ArchiveCreditNote(UUIDPkMixin, TimestampMixin, Base):
+class ArchiveCreditNote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """Historical Cin7 credit note (``CR-*``).
 
     Kept apart from ``credit_notes`` on purpose: a book credit note needs exactly one
@@ -44,7 +45,7 @@ class ArchiveCreditNote(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class ArchiveCreditNoteLine(UUIDPkMixin, TimestampMixin, Base):
+class ArchiveCreditNoteLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "archive_credit_note_lines"
 
     credit_note_id: Mapped[uuid.UUID] = mapped_column(

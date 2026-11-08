@@ -7,10 +7,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class ProductGroup(UUIDPkMixin, TimestampMixin, Base):
+class ProductGroup(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "product_groups"
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -20,7 +21,7 @@ class ProductGroup(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class ProductGroupVariant(UUIDPkMixin, TimestampMixin, Base):
+class ProductGroupVariant(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "product_group_variants"
 
     product_group_id: Mapped[uuid.UUID] = mapped_column(

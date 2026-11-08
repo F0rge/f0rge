@@ -7,10 +7,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class CustomerPortalUser(UUIDPkMixin, TimestampMixin, Base):
+class CustomerPortalUser(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "customer_portal_users"
 
     customer_id: Mapped[uuid.UUID] = mapped_column(
@@ -25,7 +26,10 @@ class CustomerPortalUser(UUIDPkMixin, TimestampMixin, Base):
 
     customer: Mapped["Customer"] = relationship()
 
-    __table_args__ = (UniqueConstraint("email", name="uq_customer_portal_users_email"),)
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_customer_portal_users_email"),
+        UniqueConstraint("team_id", "id", name="uq_customer_portal_users_team_id_id"),
+    )
 
 
 from app.models.customer import Customer  # noqa: E402

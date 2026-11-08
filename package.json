@@ -13,8 +13,8 @@
     "axios": "1.20.0",
     "next": "16.4.3",
     "postcss": "8.5.28",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "eslint-plugin-react-hooks": "7.0.1",
     "sharp": "0.35.5",
     "fast-uri": "3.1.9",
@@ -32,7 +32,7 @@
     "@graphql-tools/utils": "12.0.3",
     "proxy-addr": "2.0.8",
     "source-map-js": "1.2.2",
-    "follow-redirects": "1.16.1",
+    "follow-redirects": "1.16.2",
     "bullmq": {
       "uuid": "11.1.1"
     },

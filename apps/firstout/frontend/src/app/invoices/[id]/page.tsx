@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   InlineNotification,
@@ -405,8 +407,7 @@ export default function InvoiceDetailPage() {
           <div>
             <p className="cds--type-label-01">Seller</p>
             {companySettings?.has_logo ? (
-              // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
-              <img className="firstout-company-logo" src={settingsLogoUrl()} alt="" />
+              <StaffImage className="firstout-company-logo" src={settingsLogoUrl()} alt="" />
             ) : null}
             <p className="cds--type-body-01">{companySettings?.legal_name ?? "—"}</p>
             <p className="cds--type-body-01">{companySettings?.address ?? "—"}</p>
@@ -447,6 +448,9 @@ export default function InvoiceDetailPage() {
                     {line.description}
                     {line.price_warning ? (
                       <div className="firstout-muted-text">{line.price_warning}</div>
+                    ) : null}
+                    {line.suspect_price_warning ? (
+                      <div className="firstout-price-warning">{line.suspect_price_warning}</div>
                     ) : null}
                   </TableCell>
                   <TableCell>{line.qty}</TableCell>

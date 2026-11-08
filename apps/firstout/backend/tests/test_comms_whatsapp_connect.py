@@ -118,11 +118,26 @@ async def test_webhook_bad_signature_403(
 async def test_webhook_valid_signature_updates_outbox(
     owner_client: AsyncClient,
     async_client: AsyncClient,
+    async_db,
+    monkeypatch,
 ) -> None:
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def scoped_session(team_id=None):
+        from f0rge_db.organisation import tenant_id_ctx
+
+        token = tenant_id_ctx.set(team_id)
+        try:
+            yield async_db
+        finally:
+            tenant_id_ctx.reset(token)
+
+    monkeypatch.setattr("app.routers.whatsapp_webhook.tenant_session", scoped_session)
     secret = "app-secret"
     saved = await owner_client.patch(
         "/api/v1/settings/comms",
-        json={"wa_app_secret": secret},
+        json={"wa_app_secret": secret, "wa_phone_number_id": "synthetic-phone"},
     )
     assert saved.status_code == 200
     payload = json.dumps(
@@ -132,9 +147,10 @@ async def test_webhook_valid_signature_updates_outbox(
                     "changes": [
                         {
                             "value": {
+                                "metadata": {"phone_number_id": "synthetic-phone"},
                                 "statuses": [
                                     {"id": "wamid.missing", "status": "delivered"},
-                                ]
+                                ],
                             }
                         }
                     ]
