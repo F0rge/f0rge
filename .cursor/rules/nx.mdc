@@ -3,6 +3,8 @@ description: Nx monorepo conventions — project registration, cache, affected C
 alwaysApply: true
 ---
 
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Nx workspace (f0rge)
 
 Canonical map: `nx.json` + each app/lib `project.json`. Details live there — do not invent alternate CI wiring.
@@ -26,11 +28,11 @@ Canonical map: `nx.json` + each app/lib `project.json`. Details live there — d
 
 - Use `npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py'` (or `run-many --projects=tag:platform:py` on `workflow_dispatch`). `affected` does **not** take `--projects` — that flag is forwarded into the task and breaks tsc/ruff.
 - **Do not** reintroduce a custom detect job that builds project lists for `run-many --projects "$LIST"`.
-- CI targets `main` only (there is no develop branch); affected runs include `test`. `defaultBase` is `main`.
+- CI workflows in this repo target `main`. Do not open pull requests against `develop`. A remote `develop` ref is not an approved branch. `defaultBase` is `main`. Nx is the current monorepo tool, not a newly selected build orchestrator.
 
 ## Boundaries + OpenAPI + e2e
 
-- TS imports: `@nx/enforce-module-boundaries` via `eslint/nx-boundaries.mjs` (`scope:shared` / `marrow` / `dk`).
+- TS imports: `@nx/enforce-module-boundaries` via `eslint/nx-boundaries.mjs`. This sentence is not a full inventory of that file: it also names `scope:firstout` and `scope:vellano`, and it does not name `scope:buycycle` or `scope:envmon`. Do not edit the ESLint file from an instruction-only change.
 - Python libs→apps: keep `.github/scripts/check-lib-boundary.sh` (ESLint does not see Python).
 - Marrow OpenAPI: `marrow-frontend` has `implicitDependencies: ["marrow-backend"]` and `codegen:check` (depends on `marrow-backend:openapi`). Do not replace with ad-hoc CI export+diff steps.
 - Playwright: `npx nx run marrow-frontend:e2e` (inferred). e2e-smoke boots the stack, then runs that target.

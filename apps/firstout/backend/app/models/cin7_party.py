@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -39,7 +40,7 @@ class _ContactColumns:
     include_in_emails: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
-class CustomerAddress(_AddressColumns, UUIDPkMixin, TimestampMixin, Base):
+class CustomerAddress(TenantOwnedMixin, _AddressColumns, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "customer_addresses"
 
     customer_id: Mapped[uuid.UUID] = mapped_column(
@@ -53,7 +54,7 @@ class CustomerAddress(_AddressColumns, UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class CustomerContact(_ContactColumns, UUIDPkMixin, TimestampMixin, Base):
+class CustomerContact(TenantOwnedMixin, _ContactColumns, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "customer_contacts"
 
     customer_id: Mapped[uuid.UUID] = mapped_column(
@@ -68,7 +69,7 @@ class CustomerContact(_ContactColumns, UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class SupplierAddress(_AddressColumns, UUIDPkMixin, TimestampMixin, Base):
+class SupplierAddress(TenantOwnedMixin, _AddressColumns, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "supplier_addresses"
 
     supplier_id: Mapped[uuid.UUID] = mapped_column(
@@ -82,7 +83,7 @@ class SupplierAddress(_AddressColumns, UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class SupplierContact(_ContactColumns, UUIDPkMixin, TimestampMixin, Base):
+class SupplierContact(TenantOwnedMixin, _ContactColumns, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "supplier_contacts"
 
     supplier_id: Mapped[uuid.UUID] = mapped_column(

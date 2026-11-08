@@ -1,80 +1,86 @@
-"""Regression: migration 002 CHECK expects lowercase role values in DB."""
+"""Migrated lowercase roles still authorize through real signed Clerk HTTP."""
 
 from __future__ import annotations
 
 import os
 import subprocess
+import sys
+import uuid
 from pathlib import Path
-from typing import AsyncIterator
 
 import pytest
 import sqlalchemy as sa
 from f0rge_testing import async_url
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 from app.config import settings
 from app.database import get_db
 from app.main import app
+from app.models.team import Team
+from app.models.user import User
 from app.services.users import BootstrapService
-from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD
+from tests.conftest import OWNER_EMAIL, signed_clerk_token
 
+pytestmark = pytest.mark.no_db
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.mark.asyncio
 async def test_migration_002_seed_stores_lowercase_role(
-    postgres_container: PostgresContainer,
-    monkeypatch: pytest.MonkeyPatch,
+    postgres_container: PostgresContainer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     base_url = async_url(postgres_container)
-    admin_url = f"{base_url.rsplit('/', 1)[0]}/postgres"
-    db_name = "firstout_mig002"
-
-    admin_engine = create_async_engine(admin_url, echo=False, isolation_level="AUTOCOMMIT")
-    async with admin_engine.connect() as conn:
-        await conn.execute(sa.text(f'DROP DATABASE IF EXISTS "{db_name}"'))
+    db_name = "firstout_mig002_" + uuid.uuid4().hex
+    admin_url = make_url(base_url).set(database="postgres").render_as_string(hide_password=False)
+    admin = create_async_engine(admin_url, isolation_level="AUTOCOMMIT")
+    async with admin.connect() as conn:
         await conn.execute(sa.text(f'CREATE DATABASE "{db_name}"'))
-    await admin_engine.dispose()
-
-    mig_url = f"{base_url.rsplit('/', 1)[0]}/{db_name}"
-    monkeypatch.setenv("DATABASE_URL", mig_url)
+    mig_url = make_url(base_url).set(database=db_name).render_as_string(hide_password=False)
     monkeypatch.setattr(settings, "database_url", mig_url)
-
-    subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
-        cwd=BACKEND_ROOT,
-        env={**os.environ, "DATABASE_URL": mig_url},
-        check=True,
-    )
-
-    engine = create_async_engine(mig_url, echo=False)
+    engine = create_async_engine(mig_url)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    monkeypatch.setattr("app.database.async_session_maker", maker)
-    monkeypatch.setattr("app.main.async_session_maker", maker)
-
-    async with maker() as session:
-        await BootstrapService(session).seed_if_empty()
-
-    async with engine.connect() as conn:
-        role = (await conn.execute(sa.text("SELECT role FROM users LIMIT 1"))).scalar_one()
-    assert role == "owner"
-    await engine.dispose()
-
-    async def override_get_db() -> AsyncIterator[AsyncSession]:
-        async with maker() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = override_get_db
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        login = await client.post(
-            "/api/v1/auth/login",
-            json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
+    previous = app.dependency_overrides.get(get_db)
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=BACKEND_ROOT,
+            env={**os.environ, "DATABASE_URL": mig_url, "MIGRATION_DATABASE_URL": mig_url},
+            check=True,
         )
-        assert login.status_code == 200
-        me = await client.get("/api/v1/auth/me")
-        assert me.status_code == 200
-        assert me.json()["role"] == "owner"
-    app.dependency_overrides.clear()
+        monkeypatch.setattr("app.database.async_session_maker", maker)
+        monkeypatch.setattr("app.main.async_session_maker", maker)
+        async with maker() as session:
+            await BootstrapService(session).seed_if_empty()
+            user = await session.scalar(sa.select(User).where(User.email == OWNER_EMAIL))
+            team = await session.get(Team, user.team_id)
+            assert user.role == "owner"
+            user.clerk_user_id = "user_migration002"
+            team.clerk_org_id = "org_migration002"
+            slug = team.slug
+            await session.commit()
+
+        async def request_db():
+            async with maker() as session:
+                yield session
+
+        app.dependency_overrides[get_db] = request_db
+        token = signed_clerk_token("user_migration002", org_id="org_migration002", org_slug=slug)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get(
+                "/api/v1/auth/me", headers={"Authorization": "Bearer " + token}
+            )
+            assert response.status_code == 200
+            assert response.json()["role"] == "owner"
+            assert response.json()["email"] == OWNER_EMAIL
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous
+        await engine.dispose()
+        async with admin.connect() as conn:
+            await conn.execute(sa.text(f'DROP DATABASE "{db_name}" WITH (FORCE)'))
+        await admin.dispose()

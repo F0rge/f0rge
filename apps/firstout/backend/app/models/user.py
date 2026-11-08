@@ -5,7 +5,7 @@ import uuid
 
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, String
+from sqlalchemy import ForeignKeyConstraint, Boolean, ForeignKey, Integer, String, text
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,16 +30,31 @@ class User(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+    clerk_user_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     is_disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    token_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
     default_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "default_location_id"],
+            ["locations.team_id", "locations.id"],
+            name="fk_users_default_location_tenant",
+        ),
     )
 
     team: Mapped["Team"] = relationship(back_populates="users")

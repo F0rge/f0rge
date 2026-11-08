@@ -61,6 +61,7 @@ async def test_proforma_file_unauthenticated_returns_401(
     proforma_id = create_resp.json()["id"]
 
     async_client.cookies.clear()
+    async_client.headers.pop("Authorization", None)
     unauth_resp = await async_client.get(f"/api/v1/proformas/{proforma_id}/file")
     assert unauth_resp.status_code == 401
 

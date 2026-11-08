@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from decimal import Decimal
 
 from httpx import AsyncClient
@@ -40,10 +42,8 @@ async def _inventory_on_hand(
 
 async def _login_warehouse(client: AsyncClient) -> AsyncClient:
     client.cookies.clear()
-    login_resp = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "warehouse-po@example.com", "password": "warehouse-password"},
-    )
+    client.headers.pop("Authorization", None)
+    login_resp = await authenticate_as(client, "warehouse-po@example.com")
     assert login_resp.status_code == 200
     return client
 

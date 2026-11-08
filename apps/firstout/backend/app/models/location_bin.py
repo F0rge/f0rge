@@ -19,6 +19,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 DEFAULT_BIN_CODE = "FLOOR"
@@ -31,7 +32,7 @@ def grid_bin_code(row_code: str, bay: int, level: int) -> str:
     return f"{row_code}-{bay:02d}-{level}"
 
 
-class LocationBin(UUIDPkMixin, TimestampMixin, Base):
+class LocationBin(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "location_bins"
 
     location_id: Mapped[uuid.UUID] = mapped_column(
@@ -77,7 +78,7 @@ class LocationBin(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class BinStock(UUIDPkMixin, TimestampMixin, Base):
+class BinStock(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "bin_stock"
 
     sku_id: Mapped[uuid.UUID] = mapped_column(

@@ -7,12 +7,13 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 DEFAULT_DOCUMENT_PADDING = 4
 
 
-class DocumentSequence(UUIDPkMixin, TimestampMixin, Base):
+class DocumentSequence(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "document_sequences"
 
     team_id: Mapped[uuid.UUID] = mapped_column(

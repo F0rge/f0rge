@@ -48,10 +48,10 @@ async def create_quote(
 @quotes_router.get("/{quote_id}", response_model=QuoteResponse)
 async def get_quote(
     quote_id: uuid.UUID,
-    _: uuid.UUID = Depends(get_current_user_id),
+    user_id: uuid.UUID = Depends(get_current_user_id),
     service: QuotesService = Depends(get_quote_service),
 ):
-    return await service.get(quote_id)
+    return await service.get(quote_id, user_id)
 
 
 @quotes_router.patch("/{quote_id}", response_model=QuoteResponse)
@@ -67,19 +67,19 @@ async def update_quote(
 @quotes_router.post("/{quote_id}/mark-sent", response_model=QuoteResponse)
 async def mark_quote_sent(
     quote_id: uuid.UUID,
-    _: uuid.UUID = Depends(require_quotes),
+    user_id: uuid.UUID = Depends(require_quotes),
     service: QuotesService = Depends(get_quote_service),
 ):
-    return await service.mark_sent(quote_id)
+    return await service.mark_sent(quote_id, user_id)
 
 
 @quotes_router.post("/{quote_id}/cancel", response_model=QuoteResponse)
 async def cancel_quote(
     quote_id: uuid.UUID,
-    _: uuid.UUID = Depends(require_quotes),
+    user_id: uuid.UUID = Depends(require_quotes),
     service: QuotesService = Depends(get_quote_service),
 ):
-    return await service.cancel(quote_id)
+    return await service.cancel(quote_id, user_id)
 
 
 @quotes_router.post("/{quote_id}/accept", response_model=SalesOrderResponse)

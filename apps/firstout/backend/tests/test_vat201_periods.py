@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 from httpx import AsyncClient
 
 from tests.pdf_fixture import assert_pdf_openable
@@ -45,7 +47,8 @@ async def _create_period(owner_client: AsyncClient, period_from: str, period_to:
 
 async def _login(client: AsyncClient, email: str, password: str) -> None:
     client.cookies.clear()
-    resp = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    client.headers.pop("Authorization", None)
+    resp = await authenticate_as(client, email)
     assert resp.status_code == 200
 
 

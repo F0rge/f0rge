@@ -40,6 +40,8 @@ class InvoiceLineResponse(BaseModel):
     sort_order: int
     sku_id: Optional[uuid.UUID] = None
     price_warning: Optional[str] = None
+    # Computed on read. Not stored, and not printed on the customer PDF.
+    suspect_price_warning: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

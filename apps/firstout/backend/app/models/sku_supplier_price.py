@@ -9,10 +9,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class SkuSupplierPrice(UUIDPkMixin, TimestampMixin, Base):
+class SkuSupplierPrice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """Cin7 product price by supplier. Not a landed cost and not a PO line."""
 
     __tablename__ = "sku_supplier_prices"

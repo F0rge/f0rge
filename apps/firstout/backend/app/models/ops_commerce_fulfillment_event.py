@@ -18,10 +18,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class OpsCommerceFulfillmentEvent(UUIDPkMixin, TimestampMixin, Base):
+class OpsCommerceFulfillmentEvent(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     """Durable, acknowledged Storefront status message for one paid order."""
 
     __tablename__ = "ops_commerce_fulfillment_events"

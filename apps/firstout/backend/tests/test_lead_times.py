@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as
+
 import datetime
 import uuid
 from typing import Optional
@@ -10,7 +12,6 @@ import sqlalchemy as sa
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.purchase_order import PurchaseOrder
 from app.models.sku import Sku
 from app.services.lead_times import median_days
@@ -361,13 +362,8 @@ async def test_warehouse_can_read_lead_time_reports(
 ) -> None:
     await _complete_po(owner_client, supplier_name="Lead Warehouse Supplier", our_ref="LEAD-WH")
     async_client.cookies.clear()
-    login = await async_client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": "warehouse@example.com",
-            "password": settings.seed_warehouse_password,
-        },
-    )
+    async_client.headers.pop("Authorization", None)
+    login = await authenticate_as(async_client, "warehouse@example.com")
     assert login.status_code == 200
     json_resp = await async_client.get("/api/v1/reports/supplier-lead-times")
     assert json_resp.status_code == 200

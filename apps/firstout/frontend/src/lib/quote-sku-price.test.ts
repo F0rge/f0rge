@@ -9,9 +9,12 @@ import {
   formatUnitExVatInput,
   isCin7GeneratedPriceList,
   quoteLineExVat,
+  quoteLineSuspectWarning,
   quoteSkuMatchesQuery,
   quoteSkuUnitExVat,
   quoteUnitPriceHelper,
+  RESTRICTED_SUSPECT_PRICE_WARNING,
+  suspectUnitPriceWarning,
 } from "./quote-sku-price";
 
 function sku(overrides: Partial<Sku> = {}): Sku {
@@ -131,6 +134,7 @@ describe("quoteSkuUnitExVat", () => {
       priceListName: null,
       warning: null,
       pricesIncludeVat: true,
+      belowAverageCost: false,
     });
   });
 
@@ -185,6 +189,7 @@ describe("quoteSkuUnitExVat", () => {
       priceListName: "Decorator",
       warning: null,
       pricesIncludeVat: false,
+      belowAverageCost: false,
     });
   });
 
@@ -264,6 +269,7 @@ describe("quoteSkuUnitExVat", () => {
       priceListName: null,
       warning: null,
       pricesIncludeVat: true,
+      belowAverageCost: false,
     });
   });
 });
@@ -303,6 +309,7 @@ describe("quote unit field copy", () => {
         priceListName: "Decorator",
         warning: null,
         pricesIncludeVat: false,
+        belowAverageCost: false,
       },
       true,
     )).toBe("Price list Decorator overrides the classification · excl. VAT");
@@ -313,8 +320,138 @@ describe("quote unit field copy", () => {
         priceListName: null,
         warning: null,
         pricesIncludeVat: true,
+        belowAverageCost: false,
       },
       false,
     )).toBe("Retail · incl. VAT (no customer)");
+  });
+});
+
+describe("suspectUnitPriceWarning", () => {
+  const healthy = {
+    averageUnitCostZar: "400.00" as string | null,
+    catalogueBelowCost: false,
+    unitMatchesCatalogue: true,
+    canViewCost: true,
+  };
+
+  it("warns when the unit is R1.00 ex VAT or less, including a R1.00 incl. VAT placeholder", () => {
+    expect(suspectUnitPriceWarning({ ...healthy, unitExVat: 1, averageUnitCostZar: null })).toBe(
+      "Unit price R1.00 excl. VAT is R1.00 excl. VAT or below (R1.15 incl. VAT or less). Check this price.",
+    );
+    expect(
+      suspectUnitPriceWarning({
+        ...healthy,
+        unitExVat: 0.87,
+        averageUnitCostZar: null,
+        pricesIncludeVat: true,
+      }),
+    ).toBe(
+      "Unit price R1.00 incl. VAT (R0.87 excl.) is R1.00 excl. VAT or below (R1.15 incl. VAT or less). Check this price.",
+    );
+    const atCost = suspectUnitPriceWarning({ ...healthy, unitExVat: 1, averageUnitCostZar: "1.00" });
+    expect(atCost).toContain("R1.00 excl. VAT or below");
+    expect(atCost).not.toContain("below average cost");
+  });
+
+  it("warns when the unit is below average cost and shows the cost to someone who can see it", () => {
+    const message = suspectUnitPriceWarning({
+      ...healthy,
+      unitExVat: 400,
+      averageUnitCostZar: "1500.50",
+      unitMatchesCatalogue: false,
+    });
+    expect(message).toBe(
+      "Unit price R400.00 excl. VAT is below average cost R1500.50 excl. VAT.",
+    );
+  });
+
+  it("quotes a retail line in the incl. VAT amount the line shows", () => {
+    expect(
+      suspectUnitPriceWarning({
+        ...healthy,
+        unitExVat: 400,
+        averageUnitCostZar: "1500.00",
+        pricesIncludeVat: true,
+      }),
+    ).toBe(
+      "Unit price R460.00 incl. VAT (R400.00 excl.) is below average cost R1500.00 excl. VAT.",
+    );
+  });
+
+  it("stays quiet for a normal price", () => {
+    expect(suspectUnitPriceWarning({ ...healthy, unitExVat: 800 })).toBeNull();
+    expect(suspectUnitPriceWarning({ ...healthy, unitExVat: 1.01, averageUnitCostZar: "0.50" })).toBeNull();
+  });
+
+  it("does not reveal the cost figure when the viewer cannot see costs", () => {
+    const message = suspectUnitPriceWarning({
+      unitExVat: 400,
+      averageUnitCostZar: "1500.00",
+      catalogueBelowCost: true,
+      unitMatchesCatalogue: true,
+      canViewCost: false,
+    });
+    expect(message).toBe(RESTRICTED_SUSPECT_PRICE_WARNING);
+    expect(message).not.toContain("1500");
+    expect(
+      suspectUnitPriceWarning({
+        unitExVat: 400,
+        averageUnitCostZar: "1500.00",
+        catalogueBelowCost: false,
+        unitMatchesCatalogue: false,
+        canViewCost: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("still warns when a manual unit matches the rule", () => {
+    const message = quoteLineSuspectWarning(
+      "1.00",
+      { average_unit_cost_zar: "900.00" },
+      {
+        unitExVat: 800,
+        source: "wholesale",
+        priceListName: null,
+        warning: null,
+        pricesIncludeVat: false,
+        belowAverageCost: false,
+      },
+      true,
+    );
+    expect(message).toContain("Unit price R1.00 excl. VAT");
+    expect(message).toContain("R900.00 excl. VAT");
+    expect(
+      quoteLineSuspectWarning(
+        "400.00",
+        { average_unit_cost_zar: "1500.00" },
+        {
+          unitExVat: 800,
+          source: "retail",
+          priceListName: null,
+          warning: null,
+          pricesIncludeVat: true,
+          belowAverageCost: false,
+        },
+        true,
+        true,
+      ),
+    ).toBe(
+      "Unit price R460.00 incl. VAT (R400.00 excl.) is below average cost R1500.00 excl. VAT.",
+    );
+  });
+
+  it("marks the stockist tier and a price-list row that are below cost", () => {
+    const item = sku({ stockist_ex_vat: "50.00", stockist_below_cost: true });
+    expect(
+      quoteSkuUnitExVat(item, customer({ price_classification: "Stockist" }), []).belowAverageCost,
+    ).toBe(true);
+    const list: PriceList = {
+      ...decoratorList,
+      items: [{ sku_id: "sku-1", our_ref: "PG-TABLE", unit_ex_vat: "900.00", below_average_cost: true }],
+    };
+    expect(
+      quoteSkuUnitExVat(sku(), customer({ price_list_id: "list-1" }), [list]).belowAverageCost,
+    ).toBe(true);
   });
 });
