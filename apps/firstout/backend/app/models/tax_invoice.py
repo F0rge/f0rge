@@ -22,11 +22,12 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from app.services.settlement import SettlementStatus, settlement_status
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
-class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
+class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "tax_invoices"
 
     invoice_number: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -82,7 +83,7 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("invoice_number", name="uq_tax_invoices_invoice_number"),)
 
 
-class InvoiceLine(UUIDPkMixin, Base):
+class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "invoice_lines"
 
     invoice_id: Mapped[uuid.UUID] = mapped_column(

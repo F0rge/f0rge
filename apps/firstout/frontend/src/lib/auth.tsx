@@ -2,22 +2,23 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { ApiError, getMe, logout as apiLogout, type AuthUser } from "@/lib/api";
+import { ApiError, getMe, logout as apiLogout, portalLogout, type AuthUser } from "@/lib/api";
 
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   refreshUser: () => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (redirectUrl?: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children, onSignOut, loadIdentity = true }: { children: React.ReactNode; onSignOut: (redirectUrl?: string) => Promise<unknown>; loadIdentity?: boolean }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(loadIdentity);
 
   const refreshUser = useCallback(async () => {
+    if (!loadIdentity) return;
     try {
       const me = await getMe();
       setUser(me);
@@ -28,9 +29,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(null);
     }
-  }, []);
+  }, [loadIdentity]);
 
   useEffect(() => {
+    if (!loadIdentity) return;
     let cancelled = false;
 
     async function loadSession() {
@@ -55,12 +57,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadIdentity]);
 
-  const logout = useCallback(async () => {
-    await apiLogout();
+  const logout = useCallback(async (redirectUrl?: string) => {
+    // Cookie cleanup cannot delay or prevent the actual Clerk session sign-out.
+    void Promise.allSettled([apiLogout(), portalLogout()]);
+    await onSignOut(redirectUrl);
     setUser(null);
-  }, []);
+  }, [onSignOut]);
 
   const value = useMemo(
     () => ({ user, loading, refreshUser, logout }),

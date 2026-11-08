@@ -1,3 +1,4 @@
+import { staffFetch } from "./staff-fetch";
 import { downloadApiFile } from "./download";
 import {
   normalizePick,
@@ -59,21 +60,7 @@ export type RoleUpdatePayload = {
   permissions?: string[];
 };
 
-export type LoginResponse = {
-  email: string;
-};
-
-export type CreateUserPayload = {
-  email: string;
-  password: string;
-  role: UserRole;
-  display_name?: string;
-  default_location_id?: string | null;
-};
-
 export type UpdateUserPayload = {
-  email?: string;
-  password?: string;
   role?: UserRole;
   display_name?: string;
   is_disabled?: boolean;
@@ -81,9 +68,7 @@ export type UpdateUserPayload = {
 };
 
 export type UpdateProfilePayload = {
-  email?: string;
   display_name?: string;
-  password?: string;
   default_location_id?: string | null;
 };
 
@@ -244,7 +229,7 @@ export async function parseErrorMessage(response: Response): Promise<string> {
   return payload.message;
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -253,7 +238,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
   let response: Response;
   try {
-    response = await fetch(`/api/v1${path}`, {
+    response = await staffFetch(`/api/v1${path}`, {
       ...options,
       credentials: "include",
       headers,
@@ -278,13 +263,6 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   return response.json() as Promise<T>;
 }
 
-export function login(email: string, password: string): Promise<LoginResponse> {
-  return apiFetch<LoginResponse>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-}
-
 export function logout(): Promise<void> {
   return apiFetch<void>("/auth/logout", { method: "POST" });
 }
@@ -295,13 +273,6 @@ export function getMe(): Promise<AuthUser> {
 
 export function listUsers(): Promise<User[]> {
   return apiFetch<User[]>("/users");
-}
-
-export function createUser(payload: CreateUserPayload): Promise<User> {
-  return apiFetch<User>("/users", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
 }
 
 export function updateUser(id: string, payload: UpdateUserPayload): Promise<User> {
@@ -507,7 +478,7 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   const call = callName("POST", path);
   let response: Response;
   try {
-    response = await fetch(`/api/v1${path}`, {
+    response = await staffFetch(`/api/v1${path}`, {
       method: "POST",
       credentials: "include",
       body: formData,
@@ -564,6 +535,7 @@ export type PriceListItem = {
   sku_id: string;
   our_ref: string;
   unit_ex_vat: string;
+  below_average_cost?: boolean;
 };
 
 export type PriceList = {
@@ -908,6 +880,11 @@ export type Sku = {
   decorator_inc_vat: string | null;
   retail_ex_vat: string | null;
   retail_inc_vat: string | null;
+  average_unit_cost_zar?: string | null;
+  stockist_below_cost?: boolean;
+  wholesale_below_cost?: boolean;
+  decorator_below_cost?: boolean;
+  retail_below_cost?: boolean;
   carton_count: number;
   is_kit: boolean;
   created_at: string;
@@ -979,7 +956,7 @@ export function displayPrice(value: string | null | undefined): string {
 
 export type CreateSkuPayload = {
   our_ref: string;
-  our_barcode: string;
+  our_barcode?: string;
   name: string;
   design: string;
   fabric: string;
@@ -1044,6 +1021,12 @@ export function getSku(id: string): Promise<Sku> {
 
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   const body: CreateSkuPayload = { ...payload };
+  const barcode = body.our_barcode?.trim();
+  if (barcode) {
+    body.our_barcode = barcode;
+  } else {
+    delete body.our_barcode;
+  }
   const category = body.category?.trim();
   if (category) {
     body.category = category;
@@ -1160,6 +1143,68 @@ export function previewCatalogueImport(formData: FormData): Promise<CatalogueImp
 
 export function commitCatalogueImport(formData: FormData): Promise<CatalogueImportCommit> {
   return apiUpload<CatalogueImportCommit>("/imports/commit", formData);
+}
+
+export type Cin7EntityCounts = {
+  created: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+};
+
+export type Cin7ImportSummary = {
+  entities: Record<string, Cin7EntityCounts>;
+  price_changes: Record<string, number>;
+  generated_barcodes: number;
+  generated_barcodes_blank: number;
+  generated_barcodes_shared: number;
+};
+
+export type Cin7ImportRun = {
+  id: string;
+  created_at: string;
+  finished_at: string | null;
+  user_id: string;
+  user_email: string;
+  file_sha256: string;
+  file_name: string;
+  mode: "dry_run" | "commit";
+  status: "queued" | "running" | "completed" | "failed";
+  dry_run_id: string | null;
+  summary: Cin7ImportSummary;
+  warning_count: number;
+  error_count: number;
+};
+
+export function listCin7Imports(): Promise<Cin7ImportRun[]> {
+  return apiFetch<Cin7ImportRun[]>("/cin7-imports");
+}
+
+export function getCin7Import(id: string): Promise<Cin7ImportRun> {
+  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}`);
+}
+
+export function startCin7Import(formData: FormData): Promise<Cin7ImportRun> {
+  return apiUpload<Cin7ImportRun>("/cin7-imports", formData);
+}
+
+export function commitCin7Import(id: string, fileSha256: string): Promise<Cin7ImportRun> {
+  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}/commit`, {
+    method: "POST",
+    body: JSON.stringify({ file_sha256: fileSha256 }),
+  });
+}
+
+export function downloadCin7Warnings(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/warnings.csv`, "cin7-import-warnings.csv");
+}
+
+export function downloadCin7Errors(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/errors.csv`, "cin7-import-errors.csv");
+}
+
+export function downloadCin7Barcodes(id: string): Promise<void> {
+  return downloadApiFile(`/api/v1/cin7-imports/${id}/barcodes.csv`, "cin7-import-barcodes.csv");
 }
 
 export type PurchaseOrderStatus =
@@ -1945,6 +1990,7 @@ export type InvoiceLine = {
   sort_order: number;
   sku_id?: string | null;
   price_warning?: string | null;
+  suspect_price_warning?: string | null;
 };
 
 export type InvoiceListItem = {
@@ -3402,7 +3448,7 @@ export type DocumentSequenceUpdate = {
   padding?: number;
 };
 
-export type AppSettings = {
+export type AppSettings = import("./label-settings").LabelSettings & {
   vat_rate: string;
   vat_percent: string;
   home_currency: string;
@@ -3422,6 +3468,7 @@ export type AppSettings = {
   max_till_discount_percent: string | null;
   po_approval_threshold_zar: string | null;
   auto_process_exact_supplier_invoices: boolean;
+  /** Historical read-only value; session duration is managed by Clerk. */
   session_ttl_hours: number;
   payment_terms_days: number;
   default_receive_location_id: string | null;
@@ -3549,7 +3596,7 @@ export function openCommsSend(result: CommsSendResult): void {
   }
 }
 
-export function updateSettings(payload: {
+export function updateSettings(payload: Partial<import("./label-settings").LabelSettings> & {
   vat_rate?: string;
   home_currency?: string;
   always_prefer_warehouse?: boolean;
@@ -3566,7 +3613,6 @@ export function updateSettings(payload: {
   max_till_discount_percent?: string | null;
   po_approval_threshold_zar?: string | null;
   auto_process_exact_supplier_invoices?: boolean;
-  session_ttl_hours?: number;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
@@ -3904,6 +3950,7 @@ export type QuoteLine = {
   description: string;
   notes: string | null;
   price_warning?: string | null;
+  suspect_price_warning?: string | null;
 };
 
 export type QuoteListItem = {
@@ -3955,6 +4002,8 @@ export type SalesOrderLine = {
   unit_ex_vat: string;
   description: string;
   notes: string | null;
+  price_warning?: string | null;
+  suspect_price_warning?: string | null;
   held_qty: number;
   hold_location_id: string | null;
 };
@@ -4178,6 +4227,8 @@ export function requestStorefrontRefund(
 }
 
 export type PortalMe = {
+  access_id: string;
+  organisation_id: string;
   id: string;
   email: string;
   customer_id: string;
@@ -4193,41 +4244,66 @@ export type PortalCatalogueItem = {
   unit_inc_vat: string;
 };
 
-export function portalLogin(email: string, password: string): Promise<{ email: string; customer_name: string }> {
-  return apiFetch("/portal/login", { method: "POST", body: JSON.stringify({ email, password }) });
-}
+export type PortalAccess = {
+  id: string;
+  organisation_id: string;
+  organisation_name: string;
+  customer_id: string;
+  customer_name: string;
+  email: string;
+  url: string;
+};
+export type CustomerPortalAccess = PortalAccess & { status: "active" | "revoked" };
+export type PortalInvitation = {
+  id: string;
+  email: string;
+  expires_at: string;
+  status: "pending" | "accepted" | "revoked" | "expired";
+};
+export type CreatedPortalInvitation = PortalInvitation & { invitation_url: string };
 
 export function portalLogout(): Promise<void> {
   return apiFetch("/portal/logout", { method: "POST" });
 }
-
-export function getPortalMe(): Promise<PortalMe> {
-  return apiFetch("/portal/me");
+export function listPortalOrganisations(): Promise<PortalAccess[]> {
+  return apiFetch("/portal/organisations");
 }
-
-export function listPortalCatalogue(): Promise<PortalCatalogueItem[]> {
-  return apiFetch("/portal/catalogue");
+export function acceptPortalInvitation(token: string): Promise<PortalAccess> {
+  return apiFetch("/portal/invitations/accept", { method: "POST", body: JSON.stringify({ token }) });
 }
-
-export function placePortalOrder(payload: {
+function portalAccessHeaders(accessId: string): HeadersInit {
+  if (!accessId) throw new Error("Choose a trade account first.");
+  return { "X-Firstout-Portal-Access": accessId };
+}
+export function getPortalMe(accessId: string): Promise<PortalMe> {
+  return apiFetch("/portal/me", { headers: portalAccessHeaders(accessId) });
+}
+export function listPortalCatalogue(accessId: string): Promise<PortalCatalogueItem[]> {
+  return apiFetch("/portal/catalogue", { headers: portalAccessHeaders(accessId) });
+}
+export function placePortalOrder(accessId: string, payload: {
   lines: { sku_id: string; qty: number; notes?: string }[];
   notes?: string;
 }): Promise<SalesOrder> {
-  return apiFetch("/portal/orders", { method: "POST", body: JSON.stringify(payload) });
+  return apiFetch("/portal/orders", { method: "POST", headers: portalAccessHeaders(accessId), body: JSON.stringify(payload) });
 }
-
-export function listPortalOrders(): Promise<SalesOrder[]> {
-  return apiFetch("/portal/orders");
+export function listPortalOrders(accessId: string): Promise<SalesOrder[]> {
+  return apiFetch("/portal/orders", { headers: portalAccessHeaders(accessId) });
 }
-
-export function createPortalUser(
-  customerId: string,
-  payload: { email: string; password: string },
-): Promise<PortalMe> {
-  return apiFetch(`/customers/${customerId}/portal-users`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+export function createPortalInvitation(customerId: string, email: string): Promise<CreatedPortalInvitation> {
+  return apiFetch(`/customers/${customerId}/portal-invitations`, { method: "POST", body: JSON.stringify({ email }) });
+}
+export function listPortalInvitations(customerId: string): Promise<PortalInvitation[]> {
+  return apiFetch(`/customers/${customerId}/portal-invitations`);
+}
+export function revokePortalInvitation(customerId: string, invitationId: string): Promise<void> {
+  return apiFetch(`/customers/${customerId}/portal-invitations/${invitationId}`, { method: "DELETE" });
+}
+export function listCustomerPortalAccess(customerId: string): Promise<CustomerPortalAccess[]> {
+  return apiFetch(`/customers/${customerId}/portal-access`);
+}
+export function revokeCustomerPortalAccess(customerId: string, accessId: string): Promise<void> {
+  return apiFetch(`/customers/${customerId}/portal-access/${accessId}`, { method: "DELETE" });
 }
 
 export type CustomerType = "retail" | "trade";

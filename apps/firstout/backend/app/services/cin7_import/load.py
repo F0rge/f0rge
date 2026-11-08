@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
@@ -37,13 +38,16 @@ from app.models.tax_rule import TaxRule
 from app.services.cin7_import.parse import (
     as_bool,
     assign_barcodes,
+    generated_barcode_rows,
     carton_count,
     clip,
     find_file,
     integral_qty,
     money,
+    NamedSkuPrices,
     named_sku_prices,
     parse_date,
+    price_warnings,
     read_csv_records,
     read_xlsx_all,
     reorder_min,
@@ -131,6 +135,32 @@ def _dec_eq(left: Optional[Decimal], right: Optional[Decimal]) -> bool:
     if left is None or right is None:
         return False
     return Decimal(left) == Decimal(right)
+
+
+def _note_price_changes(
+    report: ImportReport,
+    current: Optional[Sku],
+    prices: NamedSkuPrices,
+) -> None:
+    """Count tier prices that would change. A new SKU counts each price it sets."""
+    pairs = (
+        ("stockist", None if current is None else current.stockist_ex_vat, prices.stockist_ex_vat),
+        (
+            "wholesale",
+            None if current is None else current.wholesale_ex_vat,
+            prices.wholesale_ex_vat,
+        ),
+        (
+            "decorator",
+            None if current is None else current.decorator_ex_vat,
+            prices.decorator_ex_vat,
+        ),
+        ("retail", None if current is None else current.retail_ex_vat, prices.retail_ex_vat),
+    )
+    for tier, old, new in pairs:
+        changed = new is not None if current is None else not _dec_eq(old, new)
+        if changed:
+            report.price_changes[tier] = report.price_changes.get(tier, 0) + 1
 
 
 def _group(rows: list[dict[str, str]], column: str) -> list[tuple[str, list[dict[str, str]]]]:
@@ -247,7 +277,7 @@ class Cin7Loader:
         await self._load_skus()
         await self._load_price_lists()
         await self._note_simple_prices()
-        self._note_markup_prices()
+        await self._note_markup_prices()
         await self._load_supplier_prices()
         await self._load_bom()
         await self._load_stock()
@@ -257,7 +287,7 @@ class Cin7Loader:
         await self._link_orders_to_invoices()
         await self._load_purchase_orders()
         await self._load_bills()
-        self._note_unused_files()
+        await self._note_unused_files()
         journals = await self.session.scalar(select(JournalEntry.id).limit(1))
         if journals is not None:
             self.report.assumptions.append(
@@ -271,7 +301,7 @@ class Cin7Loader:
         if path is None:
             result.skip("PaymentTerm file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing = {
             _key(row.name): row for row in (await self.session.scalars(select(PaymentTerm))).all()
         }
@@ -324,7 +354,7 @@ class Cin7Loader:
         if path is None:
             result.skip("TaxationRules file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing = {
             _key(row.name): row for row in (await self.session.scalars(select(TaxRule))).all()
         }
@@ -367,7 +397,7 @@ class Cin7Loader:
         if path is None:
             result.skip("ChartOfAccounts file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing = {row.code: row for row in (await self.session.scalars(select(Account))).all()}
         for row in rows:
             code = clip(row.get("*Code") or row.get("Code"), 16)
@@ -424,7 +454,7 @@ class Cin7Loader:
         if path is None:
             result.skip("Suppliers file not found")
             return
-        rows, shifted = read_csv_records(path, realign=True)
+        rows, shifted = await self._read_csv(path, realign=True)
         self.report.supplier_rows_realigned = shifted
         chosen, folded = _collapse(rows, "Name", "ContactDefault")
         if folded:
@@ -480,7 +510,7 @@ class Cin7Loader:
         if path is None:
             result.skip("Customers file not found")
             return
-        rows, shifted = read_csv_records(path, realign=True)
+        rows, shifted = await self._read_csv(path, realign=True)
         self.report.customer_rows_realigned = shifted
         if shifted == 0:
             self.report.assumptions.append(
@@ -564,10 +594,17 @@ class Cin7Loader:
         self._result("customer").note("stub customer created from a document name")
         return found
 
-    def _workbook(self, path: Path) -> tuple[list[dict[str, str]], int]:
-        if path not in self._workbooks:
-            self._workbooks[path] = read_xlsx_all(path)
-        return self._workbooks[path]
+    async def _read_csv(
+        self, path: Path, realign: bool = False
+    ) -> tuple[list[dict[str, str]], int]:
+        return await asyncio.to_thread(read_csv_records, path, realign)
+
+    async def _read_xlsx(self, path: Path) -> tuple[list[dict[str, str]], int]:
+        cached = self._workbooks.get(path)
+        if cached is None:
+            cached = await asyncio.to_thread(read_xlsx_all, path)
+            self._workbooks[path] = cached
+        return cached
 
     async def _ensure_document_parties(self) -> None:
         """Create customer/supplier stubs named only on documents before anything links to them.
@@ -584,7 +621,7 @@ class Cin7Loader:
             path = find_file(self.export_dir, prefix, ".xlsx")
             if path is None:
                 continue
-            records, _filled = self._workbook(path)
+            records, _filled = await self._read_xlsx(path)
             for name in sorted({row.get(column, "").strip() for row in records} - {""}):
                 await ensure(name)
 
@@ -596,7 +633,7 @@ class Cin7Loader:
         if path is None:
             result.skip("CustomerContacts file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         grouped: dict[str, list[dict[str, str]]] = {}
         for row in rows:
             key = _key(row.get("Customer", ""))
@@ -643,7 +680,7 @@ class Cin7Loader:
         if path is None:
             result.skip("CustomerAddresses file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         grouped: dict[str, list[dict[str, str]]] = {}
         for row in rows:
             key = _key(row.get("Name", ""))
@@ -685,7 +722,7 @@ class Cin7Loader:
             if path is None:
                 self._result(entity).skip(f"{prefix} file not found")
                 continue
-            rows, _shifted = read_csv_records(path)
+            rows, _shifted = await self._read_csv(path)
             column = "Supplier" if model is SupplierContact else "Name"
             await upsert_children(
                 self.session,
@@ -706,7 +743,7 @@ class Cin7Loader:
         if path is None:
             result.skip("LocationsWithBins file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing = {
             _key(row.name): row for row in (await self.session.scalars(select(Location))).all()
         }
@@ -767,7 +804,7 @@ class Cin7Loader:
         if path is None:
             result.skip("InventoryList file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing = {row.our_ref: row for row in (await self.session.scalars(select(Sku))).all()}
         taken = {row.our_barcode for row in existing.values()}
         pairs = [
@@ -785,6 +822,7 @@ class Cin7Loader:
         generated = sum(1 for _code, (_barcode, was_generated) in assigned.items() if was_generated)
         if generated:
             result.note("barcode generated because it was blank or duplicated", generated)
+        self.report.barcode_replacements = generated_barcode_rows(pairs, assigned)
         designs = {
             (row.design.lower(), row.fabric.lower()): row.our_ref for row in existing.values()
         }
@@ -800,6 +838,7 @@ class Cin7Loader:
         }
         for code in sorted(by_code):
             row = by_code[code]
+            self.report.warnings.extend(price_warnings(row))
             barcode, _generated = assigned[code]
             name = clip(row.get("Name"), 255) or code
             category = clip(row.get("Category"), 64)
@@ -838,6 +877,7 @@ class Cin7Loader:
                 existing[code] = current
                 designs[(design.lower(), fabric.lower())] = code
                 result.created += 1
+                _note_price_changes(self.report, None, prices)
             else:
                 same = (
                     current.name == name
@@ -856,6 +896,7 @@ class Cin7Loader:
                 if same:
                     result.unchanged += 1
                 else:
+                    _note_price_changes(self.report, current, prices)
                     current.name = name
                     current.category = category
                     current.supplier_ref = supplier_ref
@@ -881,7 +922,7 @@ class Cin7Loader:
             lists.skip("InventoryList file not found")
             items.skip("InventoryList file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing_lists = {
             row.name: row for row in (await self.session.scalars(select(PriceList))).all()
         }
@@ -936,8 +977,8 @@ class Cin7Loader:
         if path is None:
             result.skip("SimplePrices file not found")
             return
-        rows, _shifted = read_csv_records(path)
-        inventory_rows, _shifted = read_csv_records(inventory) if inventory else ([], 0)
+        rows, _shifted = await self._read_csv(path)
+        inventory_rows, _shifted = await self._read_csv(inventory) if inventory else ([], 0)
         by_code = {row.get("ProductCode", "").strip(): row for row in inventory_rows}
         mismatches = 0
         for row in rows:
@@ -956,13 +997,13 @@ class Cin7Loader:
         if mismatches:
             result.note("SimplePrices tier differs from InventoryList for a product", mismatches)
 
-    def _note_markup_prices(self) -> None:
+    async def _note_markup_prices(self) -> None:
         result = self._result("markup_price")
         path = find_file(self.export_dir, "MarkupPrices", ".csv")
         if path is None:
             result.skip("MarkupPrices file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         nonzero = 0
         for row in rows:
             value = money(row.get("Value"), "0.000001")
@@ -979,7 +1020,7 @@ class Cin7Loader:
         if path is None:
             result.skip("ProductPriceBySupplier file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing = {
             (row.sku_id, row.supplier_id): row
             for row in (await self.session.scalars(select(SkuSupplierPrice))).all()
@@ -1030,7 +1071,7 @@ class Cin7Loader:
         if path is None:
             result.skip("AssemblyBOM file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         existing = {
             (row.parent_sku_id, row.component_sku_id): row
             for row in (await self.session.scalars(select(SkuBomLine))).all()
@@ -1070,7 +1111,7 @@ class Cin7Loader:
         if path is None:
             result.skip("StockOnHand file not found")
             return
-        rows, _shifted = read_csv_records(path)
+        rows, _shifted = await self._read_csv(path)
         names = {_key(location.name): location.id for location in self.locations.values()}
         totals: dict[tuple[uuid.UUID, uuid.UUID], list[tuple[Decimal, Optional[Decimal]]]] = {}
         for row in rows:
@@ -1153,7 +1194,7 @@ class Cin7Loader:
             orders.skip("Sale_Order_Details file not found")
             lines.skip("Sale_Order_Details file not found")
             return
-        records, filled = self._workbook(path)
+        records, filled = await self._read_xlsx(path)
         self.report.filled_down["Sale_Order_Details"] = filled
         existing = {
             row.so_number: row
@@ -1256,7 +1297,7 @@ class Cin7Loader:
             lines.skip("Sale_Documents file not found")
             credits.skip("Sale_Documents file not found")
             return
-        records, filled = self._workbook(path)
+        records, filled = await self._read_xlsx(path)
         self.report.filled_down["Sale_Documents"] = filled
         invoice_rows: list[dict[str, str]] = []
         for row in records:
@@ -1446,7 +1487,7 @@ class Cin7Loader:
         orders = self._result("sales_order")
         if path is None:
             return
-        records, filled = self._workbook(path)
+        records, filled = await self._read_xlsx(path)
         self.report.filled_down["Sales_by_Product"] = filled
         links: dict[str, set[str]] = {}
         for row in records:
@@ -1490,7 +1531,7 @@ class Cin7Loader:
             orders.skip("Purchase_Order_Details file not found")
             lines.skip("Purchase_Order_Details file not found")
             return
-        records, filled = self._workbook(path)
+        records, filled = await self._read_xlsx(path)
         self.report.filled_down["Purchase_Order_Details"] = filled
         existing = {
             row.po_number: row
@@ -1579,7 +1620,7 @@ class Cin7Loader:
             bills.skip("Purchase_Invoice_Details file not found")
             lines.skip("Purchase_Invoice_Details file not found")
             return
-        records, filled = self._workbook(path)
+        records, filled = await self._read_xlsx(path)
         self.report.filled_down["Purchase_Invoice_Details"] = filled
         existing = {
             row.bill_number: row
@@ -1673,10 +1714,10 @@ class Cin7Loader:
             )
         self._result("bill_line").created += len(built)
 
-    def _note_unused_files(self) -> None:
+    async def _note_unused_files(self) -> None:
         availability = find_file(self.export_dir, "AvailabilityReport", ".csv")
         if availability is not None:
-            rows, _shifted = read_csv_records(availability)
+            rows, _shifted = await self._read_csv(availability)
             self._result("availability").skip(
                 "availability is a derived stock view; on-hand comes from StockOnHand",
                 len(rows),
@@ -1685,7 +1726,7 @@ class Cin7Loader:
             self._result("availability").skip("AvailabilityReport file not found")
         smart = find_file(self.export_dir, "SmartReordering", ".csv")
         if smart is not None:
-            rows, _shifted = read_csv_records(smart)
+            rows, _shifted = await self._read_csv(smart)
             self._result("smart_reorder").skip(
                 "reorder_min is taken from the product MinimumBeforeReorder; "
                 "per-supplier lead settings were not stored",
@@ -1695,7 +1736,7 @@ class Cin7Loader:
             self._result("smart_reorder").skip("SmartReordering file not found")
         reorder_locations = find_file(self.export_dir, "StockReorder", ".csv")
         if reorder_locations is not None:
-            rows, _shifted = read_csv_records(reorder_locations)
+            rows, _shifted = await self._read_csv(reorder_locations)
             self._result("stock_reorder_location").skip(
                 "reorder minimums are per SKU, not per location",
                 len(rows),

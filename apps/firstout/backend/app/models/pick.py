@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -36,7 +37,7 @@ class PickStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Pick(UUIDPkMixin, TimestampMixin, Base):
+class Pick(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "picks"
 
     number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -126,7 +127,7 @@ class Pick(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class PickLine(UUIDPkMixin, TimestampMixin, Base):
+class PickLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "pick_lines"
 
     pick_id: Mapped[uuid.UUID] = mapped_column(
@@ -152,7 +153,7 @@ class PickLine(UUIDPkMixin, TimestampMixin, Base):
     __table_args__ = (CheckConstraint("qty_needed > 0", name="ck_pick_lines_qty_needed"),)
 
 
-class PickAllocation(UUIDPkMixin, TimestampMixin, Base):
+class PickAllocation(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "pick_allocations"
 
     pick_line_id: Mapped[uuid.UUID] = mapped_column(

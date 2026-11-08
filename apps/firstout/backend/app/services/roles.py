@@ -130,6 +130,7 @@ class RoleSeedService:
                 role.is_system = True
                 role.is_owner_preset = slug == SLUG_OWNER
                 existing = {permission.key for permission in role.permissions}
+                desired = desired | existing  # Never strip inventoried grants during rollout.
                 if existing == desired:
                     continue
                 role.permissions.clear()

@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -19,7 +20,7 @@ class PaymentDirection(str, enum.Enum):
     OUT = "out"
 
 
-class Payment(UUIDPkMixin, TimestampMixin, Base):
+class Payment(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "payments"
 
     payment_number: Mapped[str] = mapped_column(String(32), nullable=False)

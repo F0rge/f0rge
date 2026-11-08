@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.conftest import authenticate_as, create_test_staff
+
 from decimal import Decimal
 from pathlib import Path
 
@@ -25,14 +27,12 @@ async def _load(async_db: AsyncSession, tmp_path: Path) -> None:
 
 async def _login_as(owner_client: AsyncClient, role: str) -> AsyncClient:
     email = f"{role}-records@example.com"
-    created = await owner_client.post(
-        "/api/v1/users", json={"email": email, "password": f"{role}-password", "role": role}
+    await create_test_staff(
+        owner_client, **{"email": email, "password": f"{role}-password", "role": role}
     )
-    assert created.status_code == 201
     owner_client.cookies.clear()
-    login = await owner_client.post(
-        "/api/v1/auth/login", json={"email": email, "password": f"{role}-password"}
-    )
+    owner_client.headers.pop("Authorization", None)
+    login = await authenticate_as(owner_client, email)
     assert login.status_code == 200
     return owner_client
 

@@ -1,3 +1,5 @@
+> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Shared Conventions — All Reviewers
 
 Hard rules every reviewing agent must honour, regardless of domain. Block-level findings here apply to backend, frontend, devops, and qa-engineer alike.
@@ -14,7 +16,7 @@ See `AGENTS.md` § Shared libraries for the canonical inventory. **Nx gates** (a
 
 ## Plans must delegate to sub-agents
 
-**At planning time** (before any code), every implementation plan MUST include a sub-agent map: one named sub-agent from `~/.cursor/agents/` per work chunk, with deliverable and dependencies. The planning agent orchestrates; it does not implement the chunks. See `.cursor/rules/orchestration.mdc` and `.cursor/skills/ship-feature/SKILL.md`.
+**At planning time** (before any code), every implementation plan MUST include a sub-agent map: one named sub-agent from `~/.cursor/agents/` per work chunk, with deliverable and dependencies. The planning agent orchestrates; it does not implement the chunks. See `.cursor/rules/orchestration.mdc`. `.cursor/skills/ship-feature/SKILL.md` is not in this repo; do not invent it.
 
 At PR review time: if the PR description outlines multi-step work that does NOT name a sub-agent per chunk, flag it. Solo plans where the main agent did all the work are not acceptable.
 
@@ -75,11 +77,11 @@ Canonical playbooks: `.cursor/review-context/`.
 
 ## Branch & PR conventions
 
-- Trunk-based: `main` is the only long-lived and only deployed branch. There is no `develop` branch or develop environment. Block any PR targeting `develop`.
+- Trunk-based: pull requests go to `main`. A remote `develop` ref may still exist; block any PR targeting it. It is not an approved long-lived branch.
 - Short-lived branches off `main`: `feat/…`, `fix/…`, `chore/…`, `docs/…`, `refactor/…`, `test/…`, `hotfix/…`.
-- PRs into `main` only, `.github/workflows/ci.yml` green, squash merge. Merging deploys.
+- PRs into `main` only, `.github/workflows/ci.yml` green, squash merge after review. A merge is not Leo's production release approval. Do not enable auto-merge.
 - Hotfixes are ordinary PRs into `main`.
-- Direct push to `main` is only acceptable for single-file edits on personal config.
+- Do not direct-push to `main`. A personal-config exception is not a production release approval.
 
 ## Git workflow boundaries
 
@@ -105,6 +107,6 @@ See global `~/.cursor/rules/leo-system-wide.mdc` § "Post-Merge Hygiene".
 Every new `Settings` attribute in `apps/marrow/backend/app/config.py` requires:
 1. A matching line in `apps/marrow/backend/.env.example`.
 2. If required (no safe default), documentation of how to obtain the value.
-3. For deployed environments: set the value on Fly app secrets (`fly secrets set -a marrow-dev` / `marrow`).
+3. Do not run `fly secrets set` or change production secrets from this checklist. A production secret change needs a separate explicit approval.
 
 Block on missing `.env.example` entry. See `mcp_server_issue_49_findings.md`.

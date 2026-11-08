@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -31,7 +32,7 @@ class LaybyStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class Layby(UUIDPkMixin, TimestampMixin, Base):
+class Layby(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "laybys"
 
     layby_number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -100,7 +101,7 @@ class Layby(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class LaybyLine(UUIDPkMixin, TimestampMixin, Base):
+class LaybyLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "layby_lines"
 
     layby_id: Mapped[uuid.UUID] = mapped_column(
@@ -123,7 +124,7 @@ class LaybyLine(UUIDPkMixin, TimestampMixin, Base):
     __table_args__ = (CheckConstraint("qty > 0", name="ck_layby_lines_qty"),)
 
 
-class LaybyPayment(UUIDPkMixin, TimestampMixin, Base):
+class LaybyPayment(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "layby_payments"
 
     layby_id: Mapped[uuid.UUID] = mapped_column(

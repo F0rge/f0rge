@@ -128,7 +128,7 @@ export default function PaymentsPage() {
         />
       ) : null}
 
-      <div data-tour="payments-list">
+      <div>
       {loading ? (
         <p className="cds--type-body-01">Loading payments…</p>
       ) : total === 0 ? (

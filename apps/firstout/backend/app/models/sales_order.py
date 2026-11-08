@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
@@ -34,7 +35,7 @@ class SalesOrderStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
+class SalesOrder(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "sales_orders"
 
     so_number: Mapped[str] = mapped_column(Text, nullable=False)
@@ -122,7 +123,7 @@ class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class SalesOrderLine(UUIDPkMixin, TimestampMixin, Base):
+class SalesOrderLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "sales_order_lines"
 
     sales_order_id: Mapped[uuid.UUID] = mapped_column(
@@ -162,7 +163,7 @@ class SalesOrderLine(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class SalesOrderPayment(UUIDPkMixin, TimestampMixin, Base):
+class SalesOrderPayment(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "sales_order_payments"
 
     sales_order_id: Mapped[uuid.UUID] = mapped_column(

@@ -3,6 +3,8 @@ description: Orchestration and planning — every plan must delegate work chunks
 alwaysApply: true
 ---
 
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+
 # Orchestration — Plan, Delegate, Ship
 
 Extends `~/.cursor/rules/leo-system-wide.mdc` § Sub-Agent Delegation. Project-specific routing below.
@@ -14,7 +16,7 @@ When producing an implementation plan (Plan mode, issue spec, or ad-hoc scope), 
 1. **Sub-agent map** — one row per work chunk: `Chunk | Owner (sub-agent) | Deliverable | Depends on`
 2. **Owner = a named sub-agent** from `~/.cursor/agents/` or a built-in (`explore`, `bash`, `browser`) — not "main agent" or "me". Plan is a *mode*, not a sub-agent; don't assign chunks to it.
 3. **Right-sized delegation** — match scope to agent count (see table)
-4. **Verification plan** — ends with live-server E2E when UI/API changes; dev-env smoke when shipping via `ship-feature` skill
+4. **Verification plan** — ends with live-server E2E when UI/API changes. `.cursor/skills/ship-feature/SKILL.md` is not in this repo; do not invent a ship-feature smoke, and do not treat a local smoke as a production release.
 5. **Explicit sign-off** — unresolved decisions listed before execution
 
 Solo plans where the orchestrator implements every chunk are **not acceptable**. Exception: trivial single-file edits (typo, dep bump, one-line config).
@@ -54,8 +56,8 @@ Each brief MUST include:
 4. Scope: plan slice with file paths and acceptance criteria
 5. Write back gotchas to memory when done
 
-Template: `.cursor/skills/ship-feature/references/sub-agent-brief-template.md`
+The brief template was cited at `.cursor/skills/ship-feature/references/sub-agent-brief-template.md`. That skill is not in this repo. Use the five items above and do not invent the file.
 
 ## End-to-end shipping
 
-For idea or GitHub issue implementation through a short-lived branch → PR into `main` → CI green → squash merge (deploys), use the **`ship-feature`** skill (`.cursor/skills/ship-feature/SKILL.md`).
+For idea or GitHub issue implementation, use a short-lived branch and a pull request into `main`. Squash merge is a git action, not a production release. Leo approves every production release. `.cursor/skills/ship-feature/SKILL.md` is not in this repo; do not invent it.

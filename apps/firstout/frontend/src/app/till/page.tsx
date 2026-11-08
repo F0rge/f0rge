@@ -1,5 +1,7 @@
 "use client";
 
+import { StaffImage } from "@/components/staff-image";
+
 import {
   Button,
   ButtonSet,
@@ -34,7 +36,7 @@ import {
   UserFollow,
 } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CustomerPicker } from "@/components/customer-picker";
 import { TillScanner } from "@/components/till-scanner";
@@ -44,6 +46,7 @@ import {
   can,
   canManageCustomerCredit,
   canUseTill,
+  canViewCostAudit,
   cancelPick,
   computeInvoicePreview,
   confirmPick,
@@ -79,6 +82,7 @@ import { useAuth } from "@/lib/auth";
 import {
   displayUnitAmount,
   pricesIncludeVat,
+  quoteLineSuspectWarning,
   quoteSkuUnitExVat,
   vatBasisLabel,
 } from "@/lib/quote-sku-price";
@@ -255,9 +259,7 @@ function SkuThumb({ sku }: { sku: Sku }) {
     );
   }
   return (
-    // Cookie + 302 Tigris redirect — same as catalogue; not next/image.
-    // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
-    <img
+    <StaffImage
       className="firstout-till-thumb"
       src={skuPhotoUrl(sku.id)}
       alt=""
@@ -272,6 +274,7 @@ export default function TillPage() {
   const { user } = useAuth();
   const canSell = canUseTill(user);
   const canDiscount = can(user, "till.discount");
+  const canViewCost = canViewCostAudit(user);
   const canOverrideCredit = canManageCustomerCredit(user);
   const [locations, setLocations] = useState<Location[]>([]);
   const [companySettings, setCompanySettings] = useState<AppSettings | null>(null);
@@ -976,7 +979,7 @@ export default function TillPage() {
                     disabled={!skuId}
                   />
 
-                  <Button data-tour="till-add" kind="secondary" disabled={!addValid} onClick={handleAddToCart}>
+                  <Button kind="secondary" disabled={!addValid} onClick={handleAddToCart}>
                     Add to cart
                   </Button>
                 </Stack>
@@ -1004,18 +1007,27 @@ export default function TillPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {cart.map((line) => (
-                          <TableRow key={line.key}>
+                        {cart.map((line) => {
+                          const priced = quoteSkuUnitExVat(line.sku, selectedCustomer, priceLists);
+                          const suspect = quoteLineSuspectWarning(
+                            priced.unitExVat === null ? "" : formatPriceAmount(priced.unitExVat),
+                            line.sku,
+                            priced,
+                            canViewCost,
+                            showInclusive,
+                          );
+                          const columnCount = canDiscount ? 7 : 6;
+                          return (
+                          <Fragment key={line.key}>
+                          <TableRow>
                             <TableCell className="firstout-till-thumb-cell">
                               <SkuThumb sku={line.sku} />
                             </TableCell>
                             <TableCell>
                               <strong>{line.sku.name}</strong>
                               <div className="firstout-muted-text">SKU: {line.sku.our_ref}</div>
-                              {quoteSkuUnitExVat(line.sku, selectedCustomer, priceLists).warning ? (
-                                <div className="firstout-muted-text">
-                                  {quoteSkuUnitExVat(line.sku, selectedCustomer, priceLists).warning}
-                                </div>
+                              {priced.warning ? (
+                                <div className="firstout-muted-text">{priced.warning}</div>
                               ) : null}
                             </TableCell>
                             <TableCell>
@@ -1087,7 +1099,23 @@ export default function TillPage() {
                               />
                             </TableCell>
                           </TableRow>
-                        ))}
+                          {suspect ? (
+                            <TableRow>
+                              <TableCell colSpan={columnCount}>
+                                <InlineNotification
+                                  className="firstout-till-price-warning"
+                                  kind="warning"
+                                  lowContrast
+                                  hideCloseButton
+                                  title="Check this price"
+                                  subtitle={suspect}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                          </Fragment>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1283,8 +1311,7 @@ export default function TillPage() {
               <div>
                 <strong>Seller</strong>
                 {companySettings?.has_logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
-                  <img
+                  <StaffImage
                     className="firstout-company-logo"
                     src={settingsLogoUrl()}
                     alt=""
@@ -1326,6 +1353,9 @@ export default function TillPage() {
                         {line.description}
                         {line.price_warning ? (
                           <div className="firstout-muted-text">{line.price_warning}</div>
+                        ) : null}
+                        {line.suspect_price_warning ? (
+                          <div className="firstout-price-warning">{line.suspect_price_warning}</div>
                         ) : null}
                       </TableCell>
                       <TableCell>{line.qty}</TableCell>

@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import UUIDPkMixin
 
 
@@ -26,7 +27,7 @@ class BooksEventAction(str, enum.Enum):
     VOIDED = "voided"
 
 
-class BooksEvent(UUIDPkMixin, Base):
+class BooksEvent(TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "books_events"
 
     document_type: Mapped[BooksDocumentType] = mapped_column(

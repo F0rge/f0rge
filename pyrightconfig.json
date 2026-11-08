@@ -30,6 +30,7 @@
     },
     {
       "root": "apps/firstout/backend",
+      "pythonVersion": "3.11",
       "extraPaths": [
         "apps/firstout/backend",
         "libs/backend/core/src",
@@ -40,6 +41,7 @@
     },
     {
       "root": "apps/dk/tag-printer/backend",
+      "pythonVersion": "3.11",
       "extraPaths": ["apps/dk/tag-printer/backend"]
     }
   ]

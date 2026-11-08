@@ -133,7 +133,7 @@ export default function AuditPage() {
         />
       ) : null}
 
-      <div data-tour="audit-events">
+      <div>
       {loading ? (
         <p className="cds--type-body-01">Loading audit events…</p>
       ) : total === 0 && !error ? (

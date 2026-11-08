@@ -26,6 +26,7 @@ from app.permissions import (
     USERS_MANAGE,
 )
 from app.services.auth import AuthService
+from app.services.password_reset import PasswordResetService
 from app.services.permissions import PermissionService
 from app.services.bills import BillService
 from app.services.books_events import BooksEventService
@@ -46,6 +47,7 @@ from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
 from app.services.bank_rules import BankRuleService
 from app.services.catalogue_imports import CatalogueImportService
+from app.services.cin7_import_jobs import Cin7ImportJobService
 from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
@@ -82,6 +84,10 @@ from app.services.audit_hub import AuditHubService
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(db)
+
+
+def get_password_reset_service(db: AsyncSession = Depends(get_db)) -> PasswordResetService:
+    return PasswordResetService(db)
 
 
 def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
@@ -236,6 +242,12 @@ def get_catalogue_import_service(
     db: AsyncSession = Depends(get_db),
 ) -> CatalogueImportService:
     return CatalogueImportService(db)
+
+
+def get_cin7_import_job_service(
+    db: AsyncSession = Depends(get_db),
+) -> Cin7ImportJobService:
+    return Cin7ImportJobService(db)
 
 
 def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
