@@ -93,7 +93,7 @@ uv run python -m scripts.<script_name>
 uv run ruff check . && uv run ruff format .
 ```
 
-For deep pipeline work, delegate to the `data-engineer` sub-agent in `~/.cursor/agents/`.
+Coordinate data work with `f0rge-data` under the [shared protocol](../../docs/agents/protocol.md). Resolve exact paths with `node scripts/agents/agents.mjs route <repo-relative-path...>`; server-contract exporters are server work even when located under `scripts/`.
 
 ---
 
@@ -160,4 +160,4 @@ uv run python -m scripts.<script_name>
 uv run ruff check . && uv run ruff format .
 ```
 
-For deep ML/prompt work, delegate to the `data-scientist` sub-agent in `~/.cursor/agents/`.
+For ML/prompt changes, resolve the owning behavior through the [routing manifest](../../docs/agents/manifest.json) and request the required specialist reviews through the coordinator. A subject label does not create a separate role or override path ownership.

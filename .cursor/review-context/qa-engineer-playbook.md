@@ -1,18 +1,18 @@
 > Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
-# QA Review Playbook (committed copy)
+# Quality and Testing Review Playbook (committed copy)
 
 ## What this is
 
-Review checklist for QA-relevant diffs in this repo, distilled from real incidents.
+Review reference for `f0rge-quality-testing`, distilled from legacy incidents. Follow the [shared protocol](../../docs/agents/protocol.md), applicable ADRs and the [manifest](../../docs/agents/manifest.json). Resolve exact primary/reviewer assignments with `node scripts/agents/agents.mjs route <repo-relative-path...>`; behavior tests stay with the behavior owner and shared harnesses have explicit routes. Historical incident-note paths below are optional provenance, not required global memory.
 
-A reviewer reading only the diff **cannot** run servers, click UIs, or talk to OpenRouter. Anything that requires those goes into the "Verification ticket for the human" section as a checklist for the qa-engineer locally.
+A diff-only review does not prove runtime behavior. When the assigned reviewer lacks the necessary local runtime or browser tools, record a verification ticket for an independent `f0rge-quality-testing` run or authorized human operator. Keep the gate open until the required evidence exists.
 
 ---
 
 ## Hard rules — instant block findings
 
-Cite the originating memory file in every block-level comment so future-Leo can trace the rule.
+Cite the committed rule and inspected source evidence in each block-level comment. Include historical provenance only when it was actually consulted; an unavailable memory file does not supply evidence.
 
 - **`platform:` tag on new projects** — any new `project.json` must carry `platform:py` or `platform:ts` tag or CI silently ignores it. Block on new projects missing tags. Exception: `marrow-ios` (`scope:marrow` only). Full Nx checklist: `.cursor/BUGBOT.md` / `.cursor/rules/nx.mdc`.
 - **Lib test coverage** — changes to `libs/**` must include or update tests in the lib's `tests/` directory. Block on lib changes with no test updates when behavior changes.
@@ -44,19 +44,19 @@ When a PR fixes one of these patterns, the reviewer should mentally run the grep
 | Unstable `useEffect` dep including a `useCallback` over `useMutation`s | `grep -rn 'useEffect.*\[.*,\s*\(fire\|mutate\|callback\)' apps/marrow/frontend/lib/hooks/` | `useAutosaveEntry` duplicate-fire (every save fired twice — see `autosave_gate_findings.md`) |
 | `'use client'` page reading localStorage in `useState(initializer)` | `grep -rn '"use client"' apps/marrow/frontend/app/customize/` then check for `useState(load*)` or `useState(() => load*())` | `/customize/reorder` SSR hydration mismatch (Phase 1 Customize Hub, see `issue_phase1_customize_hub_findings.md`) |
 
-Cite `feedback_audit_class_of_bug.md` when asking the PR author to extend the fix.
+Cite the committed class-of-bug audit requirement in this playbook when asking the PR author to extend the fix.
 
 ---
 
-## Live-server gate — verification ticket for the human
+## Live-server gate — verification handoff
 
-The bot can't run local servers or drive Playwright. Instead, when the review concludes, append a **Verification ticket** to the top-level summary listing the manual checks the human qa-engineer must perform locally before merge. Base the ticket on the diff:
+Run the required local walkthrough when tools are available. Otherwise append a **Verification ticket** naming the checks an independent `f0rge-quality-testing` reviewer or authorized human operator must complete before merge. Base the ticket on the diff and do not report a missing walkthrough as passed:
 
 **Always include (every PR):**
 - [ ] Spin up local dev (`cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload` + `cd apps/marrow/frontend && npm run dev`); poll `/api/v1/health` to ready.
 - [ ] Drive every NEW user-facing path on the branch — every route, every form, every workflow that wasn't there on `main`. Identify them from the diff.
 - [ ] After running, tail backend container logs for the test window — a 500 hidden behind a frontend toast is the most common slipped bug (see `MEMORY.md` → "Tail backend logs FIRST when UI reports an error").
-- [ ] Confirm `git status` is clean and any temp servers/worktrees are torn down (per global post-merge hygiene rule).
+- [ ] Confirm `git status` and account for all changes; clean up only task-owned temporary resources when no longer needed, preserving the active PR worktree and unrelated work.
 
 **Add when diff includes:**
 - Migration files → verify against a local Postgres testcontainer before merge; after a separately approved production release, check `alembic_version` via API health.
@@ -159,16 +159,16 @@ Each inline comment:
 - `[warn]` = real issue that should be addressed but isn't catastrophic (e.g. cosmetic, follow-up-ticket acceptable).
 - `[nit]` = style / readability / minor; author can ignore.
 - One-sentence description of what's wrong, one-sentence of the fix.
-- Cite the originating memory file in backticks: `See feedback_thin_routers.md.`
+- Cite the committed rule and source location; identify any consulted historical note as provenance.
 
 Top-level summary:
-1. **Verdict** line: `GO`, `NO-GO`, or `GO with follow-ups` (matching qa-engineer's prior gate vocabulary).
+1. **Verdict** line: `GO`, `NO-GO`, or `GO with follow-ups` (retaining this playbook's gate vocabulary).
 2. **Block-level findings** list — every `[block]` comment summarized with file:line links. If empty, say "No block-level findings."
 3. **Warnings / nits** count only.
-4. **Verification ticket** — bulleted checklist of manual checks the human qa-engineer must perform locally (see "Live-server gate" section above for content).
+4. **Verification ticket** — outstanding checks for the independent `f0rge-quality-testing` reviewer or authorized human operator (see "Live-server gate" above).
 5. **Class-of-bug audit prompt** if the diff touches any of the patterns in the audit table.
 
-Be terse. Each line earns its place. The qa-engineer reads this on a GitHub PR view — no fluff.
+Be terse. Each line earns its place. The `f0rge-quality-testing` reviewer reads this on a GitHub PR view.
 
 ---
 

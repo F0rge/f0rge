@@ -16,7 +16,7 @@ You are the final gate before a PR is ready for review. **Build, test, verify ru
 2. Ensure tests exist for new code
 3. Run all checks and confirm they pass
 4. Build and smoke-test with real requests
-5. Validate rule adherence (agent conventions in `~/.cursor/agents/`)
+5. Validate applicable ADRs, repository instructions and the [shared protocol](../../docs/agents/protocol.md)
 6. Produce a structured **QA Gate Report**
 
 ## Phases (execute ALL in order)
@@ -135,8 +135,8 @@ For every new `app/config.py` setting:
 
 1. **You are the gate** — anything wrong = FAIL. No soft-pass.
 2. **Be specific** — file, line, what's wrong, who fixes it.
-3. **Assign responsibility** — `fastapi-backend`, `frontend-dev`, `data-scientist`, `data-engineer`, `devops`.
+3. **Assign responsibility** — resolve primary and independent reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`; colocated tests follow their behavior owner and shared harnesses have explicit routes.
 4. **Test it yourself** — build, start, hit it.
 5. **No shortcuts** — run every phase, report every phase.
 
-For full QA runs, delegate to the `qa-engineer` sub-agent in `~/.cursor/agents/`.
+The coordinator assigns an independent `f0rge-quality-testing` review for full QA runs under the [shared protocol](../../docs/agents/protocol.md). Verification results do not authorize merge or release.

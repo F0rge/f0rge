@@ -44,6 +44,11 @@ jobs:
 
       - uses: ./.github/actions/setup-node-workspace
 
+      - name: Repository agent routing and generated adapter checks
+        run: |
+          npm run agents:check
+          npm run agents:test
+
       - name: Assert no root uv.lock
         run: bash .github/scripts/assert-no-root-uv-lock.sh
 

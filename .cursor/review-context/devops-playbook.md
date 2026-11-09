@@ -1,10 +1,10 @@
 > Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Existing app commands and safety rules remain applicable. Leo approves every production release. Do not enable auto-merge or deploy without that approval.
 
-# DevOps Review Playbook
+# Delivery and DevOps Review Playbook
 
-Review infrastructure, CI, Docker, Railway/Coolify configuration, and migration delivery changes. Read `.cursor/rules/infra.mdc`, inspect the diff, and return concrete findings.
+Review reference for `f0rge-delivery` and `f0rge-devops`. Read the [shared protocol](../../docs/agents/protocol.md) and `.cursor/rules/infra.mdc`, inspect the diff, and return concrete findings. Resolve exact primaries and independent reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`. Build/CI work and runtime operations remain distinct; this retained playbook covers both for review, not duplicate ownership.
 
-## Scope
+## Review coverage — not ownership routing
 
 - `.github/**`, `**/railway*.toml`, Dockerfiles, compose and entrypoint files.
 - Nx registration, root build/dependency configuration, `.dockerignore`, and `.gitignore`.

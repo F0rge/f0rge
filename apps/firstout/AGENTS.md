@@ -4,22 +4,14 @@
 
 Gauteng furniture retailer back office (stock, books, till). Sibling app next to Marrow and dk. **Never** nest this under `apps/marrow/`. **Never** a new repo.
 
-Owner routing (even though `.cursor/rules/orchestration.mdc` still lists marrow paths):
+Use the repository [agent guide](../../docs/agents/README.md) and [shared protocol](../../docs/agents/protocol.md). From the repo root, run `node scripts/agents/agents.mjs route <repo-relative-path...>` for the primary and reviewers. The [manifest](../../docs/agents/manifest.json) owns routing, including model/migration, server-contract, test-harness and runtime-infrastructure exceptions.
 
-| Area | Sub-agent |
-|------|-----------|
-| `apps/firstout/backend` | `fastapi-backend` |
-| `apps/firstout/frontend` | `frontend-dev` |
-| Nx / Docker / Railway / `.github/deploy` | `devops` |
-
-Read `~/.cursor/agent-memory/<agent>/MEMORY.md` first. Write gotchas back when done.
-
-## UI — IBM Carbon (explicit exception to `ui-kit.mdc`)
+## Existing UI — IBM Carbon (legacy inventory)
 
 - **This app uses IBM Carbon (`@carbon/react`, `@carbon/styles`, `@carbon/icons-react`).**
 - Do **not** import `@f0rge/ui`, `@f0rge/ui/forms`, or `@f0rge/ui/api`.
 - Do **not** put Carbon in `libs/ui`. Do **not** run `add-ui-primitive` for Firstout.
-- `ui-kit.mdc` remains the default for Marrow and dk. This nested AGENTS.md is the exception.
+- Preserve Firstout's current Carbon integration for maintenance. Marrow and dk retain their current `ui-kit.mdc` rules. These legacy choices are not approved exceptions to the Primer ADR and do not authorize a migration.
 - Superdesign: try the Superdesign plugin first for frontend/UI. If the CLI reports credits/quota/paywall/auth failure, skip the canvas, implement Carbon, and record that in the PR. Do not invent extra retries.
 
 ## Stack

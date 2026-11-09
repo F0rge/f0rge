@@ -173,7 +173,7 @@ uv run uvicorn app.main:app --port 8000 --reload
 uv run pytest tests/ -v --tb=short
 ```
 
-For deep backend work, delegate to the `fastapi-backend` sub-agent in `~/.cursor/agents/`.
+Use `node scripts/agents/agents.mjs route <repo-relative-path...>` and the [shared protocol](../../docs/agents/protocol.md). `f0rge-backend` handles server behavior; database models/migrations and shared test harnesses have distinct manifest routes. Resolve server-contract exporters before treating a script as ETL; request the relevant reviews through the coordinator.
 
 ## Marrow specifics
 

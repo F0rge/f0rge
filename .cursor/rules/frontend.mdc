@@ -126,4 +126,4 @@ npx nx run marrow-frontend:dev    # :3000
 npx nx run-many -t lint typecheck build --projects f0rge-ui,marrow-frontend
 ```
 
-For deep frontend work, delegate to the `frontend-dev` sub-agent in `~/.cursor/agents/`.
+Coordinate frontend work with `f0rge-frontend` under the [shared protocol](../../docs/agents/protocol.md). Resolve each changed path with `node scripts/agents/agents.mjs route <repo-relative-path...>`; generated clients, build configuration and browser harnesses have explicit routes and reviewers.

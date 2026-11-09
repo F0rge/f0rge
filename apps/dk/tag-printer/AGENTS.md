@@ -3,7 +3,7 @@
 # dk tag printer — Agent Instructions
 
 DasKasas price tag tool. Deploy target: **Coolify on Pi** (prod only).
-Delegate deploy/infra work to the `devops` sub-agent.
+Resolve primary and reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>` from the repo root. Follow the [shared protocol](../../../docs/agents/protocol.md): `f0rge-delivery` covers build/CI work and `f0rge-devops` covers runtime operations, subject to the exact manifest route.
 
 ## Local dev
 
@@ -43,7 +43,7 @@ cd apps/dk/tag-printer/frontend && npm run dev -- --port 3002
 
 `.github/deploy/manifest.yml` documents a Coolify webhook path. On a push to `main` after CI is green, `deploy-reusable.yml` is written to call those webhooks. That is the documented current configuration. It is not Leo's release approval, a merge is not that approval, and this file does not turn the path off. Each app is signed with its own secret name: `COOLIFY_WEBHOOK_DASKASAS_BACKEND` and `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`. `watch_paths` are how that workflow avoids rebuilding dk for unrelated changes.
 
-Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`
+Use the committed configuration and gotchas above; verify current provider state before an authorized operation.
 
 ## Frontend kit
 

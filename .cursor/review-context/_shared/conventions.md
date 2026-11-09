@@ -2,7 +2,7 @@
 
 # Shared Conventions — All Reviewers
 
-Hard rules every reviewing agent must honour, regardless of domain. Block-level findings here apply to backend, frontend, devops, and qa-engineer alike.
+Hard rules every reviewing agent must honour, regardless of domain. Use the [shared protocol](../../../docs/agents/protocol.md) and canonical [routing manifest](../../../docs/agents/manifest.json) for role assignments. Legacy incident-note filenames below are provenance, not required global files or current role IDs; findings must stand on committed rules and inspected evidence.
 
 ## Shared libraries — non-duplication
 
@@ -16,9 +16,9 @@ See `AGENTS.md` § Shared libraries for the canonical inventory. **Nx gates** (a
 
 ## Plans must delegate to sub-agents
 
-**At planning time** (before any code), every implementation plan MUST include a sub-agent map: one named sub-agent from `~/.cursor/agents/` per work chunk, with deliverable and dependencies. The planning agent orchestrates; it does not implement the chunks. See `.cursor/rules/orchestration.mdc`. `.cursor/skills/ship-feature/SKILL.md` is not in this repo; do not invent it.
+**At planning time** (before implementation), the coordinator names a manifest-resolved `f0rge-` primary and independent reviewers for each chunk, with deliverable and dependencies. Use `node scripts/agents/agents.mjs route <repo-relative-path...>` and `.cursor/rules/orchestration.mdc`. Specialists implement their assigned slice and request cross-domain work or review through the coordinator; they do not recursively delegate every step. `.cursor/skills/ship-feature/SKILL.md` is absent; use the shared protocol.
 
-At PR review time: if the PR description outlines multi-step work that does NOT name a sub-agent per chunk, flag it. Solo plans where the main agent did all the work are not acceptable.
+At PR review time, flag substantial work without a named primary and independent review. A list of role names without completed review evidence is insufficient.
 
 Exception: trivial single-file edits (typo fix, dep bump, config tweak) — one specialist sub-agent or inline edit is fine.
 
@@ -66,14 +66,9 @@ If a test's seam is mocked, the test cannot catch the bugs that mock seam was de
 
 FastAPI routers are 1-3 lines: signature, single service-call delegation, return. No `if`, no `raise`, no `try`, no `db.query`, no helpers in the router module. Pre-existing violations are NOT this PR's problem — only flag NEW ones. See `feedback_thin_routers.md`.
 
-## Sub-agents must read/write their own memory
+## Review context and handoff
 
-When invoked, each sub-agent must:
-1. Read `~/.cursor/agent-memory/<agent-name>/MEMORY.md` before starting; write back gotchas when done.
-2. Read `.cursor/review-context/<own-name>-playbook.md` and `.cursor/review-context/_shared/*.md` when doing PR review.
-3. Return review findings in JSON format (see each playbook for the schema).
-
-Canonical playbooks: `.cursor/review-context/`.
+Read root and applicable nested `AGENTS.md`, the shared protocol, relevant ADRs, `.cursor/review-context/_shared/*.md`, and the existing playbooks selected by the [agent guide's review-reference mapping](../../../docs/agents/README.md). Playbook filenames are retained historical names; do not construct a filename from a new role ID. Return findings in the playbook's documented format with source locations, evidence and verification limits. Include reusable gotchas in the handoff; global memory is not a prerequisite and is not written without separate user instruction.
 
 ## Branch & PR conventions
 
@@ -100,7 +95,7 @@ After this PR merges, the working tree must be clean:
 - `git status` is clean.
 - Session ends on the default branch (`main`), fast-forwarded to origin.
 
-See global `~/.cursor/rules/leo-system-wide.mdc` § "Post-Merge Hygiene".
+Apply cleanup only to task-owned resources, preserving unrelated work and any worktree still needed for the PR. Follow the shared protocol and the user's explicit cleanup scope; these instructions do not authorize deleting unrelated branches or changes.
 
 ## Required environment vars must mirror to `.env.example`
 
