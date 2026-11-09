@@ -8,7 +8,7 @@ alwaysApply: false
 
 # f0rge Infrastructure
 
-Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
+Use the [shared protocol](../../docs/agents/protocol.md) and resolve each path with `node scripts/agents/agents.mjs route <repo-relative-path...>`. `f0rge-delivery` owns build/CI work; `f0rge-devops` owns runtime infrastructure and operations. The manifest assigns the precise primary and reviewers; neither role authorizes a production release.
 
 ## Multi-target deploy
 
@@ -25,7 +25,7 @@ Orchestrator: [`.github/workflows/deploy-reusable.yml`](../../.github/workflows/
 
 # Marrow Infrastructure (Railway)
 
-**Deploy gotchas:** read `~/.cursor/agent-memory/devops/` + [`apps/marrow/backend/docs/railway_env.md`](../../apps/marrow/backend/docs/railway_env.md). Cloudflare DNS Edit for `marrow-health.com` often needs UI (API token may 9109/7003).
+**Deploy gotchas:** read [`apps/marrow/backend/docs/railway_env.md`](../../apps/marrow/backend/docs/railway_env.md) and verify the current provider state. Cloudflare DNS Edit for `marrow-health.com` often needs UI (API token may 9109/7003).
 
 ## Environments
 

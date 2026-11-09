@@ -1,0 +1,373 @@
+[
+  {
+    "path": "docs/adr/delivery.md",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "docs/adr/operations.md",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".github/workflows/deploy.yml",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".github/deploy/manifest.yml",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/airflow/Dockerfile",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-devops",
+      "f0rge-workflows"
+    ]
+  },
+  {
+    "path": "apps/airflow/docker-compose.yml",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-delivery",
+      "f0rge-security",
+      "f0rge-workflows"
+    ]
+  },
+  {
+    "path": "apps/airflow/scripts/scale-workers.sh",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-workflows"
+    ]
+  },
+  {
+    "path": "apps/airflow/dags/_system/smoke.py",
+    "owner": "f0rge-workflows",
+    "reviewers": [
+      "f0rge-workflows",
+      "f0rge-backend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "apps/marrow/dags/meal_classify.py",
+    "owner": "f0rge-workflows",
+    "reviewers": [
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/scripts/export_openapi.py",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-frontend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/openapi.json",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-frontend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/scripts/load_curated.py",
+    "owner": "f0rge-data",
+    "reviewers": [
+      "f0rge-backend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/scripts/railway_pg_migrate.sh",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-data",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/marrow/frontend/openapi.json",
+    "owner": "f0rge-frontend",
+    "reviewers": [
+      "f0rge-backend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "apps/marrow/frontend/lib/api/types/entries-openapi.ts",
+    "owner": "f0rge-frontend",
+    "reviewers": [
+      "f0rge-backend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "apps/marrow/ios/codegen/openapi-generator-config.yaml",
+    "owner": "f0rge-frontend",
+    "reviewers": [
+      "f0rge-backend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "libs/backend/testing/src/f0rge_testing/fixtures.py",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "apps/firstout/backend/tests/conftest.py",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "apps/storefront/web/playwright.config.ts",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-frontend"
+    ]
+  },
+  {
+    "path": "apps/storefront/web/scripts/run-local-checkout.py",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-frontend"
+    ]
+  },
+  {
+    "path": "apps/firstout/backend/scripts/local_storefront_fixture.py",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/docker-compose.test.yml",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-backend",
+      "f0rge-devops"
+    ]
+  },
+  {
+    "path": "apps/dk/tag-printer/docker-compose.yml",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-devops"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/tests/test_migration_upgrade_head.py",
+    "owner": "f0rge-data",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "apps/firstout/backend/tests/test_auth.py",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/storefront/web/e2e/checkout.spec.ts",
+    "owner": "f0rge-frontend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-frontend"
+    ]
+  },
+  {
+    "path": "libs/backend/db/src/f0rge_db/rls.py",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-data",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/firstout/backend/app/models/sku.py",
+    "owner": "f0rge-data",
+    "reviewers": [
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "apps/dk/tag-printer/backend/app/models/schemas.py",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": "apps/storefront/commerce/src/workflows/submit-order.ts",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "apps/storefront/commerce/src/modules/firstout/models/order.ts",
+    "owner": "f0rge-data",
+    "reviewers": [
+      "f0rge-backend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": ".gitignore",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/.dockerignore",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-devops",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".cursorignore",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".cursorindexingignore",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "scripts/security/check-braces.cjs",
+    "owner": "f0rge-security",
+    "reviewers": [
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "vendor/braces/test/security.test.js",
+    "owner": "f0rge-security",
+    "reviewers": [
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "scripts/agents/agents.mjs",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".agents/skills/tdd/SKILL.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": "apps/new-product/unclassified.rs",
+    "error": "Unclassified path"
+  },
+  {
+    "path": "scripts/unclassified.sh",
+    "error": "Unclassified path"
+  },
+  {
+    "path": "docs/adr/backend.md",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "docs/adr/data.md",
+    "owner": "f0rge-data",
+    "reviewers": [
+      "f0rge-data",
+      "f0rge-backend",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "docs/agents/manifest.json",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "AGENTS.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".cursor/rules/frontend.mdc",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-delivery",
+      "f0rge-security",
+      "f0rge-frontend"
+    ]
+  },
+  {
+    "path": "apps/firstout/backend/app/auth/dependencies.py",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/storefront/commerce/src/modules/permissions/check.ts",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-security"
+    ]
+  }
+]

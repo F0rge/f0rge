@@ -14,13 +14,15 @@ Genuinely generic code lives here. Apps import from libs — never the reverse.
 
 ## Inventory
 
-| Lib | Import | Contents | Owner |
-|-----|--------|----------|-------|
-| `libs/backend/core` | `f0rge_core` | `DomainError` tree, `register_exception_handlers(app)` | `fastapi-backend` |
-| `libs/backend/db` | `f0rge_db` | Engine/session/get_db factories, auth context, tenant/RLS mechanism, `unit_of_work`, `BaseCRUD`, mixins (`UUIDPk`, `Timestamp`, `UserOwned`) | `fastapi-backend` |
-| `libs/backend/storage` | `f0rge_storage` | `ObjectStorageConfig` + client, `resize_image` | `fastapi-backend` |
-| `libs/backend/testing` | `f0rge_testing` | pgvector testcontainer fixture, savepoint-session fixture factories | `fastapi-backend` |
-| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api`, `@f0rge/ui/forms` (when added) | 12 shadcn primitives, `cn`, date formatters, hooks, `fetch-error`, API client; Storybook catalogue in `libs/ui` | `frontend-dev` |
+| Lib | Import | Contents |
+|-----|--------|----------|
+| `libs/backend/core` | `f0rge_core` | `DomainError` tree, `register_exception_handlers(app)` |
+| `libs/backend/db` | `f0rge_db` | Engine/session/get_db factories, auth context, tenant/RLS mechanism, `unit_of_work`, `BaseCRUD`, mixins (`UUIDPk`, `Timestamp`, `UserOwned`) |
+| `libs/backend/storage` | `f0rge_storage` | `ObjectStorageConfig` + client, `resize_image` |
+| `libs/backend/testing` | `f0rge_testing` | pgvector testcontainer fixture, savepoint-session fixture factories |
+| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api`, `@f0rge/ui/forms` (when added) | 12 shadcn primitives, `cn`, date formatters, hooks, `fetch-error`, API client; Storybook catalogue in `libs/ui` |
+
+Resolve library primaries and reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`. The [manifest](../../docs/agents/manifest.json) owns routing, including the shared test-harness exception; this table is an inventory. Follow the [shared protocol](../../docs/agents/protocol.md).
 
 **Deferred:** `f0rge-llm` — extract when a second LLM consumer exists. Parser duplication in `lab_extraction_prompt.py` / `vision_prompt.py` is known debt.
 

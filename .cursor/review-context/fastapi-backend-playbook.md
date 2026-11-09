@@ -1,14 +1,14 @@
 > Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
-# FastAPI Backend Review Playbook
+# Legacy FastAPI Backend Review Playbook
 
 ## What this is
 
-Authoritative review checklist for backend diffs in this repo. Every rule is grounded in a memory file written from a real production incident or architectural decision — not generic FastAPI best practice.
+Legacy Python review reference for `f0rge-backend` and the reviewers assigned by the [manifest](../../docs/agents/manifest.json). Follow the [shared protocol](../../docs/agents/protocol.md) and current ADRs. Historical incident-note citations explain provenance; they do not require user-global memory access or replace inspected source evidence.
 
 ---
 
-## Scope — what files YOU review
+## Legacy review coverage — not ownership routing
 
 - `apps/marrow/backend/app/routers/**` — thin HTTP layer
 - `apps/marrow/backend/app/services/**` — all business logic
@@ -23,7 +23,7 @@ Authoritative review checklist for backend diffs in this repo. Every rule is gro
 - `apps/marrow/backend/pyproject.toml` — deps + ruff config
 - `libs/backend/**` — shared Python libs (`f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing`)
 
-**NOT your scope:** `.github/`, `apps/marrow/backend/docker-entrypoint.sh`, `apps/marrow/frontend/`, `libs/ui/` — those go to `devops` or `frontend-dev`.
+Resolve ownership and reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`. The coverage above permits relevant backend review; it does not give backend primary ownership of database models/migrations, dependencies or shared test harnesses. Request the manifest-selected `f0rge-data`, `f0rge-delivery`, `f0rge-devops`, `f0rge-frontend` or `f0rge-quality-testing` collaboration through the coordinator.
 
 **Non-duplication:** block re-implementations of lib-owned helpers. Apps must import from `f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing` — never duplicate exceptions, CRUD base, session factories, RLS hooks, or object storage clients.
 

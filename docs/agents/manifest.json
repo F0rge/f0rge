@@ -1,0 +1,665 @@
+{
+  "schemaVersion": 1,
+  "protocol": "docs/agents/protocol.md",
+  "adapters": [
+    "codex",
+    "cursor"
+  ],
+  "roles": [
+    {
+      "id": "f0rge-backend",
+      "profile": "docs/agents/profiles/backend.md",
+      "description": "Server HTTP contracts, business services and shared backend plumbing across F0rge apps.",
+      "adrFiles": [
+        "docs/adr/backend.md",
+        "docs/adr/api.md"
+      ]
+    },
+    {
+      "id": "f0rge-frontend",
+      "profile": "docs/agents/profiles/frontend.md",
+      "description": "App UI, shared components and generated client contracts across F0rge apps.",
+      "adrFiles": [
+        "docs/adr/frontend.md"
+      ]
+    },
+    {
+      "id": "f0rge-data",
+      "profile": "docs/agents/profiles/data.md",
+      "description": "App-owned database models, migrations and ETL with explicit tenant and recovery boundaries.",
+      "adrFiles": [
+        "docs/adr/data.md"
+      ]
+    },
+    {
+      "id": "f0rge-security",
+      "profile": "docs/agents/profiles/security.md",
+      "description": "Dedicated security controls and independent review of identity, permissions, isolation and sensitive-data handling.",
+      "adrFiles": [
+        "docs/adr/security.md"
+      ]
+    },
+    {
+      "id": "f0rge-delivery",
+      "profile": "docs/agents/profiles/delivery.md",
+      "description": "Builds, dependencies, CI and release artifacts; prepares releases without authorizing them.",
+      "adrFiles": [
+        "docs/adr/delivery.md"
+      ]
+    },
+    {
+      "id": "f0rge-devops",
+      "profile": "docs/agents/profiles/devops.md",
+      "description": "Runtime provider configuration, observability, managed secrets, backups and operational recovery.",
+      "adrFiles": [
+        "docs/adr/operations.md"
+      ]
+    },
+    {
+      "id": "f0rge-workflows",
+      "profile": "docs/agents/profiles/workflows.md",
+      "description": "Airflow and app-local orchestration through scoped app interfaces with safe retries and replay.",
+      "adrFiles": [
+        "docs/adr/workflows.md"
+      ]
+    },
+    {
+      "id": "f0rge-quality-testing",
+      "profile": "docs/agents/profiles/quality-testing.md",
+      "description": "Shared test harnesses, independent evidence review and repository instruction/governance consistency.",
+      "adrFiles": [
+        "docs/adr/governance.md",
+        "docs/adr/product.md",
+        "docs/adr/development.md"
+      ]
+    }
+  ],
+  "primaryRules": [
+    {
+      "patterns": [
+        "docs/adr/backend.md",
+        "docs/adr/api.md"
+      ],
+      "owner": "f0rge-backend",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "docs/adr/frontend.md"
+      ],
+      "owner": "f0rge-frontend",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "docs/adr/data.md"
+      ],
+      "owner": "f0rge-data",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "docs/adr/security.md"
+      ],
+      "owner": "f0rge-security",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "docs/adr/delivery.md"
+      ],
+      "owner": "f0rge-delivery",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "docs/adr/operations.md"
+      ],
+      "owner": "f0rge-devops",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "docs/adr/workflows.md"
+      ],
+      "owner": "f0rge-workflows",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "docs/adr/governance.md",
+        "docs/adr/product.md",
+        "docs/adr/development.md"
+      ],
+      "owner": "f0rge-quality-testing",
+      "reason": "Canonical ADR category maintenance; policy changes remain Leo’s decision."
+    },
+    {
+      "patterns": [
+        "**/AGENTS.md",
+        "**/README.md",
+        "docs/adr/README.md",
+        "docs/agents/**",
+        ".cursor/**",
+        ".codex/agents/**",
+        ".agents/skills/**",
+        "scripts/agents/**",
+        ".cursorignore",
+        ".cursorindexingignore",
+        ".vscode/settings.json",
+        "**/CONTEXT.md",
+        "CONTEXT-MAP.md"
+      ],
+      "owner": "f0rge-quality-testing",
+      "reason": "Repository instructions, governance and generated agent adapters."
+    },
+    {
+      "patterns": [
+        "scripts/security/**",
+        "vendor/braces/**",
+        "docs/security-dependency-overrides.md"
+      ],
+      "owner": "f0rge-security",
+      "reason": "Dedicated security controls and reviewed dependency backports."
+    },
+    {
+      "patterns": [
+        "**/docker-compose.test*.yml",
+        "**/docker-compose.test*.yaml",
+        "**/docker-compose.local*.yml",
+        "**/docker-compose.local*.yaml",
+        "**/compose.test*.yml",
+        "**/compose.test*.yaml",
+        "apps/dk/tag-printer/docker-compose.yml",
+        "apps/firstout/backend/scripts/local_storefront_fixture.py",
+        "apps/storefront/web/scripts/**",
+        "apps/storefront/commerce/scripts/verify-live.mjs",
+        "apps/storefront/commerce/scripts/check-container.mjs",
+        "libs/backend/testing/**",
+        "**/playwright.config.*",
+        "**/vitest.config.*",
+        "**/jest.config.*",
+        "**/tests/conftest.py",
+        "**/tests/fixtures/**",
+        "**/test-setup.*",
+        "**/test/setup.*",
+        "**/tests/setup.*"
+      ],
+      "owner": "f0rge-quality-testing",
+      "reason": "Local verification infrastructure precedes general hosting and source rules."
+    },
+    {
+      "patterns": [
+        "apps/marrow/backend/openapi.json",
+        "apps/marrow/backend/scripts/export_openapi.py"
+      ],
+      "owner": "f0rge-backend",
+      "reason": "Server contract and exporter are authoritative, not ETL."
+    },
+    {
+      "patterns": [
+        "apps/marrow/frontend/openapi.json",
+        "apps/marrow/frontend/lib/api/types/entries-openapi.ts",
+        "apps/marrow/ios/codegen/**",
+        "apps/marrow/ios/scripts/generate-client.sh"
+      ],
+      "owner": "f0rge-frontend",
+      "reason": "Generated client copies and client generation follow the consumer, with server review."
+    },
+    {
+      "patterns": [
+        ".github/deploy/**",
+        "**/railway*.toml",
+        "**/docker-compose*.yml",
+        "**/docker-compose*.yaml",
+        "**/compose.yml",
+        "**/compose.yaml",
+        "**/docker-entrypoint.sh",
+        "apps/buycycle/entrypoint.sh",
+        "**/nginx.conf",
+        "**/.env.example",
+        "apps/airflow/scripts/**",
+        "apps/dk/tag-printer/scripts/repoint-coolify.sh",
+        "apps/environment-monitor/backup-sensor-data.sh",
+        "apps/environment-monitor/restore-sensor-data.sh",
+        "apps/marrow/backend/scripts/pg_backup.sh",
+        "apps/marrow/backend/scripts/railway_bucket_sync.sh",
+        "apps/marrow/backend/scripts/railway_pg_migrate.sh",
+        "**/deploy/**",
+        "apps/marrow/backend/docs/railway*.md"
+      ],
+      "owner": "f0rge-devops",
+      "reason": "Provider targets, runtime operations and recovery configuration."
+    },
+    {
+      "patterns": [
+        ".github/**",
+        "**/Dockerfile",
+        "**/Dockerfile.*",
+        "**/.dockerignore",
+        "**/*.dockerignore",
+        "**/.gitignore",
+        "**/.editorconfig",
+        "**/.python-version",
+        "**/package.json",
+        "**/package-lock.json",
+        "**/pyproject.toml",
+        "**/uv.lock",
+        "**/requirements*.txt",
+        "**/project.json",
+        "**/tsconfig*.json",
+        "**/eslint.config.*",
+        "eslint/**",
+        "nx.json",
+        "pyrightconfig.json",
+        "skills-lock.json",
+        "**/postcss.config.*",
+        "**/next.config.*",
+        "**/next-env.d.ts",
+        "**/vite.config.*",
+        "apps/marrow/ios/Config/**",
+        "apps/marrow/ios/ExportOptions.plist",
+        "apps/marrow/ios/Marrow.xcodeproj/**"
+      ],
+      "owner": "f0rge-delivery",
+      "reason": "Packaging, dependencies, build configuration and CI; no release authority."
+    },
+    {
+      "patterns": [
+        "apps/airflow/**",
+        "apps/*/dags/**"
+      ],
+      "owner": "f0rge-workflows",
+      "reason": "Airflow and app-local DAG orchestration; deployment rules take precedence."
+    },
+    {
+      "patterns": [
+        "apps/dk/tag-printer/backend/app/models/**",
+        "apps/environment-monitor/backend/models/**"
+      ],
+      "owner": "f0rge-backend",
+      "reason": "These legacy models are HTTP payload schemas, not database models."
+    },
+    {
+      "patterns": [
+        "apps/*/backend/app/models/**",
+        "apps/*/backend/migrations/**",
+        "apps/*/backend/alembic/**",
+        "apps/*/backend/alembic.ini",
+        "apps/*/backend/tests/test_migration*.py",
+        "apps/storefront/commerce/src/modules/*/models/**",
+        "apps/storefront/commerce/src/modules/*/migrations/**",
+        "apps/storefront/commerce/src/**/test*/*migration*",
+        "apps/marrow/backend/scripts/**",
+        "apps/marrow/backend/data/**",
+        "apps/firstout/backend/app/commands/import_cin7.py",
+        "apps/firstout/backend/app/commands/import_clerk_staff.py",
+        "apps/firstout/backend/app/commands/tenant_cutover.py",
+        "apps/buycycle/tracker/**",
+        "apps/buycycle/tests/**",
+        "apps/environment-monitor/backend/migrate_to_sqlite.py",
+        "apps/environment-monitor/restore-all-historical-data.py"
+      ],
+      "owner": "f0rge-data",
+      "reason": "Application database structures, migrations and migration behavior tests."
+    },
+    {
+      "patterns": [
+        "libs/ui/**",
+        "apps/*/frontend/**",
+        "apps/dk/tag-printer/frontend/**",
+        "apps/storefront/web/**",
+        "apps/marrow/ios/**",
+        "apps/buycycle/dashboard/**",
+        "apps/firstout/.superdesign/**"
+      ],
+      "owner": "f0rge-frontend",
+      "reason": "UI, UI behavior tests and shared client libraries."
+    },
+    {
+      "patterns": [
+        "libs/backend/core/**",
+        "libs/backend/db/**",
+        "libs/backend/storage/**",
+        "apps/*/backend/**",
+        "apps/dk/tag-printer/backend/**",
+        "apps/storefront/commerce/**",
+        "apps/buycycle/run-tracker.sh"
+      ],
+      "owner": "f0rge-backend",
+      "reason": "Application services, API behavior tests and shared backend plumbing."
+    },
+    {
+      "patterns": [
+        "apps/*/docs/**",
+        "apps/*/CONTEXT.md",
+        "apps/dk/tag-printer/FOLLOWUPS.md",
+        "apps/storefront/*.md"
+      ],
+      "owner": "f0rge-quality-testing",
+      "reason": "Existing cross-domain product documentation and evidence, with domain review."
+    }
+  ],
+  "reviewerRules": [
+    {
+      "patterns": [
+        "**"
+      ],
+      "reviewers": [
+        "f0rge-quality-testing"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/api.md",
+        "apps/marrow/backend/openapi.json",
+        "apps/marrow/backend/scripts/export_openapi.py"
+      ],
+      "reviewers": [
+        "f0rge-frontend",
+        "f0rge-data"
+      ]
+    },
+    {
+      "patterns": [
+        "apps/marrow/frontend/openapi.json",
+        "apps/marrow/frontend/lib/api/types/entries-openapi.ts",
+        "apps/marrow/ios/codegen/**",
+        "apps/marrow/ios/scripts/generate-client.sh"
+      ],
+      "reviewers": [
+        "f0rge-backend",
+        "f0rge-data"
+      ]
+    },
+    {
+      "patterns": [
+        "libs/backend/**",
+        "apps/*/backend/**",
+        "apps/dk/tag-printer/backend/**",
+        "apps/storefront/commerce/**"
+      ],
+      "reviewers": [
+        "f0rge-backend"
+      ]
+    },
+    {
+      "patterns": [
+        "libs/ui/**",
+        "apps/*/frontend/**",
+        "apps/dk/tag-printer/frontend/**",
+        "apps/storefront/web/**",
+        "apps/marrow/ios/**",
+        "apps/buycycle/dashboard/**"
+      ],
+      "reviewers": [
+        "f0rge-frontend"
+      ]
+    },
+    {
+      "patterns": [
+        "apps/*/backend/app/models/**",
+        "apps/*/backend/migrations/**",
+        "apps/*/backend/alembic/**",
+        "apps/*/backend/scripts/**",
+        "apps/*/backend/data/**",
+        "libs/backend/db/**",
+        "apps/storefront/commerce/src/modules/*/models/**",
+        "apps/storefront/commerce/src/modules/*/migrations/**"
+      ],
+      "reviewers": [
+        "f0rge-data"
+      ]
+    },
+    {
+      "patterns": [
+        "scripts/security/**",
+        "vendor/braces/**",
+        "docs/security-dependency-overrides.md",
+        "**/package.json",
+        "**/package-lock.json",
+        "**/uv.lock",
+        "**/requirements*.txt"
+      ],
+      "reviewers": [
+        "f0rge-delivery"
+      ]
+    },
+    {
+      "patterns": [
+        ".github/**",
+        "**/Dockerfile",
+        "**/Dockerfile.*",
+        "**/.dockerignore",
+        "**/*.dockerignore",
+        "**/railway*.toml",
+        "**/docker-compose*.yml",
+        "**/docker-compose*.yaml",
+        "**/docker-entrypoint.sh",
+        "**/deploy/**",
+        "apps/airflow/scripts/**",
+        "apps/marrow/backend/scripts/railway*",
+        "apps/marrow/backend/scripts/pg_backup.sh"
+      ],
+      "reviewers": [
+        "f0rge-devops",
+        "f0rge-delivery",
+        "f0rge-security"
+      ]
+    },
+    {
+      "patterns": [
+        "scripts/agents/**",
+        "docs/agents/**",
+        ".cursor/**",
+        ".codex/agents/**",
+        "**/AGENTS.md",
+        "docs/adr/governance.md",
+        "docs/adr/security.md",
+        "docs/adr/delivery.md",
+        "docs/adr/operations.md",
+        "scripts/security/**",
+        "vendor/braces/**",
+        "docs/security-dependency-overrides.md",
+        "**/.env.example",
+        "**/.gitignore",
+        "**/*auth*",
+        "**/*permission*",
+        "**/*tenant*",
+        "**/*rls*",
+        "**/*clerk*",
+        "**/*role*",
+        "**/*secret*",
+        "apps/*/backend/migrations/**",
+        "apps/*/backend/alembic/**",
+        "libs/backend/db/**"
+      ],
+      "reviewers": [
+        "f0rge-security"
+      ]
+    },
+    {
+      "patterns": [
+        "apps/airflow/**",
+        "apps/*/dags/**",
+        "docs/adr/workflows.md"
+      ],
+      "reviewers": [
+        "f0rge-workflows",
+        "f0rge-backend",
+        "f0rge-data"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/backend.md",
+        "docs/adr/api.md",
+        "docs/agents/profiles/backend.md"
+      ],
+      "reviewers": [
+        "f0rge-backend"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/frontend.md",
+        "docs/agents/profiles/frontend.md"
+      ],
+      "reviewers": [
+        "f0rge-frontend"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/data.md",
+        "docs/agents/profiles/data.md"
+      ],
+      "reviewers": [
+        "f0rge-data"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/security.md",
+        "docs/agents/profiles/security.md"
+      ],
+      "reviewers": [
+        "f0rge-security"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/delivery.md",
+        "docs/agents/profiles/delivery.md"
+      ],
+      "reviewers": [
+        "f0rge-delivery"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/operations.md",
+        "docs/agents/profiles/devops.md"
+      ],
+      "reviewers": [
+        "f0rge-devops"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/workflows.md",
+        "docs/agents/profiles/workflows.md"
+      ],
+      "reviewers": [
+        "f0rge-workflows"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/governance.md",
+        "docs/adr/product.md",
+        "docs/adr/development.md",
+        "docs/agents/profiles/quality-testing.md"
+      ],
+      "reviewers": [
+        "f0rge-quality-testing"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/agents/**",
+        "scripts/agents/**",
+        "**/AGENTS.md",
+        ".cursor/**",
+        ".codex/agents/**",
+        ".cursorignore",
+        ".cursorindexingignore"
+      ],
+      "reviewers": [
+        "f0rge-delivery",
+        "f0rge-security"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/adr/data.md",
+        "docs/adr/api.md"
+      ],
+      "reviewers": [
+        "f0rge-backend",
+        "f0rge-security"
+      ]
+    },
+    {
+      "patterns": [
+        ".cursor/rules/backend.mdc",
+        ".cursor/review-context/fastapi-backend-playbook.md"
+      ],
+      "reviewers": [
+        "f0rge-backend",
+        "f0rge-data"
+      ]
+    },
+    {
+      "patterns": [
+        ".cursor/rules/frontend.mdc",
+        ".cursor/rules/ui-kit.mdc",
+        ".cursor/review-context/frontend-dev-playbook.md"
+      ],
+      "reviewers": [
+        "f0rge-frontend"
+      ]
+    },
+    {
+      "patterns": [
+        ".cursor/rules/data-pipelines.mdc"
+      ],
+      "reviewers": [
+        "f0rge-data",
+        "f0rge-workflows",
+        "f0rge-backend"
+      ]
+    },
+    {
+      "patterns": [
+        ".cursor/rules/infra.mdc",
+        ".cursor/review-context/devops-playbook.md"
+      ],
+      "reviewers": [
+        "f0rge-devops"
+      ]
+    },
+    {
+      "patterns": [
+        ".cursor/rules/shared-libs.mdc"
+      ],
+      "reviewers": [
+        "f0rge-backend",
+        "f0rge-frontend",
+        "f0rge-data"
+      ]
+    },
+    {
+      "patterns": [
+        "**/*auth*/**",
+        "**/*permission*/**",
+        "**/*tenant*/**",
+        "**/*rls*/**",
+        "**/*clerk*/**",
+        "**/*role*/**",
+        "**/*secret*/**"
+      ],
+      "reviewers": [
+        "f0rge-security"
+      ]
+    }
+  ],
+  "liveCallerPatterns": [
+    "**/AGENTS.md",
+    ".cursor/rules/*.mdc",
+    ".cursor/BUGBOT.md",
+    ".cursor/review-context/**/*.md",
+    "docs/agents/protocol.md",
+    "docs/agents/profiles/*.md"
+  ]
+}
