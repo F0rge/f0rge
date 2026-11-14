@@ -14,13 +14,15 @@ Canonical map: `nx.json` + each app/lib `project.json`. Details live there — d
 1. `project.json` with tags:
    - Python: `platform:py` + `scope:shared|marrow|dk|…`
    - TypeScript: `platform:ts` + matching `scope:`
+   - Rust: `platform:rust` + matching `scope:`, with [the Rust target contract](../../.github/rust/README.md)
    - Exception: `marrow-ios` — `scope:marrow` only (no `platform:` — Linux CI ignores it)
-2. Without `platform:py|ts`, CI silently ignores the project. Guard: `.github/scripts/check-nx-projects.sh`.
+2. Node/Python/Cargo manifests need their matching platform tags. Guard: `.github/scripts/check-nx-projects.sh`; the Rust job also validates every Cargo project before affected selection. Follow [Rust/Nx registration](../../.github/rust/README.md) for targets, local dependencies and workspace inputs.
 3. Never create a root `uv.lock` (`@nxlv/python` flips to workspace mode).
 
 ## Cache + targets
 
 - Cache is on via `targetDefaults` in `nx.json` (`lint`, `format-check`, `typecheck`, `test`, `build`, `codegen:check`). Do not disable without reason.
+- Initial Rust targets explicitly disable Nx caching until native output restoration and environment fingerprints are proven. Cargo still manages its own local intermediates; `nx affected` still selects projects. This does not authorize remote artifact reuse or a release.
 - Prefer inferred targets (`@nx/eslint`, `@nx/vitest`, `@nx/playwright`, `@nx/next`) over new `nx:run-commands` copies.
 - Do **not** persist `.nx/cache` across GHA machines. Never add deprecated `@nx/s3-cache` / `@nx/gcs-cache` / `@nx/azure-cache` / `@nx/shared-fs-cache`.
 

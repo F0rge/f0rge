@@ -1,6 +1,6 @@
 name: CI
 
-# PR + push on main, plus workflow_dispatch: parallel backend/frontend via
+# PR + push on main, plus workflow_dispatch: parallel Python/frontend/Rust via
 # `nx affected` (no detect job) → `ci` gate. This workflow does not deploy
 # or authorize a production release.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
@@ -22,10 +22,55 @@ env:
   TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
 
 jobs:
-  backend:
-    name: backend
+  rust:
+    name: rust
     concurrency:
-      group: ci-backend-${{ github.ref }}
+      group: ci-rust-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: ${{ env.TARGET_BRANCH }}
+
+      - uses: ./.github/actions/setup-node-workspace
+
+      - name: Install pinned Rust toolchain
+        run: |
+          set -euo pipefail
+          RUST_VERSION=$(python3 -c 'import pathlib, re, tomllib; version = tomllib.loads(pathlib.Path("rust-toolchain.toml").read_text())["toolchain"]["channel"]; assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Rust channel must be an exact release"; print(version)')
+          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
+          echo "RUSTUP_TOOLCHAIN=$RUST_VERSION" >> "$GITHUB_ENV"
+          rustup run "$RUST_VERSION" rustc --version
+          rustup run "$RUST_VERSION" cargo --version
+
+      - name: Rust registration and failing-target regression checks
+        # Always exercise the uncached fixture suite, even before an app adopts Rust.
+        run: npx nx run f0rge-rust-checks:test
+
+      - name: Validate every Rust project before affected selection
+        run: node .github/rust/guard.mjs
+
+      - name: Nx affected Rust checks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            npx nx run-many -t=lint,format-check,test,build --projects=tag:platform:rust
+          else
+            npx nx affected -t=lint,format-check,test,build --exclude='*,!tag:platform:rust' --base="${NX_BASE}" --head="${NX_HEAD}"
+          fi
+
+  python:
+    name: python
+    concurrency:
+      group: ci-python-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -106,7 +151,7 @@ jobs:
 
       # Pytest is expensive (testcontainers). Runs for main.
       # workflow_dispatch uses run-many (full matrix).
-      - name: nx affected (backend)
+      - name: nx affected (python)
         env:
           TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
           EVENT_NAME: ${{ github.event_name }}
@@ -251,7 +296,7 @@ jobs:
 
   ci:
     name: ci
-    needs: [backend, frontend]
+    needs: [python, frontend, rust]
     if: always()
     concurrency:
       group: ci-${{ github.ref }}
@@ -261,14 +306,19 @@ jobs:
     steps:
       - name: Aggregate gate
         env:
-          BACKEND_RESULT: ${{ needs.backend.result }}
+          PYTHON_RESULT: ${{ needs.python.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
+          RUST_RESULT: ${{ needs.rust.result }}
         run: |
-          if [ "$BACKEND_RESULT" != "success" ]; then
-            echo "backend job required but result was: $BACKEND_RESULT"
+          if [ "$PYTHON_RESULT" != "success" ]; then
+            echo "python job required but result was: $PYTHON_RESULT"
             exit 1
           fi
           if [ "$FRONTEND_RESULT" != "success" ]; then
             echo "frontend job required but result was: $FRONTEND_RESULT"
+            exit 1
+          fi
+          if [ "$RUST_RESULT" != "success" ]; then
+            echo "rust job required but result was: $RUST_RESULT"
             exit 1
           fi
