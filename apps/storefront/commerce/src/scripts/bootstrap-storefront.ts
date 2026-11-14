@@ -1,4 +1,4 @@
-import type { ExecArgs, StoreCurrencyDTO } from "@medusajs/framework/types";
+import type { ExecArgs } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils";
 import {
   createApiKeysWorkflow,
@@ -60,7 +60,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
     });
   }
   for (const store of stores) {
-    const supportedCurrencies: (StoreCurrencyDTO | null)[] = store.supported_currencies || [];
+    const supportedCurrencies: readonly unknown[] = store.supported_currencies || [];
     const currencies = supportedCurrencies.filter((currency) => currency !== null);
     if (currencies.length > 1) {
       throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE,
