@@ -29,13 +29,13 @@ git diff --check
 ```
 
 - Ruff lint and formatting passed.
-- **42 tests passed:** 12 existing behavior tests plus 30 safety tests.
+- **44 tests passed:** 12 existing behavior tests plus 32 safety tests.
 - Agent routing/generated-adapter consistency and whitespace checks passed.
 - Independent quality and security review found no remaining blocking findings.
 
 The new tests cover the combined daily 150-detail-attempt budget across kinds
 and separate CLI processes, 403/429 block persistence, pending-request recovery,
-ledger-write failures, interrupted requests, corrupt state, conservative legacy
+ledger-write failures, interrupted requests/cooldowns, corrupt state, conservative legacy
 bootstrap, Luxembourg date changes, exclusive locking before DB access, lock
 release after process termination, redirects, failed-detail bookkeeping and
 malformed/truncated/duplicate/exhausted pagination. A real loopback-only HTTP
@@ -60,7 +60,7 @@ transport was additionally denied in the smoke harness.
 A temporary QA layer over that same ARM64 image adds pytest and the safety test
 file, then executes the safety suite with networking disabled. Dependency
 installation happens during the local build, not during the isolated tests.
-All **30 safety tests passed** on Linux ARM64/Python 3.12; the only warning was
+All **32 safety tests passed** on Linux ARM64/Python 3.12; the only warning was
 pytest being unable to write its optional cache under the non-root app directory.
 
 ## Served clickable mockup walkthrough

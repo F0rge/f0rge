@@ -124,11 +124,11 @@ def get(u, js=True):
         settled = True
         raise
     finally:
-        # An interrupted request has an unknown outcome: preserve pending on disk.
+        # Preserve pending until both the request and its required cooldown finish.
         if settled and not blocked:
+            time.sleep(FEED_PAUSE if js else PAGE_PAUSE)
             if _REQUEST_STATE is not None:
                 _REQUEST_STATE.finish_request()
-            time.sleep(FEED_PAUSE if js else PAGE_PAUSE)
 
 
 def db():

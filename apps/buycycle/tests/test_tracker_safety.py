@@ -501,3 +501,27 @@ def test_unique_full_pages_without_terminal_page_are_incomplete(tmp_path, monkey
     assert calls == list(range(1, 120))
     assert c.execute("select gone_at from listing where id='old'").fetchone()[0] is None
     c.close()
+
+
+@pytest.mark.parametrize("json_response, pause", [(True, 1.6), (False, 2.2)])
+def test_interrupted_pacing_preserves_pending_hold(tmp_path, monkeypatch, json_response, pause):
+    import safety
+
+    path, _ = runtime(tmp_path, monkeypatch)
+    state = safety.RequestState(path, legacy_data=False)
+    monkeypatch.setattr(tracker, "_REQUEST_STATE", state)
+    monkeypatch.setattr(tracker, "open_url", lambda *args, **kwargs: io.BytesIO(b"{}"))
+    slept = []
+
+    def interrupted_sleep(seconds):
+        slept.append(seconds)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(tracker.time, "sleep", interrupted_sleep)
+    with pytest.raises(KeyboardInterrupt):
+        tracker.get("https://example.invalid/fixture", js=json_response)
+    assert slept == [pause]
+    recovered = safety.RequestState(path, legacy_data=True)
+    assert recovered.state["pending"] is True
+    with pytest.raises(safety.Blocked):
+        recovered.allowed()
