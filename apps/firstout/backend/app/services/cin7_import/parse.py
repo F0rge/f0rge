@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import datetime
+import io
 import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
@@ -308,8 +309,10 @@ def _generated_barcode(code: str, claimed: set[str]) -> str:
 
 
 def read_csv_records(path: Path, realign: bool = False) -> tuple[list[dict[str, str]], int]:
-    text = path.read_text(encoding="utf-8-sig")
-    parsed = list(csv.reader(text.splitlines()))
+    # Preserve quoted field contents, including exact LF/CRLF. Splitting lines
+    # removes embedded breaks; universal-newline file reads normalize CRLF.
+    text = path.read_bytes().decode("utf-8-sig")
+    parsed = list(csv.reader(io.StringIO(text, newline="")))
     if not parsed:
         return [], 0
     header = [cell.strip() for cell in parsed[0]]

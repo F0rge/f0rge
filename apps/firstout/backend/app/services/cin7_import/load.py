@@ -1413,13 +1413,13 @@ class Cin7Loader:
             subtotal = sum((line["ex_vat"] for line in built), ZERO)
             vat = sum((line["vat_amount"] for line in built), ZERO)
             total = sum((line["inc_vat"] for line in built), ZERO)
-            signature = [tuple(str(line[k]) for k in sorted(line)) for line in built]
+            signature = [tuple(line[k] for k in sorted(line)) for line in built]
             customer_id = customer.id if customer else None
             current = existing.get(number)
             if current is not None:
                 current_sig = [
                     tuple(
-                        str(v)
+                        v
                         for _k, v in sorted(
                             {
                                 "description": line.description,
@@ -1582,7 +1582,7 @@ class Cin7Loader:
                 _utc(received) if status == PurchaseOrderStatus.RECEIVED and received else None
             )
             current = existing.get(number)
-            signature = [(line["sku_id"], line["qty"], str(line["cost"])) for line in built]
+            signature = [(line["sku_id"], line["qty"], line["cost"]) for line in built]
             if current is None:
                 current = PurchaseOrder(
                     po_number=number,
@@ -1671,7 +1671,7 @@ class Cin7Loader:
                 )
             fx_known = currency == "ZAR"
             current = existing.get(number)
-            signature = [(line["description"], line["qty"], str(line["amount"])) for line in built]
+            signature = [(line["description"], line["qty"], line["amount"]) for line in built]
             if current is None:
                 current = Bill(
                     bill_number=number,
@@ -1923,14 +1923,16 @@ def _credit_lines(
 
 
 def _invoice_signature(built: list[dict[str, object]]) -> list[tuple[object, ...]]:
+    # Decimal equality ignores storage scale while retaining every significant
+    # digit. String signatures made 15.00 differ from a Numeric(16,4) reload.
     return [
         (
             line["sku_id"],
             line["qty"],
             line["description"],
-            str(line["ex_vat"]),
-            str(line["vat_amount"]),
-            str(line["inc_vat"]),
+            line["ex_vat"],
+            line["vat_amount"],
+            line["inc_vat"],
         )
         for line in built
     ]
@@ -1959,9 +1961,9 @@ def _invoice_same(
             line.sku_id,
             line.qty,
             line.description,
-            str(line.ex_vat),
-            str(line.vat_amount),
-            str(line.inc_vat),
+            line.ex_vat,
+            line.vat_amount,
+            line.inc_vat,
         )
         for line in current.lines
     ]
@@ -2007,7 +2009,7 @@ def _po_same(
     status: PurchaseOrderStatus,
     ordered_at: Optional[datetime.datetime],
     received_at: Optional[datetime.datetime],
-    signature: list[tuple[object, object, str]],
+    signature: list[tuple[object, object, object]],
 ) -> bool:
     if (
         not current.is_archive
@@ -2017,9 +2019,7 @@ def _po_same(
         or current.received_at != received_at
     ):
         return False
-    existing = sorted(
-        (line.sku_id, line.qty, str(line.factory_unit_amount)) for line in current.lines
-    )
+    existing = sorted((line.sku_id, line.qty, line.factory_unit_amount) for line in current.lines)
     return existing == sorted(signature)
 
 
@@ -2047,7 +2047,7 @@ def _bill_same(
     fx: Decimal,
     foreign: Decimal,
     amount_zar: Decimal,
-    signature: list[tuple[object, object, str]],
+    signature: list[tuple[object, object, object]],
 ) -> bool:
     if (
         not current.is_archive
@@ -2059,7 +2059,7 @@ def _bill_same(
         or not _dec_eq(current.amount_zar, amount_zar)
     ):
         return False
-    existing = [(line.description, line.qty, str(line.amount_foreign)) for line in current.lines]
+    existing = [(line.description, line.qty, line.amount_foreign) for line in current.lines]
     return existing == signature
 
 
