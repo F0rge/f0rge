@@ -3,8 +3,9 @@
 This is the operator handoff for the prepared Cin7 replacement of the Primavera
 organisation. The user authorised this replacement, exact fractional stock, and
 the reviewed location mapping. That authorisation does not approve a production
-release of the new application source. The current work is preparation: no
-replacement or release has been performed.
+release of the new application source. Application source `b7d5063a` and schema
+088 are prepared and tested locally; no production replacement or release has
+been performed.
 
 Use the reviewed prepared package and source-bin mapping, kept in private
 operator storage outside this public repository. Do not import the raw export,
@@ -26,7 +27,7 @@ commitment.
 | Products | 2,731 products. Exclude only the exact product code `AU0001`; retain the other 52 fabric products. Preserve the source's 23 products marked not for sale. |
 | Stock | 1,759 source rows aggregate to 1,758 unique SKU/bin balances. Preserve all 17 fractional stock rows exactly, with up to four decimal places. |
 | Locations | Apply the reviewed Bedfordview, Kramerville, Warehouse and Unassigned mapping; Unassigned holds eight units. Four location names change and six unused locations become archived. Existing location/bin IDs and settings references remain stable. |
-| Sales history | 1,329 sales documents and 1,294 sales orders, imported as archives. |
+| Sales history | 1,329 sales documents: 1,297 invoices and 32 credit notes, plus 1,294 sales orders, imported as archives. |
 | Purchase history | 77 purchase documents and 50 purchase orders, imported as archives. |
 | Pricing | Retain the source tiers as reference data, including 450 positive prices in tier 5. Activate only the four recognised customer-class price lists: 10,259 valid items. |
 | Contacts/addresses | Hold one orphan contact in audit evidence; deduplicate four exact duplicate addresses. Do not invent missing contact values. |
@@ -73,6 +74,12 @@ strict [`prepared.py`](../backend/app/services/cin7_import/prepared.py) adapter.
 It accepts exactly 14 candidate files and verifies three additional evidence
 files. The manifest, each allowed file and the bin mapping must match their
 reviewed SHA-256 hashes; unexpected file sets or changed row shapes/counts fail.
+The loader parses the verified CSV bytes with newline preservation, keeping
+meaningful LF/CRLF inside quoted fields. Splitting CSV into physical lines or
+normalising those field values would change addresses and their identity hashes;
+the required customer-address result is all 965 prepared rows, not an extra
+"normalised duplicate" removal. Typed Decimal signatures also keep valid
+re-import comparisons independent of decimal scale representation.
 
 The command is restricted to the fixed Primavera team identity, exact database
 name, schema 088, maintenance status and verified non-owner runtime role under
@@ -146,14 +153,18 @@ Evidence reported during preparation on 14 November 2026:
 | Check | Observed result and limits |
 | --- | --- |
 | Prepared data | Original cleaning package: 82 checks. Staging: 50 parent-document hashes and 42 checks, plus ten independent data checks and seven independent numerical checks. Private evidence remains outside Git. |
-| Recovery rehearsal | Encrypted target backup at source schema 083 covering 87 tables and 122,408 rows restored exactly into isolated PostgreSQL 18, without networking, app processes or SMTP. A subsequent 083→087 migration rehearsal has begun on an internal-only network, without API/jobs or production writes; the replacement dry run/commit awaits the newer name-check image. Neither rehearsal replaces the fresh pre-commit backup. |
-| Backend | Earlier feature run: 218 tests passed. The replacement name-check correction passed 16 focused replacement tests, and three fresh-numbering tests passed. A fresh-database full backend rerun is pending; these separate runs are not a final aggregate count. |
-| Independent security | Final source review reported 37 groups passing with no findings. Final source/CI and recovery-rehearsal completion still need their own evidence. |
+| Recovery rehearsal | The original encrypted schema-083 backup restored exactly: 87 tables and 122,408 rows in isolated PostgreSQL 18, without networking, app processes or SMTP. A separate recovery drill after a local replacement restored all 91 tables and 122,412 baseline rows with matching before-hashes. These drills do not replace the fresh pre-commit backup. |
+| Final package rehearsal | Source `b7d5063a` passed against a fresh private database restored from the verified schema-088 backup. The full dry run left all 91 tables unchanged after rollback; the reviewed local replacement committed successfully, then passed complete post-read verification. No production writes, API process or jobs ran against this private copy. |
+| Final source fidelity | All four history files matched canonical source row counters. Every invoice/credit parent and line Tax/Total matched exactly to four decimals, and all quantities matched. Contacts 558/114 and addresses 965/54 matched exact payload sets and values, including quoted newlines. Customer/supplier archive splits, 2,731 products, 23 not-for-sale flags and all 2,731 retained SKU UUIDs matched; six published products remained published. |
+| Final stock and isolation | Exact per-SKU/bin stock total: 4,078.5100 units, comprising Warehouse 2,961.5100, Bedfordview 672, Kramerville 437 and Unassigned 8. Imported counts: 1,297 invoices, 32 credit notes, 1,294 SOs, 77 bills and 50 POs. Payments, journals, outbox and newly created operational documents were zero; protected and other-organisation fingerprints were unchanged. |
+| Backend | Fifty affected integration tests passed after the strict Decimal idempotency and quoted LF/CRLF CSV fixes, including four new regressions. The final 883-test full-suite run and CI result are tracked in the PR evidence; the scoped 50-pass run is not substituted for either. |
+| Independent reviews | Backend, data, security, frontend, DevOps and delivery signoffs completed for the final source. Two additional security/parser regressions passed. Review is evidence, not production-release permission. |
 | Frontend | 159 tests, strict type checking, full lint and Next production build reported passing. Four existing image-element warnings remain in frontend lint; no new lint errors were reported. |
 | Live stock UI/API | Seven grouped checks passed through actual Carbon pages in a built Vite fixture, real FastAPI/SQLAlchemy/PostgreSQL and a signed synthetic Clerk boundary. Desktop adjustment/stocktake/transfer, mobile fractional count/transfer, explicit zero versus blank, failure/retry and nonsellable till behaviour passed; no browser errors or unexpected API 500s. |
-| Live history UI/API | Eight groups passed against source `f7ad33d8`, with real PostgreSQL 16 and the same synthetic signed identity boundary, without HTTP mocks. Unknown SO amounts remain unknown; PO quantity 4.576 and original Cost `100.1234567890123`/Total `100.00` retain their precision without an invented currency. Invoice totals 100/15/115 and foreign bill USD 100 remain visible while settlements and missing FX/ZAR are labelled unknown/not imported. Operational invoice/bill lists exclude archives and link to working history searches; direct detail URLs and a 390px bill layout passed. |
-| Live archive guards | Five real HTTP 409 rejections: invoice PDF, invoice payment, bill payment, SO invoicing and PO on-water action. Payment, journal, outbox and SO-payment counters stayed unchanged. No browser errors or unexpected API failures; the unconfigured local Ops Commerce endpoint returned its expected 503 configuration response. |
-| Release preparation | Eleven delivery tests and 26 release-helper groups passed for the extended closed component profiles. The actual Linux API image from `f7ad33d8` built and passed packaged smoke against PostgreSQL 18, including FORCE RLS and normal startup. The later replacement name-check correction still needs its corresponding image/evidence; final CI and selected API/frontend artifact-release verification remain pending. No release was performed. |
+| Live history UI/API | Eight groups passed again after the 088 precision fix, with real PostgreSQL 16 and the same synthetic signed identity boundary, without HTTP mocks. Unknown SO amounts remain unknown; PO quantity 4.576 and original Cost `100.1234567890123`/Total `100.00` retain their precision without an invented currency. Invoice totals 100/15/115 and foreign bill USD 100 remain visible while settlements and missing FX/ZAR are labelled unknown/not imported. Operational invoice/bill lists exclude archives and link to working history searches; direct detail URLs and a 390px bill layout passed. |
+| Live archive guards | Five real HTTP 409 rejections, rerun after 088: invoice PDF, invoice payment, bill payment, SO invoicing and PO on-water action. Payment, journal, outbox and SO-payment counters stayed unchanged. No browser errors or unexpected API failures; the unconfigured local Ops Commerce endpoint returned its expected 503 configuration response. |
+| Live archive precision | Three additional groups passed through the actual API/UI: invoice tax `15.0015` and gross `115.0015`, signed credit tax/gross `-20.0015`/`-120.0015`, and twelve-digit gross `999999999999.1234` remain exact. History exposes a Tax column; original cents still show two places. Two additional precise-invoice PDF/payment requests returned HTTP 409 with unchanged counters. Source-file hashes and screenshots identify the tested frozen tree. |
+| Release preparation | Eleven delivery tests and 26 release-helper groups passed for the closed component profiles. The final `b7d5063a` Linux/amd64 API image passed packaged smoke against PostgreSQL 18, including FORCE RLS and normal startup; the private receipt is `api-image-smoke-final-b7d5063a.json`. CI and selected API/frontend artifact-release verification remain distinct prerequisites. No release was performed. |
 
 The browser evidence uses the built Vite fixture with actual Carbon pages,
 AuthProvider and a navigation adapter, not the real Next server or real Clerk.
@@ -167,11 +178,18 @@ the transfer tab and resets its inbound destination to the standing location.
 Reselect the receiving location to see and receive the transfer. Exact stock
 values were verified despite that reset.
 
+The invoice paper also has an existing mobile clipping limitation. At 390px,
+the unchanged Carbon table minimum and parent sizing produce the same clipped
+paper for cents-only and four-decimal invoices; the precision formatter adds no
+width. The body itself does not overflow, but the main content clips the paper
+instead of containing it in a useful table scroller. No mobile invoice visual
+pass is claimed. The 390px bill detail and mobile stock flows passed.
+
 Before any production replacement write:
 
-1. Finish the fresh-database full backend rerun and private migration/replacement
-   rehearsal. Retain final independent QA, backend/data, security, delivery and
-   DevOps review, and complete CI for the selected source.
+1. Retain the final full-suite, CI, independent-review and local rehearsal
+   evidence for the selected source. Recheck required CI before release; scoped
+   tests and an earlier image receipt do not replace that evidence.
 2. Build and smoke-test the exact API/frontend release artifacts. Obtain Leo's
    explicit consent for the selected commit/digests/targets and verify their
    release/provider evidence; do not infer it from the data-replacement request.
