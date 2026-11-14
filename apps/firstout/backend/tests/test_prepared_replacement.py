@@ -283,7 +283,9 @@ async def replacement_database(second_postgres_url, monkeypatch):
         if migrated_home is not None:
             migrated_home.slug = "migration-seed-home"
             await db.flush()
-        target = Team(id=PRIMAVERA_TEAM_ID, name="Primavera", slug="firstout", status="maintenance")
+        target = Team(
+            id=PRIMAVERA_TEAM_ID, name="Primavera Pty Ltd", slug="firstout", status="maintenance"
+        )
         other = Team(name="Synthetic sentinel", slug="sentinel", status="active")
         db.add_all([target, other])
         await db.flush()
@@ -696,6 +698,7 @@ async def test_uncommitted_cross_tenant_fault_is_detected_before_commit(
         "unknown_table",
         "active_job",
         "foreign_company",
+        "identity",
     ],
 )
 async def test_replacement_refusal_gates_leave_business_data_intact(
@@ -704,7 +707,14 @@ async def test_replacement_refusal_gates_leave_business_data_intact(
     admin, maker, info = replacement_database
     package = write_package(tmp_path / "package")
     (mappings, changes), mapping_hash = mapping_file(tmp_path / "map.json", info)
-    if gate in {"portal", "published", "unknown_table", "active_job", "foreign_company"}:
+    if gate in {
+        "portal",
+        "published",
+        "unknown_table",
+        "active_job",
+        "foreign_company",
+        "identity",
+    }:
         async with AsyncSession(admin) as db:
             if gate == "portal":
                 customer = await db.scalar(
@@ -727,6 +737,9 @@ async def test_replacement_refusal_gates_leave_business_data_intact(
                 sku.storefront_published = True
             elif gate == "unknown_table":
                 await db.execute(sa.text("CREATE TABLE unreviewed_business_table (id integer)"))
+            elif gate == "identity":
+                target = await db.get(Team, PRIMAVERA_TEAM_ID)
+                target.name = "Primavera"
             elif gate == "active_job":
                 user = await db.scalar(sa.select(User).where(User.team_id == PRIMAVERA_TEAM_ID))
                 db.add(

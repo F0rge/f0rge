@@ -28,7 +28,7 @@ commitment.
 | Locations | Apply the reviewed Bedfordview, Kramerville, Warehouse and Unassigned mapping; Unassigned holds eight units. Four location names change and six unused locations become archived. Existing location/bin IDs and settings references remain stable. |
 | Sales history | 1,329 sales documents and 1,294 sales orders, imported as archives. |
 | Purchase history | 77 purchase documents and 50 purchase orders, imported as archives. |
-| Pricing | Retain all five source tiers as reference data, including tier 450. Activate only the four recognised customer-class price lists: 10,259 valid items. |
+| Pricing | Retain the source tiers as reference data, including 450 positive prices in tier 5. Activate only the four recognised customer-class price lists: 10,259 valid items. |
 | Contacts/addresses | Hold one orphan contact in audit evidence; deduplicate four exact duplicate addresses. Do not invent missing contact values. |
 | Assemblies/costs | Withhold 23 recipes linked to excluded AU0001 products. Retain four fractional BOMs; existing whole-kit sale/pick flows reject these explicitly. Seven unknown unit costs remain null and block COGS-dependent sales until corrected. |
 
@@ -54,7 +54,7 @@ compatible API and frontend before fractional rows are loaded.
 | 084 | Adds customer/supplier archive flags, active by default. The replacement applies the reviewed active/archive split. |
 | 085 | Changes ten inventory, stocktake, adjustment, transfer, PO and bill quantity columns to `Numeric(14,4)`. Downgrade refuses fractional or out-of-range values rather than rounding. |
 | 086 | Adds `skus.is_sellable`, true by default for existing products. A downgrade would remove that information. |
-| 087 | Adds canonical Cin7 JSON payloads to five archive parents and limits supplier-reference uniqueness to live bills. Downgrade refuses retained payloads or references incompatible with the previous index. |
+| 087 | Adds canonical Cin7 JSON payloads to five archive parents, permits unknown PO factory amounts as null, and limits supplier-reference uniqueness to live bills. Downgrade refuses retained payloads, null factory amounts or references incompatible with the previous index. |
 
 Follow the [Firstout tested-image release procedure](../../../.github/deploy/firstout-release.md).
 Its API and frontend profiles are fixed; the API image never migrates on startup.
@@ -145,11 +145,21 @@ Evidence reported during preparation on 14 November 2026:
 | Check | Observed result and limits |
 | --- | --- |
 | Prepared data | Original cleaning package: 82 checks. Staging: 50 parent-document hashes and 42 checks, plus ten independent data checks and seven independent numerical checks. Private evidence remains outside Git. |
-| Recovery rehearsal | Encrypted target backup at source schema 083 covering 87 tables and 122,408 rows restored exactly into isolated PostgreSQL 18, without networking, app processes or SMTP. This is an earlier recovery rehearsal, not the fresh pre-commit backup. |
-| Backend | 218 feature tests reported passing before additional replacement/security matrix work. Final replacement tests and independent security fixes/review remain in progress. |
-| Frontend | 153 tests, strict type checking, focused lint and Next production build reported passing. |
-| Live UI/API | Seven grouped checks passed through actual Carbon pages in a built Vite fixture, real FastAPI/SQLAlchemy/PostgreSQL and a signed synthetic Clerk boundary. Desktop adjustment/stocktake/transfer, mobile fractional count/transfer, explicit zero versus blank, failure/retry and nonsellable till behaviour passed; no browser errors or unexpected API 500s. This is not a full Next server, real Clerk or production grant audit. |
-| Release preparation | Ten delivery tests and 24 DevOps groups reported passing for the extended closed component profiles. Actual API image build/container smoke and CI for this final source have not yet been established. No release was performed. |
+| Recovery rehearsal | Encrypted target backup at source schema 083 covering 87 tables and 122,408 rows restored exactly into isolated PostgreSQL 18, without networking, app processes or SMTP. A subsequent 083→087 migration rehearsal has begun on an internal-only network, without API/jobs or production writes; the replacement dry run/commit awaits the newer name-check image. Neither rehearsal replaces the fresh pre-commit backup. |
+| Backend | Earlier feature run: 218 tests passed. The replacement name-check correction passed 16 focused replacement tests, and three fresh-numbering tests passed. A fresh-database full backend rerun is pending; these separate runs are not a final aggregate count. |
+| Independent security | Final source review reported 37 groups passing with no findings. Final source/CI and recovery-rehearsal completion still need their own evidence. |
+| Frontend | 158 tests, strict type checking, full lint and Next production build reported passing. Four existing image-element warnings remain in frontend lint; no new lint errors were reported. |
+| Live stock UI/API | Seven grouped checks passed through actual Carbon pages in a built Vite fixture, real FastAPI/SQLAlchemy/PostgreSQL and a signed synthetic Clerk boundary. Desktop adjustment/stocktake/transfer, mobile fractional count/transfer, explicit zero versus blank, failure/retry and nonsellable till behaviour passed; no browser errors or unexpected API 500s. |
+| Live history UI/API | Eight groups passed against source `f7ad33d8`, with real PostgreSQL 16 and the same synthetic signed identity boundary, without HTTP mocks. Unknown SO amounts remain unknown; PO quantity 4.576 and original Cost `100.1234567890123`/Total `100.00` retain their precision without an invented currency. Invoice totals 100/15/115 and foreign bill USD 100 remain visible while settlements and missing FX/ZAR are labelled unknown/not imported. Operational invoice/bill lists exclude archives and link to working history searches; direct detail URLs and a 390px bill layout passed. |
+| Live archive guards | Five real HTTP 409 rejections: invoice PDF, invoice payment, bill payment, SO invoicing and PO on-water action. Payment, journal, outbox and SO-payment counters stayed unchanged. No browser errors or unexpected API failures; the unconfigured local Ops Commerce endpoint returned its expected 503 configuration response. |
+| Release preparation | Eleven delivery tests and 26 release-helper groups passed for the extended closed component profiles. The actual Linux API image from `f7ad33d8` built and passed packaged smoke against PostgreSQL 18, including FORCE RLS and normal startup. The later replacement name-check correction still needs its corresponding image/evidence; final CI and selected API/frontend artifact-release verification remain pending. No release was performed. |
+
+The browser evidence uses the built Vite fixture with actual Carbon pages,
+AuthProvider and a navigation adapter, not the real Next server or real Clerk.
+It does not certify production runtime grants or a complete accessibility audit.
+No original attachment was seeded for the history walkthrough, so retained-file
+download was not exercised. Screenshots and reports stay in private local
+artifacts outside Git.
 
 A pre-existing WMS limitation remains outside this replacement: dispatch reloads
 the transfer tab and resets its inbound destination to the standing location.
@@ -158,9 +168,9 @@ values were verified despite that reset.
 
 Before any production replacement write:
 
-1. Finish the final backend/replacement test matrix, security corrections and
-   independent QA, backend/data, security, delivery and DevOps review. Retain
-   their actual final results and complete CI for the selected source.
+1. Finish the fresh-database full backend rerun and private migration/replacement
+   rehearsal. Retain final independent QA, backend/data, security, delivery and
+   DevOps review, and complete CI for the selected source.
 2. Build and smoke-test the exact API/frontend release artifacts. Obtain Leo's
    explicit consent for the selected commit/digests/targets and verify their
    release/provider evidence; do not infer it from the data-replacement request.

@@ -279,7 +279,7 @@ async def _preflight(db: AsyncSession, expected_database: str) -> Team:
     if (
         team is None
         or team.slug != "firstout"
-        or team.name != "Primavera"
+        or team.name != "Primavera Pty Ltd"
         or team.status != "maintenance"
     ):
         raise ValidationError("Verified Primavera identity and maintenance fence are required")
