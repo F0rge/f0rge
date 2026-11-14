@@ -42,14 +42,15 @@ function fixture(suppliedToken?: string) {
     headers: suppliedToken ? { "x-storefront-order-status-token": suppliedToken } : {},
     scope: { resolve: (key: string) => key === ContainerRegistrationKeys.QUERY ? query : undefined },
   } as unknown as MedusaRequest;
-  const response = {
+  const responseData = {
     headers: {} as Record<string, string>,
     statusCode: 0,
     body: undefined as unknown,
     setHeader(name: string, value: string) { this.headers[name] = value; return this; },
     status(code: number) { this.statusCode = code; return this; },
     json(body: unknown) { this.body = body; return this; },
-  } as unknown as MedusaResponse & { statusCode: number; body: unknown; headers: Record<string, string> };
+  };
+  const response = responseData as unknown as MedusaResponse & { statusCode: number; body: unknown; headers: Record<string, string> };
   return { req, response, query };
 }
 

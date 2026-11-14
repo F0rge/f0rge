@@ -7,7 +7,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "npx tsc --noEmit -p libs/ui/tsconfig.json"
+        "command": "node node_modules/@typescript/native/bin/tsc --noEmit -p libs/ui/tsconfig.json"
       }
     },
     "storybook": {

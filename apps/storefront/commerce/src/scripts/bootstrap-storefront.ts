@@ -60,7 +60,8 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
     });
   }
   for (const store of stores) {
-    const currencies = (store.supported_currencies || []).filter((currency) => currency !== null);
+    const supportedCurrencies: readonly unknown[] = store.supported_currencies || [];
+    const currencies = supportedCurrencies.filter((currency) => currency !== null);
     if (currencies.length > 1) {
       throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE,
         "Store has multiple currencies; set ZAR tax-inclusive in Medusa Admin before syncing Firstout");
