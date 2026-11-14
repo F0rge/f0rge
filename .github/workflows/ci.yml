@@ -1,8 +1,8 @@
 name: CI
 
 # PR + push on main, plus workflow_dispatch: parallel backend/frontend via
-# `nx affected` (no detect job) → `ci` gate. Deploy is a separate workflow
-# (deploy.yml) after this succeeds on push.
+# `nx affected` (no detect job) → `ci` gate. This workflow does not deploy
+# or authorize a production release.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
 # Tests (pytest / frontend unit / e2e-smoke) run for main.
 
@@ -52,10 +52,9 @@ jobs:
       - name: Assert no root uv.lock
         run: bash .github/scripts/assert-no-root-uv-lock.sh
 
-      - name: Deploy planner and Coolify payload checks
-        # discover can't import `.github/` (the dot). Run the module from its dir.
-        working-directory: .github/deploy
-        run: uv run --no-project --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py
+      - name: Release evidence and deploy planner checks
+        # Always run this uncached tool target; it also reads deployment workflows.
+        run: npx nx run f0rge-release-checks:test
 
       - name: Nx project registration guard
         run: bash .github/scripts/check-nx-projects.sh
@@ -162,6 +161,9 @@ jobs:
       - name: Nx project registration guard
         run: bash .github/scripts/check-nx-projects.sh
 
+      - name: Commerce image retention checks
+        run: node --test apps/storefront/commerce/scripts/check-container.test.mjs
+
       # main only: prod-shaped build.
       - name: Prod-shaped build env
         if: env.TARGET_BRANCH == 'main'
@@ -197,6 +199,7 @@ jobs:
         env:
           TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
           EVENT_NAME: ${{ github.event_name }}
+          F0RGE_COMMERCE_IMAGE_ARCHIVE: ${{ runner.temp }}/f0rge-commerce-image.tar
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$TARGET_BRANCH" = "main" ]; then
@@ -211,6 +214,40 @@ jobs:
               npx nx affected -t=lint,typecheck,build,codegen:check,storybook-build,container-test --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
             fi
           fi
+
+      - name: Check retained commerce image
+        id: commerce-image
+        env:
+          ARCHIVE: ${{ runner.temp }}/f0rge-commerce-image.tar
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            EXPECTED=true
+          else
+            EXPECTED=$(npx nx show projects --affected --projects=daskasas-commerce --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -er 'if type == "array" and all(.[]; type == "string") then (index("daskasas-commerce") != null) | tostring else error("Invalid Nx project list") end')
+          fi
+          if [ "$EXPECTED" = true ]; then
+            test -s "$ARCHIVE"
+            test -s "$ARCHIVE.json"
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            test ! -e "$ARCHIVE"
+            test ! -e "$ARCHIVE.json"
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      # This unpromoted archive is not a registry manifest, attestation, or release approval.
+      # PR archives use the synthetic merge commit and must not be promoted as main artifacts.
+      - name: Retain tested commerce image
+        if: steps.commerce-image.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-daskasas-commerce-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/f0rge-commerce-image.tar
+            ${{ runner.temp }}/f0rge-commerce-image.tar.json
+          if-no-files-found: error
 
   ci:
     name: ci

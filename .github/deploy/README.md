@@ -1,8 +1,85 @@
-# Deploy manifest
+# Release hold and historical deploy manifest
 
-Single source of truth for **which Nx projects deploy where**. The orchestrator
-(`.github/workflows/deploy-reusable.yml`) reads this file, intersects with `nx
-affected`, and delegates to Railway smoke or Coolify executors.
+The repository release entry points in this change are **inert**. The manual
+`deploy.yml` and callable `deploy-reusable.yml` target the fixed GitHub
+`production` environment without calling a provider, reading deployment
+credentials or running a smoke against production. Both jobs set
+`deployment: false`; the manual preparation job reports its limited scope and
+the retired callable entry point fails. Neither is an approved release path. The repository's Nx CI
+runs builds and tests; those results do not authorize a release. GitHub support
+for `deployment: false` and the environment's effective protection have not
+been verified by running this workflow.
+
+On 14 November 2026, the repository `production` environment was configured
+with Leo as the sole required reviewer, prevent self-review, no administrator
+bypass and the `main` branch restriction. It has no environment secrets. Verify
+settings and the exact selected environment again before activation. A separate
+automation identity is needed for a release that Leo can approve independently;
+an agent using Leo's account is not independent human approval.
+The current environment allows `main` only and no tags; P-045's release-tag
+grammar and corresponding protected tag allowlist need design before a
+tag-triggered release.
+
+No separate release requester has been verified. `workflow_run` does not by
+itself establish a bot identity. A candidate private GitHub App and its
+setup and validation plan are documented in [release-requester-app.md](release-requester-app.md).
+A token with repository Actions write access can enable disabled workflows and
+rerun historical workflows; do not grant it until historical release paths and
+production credentials are contained. Before activation, verify a
+separate least-privilege requester, Leo's independent approval, and fresh
+approval on reruns in an isolated nonproduction setting.
+
+`release_evidence.py` compares supplied candidate, artifact and check fields
+offline. `test_release_evidence.py` exercises mismatches and the no-effect
+workflow configuration. These fixtures do not retrieve trustworthy GitHub
+approval or CI facts, prove a human acted, prevent real approval replay, verify
+a provider's running digest or authorize a release.
+
+The `daskasas-commerce:container-test` target can retain its locally tested
+image as an archive outside the checkout, with the source commit, platform,
+Docker image ID and archive checksum. CI retains that archive when this project
+is affected or a full manual CI run is requested. The probe checks runtime
+imports and hosted-configuration guards with container networking disabled; it
+is not a full application or checkout
+journey. The image ID and archive checksum are not a registry manifest digest,
+and the accompanying metadata is not signed provenance or an approval. Pull
+request archives use a synthetic merge commit; neither those nor non-main or
+manual-run archives are trusted production release artifacts.
+No other app image is covered by this retention path.
+
+The documented Railway deployment metadata and Coolify configuration inspected
+so far do not independently establish each running instance's image digest.
+Provider verification remains a release blocker until a trusted source and
+nonproduction rehearsal establish the exact running image, target and health.
+See the [provider verification design](provider-verification.md).
+
+Expiry and replay enforcement are not implemented here. Before activation,
+test that an expired review is rejected and that reusing the same approved
+commit/digest/target is handled safely after a restart or with a different
+approval ID. Verify whether a rerun requires fresh GitHub approval. No
+process-local fixture is proof of durable replay protection.
+
+Before a future release path is enabled, build and test a target-specific image
+once, retain its immutable digest, obtain independent GitHub approval for that
+commit/digest/target, promote that same image without rebuilding and verify the
+running digest and health. Test reruns, mismatches and recovery in an isolated
+environment. Audit and control Railway, Coolify, manual, historical rerun and
+other alternate provider paths; their current live state is not established by
+this change. Do not put deployment credentials into repository-level secrets or
+activate a provider trigger merely to make this hold pass. Every production
+release still needs Leo's explicit approval.
+
+## Historical configuration — not an active release path
+
+The following inventory and commands document the former source-based path;
+they do not describe a runnable deployment workflow in this change. Do not add
+secrets or use the legacy webhooks to bypass the release hold. Retained code
+and tests support investigation, not production authorization.
+
+The manifest records the legacy mapping of Nx projects to deployment targets.
+The historical orchestrator intersected it with `nx affected`, then delegated
+to Railway smoke or Coolify executors; those jobs are no longer present in the
+proposed workflows.
 
 Committed configuration describes **Railway deployment plus Actions smoke** for Marrow. Check current provider triggers before an authorized release; this file does not enable them or grant production approval.
 dk tag-printer, buycycle, and environment-monitor run on Coolify (Pi). Firstout is a **separate Railway
@@ -16,36 +93,18 @@ production environment `d73ff2d5-816d-4bc8-85b4-71a85b0398fa`, with services
 `storefront` and `storefront-commerce`. Its `apps/storefront/` Railway configs are
 outside this manifest; verify both services separately for an approved release.
 
-## Add an app
+## Historical webhook secret inventory
 
-1. Land code under `apps/<name>/` with `project.json` tags `platform:py` or
-   `platform:ts` (and optional `deploy-target:*`).
-2. Add a `components.<id>` block below.
-3. For **Railway smoke**: set `target: railway`, `railway.role`
-   (`api` | `frontend`), and per-env `railway.health_url` (smoke target).
-   MCP URLs go under `also_deploys`.
-4. For **Coolify (Pi)**: set `target: coolify`, `coolify.app_uuid`, and
-   `webhook_secret_env` (name of a GitHub Actions secret holding the app's
-   `manual_webhook_secret_github` value).
-5. Set `branches: [main]`. PRs target `main`; existing remote refs and historical
-   environment names are separate inventory.
-6. Add repo secrets if new Coolify webhooks are needed:
-   - `COOLIFY_BASE_URL` (e.g. `https://coolify.taxpilot.lu`)
-   - `COOLIFY_WEBHOOK_<APP>_*` per component
+The former workflow used `COOLIFY_BASE_URL` and per-component
+`COOLIFY_WEBHOOK_*` values, with optional `SMOKE_EMAIL` and `SMOKE_PASSWORD`
+for Railway smoke. A read-only GitHub inventory on 14 November 2026 confirmed
+repository-level Coolify and smoke secret names remain present; their values
+were not read. Consumers and provider permissions require further verification.
+The new inert workflows neither receive nor use
+these values. Any future production credentials must be restricted to an
+approved protected environment and unavailable to ungated jobs.
 
-## Secrets
-
-| Secret | Used by |
-|--------|---------|
-| `COOLIFY_BASE_URL` | Coolify webhook POST base |
-| `COOLIFY_WEBHOOK_DASKASAS_BACKEND` | dk-tag-printer-backend (Coolify app daskasas-backend) |
-| `COOLIFY_WEBHOOK_DASKASAS_FRONTEND` | dk-tag-printer-frontend (Coolify app daskasas-frontend) |
-| `COOLIFY_WEBHOOK_BUYCYCLE` | buycycle (Pi, internal only; skips while unset) |
-| `COOLIFY_WEBHOOK_ENVMON_BACKEND` | environment-monitor-backend (Pi; skips while unset) |
-| `COOLIFY_WEBHOOK_ENVMON_FRONTEND` | environment-monitor-frontend (Pi; skips while unset) |
-| `SMOKE_EMAIL` / `SMOKE_PASSWORD` | Optional Railway auth smoke |
-
-## Coolify monorepo settings (per app)
+## Historical Coolify monorepo settings (per app)
 
 | Field | dk tag printer | environment-monitor |
 |-------|----------------|---------------------|
@@ -57,47 +116,19 @@ outside this manifest; verify both services separately for an approved release.
 | Frontend build-time env | `NEXT_PUBLIC_API_URL=https://tags-api.leo-figueiredo.com` | keep existing `BACKEND_URL` |
 | Backend runtime env | `CORS_ORIGINS=https://tags.leo-figueiredo.com` | keep existing `PYTHONUNBUFFERED` (both apps) |
 
-The manual webhook body is one commit (`id`, `added`, `modified`, `removed`)
-from `git diff --name-status` between the deployed SHA and the Coolify base
-(`NX_PARENT` when `NX_BASE == NX_HEAD`, otherwise `NX_BASE`). Coolify matches
-those paths to each app's watch paths. Each component is signed with its own
-secret (`webhook_secret_env`). That value must equal the app's manual GitHub
-webhook secret in Coolify. Sibling apps on the same repo and branch answer
-`Invalid signature` because the endpoint checks each app's own secret. The job
-ignores that answer on apps it did not select. The selected app must queue a
-deployment, or return the exact watch-path ignore. `Invalid signature` on the
-selected app fails the job.
-
-An explicitly approved release through this legacy webhook path requires the
-selected app to accept manual webhooks. Coolify v4 reports `Deployments disabled.`
-when `is_auto_deploy_enabled=false`; the job treats that response as failure.
-Preserve existing release holds. Changing provider trigger settings needs an
-authorized operations task; do not enable them merely to make this workflow pass.
-
-Internal-only Coolify components (e.g. `buycycle`, `environment-monitor-*`, `host: pi`) omit `health_url`:
-runners can't reach the Pi, so the job relies on Coolify's `queued` response and
-skips the health smoke. A `TODO…` placeholder `app_uuid` also skips. Buycycle
-cutover: [apps/buycycle/deploy/PI_CUTOVER.md](../../apps/buycycle/deploy/PI_CUTOVER.md).
-
-Coolify steps **skip (success)** when webhook secrets are missing, the
-`app_uuid` is still a `TODO…` placeholder, or Coolify answers HTTP 2xx with
-this app's message exactly equal to `Changed files do not match watch paths. Ignoring deployment.`
-The watch-path case logs `SKIPPED <app>: Coolify ignored (watch paths)` and
-writes that line to the job summary.
-
-HTTP 2xx with this selected app's message exactly equal to `Deployments disabled.`
-**fails** the job. `classify_coolify_response` returns `failed` for that
-sentence (not `skipped`). The error names the app and its Coolify uuid and
-reports that the app does not accept this deployment path. A sibling's copy of that
-sentence does not count. Any other 2xx that does not queue a deployment, and
-any non-2xx, fails the job. Missing secrets and placeholder uuids still skip,
-so an unconfigured Pi app does not fail the marrow Railway smoke.
+The former webhook supplied a Git diff and signed it with a component-specific
+secret. It classified queued, watch-path-skipped and rejected responses.
+These details describe the retired source-building path, not an approval or
+immutable artifact mechanism. Retained payload and planner tests document the
+legacy behavior without contacting a provider.
 
 See also [manifest.yml](manifest.yml) and [plan_deploy.py](plan_deploy.py).
 
-## Known: Deploy runs from the default branch's workflow file
-`deploy.yml` is triggered by `workflow_run`, which always uses the workflow file
-(and the local `./.github/workflows/deploy-reusable.yml` it calls) from the
-repository **default branch** (`main`). A change to these files on `main`
-applies to the next automatic Deploy. The checked-out code, manifest, and
-`plan_deploy.py` come from the deployed SHA.
+## Historical workflow selection
+
+The former `workflow_run` deployment used the default branch's workflow files.
+Historical reruns can use historical workflow definitions, so removing a trigger
+from a new revision does not prove those paths are closed. On 14 November 2026
+the old Deploy workflow was disabled, but a successful historical run was
+still within GitHub's rerun window. Actions write can re-enable a disabled
+workflow. Verify controls before activating any release mechanism.

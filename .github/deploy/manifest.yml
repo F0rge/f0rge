@@ -1,8 +1,7 @@
 version: 1
 
-# Maps Nx projects to deploy targets. The orchestrator (deploy-reusable.yml)
-# filters by branch/environment and nx affected before calling executors.
-# Marrow: Railway GitHub autodeploy + Actions smoke only. dk + buycycle: Coolify (Pi) on main.
+# Historical Nx-to-provider inventory; the proposed release workflows are inert.
+# These entries do not authorize a deployment or establish current provider state.
 
 components:
   marrow-backend:
