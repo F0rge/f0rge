@@ -57,6 +57,7 @@
     "@nxlv/python": "~22.2.1",
     "@playwright/test": "^1.62.1",
     "@types/react": "^19",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "nx": "~23.2.1",
     "typescript": "^5"
   },

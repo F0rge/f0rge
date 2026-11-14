@@ -239,9 +239,7 @@ async function send(container: MedusaContainer, order: JsonRecord, entry: Notifi
     ...entry.data,
     order_access_url: accessUrl(order.id, digest),
   };
-  const notificationModule = container.resolve(Modules.NOTIFICATION) as {
-    createNotifications: (input: JsonRecord) => Promise<unknown>;
-  };
+  const notificationModule = container.resolve(Modules.NOTIFICATION);
   await notificationModule.createNotifications({
     idempotency_key: `storefront:${entry.id}`,
     to: entry.recipient,

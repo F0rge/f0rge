@@ -1,3 +1,4 @@
+import type { CartLineItemDTO } from "@medusajs/framework/types";
 import { addToCartWorkflow, completeCartWorkflow, createProductsWorkflow, updateProductsWorkflow } from "@medusajs/medusa/core-flows";
 import { assertPublishedProductComplete, assertVariantsPurchasable } from "../../publication";
 
@@ -7,7 +8,8 @@ addToCartWorkflow.hooks.validate(async ({ input, cart }, { container }) => {
 });
 
 completeCartWorkflow.hooks.validate(async ({ cart }, { container }) => {
-  const ids = (cart.items || []).map((item) => item.variant_id).filter((id): id is string => !!id);
+  const items: Pick<CartLineItemDTO, "variant_id">[] = cart.items || [];
+  const ids = items.map((item) => item.variant_id).filter((id): id is string => !!id);
   await assertVariantsPurchasable(container, ids, cart.sales_channel_id);
 });
 
