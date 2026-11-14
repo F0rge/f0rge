@@ -139,6 +139,8 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 Always-on agent policy: [`.cursor/rules/nx.mdc`](.cursor/rules/nx.mdc). Bugbot / Agent Review checklist: [`.cursor/BUGBOT.md`](.cursor/BUGBOT.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
 
+Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. The pinned toolchain and required Rust CI job provide build/test plumbing; they do not implement Buycycle's backend or satisfy the holiday-explorer pilot prerequisite.
+
 ## Project rules
 
 Cursor attaches scoped rules from `.cursor/rules/` by their globs. In other clients, read the applicable rules explicitly; the [shared protocol](docs/agents/protocol.md) defines the bootstrap.

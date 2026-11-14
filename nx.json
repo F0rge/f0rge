@@ -17,7 +17,23 @@
       "!{projectRoot}/tests/**/*",
       "!{projectRoot}/e2e/**/*"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": [],
+    "rust": [
+      "{projectRoot}/**/*",
+      "!{projectRoot}/target/**/*",
+      "{workspaceRoot}/**/Cargo.toml",
+      "{workspaceRoot}/**/Cargo.lock",
+      "{workspaceRoot}/rust-toolchain.toml",
+      "{workspaceRoot}/rust-toolchain",
+      "{workspaceRoot}/.cargo/**/*",
+      "{workspaceRoot}/**/.cargo/config.toml",
+      "{workspaceRoot}/rustfmt.toml",
+      "{workspaceRoot}/clippy.toml",
+      "{workspaceRoot}/.github/rust/**/*",
+      {
+        "runtime": "rustc -vV"
+      }
+    ]
   },
   "targetDefaults": {
     "build": {

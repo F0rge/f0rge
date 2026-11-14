@@ -52,6 +52,9 @@ qa-screenshots/
 *.tsbuildinfo
 .tmp/
 
+# Rust build intermediates (Cargo.lock stays tracked)
+target/
+
 # libs/ui Storybook
 libs/ui/dist/
 libs/ui/storybook-static/

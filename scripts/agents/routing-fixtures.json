@@ -369,5 +369,47 @@
     "reviewers": [
       "f0rge-security"
     ]
+  },
+  {
+    "path": "Cargo.toml",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": "Cargo.lock",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": "rust-toolchain.toml",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": ".cargo/config.toml",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": "libs/example/Cargo.toml",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": "apps/example/rust-toolchain",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
   }
 ]

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fail if any apps/** or libs/** tree with package.json or pyproject.toml
+# Fail if any apps/** or libs/** tree with package.json, pyproject.toml or Cargo.toml
 # lacks a sibling project.json with a platform: tag.
 # Exception: marrow-ios (Swift; no platform:py/ts — not on Linux CI).
 set -euo pipefail
@@ -64,4 +64,5 @@ if [[ $fail -ne 0 ]]; then
   echo "Nx project registration check failed. See .cursor/rules/nx.mdc"
   exit 1
 fi
+node .github/rust/guard.mjs --static
 echo "Nx project registration check OK"
