@@ -8,7 +8,7 @@
       "cache": false,
       "options": {
         "cwd": ".github/deploy",
-        "command": "uv run --no-project --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py test_release_evidence.py"
+        "command": "uv run --no-project --with pyyaml==6.0.2 python ../scripts/test_firstout_pipeline.py && uv run --no-project --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py test_release_evidence.py test_firstout_release.py"
       }
     }
   }

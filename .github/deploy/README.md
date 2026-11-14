@@ -1,4 +1,20 @@
-# Release hold and historical deploy manifest
+# Release paths and retained holds
+
+The Firstout frontend has a narrowly scoped, operator-driven release path in
+[firstout-release.md](firstout-release.md). Its manual image workflow builds and
+tests one Linux image, records its immutable digest, and retains release
+evidence. The operator promotion helper checks that evidence and the fixed
+Firstout target before deploying the same image and verifying Railway's
+serving deployment and instance mapping. Explicit release approval is still
+required; publishing an image or creating a release tag does not grant it.
+
+This path does not enable automatic releases, migrate other apps, move
+production credentials into GitHub, or make the GitHub environment protect
+operator CLI access. The generic entry points and other apps remain under the
+holds below. Existing legacy credentials and alternate historical paths remain
+separate operational risks, not protections established by this release.
+
+## Generic release hold and historical deploy manifest
 
 The repository release entry points in this change are **inert**. The manual
 `deploy.yml` and callable `deploy-reusable.yml` target the fixed GitHub
