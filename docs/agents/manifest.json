@@ -2,8 +2,7 @@
   "schemaVersion": 1,
   "protocol": "docs/agents/protocol.md",
   "adapters": [
-    "codex",
-    "cursor"
+    "codex"
   ],
   "roles": [
     {
@@ -140,12 +139,9 @@
         "**/README.md",
         "docs/adr/README.md",
         "docs/agents/**",
-        ".cursor/**",
         ".codex/agents/**",
         ".agents/skills/**",
         "scripts/agents/**",
-        ".cursorignore",
-        ".cursorindexingignore",
         ".vscode/settings.json",
         "**/CONTEXT.md",
         "CONTEXT-MAP.md"
@@ -451,7 +447,6 @@
       "patterns": [
         "scripts/agents/**",
         "docs/agents/**",
-        ".cursor/**",
         ".codex/agents/**",
         "**/AGENTS.md",
         "docs/adr/governance.md",
@@ -570,10 +565,7 @@
         "docs/agents/**",
         "scripts/agents/**",
         "**/AGENTS.md",
-        ".cursor/**",
-        ".codex/agents/**",
-        ".cursorignore",
-        ".cursorindexingignore"
+        ".codex/agents/**"
       ],
       "reviewers": [
         "f0rge-delivery",
@@ -592,8 +584,8 @@
     },
     {
       "patterns": [
-        ".cursor/rules/backend.mdc",
-        ".cursor/review-context/fastapi-backend-playbook.md"
+        "docs/agents/rules/backend.md",
+        "docs/agents/review-context/fastapi-backend-playbook.md"
       ],
       "reviewers": [
         "f0rge-backend",
@@ -602,9 +594,9 @@
     },
     {
       "patterns": [
-        ".cursor/rules/frontend.mdc",
-        ".cursor/rules/ui-kit.mdc",
-        ".cursor/review-context/frontend-dev-playbook.md"
+        "docs/agents/rules/frontend.md",
+        "docs/agents/rules/ui-kit.md",
+        "docs/agents/review-context/frontend-dev-playbook.md"
       ],
       "reviewers": [
         "f0rge-frontend"
@@ -612,7 +604,7 @@
     },
     {
       "patterns": [
-        ".cursor/rules/data-pipelines.mdc"
+        "docs/agents/rules/data-pipelines.md"
       ],
       "reviewers": [
         "f0rge-data",
@@ -622,8 +614,8 @@
     },
     {
       "patterns": [
-        ".cursor/rules/infra.mdc",
-        ".cursor/review-context/devops-playbook.md"
+        "docs/agents/rules/infra.md",
+        "docs/agents/review-context/devops-playbook.md"
       ],
       "reviewers": [
         "f0rge-devops"
@@ -631,7 +623,7 @@
     },
     {
       "patterns": [
-        ".cursor/rules/shared-libs.mdc"
+        "docs/agents/rules/shared-libs.md"
       ],
       "reviewers": [
         "f0rge-backend",
@@ -656,10 +648,6 @@
   ],
   "liveCallerPatterns": [
     "**/AGENTS.md",
-    ".cursor/rules/*.mdc",
-    ".cursor/BUGBOT.md",
-    ".cursor/review-context/**/*.md",
-    "docs/agents/protocol.md",
-    "docs/agents/profiles/*.md"
+    "docs/agents/**/*.md"
   ]
 }

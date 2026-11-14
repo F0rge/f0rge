@@ -174,7 +174,7 @@ def _route_paths(app) -> list[str]:
 
 
 def test_http_app_does_not_advertise_oauth_discovery() -> None:
-    """Cursor ignores mcp.json Bearer headers if RFC 9728 metadata returns 200."""
+    """Static bearer auth must not advertise an unavailable OAuth flow."""
     from starlette.testclient import TestClient
 
     from app.mcp.server import create_server

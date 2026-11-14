@@ -1,10 +1,10 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Quality and Testing Review Playbook (committed copy)
 
 ## What this is
 
-Review reference for `f0rge-quality-testing`, distilled from legacy incidents. Follow the [shared protocol](../../docs/agents/protocol.md), applicable ADRs and the [manifest](../../docs/agents/manifest.json). Resolve exact primary/reviewer assignments with `node scripts/agents/agents.mjs route <repo-relative-path...>`; behavior tests stay with the behavior owner and shared harnesses have explicit routes. Historical incident-note paths below are optional provenance, not required global memory.
+Review reference for `f0rge-quality-testing`, distilled from legacy incidents. Follow the [shared protocol](../protocol.md), applicable ADRs and the [manifest](../manifest.json). Resolve exact primary/reviewer assignments with `node scripts/agents/agents.mjs route <repo-relative-path...>`; behavior tests stay with the behavior owner and shared harnesses have explicit routes. Historical incident-note paths below are optional provenance, not required global memory.
 
 A diff-only review does not prove runtime behavior. When the assigned reviewer lacks the necessary local runtime or browser tools, record a verification ticket for an independent `f0rge-quality-testing` run or authorized human operator. Keep the gate open until the required evidence exists.
 
@@ -14,7 +14,7 @@ A diff-only review does not prove runtime behavior. When the assigned reviewer l
 
 Cite the committed rule and inspected source evidence in each block-level comment. Include historical provenance only when it was actually consulted; an unavailable memory file does not supply evidence.
 
-- **`platform:` tag on new projects** — any new `project.json` must carry `platform:py` or `platform:ts` tag or CI silently ignores it. Block on new projects missing tags. Exception: `marrow-ios` (`scope:marrow` only). Full Nx checklist: `.cursor/BUGBOT.md` / `.cursor/rules/nx.mdc`.
+- **`platform:` tag on new projects** — any new `project.json` must carry `platform:py` or `platform:ts` tag or CI silently ignores it. Block on new projects missing tags. Exception: `marrow-ios` (`scope:marrow` only). Full Nx checklist: `docs/agents/review-checklist.md` / `docs/agents/rules/nx.md`.
 - **Lib test coverage** — changes to `libs/**` must include or update tests in the lib's `tests/` directory. Block on lib changes with no test updates when behavior changes.
 - **Re-implementation grep** — when reviewing app code, grep diff for local copies of lib-owned helpers (`DomainError`, `BaseCRUD`, `unit_of_work`, `ApiError`, shadcn primitives). Block on re-implementations.
 - **Thin routers** — any new or modified route in `apps/marrow/backend/app/routers/` must be ≤ 3 lines (signature + delegation + return). Block on presence of `if`, `try:`, `raise HTTPException`, `db.query(`, `db.add(`, `db.commit(`, `setattr(`, or any inline helper. Pre-existing redirect branches in `photos.serve_photo` and `account.serve_avatar` are grandfathered — only flag NEW violations. See `feedback_thin_routers.md`.
@@ -23,7 +23,7 @@ Cite the committed rule and inspected source evidence in each block-level commen
 - **Class-of-bug audit missing** — when a fix names a pattern (tz-aware bind, `scalar_one_or_none` on non-unique WHERE, `field || undefined` + `exclude_unset`, etc.), the PR must either fix every sibling occurrence in the same diff or open a tracked follow-up issue. Block if neither. See `feedback_audit_class_of_bug.md` (root-cause: 2026-05-17 two prod outages from missing sibling audit on `photos.meal_time`).
 - **`.env.example` not updated for new required env vars** — block on any new entry in `apps/marrow/backend/app/config.py` (e.g. `HEALTHTRACKER_RO_PASSWORD`, `SETTINGS_ENCRYPTION_KEY`, `MCP_READONLY_DATABASE_URL`) that isn't mirrored in `apps/marrow/backend/.env.example`. Redeploys silently break without it. See `mcp_server_issue_49_findings.md`.
 - **`ruff format` regression** — if a touched file used to pass `ruff format --check` and no longer does, block. CI enforces format via `nx affected -t format-check` / `nx run-many -t format-check` in `ci.yml`.
-- **Migration path** — New migrations stay compatible. Railway `preDeployCommand` lines are configuration inventory; production migration still needs Leo's release approval. See `.cursor/rules/infra.mdc` and `docs/adr/README.md`.
+- **Migration path** — New migrations stay compatible. Railway `preDeployCommand` lines are configuration inventory; production migration still needs Leo's release approval. See `docs/agents/rules/infra.md` and `docs/adr/README.md`.
 - **pgvector extension order** — block any new test fixture or context that calls `Base.metadata.create_all` on a fresh Postgres without first executing `CREATE EXTENSION IF NOT EXISTS vector`. The `embedding.embedding VECTOR(1024)` column will crash `create_all`. See `project_byok_pgvector.md`.
 - **BYOK key resolution missed** — block any new AI/LLM call site that imports `settings.openrouter_api_key` directly instead of calling `resolve_llm_credentials(db)`. Lab extraction has this as an open follow-up; new code must not repeat it. See `project_byok_pgvector_gate.md`.
 - **Embedding vector dim != 1024** — block any new embedding column, request, or response that uses a dim other than 1024. The column is locked. See `project_ai_seams.md`.
@@ -124,7 +124,7 @@ Per `project_datetime_tz_convention.md`:
 
 ## DevOps / infra patterns
 
-- **Migrations** — Marrow Railway files use `preDeployCommand`. Runtime credentials remain least-privilege; production migrations require Leo's release approval. See `.cursor/rules/infra.mdc`.
+- **Migrations** — Marrow Railway files use `preDeployCommand`. Runtime credentials remain least-privilege; production migrations require Leo's release approval. See `docs/agents/rules/infra.md`.
 - **Database roles** — verify migration and runtime privileges separately; role creation requires an authorized operations task.
 - **Custom domains** — verify the current provider target and DNS/certificate behavior within the approved scope.
 

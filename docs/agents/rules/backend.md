@@ -1,10 +1,4 @@
----
-description: FastAPI backend conventions — Router → Service → Dependency pattern, Pydantic v2, async SQLAlchemy, domain exceptions. Use proactively when writing or reviewing Python API code, routers, services, schemas, migrations, or backend tests.
-globs: apps/marrow/backend/**/*.py, apps/marrow/backend/migrations/**
-alwaysApply: false
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # FastAPI Backend Standards
 
@@ -173,7 +167,7 @@ uv run uvicorn app.main:app --port 8000 --reload
 uv run pytest tests/ -v --tb=short
 ```
 
-Use `node scripts/agents/agents.mjs route <repo-relative-path...>` and the [shared protocol](../../docs/agents/protocol.md). `f0rge-backend` handles server behavior; database models/migrations and shared test harnesses have distinct manifest routes. Resolve server-contract exporters before treating a script as ETL; request the relevant reviews through the coordinator.
+Use `node scripts/agents/agents.mjs route <repo-relative-path...>` and the [shared protocol](../protocol.md). `f0rge-backend` handles server behavior; database models/migrations and shared test harnesses have distinct manifest routes. Resolve server-contract exporters before treating a script as ETL; request the relevant reviews through the coordinator.
 
 ## Marrow specifics
 

@@ -1,10 +1,4 @@
----
-description: Design-system hard rules — @f0rge/ui imports, token layers, banned engines, forms via wrappers. Use when editing apps frontend, libs/ui, or adding UI primitives/forms.
-globs: libs/ui/**,apps/**/frontend/**/*.tsx,apps/**/frontend/**/*.ts,apps/**/frontend/**/*.css
-alwaysApply: false
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # UI Kit — `@f0rge/ui`
 
@@ -59,7 +53,6 @@ Apps import **only**:
 3. Add a Storybook story when `libs/ui/.storybook` exists.
 4. **Never** copy shadcn into `apps/**/components/ui`.
 
-Workflow skill: `.cursor/skills/add-ui-primitive/SKILL.md`.
 
 ## Catalogue
 

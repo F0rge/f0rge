@@ -14,16 +14,9 @@ import {
 import type { ExternalApiTokenItem } from '@/lib/api/types'
 import { SettingsCard } from './settings-card'
 
-const MCP_CONFIG_SNIPPET = `{
-  "mcpServers": {
-    "marrow": {
-      "url": "https://mcp.marrow-health.com/mcp",
-      "headers": {
-        "Authorization": "Bearer {TOKEN}"
-      }
-    }
-  }
-}`
+const MCP_CONFIG_SNIPPET = `[mcp_servers.marrow]
+url = "https://mcp.marrow-health.com/mcp"
+bearer_token_env_var = "MARROW_MCP_TOKEN"`
 
 function tokenMeta(token: ExternalApiTokenItem): string | null {
   if (!token.created_at) return null
@@ -73,7 +66,7 @@ export function ExternalTokenSection() {
   return (
     <SettingsCard icon={Lock} iconClassName="text-muted-foreground" title="External access tokens">
       <p className="text-xs text-muted-foreground">
-        For querying your health data from Claude Code or Claude Desktop via MCP. Each token stays
+        For querying your health data from Codex via MCP. Each token stays
         valid until you revoke it.
       </p>
 
@@ -161,17 +154,18 @@ export function ExternalTokenSection() {
       </div>
 
       <div className="space-y-2 pt-1">
-        <p className="text-xs font-medium text-muted-foreground">Connection examples</p>
+        <p className="text-xs font-medium text-muted-foreground">Connect Codex</p>
         <details className="rounded-lg border border-border">
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
-            Claude / Cursor (JSON config)
+            Codex (TOML config)
           </summary>
           <div className="space-y-2 border-t border-border px-3 py-2">
             <pre className="overflow-x-auto rounded bg-muted p-2 text-xs leading-relaxed">{MCP_CONFIG_SNIPPET}</pre>
             <p className="text-xs text-muted-foreground">
-              Paste into Cursor <code className="rounded bg-muted px-1">~/.cursor/mcp.json</code> or
-              Claude Desktop config. Replace <code className="rounded bg-muted px-1">{'{TOKEN}'}</code> with
-              the secret shown once above.
+              Add this to <code className="rounded bg-muted px-1">~/.codex/config.toml</code>.
+              Set <code className="rounded bg-muted px-1">MARROW_MCP_TOKEN</code> in the environment
+              that launches Codex to the secret shown once above, then restart Codex. Keep the
+              secret out of config files and version control.
             </p>
             <Button type="button" variant="ghost" size="sm" onClick={() => handleCopy(MCP_CONFIG_SNIPPET)}>
               <Copy />

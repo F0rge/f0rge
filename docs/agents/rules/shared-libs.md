@@ -1,10 +1,4 @@
----
-description: Shared library conventions for libs/backend/* and libs/ui. Use when creating, modifying, or consuming shared libs.
-globs: libs/**
-alwaysApply: false
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Shared Libraries (`libs/`)
 
@@ -22,7 +16,7 @@ Genuinely generic code lives here. Apps import from libs — never the reverse.
 | `libs/backend/testing` | `f0rge_testing` | pgvector testcontainer fixture, savepoint-session fixture factories |
 | `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api`, `@f0rge/ui/forms` (when added) | 12 shadcn primitives, `cn`, date formatters, hooks, `fetch-error`, API client; Storybook catalogue in `libs/ui` |
 
-Resolve library primaries and reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`. The [manifest](../../docs/agents/manifest.json) owns routing, including the shared test-harness exception; this table is an inventory. Follow the [shared protocol](../../docs/agents/protocol.md).
+Resolve library primaries and reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`. The [manifest](../manifest.json) owns routing, including the shared test-harness exception; this table is an inventory. Follow the [shared protocol](../protocol.md).
 
 **Deferred:** `f0rge-llm` — extract when a second LLM consumer exists. Parser duplication in `lab_extraction_prompt.py` / `vision_prompt.py` is known debt.
 
@@ -49,14 +43,14 @@ Resolve library primaries and reviewers with `node scripts/agents/agents.mjs rou
 - Apps: `transpilePackages: ["@f0rge/ui"]`, `globals.css` `@source` for Tailwind 4 scanning
 - **Semantic tokens only** in lib components (`var(--primary)`, `text-muted-foreground`) — never `--marrow-*` brand vars
 - shadcn CLI additions land in `libs/ui`, never `apps/`
-- New primitive → Storybook story required when `libs/ui/.storybook` exists (see `.cursor/rules/ui-kit.mdc`)
+- New primitive → Storybook story required when `libs/ui/.storybook` exists (see `docs/agents/rules/ui-kit.md`)
 - `libs/ui/src/styles/extras.css` is the only documented override file for kit-level CSS tweaks
 
 ## New project checklist
 
 Every new lib or app project must have:
 
-1. `project.json` with correct tags (see `.cursor/rules/nx.mdc`):
+1. `project.json` with correct tags (see `docs/agents/rules/nx.md`):
    - Python lib: `["platform:py", "scope:shared"]`
    - TS lib: `["platform:ts", "scope:shared"]`
    - App backend: `["platform:py", "scope:<app>"]`

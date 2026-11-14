@@ -1,13 +1,8 @@
----
-description: Coordinate implementation plans, repository role routing and independent review. Use when planning, scoping or coordinating work across files or domains.
-alwaysApply: true
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Orchestration — Plan, Delegate, Verify
 
-Read the [agent guide](../../docs/agents/README.md) and [shared protocol](../../docs/agents/protocol.md). Repository roles use the `f0rge-` names in the [manifest](../../docs/agents/manifest.json); no user-global profile, memory file or particular model is a prerequisite.
+Read the [agent guide](../README.md) and [shared protocol](../protocol.md). Repository roles use the `f0rge-` names in the [manifest](../manifest.json); no user-global profile, memory file or particular model is a prerequisite.
 
 ## Planning and routing
 
@@ -21,10 +16,10 @@ The plan records unresolved decisions and testable acceptance criteria. UI/API b
 
 ## Dispatch and handoff
 
-Use the [shared protocol](../../docs/agents/protocol.md) for the brief and result contract. Include the approved objective, owned paths, resolved primary/reviewers, relevant ADR and app-context pointers, dependencies, allowed effects, acceptance criteria and available tool capabilities. Preserve explicit release holds.
+Use the [shared protocol](../protocol.md) for the brief and result contract. Include the approved objective, owned paths, resolved primary/reviewers, relevant ADR and app-context pointers, dependencies, allowed effects, acceptance criteria and available tool capabilities. Preserve explicit release holds.
 
 Select an available runtime/model through the host's supported configuration. If the required agent or tool is unavailable, report the limitation and agree a supported allocation; do not claim a profile provides capabilities or permission controls the host does not enforce.
 
 ## PR and release boundary
 
-Use a short-lived branch and a pull request into `main`. Run applicable checks, include the all-ADR compliance assessment, and obtain independent review. Squash merge is a git action, not a production release. Leo approves each production release; do not enable auto-merge or infer approval from CI, agent findings or deploy configuration. `.cursor/skills/ship-feature/SKILL.md` is absent; use the repository protocol rather than inventing that workflow.
+Use a short-lived branch and a pull request into `main`. Run applicable checks, include the all-ADR compliance assessment, and obtain independent review. Squash merge is a git action, not a production release. Leo approves each production release; do not enable auto-merge or infer approval from CI, agent findings or deploy configuration. Use the repository protocol for shipping work.

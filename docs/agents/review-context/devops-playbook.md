@@ -1,8 +1,8 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Existing app commands and safety rules remain applicable. Leo approves every production release. Do not enable auto-merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Existing app commands and safety rules remain applicable. Leo approves every production release. Do not enable auto-merge or deploy without that approval.
 
 # Delivery and DevOps Review Playbook
 
-Review reference for `f0rge-delivery` and `f0rge-devops`. Read the [shared protocol](../../docs/agents/protocol.md) and `.cursor/rules/infra.mdc`, inspect the diff, and return concrete findings. Resolve exact primaries and independent reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`. Build/CI work and runtime operations remain distinct; this retained playbook covers both for review, not duplicate ownership.
+Review reference for `f0rge-delivery` and `f0rge-devops`. Read the [shared protocol](../protocol.md) and `docs/agents/rules/infra.md`, inspect the diff, and return concrete findings. Resolve exact primaries and independent reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`. Build/CI work and runtime operations remain distinct; this retained playbook covers both for review, not duplicate ownership.
 
 ## Review coverage — not ownership routing
 
@@ -30,6 +30,6 @@ Review reference for `f0rge-delivery` and `f0rge-devops`. Read the [shared proto
 
 ## Verification
 
-Use [the deploy manifest](../../.github/deploy/manifest.yml) and app-local Railway/Coolify configuration to identify the affected services. Confirm current provider identity before an authorized operation. A queued deployment or HTTP 200 alone does not prove successful rollout; verify the running version and affected user journey.
+Use [the deploy manifest](../../../.github/deploy/manifest.yml) and app-local Railway/Coolify configuration to identify the affected services. Confirm current provider identity before an authorized operation. A queued deployment or HTTP 200 alone does not prove successful rollout; verify the running version and affected user journey.
 
 Marrow production smoke targets are `https://api.marrow-health.com/api/v1/health` and `https://marrow-health.com/`. Firstout and DasKasas use their own projects and service checks; do not substitute Marrow health for a sibling app.

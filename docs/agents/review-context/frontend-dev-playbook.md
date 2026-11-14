@@ -1,14 +1,14 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Legacy Frontend Review Playbook
 
-> **Cursor rule attachment:** `.cursor/rules/ui-kit.mdc` uses globs for `libs/ui` and app frontends. Other clients must read the applicable rule explicitly.
-> **Bugbot:** `.cursor/BUGBOT.md` (Nx gates + UI kit import bans).
+> Read `docs/agents/rules/ui-kit.md` explicitly when reviewing `libs/ui` or app frontends.
+> **Codex review:** `docs/agents/review-checklist.md` (Nx gates + UI kit import bans).
 > **This playbook is manual** — nothing loads it automatically; read when reviewing PRs.
 
 ## What this is
 
-Legacy UI review reference for `f0rge-frontend` and assigned reviewers. Follow the [shared protocol](../../docs/agents/protocol.md) and current ADRs. Historical incident-note citations are optional provenance, not required global memory. Resolve primaries and reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`; this playbook does not own build configuration or browser harnesses merely because they appear under a frontend directory.
+Legacy UI review reference for `f0rge-frontend` and assigned reviewers. Follow the [shared protocol](../protocol.md) and current ADRs. Historical incident-note citations are optional provenance, not required global memory. Resolve primaries and reviewers with `node scripts/agents/agents.mjs route <repo-relative-path...>`; this playbook does not own build configuration or browser harnesses merely because they appear under a frontend directory.
 
 ---
 
@@ -25,13 +25,13 @@ Legacy UI review reference for `f0rge-frontend` and assigned reviewers. Follow t
 
 NOT in scope for this playbook: `.github/`, `apps/marrow/backend/`, `apps/dk/tag-printer/backend/`, `libs/backend/`, `docker-compose*.yml`, migration files.
 
-**Non-duplication:** block re-implementations of `@f0rge/ui` primitives, API client, or shared hooks. See `ui-kit.mdc` for import and token rules.
+**Non-duplication:** block re-implementations of `@f0rge/ui` primitives, API client, or shared hooks. See `docs/agents/rules/ui-kit.md` for import and token rules.
 
 ---
 
 ## Hard rules — instant block findings
 
-**UI kit (mirrors `.cursor/BUGBOT.md` + `ui-kit.mdc`):**
+**UI kit (mirrors `docs/agents/review-checklist.md` + `docs/agents/rules/ui-kit.md`):**
 
 - **`apps/**` imports `@base-ui/react` or `@mantine/*`** — engines stay in `libs/ui`.
 - **New shadcn primitive under `apps/**/components/ui`** — add to `libs/ui` + Storybook instead.

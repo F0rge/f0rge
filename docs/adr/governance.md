@@ -90,15 +90,15 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 
 ## P-007
 
-- **Policy status:** Accepted
+- **Policy status:** Accepted (amended by Leo’s 14 November 2026 request)
 - **Temporary ID:** P-007
 - **Category:** Governance
-- **Decision:** Recreate development agents later with repo-aligned instructions.
-- **Proposed enforcement (not installed):** After ADRs and checks are established, rebuild agent instructions as short canonical pointers; smoke-test instruction discovery and a deliberately violating task.
-- **Gate and limit:** Human + test: instruction-load evidence and negative test. No agents recreated in this work.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** No instruction-discovery smoke test or deliberate-violation test is in CI.
-- **Implementation:** Pending. This record does not claim the decision is built.
-- **Assessment label:** gap (read-only assessment, not a gate).
-- **Risk noted in that assessment:** medium.
+- **Decision:** Codex is the supported repository coding harness. Maintain repository-aligned instructions through `AGENTS.md`, shared Markdown rules and review references under `docs/agents/`, procedure skills under `.agents/skills/`, and generated `.codex/agents/` profiles. Keep role routing in the manifest and independent review separate from implementation.
+- **Rationale and trade-off:** Supporting multiple instruction adapters creates duplicate maintenance and hides useful rules behind editor-specific loading. Leo requested one Codex workflow and removal of the other adapter. Explicit scope pointers preserve the useful domain instructions without relying on editor rule attachment.
+- **Enforcement:** `npm run agents:generate`, `npm run agents:check` and `npm run agents:test` maintain canonical-source/generated-profile consistency and representative routing cases. They do not enforce the whole ADR register or prove native discovery.
+- **Proposed enforcement (not installed):** Repeatable native Codex discovery/invocation smoke and a deliberately violating task, with recorded instruction-load and negative-test evidence.
+- **Gate and limit:** Static generation/routing checks plus independent review; native discovery and worker compliance require separate observed evidence. Plaintext profiles do not grant tools or permissions.
+- **Static evidence at `f155a2ba` (historical, not normative, not a live check):** No instruction-discovery smoke test or deliberate-violation test was in CI.
+- **Implementation:** Partial: repository role profiles and generation checks exist. This amendment consolidates the supported workflow; native discovery and deliberate-violation coverage remain separately reported verification.
+- **Assessment label:** partial.
 - **Approved exception:** None.
-

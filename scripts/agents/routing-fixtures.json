@@ -259,7 +259,7 @@
     ]
   },
   {
-    "path": ".cursorignore",
+    "path": "docs/agents/review-checklist.md",
     "owner": "f0rge-quality-testing",
     "reviewers": [
       "f0rge-quality-testing",
@@ -268,7 +268,7 @@
     ]
   },
   {
-    "path": ".cursorindexingignore",
+    "path": ".codex/agents/f0rge-backend.toml",
     "owner": "f0rge-quality-testing",
     "reviewers": [
       "f0rge-quality-testing",
@@ -348,7 +348,7 @@
     ]
   },
   {
-    "path": ".cursor/rules/frontend.mdc",
+    "path": "docs/agents/rules/frontend.md",
     "owner": "f0rge-quality-testing",
     "reviewers": [
       "f0rge-delivery",
@@ -368,6 +368,62 @@
     "owner": "f0rge-backend",
     "reviewers": [
       "f0rge-security"
+    ]
+  },
+  {
+    "path": "docs/agents/rules/backend.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-delivery",
+      "f0rge-security",
+      "f0rge-backend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "docs/agents/rules/data-pipelines.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-delivery",
+      "f0rge-security",
+      "f0rge-data",
+      "f0rge-workflows",
+      "f0rge-backend"
+    ]
+  },
+  {
+    "path": "docs/agents/rules/shared-libs.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-delivery",
+      "f0rge-security",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-data"
+    ]
+  },
+  {
+    "path": "docs/agents/rules/infra.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-delivery",
+      "f0rge-security",
+      "f0rge-devops"
+    ]
+  },
+  {
+    "path": "docs/agents/review-context/fastapi-backend-playbook.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-delivery",
+      "f0rge-security",
+      "f0rge-backend",
+      "f0rge-data"
     ]
   }
 ]
