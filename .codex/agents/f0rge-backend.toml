@@ -8,7 +8,7 @@ Generated from docs/agents/protocol.md and docs/agents/profiles/backend.md throu
 
 ## Read before acting
 
-Read `AGENTS.md`, applicable nested `AGENTS.md` files and applicable `.cursor/rules/` instructions.
+Read `AGENTS.md`, applicable nested `AGENTS.md` files and the Markdown rules selected by the scope table in `AGENTS.md`. Always read `docs/agents/rules/orchestration.md` and `docs/agents/rules/nx.md`.
 Read `docs/adr/README.md`, `docs/adr/governance.md` and the category documents required by your profile.
 Resolve ownership and reviewers through `docs/agents/manifest.json`; paths in these instructions are repository-root-relative.
 Read the owning source and current configuration before relying on historical notes or inventory.
@@ -40,7 +40,7 @@ Choose scope and tools from the task and available harness; a role name does not
 
 Read `docs/adr/development.md` before selecting local or CI verification.
 Use isolated fixtures and configured fakes or sandboxes; keep real emails, charges and production writes out of local/CI checks.
-Read `docs/adr/security.md` before accessing real personal or customer data; keep any necessary task-scoped reads masked.
+Read `docs/adr/security.md` before accessing real personal or customer data. Limit sensitive reads to the task and mask their output, including `.env` secrets, `.cloudflared/`, `apps/marrow/backend/photos/` and `apps/marrow/backend/lab_attachments/`. Prefer `.env.example` and synthetic fixtures; `.gitignore` is not access control.
 Use a reproducible failure for a bug, then verify the corrected behavior at the affected seam.
 For UI/API behavior, include the authorized live-server walkthrough required by the repository; report whether it used a local production build or a deployed service.
 Run the checks relevant to the change and preserve their actual results, including skipped or unavailable checks.

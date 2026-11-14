@@ -55,7 +55,8 @@ test('first matching owner never suppresses later or same-role independent revie
 
 test('generation is deterministic, self-contained, and inherits native model/tools/permissions', (t) => {
   const root = fixture(t);
-  assert.equal(generate(manifest, root), 16);
+  assert.equal(generate(manifest, root), 8);
+  assert.deepEqual(readdirSync(root).sort(), ['.codex', 'docs']);
   const first = adapterContents(manifest, root);
   generate(manifest, root);
   assert.deepEqual(adapterContents(manifest, root), first);
@@ -65,7 +66,7 @@ test('generation is deterministic, self-contained, and inherits native model/too
       if (!path.includes(role.id)) continue;
       const protocol = readFileSync(join(root, manifest.protocol), 'utf8').trim();
       const profile = readFileSync(join(root, role.profile), 'utf8').trim();
-      const decoded = path.endsWith('.toml') ? body.slice(body.indexOf('developer_instructions = """\n') + 'developer_instructions = """\n'.length, -4).replaceAll('\\"', '"').replaceAll('\\\\', '\\') : body;
+      const decoded = body.slice(body.indexOf('developer_instructions = """\n') + 'developer_instructions = """\n'.length, -4).replaceAll('\\"', '"').replaceAll('\\\\', '\\');
       assert.ok(decoded.includes(protocol));
       assert.ok(decoded.includes(profile));
       assert.ok(!/^(?:model|tools|permission_mode|sandbox_mode)\s*[:=]/mu.test(body));
@@ -85,28 +86,28 @@ test('adapter escaping preserves quotes, backslashes and triple quotes', (t) => 
 test('missing, edited and extra owned adapters fail; other namespaces are untouched', (t) => {
   const root = fixture(t);
   generate(manifest, root);
-  write(root, '.cursor/agents/personal-helper.md', 'other owner');
+  write(root, '.codex/agents/personal-helper.toml', 'other owner');
   assert.deepEqual(checkAdapters(manifest, root), []);
   rmSync(join(root, '.codex/agents/f0rge-data.toml'));
-  write(root, '.cursor/agents/f0rge-backend.md', 'manual edit');
-  write(root, '.cursor/agents/f0rge-unexpected.md', 'extra');
+  write(root, '.codex/agents/f0rge-backend.toml', 'manual edit');
+  write(root, '.codex/agents/f0rge-unexpected.toml', 'extra');
   const errors = checkAdapters(manifest, root);
   assert.ok(errors.some((error) => error.includes('Missing generated')));
   assert.ok(errors.some((error) => error.includes('adapter drift')));
   assert.ok(errors.some((error) => error.includes('Unexpected repository-owned')));
   generate(manifest, root);
-  assert.equal(readFileSync(join(root, '.cursor/agents/personal-helper.md'), 'utf8'), 'other owner');
-  assert.equal(readFileSync(join(root, '.cursor/agents/f0rge-unexpected.md'), 'utf8'), 'extra');
+  assert.equal(readFileSync(join(root, '.codex/agents/personal-helper.toml'), 'utf8'), 'other owner');
+  assert.equal(readFileSync(join(root, '.codex/agents/f0rge-unexpected.toml'), 'utf8'), 'extra');
 });
 
 test('check detects drift without repairing files or writing new files', (t) => {
   const root = fixture(t);
   generate(manifest, root);
-  const path = '.cursor/agents/f0rge-backend.md';
+  const path = '.codex/agents/f0rge-backend.toml';
   write(root, path, 'intentional drift');
-  const before = readdirSync(join(root, '.cursor/agents')).map((name) => [name, readFileSync(join(root, '.cursor/agents', name), 'utf8')]);
+  const before = readdirSync(join(root, '.codex/agents')).map((name) => [name, readFileSync(join(root, '.codex/agents', name), 'utf8')]);
   assert.ok(check(manifest, root, []).some((error) => error.includes('adapter drift')));
-  const after = readdirSync(join(root, '.cursor/agents')).map((name) => [name, readFileSync(join(root, '.cursor/agents', name), 'utf8')]);
+  const after = readdirSync(join(root, '.codex/agents')).map((name) => [name, readFileSync(join(root, '.codex/agents', name), 'utf8')]);
   assert.deepEqual(after, before);
 });
 
@@ -121,6 +122,9 @@ test('manifest rejects unknown/duplicate roles, invalid owner/reviewer and catch
     (m) => { m.primaryRules[0].patterns = ['**']; },
     (m) => { m.reviewerRules[0].reviewers = ['unknown']; },
     (m) => { m.adapters.push('unverified-harness'); },
+    (m) => { m.adapters = []; },
+    (m) => { m.adapters = ['unverified-harness']; },
+    (m) => { m.adapters = ['codex', 'codex']; },
     (m) => { m.schemaVersion = 2; },
   ];
   for (const mutate of mutations) {
@@ -144,11 +148,11 @@ test('missing source/ADR file and unknown or misplaced ADR IDs fail', (t) => {
 test('active obsolete dispatch/model/global loader requirements fail; provenance paths survive', (t) => {
   const root = fixture(t);
   const path = 'AGENTS.md';
-  for (const content of ['Delegate to `fastapi-backend`.', 'Use `devops` sub-agent.', 'model: composer-2.5', 'Read ~/.cursor/agents/backend.md.', 'Must read ~/.cursor/agent-memory/backend/MEMORY.md.']) {
+  for (const content of ['Delegate to `fastapi-backend`.', 'Use `devops` sub-agent.', 'model: pinned-model', 'model_provider = pinned-provider', 'Read ~/.codex/agents/backend.toml.', 'Must read ~/.codex/agent-memory/backend/MEMORY.md.', 'Before starting, read ~/.codex/memories_v2/summary.md.']) {
     write(root, path, content);
     assert.equal(checkLiveCallers(manifest, [path], root).length, 1, content);
   }
-  write(root, path, 'Historical provenance: frontend-dev/dnd_kit_grid_drag_reorder.md.\nRead .cursor/review-context/fastapi-backend-playbook.md.\nUse f0rge-devops and f0rge-backend.');
+  write(root, path, 'Historical provenance: frontend-dev/dnd_kit_grid_drag_reorder.md.\nRead docs/agents/review-context/fastapi-backend-playbook.md.\nUse f0rge-devops and f0rge-backend.');
   assert.deepEqual(checkLiveCallers(manifest, [path], root), []);
 });
 
@@ -174,7 +178,7 @@ test('generation rejects a later symlinked output before changing any earlier ou
     const outside = mkdtempSync(join(tmpdir(), 'f0rge-agents-external-'));
     t.after(() => rmSync(outside, { recursive: true, force: true }));
     const first = '.codex/agents/f0rge-backend.toml';
-    const linked = '.cursor/agents/f0rge-quality-testing.md';
+    const linked = '.codex/agents/f0rge-quality-testing.toml';
     const sentinel = join(outside, 'global-profile.md');
     write(root, first, 'earlier output must stay unchanged');
     mkdirSync(dirname(join(root, linked)), { recursive: true });
@@ -183,33 +187,28 @@ test('generation rejects a later symlinked output before changing any earlier ou
 
     assert.throws(() => generate(manifest, root), /symlink/iu);
     assert.equal(readFileSync(join(root, first), 'utf8'), 'earlier output must stay unchanged');
-    assert.deepEqual(readdirSync(join(root, '.codex/agents')), ['f0rge-backend.toml']);
-    assert.deepEqual(readdirSync(join(root, '.cursor/agents')), ['f0rge-quality-testing.md']);
+    assert.deepEqual(readdirSync(join(root, '.codex/agents')).sort(), ['f0rge-backend.toml', 'f0rge-quality-testing.toml']);
     assert.ok(lstatSync(join(root, linked)).isSymbolicLink());
     if (targetExists) assert.equal(readFileSync(sentinel, 'utf8'), 'external sentinel');
     else assert.equal(existsSync(sentinel), false);
   });
 });
 
-test('generation rejects symlinked output ancestors before writing either adapter family', async (t) => {
-  for (const linked of ['.cursor', '.cursor/agents']) await t.test(linked, (t) => {
+test('generation rejects symlinked output ancestors before writing adapters', async (t) => {
+  for (const linked of ['.codex', '.codex/agents']) await t.test(linked, (t) => {
     const root = fixture(t);
     const outside = mkdtempSync(join(tmpdir(), 'f0rge-agents-external-'));
     t.after(() => rmSync(outside, { recursive: true, force: true }));
-    const first = '.codex/agents/f0rge-backend.toml';
-    const externalAdapters = linked === '.cursor' ? join(outside, 'agents') : outside;
+    const externalAdapters = linked === '.codex' ? join(outside, 'agents') : outside;
     mkdirSync(externalAdapters, { recursive: true });
-    const sentinel = join(externalAdapters, 'f0rge-backend.md');
+    const sentinel = join(externalAdapters, 'f0rge-backend.toml');
     writeFileSync(sentinel, 'external sentinel');
-    write(root, first, 'earlier output must stay unchanged');
     mkdirSync(dirname(join(root, linked)), { recursive: true });
     symlinkSync(outside, join(root, linked), 'dir');
 
     assert.throws(() => generate(manifest, root), /symlink/iu);
-    assert.equal(readFileSync(join(root, first), 'utf8'), 'earlier output must stay unchanged');
-    assert.deepEqual(readdirSync(join(root, '.codex/agents')), ['f0rge-backend.toml']);
     assert.ok(lstatSync(join(root, linked)).isSymbolicLink());
     assert.equal(readFileSync(sentinel, 'utf8'), 'external sentinel');
-    assert.deepEqual(readdirSync(externalAdapters), ['f0rge-backend.md']);
+    assert.deepEqual(readdirSync(externalAdapters), ['f0rge-backend.toml']);
   });
 });
