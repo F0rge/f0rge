@@ -58,7 +58,7 @@
     "@playwright/test": "^1.62.1",
     "@types/react": "^19",
     "nx": "~23.2.1",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "dependencies": {
     "braces": "file:vendor/braces/braces-3.0.4-f0rge.1.tgz",
