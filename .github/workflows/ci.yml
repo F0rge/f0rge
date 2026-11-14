@@ -1,6 +1,6 @@
 name: CI
 
-# PR + push on main, plus workflow_dispatch: parallel backend/frontend/Rust via
+# PR + push on main, plus workflow_dispatch: parallel Python/frontend/Rust via
 # `nx affected` (no detect job) → `ci` gate. This workflow does not deploy
 # or authorize a production release.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
@@ -67,10 +67,10 @@ jobs:
             npx nx affected -t=lint,format-check,test,build --exclude='*,!tag:platform:rust' --base="${NX_BASE}" --head="${NX_HEAD}"
           fi
 
-  backend:
-    name: backend
+  python:
+    name: python
     concurrency:
-      group: ci-backend-${{ github.ref }}
+      group: ci-python-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -151,7 +151,7 @@ jobs:
 
       # Pytest is expensive (testcontainers). Runs for main.
       # workflow_dispatch uses run-many (full matrix).
-      - name: nx affected (backend)
+      - name: nx affected (python)
         env:
           TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
           EVENT_NAME: ${{ github.event_name }}
@@ -296,7 +296,7 @@ jobs:
 
   ci:
     name: ci
-    needs: [backend, frontend, rust]
+    needs: [python, frontend, rust]
     if: always()
     concurrency:
       group: ci-${{ github.ref }}
@@ -306,12 +306,12 @@ jobs:
     steps:
       - name: Aggregate gate
         env:
-          BACKEND_RESULT: ${{ needs.backend.result }}
+          PYTHON_RESULT: ${{ needs.python.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           RUST_RESULT: ${{ needs.rust.result }}
         run: |
-          if [ "$BACKEND_RESULT" != "success" ]; then
-            echo "backend job required but result was: $BACKEND_RESULT"
+          if [ "$PYTHON_RESULT" != "success" ]; then
+            echo "python job required but result was: $PYTHON_RESULT"
             exit 1
           fi
           if [ "$FRONTEND_RESULT" != "success" ]; then
