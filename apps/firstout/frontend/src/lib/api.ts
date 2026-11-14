@@ -507,6 +507,7 @@ export type Supplier = {
   id: string;
   name: string;
   default_currency: string;
+  is_archived: boolean;
   vat_number: string | null;
   address: string | null;
   created_at: string;
@@ -520,8 +521,22 @@ export type CreateSupplierPayload = {
   address?: string | null;
 };
 
-export function listSuppliers(): Promise<Supplier[]> {
-  return apiFetch<Supplier[]>("/suppliers");
+export type ArchiveCounts = { active: number; archived: number };
+
+export function listSuppliers(filters?: { archived?: boolean }): Promise<Supplier[]> {
+  const query = typeof filters?.archived === "boolean" ? `?archived=${filters.archived}` : "";
+  return apiFetch<Supplier[]>(`/suppliers${query}`);
+}
+
+export function getSupplierArchiveCounts(): Promise<ArchiveCounts> {
+  return apiFetch<ArchiveCounts>("/suppliers/archive-counts");
+}
+
+export function setSupplierArchived(id: string, isArchived: boolean): Promise<Supplier> {
+  return apiFetch<Supplier>(`/suppliers/${id}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_archived: isArchived }),
+  });
 }
 
 export function createSupplier(payload: CreateSupplierPayload): Promise<Supplier> {
@@ -4324,6 +4339,7 @@ export const PRICE_CLASSIFICATIONS: PriceClassification[] = [
 export type CustomerCrm = {
   id: string;
   name: string;
+  is_archived: boolean;
   email: string | null;
   phone: string | null;
   whatsapp_e164?: string | null;
@@ -4352,6 +4368,7 @@ export type CustomerCrm = {
 };
 
 export type CustomerListFilters = {
+  archived?: boolean;
   overdue?: boolean;
   active_layby?: boolean;
   on_hold?: boolean;
@@ -4364,6 +4381,7 @@ export type CustomerDuplicateMatch = {
   email: string | null;
   phone: string | null;
   matched_fields: Array<"name" | "email" | "phone">;
+  is_archived: boolean;
 };
 
 export type CreateCustomerPayload = {
@@ -4407,6 +4425,9 @@ export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
 
 export function listCustomers(filters?: CustomerListFilters): Promise<CustomerCrm[]> {
   const params = new URLSearchParams();
+  if (typeof filters?.archived === "boolean") {
+    params.set("archived", String(filters.archived));
+  }
   if (filters?.overdue) {
     params.set("overdue", "true");
   }
@@ -4422,6 +4443,17 @@ export function listCustomers(filters?: CustomerListFilters): Promise<CustomerCr
   }
   const qs = params.toString();
   return apiFetch<CustomerCrm[]>(qs ? `/customers?${qs}` : "/customers");
+}
+
+export function getCustomerArchiveCounts(): Promise<ArchiveCounts> {
+  return apiFetch<ArchiveCounts>("/customers/archive-counts");
+}
+
+export function setCustomerArchived(id: string, isArchived: boolean): Promise<CustomerCrm> {
+  return apiFetch<CustomerCrm>(`/customers/${id}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_archived: isArchived }),
+  });
 }
 
 export function findCustomerDuplicates(query: {
@@ -4832,6 +4864,6 @@ export function listStockByBin(
   return apiFetch<Page<StockByBinRow>>(`/stock/by-bin?${recordsQuery(params, filters)}`);
 }
 
-export function getSupplier(id: string): Promise<Supplier | undefined> {
-  return listSuppliers().then((rows) => rows.find((row) => row.id === id));
+export function getSupplier(id: string): Promise<Supplier> {
+  return apiFetch<Supplier>(`/suppliers/${id}`);
 }

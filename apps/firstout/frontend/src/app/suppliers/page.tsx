@@ -17,16 +17,20 @@ import {
   TextInput,
 } from "@carbon/react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PartyArchiveTabs } from "@/components/party-archive-actions";
 
 import {
   canMutateCatalogue,
   createSupplier,
   getSupplierLeadTimes,
+  getSupplierArchiveCounts,
   listSuppliers,
   type CreateSupplierPayload,
   type Supplier,
   type SupplierLeadTimeRow,
+  type ArchiveCounts,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatObservedMedianLine, supplierLeadTimeById } from "@/lib/lead-times";
@@ -50,39 +54,50 @@ const emptyCreateForm: CreateSupplierPayload = {
   default_currency: "",
 };
 
-export default function SuppliersPage() {
+function SuppliersScreen() {
+  const router = useRouter();
+  const archived = useSearchParams().get("archived") === "true";
   const { user } = useAuth();
   const canMutate = canMutateCatalogue(user);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [leadTimes, setLeadTimes] = useState<SupplierLeadTimeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [counts, setCounts] = useState<ArchiveCounts | null>(null);
+  const requestId = useRef(0);
   const [searchFilter, setSearchFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateSupplierPayload>(emptyCreateForm);
   const [saving, setSaving] = useState(false);
 
   const loadSuppliers = useCallback(async () => {
+    const request = ++requestId.current;
     setLoading(true);
+    setSuppliers([]);
     setError(null);
     try {
-      const [data, leadReport] = await Promise.all([
-        listSuppliers(),
+      const [data, leadReport, archiveCounts] = await Promise.all([
+        listSuppliers({ archived }),
         getSupplierLeadTimes().catch(() => ({ rows: [] as SupplierLeadTimeRow[] })),
+        getSupplierArchiveCounts(),
       ]);
+      if (request !== requestId.current) return;
       setSuppliers(data);
       setLeadTimes(leadReport.rows);
+      setCounts(archiveCounts);
     } catch (err) {
+      if (request !== requestId.current) return;
       setError(err instanceof Error ? err.message : "Failed to load suppliers.");
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
-  }, []);
+  }, [archived]);
 
   useEffect(() => {
     if (user) {
       void loadSuppliers();
     }
+    return () => { requestId.current += 1; };
   }, [user, loadSuppliers]);
 
   const leadBySupplier = supplierLeadTimeById(leadTimes);
@@ -100,7 +115,7 @@ export default function SuppliersPage() {
 
   const { page, pageSize, pagedItems, totalItems, onPaginationChange } = useClientPagination(
     filteredSuppliers,
-    searchFilter,
+    `${archived}:${searchFilter}`,
   );
 
   const rows: SupplierRow[] = pagedItems.map((entry) => ({
@@ -139,7 +154,7 @@ export default function SuppliersPage() {
           <h1 className="cds--type-productive-heading-04">Suppliers</h1>
           <p className="cds--type-body-01">Furniture suppliers and their default currencies.</p>
         </div>
-        {canMutate ? (
+        {canMutate && !archived ? (
           <Button onClick={() => setCreateOpen(true)}>Add supplier</Button>
         ) : null}
       </div>
@@ -154,13 +169,24 @@ export default function SuppliersPage() {
         />
       ) : null}
 
+      <PartyArchiveTabs
+        kind="suppliers"
+        archived={archived}
+        counts={counts}
+        onChange={(next) => {
+          setCreateOpen(false);
+          router.replace(`/suppliers${next ? "?archived=true" : ""}`, { scroll: false });
+        }}
+      >
       {loading ? (
         <p className="cds--type-body-01">Loading suppliers…</p>
+      ) : error ? (
+        <Button kind="tertiary" onClick={() => void loadSuppliers()}>Retry loading suppliers</Button>
       ) : suppliers.length === 0 ? (
         <InlineNotification
           kind="info"
-          title="No suppliers"
-          subtitle="No suppliers have been added yet."
+          title={archived ? "No archived suppliers" : "No active suppliers"}
+          subtitle={archived ? "Archived suppliers will appear here with their account details and history preserved." : "No active suppliers have been added yet."}
           hideCloseButton
           lowContrast
         />
@@ -180,7 +206,7 @@ export default function SuppliersPage() {
           </div>
           <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
             {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <TableContainer title="Suppliers" description="All Firstout suppliers">
+              <TableContainer title={archived ? "Archived suppliers" : "Active suppliers"} description="Supplier accounts and purchasing history">
                 <Table {...getTableProps()}>
                   <TableHead>
                     <TableRow>
@@ -225,6 +251,7 @@ export default function SuppliersPage() {
           />
         </div>
       )}
+      </PartyArchiveTabs>
 
       <Modal
         open={createOpen}
@@ -258,4 +285,8 @@ export default function SuppliersPage() {
       </Modal>
     </Stack>
   );
+}
+
+export default function SuppliersPage() {
+  return <Suspense fallback={<p className="cds--type-body-01">Loading suppliers…</p>}><SuppliersScreen /></Suspense>;
 }

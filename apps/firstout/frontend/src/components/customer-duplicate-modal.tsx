@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, InlineNotification, Modal, Stack } from "@carbon/react";
+import { Button, InlineNotification, Modal, Stack, Tag } from "@carbon/react";
 
 import type { CustomerDuplicateMatch } from "@/lib/api";
 
@@ -63,6 +63,7 @@ export function CustomerDuplicateModal({
             <div key={match.id}>
               <p className="cds--type-body-compact-01" style={{ fontWeight: 600 }}>
                 {match.name}
+                {match.is_archived ? <Tag type="gray">Archived</Tag> : null}
               </p>
               <p className="cds--type-body-compact-01 firstout-break-text">
                 {match.email || "No email"} · {match.phone || "No cell"}
@@ -70,6 +71,7 @@ export function CustomerDuplicateModal({
               <p className="firstout-muted-text" style={{ marginBottom: "0.5rem" }}>
                 Matched {match.matched_fields.map((field) => FIELD_LABELS[field]).join(", ")}
               </p>
+              {match.is_archived ? <p className="cds--type-body-compact-01" style={{ marginBottom: "0.5rem" }}>This account is archived. Open it to restore the existing account.</p> : null}
               <Button
                 kind="tertiary"
                 size="sm"
@@ -80,7 +82,7 @@ export function CustomerDuplicateModal({
                   onOpenExisting(match.id);
                 }}
               >
-                Open existing customer
+                {match.is_archived ? "Open archived customer" : "Open existing customer"}
               </Button>
             </div>
           ))

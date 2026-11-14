@@ -20,6 +20,7 @@ from app.schemas.customer_crm import (
     CustomerCrmUpdate,
     CustomerDuplicateMatch,
 )
+from app.schemas.party_archive import PartyArchiveCounts
 from app.services.draft_reprice import DraftRepriceService
 from app.services.pricing import (
     classification_for_legacy_customer_type,
@@ -38,6 +39,7 @@ from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
 from app.services.permissions import PermissionService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+from f0rge_db.organisation import tenant_id_ctx
 
 CREDIT_PATCH_FIELDS = frozenset({"credit_limit", "on_hold", "on_hold_reason"})
 PROFILE_PATCH_FIELDS = frozenset(
@@ -69,8 +71,9 @@ class CustomersCrmService:
         active_layby: Optional[bool] = None,
         on_hold: Optional[bool] = None,
         q: Optional[str] = None,
+        archived: bool = False,
     ) -> list[CustomerCrmResponse]:
-        customers = await self.crud.list_all(q=q)
+        customers = await self.crud.list_all(q=q, archived=archived)
         responses = await self._to_responses(customers)
         if overdue is not None:
             responses = [row for row in responses if (row.overdue_invoices_count > 0) is overdue]
@@ -79,6 +82,18 @@ class CustomersCrmService:
         if on_hold is not None:
             responses = [row for row in responses if row.on_hold is on_hold]
         return responses
+
+    async def archive_counts(self) -> PartyArchiveCounts:
+        active, archived = await self.crud.archive_counts()
+        return PartyArchiveCounts(active=active, archived=archived)
+
+    async def set_archived(self, customer_id: uuid.UUID, is_archived: bool) -> CustomerCrmResponse:
+        customer = await self.crud.get_by_id(customer_id)
+        if customer is None:
+            raise NotFoundError("Customer not found")
+        async with unit_of_work(self.db):
+            customer.is_archived = is_archived
+        return await self.get(customer.id)
 
     async def find_duplicates(
         self,
@@ -103,7 +118,7 @@ class CustomersCrmService:
             (
                 await self.db.execute(
                     select(Customer)
-                    .where(or_(*filters))
+                    .where(Customer.team_id == tenant_id_ctx.get(), or_(*filters))
                     .order_by(Customer.name)
                     .limit(50)
                     .execution_options(populate_existing=True)
@@ -128,6 +143,7 @@ class CustomersCrmService:
                 CustomerDuplicateMatch(
                     id=customer.id,
                     name=customer.name,
+                    is_archived=customer.is_archived,
                     email=customer.email,
                     phone=customer.phone,
                     matched_fields=matched,
@@ -272,6 +288,7 @@ class CustomersCrmService:
         return CustomerCrmResponse(
             id=customer.id,
             name=customer.name,
+            is_archived=customer.is_archived,
             email=customer.email,
             phone=customer.phone,
             vat_number=customer.vat_number,

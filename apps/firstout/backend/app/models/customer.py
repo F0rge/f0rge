@@ -73,6 +73,12 @@ class Customer(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         server_default="Retail",
     )
     credit_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2), nullable=True)
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     on_hold: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -96,6 +102,7 @@ class Customer(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("team_id", "id", name="uq_customers_team_id_id"),
+        Index("ix_customers_team_id_is_archived", "team_id", "is_archived"),
         CheckConstraint(
             "price_classification IN ('Stockist', 'Wholesale', 'Decorator', 'Retail')",
             name="ck_customers_price_classification",

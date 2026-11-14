@@ -23,6 +23,7 @@ from app.models.team import Team
 from app.services.clerk import ClerkSession
 from app.services.clerk_api import ClerkAPI, verified_primary_email
 from app.services.permissions import PermissionService
+from app.services.party_archive import assert_customer_active
 from app.services.staff_identity import staff_identity_ctx
 from app.services.tenant_host import require_matching_host
 from f0rge_core.exceptions import (
@@ -99,6 +100,7 @@ class PortalIdentityService:
 
     async def invite(self, customer_id: uuid.UUID, email: str) -> dict:
         customer, team, actor = await self._staff_customer(customer_id)
+        assert_customer_active(customer)
         raw = secrets.token_urlsafe(32)
         invite = PortalInvitation(
             organisation_id=team.id,
@@ -262,6 +264,7 @@ class PortalIdentityService:
             )
             if customer is None:
                 raise ValidationError("This customer approval is unavailable")
+            assert_customer_active(customer)
             access = await self.db.scalar(
                 select(PortalAccess)
                 .where(

@@ -50,6 +50,7 @@ class DraftRepriceResponse(BaseModel):
 class CustomerDuplicateMatch(BaseModel):
     id: uuid.UUID
     name: str
+    is_archived: bool
     email: Optional[str] = None
     phone: Optional[str] = None
     matched_fields: list[Literal["name", "email", "phone"]]
@@ -58,6 +59,7 @@ class CustomerDuplicateMatch(BaseModel):
 class CustomerCrmResponse(BaseModel):
     id: uuid.UUID
     name: str
+    is_archived: bool
     email: Optional[str] = None
     phone: Optional[str] = None
     vat_number: Optional[str] = None

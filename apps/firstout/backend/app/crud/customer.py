@@ -15,6 +15,7 @@ from app.models.tax_invoice import TaxInvoice
 from app.services.customer_match import customer_search_clause
 from app.services.payment_terms import invoice_overdue_predicate
 from f0rge_db.crud import BaseCRUD
+from f0rge_db.organisation import tenant_id_ctx
 
 
 @dataclass(frozen=True)
@@ -38,16 +39,37 @@ class CustomerCRUD(BaseCRUD):
 
     async def get_by_id(self, customer_id: uuid.UUID) -> Optional[Customer]:
         return (
-            await self.db.execute(select(Customer).where(Customer.id == customer_id))
+            await self.db.execute(
+                select(Customer).where(
+                    Customer.id == customer_id, Customer.team_id == tenant_id_ctx.get()
+                )
+            )
         ).scalar_one_or_none()
 
-    async def list_all(self, q: Optional[str] = None) -> list[Customer]:
-        stmt = select(Customer).order_by(Customer.name)
+    async def list_all(self, q: Optional[str] = None, archived: bool = False) -> list[Customer]:
+        stmt = (
+            select(Customer)
+            .where(Customer.team_id == tenant_id_ctx.get(), Customer.is_archived.is_(archived))
+            .order_by(Customer.name)
+        )
         clause = customer_search_clause(q)
         if clause is not None:
             stmt = stmt.where(clause)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def archive_counts(self) -> tuple[int, int]:
+        row = (
+            await self.db.execute(
+                select(
+                    func.count().filter(Customer.is_archived.is_(False)),
+                    func.count().filter(Customer.is_archived.is_(True)),
+                )
+                .select_from(Customer)
+                .where(Customer.team_id == tenant_id_ctx.get())
+            )
+        ).one()
+        return int(row[0]), int(row[1])
 
     async def invoice_aggregates_for_customers(
         self,

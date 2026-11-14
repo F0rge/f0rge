@@ -81,6 +81,7 @@ export default function RepeatingInvoicesPage() {
   const canMutate = canMutateBooks(user);
   const [schedules, setSchedules] = useState<RepeatingInvoice[]>([]);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
+  const [archivedCustomers, setArchivedCustomers] = useState<CustomerCrm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -95,22 +96,25 @@ export default function RepeatingInvoicesPage() {
 
   const customerNameById = useMemo(() => {
     const names = new Map<string, string>();
-    for (const customer of customers) {
+    for (const customer of [...customers, ...archivedCustomers]) {
       names.set(customer.id, customer.name);
     }
     return names;
-  }, [customers]);
+  }, [customers, archivedCustomers]);
+  const archivedCustomerIds = useMemo(() => new Set(archivedCustomers.map((customer) => customer.id)), [archivedCustomers]);
 
   const loadSchedules = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [scheduleData, customerData] = await Promise.all([
+      const [scheduleData, customerData, archivedData] = await Promise.all([
         listRepeatingInvoices(),
         listCustomers(),
+        listCustomers({ archived: true }),
       ]);
       setSchedules(scheduleData);
       setCustomers(customerData);
+      setArchivedCustomers(archivedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load repeating invoices.");
     } finally {
@@ -301,6 +305,9 @@ export default function RepeatingInvoicesPage() {
                     return (
                       <TableRow {...getRowProps({ row })} key={row.id}>
                         {row.cells.map((cell) => {
+                          if (cell.info.header === "customer_name" && entry) {
+                            return <TableCell key={cell.id}>{cell.value}{archivedCustomerIds.has(entry.customer_id) ? <Tag type="gray">Archived customer</Tag> : null}</TableCell>;
+                          }
                           if (cell.info.header === "status" && entry) {
                             return (
                               <TableCell key={cell.id}>
@@ -313,7 +320,7 @@ export default function RepeatingInvoicesPage() {
                           if (cell.info.header === "actions") {
                             return (
                               <TableCell key={cell.id}>
-                                {canMutate && entry?.is_active ? (
+                                {canMutate && entry?.is_active && !archivedCustomerIds.has(entry.customer_id) ? (
                                   <Button
                                     kind="ghost"
                                     size="sm"
@@ -323,6 +330,7 @@ export default function RepeatingInvoicesPage() {
                                     {busy ? "Running…" : "Run now"}
                                   </Button>
                                 ) : null}
+                                {entry && archivedCustomerIds.has(entry.customer_id) ? <Button kind="ghost" size="sm" href={`/customers/${entry.customer_id}`}>Open archived customer</Button> : null}
                               </TableCell>
                             );
                           }
