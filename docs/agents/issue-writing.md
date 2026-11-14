@@ -29,4 +29,3 @@ References:
 - [Osmani — How to write a good spec for AI agents](https://addyosmani.com/blog/good-spec/)
 - [GitHub — Getting the best results from Copilot coding agent](https://docs.github.com/en/copilot/tutorials/cloud-agent/get-the-best-results)
 - [GitHub — Reliable AI workflows with agentic primitives and context engineering](https://github.blog/ai-and-ml/github-copilot/how-to-build-reliable-ai-workflows-with-agentic-primitives-and-context-engineering/)
-

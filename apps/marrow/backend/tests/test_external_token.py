@@ -268,7 +268,7 @@ async def test_copy_is_idempotent(async_db: AsyncSession) -> None:
 def test_token_name_is_required_and_trimmed() -> None:
     from pydantic import ValidationError
 
-    assert ExternalTokenCreate(name="  cursor  ").name == "cursor"
+    assert ExternalTokenCreate(name="  codex  ").name == "codex"
     with pytest.raises(ValidationError):
         ExternalTokenCreate(name="   ")
     with pytest.raises(ValidationError):
