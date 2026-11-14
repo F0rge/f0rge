@@ -1,8 +1,8 @@
 name: CI
 
 # PR + push on main, plus workflow_dispatch: parallel backend/frontend via
-# `nx affected` (no detect job) → `ci` gate. Deploy is a separate workflow
-# (deploy.yml) after this succeeds on push.
+# `nx affected` (no detect job) → `ci` gate. This workflow does not deploy
+# or authorize a production release.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
 # Tests (pytest / frontend unit / e2e-smoke) run for main.
 

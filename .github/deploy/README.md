@@ -21,9 +21,11 @@ grammar and corresponding protected tag allowlist need design before a
 tag-triggered release.
 
 No separate release requester has been verified. `workflow_run` does not by
-itself establish a bot identity. A token with repository Actions write access
-can also rerun historical workflows; do not grant it until historical release
-paths and production credentials are contained. Before activation, verify a
+itself establish a bot identity. A candidate private GitHub App and its
+setup and validation plan are documented in [release-requester-app.md](release-requester-app.md).
+A token with repository Actions write access can enable disabled workflows and
+rerun historical workflows; do not grant it until historical release paths and
+production credentials are contained. Before activation, verify a
 separate least-privilege requester, Leo's independent approval, and fresh
 approval on reruns in an isolated nonproduction setting.
 
@@ -49,6 +51,7 @@ The documented Railway deployment metadata and Coolify configuration inspected
 so far do not independently establish each running instance's image digest.
 Provider verification remains a release blocker until a trusted source and
 nonproduction rehearsal establish the exact running image, target and health.
+See the [provider verification design](provider-verification.md).
 
 Expiry and replay enforcement are not implemented here. Before activation,
 test that an expired review is rejected and that reusing the same approved
@@ -94,8 +97,10 @@ outside this manifest; verify both services separately for an approved release.
 
 The former workflow used `COOLIFY_BASE_URL` and per-component
 `COOLIFY_WEBHOOK_*` values, with optional `SMOKE_EMAIL` and `SMOKE_PASSWORD`
-for Railway smoke. Their location, current consumers and provider permissions
-require a separate live audit. The new inert workflows neither receive nor use
+for Railway smoke. A read-only GitHub inventory on 14 November 2026 confirmed
+repository-level Coolify and smoke secret names remain present; their values
+were not read. Consumers and provider permissions require further verification.
+The new inert workflows neither receive nor use
 these values. Any future production credentials must be restricted to an
 approved protected environment and unavailable to ungated jobs.
 
@@ -123,5 +128,7 @@ See also [manifest.yml](manifest.yml) and [plan_deploy.py](plan_deploy.py).
 
 The former `workflow_run` deployment used the default branch's workflow files.
 Historical reruns can use historical workflow definitions, so removing a trigger
-from a new revision does not prove those paths are closed. Verify their controls
-before activating any release mechanism.
+from a new revision does not prove those paths are closed. On 14 November 2026
+the old Deploy workflow was disabled, but a successful historical run was
+still within GitHub's rerun window. Actions write can re-enable a disabled
+workflow. Verify controls before activating any release mechanism.
