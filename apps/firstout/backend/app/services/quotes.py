@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
+from app.services.party_archive import assert_customer_active
 from app.crud.quote import QuoteCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.user import UserCRUD
@@ -72,6 +73,7 @@ class QuotesService:
 
     async def create(self, data: QuoteCreate, user_id: uuid.UUID) -> QuoteResponse:
         customer = await self._require_customer(data.customer_id)
+        assert_customer_active(customer)
         role = await self._actor_role(user_id)
         line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
             customer,
@@ -105,6 +107,7 @@ class QuotesService:
         lines: list[tuple[uuid.UUID, int, Decimal, str]],
     ) -> QuoteResponse:
         customer = await self._require_customer(customer_id)
+        assert_customer_active(customer)
         models: list[QuoteLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -158,6 +161,8 @@ class QuotesService:
         customer = quote.customer
         if data.customer_id is not None:
             customer = await self._require_customer(data.customer_id)
+            if data.customer_id != quote.customer_id:
+                assert_customer_active(customer)
             quote.customer_id = customer.id
         if data.notes is not None:
             quote.notes = data.notes

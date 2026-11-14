@@ -33,6 +33,7 @@ from app.services.chart_of_accounts import (
 )
 from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.payment_terms import compute_due_date
+from app.services.party_archive import require_active_customer
 from app.services.pricing import (
     format_pdf_unit,
     pdf_unit_basis_note,
@@ -81,9 +82,7 @@ class InvoiceService:
     async def create(
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
     ) -> InvoiceResponse:
-        customer = await self.customer_crud.get_by_id(data.customer_id)
-        if customer is None:
-            raise NotFoundError("Customer not found")
+        customer = await require_active_customer(self.db, data.customer_id)
         await assert_date_postable(self.db, data.issue_date)
 
         subtotal = Decimal(0)

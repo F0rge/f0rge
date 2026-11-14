@@ -1,13 +1,14 @@
 "use client";
 
-import { Button, InlineNotification, Stack, Tile } from "@carbon/react";
+import { Button, InlineNotification, Stack, Tag, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CustomerPortalAccessPanel } from "@/components/customer-portal-access";
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
 import { SalesHistoryTable } from "@/components/records/history-tables";
 import { PartyRecords } from "@/components/records/party-records";
+import { PartyArchiveAction } from "@/components/party-archive-actions";
 import {
   CustomerFormFields,
   RepriceDraftsModal,
@@ -22,6 +23,7 @@ import {
   getCustomer,
   listPriceLists,
   repriceCustomerDrafts,
+  setCustomerArchived,
   updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
@@ -65,19 +67,29 @@ export default function CustomerDetailPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [repriceOpen, setRepriceOpen] = useState(false);
   const [repriceBusy, setRepriceBusy] = useState(false);
+  const requestId = useRef(0);
 
   const loadCustomer = useCallback(async () => {
+    const request = ++requestId.current;
     setLoading(true);
+    setCustomer(null);
+    setPriceLists([]);
     setError(null);
+    setSuccess(null);
+    setRepriceOpen(false);
+    setSaving(false);
+    setRepriceBusy(false);
     try {
       const [data, lists] = await Promise.all([getCustomer(params.id), listPriceLists()]);
+      if (request !== requestId.current) return;
       setCustomer(data);
       setPriceLists(lists);
       setForm(formFromCustomer(data));
     } catch (err) {
+      if (request !== requestId.current) return;
       setError(err instanceof Error ? err.message : "Failed to load customer.");
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
   }, [params.id]);
 
@@ -85,10 +97,11 @@ export default function CustomerDetailPage() {
     if (user && params.id) {
       void loadCustomer();
     }
+    return () => { requestId.current += 1; };
   }, [user, params.id, loadCustomer]);
 
   async function handleSave() {
-    if (!customer || !canMutate) {
+    if (!customer || customer.id !== params.id || !canMutate) {
       return;
     }
     if (!form.name.trim()) {
@@ -96,11 +109,13 @@ export default function CustomerDetailPage() {
       return;
     }
     setSaving(true);
+    const request = requestId.current;
     setError(null);
     setSuccess(null);
     try {
       const previous = customer.price_classification;
       const updated = await updateCustomer(customer.id, customerWritePayload(form, canEditCredit));
+      if (request !== requestId.current) return;
       setCustomer(updated);
       setForm(formFromCustomer(updated));
       const drafts = (updated.draft_quote_count ?? 0) + (updated.draft_sales_order_count ?? 0);
@@ -111,43 +126,67 @@ export default function CustomerDetailPage() {
         setSuccess("Customer updated.");
       }
     } catch (err) {
+      if (request !== requestId.current) return;
       setError(err instanceof Error ? err.message : "Failed to update customer.");
     } finally {
-      setSaving(false);
+      if (request === requestId.current) setSaving(false);
     }
   }
 
   async function confirmReprice() {
-    if (!customer) {
+    if (!customer || customer.id !== params.id) {
       return;
     }
     setRepriceBusy(true);
+    const request = requestId.current;
     setError(null);
     try {
       const result = await repriceCustomerDrafts(customer.id);
+      if (request !== requestId.current) return;
       setRepriceOpen(false);
       setSuccess(
         `Repriced ${result.quotes} draft quotes and ${result.sales_orders} draft sales orders. Issued invoices were left unchanged.`,
       );
     } catch (err) {
+      if (request !== requestId.current) return;
       setError(err instanceof Error ? err.message : "Could not reprice drafts.");
     } finally {
-      setRepriceBusy(false);
+      if (request === requestId.current) setRepriceBusy(false);
     }
+  }
+
+  if (loading || (customer !== null && customer.id !== params.id)) {
+    return <p className="cds--type-body-01">Loading customer…</p>;
   }
 
   return (
     <Stack gap={6}>
       <div className="firstout-page-header">
         <div>
-          <Button kind="ghost" size="sm" onClick={() => router.push("/customers")}>
+          <Button kind="ghost" size="sm" onClick={() => router.push(`/customers${customer?.is_archived ? "?archived=true" : ""}`)}>
             Back to customers
           </Button>
           <h1 className="cds--type-productive-heading-04">{customer?.name ?? "Customer"}</h1>
+          {customer?.is_archived ? <Tag type="gray">Archived</Tag> : null}
           {customer ? <CustomerCrmBadges customer={customer} /> : null}
         </div>
         {customer ? (
           <div className="firstout-catalogue-actions">
+            {canMutate ? <PartyArchiveAction
+              key={customer.id}
+              kind="customer"
+              name={customer.name}
+              archived={customer.is_archived}
+              disabled={loading || saving || repriceBusy}
+              onConfirm={async () => {
+                const request = requestId.current;
+                const updated = await setCustomerArchived(customer.id, !customer.is_archived);
+                if (request !== requestId.current) return;
+                setCustomer(updated);setForm(formFromCustomer(updated));
+                setRepriceOpen(false);
+                setSuccess(updated.is_archived ? "Customer archived. Account details and history are preserved." : "Customer restored to the active list.");
+              }}
+            /> : null}
             <Button
               kind="tertiary"
               onClick={() => router.push(`/invoices?customer=${customer.id}`)}
@@ -180,6 +219,8 @@ export default function CustomerDetailPage() {
           lowContrast
         />
       ) : null}
+
+      {customer?.is_archived ? <InlineNotification kind="info" title="This customer is archived" subtitle="Contacts, terms and available history are preserved. Restore the account before using it in new transactions." hideCloseButton lowContrast /> : null}
 
       {loading ? (
         <p className="cds--type-body-01">Loading customer…</p>
@@ -230,11 +271,11 @@ export default function CustomerDetailPage() {
             </Stack>
           </Tile>
 
-          {canMutate && customer.customer_type === "trade" ? (
+          {canMutate && !customer.is_archived && customer.customer_type === "trade" ? (
             <CustomerPortalAccessPanel key={customer.id} customerId={customer.id} defaultEmail={customer.email ?? ""} />
           ) : null}
 
-          {canMutate ? (
+          {canMutate && !customer.is_archived ? (
             <Tile>
               <Stack gap={5}>
                 <h2 className="cds--type-productive-heading-03">Edit profile</h2>
