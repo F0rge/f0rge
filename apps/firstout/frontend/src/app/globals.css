@@ -291,10 +291,26 @@ body {
   max-width: 100%;
 }
 
-.firstout-header-create {
+.firstout-header-organisation {
+  display: flex;
   align-self: center;
-  margin-inline: 1rem;
-  color: var(--cds-text-on-color);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 18rem;
+  margin-inline-end: 1rem;
+}
+
+.firstout-organisation-switcher,
+.firstout-organisation-switcher-trigger {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.firstout-organisation-switcher-name {
+  display: block;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -308,6 +324,86 @@ body {
   width: 100%;
   max-width: 48rem;
   margin-inline: auto;
+}
+
+.firstout-onboarding-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.firstout-onboarding-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+.firstout-onboarding-account p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.firstout-onboarding-account-label,
+.firstout-onboarding-description,
+.firstout-business-address {
+  color: var(--cds-text-secondary);
+}
+
+.firstout-onboarding-account .cds--btn {
+  flex-shrink: 0;
+}
+
+.firstout-onboarding-tabs {
+  width: 100%;
+}
+
+.firstout-onboarding-panel.cds--tab-content {
+  padding: 1.5rem 0 0;
+}
+
+.firstout-business-card.cds--tile {
+  padding: 1.5rem;
+}
+
+.firstout-business-card article {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  height: 100%;
+  min-height: 9rem;
+}
+
+.firstout-business-card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.firstout-business-card-heading svg {
+  flex-shrink: 0;
+  color: var(--cds-icon-secondary);
+}
+
+.firstout-business-card-heading h2 {
+  overflow-wrap: anywhere;
+}
+
+.firstout-business-card .cds--btn {
+  margin-top: auto;
+  width: 100%;
+  max-width: none;
+}
+
+.firstout-onboarding-empty.cds--tile {
+  padding: 2rem;
+}
+
+.firstout-onboarding-create {
+  max-width: 40rem;
 }
 
 .firstout-organisation-content {
@@ -352,9 +448,14 @@ body {
 
 @media (max-width: 42rem) {
   .firstout-onboarding-page { padding: 2rem 1rem; }
+  .firstout-onboarding-header { align-items: flex-start; gap: 1rem; }
+  .firstout-onboarding-header > img { width: 40px; height: 40px; }
+  .firstout-onboarding-account { align-items: flex-start; }
+  .firstout-onboarding-account-label { display: block; }
   .firstout-organisation-form-grid,
   .firstout-organisation-workspaces { grid-template-columns: minmax(0, 1fr); }
-  .firstout-header-create { margin-inline: 0.5rem; white-space: normal; max-width: 6rem; }
+  .firstout-header-organisation { max-width: 8rem; margin-inline-end: 0.5rem; }
+  .firstout-organisation-switcher-name { max-width: 4.5rem; }
 }
 
 .firstout-brand.cds--header__name {

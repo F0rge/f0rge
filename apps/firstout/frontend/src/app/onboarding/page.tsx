@@ -9,11 +9,13 @@ import { OrganisationOnboarding } from "@/components/organisation-onboarding";
 export default function OnboardingPage() {
   return <Theme theme="g10"><main className="firstout-onboarding-page">
     <section className="firstout-onboarding-content"><Stack gap={7}>
-      <header><Stack gap={4}>
-        <Image src="/brand/logo-transparent.png" alt="Firstout" width={72} height={72} />
-        <h1 className="cds--type-productive-heading-05">Your business, ready to work</h1>
-        <p className="cds--type-body-02">Create a free organisation or open one you already belong to.</p>
-      </Stack></header>
+      <header className="firstout-onboarding-header">
+        <Image src="/brand/logo-transparent.png" alt="Firstout" width={48} height={48} />
+        <Stack gap={3}>
+          <h1 className="cds--type-productive-heading-04">Choose your business</h1>
+          <p className="cds--type-body-02">Your team, stock and books, in one workspace.</p>
+        </Stack>
+      </header>
       {clerkEnabled ? <OrganisationOnboarding /> : <p>Organisation signup is not enabled yet.</p>}
     </Stack></section>
   </main></Theme>;
