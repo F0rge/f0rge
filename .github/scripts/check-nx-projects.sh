@@ -61,7 +61,7 @@ done < <(find apps libs \( -name package.json -o -name pyproject.toml \) -print0
 
 # Root package.json is the workspace root — not an Nx project.
 if [[ $fail -ne 0 ]]; then
-  echo "Nx project registration check failed. See .cursor/rules/nx.mdc"
+  echo "Nx project registration check failed. See docs/agents/rules/nx.md"
   exit 1
 fi
 echo "Nx project registration check OK"

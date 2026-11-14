@@ -1,6 +1,6 @@
 # F0rge — Agent Instructions
 
-This is the repository entry point for coding agents. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
+This is the repository entry point for Codex. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
 
 Personal Nx monorepo for Marrow, Firstout, DasKasas storefront and tag printer, Buycycle, Environment Monitor, and Airflow.
 
@@ -36,7 +36,7 @@ Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `z
 | Redis | `Redis` | via `REDIS_URL` |
 | Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
-Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. These are provider configuration references; current runtime state has not been checked for this release-hold change. The proposed GitHub release entry points perform no deployment or production smoke. See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
+Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. These are provider configuration references; current runtime state has not been checked for this release-hold change. The proposed GitHub release entry points perform no deployment or production smoke. See [README.md](README.md#cicd), [`docs/agents/rules/infra.md`](docs/agents/rules/infra.md), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
 ## apps/buycycle
 
 Internal buycycle deal-finder dashboards on the Pi (Coolify, ports 8095/8096, no domain). See [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md). Public repo: never commit its DBs, data or feed key.
@@ -74,7 +74,7 @@ DasKasas public storefront and Medusa commerce service. Nx projects: `daskasas-w
 Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. Leo approves every production release. A merge to `main` is not that approval. Do not enable auto-merge.
 
 - **Trunk-based development.** Everyone integrates into `main` continuously.
-- **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches may keep their tool prefix (`cursor/…`). Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
+- **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Codex-created branches use `codex/<short-kebab-description>`. Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
 - **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
 - **Squash merge** with a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
 - **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check. A merge to `main` is not by itself a production release approval.
@@ -99,7 +99,7 @@ cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload   # :
 cd apps/marrow/frontend && npm run dev                                      # :3000, proxies /api/* → :8000
 ```
 
-No root-level `start.sh` — local dev is the Postgres container plus separate backend and frontend processes (see Running locally above).
+For clean-checkout secrets, migrations and safe test fixtures, read [Marrow local setup](docs/agents/marrow-local-setup.md).
 
 ## Key Paths
 
@@ -111,7 +111,7 @@ No root-level `start.sh` — local dev is the Postgres container plus separate b
 
 ## Shared libraries
 
-Canonical reference for what lives in `libs/` and the non-duplication mandate. See also [`.cursor/rules/shared-libs.mdc`](.cursor/rules/shared-libs.mdc).
+Canonical reference for what lives in `libs/` and the non-duplication mandate. See also [`docs/agents/rules/shared-libs.md`](docs/agents/rules/shared-libs.md).
 
 | Lib | Import | Contents | Mandate |
 |-----|--------|----------|---------|
@@ -131,106 +131,55 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 - Python: ruff for linting/formatting, target Python 3.11
 - Use `from __future__ import annotations` in all Python files
-- Existing Marrow/dk frontend conventions: TypeScript strict, Tailwind for styling; primitives from `@f0rge/ui`; forms from `@f0rge/ui/forms`; token skins in app CSS; Storybook is the catalogue — see `.cursor/rules/ui-kit.mdc`. New apps follow the Primer ADR; preserve each legacy app until an approved migration.
+- Existing Marrow/dk frontend conventions: TypeScript strict, Tailwind for styling; primitives from `@f0rge/ui`; forms from `@f0rge/ui/forms`; token skins in app CSS; Storybook is the catalogue — see `docs/agents/rules/ui-kit.md`. New apps follow the Primer ADR; preserve each legacy app until an approved migration.
 - API prefix: /api/v1
 - Marrow auth cookie name: ht_session
 
 ## Nx conventions
 
-Always-on agent policy: [`.cursor/rules/nx.mdc`](.cursor/rules/nx.mdc). Bugbot / Agent Review checklist: [`.cursor/BUGBOT.md`](.cursor/BUGBOT.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
+Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Codex review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
 
 ## Project rules
 
-Cursor attaches scoped rules from `.cursor/rules/` by their globs. In other clients, read the applicable rules explicitly; the [shared protocol](docs/agents/protocol.md) defines the bootstrap.
+Read the applicable Markdown rules explicitly before planning or changing files. These are repository instructions reached through this entry point; the [shared protocol](docs/agents/protocol.md) defines the bootstrap.
 
 | Rule | Scope |
 |------|-------|
-| `orchestration.mdc` | Always — coordinator delegation and independent review |
-| `nx.mdc` | Always — Nx registration, cache, affected CI, boundaries |
-| `shared-libs.mdc` | `libs/**` — shared library conventions |
-| `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
-| `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
-| `ui-kit.mdc` | `libs/ui/**`, `apps/**/frontend/**` — design-system imports, tokens, primitives |
-| `infra.mdc` | `**/railway*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
-| `qa-gate.mdc` | tests, workflows |
-| `data-pipelines.mdc` | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
+| [orchestration](docs/agents/rules/orchestration.md) | Always — coordinator delegation and independent review |
+| [nx](docs/agents/rules/nx.md) | Always — Nx registration, cache, affected CI, boundaries |
+| [shared-libs](docs/agents/rules/shared-libs.md) | `libs/**` — shared library conventions |
+| [backend](docs/agents/rules/backend.md) | `apps/marrow/backend/**/*.py`, migrations |
+| [frontend](docs/agents/rules/frontend.md) | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
+| [ui-kit](docs/agents/rules/ui-kit.md) | `libs/ui/**`, `apps/**/frontend/**` — design-system imports, tokens, primitives |
+| [infra](docs/agents/rules/infra.md) | `**/railway*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
+| [qa-gate](docs/agents/rules/qa-gate.md) | Before preparing any PR or verifying a feature; tests, `libs/**`, workflows |
+| [data-pipelines](docs/agents/rules/data-pipelines.md) | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
-Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/dk/tag-printer/AGENTS.md` and `libs/ui/AGENTS.md`). Client discovery differs; an adapter loading successfully does not prove every scoped instruction was loaded.
+Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/dk/tag-printer/AGENTS.md` and `libs/ui/AGENTS.md`). A generated Codex profile does not load scoped rules automatically; read the files selected by the table above.
 
 ## Sub-agents
 
-The coordinator assigns a named `f0rge-` primary and independent reviewers to each work chunk before implementation. Resolve repository-relative paths with `node scripts/agents/agents.mjs route <path...>` and follow the [shared protocol](docs/agents/protocol.md). Unknown paths need explicit classification. Specialists complete their assigned slice and request cross-domain work or review through the coordinator; an ordinary specialist plan does not require recursive delegation. See [orchestration](.cursor/rules/orchestration.mdc).
+The coordinator assigns a named `f0rge-` primary and independent reviewers to each work chunk before implementation. Resolve repository-relative paths with `node scripts/agents/agents.mjs route <path...>` and follow the [shared protocol](docs/agents/protocol.md). Unknown paths need explicit classification. Specialists complete their assigned slice and request cross-domain work or review through the coordinator; an ordinary specialist plan does not require recursive delegation. See [orchestration](docs/agents/rules/orchestration.md).
 
 ## Creating issues
 
-Agent-ready GitHub issue authoring (scope split, decision surfacing, parent/sub-issues): `.cursor/skills/create-github-issue/SKILL.md`.
+Use [issue-writing guidance](docs/agents/issue-writing.md) for self-contained implementation briefs, plus the [issue tracker](docs/agents/issue-tracker.md).
 
 ## Shipping features
 
-Use a short-lived branch and a pull request into `main`. Review and green CI are not a production release. Leo approves every production release. Do not enable auto-merge. `.cursor/skills/ship-feature/SKILL.md` is not in this repo; do not invent it.
+Use a short-lived branch and a pull request into `main`. Review and green CI are not a production release. Leo approves every production release. Do not enable auto-merge.
 
 Before creating, updating or reviewing a PR description, follow [the PR process](docs/agents/pr-process.md) and [PR template](.github/PULL_REQUEST_TEMPLATE.md): explain what changed, why and the solution design, then assess every ADR with evidence and visible gaps.
 
 ## PR review context
 
-Review playbooks live in `.cursor/review-context/`. Read `_shared/*.md` plus the existing area playbooks selected by the [agent guide's review-reference mapping](docs/agents/README.md). Their historical filenames remain stable; they are review references, not another ownership map or proof of automatic loading.
+Review playbooks live in `docs/agents/review-context/`. Read `_shared/*.md` plus the existing area playbooks selected by the [agent guide's review-reference mapping](docs/agents/README.md). Their historical filenames remain stable; they are review references, not another ownership map or proof of automatic loading.
 
-**Bugbot / Agent Review:** [`.cursor/BUGBOT.md`](.cursor/BUGBOT.md) is auto-loaded by Bugbot (project `.mdc` rules are not). Keep Nx gates and UI kit import bans there; point playbooks at `nx.mdc` / `BUGBOT.md` instead of duplicating checklists.
+Read the [Codex PR review checklist](docs/agents/review-checklist.md) explicitly. It holds Nx gates and legacy UI kit import bans; area playbooks point to it instead of depending on an external review bot.
+
 ## Task learnings
 
 Return verified reusable findings in the handoff. Repository roles do not require user-global profiles or memory files. Changing global instructions or persistent memory requires a separate explicit user instruction.
-
-## Writing issues for sub-agents
-
-Every implementation issue is a self-contained prompt for an agent that has no prior context. Use this structure, in this order:
-
-1. **Problem (Why)** — one paragraph on what hurts now. Describe the constraint, not the solution.
-2. **Goal** — one sentence on what changes when this is done.
-3. **Sub-agent assignments** — table mapping each chunk to its manifest-resolved `f0rge-` primary, independent reviewers, deliverable and dependencies. Include the [shared protocol](docs/agents/protocol.md) and applicable context in each brief.
-4. **Proposed approach** — high-level technical approach + reasoning. Design, not implementation. Each issue gets a dedicated per-issue planning pass before code is written.
-5. **Files** — *Existing modified* (paths + line numbers where known) and *New* (paths to create). Starting points, not exhaustive.
-6. **Out of scope (non-goals)** — stated positively ("do not change X"). Agents cannot infer from omission.
-7. **Boundaries** — tiered:
-   - Always: actions the agent can take without asking
-   - Ask first: actions that need user approval
-   - Never: hard stops (secrets, force-push, destructive ops, `--no-verify`)
-8. **Acceptance criteria / Definition of done** — concrete, runnable, objectively true/false. **Must include a live-server walkthrough** for UI/API behavior, following the [QA gate](.cursor/rules/qa-gate.mdc) — pytest passing is not the gate.
-9. **Dependencies** — `Blocked by:` / `Blocks:` / `Required env / secrets:`.
-10. **Rollback** — only when destructive or production-affecting. Trigger criteria + concrete revert steps.
-
-**Anti-patterns to avoid:**
-- Vague acceptance criteria ("user can log in" — write "POST /auth/login with valid credentials returns 200 and sets `ht_session` cookie")
-- Implicit scope ("just clean things up while you're there" — list every file)
-- Bundling unrelated work (one issue = one cohesive change)
-- Skipping the live-server walkthrough in favor of "tests pass"
-- Omitting boundaries — without them, agents take defensible-but-unwanted actions
-
-**Sizing heuristic:** if an issue's sub-agent table has more than ~5 agents listed, or estimated effort exceeds ~5 person-days, split it.
-
-References:
-- [Osmani — How to write a good spec for AI agents](https://addyosmani.com/blog/good-spec/)
-- [GitHub — Getting the best results from Copilot coding agent](https://docs.github.com/en/copilot/tutorials/cloud-agent/get-the-best-results)
-- [GitHub — Reliable AI workflows with agentic primitives and context engineering](https://github.blog/ai-and-ml/github-copilot/how-to-build-reliable-ai-workflows-with-agentic-primitives-and-context-engineering/)
-
-## Cursor Cloud specific instructions
-
-The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project apps/marrow/backend`, `uv tool install "ruff==$(cat .github/ruff-version)"`, `npm ci` at repo root). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
-
-### Database + Docker (must start manually each session)
-- There is **no local dev docker-compose**; documented production hosts are Railway (`railway*.toml`) and Coolify for dk. The proposed GitHub release entry points remain under the [release hold](.github/deploy/README.md).
-- The Docker daemon is not auto-started. Start it once per session: `sudo dockerd > /tmp/dockerd.log 2>&1 &` then `sudo chmod 666 /var/run/docker.sock` (lets `uv run pytest`'s testcontainers reach the socket as the `ubuntu` user). `/etc/docker/daemon.json` is pre-set to `fuse-overlayfs` + `containerd-snapshotter: false` (required for Docker 29 in this VM) — do not change it.
-- Backend + tests need a **pgvector** Postgres on `localhost:5432` with user/pass/db all `health`. Start/reuse it:
-  `docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health -p 5432:5432 pgvector/pgvector:pg16`
-- `apps/marrow/backend/.env` (gitignored) holds local secrets. If missing, recreate with: `JWT_SECRET` (any string), `SETTINGS_ENCRYPTION_KEY` (a valid Fernet key: `uv run --project apps/marrow/backend python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"`), `DATABASE_URL=postgresql+asyncpg://health:health@localhost:5432/health`, `PHOTO_DIR=photos`, and `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` (any random strings, consumed by migrations 004/019). Do **not** put `CORS_ORIGINS` as a bare string in `.env` — it is a `list[str]` parsed as JSON and a plain value crashes startup; omit it (default already allows `http://localhost:3000`).
-
-### Migrations gotcha
-- Alembic migrations 004/019 read `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` from **`os.environ`, not** from `.env` via pydantic. Export the `.env` before migrating: `cd apps/marrow/backend && set -a && . ./.env && set +a && uv run alembic upgrade head`. Running the backend itself does not need this (pydantic loads `.env`), only the migration step does.
-- **Cross-tenant data migrations under FORCE RLS:** use `f0rge_db.rls.migration_bypass` (transient `app.service_role = 'migrator'` policy). Do not loop per user with `set_config('app.user_id', ...)`. Single-tenant reference-user seeds may still use `app.user_id`. Full convention: `.cursor/rules/backend.mdc` § Alembic migrations under FORCE RLS.
-
-### Running
-- Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (from repo root: `npx nx run marrow-frontend:dev`). Install deps with `npm ci` at repo root (workspaces).
-- Signup rejects non-routable email TLDs (e.g. `.local`); use a normal domain like `demo@example.com` when testing auth.
-- Optional services (not needed for the core check-in app): embedding worker (`uv run python -m app.embedding_pipeline`, needs `OPENROUTER_API_KEY`) and MCP server (`uv run python -m app.mcp ...`).
 
 ## Agent skills
 

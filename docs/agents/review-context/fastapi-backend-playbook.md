@@ -1,10 +1,10 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Legacy FastAPI Backend Review Playbook
 
 ## What this is
 
-Legacy Python review reference for `f0rge-backend` and the reviewers assigned by the [manifest](../../docs/agents/manifest.json). Follow the [shared protocol](../../docs/agents/protocol.md) and current ADRs. Historical incident-note citations explain provenance; they do not require user-global memory access or replace inspected source evidence.
+Legacy Python review reference for `f0rge-backend` and the reviewers assigned by the [manifest](../manifest.json). Follow the [shared protocol](../protocol.md) and current ADRs. Historical incident-note citations explain provenance; they do not require user-global memory access or replace inspected source evidence.
 
 ---
 
@@ -190,7 +190,7 @@ Source of truth: `docs/architecture/ai_seams.md`.
 
 ## Migration safety
 
-- Marrow `railway.toml` files contain `preDeployCommand`. That configuration is not permission to migrate production. See `.cursor/rules/infra.mdc`.
+- Marrow `railway.toml` files contain `preDeployCommand`. That configuration is not permission to migrate production. See `docs/agents/rules/infra.md`.
 - `RUN_MIGRATIONS=1` + `docker-entrypoint.sh` is optional for **local Docker image** builds only — do not set on MCP or embedding-worker containers.
 - After `alembic revision --autogenerate -m "..."`, always audit the generated file. Autogenerate misses: index renames, `server_default` changes, `CHECK` constraint adds/drops, and extension-level DDL. Hand-write those `op.execute()` calls.
 - Migration 004 introduced `HEALTHTRACKER_RO_PASSWORD` env var requirement. Any new migration that references Postgres roles must document the required env var in the migration file's docstring and in `apps/marrow/backend/.env.example`. See `project_mcp_migrations.md`.

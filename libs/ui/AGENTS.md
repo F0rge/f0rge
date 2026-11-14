@@ -25,4 +25,4 @@ This package is the legacy shared kit for existing apps, not actual Primer and n
 npx nx run f0rge-ui:storybook
 ```
 
-Full contract: `.cursor/rules/ui-kit.mdc`. Workflow: `.cursor/skills/add-ui-primitive/SKILL.md`.
+Full contract: `docs/agents/rules/ui-kit.md`. Add shared primitives here with public exports and Storybook coverage.

@@ -1,9 +1,4 @@
----
-description: Nx monorepo conventions — project registration, cache, affected CI, boundaries, OpenAPI, Playwright.
-alwaysApply: true
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Nx workspace (f0rge)
 
@@ -42,4 +37,4 @@ Canonical map: `nx.json` + each app/lib `project.json`. Details live there — d
 - `@nxlv/python` with `inferDependencies: true` and `sync.globalGenerators: ["@nxlv/python:pkg-sync"]`.
 - Keep per-project `uv.lock`. Run `npx nx sync:check` when changing local path deps.
 
-See also `.cursor/BUGBOT.md` (PR review) and `.cursor/rules/shared-libs.mdc`.
+See also `docs/agents/review-checklist.md` (PR review) and `docs/agents/rules/shared-libs.md`.

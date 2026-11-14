@@ -53,7 +53,7 @@ Every pull request into `main` follows [the PR process](../agents/pr-process.md)
 | P-004 | Automated architecture checks | Accepted | Deterministic automated architecture checks block merge and release where enforceable; exceptions need Leo. | [P-004](governance.md#p-004) |
 | P-005 | Independent review | Accepted | Independent agent review plus CI, not the implementing agent alone. | [P-005](governance.md#p-005) |
 | P-006 | Leo approves production releases | Accepted | Leo approves every production release. | [P-006](governance.md#p-006) |
-| P-007 | Repository agent profiles | Accepted | Recreate development agents later with repo-aligned instructions. | [P-007](governance.md#p-007) |
+| P-007 | Repository agent profiles | Accepted | Codex is the supported repository coding harness, with canonical shared instructions and generated role profiles. | [P-007](governance.md#p-007) |
 | P-008 | Brief and mockup before substantial work | Accepted | Before an app or substantial feature: agree a short brief, testable outcomes and clickable mockup with Leo. | [P-008](product.md#p-008) |
 | P-009 | Design all user states | Accepted | Design and test loading, empty, error, denied, success and edit-conflict states. | [P-009](product.md#p-009) |
 | P-010 | Holiday explorer pilot | Accepted | Use the holiday explorer as the platform pilot; no standalone off-platform deployment. | [P-010](product.md#p-010) |

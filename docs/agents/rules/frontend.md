@@ -1,22 +1,16 @@
----
-description: Marrow App Router UX — Next.js stack, API/auth, customize-hub contract, onboarding tour, quality gate. Kit/import/token rules live in ui-kit.mdc.
-globs: apps/marrow/frontend/**/*.tsx, apps/marrow/frontend/**/*.ts
-alwaysApply: false
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Frontend Standards (Marrow App Router)
 
 These rules are the legacy Marrow Next.js app. New frontends use Vite, strict TypeScript, actual Primer, and TanStack Router, Query, and Form. Do not treat this file as that migration.
 
-Kit/import/token rules: `.cursor/rules/ui-kit.mdc`.
+Kit/import/token rules: `docs/agents/rules/ui-kit.md`.
 
 ## Stack
 
 - **Next.js 16** (App Router, not Pages Router)
 - **React 19**, **TypeScript** strict mode
-- **@f0rge/ui** + **Tailwind CSS v4** (primitives and forms; see `ui-kit.mdc`)
+- **@f0rge/ui** + **Tailwind CSS v4** (primitives and forms; see `docs/agents/rules/ui-kit.md`)
 - Backend API at `http://localhost:8000/api/v1` via `/api/*` rewrite
 - Auth: `ht_session` cookie (email + password)
 
@@ -60,7 +54,7 @@ Kit/import/token rules: `.cursor/rules/ui-kit.mdc`.
 
 ## Forms
 
-Labeled forms use `@f0rge/ui/forms` (see `ui-kit.mdc`). Controlled components, inline validation errors, disable submit during submission, clear success/error feedback.
+Labeled forms use `@f0rge/ui/forms` (see `docs/agents/rules/ui-kit.md`). Controlled components, inline validation errors, disable submit during submission, clear success/error feedback.
 
 ## Customize-Hub UX Contract (marrow)
 
@@ -126,4 +120,4 @@ npx nx run marrow-frontend:dev    # :3000
 npx nx run-many -t lint typecheck build --projects f0rge-ui,marrow-frontend
 ```
 
-Coordinate frontend work with `f0rge-frontend` under the [shared protocol](../../docs/agents/protocol.md). Resolve each changed path with `node scripts/agents/agents.mjs route <repo-relative-path...>`; generated clients, build configuration and browser harnesses have explicit routes and reviewers.
+Coordinate frontend work with `f0rge-frontend` under the [shared protocol](../protocol.md). Resolve each changed path with `node scripts/agents/agents.mjs route <repo-relative-path...>`; generated clients, build configuration and browser harnesses have explicit routes and reviewers.
