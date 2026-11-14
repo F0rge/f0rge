@@ -58,6 +58,7 @@ function customer(overrides: Partial<CustomerCrm> = {}): CustomerCrm {
   return {
     id: "cust-1",
     name: "Trade House",
+    is_archived: false,
     email: null,
     phone: null,
     vat_number: null,

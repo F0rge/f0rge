@@ -17,6 +17,7 @@ from app.crud.proforma import ProformaCRUD
 from app.crud.purchase_order import PurchaseOrderCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
+from app.services.party_archive import assert_supplier_active
 from app.models.proforma import Proforma
 from app.models.sku_supplier_price import SkuSupplierPrice
 from app.schemas.document_intake import (
@@ -97,8 +98,9 @@ class DocumentIntakeService:
         *,
         record_proforma_duplicate: bool = True,
         number_noun: str = "proforma",
+        include_archived_suppliers: bool = False,
     ) -> ProformaReview:
-        suppliers = await self._supplier_records()
+        suppliers = await self._supplier_records(include_archived=include_archived_suppliers)
         skus = await self._sku_records()
         prices = await self._price_records()
         chosen, candidates = match_supplier(
@@ -294,6 +296,7 @@ class DocumentIntakeService:
         supplier = await self.supplier_crud.get_by_id(data.supplier_id)
         if supplier is None:
             raise NotFoundError("Supplier not found")
+        assert_supplier_active(supplier)
         created = await self.skus.create(
             SkuCreate(
                 our_ref=data.our_ref,
@@ -326,6 +329,7 @@ class DocumentIntakeService:
             supplier = await self.supplier_crud.get_by_id(data.supplier_id)
             if supplier is None:
                 raise NotFoundError("Supplier not found")
+            assert_supplier_active(supplier)
             return data.supplier_id
         if data.create_supplier is None:
             raise ValidationError("Choose a supplier or create a new one.")
@@ -432,8 +436,10 @@ class DocumentIntakeService:
             suffix += 1
         return candidate
 
-    async def _supplier_records(self) -> list[SupplierRecord]:
+    async def _supplier_records(self, *, include_archived: bool = False) -> list[SupplierRecord]:
         rows = await self.supplier_crud.list_all()
+        if include_archived:
+            rows.extend(await self.supplier_crud.list_all(archived=True))
         return [
             SupplierRecord(
                 id=row.id,

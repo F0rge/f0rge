@@ -15,6 +15,7 @@ from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.supplier import SupplierCRUD
+from app.services.party_archive import assert_supplier_active
 from app.crud.unit_cost_audit import UnitCostAuditCRUD
 from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
@@ -209,6 +210,8 @@ class SkuService:
                 supplier = await self.supplier_crud.get_by_id(data.preferred_supplier_id)
                 if supplier is None:
                     raise NotFoundError("Supplier not found")
+                if data.preferred_supplier_id != sku.preferred_supplier_id:
+                    assert_supplier_active(supplier)
             sku.preferred_supplier_id = data.preferred_supplier_id
 
         if "lead_time_days" in fields_set:

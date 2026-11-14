@@ -18,10 +18,11 @@ import {
   TextInput,
 } from "@carbon/react";
 import { DocumentExport, Edit } from "@carbon/icons-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
+import { PartyArchiveTabs } from "@/components/party-archive-actions";
 import {
   CustomerDuplicateModal,
   DUPLICATE_NAME_TAKEN,
@@ -42,11 +43,13 @@ import {
   repriceCustomerDrafts,
   findCustomerDuplicates,
   formatZarAmount,
+  getCustomerArchiveCounts,
   listCustomers,
   updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
   type CustomerDuplicateMatch,
+  type ArchiveCounts,
 } from "@/lib/api";
 import { CUSTOMER_SEARCH_PLACEHOLDER } from "@/lib/customer-search";
 import { useAuth } from "@/lib/auth";
@@ -128,14 +131,17 @@ function csvMoney(count: number, amount: string): string {
   return count > 0 ? formatZarAmount(amount) : "";
 }
 
-export default function CustomersPage() {
+function CustomersScreen() {
   const router = useRouter();
+  const archived = useSearchParams().get("archived") === "true";
   const { user } = useAuth();
   const canMutate = canMutateCustomers(user);
   const canEditCredit = canManageCustomerCredit(user);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [counts, setCounts] = useState<ArchiveCounts | null>(null);
+  const requestId = useRef(0);
   const [searchFilter, setSearchFilter] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -162,27 +168,31 @@ export default function CustomersPage() {
   }, [searchFilter]);
 
   const loadCustomers = useCallback(async () => {
+    const request = ++requestId.current;
     setLoading(true);
+    setCustomers([]);
     setError(null);
     try {
-      const data = await listCustomers({
-        overdue: overdueFilter || undefined,
-        active_layby: activeLaybyFilter || undefined,
-        on_hold: onHoldFilter || undefined,
-        q: debouncedSearch,
-      });
+      const [data, archiveCounts] = await Promise.all([
+        listCustomers({ archived, overdue: overdueFilter || undefined, active_layby: activeLaybyFilter || undefined, on_hold: onHoldFilter || undefined, q: debouncedSearch }),
+        getCustomerArchiveCounts(),
+      ]);
+      if (request !== requestId.current) return;
       setCustomers(data);
+      setCounts(archiveCounts);
     } catch (err) {
+      if (request !== requestId.current) return;
       setError(err instanceof Error ? err.message : "Failed to load customers.");
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
-  }, [overdueFilter, activeLaybyFilter, onHoldFilter, debouncedSearch]);
+  }, [archived, overdueFilter, activeLaybyFilter, onHoldFilter, debouncedSearch]);
 
   useEffect(() => {
     if (user) {
       void loadCustomers();
     }
+    return () => { requestId.current += 1; };
   }, [user, loadCustomers]);
 
   const filteredCustomers = useMemo(() => {
@@ -202,14 +212,15 @@ export default function CustomersPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchFilter, typeFilter, balanceFilter, overdueFilter, activeLaybyFilter, onHoldFilter]);
+  }, [archived, searchFilter, typeFilter, balanceFilter, overdueFilter, activeLaybyFilter, onHoldFilter]);
 
+  const effectivePage = Math.min(page, Math.max(1, Math.ceil(filteredCustomers.length / pageSize)));
   const pagedCustomers = useMemo(() => {
-    const start = (page - 1) * pageSize;
+    const start = (effectivePage - 1) * pageSize;
     return filteredCustomers.slice(start, start + pageSize);
-  }, [filteredCustomers, page, pageSize]);
+  }, [filteredCustomers, effectivePage, pageSize]);
 
-  const tableHeaders = canMutate ? [...TABLE_HEADERS, ACTIONS_HEADER] : [...TABLE_HEADERS];
+  const tableHeaders = canMutate && !archived ? [...TABLE_HEADERS, ACTIONS_HEADER] : [...TABLE_HEADERS];
 
   const rows: CustomerRow[] = pagedCustomers.map((entry) => ({
     id: entry.id,
@@ -228,7 +239,7 @@ export default function CustomersPage() {
 
   function handleExport() {
     downloadCsv(
-      "firstout-customers.csv",
+      archived ? "firstout-archived-customers.csv" : "firstout-customers.csv",
       CSV_HEADERS,
       filteredCustomers.map((customer) => [
         customer.name,
@@ -363,12 +374,12 @@ export default function CustomersPage() {
           <Button
             kind="secondary"
             renderIcon={DocumentExport}
-            disabled={filteredCustomers.length === 0}
+            disabled={loading || filteredCustomers.length === 0}
             onClick={handleExport}
           >
             Export CSV
           </Button>
-          {canMutate ? (
+          {canMutate && !archived ? (
             <Button
               onClick={() => {
                 setCreateForm(emptyCustomerForm);
@@ -392,6 +403,15 @@ export default function CustomersPage() {
         />
       ) : null}
 
+      <PartyArchiveTabs
+        kind="customers"
+        archived={archived}
+        counts={counts}
+        onChange={(next) => {
+          setPage(1);setCreateOpen(false);setEditCustomer(null);closeDuplicates();
+          router.replace(`/customers${next ? "?archived=true" : ""}`, { scroll: false });
+        }}
+      >
       <div className="firstout-catalogue-panel">
         <div className="firstout-catalogue-toolbar">
           <div className="firstout-catalogue-toolbar__left">
@@ -478,10 +498,12 @@ export default function CustomersPage() {
           <p className="cds--type-body-01" style={{ padding: "1rem" }}>
             Loading customers…
           </p>
+        ) : error ? (
+          <div style={{ padding: "1rem" }}><Button kind="tertiary" onClick={() => void loadCustomers()}>Retry loading customers</Button></div>
         ) : customers.length === 0 ? (
           <InlineNotification
             kind="info"
-            title="No customers"
+            title={archived ? "No archived customers" : "No active customers"}
             subtitle="No customers match the current filters."
             hideCloseButton
             lowContrast
@@ -491,7 +513,7 @@ export default function CustomersPage() {
           <>
             <DataTable rows={rows} headers={tableHeaders}>
               {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                <TableContainer title="Customers" description="Retail and trade customer balances">
+                <TableContainer title={archived ? "Archived customers" : "Active customers"} description="Retail and trade customer balances">
                   <Table {...getTableProps()}>
                     <TableHead>
                       <TableRow>
@@ -570,7 +592,7 @@ export default function CustomersPage() {
                                   <div className="firstout-muted-text">{laybys.detail}</div>
                                 ) : null}
                               </TableCell>
-                              {canMutate ? (
+                              {canMutate && !archived ? (
                                 <TableCell style={{ textAlign: "center" }}>
                                   <Button
                                     type="button"
@@ -597,7 +619,7 @@ export default function CustomersPage() {
               )}
             </DataTable>
             <Pagination
-              page={page}
+              page={effectivePage}
               pageSize={pageSize}
               pageSizes={[10, 25, 50]}
               totalItems={filteredCustomers.length}
@@ -609,6 +631,7 @@ export default function CustomersPage() {
           </>
         )}
       </div>
+      </PartyArchiveTabs>
 
       <Modal
         open={createOpen && !duplicateOpen}
@@ -675,4 +698,8 @@ export default function CustomersPage() {
       />
     </Stack>
   );
+}
+
+export default function CustomersPage() {
+  return <Suspense fallback={<p className="cds--type-body-01">Loading customers…</p>}><CustomersScreen /></Suspense>;
 }

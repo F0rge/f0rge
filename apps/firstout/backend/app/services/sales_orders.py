@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.crud.customer import CustomerCRUD
+from app.services.party_archive import assert_customer_active
 from app.crud.location import LocationCRUD
 from app.crud.ops_commerce_orders import OpsCommerceOrdersCRUD
 from app.crud.purchase_order import LocationStockCRUD
@@ -108,6 +109,7 @@ class SalesOrdersService:
         user_id: Optional[uuid.UUID] = None,
     ) -> SalesOrderResponse:
         customer = await self._require_customer(data.customer_id)
+        assert_customer_active(customer)
         line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
             customer,
             data.lines,
