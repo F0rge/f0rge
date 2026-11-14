@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3004",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../../node_modules/@typescript/native/bin/tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -30,7 +30,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "16.3.5",
     "pg": "^8.23.0",
-    "typescript": "^7",
+    "typescript": "^5",
     "vitest": "^4.1.10",
     "tailwindcss": "4.3.2",
     "@tailwindcss/postcss": "4.3.2"

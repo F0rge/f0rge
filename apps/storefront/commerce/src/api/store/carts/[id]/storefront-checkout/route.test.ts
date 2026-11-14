@@ -58,14 +58,15 @@ function fixture(customerId: string | null) {
       : key === Modules.LOCKING ? { execute: async (_key: string, operation: () => Promise<unknown>) => operation() }
       : key === Modules.CART ? { retrieveCart: async () => cart, updateCarts: jest.fn(async (_id: string, input: Record<string, unknown>) => Object.assign(cart, input)) } : undefined },
   } as unknown as MedusaRequest;
-  const response = {
+  const responseData = {
     headers: {} as Record<string, string>,
     statusCode: 0,
     body: undefined as unknown,
     setHeader(name: string, value: string) { this.headers[name] = value; return this; },
     status(code: number) { this.statusCode = code; return this; },
     json(body: unknown) { this.body = body; return this; },
-  } as unknown as MedusaResponse & { statusCode: number; body: unknown; headers: Record<string, string> };
+  };
+  const response = responseData as unknown as MedusaResponse & { statusCode: number; body: unknown; headers: Record<string, string> };
   return { req, response, cart };
 }
 

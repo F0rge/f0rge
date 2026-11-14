@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../../node_modules/@typescript/native/bin/tsc --noEmit",
     "lint": "eslint",
     "test": "vitest run",
     "codegen:api": "openapi-typescript ../backend/openapi.json -o lib/api/generated/schema.ts",
@@ -41,7 +41,7 @@
     "openapi-typescript": "^7.13.0",
     "shadcn": "^4.17.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7",
+    "typescript": "^5",
     "vitest": "^4.1.10"
   }
 }

@@ -17,6 +17,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "checkJs": false,
+    "types": ["node", "jest"],
     "strictNullChecks": true
   },
   "ts-node": {
