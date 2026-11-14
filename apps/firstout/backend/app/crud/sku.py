@@ -21,8 +21,15 @@ class SkuCRUD(BaseCRUD):
     async def get_by_id(self, sku_id: uuid.UUID) -> Optional[Sku]:
         return (await self.db.execute(select(Sku).where(Sku.id == sku_id))).scalar_one_or_none()
 
-    async def list_all(self, category: Optional[str] = None, q: Optional[str] = None) -> list[Sku]:
-        rows, _total = await self.list_filtered(category=category, q=q, limit=None)
+    async def list_all(
+        self,
+        category: Optional[str] = None,
+        q: Optional[str] = None,
+        preferred_supplier_id: Optional[uuid.UUID] = None,
+    ) -> list[Sku]:
+        rows, _total = await self.list_filtered(
+            category=category, q=q, preferred_supplier_id=preferred_supplier_id, limit=None
+        )
         return rows
 
     async def list_filtered(
@@ -30,10 +37,11 @@ class SkuCRUD(BaseCRUD):
         *,
         category: Optional[str] = None,
         q: Optional[str] = None,
+        preferred_supplier_id: Optional[uuid.UUID] = None,
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> tuple[list[Sku], int]:
-        filters = self._filters(category, q)
+        filters = self._filters(category, q, preferred_supplier_id)
         count_stmt = select(func.count()).select_from(Sku)
         if filters:
             count_stmt = count_stmt.where(*filters)
@@ -60,8 +68,15 @@ class SkuCRUD(BaseCRUD):
                 values.add(cleaned)
         return sorted(values, key=str.casefold)
 
-    def _filters(self, category: Optional[str], q: Optional[str]) -> list:
+    def _filters(
+        self,
+        category: Optional[str],
+        q: Optional[str],
+        preferred_supplier_id: Optional[uuid.UUID] = None,
+    ) -> list:
         filters = []
+        if preferred_supplier_id is not None:
+            filters.append(Sku.preferred_supplier_id == preferred_supplier_id)
         if category is not None:
             filters.append(func.lower(Sku.category) == category.lower())
         if q:
