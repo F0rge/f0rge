@@ -38,7 +38,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Temporary ID:** P-003
 - **Category:** Governance
 - **Decision:** Every PR to main includes an ALL-ADR compliance checklist, with statuses and justified exceptions.
-- **Proposed enforcement (not installed):** Generate a complete appendix from the register for every main PR, with pass/fail/not-applicable/approved-exception/pending per ADR, evidence and reason. An impacted-ADR summary may precede it, never replace it.
+- **Proposed enforcement (not installed):** Generate a complete appendix from the register for every main PR using [the PR process](../agents/pr-process.md), with distinct review and compliance status, existing gaps, evidence and reasons. An impacted-ADR summary may precede it, never replace it.
 - **Gate and limit:** PR gate: adr-coverage verifies every current ADR appears and exceptions are valid. Checking a box is not proof; link real test/review evidence.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** Ruleset main-pr-gate required_status_checks contexts ci and playwright smoke. No ADR appendix job.
 - **Implementation:** Pending. This record does not claim the decision is built.
