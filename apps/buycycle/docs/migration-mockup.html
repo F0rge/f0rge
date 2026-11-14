@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en" data-color-mode="light" data-light-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Buycycle — migration design preview</title>
+  <link rel="stylesheet" href="../dashboard/vendor/primer.css">
+  <link rel="stylesheet" href="../dashboard/vendor/primer_view_components.css">
+</head>
+<body class="color-bg-subtle">
+  <a href="#page-title" class="p-3 d-inline-block">Skip to content</a>
+  <div class="container-xl px-3 px-md-5 pb-5">
+    <aside class="flash flash-warn mb-3" aria-label="Preview scope">
+      <strong>Design preview · synthetic data</strong>
+      <p class="mb-0 mt-1">For Leo’s review. Changes stay in this page and disappear on reload. No real account, saved records or collection is connected.</p>
+    </aside>
+    <header class="d-flex flex-wrap flex-items-center flex-justify-between mb-3">
+      <div class="mr-3 mb-2"><p class="f5 color-fg-muted mb-1">Buycycle</p><h1 class="h2">Find a deal. Understand the numbers.</h1></div>
+      <span class="Label Label--secondary mb-2">Private on the Pi · proposed app</span>
+    </header>
+    <div id="session-summary" class="Box mb-3">
+      <div class="Box-body d-flex flex-wrap flex-items-center">
+        <div class="mr-4 mb-2">
+          <label for="kind" class="text-bold d-block mb-1">Category</label>
+          <select id="kind" class="form-select"><option value="bikes">Bikes</option><option value="wheels">Wheelsets</option></select>
+        </div>
+        <div class="mb-2 flex-1 min-width-0">
+          <p class="f6 color-fg-muted mb-1">Illustrative collection status</p>
+          <p class="mb-0"><span class="Label Label--success mr-1" id="fresh-label">Last collection complete</span> <span id="fresh-text">14 Nov, 06:15 Luxembourg · synthetic example</span></p>
+        </div>
+      </div>
+    </div>
+    <nav aria-label="Buycycle views" class="d-flex flex-wrap mb-3">
+      <button type="button" class="btn btn-primary mr-2 mb-2" data-page="deals" aria-current="page">Deals</button>
+      <button type="button" class="btn mr-2 mb-2" data-page="watch">Watchlist <span id="watch-count" class="Counter">1</span></button>
+      <button type="button" class="btn mr-2 mb-2" data-page="trades">Trade log</button>
+      <button type="button" class="btn mr-2 mb-2" data-page="costs">Costs</button>
+      <button type="button" class="btn mr-2 mb-2" data-page="import">Bring saved data</button>
+      <button type="button" class="btn mr-2 mb-2" data-page="collection">Collection</button>
+    </nav>
+    <details class="Box mb-3">
+      <summary class="Box-header">Reviewer controls: preview a page state</summary>
+      <div class="Box-body">
+        <label for="view-state" class="text-bold d-block mb-2">State to illustrate</label>
+        <select id="view-state" class="form-select width-full">
+          <option value="ready">Ready</option><option value="loading">Loading</option><option value="empty">Empty</option><option value="error">Load error</option><option value="denied">Access denied</option><option value="stale">Stale data</option>
+        </select>
+        <p class="f6 color-fg-muted mt-2 mb-0">These controls simulate UI states. They do not change access or start a tracker.</p>
+      </div>
+    </details>
+    <main>
+      <h2 id="page-title" class="h3 mb-3" tabindex="-1">Deals</h2>
+      <div id="state-notice" class="flash mb-3" role="status" hidden></div>
+      <p id="action-status" class="mb-3 color-fg-muted" role="status" aria-live="polite"></p>
+      <div id="content">
+        <section id="deals" class="Box" aria-label="Deals">
+          <div class="Box-header">
+            <label for="search" class="text-bold d-block mb-2">Find a model</label>
+            <input id="search" type="search" class="form-control width-full" placeholder="Search these synthetic examples">
+            <p id="result-count" class="f6 color-fg-muted mt-2 mb-0"></p>
+          </div>
+          <div class="Box-body">
+            <p class="color-fg-muted">Compare the asking price with other listings. Estimated return uses your assumptions, not a guaranteed sale.</p>
+            <div class="d-none d-md-block overflow-x-auto">
+              <table class="width-full" aria-label="Synthetic deals">
+                <thead><tr class="text-left border-bottom"><th class="p-2" scope="col">Listing</th><th class="p-2" scope="col">Ask</th><th class="p-2" scope="col">Reference</th><th class="p-2" scope="col">Comps</th><th class="p-2" scope="col">Action</th></tr></thead>
+                <tbody id="deal-rows"></tbody>
+              </table>
+            </div>
+            <div id="deal-cards" class="d-md-none"></div>
+            <p id="no-results" class="py-4 text-center" hidden>No models match. Clear your search to see all examples.</p>
+            <details class="mt-3"><summary>How to read these numbers</summary><p class="mt-2 mb-0">Reference is the median of eligible live comparables, excluding this listing. Average asking price is a separate measure. “Disappeared” may mean sold or withdrawn; it is not a confirmed sale. A dash means the evidence is insufficient.</p></details>
+          </div>
+        </section>
+        <section id="watch" class="Box" aria-label="Watchlist" hidden>
+          <div class="Box-header"><h3 class="Box-title">Keep a short list</h3><p class="mt-1 mb-0">Illustrates future user-owned saved records. The real app’s current records remain in their original browsers.</p></div>
+          <div id="watch-items"></div>
+        </section>
+        <section id="trades" class="Box" aria-label="Trade log" hidden>
+          <div class="Box-header"><h3 class="Box-title">Bought and sold</h3><p class="mt-1 mb-0">Preview a trade entry. Nothing is saved outside this page.</p></div>
+          <div class="Box-body">
+            <form id="trade-form">
+              <div class="form-group mt-0"><label for="trade-name">Item name</label><input id="trade-name" class="form-control width-full" required maxlength="100" value="Example wheelset"></div>
+              <div class="d-md-flex">
+                <div class="form-group mt-0 mr-md-3 flex-1"><label for="trade-buy">Bought for (€)</label><input id="trade-buy" type="number" class="form-control width-full" min="0.01" step="0.01" required value="400"></div>
+                <div class="form-group mt-0 flex-1"><label for="trade-date">Bought on</label><input id="trade-date" type="date" class="form-control width-full" required value="2026-11-10"></div>
+              </div>
+              <button type="submit" class="btn btn-primary">Preview trade</button>
+            </form>
+            <div class="border-top mt-3 pt-3"><h4 class="mb-2">Page-local preview entries</h4><ul id="trade-items" class="pl-3 mb-0"><li>No preview entries yet.</li></ul></div>
+          </div>
+        </section>
+        <section id="costs" class="Box" aria-label="Cost assumptions" hidden>
+          <div class="Box-header"><h3 class="Box-title">Make assumptions visible</h3><p class="mt-1 mb-0">Illustrative values, not current Buycycle fees. The implementation must preserve every existing cost field.</p></div>
+          <div class="Box-body">
+            <form id="cost-form">
+              <div class="form-group mt-0"><label for="cost-ship">Inbound shipping (€)</label><input id="cost-ship" class="form-control width-full" type="number" min="0" step="0.01" required value="35"></div>
+              <div class="form-group mt-0"><label for="cost-repair">Repair allowance (€)</label><input id="cost-repair" class="form-control width-full" type="number" min="0" step="0.01" required value="50"></div>
+              <div class="form-group mt-0"><label for="cost-haircut">Negotiation haircut (%)</label><input id="cost-haircut" class="form-control width-full" type="number" min="0" max="100" step="0.1" required value="8"></div>
+              <button type="submit" class="btn btn-primary">Preview assumptions</button>
+            </form>
+            <p id="cost-preview" class="mt-3 mb-0" role="status">Preview not updated yet. Existing saved assumptions are untouched.</p>
+          </div>
+        </section>
+        <section id="import" class="Box" aria-label="Bring saved data" hidden>
+          <div class="Box-header"><h3 class="Box-title">Bring your saved data with you</h3><p class="mt-1 mb-0">The proposed importer must include watches, trades and costs for bikes and wheelsets.</p></div>
+          <div class="Box-body">
+            <ol class="pl-3"><li class="mb-2">Export from every old address and browser you used, including both ports and LAN/tailnet aliases.</li><li class="mb-2">Review every category and any conflicts before saving.</li><li>Keep your original exports until the migration has been reconciled.</li></ol>
+            <div class="form-group"><label for="import-sample">Synthetic sample to preview</label><select id="import-sample" class="form-select width-full"><option value="valid">Valid watches, trades and costs</option><option value="conflict">One cost conflict</option><option value="invalid">Invalid trade amount</option></select></div>
+            <button type="button" id="preview-import" class="btn">Review sample import</button>
+            <div id="import-preview" class="mt-3" hidden>
+              <div id="import-message" class="flash mb-3" role="status"></div>
+              <ul id="import-counts" class="pl-3 mb-3"></ul>
+              <fieldset id="conflict-choice" class="border rounded-2 p-3 mb-3" hidden><legend class="text-bold px-1">Bikes: inbound shipping differs</legend><label class="d-block mb-2"><input type="radio" name="conflict" value="keep" checked> Keep current illustrative value (€35)</label><label class="d-block"><input type="radio" name="conflict" value="replace"> Use imported illustrative value (€40)</label></fieldset>
+              <button type="button" id="simulate-import" class="btn btn-primary">Simulate confirmed import</button>
+            </div>
+          </div>
+        </section>
+        <section id="collection" class="Box" aria-label="Collection status" hidden>
+          <div class="Box-header"><h3 class="Box-title">Know what the tracker has done</h3><p class="mt-1 mb-0">Illustrative status only. No action on this page starts collection.</p></div>
+          <div class="Box-body">
+            <dl><dt>Next normal schedule</dt><dd class="mb-3">06:15 Europe/Luxembourg · one daily collection</dd><dt>Detail request budget</dt><dd class="mb-3">Illustrative: 42 of 150 attempts used across both categories</dd><dt>Feed pacing</dt><dd class="mb-3">At least 1.6 seconds; detail requests at least 2.2 seconds apart</dd><dt>When blocked</dt><dd class="mb-3">A 403/429 records a block, backs off once for two minutes, then stops further requests that day.</dd><dt>Partial or interrupted collection</dt><dd class="mb-3">Does not mark unseen listings disappeared. Show last-good data with a visible status.</dd><dt>Unknown previous usage</dt><dd>Pause until the next Luxembourg day rather than risk an extra collection.</dd></dl>
+            <details><summary>Why no “run anyway” button?</summary><p class="mt-2 mb-0">Manual invocation must respect the same block, budget and overlap rules. A future approved operational action is separate from this design preview.</p></details>
+          </div>
+        </section>
+      </div>
+    </main>
+    <footer class="mt-4 pt-3 border-top color-fg-muted f6">Design artifact for review. Existing Pi hosting, databases, browser state and release controls are unchanged. <a href="migration-brief.md">Read the brief</a>.</footer>
+  </div>
+<script>
+'use strict';
+const byId = id => document.getElementById(id);
+const titles = {deals: 'Deals', watch: 'Watchlist', trades: 'Trade log', costs: 'Cost assumptions', import: 'Bring saved data', collection: 'Collection status'};
+const examples = {
+  bikes: [{id: 'bike-a', name: 'Example Aero · 54 cm', price: 1800, reference: 2300, comps: 6, note: 'Same model; years within ±1'}, {id: 'bike-b', name: 'Example Gravel · medium', price: 1300, reference: 1650, comps: 4, note: 'Same model; years within ±1'}, {id: 'bike-c', name: 'Example Endurance · small', price: 950, reference: null, comps: 1, note: 'Insufficient evidence for a reference'}],
+  wheels: [{id: 'wheel-a', name: 'Example Carbon 45 · disc', price: 500, reference: 720, comps: 8, note: 'Same model, brake and rim material'}, {id: 'wheel-b', name: 'Example Alloy 30 · rim', price: 260, reference: 350, comps: 3, note: 'Same model, brake and rim material'}, {id: 'wheel-c', name: 'Example Aero 60 · disc', price: 600, reference: null, comps: 1, note: 'Insufficient evidence for a reference'}]
+};
+const watched = new Set(['bike-a']);
+let page = 'deals';
+let reviewedSample = null;
+const euro = value => value === null ? '—' : '€' + value.toLocaleString('en');
+const element = (name, className, text) => {const node = document.createElement(name); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node;};
+const announce = text => {byId('action-status').textContent = text;};
+function watchButton(item) {
+  const button = element('button', 'btn btn-sm', watched.has(item.id) ? 'Remove watch' : 'Watch');
+  button.type = 'button'; button.dataset.watch = item.id; button.setAttribute('aria-label', (watched.has(item.id) ? 'Remove watch for ' : 'Watch ') + item.name);
+  button.addEventListener('click', () => {const was = watched.has(item.id); if (was) watched.delete(item.id); else watched.add(item.id); render(); const next = Array.from(byId(page).querySelectorAll('[data-watch]')).find(candidate => candidate.dataset.watch === item.id && candidate.getClientRects().length > 0); (next || byId('page-title')).focus(); announce(item.name + (was ? ' removed from' : ' added to') + ' this page’s synthetic watchlist.');});
+  return button;
+}
+function comparableDetails(item) {
+  const details = element('details', 'mt-2'); const summary = element('summary', 'f6', 'Compare listings'); details.append(summary);
+  const description = item.reference === null ? 'Only one eligible comparable. No median reference is shown.' : item.comps + ' eligible live comparables. Median asking price ' + euro(item.reference) + '. This is an illustrative reference, not a completed sale.';
+  details.append(element('p', 'f6 color-fg-muted mt-2 mb-0', item.note + '. ' + description)); return details;
+}
+function renderDeals() {
+  const needle = byId('search').value.toLowerCase().trim();
+  const items = examples[byId('kind').value].filter(item => item.name.toLowerCase().includes(needle));
+  byId('result-count').textContent = items.length + ' synthetic example' + (items.length === 1 ? '' : 's');
+  byId('deal-rows').replaceChildren(); byId('deal-cards').replaceChildren(); byId('no-results').hidden = items.length > 0;
+  items.forEach(item => {
+    const row = element('tr', 'border-bottom'); const name = element('th', 'p-2 text-left'); name.scope = 'row'; name.append(element('span', 'text-bold', item.name), comparableDetails(item)); row.append(name);
+    [euro(item.price), euro(item.reference), String(item.comps)].forEach(value => row.append(element('td', 'p-2', value)));
+    const action = element('td', 'p-2'); action.append(watchButton(item)); row.append(action); byId('deal-rows').append(row);
+    const card = element('article', 'Box p-3 mb-3'); card.append(element('h3', 'h4 mb-2', item.name), element('p', 'mb-2', 'Ask ' + euro(item.price) + ' · Reference ' + euro(item.reference) + ' · ' + item.comps + ' comps'), watchButton(item), comparableDetails(item)); byId('deal-cards').append(card);
+  });
+}
+function renderWatch() {
+  const items = examples[byId('kind').value].filter(item => watched.has(item.id));
+  byId('watch-count').textContent = String(watched.size); byId('watch-items').replaceChildren();
+  if (!items.length) byId('watch-items').append(element('p', 'p-3 mb-0', 'No watched examples in this category. Add one from Deals.'));
+  items.forEach(item => {const row = element('article', 'Box-row'); row.append(element('h4', 'h5 mb-2', item.name), element('p', 'mb-2', 'Current illustrative ask ' + euro(item.price)), watchButton(item)); byId('watch-items').append(row);});
+}
+function renderState() {
+  const state = byId('view-state').value;
+  byId('session-summary').hidden = state === 'denied'; byId('watch-count').hidden = state === 'denied';
+  const text = {loading: 'Loading the preview…', empty: 'Nothing to show yet. In the app, a useful empty state explains how to get started.', error: 'We could not load the latest data. Your saved records are safe. Retry the preview.', denied: 'You do not have access to this private app. No protected content is shown in this state.', stale: 'Latest collection is incomplete. Showing last-good data, clearly marked as stale.'};
+  const notice = byId('state-notice'); notice.replaceChildren(); notice.hidden = state === 'ready'; notice.className = 'flash mb-3' + (state === 'error' || state === 'denied' ? ' flash-error' : state === 'stale' ? ' flash-warn' : '');
+  byId('content').hidden = ['loading', 'empty', 'error', 'denied'].includes(state);
+  if (text[state]) notice.append(element('p', 'mb-2', text[state]));
+  if (['loading', 'empty', 'error', 'denied'].includes(state)) {const retry = element('button', 'btn btn-sm', state === 'error' ? 'Retry preview' : 'Return to ready preview'); retry.type = 'button'; retry.addEventListener('click', () => {byId('view-state').value = 'ready'; render(); byId('page-title').focus();}); notice.append(retry);}
+  byId('fresh-label').textContent = state === 'stale' ? 'Stale data' : 'Last collection complete'; byId('fresh-label').className = 'Label mr-1 ' + (state === 'stale' ? 'Label--attention' : 'Label--success');
+}
+function render() {renderDeals(); renderWatch(); renderState();}
+function navigate(next) {
+  page = next; Object.keys(titles).forEach(id => {byId(id).hidden = id !== page;});
+  document.querySelectorAll('[data-page]').forEach(button => {const selected = button.dataset.page === page; button.classList.toggle('btn-primary', selected); if (selected) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');});
+  byId('page-title').textContent = titles[page]; announce(''); render(); byId('page-title').focus();
+}
+document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
+byId('kind').addEventListener('change', () => {render(); announce('Showing synthetic ' + byId('kind').selectedOptions[0].textContent.toLowerCase() + '.');});
+byId('search').addEventListener('input', renderDeals); byId('view-state').addEventListener('change', () => {announce(''); renderState();});
+byId('trade-form').addEventListener('submit', event => {
+  event.preventDefault(); const amount = Number(byId('trade-buy').value); const name = byId('trade-name').value.trim();
+  if (!name || !Number.isFinite(amount) || amount <= 0) {announce('Enter an item name and a positive, finite purchase amount.'); return;}
+  if (byId('trade-items').children.length === 1 && byId('trade-items').firstElementChild.textContent === 'No preview entries yet.') byId('trade-items').replaceChildren();
+  byId('trade-items').append(element('li', 'mb-2', name + ' · bought ' + euro(amount) + ' · ' + byId('trade-date').value + ' · synthetic preview'));
+  announce('Trade preview added to page memory only. No record was saved.');
+});
+byId('cost-form').addEventListener('submit', event => {
+  event.preventDefault(); const values = ['cost-ship', 'cost-repair', 'cost-haircut'].map(id => Number(byId(id).value));
+  if (values.some(value => !Number.isFinite(value) || value < 0) || values[2] > 100) {announce('Use finite nonnegative costs and a haircut between 0 and 100.'); return;}
+  byId('cost-preview').textContent = 'Preview: inbound shipping ' + euro(values[0]) + ', repair ' + euro(values[1]) + ', haircut ' + values[2] + '%. Page-local assumptions only; no saved data or deal rankings changed.';
+  announce('Assumptions preview updated.');
+});
+byId('import-sample').addEventListener('change', () => {reviewedSample = null; byId('import-preview').hidden = true; announce('Sample changed. Review it before simulating an import.');});
+byId('preview-import').addEventListener('click', () => {
+  reviewedSample = byId('import-sample').value; byId('import-preview').hidden = false;
+  byId('import-counts').replaceChildren();
+  ['Bikes: 2 watches, 1 trade and all cost assumptions', 'Wheelsets: 1 watch, 1 trade and all cost assumptions'].forEach(value => byId('import-counts').append(element('li', 'mb-1', value)));
+  const invalid = reviewedSample === 'invalid'; byId('import-message').className = 'flash mb-3 ' + (invalid ? 'flash-error' : reviewedSample === 'conflict' ? 'flash-warn' : 'flash-success');
+  byId('import-message').textContent = invalid ? 'Rejected: one trade has a negative amount. Nothing can be imported until the record is corrected.' : reviewedSample === 'conflict' ? 'Review required: one cost differs. Choose which illustrative value to retain.' : 'Synthetic sample is ready to review. No conflicts; watches, trades and costs are included.';
+  byId('conflict-choice').hidden = reviewedSample !== 'conflict'; byId('simulate-import').disabled = invalid; announce('Synthetic import preview updated.');
+});
+byId('simulate-import').addEventListener('click', () => {
+  if (!reviewedSample || reviewedSample === 'invalid') return;
+  const choice = document.querySelector('input[name="conflict"]:checked').value;
+  announce('Simulation complete: reviewed both categories, watches, trades and costs.' + (reviewedSample === 'conflict' ? ' Cost conflict: ' + (choice === 'keep' ? 'kept current value.' : 'used sample value.') : '') + ' No data was imported or saved.');
+});
+navigate('deals');
+</script>
+</body>
+</html>

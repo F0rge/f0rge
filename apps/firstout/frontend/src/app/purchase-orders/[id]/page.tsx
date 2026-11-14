@@ -37,7 +37,7 @@ import {
   getPurchaseOrder,
   landPurchaseOrder,
   listSkus,
-  listSuppliers,
+  getSupplier,
   markOnWater,
   rejectPurchaseOrder,
   updatePurchaseOrderLines,
@@ -167,8 +167,7 @@ export default function PurchaseOrderDetailPage() {
       setDraftLines(draftsFromOrder(data));
       setSupplierRef(data.supplier_ref ?? "");
       setHeaderNotes(data.notes ?? "");
-      const suppliers = await listSuppliers();
-      const matched = suppliers.find((entry) => entry.id === data.supplier_id) ?? null;
+      const matched = await getSupplier(data.supplier_id);
       setSupplier(matched);
       if (matched) {
         setFactoryBill((current) => ({ ...current, currency: matched.default_currency }));

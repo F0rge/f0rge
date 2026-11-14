@@ -8,6 +8,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
+from app.services.party_archive import require_active_customer
 from app.crud.repeating_invoice import RepeatingInvoiceCRUD
 from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.schemas.invoice import InvoiceCreate, InvoiceLineCreate
@@ -49,8 +50,7 @@ class RepeatingInvoiceService:
     async def create(
         self, data: RepeatingInvoiceCreate, user_id: uuid.UUID
     ) -> RepeatingInvoiceResponse:
-        if await self.customer_crud.get_by_id(data.customer_id) is None:
-            raise NotFoundError("Customer not found")
+        await require_active_customer(self.db, data.customer_id)
         schedule = RepeatingInvoice(
             customer_id=data.customer_id,
             name=data.name,

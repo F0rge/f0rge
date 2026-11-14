@@ -2,6 +2,8 @@
 """Gentle daily Buycycle tracker: one feed pass/day, embedded Turso history, writes data.json + alerts.json.
 Usage: tracker.py [--kind bikes|wheels|all] [--no-fetch] [--seed-checks file.json ...]"""
 
+from __future__ import annotations
+
 import json
 import re
 import time
@@ -12,6 +14,9 @@ import urllib.request
 import urllib.error
 import os
 import argparse
+import math
+
+from safety import Blocked, BudgetExhausted, RequestState, SafetyStop, collection_lock, local_day
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 import storage  # noqa: E402
@@ -76,31 +81,54 @@ KM = {
 }
 
 
-class Blocked(Exception):
-    pass
+_REQUEST_STATE = None
 
 
 def log(*a):
     print(dt.datetime.now().strftime("%H:%M:%S"), *a, flush=True)
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+def open_url(request, timeout):
+    # Redirects would hide additional HTTP attempts from the durable budget.
+    return urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
+
+
 def get(u, js=True):
-    for attempt in range(2):
-        try:
-            r = (
-                urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": UA, "Accept-Language": "en"}), timeout=60)
-                .read()
-                .decode("utf-8", "replace")
-            )
-            return json.loads(r) if js else r
-        except urllib.error.HTTPError as e:
-            if e.code in (403, 429):
-                log("HTTP", e.code, "-> backing off")
-                time.sleep(120 if attempt == 0 else 0)
-                if attempt == 1:
-                    raise Blocked(e.code)
-            else:
-                raise
+    if _REQUEST_STATE is not None:
+        _REQUEST_STATE.before_request(detail=not js)
+    blocked = False
+    settled = False
+    try:
+        with open_url(urllib.request.Request(u, headers={"User-Agent": UA, "Accept-Language": "en"}), timeout=60) as response:
+            r = response.read().decode("utf-8", "replace")
+        result = json.loads(r) if js else r
+        settled = True
+        return result
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 429):
+            # Persist the hold before sleeping so a restart cannot bypass it.
+            blocked = True
+            if _REQUEST_STATE is not None:
+                _REQUEST_STATE.block()
+            log("HTTP", e.code, "-> backing off once, then stopping")
+            time.sleep(120)
+            raise Blocked("upstream blocked collection") from None
+        settled = True
+        raise
+    except Exception:
+        settled = True
+        raise
+    finally:
+        # Preserve pending until both the request and its required cooldown finish.
+        if settled and not blocked:
+            time.sleep(FEED_PAUSE if js else PAGE_PAUSE)
+            if _REQUEST_STATE is not None:
+                _REQUEST_STATE.finish_request()
 
 
 def db():
@@ -114,20 +142,47 @@ def db():
 def scrape(c, kind, today):
     seen = {}
     complete = True
+    stop = None
     try:
         for f in FEEDS[kind]:
+            feed_ids = set()
+            feed_total = None
             for p in range(1, 120):
                 d = get(f"https://ac.cnstrc.com/browse/{f}key={K}&num_results_per_page=200&page={p}&c=ciojs-client-2")["response"]
                 r = d["results"]
-                for x in r:
-                    x = x["data"] | {"value": x["value"]}
-                    seen[x["id"]] = x
+                reported_total = d.get("total_num_results")
+                if reported_total is not None:
+                    if type(reported_total) is not int or reported_total < 0 or (feed_total is not None and reported_total != feed_total):
+                        raise ValueError("inconsistent feed total")
+                    feed_total = reported_total
+                if not isinstance(r, list) or len(r) > 200:
+                    raise ValueError("malformed feed page")
+                page_ids = set()
+                for item in r:
+                    x = item["data"] | {"value": item["value"]}
+                    if not isinstance(x.get("id"), (str, int)) or isinstance(x.get("id"), bool) or not str(x["id"]) or not isinstance(x["value"], str):
+                        raise ValueError("malformed feed listing")
+                    price = x.get("price")
+                    if isinstance(price, bool) or not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
+                        raise ValueError("malformed feed price")
+                    page_ids.add(str(x["id"]))
+                    seen[str(x["id"])] = x
+                if len(page_ids) != len(r) or (r and not page_ids.difference(feed_ids)):
+                    raise ValueError("duplicate feed page")
+                feed_ids.update(page_ids)
                 log(kind, f[:40], "page", p, len(r), "total", len(seen))
-                time.sleep(FEED_PAUSE)
                 if len(r) < 200:
+                    if feed_total is not None and len(feed_ids) != feed_total:
+                        raise ValueError("feed count does not match total")
                     break
+            else:
+                raise ValueError("pagination limit reached")
+    except SafetyStop as e:
+        complete = False
+        stop = e
+        log("feed incomplete:", type(e).__name__)
     except Exception as e:
-        log("feed incomplete:", e)
+        log("feed incomplete:", type(e).__name__)
         complete = False
     new = 0
     for i, x in seen.items():
@@ -177,6 +232,8 @@ def scrape(c, kind, today):
     c.execute("insert or replace into runs values(?,?,?,?,?,?,0,?)", (today, kind, int(complete), len(seen), new, gone, ""))
     c.commit()
     log(kind, "seen", len(seen), "new", new, "gone", gone, "complete", complete)
+    if stop is not None:
+        raise stop
     return complete
 
 
@@ -191,6 +248,10 @@ def fetch_detail(c, i, slug):
             o, _ = json.JSONDecoder().raw_decode(full[full.rfind('{"id"', 0, k) :])
         except Exception:
             o = {}
+    if not isinstance(o, dict) or str(o.get("id")) != str(i) or o.get("slug") != slug or not isinstance(o.get("price"), (int, float)):
+        raise ValueError("unrecognized detail response")
+    if isinstance(o["price"], bool) or not math.isfinite(o["price"]) or o["price"] < 0:
+        raise ValueError("invalid detail price")
     s = o.get("seller") or {}
 
     def f(p):
@@ -199,7 +260,7 @@ def fetch_detail(c, i, slug):
 
     rec = (
         i,
-        dt.date.today().isoformat(),
+        local_day(),
         o.get("status"),
         int(bool(o.get("can_buy_product"))),
         o.get("country"),
@@ -623,13 +684,31 @@ def alerts(kind, D, today, had_prior):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--kind", default="all")
+    ap.add_argument("--kind", choices=("bikes", "wheels", "all"), default="all")
     ap.add_argument("--no-fetch", action="store_true")
     ap.add_argument("--no-scrape", action="store_true")
     ap.add_argument("--seed-checks", nargs="*", default=[])
     a = ap.parse_args()
-    c = db()
-    today = dt.date.today().isoformat()
+    global _REQUEST_STATE
+    try:
+        # Hold the process lock before opening Turso, including offline rebuilds.
+        with collection_lock(DB):
+            c = db()
+            try:
+                if not (a.no_scrape and a.no_fetch):
+                    legacy = any(c.execute(f"select 1 from {table} limit 1").fetchone() for table in ("listing", "price_history", "detail", "runs"))
+                    _REQUEST_STATE = RequestState(DB, legacy_data=legacy, limit=PAGE_CAP)
+                return run(c, a)
+            finally:
+                _REQUEST_STATE = None
+                c.close()
+    except (SafetyStop, OSError) as e:
+        log("collection held:", type(e).__name__)
+        return 1
+
+
+def run(c, a):
+    today = local_day()
     for f in a.seed_checks:
         for slug, v in json.load(open(f)).items():
             row = c.execute("select id from listing where slug=?", (slug,)).fetchone()
@@ -656,14 +735,25 @@ def main():
                 )
         c.commit()
     blocked = False
+    incomplete = False
+    if _REQUEST_STATE is not None:
+        try:
+            _REQUEST_STATE.allowed()
+        except SafetyStop:
+            blocked = True
     for kind in ["bikes", "wheels"] if a.kind == "all" else [a.kind]:
         if not a.no_scrape and not blocked:
             if (c.execute("select complete from runs where day=? and kind=?", (today, kind)).fetchone() or [None])[0] == 1:
                 log(kind, "already scraped today")
             else:
                 try:
-                    scrape(c, kind, today)
-                except Blocked:
+                    if _REQUEST_STATE.claim_feed(kind):
+                        if not scrape(c, kind, today):
+                            incomplete = True
+                    else:
+                        incomplete = True
+                        log(kind, "feed already attempted today; using retained observations")
+                except SafetyStop:
                     blocked = True
         D = build(c, kind, today)
         if not a.no_fetch and not blocked:
@@ -679,23 +769,30 @@ def main():
                 try:
                     fetch_detail(c, i, slug)
                     n += 1
-                except Blocked:
+                except BudgetExhausted:
+                    log("daily detail budget exhausted")
+                    break
+                except SafetyStop:
                     blocked = True
                     break
                 except Exception as e:
-                    log("detail err", slug, e)
+                    c.rollback()
+                    incomplete = True
+                    log("detail err:", type(e).__name__)
+                    continue
                 c.execute("update listing set fetch_price=?, last_fetch=? where id=?", (price, today, i))
                 c.commit()
-                time.sleep(PAGE_PAUSE)
-            c.execute("update runs set fetched=? where day=? and kind=?", (n, today, kind))
+            c.execute("update runs set fetched=coalesce(fetched,0)+? where day=? and kind=?", (n, today, kind))
             c.commit()
             log(kind, "product pages fetched", n, "of", len(todo))
             D = build(c, kind, today)
         had_prior = c.execute("select count(*) from runs where kind=? and day<? and complete=1", (kind, today)).fetchone()[0] > 0
         alerts(kind, D, today, had_prior)
-    if blocked:
-        log("stopped early after 403/429; will retry tomorrow")
+    if blocked or incomplete:
+        log("collection held or incomplete; retained observations remain available")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

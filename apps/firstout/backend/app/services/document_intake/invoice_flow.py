@@ -71,6 +71,7 @@ class InvoiceIntakeService:
             usage,
             record_proforma_duplicate=False,
             number_noun="invoice",
+            include_archived_suppliers=True,
         )
         return await self._review_against_orders(extracted, review, raw, file, user_id)
 
@@ -372,7 +373,8 @@ class InvoiceIntakeService:
         user_id: uuid.UUID,
         auto: bool,
     ) -> ProcessedBillOut:
-        created = await self.bills.create(
+        created = await self.bills.create_for_purchase_order(
+            po.id,
             BillCreate(
                 supplier_id=supplier_id,
                 supplier_ref=document_number,
@@ -393,7 +395,6 @@ class InvoiceIntakeService:
         bill = await self.bills.crud.get_by_id(created.id)
         if bill is None:
             raise NotFoundError("Bill not found")
-        bill.purchase_order_id = po.id
         bill.pdf_storage_key = storage_key
         async with unit_of_work(self.db):
             await self.db.flush()

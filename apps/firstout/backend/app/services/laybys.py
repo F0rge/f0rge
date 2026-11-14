@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
+from app.services.party_archive import require_active_customer
 from app.crud.layby import LaybyCRUD
 from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
@@ -107,9 +108,7 @@ class LaybysService:
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def create(self, data: LaybyCreate, user_id: uuid.UUID) -> LaybyResponse:
-        customer = await self.customer_crud.get_by_id(data.customer_id)
-        if customer is None:
-            raise NotFoundError("Customer not found")
+        await require_active_customer(self.db, data.customer_id)
 
         location = await self.location_crud.get_by_id(data.location_id)
         if location is None:

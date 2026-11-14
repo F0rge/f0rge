@@ -116,6 +116,7 @@ async def test_duplicates_match_folded_name_email_and_phone(owner_client: AsyncC
         {
             "id": sipho["id"],
             "name": "Sipho Dlamini",
+            "is_archived": False,
             "email": "sipho.dlamini@firstout.test",
             "phone": "082 123 4567",
             "matched_fields": ["name"],

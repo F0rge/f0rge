@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.proforma import ProformaCRUD
 from app.crud.supplier import SupplierCRUD
+from app.services.party_archive import require_active_supplier
 from app.models.proforma import Proforma
 from app.schemas.proforma import ProformaResponse
 from app.services.object_storage import save_bytes
@@ -44,9 +45,7 @@ class ProformaService:
         currency: Optional[str],
         file: UploadFile,
     ) -> ProformaResponse:
-        supplier = await self.supplier_crud.get_by_id(supplier_id)
-        if supplier is None:
-            raise NotFoundError("Supplier not found")
+        await require_active_supplier(self.db, supplier_id)
 
         pdf_bytes = await file.read()
         if not pdf_bytes:

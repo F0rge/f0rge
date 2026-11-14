@@ -22,6 +22,7 @@ from app.schemas.customer_crm import (
 )
 from app.schemas.customer_portal import PortalMeResponse, PortalUserCreate
 from app.schemas.customer_portal import PortalInvitationCreate
+from app.schemas.party_archive import PartyArchiveCounts, PartyArchiveUpdate
 from app.services.portal_identity import PortalIdentityService
 from app.dependencies.customer_portal import get_portal_identity_service
 from app.services.customer_portal import CustomerPortalService
@@ -37,10 +38,21 @@ async def list_customers(
     active_layby: Optional[bool] = None,
     on_hold: Optional[bool] = None,
     q: Optional[str] = None,
+    archived: bool = False,
     _: uuid.UUID = Depends(get_current_user_id),
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
-    return await service.list(overdue=overdue, active_layby=active_layby, on_hold=on_hold, q=q)
+    return await service.list(
+        overdue=overdue, active_layby=active_layby, on_hold=on_hold, q=q, archived=archived
+    )
+
+
+@customers_router.get("/archive-counts", response_model=PartyArchiveCounts)
+async def customer_archive_counts(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: CustomersCrmService = Depends(get_customers_crm_service),
+):
+    return await service.archive_counts()
 
 
 @customers_router.get("/duplicates", response_model=list[CustomerDuplicateMatch])
@@ -84,6 +96,16 @@ async def update_customer(
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
     return await service.update(customer_id, body, user_id)
+
+
+@customers_router.patch("/{customer_id}/archive", response_model=CustomerCrmResponse)
+async def archive_customer(
+    customer_id: uuid.UUID,
+    body: PartyArchiveUpdate,
+    _: uuid.UUID = Depends(require_customers_mutate),
+    service: CustomersCrmService = Depends(get_customers_crm_service),
+):
+    return await service.set_archived(customer_id, body.is_archived)
 
 
 @customers_router.post(

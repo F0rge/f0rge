@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.bill import BillCRUD
 from app.crud.supplier import SupplierCRUD
+from app.crud.purchase_order import PurchaseOrderCRUD
+from app.services.party_archive import require_active_supplier
 from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
@@ -27,6 +29,7 @@ from app.services.suppliers import SupplierService
 from app.services.vat import CENT
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+from f0rge_db.organisation import tenant_id_ctx
 
 
 class BillService:
@@ -60,10 +63,34 @@ class BillService:
         user_id: Optional[uuid.UUID] = None,
         note: Optional[str] = None,
     ) -> BillResponse:
+        await require_active_supplier(self.db, data.supplier_id)
+        return await self._create(data, user_id=user_id, note=note)
+
+    async def create_for_purchase_order(
+        self,
+        purchase_order_id: uuid.UUID,
+        data: BillCreate,
+        *,
+        user_id: uuid.UUID,
+        note: Optional[str] = None,
+    ) -> BillResponse:
+        """Record an invoice for the verified supplier on an existing commitment."""
+        po = await PurchaseOrderCRUD(self.db).get_by_id(purchase_order_id)
+        if po is None or po.team_id != tenant_id_ctx.get():
+            raise NotFoundError("Purchase order not found")
+        if po.supplier_id != data.supplier_id:
+            raise ValidationError("Bill supplier must match the existing purchase order")
+        return await self._create(data, user_id=user_id, note=note, purchase_order_id=po.id)
+
+    async def _create(
+        self,
+        data: BillCreate,
+        *,
+        user_id: Optional[uuid.UUID],
+        note: Optional[str],
+        purchase_order_id: Optional[uuid.UUID] = None,
+    ) -> BillResponse:
         await assert_date_postable(self.db, data.issue_date)
-        supplier = await self.supplier_crud.get_by_id(data.supplier_id)
-        if supplier is None:
-            raise NotFoundError("Supplier not found")
 
         currency = SupplierService.normalize_currency(data.currency)
         fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
@@ -93,6 +120,7 @@ class BillService:
         bill = Bill(
             bill_number="",
             supplier_id=data.supplier_id,
+            purchase_order_id=purchase_order_id,
             supplier_ref=data.supplier_ref,
             issue_date=data.issue_date,
             currency=currency,

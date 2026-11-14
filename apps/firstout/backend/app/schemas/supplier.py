@@ -18,6 +18,7 @@ class SupplierCreate(BaseModel):
 class SupplierResponse(BaseModel):
     id: uuid.UUID
     name: str
+    is_archived: bool
     default_currency: str
     vat_number: Optional[str] = None
     address: Optional[str] = None

@@ -52,6 +52,9 @@ qa-screenshots/
 *.tsbuildinfo
 .tmp/
 
+# Rust build intermediates (Cargo.lock stays tracked)
+target/
+
 # libs/ui Storybook
 libs/ui/dist/
 libs/ui/storybook-static/
@@ -68,6 +71,8 @@ apps/buycycle/**/models.json
 apps/buycycle/**/alerts*.json
 apps/buycycle/**/*.csv
 apps/buycycle/**/*.env
+apps/buycycle/**/*-tracker.lock
+apps/buycycle/**/*-tracker-safety.json*
 apps/buycycle/data/
 apps/buycycle/site/
 

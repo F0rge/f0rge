@@ -18,6 +18,7 @@ from app.crud.proforma import ProformaCRUD
 from app.crud.purchase_order import PurchaseOrderCRUD, SkuStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
+from app.services.party_archive import require_active_supplier
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.models.inventory import SkuStock
@@ -43,7 +44,7 @@ from app.schemas.purchase_order import (
     PurchaseOrderResponse,
     ReceiveRequest,
 )
-from app.schemas.sku import SkuCreate, SkuUpdate
+from app.schemas.sku import SkuCreate
 from app.services.skus import SkuService
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.books_periods import assert_date_postable
@@ -116,9 +117,7 @@ class PurchaseOrderService:
         return self._to_response(po)
 
     async def create(self, data: PurchaseOrderCreate, user_id: uuid.UUID) -> PurchaseOrderResponse:
-        supplier = await self.supplier_crud.get_by_id(data.supplier_id)
-        if supplier is None:
-            raise NotFoundError("Supplier not found")
+        supplier = await require_active_supplier(self.db, data.supplier_id)
 
         if data.proforma_id is not None:
             proforma = await self.proforma_crud.get_by_id(data.proforma_id)
@@ -222,7 +221,11 @@ class PurchaseOrderService:
             ),
             user_id,
         )
-        await skus.update(created.id, SkuUpdate(preferred_supplier_id=po.supplier_id), user_id)
+        # This SKU resolves a line on an existing PO, so retain its committed supplier.
+        # Standalone catalogue assignments still require an active supplier.
+        created_sku = await self.sku_crud.get_by_id(created.id)
+        if created_sku is None:
+            raise NotFoundError("SKU not found")
         po = await self._reload(po_id)
         current = next((row for row in po.lines if row.id == line_id), None)
         if current is None:
@@ -234,6 +237,7 @@ class PurchaseOrderService:
             latest_price=current.factory_unit_amount,
         )
         async with unit_of_work(self.db):
+            created_sku.preferred_supplier_id = po.supplier_id
             self.db.add(price)
             current.sku_id = created.id
             await self.db.flush()

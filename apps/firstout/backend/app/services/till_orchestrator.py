@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
+from app.services.party_archive import assert_customer_active
 from app.crud.payment import PaymentCRUD
 from app.crud.pick import PickCRUD
 from app.crud.purchase_order import LocationStockCRUD
@@ -110,6 +111,7 @@ class TillOrchestrator:
                 raise NotFoundError("Customer not found")
         else:
             customer = await self._get_walk_in_customer()
+        assert_customer_active(customer)
         override_note = None
         if not self.credit.is_walk_in(customer):
             override_note = await self.credit.authorize_override(

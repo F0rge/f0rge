@@ -1,0 +1,5 @@
+.tabs { min-width:0; }
+.tabs :global(.cds--tab-content) { padding:1.25rem 0 0; }
+.tabs :global(.cds--tabs) { border-bottom:1px solid var(--cds-border-subtle,#c6c6c6); }
+.notice { max-width:none; margin-bottom:1.25rem; }
+.confirmation { margin-bottom:1rem; font-size:.875rem; line-height:1.6; }

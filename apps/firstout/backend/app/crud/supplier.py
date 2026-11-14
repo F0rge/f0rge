@@ -18,16 +18,42 @@ class SupplierCRUD(BaseCRUD):
 
     async def get_by_id(self, supplier_id: uuid.UUID) -> Optional[Supplier]:
         return (
-            await self.db.execute(select(Supplier).where(Supplier.id == supplier_id))
+            await self.db.execute(
+                select(Supplier).where(
+                    Supplier.id == supplier_id, Supplier.team_id == tenant_id_ctx.get()
+                )
+            )
         ).scalar_one_or_none()
 
-    async def list_all(self) -> list[Supplier]:
-        result = await self.db.execute(select(Supplier).order_by(Supplier.name))
+    async def list_all(self, archived: bool = False) -> list[Supplier]:
+        result = await self.db.execute(
+            select(Supplier)
+            .where(Supplier.team_id == tenant_id_ctx.get(), Supplier.is_archived.is_(archived))
+            .order_by(Supplier.name)
+        )
         return list(result.scalars().all())
+
+    async def archive_counts(self) -> tuple[int, int]:
+        row = (
+            await self.db.execute(
+                select(
+                    func.count().filter(Supplier.is_archived.is_(False)),
+                    func.count().filter(Supplier.is_archived.is_(True)),
+                )
+                .select_from(Supplier)
+                .where(Supplier.team_id == tenant_id_ctx.get())
+            )
+        ).one()
+        return int(row[0]), int(row[1])
 
     async def get_by_name_insensitive(self, name: str) -> Optional[Supplier]:
         return (
-            await self.db.execute(select(Supplier).where(func.lower(Supplier.name) == name.lower()))
+            await self.db.execute(
+                select(Supplier).where(
+                    Supplier.team_id == tenant_id_ctx.get(),
+                    func.lower(Supplier.name) == name.lower(),
+                )
+            )
         ).scalar_one_or_none()
 
     async def names_by_ids(self, supplier_ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
