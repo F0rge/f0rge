@@ -411,5 +411,86 @@
     "reviewers": [
       "f0rge-quality-testing"
     ]
+  },
+  {
+    "path": "libs/rust/api-errors/src/lib.rs",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/api-errors/tests/http.rs",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/api-errors/examples/error-server.rs",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/api-errors/README.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/api-errors/Cargo.toml",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/api-errors/Cargo.lock",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/api-errors/project.json",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-frontend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/unclassified/src/lib.rs",
+    "error": "Unclassified path"
   }
 ]
