@@ -20,11 +20,35 @@ The current environment allows `main` only and no tags; P-045's release-tag
 grammar and corresponding protected tag allowlist need design before a
 tag-triggered release.
 
+No separate release requester has been verified. `workflow_run` does not by
+itself establish a bot identity. A token with repository Actions write access
+can also rerun historical workflows; do not grant it until historical release
+paths and production credentials are contained. Before activation, verify a
+separate least-privilege requester, Leo's independent approval, and fresh
+approval on reruns in an isolated nonproduction setting.
+
 `release_evidence.py` compares supplied candidate, artifact and check fields
 offline. `test_release_evidence.py` exercises mismatches and the no-effect
 workflow configuration. These fixtures do not retrieve trustworthy GitHub
 approval or CI facts, prove a human acted, prevent real approval replay, verify
 a provider's running digest or authorize a release.
+
+The `daskasas-commerce:container-test` target can retain its locally tested
+image as an archive outside the checkout, with the source commit, platform,
+Docker image ID and archive checksum. CI retains that archive when this project
+is affected or a full manual CI run is requested. The probe checks runtime
+imports and hosted-configuration guards with container networking disabled; it
+is not a full application or checkout
+journey. The image ID and archive checksum are not a registry manifest digest,
+and the accompanying metadata is not signed provenance or an approval. Pull
+request archives use a synthetic merge commit; neither those nor non-main or
+manual-run archives are trusted production release artifacts.
+No other app image is covered by this retention path.
+
+The documented Railway deployment metadata and Coolify configuration inspected
+so far do not independently establish each running instance's image digest.
+Provider verification remains a release blocker until a trusted source and
+nonproduction rehearsal establish the exact running image, target and health.
 
 Expiry and replay enforcement are not implemented here. Before activation,
 test that an expired review is rejected and that reusing the same approved
