@@ -169,6 +169,8 @@ Agent-ready GitHub issue authoring (scope split, decision surfacing, parent/sub-
 
 Use a short-lived branch and a pull request into `main`. Review and green CI are not a production release. Leo approves every production release. Do not enable auto-merge. `.cursor/skills/ship-feature/SKILL.md` is not in this repo; do not invent it.
 
+Before creating, updating or reviewing a PR description, follow [the PR process](docs/agents/pr-process.md) and [PR template](.github/PULL_REQUEST_TEMPLATE.md): explain what changed, why and the solution design, then assess every ADR with evidence and visible gaps.
+
 ## PR review context
 
 Review playbooks live in `.cursor/review-context/`. Read `_shared/*.md` plus the existing area playbooks selected by the [agent guide's review-reference mapping](docs/agents/README.md). Their historical filenames remain stable; they are review references, not another ownership map or proof of automatic loading.
