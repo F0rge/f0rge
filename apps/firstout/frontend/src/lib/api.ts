@@ -989,6 +989,7 @@ export type SkuListParams = {
   offset?: number;
   q?: string;
   category?: string;
+  preferred_supplier_id?: string;
 };
 
 export type SkuListPage = Page<Sku> & { categories: string[] };
@@ -1014,11 +1015,16 @@ function skuListQuery(options?: SkuListParams): string {
   if (category) {
     params.set("category", category);
   }
+  if (options?.preferred_supplier_id) {
+    params.set("preferred_supplier_id", options.preferred_supplier_id);
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
 
-export function listSkus(options?: { category?: string; q?: string }): Promise<Sku[]> {
+export function listSkus(
+  options?: Pick<SkuListParams, "category" | "q" | "preferred_supplier_id">,
+): Promise<Sku[]> {
   return apiFetch<Sku[]>(`/skus${skuListQuery(options)}`);
 }
 

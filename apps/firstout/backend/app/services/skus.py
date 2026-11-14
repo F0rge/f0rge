@@ -103,14 +103,21 @@ class SkuService:
         limit: Optional[int] = None,
         offset: int = 0,
         q: Optional[str] = None,
+        preferred_supplier_id: Optional[uuid.UUID] = None,
     ) -> Union[list[SkuResponse], SkuListPage]:
         category = _blank_to_none(category)
         q = _blank_to_none(q)
         if limit is None:
-            skus = await self.crud.list_all(category=category, q=q)
+            skus = await self.crud.list_all(
+                category=category, q=q, preferred_supplier_id=preferred_supplier_id
+            )
             return await self._to_responses(skus, user_id)
         skus, total = await self.crud.list_filtered(
-            category=category, q=q, limit=limit, offset=offset
+            category=category,
+            q=q,
+            preferred_supplier_id=preferred_supplier_id,
+            limit=limit,
+            offset=offset,
         )
         return SkuListPage(
             items=await self._to_responses(skus, user_id),
@@ -124,13 +131,18 @@ class SkuService:
         *,
         category: Optional[str] = None,
         q: Optional[str] = None,
+        preferred_supplier_id: Optional[uuid.UUID] = None,
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> SkuUnitCostPage:
         category = _blank_to_none(category)
         q = _blank_to_none(q)
         skus, total = await self.crud.list_filtered(
-            category=category, q=q, limit=limit, offset=offset
+            category=category,
+            q=q,
+            preferred_supplier_id=preferred_supplier_id,
+            limit=limit,
+            offset=offset,
         )
         costs = await InventoryService(self.db).unit_costs_by_sku_id(
             [sku.id for sku in skus], user_id

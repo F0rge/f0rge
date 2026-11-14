@@ -26,10 +26,18 @@ async def list_skus(
     limit: Optional[int] = Query(default=None, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     q: Optional[str] = None,
+    preferred_supplier_id: Optional[uuid.UUID] = None,
     user_id: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ):
-    return await service.list(category, user_id, limit=limit, offset=offset, q=q)
+    return await service.list(
+        category,
+        user_id,
+        limit=limit,
+        offset=offset,
+        q=q,
+        preferred_supplier_id=preferred_supplier_id,
+    )
 
 
 @skus_router.get("/unit-costs", response_model=SkuUnitCostPage)
@@ -38,11 +46,17 @@ async def list_sku_unit_costs(
     limit: Optional[int] = Query(default=None, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     q: Optional[str] = None,
+    preferred_supplier_id: Optional[uuid.UUID] = None,
     user_id: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ):
     return await service.list_unit_costs(
-        user_id, category=category, q=q, limit=limit, offset=offset
+        user_id,
+        category=category,
+        q=q,
+        preferred_supplier_id=preferred_supplier_id,
+        limit=limit,
+        offset=offset,
     )
 
 
