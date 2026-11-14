@@ -1,93 +1,24 @@
-name: Deploy
+name: Release preparation (no deployment)
 
-# Runs after CI succeeds on push/dispatch to main (the only deployed branch).
-# Manual redeploy via workflow_dispatch (does not re-run lint/test — use CI for that).
-
+# A protected environment is not an artifact-promotion system. This manual
+# preparation never deploys, even after approval. Provider and historical
+# workflow routes must be audited separately before enabling a release path.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Target environment
-        type: choice
-        options: [main]
-        default: main
-      component:
-        description: Component to deploy
-        type: choice
-        options: [all, api, mcp, frontend]
-        default: all
-      sha:
-        description: Commit SHA (empty = branch tip)
-        type: string
-        required: false
-        default: ""
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  guard:
-    name: guard
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        contains(fromJSON('["push","workflow_dispatch"]'), github.event.workflow_run.event) &&
-        contains(fromJSON('["main"]'), github.event.workflow_run.head_branch)
-      )
+  release-preparation:
+    name: Release preparation only
+    environment:
+      name: production
+      deployment: false
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      environment: ${{ steps.out.outputs.environment }}
-      sha: ${{ steps.out.outputs.sha }}
-      base_branch: ${{ steps.out.outputs.base_branch }}
-      component: ${{ steps.out.outputs.component }}
     steps:
-      - name: Resolve deploy target
-        id: out
+      - name: Report preparation scope
         run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV="${{ inputs.environment }}"
-            SHA="${{ inputs.sha }}"
-            COMPONENT="${{ inputs.component }}"
-            # Empty SHA → tip of the ref this workflow was dispatched against.
-            if [ -z "$SHA" ]; then
-              SHA="${{ github.sha }}"
-            fi
-          else
-            ENV="${{ github.event.workflow_run.head_branch }}"
-            SHA="${{ github.event.workflow_run.head_sha }}"
-            COMPONENT="auto"
-          fi
-          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "base_branch=$ENV" >> "$GITHUB_OUTPUT"
-          echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
-          echo "Deploy $COMPONENT @ $SHA → $ENV"
-
-  deploy:
-    name: deploy
-    needs: guard
-    concurrency:
-      group: deploy-${{ needs.guard.outputs.environment }}
-      cancel-in-progress: false
-    uses: ./.github/workflows/deploy-reusable.yml
-    with:
-      environment: ${{ needs.guard.outputs.environment }}
-      sha: ${{ needs.guard.outputs.sha }}
-      base_branch: ${{ needs.guard.outputs.base_branch }}
-      component: ${{ needs.guard.outputs.component }}
-    secrets:
-      COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
-      COOLIFY_WEBHOOK_DASKASAS_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_BACKEND }}
-      COOLIFY_WEBHOOK_DASKASAS_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_FRONTEND }}
-      COOLIFY_WEBHOOK_BUYCYCLE: ${{ secrets.COOLIFY_WEBHOOK_BUYCYCLE }}
-      COOLIFY_WEBHOOK_ENVMON_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_BACKEND }}
-      COOLIFY_WEBHOOK_ENVMON_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_FRONTEND }}
-      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
-      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          echo 'Preparation only: no production deployment was performed.'
+          echo 'Tested immutable artifact promotion and provider verification are not configured.'

@@ -10,7 +10,7 @@ Accepted and conditional decisions in [`docs/adr/README.md`](docs/adr/README.md)
 
 New apps use the accepted stack in that index: Rust, Actix Web, Diesel, PostgreSQL, standalone React, strict TypeScript, Vite, actual Primer, and TanStack Query, Router, and Form. `C-001` and `C-002` stay conditional. Apps already in this repo are legacy migration inventory, not approved exceptions, and these records do not migrate them.
 
-Leo approves every production release. Do not enable auto-merge. Do not merge or deploy unless that approval is in the task. Workflow files that still describe automatic deploys are existing configuration, not permission and not an approved exception.
+Leo approves every production release. Do not enable auto-merge. Do not merge or deploy unless that approval is in the task. Historical automatic deploy paths and retained provider configuration are inventory, not permission and not an approved exception.
 
 ## Stack
 
@@ -36,7 +36,7 @@ Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `z
 | Redis | `Redis` | via `REDIS_URL` |
 | Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
-Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. Railway and GitHub workflow files describe automatic production paths. Those paths are not an approved exception and are not Leo's release approval. GitHub Actions smoke is configured to run on `main` only. See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
+Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. These are provider configuration references; current runtime state has not been checked for this release-hold change. The proposed GitHub release entry points perform no deployment or production smoke. See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
 ## apps/buycycle
 
 Internal buycycle deal-finder dashboards on the Pi (Coolify, ports 8095/8096, no domain). See [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md). Public repo: never commit its DBs, data or feed key.
@@ -59,7 +59,7 @@ Local dev:
 cd apps/dk/tag-printer && docker compose up --build   # :3002 / :8002
 ```
 
-Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree). Coolify repoint after first `main` merge: `apps/dk/tag-printer/scripts/repoint-coolify.sh`.
+Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree). Historical Coolify repoint runbook: `apps/dk/tag-printer/scripts/repoint-coolify.sh`; using it requires a separately authorized provider operation, not merely a merge.
 
 ## apps/firstout
 
@@ -84,7 +84,7 @@ Do not open a `develop` branch workflow. A remote `develop` ref may still exist;
 - Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names in committed files. They do not authorize a `develop` branch workflow. Committed files do not describe a deploy workflow for those names. That is not a live host check.
 
 - PRs into `main` run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build + prod-shaped frontend build) and `e2e-smoke.yml`.
-- After CI is green on a push to `main`, `.github/workflows/deploy.yml` is configured to smoke Marrow and Firstout URLs and to call Coolify webhooks for dk. That configuration is not Leo's release approval and this file does not turn it off.
+- The existing **Deploy** workflow is disabled. This proposed change makes `deploy.yml` manual preparation only and `deploy-reusable.yml` an inert, failing release hold; neither deploys nor smokes production. The GitHub `production` environment is configured, but it does not protect direct Railway/Coolify operations. Before any release work, read [the hold and remaining requirements](.github/deploy/README.md): tested immutable artifact promotion, secret migration, independent approval identity and provider-state verification remain future work.
 
 ## Running locally
 
@@ -215,7 +215,7 @@ References:
 The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project apps/marrow/backend`, `uv tool install "ruff==$(cat .github/ruff-version)"`, `npm ci` at repo root). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
 
 ### Database + Docker (must start manually each session)
-- There is **no local dev docker-compose**; deploy is Railway (`railway*.toml` + GitHub Actions smoke) and Coolify for dk.
+- There is **no local dev docker-compose**; documented production hosts are Railway (`railway*.toml`) and Coolify for dk. The proposed GitHub release entry points remain under the [release hold](.github/deploy/README.md).
 - The Docker daemon is not auto-started. Start it once per session: `sudo dockerd > /tmp/dockerd.log 2>&1 &` then `sudo chmod 666 /var/run/docker.sock` (lets `uv run pytest`'s testcontainers reach the socket as the `ubuntu` user). `/etc/docker/daemon.json` is pre-set to `fuse-overlayfs` + `containerd-snapshotter: false` (required for Docker 29 in this VM) — do not change it.
 - Backend + tests need a **pgvector** Postgres on `localhost:5432` with user/pass/db all `health`. Start/reuse it:
   `docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health -p 5432:5432 pgvector/pgvector:pg16`

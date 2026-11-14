@@ -39,11 +39,11 @@ cd apps/dk/tag-printer/frontend && npm run dev -- --port 3002
 4. **CF WAF** — synthetic smoke tests need a browser User-Agent on POST
    `/api/generate-pdf`; GET `/health` is fine with curl
 
-## CI deploy
+## Release hold
 
-`.github/deploy/manifest.yml` documents a Coolify webhook path. On a push to `main` after CI is green, `deploy-reusable.yml` is written to call those webhooks. That is the documented current configuration. It is not Leo's release approval, a merge is not that approval, and this file does not turn the path off. Each app is signed with its own secret name: `COOLIFY_WEBHOOK_DASKASAS_BACKEND` and `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`. `watch_paths` are how that workflow avoids rebuilding dk for unrelated changes.
+The existing **Deploy** workflow is disabled. In the proposed workflows, `deploy.yml` only reports preparation and `deploy-reusable.yml` fails under a release hold; neither calls Coolify or runs production smoke. The configured GitHub `production` environment does not protect direct Coolify operations. Runtime provider state has not been checked for this change.
 
-Use the committed configuration and gotchas above; verify current provider state before an authorized operation.
+The manifest and webhook names `COOLIFY_WEBHOOK_DASKASAS_BACKEND` / `COOLIFY_WEBHOOK_DASKASAS_FRONTEND` describe the historical source-building path; `watch_paths` selected affected apps there. Preserve these as inventory, not a route around the hold. Before authorized release work, read [the remaining artifact, secret migration and independent approval requirements](../../../.github/deploy/README.md), verify current provider state and obtain Leo's explicit release approval. A merge is not that approval.
 
 ## Frontend kit
 
