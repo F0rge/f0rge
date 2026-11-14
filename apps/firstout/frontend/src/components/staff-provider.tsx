@@ -84,7 +84,6 @@ function SignedInSwitcher() {
   const { isSignedIn } = useClerkAuth();
   if (!isSignedIn) return null;
   return (
-    <>
       <OrganizationSwitcher
         hidePersonal
         organizationProfileMode="navigation"
@@ -94,10 +93,15 @@ function SignedInSwitcher() {
         afterSelectOrganizationUrl={(organisation) => organisation.slug
           ? organisationDestination(organisation.slug, window.location.host)
           : "/onboarding"}
-        appearance={appearance}
+        appearance={{
+          ...appearance,
+          elements: {
+            rootBox: "firstout-organisation-switcher",
+            organizationSwitcherTrigger: "firstout-organisation-switcher-trigger",
+            organizationPreviewMainIdentifier: "firstout-organisation-switcher-name",
+          },
+        }}
       />
-      <Link className="cds--link firstout-header-create" href="/onboarding">Create organisation</Link>
-    </>
   );
 }
 export function StaffOrganizationSwitcher() {

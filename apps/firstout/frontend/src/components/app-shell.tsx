@@ -303,8 +303,10 @@ export function AppShell({ children }: AppShellProps) {
           >
             <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
           </HeaderName>
-          <HeaderGlobalBar>
+          <div className="firstout-header-organisation">
             <StaffOrganizationSwitcher />
+          </div>
+          <HeaderGlobalBar>
             <HeaderSearch />
             <span className="firstout-header-user" title={user.email}>
               {user.display_name || user.email}
