@@ -7,6 +7,8 @@ COPY vendor/braces/braces-3.0.4-f0rge.1.tgz ./vendor/braces/
 COPY apps/marrow/frontend/package.json ./apps/marrow/frontend/
 COPY apps/dk/tag-printer/frontend/package.json ./apps/dk/tag-printer/frontend/
 COPY apps/firstout/frontend/package.json ./apps/firstout/frontend/
+COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
+COPY apps/storefront/web/package.json ./apps/storefront/web/
 COPY libs/ui/package.json ./libs/ui/
 RUN npm ci
 
@@ -23,13 +25,21 @@ ENV API_URL=$API_URL
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED=$NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED
 ENV NODE_OPTIONS=--max-old-space-size=1536
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 RUN npm run typecheck -w firstout-frontend
 RUN npm run build -w firstout-frontend
 
 FROM node:22-alpine AS runner
 WORKDIR /app
 
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.source="https://github.com/F0rge/f0rge" \
+      org.opencontainers.image.revision=$SOURCE_COMMIT \
+      org.opencontainers.image.title="Firstout frontend"
+
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

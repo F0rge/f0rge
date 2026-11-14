@@ -1,0 +1,141 @@
+name: Firstout tested release image
+
+# This workflow publishes a tested artifact; it never changes a provider or
+# supplies release approval. An explicitly approved operator promotes its digest.
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact main commit to build (40-character SHA)
+        required: true
+        type: string
+      release_tag:
+        description: release/firstout-frontend/railway/YYYYMMDDTHHMMSSZ
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firstout-release-image-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  tested-image:
+    if: github.repository == 'F0rge/f0rge' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      API_URL: ${{ vars.FIRSTOUT_API_URL }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.FIRSTOUT_CLERK_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED: ${{ vars.FIRSTOUT_TENANT_SUBDOMAINS_ENABLED }}
+      IMAGE_REPOSITORY: ghcr.io/f0rge/firstout-frontend
+      NODE_ENV: production
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate immutable release inputs
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RELEASE_TAG" =~ ^release/firstout-frontend/railway/[0-9]{8}T[0-9]{6}Z$ ]]
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$SOURCE_COMMIT"
+          git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
+          test "$API_URL" = 'https://api.firstout.co.za'
+          [[ "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" == pk_live_* ]]
+          [[ "$NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED" =~ ^(true|false)$ ]]
+
+      - name: Check out the selected main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-node-workspace
+        env:
+          NODE_ENV: development
+
+      - name: Test the selected application
+        run: npx nx run-many --projects=firstout-frontend --targets=lint,typecheck,test --skip-nx-cache --output-style=static
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Name the unique candidate image
+        run: echo "CANDIDATE_IMAGE=$IMAGE_REPOSITORY:ci-$SOURCE_COMMIT-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+
+      - name: Build once for Railway
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/firstout/frontend/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: ${{ env.CANDIDATE_IMAGE }}
+          build-args: |
+            SOURCE_COMMIT=${{ inputs.source_commit }}
+            API_URL=${{ vars.FIRSTOUT_API_URL }}
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.FIRSTOUT_CLERK_PUBLISHABLE_KEY }}
+            NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED=${{ vars.FIRSTOUT_TENANT_SUBDOMAINS_ENABLED }}
+
+      - name: Test the exact production image without external access
+        run: node .github/scripts/firstout-container-smoke.mjs "$CANDIDATE_IMAGE"
+
+      - name: Authenticate publication only
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish and verify the tested image
+        id: image
+        run: |
+          set -euo pipefail
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' "$CANDIDATE_IMAGE")
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$CANDIDATE_IMAGE")" = 'linux/amd64'
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$CANDIDATE_IMAGE")" = "$SOURCE_COMMIT"
+          docker push "$CANDIDATE_IMAGE"
+          DIGEST=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$CANDIDATE_IMAGE" | sed -n "s|^$IMAGE_REPOSITORY@||p")
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          PINNED_IMAGE="$IMAGE_REPOSITORY@$DIGEST"
+          docker pull --platform linux/amd64 "$PINNED_IMAGE"
+          test "$(docker image inspect --format '{{.Id}}' "$PINNED_IMAGE")" = "$IMAGE_ID"
+          export IMAGE_ID DIGEST PINNED_IMAGE
+          node --input-type=module <<'JS'
+          import { writeFileSync } from 'node:fs';
+          const env = process.env;
+          writeFileSync('firstout-release.json', JSON.stringify({
+            schema_version: 1, repository: 'F0rge/f0rge',
+            source_commit: env.SOURCE_COMMIT, release_tag: env.RELEASE_TAG,
+            image: env.PINNED_IMAGE, digest: env.DIGEST, image_id: env.IMAGE_ID,
+            platform: 'linux/amd64', workflow_run_id: Number(env.GITHUB_RUN_ID),
+            workflow_run_attempt: Number(env.GITHUB_RUN_ATTEMPT), workflow_commit: env.GITHUB_SHA,
+            tested: true, checks: {unit: true, lint: true, typecheck: true, container_smoke: true},
+            target: {project: 'c76d8df1-d839-454c-a94a-79b930deaf38', environment: '9f7b0c34-bd95-442b-b746-a9791dcc2895', service: '10838be1-7a37-4dfc-810a-8805d040d5d7'},
+          }, null, 2) + '\n');
+          JS
+          echo "image=$PINNED_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Tested Firstout image: \`$PINNED_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source: \`$SOURCE_COMMIT\`; release tag: \`$RELEASE_TAG\`. Publication is not deployment or approval." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain tested artifact evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: firstout-release-evidence
+          path: firstout-release.json
+          if-no-files-found: error
+          overwrite: true

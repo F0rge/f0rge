@@ -1,0 +1,33 @@
+# Dockerfile-specific, repo-root-relative allowlist. A nested .dockerignore
+# alone is not used by `docker build -f apps/firstout/frontend/Dockerfile .`.
+*
+!package.json
+!package-lock.json
+!vendor/
+!vendor/braces/
+!vendor/braces/braces-3.0.4-f0rge.1.tgz
+!apps/
+!apps/marrow/
+!apps/marrow/frontend/
+!apps/marrow/frontend/package.json
+!apps/dk/
+!apps/dk/tag-printer/
+!apps/dk/tag-printer/frontend/
+!apps/dk/tag-printer/frontend/package.json
+!apps/storefront/
+!apps/storefront/commerce/
+!apps/storefront/commerce/package.json
+!apps/storefront/web/
+!apps/storefront/web/package.json
+!apps/firstout/
+!apps/firstout/frontend/
+!apps/firstout/frontend/**
+!libs/
+!libs/ui/
+!libs/ui/package.json
+**/node_modules
+**/.next
+**/.env*
+**/.superdesign
+**/*.tsbuildinfo
+**/*.log
