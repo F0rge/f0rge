@@ -29,6 +29,7 @@ from app.commands.replace_primavera import (
 )
 from app.database import TenantSession
 from app.models.bill import Bill
+from app.models.archive_credit_note import ArchiveCreditNote, ArchiveCreditNoteLine
 from app.models.customer import Customer
 from app.models.customer_portal_user import CustomerPortalUser
 from app.models.cin7_import_run import Cin7ImportRun
@@ -118,9 +119,9 @@ def write_package(root: Path, *, invalid_history=False, duplicate_po=False):
                     "UNKNOWN" if invalid_history else "RETAIN",
                     "Source sale",
                     "1",
-                    "100.00",
-                    "15.00",
-                    "115.00",
+                    "100.01",
+                    "15.0015",
+                    "115.0115",
                     "synthetic.xlsx",
                     "2",
                 ],
@@ -131,11 +132,37 @@ def write_package(root: Path, *, invalid_history=False, duplicate_po=False):
                     "RETAIN",
                     "Source credit",
                     "-1",
-                    "-100.00",
-                    "-15.00",
-                    "-115.00",
+                    "-100.01",
+                    "-15.0015",
+                    "-115.0115",
                     "synthetic.xlsx",
                     "3",
+                ],
+                [
+                    "INV-1",
+                    "Active customer",
+                    "2026-11-14",
+                    "RETAIN",
+                    "Second source sale",
+                    "1",
+                    "5.01",
+                    "0.7515",
+                    "5.7615",
+                    "synthetic.xlsx",
+                    "4",
+                ],
+                [
+                    "CR-1",
+                    "Active customer",
+                    "2026-11-14",
+                    "RETAIN",
+                    "Second source credit",
+                    "-1",
+                    "-5.01",
+                    "-0.7515",
+                    "-5.7615",
+                    "synthetic.xlsx",
+                    "5",
                 ],
             ],
         ),
@@ -255,7 +282,7 @@ async def replacement_database(second_postgres_url, monkeypatch):
     from app.commands.tenant_cutover import activate_rls
 
     monkeypatch.setattr(settings, "frontend_proxy_secret", "synthetic-replacement-proxy")
-    migrate(second_postgres_url, "087_cin7_archive_provenance")
+    migrate(second_postgres_url, "088_archive_sales_precision")
     admin = create_async_engine(second_postgres_url)
     role = "prepared_runtime_" + uuid.uuid4().hex[:12]
     password = "synthetic-" + uuid.uuid4().hex
@@ -525,6 +552,40 @@ async def test_replacement_dry_run_rollback_commit_and_sentinel_isolation(
         )
         assert committed["load"] == report["load"]
         await db.commit()
+    async with organisation_session(maker, PRIMAVERA_TEAM_ID) as db:
+        from app.services.invoices import InvoiceService
+        from app.services.records import RecordsService
+        from app.schemas.page import PageParams
+
+        invoice = await db.scalar(sa.select(TaxInvoice))
+        reloaded = await InvoiceService(db).get(invoice.id)
+        assert reloaded.subtotal_ex_vat == Decimal("105.02")
+        assert reloaded.vat_amount == Decimal("15.7530") and reloaded.total_inc_vat == Decimal(
+            "120.7730"
+        )
+        assert reloaded.model_dump(mode="json")["vat_amount"] == "15.7530"
+        assert [line.vat_amount for line in reloaded.lines] == [
+            Decimal("15.0015"),
+            Decimal("0.7515"),
+        ]
+        assert invoice.cin7_source_payload["rows"][0]["Tax"] == "15.0015"
+        credit = await db.scalar(sa.select(ArchiveCreditNote))
+        assert credit.vat_amount == Decimal("-15.7530") and credit.total_inc_vat == Decimal(
+            "-120.7730"
+        )
+        credit_lines = list(
+            await db.scalars(
+                sa.select(ArchiveCreditNoteLine).order_by(ArchiveCreditNoteLine.sort_order)
+            )
+        )
+        assert [line.inc_vat for line in credit_lines] == [Decimal("-115.0115"), Decimal("-5.7615")]
+        history = await RecordsService(db).sales_history(PageParams())
+        assert sum(line.vat_amount for line in history.items if line.kind == "invoice") == Decimal(
+            "15.7530"
+        )
+        assert sum(line.inc_vat for line in history.items if line.kind == "credit_note") == Decimal(
+            "-120.7730"
+        )
     async with AsyncSession(admin) as db:
         retained = await db.get(Sku, info["retained"])
         assert retained.name == "Retained source product" and retained.storefront_published is True
@@ -591,6 +652,27 @@ def test_manifest_hash_allowlist_and_source_bytes_are_enforced(tmp_path):
     (package.root / "data/StockOnHand_cleaned.csv").write_text("corrupted")
     with pytest.raises(ValidationError, match="file hash"):
         PreparedPackage.read(package.root, file_sha256(manifest))
+
+
+@pytest.mark.parametrize(
+    "case", ["precision", "nonfinite", "row_capacity", "document_capacity", "reconcile"]
+)
+def test_static_sales_history_validation_refuses_precision_and_capacity_loss(tmp_path, case):
+    package = write_package(tmp_path / "package")
+    row = package.rows["history/SaleInvoicesCreditNotes.csv"][0]
+    if case == "precision":
+        row["Tax"] = "15.00151"
+    elif case == "nonfinite":
+        row["Tax"] = "NaN"
+    elif case in {"row_capacity", "document_capacity"}:
+        row.update(
+            Amount="1000000000000.00" if case == "row_capacity" else "999999999999.99", Tax="0.0000"
+        )
+        row["Total"] = row["Amount"]
+    else:
+        row["Total"] = "115.0116"
+    with pytest.raises(ValidationError):
+        package.validate_source()
 
 
 async def test_generic_importers_refuse_prepared_package_profiles_before_any_db_work(tmp_path):

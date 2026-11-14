@@ -40,8 +40,8 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     issue_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     due_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     payment_status: Mapped[SettlementStatus] = mapped_column(
         Enum(
@@ -99,8 +99,8 @@ class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sku_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

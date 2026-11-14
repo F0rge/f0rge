@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useCallback } from "react";
 
 import {
-  formatZarAmount,
   listPurchaseHistory,
   listSalesHistory,
   listSupplierPrices,
@@ -14,6 +13,7 @@ import {
   type SalesHistoryRow,
   type SupplierPriceRow,
 } from "@/lib/api";
+import { formatArchiveCurrency } from "@/lib/source-history";
 
 import { RecordsTable, type RecordsColumn } from "./records-table";
 
@@ -50,8 +50,9 @@ const SALES_COLUMNS: RecordsColumn<SalesHistoryRow>[] = [
   { key: "our_ref", header: "SKU", render: (row) => row.our_ref ?? "—" },
   { key: "description", header: "Product", render: (row) => row.description },
   { key: "qty", header: "Qty", render: (row) => Number(row.qty).toString() },
-  { key: "ex_vat", header: "Ex VAT", render: (row) => formatZarAmount(row.ex_vat) },
-  { key: "inc_vat", header: "Inc VAT", render: (row) => formatZarAmount(row.inc_vat) },
+  { key: "ex_vat", header: "Ex VAT", render: (row) => formatArchiveCurrency(row.ex_vat) },
+  { key: "vat_amount", header: "Tax", render: (row) => formatArchiveCurrency(row.vat_amount) },
+  { key: "inc_vat", header: "Inc VAT", render: (row) => formatArchiveCurrency(row.inc_vat) },
 ];
 
 const PURCHASE_COLUMNS: RecordsColumn<PurchaseHistoryRow>[] = [
@@ -75,7 +76,7 @@ const PURCHASE_COLUMNS: RecordsColumn<PurchaseHistoryRow>[] = [
     header: "Bill in ZAR",
     render: (row) =>
       row.fx_rate_known ? (
-        formatZarAmount(row.bill_amount_zar)
+        formatArchiveCurrency(row.bill_amount_zar)
       ) : (
         <Tag size="sm" type="warm-gray">
           No ZAR rate

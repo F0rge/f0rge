@@ -88,6 +88,10 @@ async def test_archive_api_history_readable_but_live_debt_pdf_and_comms_are_bloc
             amount_paid_zar=Decimal(0),
             amount_paid_foreign=Decimal(0),
             is_archive=True,
+            cin7_source_payload={
+                "format": "cin7-prepared-v1",
+                "rows": [{"Quantity": "4.576", "Total": "115.00"}],
+            },
             lines=[
                 BillLine(
                     description="Source purchase line",
@@ -135,12 +139,18 @@ async def test_archive_api_history_readable_but_live_debt_pdf_and_comms_are_bloc
     purchase_history = (
         await owner_client.get("/api/v1/history/purchases", params={"q": "ORIGINAL-REF"})
     ).json()
-    assert sales_history["total"] == 1 and sales_history["items"][0]["inc_vat"] == "230.00"
+    assert sales_history["total"] == 1 and Decimal(sales_history["items"][0]["inc_vat"]) == Decimal(
+        "230.00"
+    )
     assert purchase_history["total"] == 2 and {
         r["bill_number"] for r in purchase_history["items"]
     } == {"ORIGINAL-REF"}
     assert all(
         r["bill_amount_zar"] is None and r["fx_rate_known"] is False
+        for r in purchase_history["items"]
+    )
+    assert all(
+        r["unit_amount"] is None and Decimal(r["amount_foreign"]) == Decimal("115.00")
         for r in purchase_history["items"]
     )
     ar = (await owner_client.get("/api/v1/reports/aged-ar", params={"as_of": "2026-11-14"})).json()

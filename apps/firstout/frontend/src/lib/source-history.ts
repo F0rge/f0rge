@@ -5,6 +5,23 @@ type SourceAmountStatus = {
   source_currency_known: boolean;
 };
 
+/** Source tax and gross amounts can carry four decimals even though new sales use cents. */
+export function formatArchiveCurrency(
+  value: string | null | undefined,
+  currency = "ZAR",
+): string {
+  if (value === null || value === undefined) return "—";
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(value.trim());
+  if (!match) return "—";
+  // Keep all Numeric(16,4) digits as text; converting a 12-digit whole part to
+  // Number can lose the last fraction before it reaches the display formatter.
+  const whole = match[2].replace(/^0+(?=\d)/, "");
+  const fraction = (match[3] ?? "").replace(/0+$/, "");
+  if (fraction.length > 4) return "—";
+  const negative = match[1] === "-" && (whole !== "0" || /[1-9]/.test(fraction));
+  return `${currency === "ZAR" ? "R" : currency} ${negative ? "-" : ""}${whole}.${fraction.padEnd(2, "0")}`;
+}
+
 /** Imported placeholders must never be presented as known money or a guessed currency. */
 export function formatSourceAmount(
   value: string | null,

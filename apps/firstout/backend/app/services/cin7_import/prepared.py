@@ -121,6 +121,19 @@ def _day(value: str) -> datetime.date:
     return day
 
 
+def _sales_amounts(row: dict[str, str]) -> tuple[Decimal, Decimal, Decimal]:
+    values = tuple(
+        _amount(_required(row, field), places=places)
+        for field, places in (("Amount", 2), ("Tax", 4), ("Total", 4))
+    )
+    if any(abs(value) >= Decimal("1000000000000") for value in values):
+        raise ValidationError("Sales source amount exceeds monetary storage capacity")
+    net, tax, gross = values
+    if net + tax != gross:
+        raise ValidationError("Sales source net/tax/gross do not reconcile")
+    return values
+
+
 def _whole(value: str) -> int:
     quantity = exact_quantity(value)
     if quantity <= 0 or quantity != quantity.to_integral_value():
@@ -237,6 +250,21 @@ class PreparedPackage:
                 for row in self.rows[f"data/{kind}{suffix}_cleaned.csv"]:
                     if _key(_required(row, owner)) not in parties:
                         raise ValidationError("Prepared contact/address owner is unknown")
+        document_totals = defaultdict(lambda: [ZERO, ZERO, ZERO])
+        for row in self.rows["history/SaleInvoicesCreditNotes.csv"]:
+            identity = (
+                _key(_required(row, "Customer")),
+                _required(row, "Document #"),
+                _day(_required(row, "Date")),
+            )
+            for index, value in enumerate(_sales_amounts(row)):
+                document_totals[identity][index] += value
+        if any(
+            abs(value) >= Decimal("1000000000000")
+            for totals in document_totals.values()
+            for value in totals
+        ):
+            raise ValidationError("Sales source document total exceeds monetary storage capacity")
 
     def payload(
         self, file: str, identity: tuple[str, str, str], rows: list[dict[str, str]]
@@ -525,11 +553,7 @@ class PreparedLoader:
                     if credit
                     else _whole(_required(row, "Quantity"))
                 )
-                net, tax, gross = (
-                    _amount(_required(row, field)) for field in ("Amount", "Tax", "Total")
-                )
-                if net + tax != gross:
-                    raise ValidationError("Sales source net/tax/gross do not reconcile")
+                net, tax, gross = _sales_amounts(row)
                 for i, value in enumerate((net, tax, gross)):
                     totals[i] += value
                 description = _required(row, "Product", 512)

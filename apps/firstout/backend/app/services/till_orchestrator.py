@@ -359,8 +359,8 @@ class TillOrchestrator:
             tender=data.tender,
             issue_date=reloaded.issue_date,
             subtotal_ex_vat=reloaded.subtotal_ex_vat,
-            vat_amount=reloaded.vat_amount,
-            total_inc_vat=reloaded.total_inc_vat,
+            vat_amount=reloaded.vat_amount.quantize(CENT),
+            total_inc_vat=reloaded.total_inc_vat.quantize(CENT),
             prices_include_vat=reloaded.prices_include_vat,
             lines=[
                 InvoiceLineResponse(
@@ -369,8 +369,8 @@ class TillOrchestrator:
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
                     ex_vat=line.ex_vat,
-                    inc_vat=line.inc_vat,
-                    vat_amount=line.vat_amount,
+                    inc_vat=line.inc_vat.quantize(CENT),
+                    vat_amount=line.vat_amount.quantize(CENT),
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
                     price_warning=line.price_warning,

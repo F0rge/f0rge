@@ -49,7 +49,7 @@ import {
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatSettlementAmount } from "@/lib/source-history";
+import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
 import {
   partialPaymentError,
   settlementStatusLabel,
@@ -290,6 +290,7 @@ export default function InvoiceDetailPage() {
   const showPayment = !invoice.is_archive && canMutate && hasPositiveBalance(invoice.balance);
   const showCreditNote = !invoice.is_archive && canMutate && !creditNote;
   const paymentStatus = invoice.is_archive ? "unknown" : invoice.payment_status;
+  const formatInvoiceAmount = invoice.is_archive ? formatArchiveCurrency : formatZarAmount;
 
   return (
     <Stack gap={6}>
@@ -482,9 +483,9 @@ export default function InvoiceDetailPage() {
                         : line.unit_ex_vat,
                     )}
                   </TableCell> : null}
-                  <TableCell>{formatZarAmount(line.ex_vat)}</TableCell>
-                  <TableCell>{formatZarAmount(line.vat_amount)}</TableCell>
-                  <TableCell>{formatZarAmount(line.inc_vat)}</TableCell>
+                  <TableCell>{formatInvoiceAmount(line.ex_vat)}</TableCell>
+                  <TableCell>{formatInvoiceAmount(line.vat_amount)}</TableCell>
+                  <TableCell>{formatInvoiceAmount(line.inc_vat)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -492,13 +493,13 @@ export default function InvoiceDetailPage() {
         </TableContainer>
         <div className="firstout-tax-invoice__totals">
           <p className="cds--type-body-01">
-            Subtotal ex VAT: {formatZarAmount(invoice.subtotal_ex_vat)}
+            Subtotal ex VAT: {formatInvoiceAmount(invoice.subtotal_ex_vat)}
           </p>
           <p className="cds--type-body-01">
-            {invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}: {formatZarAmount(invoice.vat_amount)}
+            {invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}: {formatInvoiceAmount(invoice.vat_amount)}
           </p>
           <p className="cds--type-productive-heading-02">
-            Total: {formatZarAmount(invoice.total_inc_vat)}
+            Total: {formatInvoiceAmount(invoice.total_inc_vat)}
           </p>
           <p className="cds--type-body-01">Paid: {formatSettlementAmount(invoice.amount_paid, invoice.is_archive)}</p>
           <p className="cds--type-body-01">

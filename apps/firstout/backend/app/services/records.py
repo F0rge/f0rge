@@ -241,7 +241,10 @@ class RecordsService:
                 description=line.description,
                 qty=line.qty,
                 currency=bill.currency,
-                unit_amount=line.unit_amount if show_cost else None,
+                unit_amount=line.unit_amount
+                if show_cost
+                and (bill.cin7_source_payload or {}).get("format") != "cin7-prepared-v1"
+                else None,
                 amount_foreign=line.amount_foreign if show_cost else None,
                 fx_rate_known=bill.fx_rate_known,
                 bill_amount_zar=bill.amount_zar if show_cost and bill.fx_rate_known else None,

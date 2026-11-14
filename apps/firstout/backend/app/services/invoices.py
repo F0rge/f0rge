@@ -251,10 +251,10 @@ class InvoiceService:
             issue_date=invoice.issue_date,
             due_date=invoice.due_date,
             subtotal_ex_vat=invoice.subtotal_ex_vat,
-            vat_amount=invoice.vat_amount,
-            total_inc_vat=invoice.total_inc_vat,
+            vat_amount=_response_money(invoice, invoice.vat_amount),
+            total_inc_vat=_response_money(invoice, invoice.total_inc_vat),
             amount_paid=invoice.amount_paid,
-            balance=balance,
+            balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
@@ -275,10 +275,10 @@ class InvoiceService:
             issue_date=invoice.issue_date,
             due_date=invoice.due_date,
             subtotal_ex_vat=invoice.subtotal_ex_vat,
-            vat_amount=invoice.vat_amount,
-            total_inc_vat=invoice.total_inc_vat,
+            vat_amount=_response_money(invoice, invoice.vat_amount),
+            total_inc_vat=_response_money(invoice, invoice.total_inc_vat),
             amount_paid=invoice.amount_paid,
-            balance=balance,
+            balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
             reminders_paused=invoice.reminders_paused,
             prices_include_vat=invoice.prices_include_vat,
@@ -289,8 +289,8 @@ class InvoiceService:
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
                     ex_vat=line.ex_vat,
-                    inc_vat=line.inc_vat,
-                    vat_amount=line.vat_amount,
+                    inc_vat=_response_money(invoice, line.inc_vat),
+                    vat_amount=_response_money(invoice, line.vat_amount),
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
                     price_warning=line.price_warning,
@@ -307,3 +307,9 @@ class InvoiceService:
             prices_include_vat=invoice.prices_include_vat,
         )
         return response
+
+
+def _response_money(invoice: TaxInvoice, value: Decimal) -> Decimal:
+    # Live operations keep their established cent-valued API contract. Historical
+    # source VAT and gross amounts retain all four stored decimal places.
+    return value if invoice.is_archive else value.quantize(CENT)

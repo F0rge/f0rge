@@ -133,7 +133,7 @@ class ReportsService:
         }
 
         for invoice, customer_name in result.all():
-            balance = invoice.total_inc_vat - invoice.amount_paid
+            balance = (invoice.total_inc_vat - invoice.amount_paid).quantize(Decimal("0.01"))
             if balance <= 0:
                 continue
             days = (as_of - invoice.issue_date).days
@@ -339,7 +339,7 @@ class ReportsService:
         cn_vat = cn_vat_result.scalar_one()
 
         standard_rated = Decimal(invoice_ex) - Decimal(cn_ex)
-        output_tax = Decimal(invoice_vat) - Decimal(cn_vat)
+        output_tax = (Decimal(invoice_vat) - Decimal(cn_vat)).quantize(Decimal("0.01"))
         input_tax = Decimal(0)
 
         team = await TeamCRUD(self.db).get_first()
@@ -631,8 +631,8 @@ class ReportsService:
             to_date=to_date,
             invoice_count=int(invoice_count),
             subtotal_ex_vat=Decimal(subtotal),
-            vat_amount=Decimal(vat_amount),
-            total_inc_vat=Decimal(total_inc),
+            vat_amount=Decimal(vat_amount).quantize(Decimal("0.01")),
+            total_inc_vat=Decimal(total_inc).quantize(Decimal("0.01")),
             amount_paid=Decimal(amount_paid),
         )
 

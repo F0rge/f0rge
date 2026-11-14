@@ -46,7 +46,7 @@ movement reports must not be replayed, which would duplicate activity.
 
 ## Application and schema prerequisites
 
-The replacement requires exact schema head `087_cin7_archive_provenance` and a
+The replacement requires exact schema head `088_archive_sales_precision` and a
 compatible API and frontend before fractional rows are loaded.
 
 | Migration | Change and recovery constraint |
@@ -55,6 +55,7 @@ compatible API and frontend before fractional rows are loaded.
 | 085 | Changes ten inventory, stocktake, adjustment, transfer, PO and bill quantity columns to `Numeric(14,4)`. Downgrade refuses fractional or out-of-range values rather than rounding. |
 | 086 | Adds `skus.is_sellable`, true by default for existing products. A downgrade would remove that information. |
 | 087 | Adds canonical Cin7 JSON payloads to five archive parents, permits unknown PO factory amounts as null, and limits supplier-reference uniqueness to live bills. Downgrade refuses retained payloads, null factory amounts or references incompatible with the previous index. |
+| 088 | Widens eight sales VAT/gross columns to `Numeric(16,4)` while retaining the previous twelve integer digits. This preserves 288 source rows across 166 documents with subcent amounts. Live sales still calculate and return cents; archive screens show up to four decimals. Downgrade locks all four affected tables and checks all organisations, refusing any non-cent, nonfinite or out-of-range amount. |
 
 Follow the [Firstout tested-image release procedure](../../../.github/deploy/firstout-release.md).
 Its API and frontend profiles are fixed; the API image never migrates on startup.
@@ -74,7 +75,7 @@ files. The manifest, each allowed file and the bin mapping must match their
 reviewed SHA-256 hashes; unexpected file sets or changed row shapes/counts fail.
 
 The command is restricted to the fixed Primavera team identity, exact database
-name, schema 087, maintenance status and verified non-owner runtime role under
+name, schema 088, maintenance status and verified non-owner runtime role under
 FORCE RLS. It rejects an active import, unknown table inventory and nonempty
 protected portal/commerce dependencies that would make replacement unsafe.
 
@@ -148,7 +149,7 @@ Evidence reported during preparation on 14 November 2026:
 | Recovery rehearsal | Encrypted target backup at source schema 083 covering 87 tables and 122,408 rows restored exactly into isolated PostgreSQL 18, without networking, app processes or SMTP. A subsequent 083→087 migration rehearsal has begun on an internal-only network, without API/jobs or production writes; the replacement dry run/commit awaits the newer name-check image. Neither rehearsal replaces the fresh pre-commit backup. |
 | Backend | Earlier feature run: 218 tests passed. The replacement name-check correction passed 16 focused replacement tests, and three fresh-numbering tests passed. A fresh-database full backend rerun is pending; these separate runs are not a final aggregate count. |
 | Independent security | Final source review reported 37 groups passing with no findings. Final source/CI and recovery-rehearsal completion still need their own evidence. |
-| Frontend | 158 tests, strict type checking, full lint and Next production build reported passing. Four existing image-element warnings remain in frontend lint; no new lint errors were reported. |
+| Frontend | 159 tests, strict type checking, full lint and Next production build reported passing. Four existing image-element warnings remain in frontend lint; no new lint errors were reported. |
 | Live stock UI/API | Seven grouped checks passed through actual Carbon pages in a built Vite fixture, real FastAPI/SQLAlchemy/PostgreSQL and a signed synthetic Clerk boundary. Desktop adjustment/stocktake/transfer, mobile fractional count/transfer, explicit zero versus blank, failure/retry and nonsellable till behaviour passed; no browser errors or unexpected API 500s. |
 | Live history UI/API | Eight groups passed against source `f7ad33d8`, with real PostgreSQL 16 and the same synthetic signed identity boundary, without HTTP mocks. Unknown SO amounts remain unknown; PO quantity 4.576 and original Cost `100.1234567890123`/Total `100.00` retain their precision without an invented currency. Invoice totals 100/15/115 and foreign bill USD 100 remain visible while settlements and missing FX/ZAR are labelled unknown/not imported. Operational invoice/bill lists exclude archives and link to working history searches; direct detail URLs and a 390px bill layout passed. |
 | Live archive guards | Five real HTTP 409 rejections: invoice PDF, invoice payment, bill payment, SO invoicing and PO on-water action. Payment, journal, outbox and SO-payment counters stayed unchanged. No browser errors or unexpected API failures; the unconfigured local Ops Commerce endpoint returned its expected 503 configuration response. |
@@ -179,7 +180,7 @@ Before any production replacement write:
    Verify its restore and bind the evidence to the reviewed baseline. The
    earlier backup does not cover subsequent changes.
 4. Complete the controlled migrations and compatible application releases,
-   verify schema 087 and health, then run and independently review the final
+   verify schema 088 and health, then run and independently review the final
    replacement dry run against the fenced target. Reconcile any changed
    baseline and backup before commit.
 5. Commit only the reviewed package/mapping/plan. Check archive partitions,

@@ -37,7 +37,7 @@ from f0rge_core.exceptions import ValidationError
 from f0rge_db.organisation import tenant_id_ctx
 
 PRIMAVERA_TEAM_ID = uuid.UUID("54493247-36a3-4ed6-a3ff-5bd35cc4f522")
-SCHEMA_REVISION = "087_cin7_archive_provenance"
+SCHEMA_REVISION = "088_archive_sales_precision"
 PRESERVE = frozenset(
     (
         "teams",
@@ -274,7 +274,7 @@ async def _preflight(db: AsyncSession, expected_database: str) -> Team:
         raise ValidationError("Database identity does not match the reviewed target")
     revision = await db.scalar(sa.text("SELECT version_num FROM alembic_version"))
     if revision != SCHEMA_REVISION:
-        raise ValidationError("Replacement requires the exact reviewed schema revision087")
+        raise ValidationError("Replacement requires the exact reviewed schema revision088")
     team = await db.scalar(sa.select(Team).where(Team.id == PRIMAVERA_TEAM_ID))
     if (
         team is None
