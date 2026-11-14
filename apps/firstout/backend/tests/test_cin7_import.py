@@ -625,7 +625,7 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     stock = (
         await async_db.execute(select(LocationStock).where(LocationStock.sku_id == chair.id))
     ).scalar_one()
-    assert stock.on_hand == 2
+    assert stock.on_hand == Decimal("2.4")
 
     bom = (await async_db.execute(select(SkuBomLine))).scalars().all()
     assert sorted(line.qty for line in bom) == [Decimal("0.5"), Decimal("2")]
@@ -654,7 +654,7 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     ).scalar_one()
     assert purchase.is_archive is True
     assert purchase.status.value == "received"
-    assert stock.on_hand == 2
+    assert stock.on_hand == Decimal("2.4")
 
     bill = (await async_db.execute(select(Bill).where(Bill.bill_number == "BILL-1"))).scalar_one()
     assert bill.is_archive is True

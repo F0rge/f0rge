@@ -16,11 +16,16 @@ def _label(amount: Decimal, currency: str) -> str:
     return f"{shown} {currency.upper()}"
 
 
+def _quantity_label(value: int | Decimal) -> str:
+    shown = format(Decimal(value), "f")
+    return shown.rstrip("0").rstrip(".") if "." in shown else shown
+
+
 def compare_invoice(
     *,
     currency: str,
     po_currency: str,
-    po_lines: list[tuple[uuid.UUID, str, int, Decimal]],
+    po_lines: list[tuple[uuid.UUID, str, int | Decimal, Decimal]],
     invoice_lines: list[tuple[int, Optional[uuid.UUID], str, int, Decimal]],
     po_charges: list[tuple[str, Decimal]],
     invoice_charges: list[tuple[str, Decimal]],
@@ -41,7 +46,7 @@ def compare_invoice(
             f"Invoice currency is {currency.upper()}, the order is {po_currency.upper()}."
         )
 
-    remaining: dict[uuid.UUID, tuple[str, int, Decimal]] = {
+    remaining: dict[uuid.UUID, tuple[str, int | Decimal, Decimal]] = {
         sku_id: (our_ref, qty, price) for sku_id, our_ref, qty, price in po_lines
     }
     for line_number, sku_id, description, qty, price in invoice_lines:
@@ -53,13 +58,13 @@ def compare_invoice(
         our_ref, order_qty, order_price = remaining.pop(sku_id)
         if qty != order_qty or not within_cent(price, order_price):
             differences.append(
-                f"Line {line_number}: invoice says {qty} units at {_label(price, currency)}, "
-                f"order said {order_qty} at {_label(order_price, po_currency)}."
+                f"Line {line_number}: invoice says {_quantity_label(qty)} units at {_label(price, currency)}, "
+                f"order said {_quantity_label(order_qty)} at {_label(order_price, po_currency)}."
             )
 
     for our_ref, qty, price in remaining.values():
         differences.append(
-            f"The order includes {our_ref}, {qty} at {_label(price, po_currency)}, "
+            f"The order includes {our_ref}, {_quantity_label(qty)} at {_label(price, po_currency)}, "
             "and the invoice does not."
         )
 

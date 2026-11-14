@@ -11,6 +11,8 @@ from sqlalchemy import select
 
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import assert_customer_active
+from app.services.sellability import assert_sku_sellable
+from app.services.archive_documents import assert_operational_document, source_document_flags
 from app.crud.location import LocationCRUD
 from app.crud.ops_commerce_orders import OpsCommerceOrdersCRUD
 from app.crud.purchase_order import LocationStockCRUD
@@ -197,6 +199,7 @@ class SalesOrdersService:
         user_id: uuid.UUID,
     ) -> SalesOrderResponse:
         order = await self._get_or_404(sales_order_id, for_update=True)
+        assert_operational_document(order)
         if order.status != SalesOrderStatus.DRAFT:
             raise ConflictError("Sales order is not a draft")
         async with unit_of_work(self.db):
@@ -225,6 +228,7 @@ class SalesOrdersService:
 
     async def cancel(self, sales_order_id: uuid.UUID, user_id: uuid.UUID) -> SalesOrderResponse:
         order = await self._get_or_404(sales_order_id, for_update=True)
+        assert_operational_document(order)
         storefront_handoff = await self.db.scalar(
             select(OpsCommerceOrder.id).where(
                 OpsCommerceOrder.sales_order_id == sales_order_id,
@@ -649,6 +653,7 @@ class SalesOrdersService:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+            assert_sku_sellable(sku)
             resolved = await resolve_unit_price(self.db, sku, customer)
             unit_ex = resolved.unit_ex_vat
             ex_vat = (Decimal(line.qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
@@ -688,6 +693,7 @@ class SalesOrdersService:
         self, sales_order_id: uuid.UUID, *, for_update: bool = False
     ) -> SalesOrder:
         order = await self._get_or_404(sales_order_id, for_update=for_update)
+        assert_operational_document(order)
         if order.status not in (SalesOrderStatus.OPEN, SalesOrderStatus.AWAITING_STOCK):
             raise ConflictError("Sales order is not open")
         return order
@@ -705,6 +711,7 @@ class SalesOrdersService:
     def _to_list_item(self, order: SalesOrder) -> SalesOrderListItem:
         balance = order.total_inc_vat - order.amount_paid
         return SalesOrderListItem(
+            **source_document_flags(order),
             id=order.id,
             so_number=order.so_number,
             customer_id=order.customer_id,
@@ -734,6 +741,7 @@ class SalesOrdersService:
     ) -> SalesOrderResponse:
         balance = order.total_inc_vat - order.amount_paid
         response = SalesOrderResponse(
+            **source_document_flags(order),
             id=order.id,
             so_number=order.so_number,
             customer_id=order.customer_id,

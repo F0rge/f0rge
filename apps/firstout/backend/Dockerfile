@@ -1,5 +1,10 @@
 FROM python:3.11-slim
 
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.source="https://github.com/F0rge/f0rge" \
+      org.opencontainers.image.revision=$SOURCE_COMMIT \
+      org.opencontainers.image.title="Firstout API"
+
 RUN groupadd --gid 1000 app && useradd --uid 1000 --gid 1000 --create-home app
 
 # Repo-root build context: mirror the monorepo layout so shared libs resolve
@@ -32,4 +37,4 @@ USER app
 
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/apps/firstout/backend/.venv/bin/python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

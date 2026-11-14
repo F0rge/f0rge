@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from dataclasses import dataclass
 from typing import Optional
 
@@ -19,9 +20,9 @@ class ReorderRow:
     our_ref: str
     name: str
     reorder_min: int
-    on_hand: int
-    on_order: int
-    suggested_qty: int
+    on_hand: Decimal
+    on_order: Decimal
+    suggested_qty: Decimal
     preferred_supplier_id: Optional[uuid.UUID]
 
 
@@ -88,9 +89,9 @@ class ReorderCRUD(BaseCRUD):
                     our_ref=row.our_ref,
                     name=row.name,
                     reorder_min=row.reorder_min,
-                    on_hand=int(row.on_hand),
-                    on_order=int(row.on_order),
-                    suggested_qty=int(row.suggested_qty),
+                    on_hand=Decimal(row.on_hand),
+                    on_order=Decimal(row.on_order),
+                    suggested_qty=Decimal(row.suggested_qty),
                     preferred_supplier_id=row.preferred_supplier_id,
                 )
             )

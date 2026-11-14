@@ -1,9 +1,10 @@
 import type { InventorySku, Location } from "@/lib/api";
+import { formatQuantity } from "@/lib/quantity";
 
 export type StockPipelineChip = "on_water" | "at_warehouse" | "at_showroom";
 
 export function formatStockQty(value: number): string {
-  return value > 0 ? String(value) : "—";
+  return value > 0 ? formatQuantity(value) : "—";
 }
 
 export function activeLocations(locations: Location[]): Location[] {

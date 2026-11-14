@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -36,6 +36,9 @@ class ArchiveCreditNote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="cin7")
+    cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
 
     lines: Mapped[list["ArchiveCreditNoteLine"]] = relationship(
         "ArchiveCreditNoteLine",

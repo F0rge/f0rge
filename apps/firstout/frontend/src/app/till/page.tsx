@@ -371,7 +371,7 @@ export default function TillPage() {
     selectedInventory?.locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0;
 
   const skuOptions = skus.filter((sku) => {
-    if (!locationId || !sku.retail_ex_vat) {
+    if (!sku.is_sellable || !locationId || !sku.retail_ex_vat) {
       return false;
     }
     if (sku.is_kit) {
@@ -512,6 +512,7 @@ export default function TillPage() {
     canSell &&
     locationId &&
     skuId &&
+    selectedSku?.is_sellable &&
     numericQty > 0 &&
     (selectedSku?.is_kit ||
       numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0)) &&
@@ -603,6 +604,9 @@ export default function TillPage() {
     locationId &&
     cart.length > 0 &&
     cart.every((line) => {
+      if (!line.sku.is_sellable) {
+        return false;
+      }
       if (line.sku.is_kit) {
         return line.qty > 0;
       }
@@ -1026,6 +1030,11 @@ export default function TillPage() {
                             <TableCell>
                               <strong>{line.sku.name}</strong>
                               <div className="firstout-muted-text">SKU: {line.sku.our_ref}</div>
+                              {!line.sku.is_sellable ? (
+                                <div className="cds--type-helper-text-01" style={{ color: "var(--cds-text-error)" }}>
+                                  Not for sale. Remove this item to complete the sale.
+                                </div>
+                              ) : null}
                               {priced.warning ? (
                                 <div className="firstout-muted-text">{priced.warning}</div>
                               ) : null}

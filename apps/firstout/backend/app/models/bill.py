@@ -18,7 +18,7 @@ from sqlalchemy import (
     event,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,6 +33,9 @@ class Bill(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     bill_number: Mapped[str] = mapped_column(String(128), nullable=False)
     is_archive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
     )
     supplier_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -84,10 +87,11 @@ class Bill(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         UniqueConstraint("bill_number", name="uq_bills_bill_number"),
         Index(
             "uq_bills_supplier_ref_ci",
+            "team_id",
             "supplier_id",
             text("lower(supplier_ref)"),
             unique=True,
-            postgresql_where=text("btrim(supplier_ref) <> ''"),
+            postgresql_where=text("btrim(supplier_ref) <> '' AND NOT is_archive"),
         ),
     )
 
@@ -102,7 +106,7 @@ class BillLine(TenantOwnedMixin, UUIDPkMixin, Base):
         index=True,
     )
     description: Mapped[str] = mapped_column(String(512), nullable=False)
-    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    qty: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     unit_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_foreign: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

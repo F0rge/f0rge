@@ -196,6 +196,31 @@ def test_compare_explains_a_qty_and_price_difference() -> None:
 
 
 @pytest.mark.no_db
+def test_compare_quantities_keep_exact_fractions_and_plain_whole_numbers() -> None:
+    sku_id, missing_id = uuid.uuid4(), uuid.uuid4()
+    exact, differences = compare_invoice(
+        currency="ZAR",
+        po_currency="ZAR",
+        po_lines=[
+            (sku_id, "FRACTION", Decimal("0.3750"), Decimal(100)),
+            (missing_id, "WHOLE", Decimal("1E+3"), Decimal(100)),
+        ],
+        invoice_lines=[(1, sku_id, "Fraction source", 1, Decimal(100))],
+        po_charges=[],
+        invoice_charges=[],
+        po_vat=Decimal(0),
+        invoice_vat=Decimal(0),
+        po_total=None,
+        invoice_total=Decimal(100),
+    )
+    assert not exact
+    assert differences == [
+        "Line 1: invoice says 1 units at R100.00, order said 0.375 at R100.00.",
+        "The order includes WHOLE, 1000 at R100.00, and the invoice does not.",
+    ]
+
+
+@pytest.mark.no_db
 def test_compare_accepts_money_within_one_cent() -> None:
     red = uuid.uuid4()
     navy = uuid.uuid4()

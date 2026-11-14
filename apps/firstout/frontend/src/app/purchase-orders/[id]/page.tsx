@@ -46,6 +46,7 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatSourceAmount, sourceReportAmountText } from "@/lib/source-history";
 import {
   displayFabric,
   changeSupplierCodeSku,
@@ -94,7 +95,7 @@ function draftsFromOrder(order: PurchaseOrder): DraftLine[] {
     description: line.description ?? "",
     notes: line.notes ?? "",
     qty: line.qty,
-    factory_unit_amount: line.factory_unit_amount,
+    factory_unit_amount: line.factory_unit_amount ?? "",
   }));
 }
 
@@ -185,7 +186,7 @@ export default function PurchaseOrderDetailPage() {
     }
   }, [user, params.id, loadOrder]);
 
-  const editingPending = Boolean(order && order.status === "pending_approval" && canEditLines);
+  const editingPending = Boolean(order && !order.is_archive && order.status === "pending_approval" && canEditLines);
 
   useEffect(() => {
     if (!editingPending || !order) return;
@@ -206,7 +207,7 @@ export default function PurchaseOrderDetailPage() {
   }, [editingPending, order]);
 
   async function handleDownload() {
-    if (!order) {
+    if (!order || order.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -221,7 +222,7 @@ export default function PurchaseOrderDetailPage() {
   }
 
   async function handleDownloadPurchaseOrder() {
-    if (!order) {
+    if (!order || !order.source_currency_known) {
       return;
     }
     setActionLoading(true);
@@ -247,7 +248,7 @@ export default function PurchaseOrderDetailPage() {
   }
 
   async function handleApprove() {
-    if (!order) {
+    if (!order || order.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -263,7 +264,7 @@ export default function PurchaseOrderDetailPage() {
   }
 
   async function handleReject() {
-    if (!order) {
+    if (!order || order.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -279,7 +280,7 @@ export default function PurchaseOrderDetailPage() {
   }
 
   async function handleMarkOnWater() {
-    if (!order) {
+    if (!order || order.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -295,6 +296,7 @@ export default function PurchaseOrderDetailPage() {
   }
 
   function openLandModal() {
+    if (!order || order.is_archive) return;
     setFxToZar("");
     setFactoryBill(emptyBill(supplier?.default_currency ?? "USD"));
     setFreightBill(emptyBill("USD"));
@@ -309,7 +311,7 @@ export default function PurchaseOrderDetailPage() {
   const landValid = fxToZar.trim() && billValid(factoryBill) && billValid(freightBill) && billValid(clearanceBill);
 
   async function handleLand() {
-    if (!order || !landValid) {
+    if (!order || order.is_archive || !landValid) {
       return;
     }
     setActionLoading(true);
@@ -382,7 +384,7 @@ export default function PurchaseOrderDetailPage() {
   );
 
   async function handleSaveLines() {
-    if (!order || !draftsValid) {
+    if (!order || order.is_archive || !draftsValid) {
       return;
     }
     setActionLoading(true);
@@ -410,6 +412,7 @@ export default function PurchaseOrderDetailPage() {
   }
 
   function openSkuModal(line: DraftLine) {
+    if (!order || order.is_archive) return;
     if (!line.id) {
       setError("Save the line first, then create its SKU.");
       return;
@@ -427,7 +430,7 @@ export default function PurchaseOrderDetailPage() {
     skuDraft.fabric.trim();
 
   async function handleCreateSku() {
-    if (!order || !skuLineKey || !skuDraftValid) {
+    if (!order || order.is_archive || !skuLineKey || !skuDraftValid) {
       return;
     }
     const line = draftLines.find((entry) => entry.key === skuLineKey);
@@ -530,8 +533,8 @@ export default function PurchaseOrderDetailPage() {
   }
 
   const poWorkflowOpen =
-    order.status !== "pending_approval" && order.status !== "rejected";
-  const editing = order.status === "pending_approval" && canEditLines;
+    !order.is_archive && order.status !== "pending_approval" && order.status !== "rejected";
+  const editing = !order.is_archive && order.status === "pending_approval" && canEditLines;
   const missingSkus = order.needs_sku_count;
 
   return (
@@ -550,7 +553,7 @@ export default function PurchaseOrderDetailPage() {
           <p className="cds--type-body-01">Supplier reference {order.supplier_ref}</p>
         ) : null}
         {order.notes ? <p className="cds--type-body-01">{order.notes}</p> : null}
-        {order.status !== "rejected" ? (
+        {order.status !== "rejected" && order.source_currency_known ? (
           <div style={{ marginTop: "1rem" }}>
             <Button
               kind="secondary"
@@ -563,6 +566,22 @@ export default function PurchaseOrderDetailPage() {
         ) : null}
       </div>
 
+      {order.is_archive ? (
+        <InlineNotification
+          kind="info"
+          title="This is imported history"
+          subtitle={
+            !order.source_amounts_known
+              ? `This order is read-only. Operational prices are not available. Original report Cost and Total are preserved separately.${!order.source_currency_known ? " Currency not provided in source." : ""}`
+              : !order.source_currency_known
+                ? "This order is read-only. Currency not provided in source; factory amounts are shown exactly as supplied, without conversion to ZAR."
+                : "This order is read-only and preserves the source order details."
+          }
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
+
       {error ? (
         <InlineNotification
           kind="error"
@@ -573,7 +592,7 @@ export default function PurchaseOrderDetailPage() {
         />
       ) : null}
 
-      {missingSkus > 0 ? (
+      {!order.is_archive && missingSkus > 0 ? (
         <InlineNotification
           kind="warning"
           title="Needs SKUs"
@@ -583,7 +602,7 @@ export default function PurchaseOrderDetailPage() {
         />
       ) : null}
 
-      {order.status === "pending_approval" && canApprovePo ? (
+      {!order.is_archive && order.status === "pending_approval" && canApprovePo ? (
         <Stack gap={4} orientation="horizontal">
           <Button
             disabled={actionLoading || missingSkus > 0}
@@ -803,6 +822,18 @@ export default function PurchaseOrderDetailPage() {
               <TableHeader>Qty</TableHeader>
               <TableHeader>Factory unit</TableHeader>
               <TableHeader>Unit cost ZAR</TableHeader>
+              {order.is_archive ? (
+                <>
+                  <TableHeader>
+                    Original report cost
+                    {!order.source_currency_known ? <div className="cds--type-helper-text-01">Currency not provided in source</div> : null}
+                  </TableHeader>
+                  <TableHeader>
+                    Original report total
+                    {!order.source_currency_known ? <div className="cds--type-helper-text-01">Currency not provided in source</div> : null}
+                  </TableHeader>
+                </>
+              ) : null}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -817,8 +848,14 @@ export default function PurchaseOrderDetailPage() {
                 <TableCell>{line.name}</TableCell>
                 <TableCell>{displayFabric(line.fabric) ?? ""}</TableCell>
                 <TableCell>{line.qty}</TableCell>
-                <TableCell>{line.factory_unit_amount}</TableCell>
-                <TableCell>{line.unit_cost_zar ?? "—"}</TableCell>
+                <TableCell>{formatSourceAmount(line.factory_unit_amount, order, (value) => value)}</TableCell>
+                <TableCell>{!order.source_amounts_known ? "Not provided in source" : line.unit_cost_zar ?? (order.is_archive ? "Not provided in source" : "—")}</TableCell>
+                {order.is_archive ? (
+                  <>
+                    <TableCell>{sourceReportAmountText(line.source_cost)}</TableCell>
+                    <TableCell>{sourceReportAmountText(line.source_total)}</TableCell>
+                  </>
+                ) : null}
               </TableRow>
             ))}
           </TableBody>

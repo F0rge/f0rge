@@ -23,6 +23,7 @@ from app.models.journal import JournalEntry, JournalLine
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.ops_commerce_fulfillment_event import OpsCommerceFulfillmentEvent
 from app.models.ops_commerce_order import OpsCommerceOrder
+from app.models.ops_commerce_refund import OpsCommerceRefund, OpsCommerceRefundEvent
 from app.models.sales_order import SalesOrder, SalesOrderLine, SalesOrderPayment, SalesOrderStatus
 from app.models.sku import Sku
 from app.models.tax_invoice import TaxInvoice
@@ -980,3 +981,61 @@ async def test_machine_order_receipts_require_scoped_durable_handoff_and_order(
     assert lost_receipt.json() == {
         "items": [{"external_order_id": external_id, "status": "missing"}]
     }
+
+
+async def test_maintenance_fence_retries_machine_calls_without_any_business_writes(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    ops_headers: dict[str, str],
+) -> None:
+    payload, _sku_id = await _paid_order_payload(owner_client, fixture_tag="maintenance")
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    observed = (
+        OpsCommerceOrder,
+        OpsCommerceRefund,
+        OpsCommerceRefundEvent,
+        OpsCommerceAcknowledgement,
+        OpsCommerceFulfillmentEvent,
+        SalesOrder,
+        TaxInvoice,
+        JournalEntry,
+    )
+
+    async def counts():
+        return [
+            await async_db.scalar(select(func.count()).select_from(model)) for model in observed
+        ]
+
+    before = await counts()
+    team = await async_db.get(Team, UUID(ops_headers["X-Ops-Company-ID"]))
+    team.status = "maintenance"
+    await async_db.flush()
+    base = "/api/v1/ops-commerce/v1"
+    requests = [
+        ("GET", f"{base}/products", None),
+        ("GET", f"{base}/checkout-safety", None),
+        ("POST", f"{base}/orders", payload),
+        ("GET", f"{base}/refund-commands", None),
+        ("POST", f"{base}/refund-commands/{UUID(int=17)}/outcome", {"status": "pending"}),
+        ("POST", f"{base}/fulfillment-events/ack", {"event_ids": [str(UUID(int=18))]}),
+        (
+            "POST",
+            f"{base}/refund-events",
+            {
+                "provider_refund_id": "maintenance-refund",
+                "event_source": "webhook",
+                "referenced_capture_id": "maintenance-capture",
+                "event_timestamp": "2026-11-14T12:00:00Z",
+                "amount_minor": 100,
+                "currency_code": "ZAR",
+                "result_code": "success",
+                "outcome": "succeeded",
+                "canonical_sha256": "a" * 64,
+                "signature_verified": True,
+            },
+        ),
+    ]
+    for method, route, body in requests:
+        response = await owner_client.request(method, route, headers=ops_headers, json=body)
+        assert response.status_code == 503, (route, response.text)
+    assert await counts() == before

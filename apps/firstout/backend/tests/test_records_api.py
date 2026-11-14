@@ -108,7 +108,7 @@ async def test_stock_by_bin(
     resp = await owner_client.get("/api/v1/stock/by-bin", params={"q": "CHAIR-1"})
     assert resp.status_code == 200
     items = resp.json()["items"]
-    assert items and items[0]["on_hand"] == 2
+    assert items and items[0]["on_hand"] == 2.4
     assert items[0]["bin_code"]
 
 

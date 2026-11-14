@@ -19,6 +19,7 @@ from app.crud.purchase_order import PurchaseOrderCRUD, SkuStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
 from app.services.party_archive import require_active_supplier
+from app.services.archive_documents import assert_operational_document, source_document_flags
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.models.inventory import SkuStock
@@ -163,6 +164,7 @@ class PurchaseOrderService:
         data: PurchaseOrderLinesUpdate,
     ) -> PurchaseOrderResponse:
         po = await self._reload(po_id)
+        assert_operational_document(po)
         if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
             raise ConflictError("Only a purchase order waiting for approval can be edited.")
         await self._validate_line_writes(data.lines)
@@ -200,6 +202,7 @@ class PurchaseOrderService:
         user_id: uuid.UUID,
     ) -> PurchaseOrderResponse:
         po = await self._reload(po_id)
+        assert_operational_document(po)
         if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
             raise ConflictError("Only a purchase order waiting for approval can be edited.")
         line = next((row for row in po.lines if row.id == line_id), None)
@@ -245,6 +248,7 @@ class PurchaseOrderService:
 
     async def approve(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
         po = await self._get_po_or_404(po_id)
+        assert_operational_document(po)
         if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
             raise ConflictError("Purchase order is not pending approval")
         _require_complete_lines(po, "approving")
@@ -255,6 +259,7 @@ class PurchaseOrderService:
 
     async def reject(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
         po = await self._get_po_or_404(po_id)
+        assert_operational_document(po)
         if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
             raise ConflictError("Purchase order is not pending approval")
         async with unit_of_work(self.db):
@@ -264,6 +269,7 @@ class PurchaseOrderService:
 
     async def mark_on_water(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
         po = await self._get_po_or_404(po_id)
+        assert_operational_document(po)
         _require_complete_lines(po, "this step")
         if po.status != PurchaseOrderStatus.OPEN:
             raise ConflictError("Purchase order is not open")
@@ -305,6 +311,7 @@ class PurchaseOrderService:
             raise ValidationError("fx_to_zar must be positive")
 
         po = await self._get_po_or_404(po_id)
+        assert_operational_document(po)
         _require_complete_lines(po, "this step")
         if po.status != PurchaseOrderStatus.ON_WATER:
             raise ConflictError("Purchase order must be on water to land")
@@ -407,6 +414,7 @@ class PurchaseOrderService:
 
     async def packing_sheet(self, po_id: uuid.UUID) -> Response:
         po = await self._get_po_or_404(po_id)
+        assert_operational_document(po)
         _require_complete_lines(po, "this step")
         lines_data = [
             (
@@ -432,6 +440,14 @@ class PurchaseOrderService:
 
     async def purchase_order_pdf(self, po_id: uuid.UUID) -> Response:
         po = await self._get_po_or_404(po_id)
+        if not source_document_flags(po)["source_currency_known"]:
+            raise ConflictError(
+                "Historical source did not provide currency; commercial PDF is unavailable"
+            )
+        if any(line.factory_unit_amount is None for line in po.lines):
+            raise ConflictError(
+                "Verified unit prices are unavailable; commercial PDF is unavailable"
+            )
         if po.status == PurchaseOrderStatus.REJECTED:
             raise ConflictError("A rejected purchase order cannot be downloaded.")
         seller = await SettingsService(self.db).build_seller_details()
@@ -474,6 +490,7 @@ class PurchaseOrderService:
         await assert_date_postable(self.db, datetime.date.today())
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         po = await self._get_po_or_404(data.purchase_order_id)
+        assert_operational_document(po)
         _require_complete_lines(po, "this step")
 
         if po.status == PurchaseOrderStatus.RECEIVED:
@@ -651,6 +668,7 @@ class PurchaseOrderService:
     @staticmethod
     def _to_list_item(po: PurchaseOrder) -> PurchaseOrderListItem:
         return PurchaseOrderListItem(
+            **source_document_flags(po),
             id=po.id,
             po_number=po.po_number,
             status=po.status.value,
@@ -673,7 +691,16 @@ class PurchaseOrderService:
 
     @staticmethod
     def _to_response(po: PurchaseOrder) -> PurchaseOrderResponse:
-        lines = [_line_response(line) for line in po.lines]
+        payload = po.cin7_source_payload or {}
+        source_rows = {
+            row["SKU"]: row
+            for row in payload.get("rows", [])
+            if payload.get("facts", {}).get("raw_costs_available") and "SKU" in row
+        }
+        lines = [
+            _line_response(line, source_rows.get(line.sku.our_ref) if line.sku else None)
+            for line in po.lines
+        ]
         bills = [
             LandingBillResponse(
                 kind=bill.kind.value,
@@ -684,6 +711,7 @@ class PurchaseOrderService:
             for bill in po.bills
         ]
         return PurchaseOrderResponse(
+            **source_document_flags(po),
             id=po.id,
             po_number=po.po_number,
             status=po.status.value,
@@ -780,7 +808,7 @@ def _apply_line_write(row: PoLine, line: PoLineWrite, supplier_code: Optional[st
     row.factory_unit_amount = line.factory_unit_amount
 
 
-def _line_response(line: PoLine) -> PoLineResponse:
+def _line_response(line: PoLine, source_row: Optional[dict[str, str]] = None) -> PoLineResponse:
     sku = line.sku
     return PoLineResponse(
         id=line.id,
@@ -796,4 +824,6 @@ def _line_response(line: PoLine) -> PoLineResponse:
         qty=line.qty,
         factory_unit_amount=line.factory_unit_amount,
         unit_cost_zar=line.unit_cost_zar,
+        source_cost=source_row.get("Cost") if source_row else None,
+        source_total=source_row.get("Total") if source_row else None,
     )

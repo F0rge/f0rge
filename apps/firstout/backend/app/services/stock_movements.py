@@ -13,6 +13,7 @@ from app.models.location_bin import BinStock
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.cost_audit import CostAuditService
 from app.services.location_bins import LocationBinService
+from app.services.quantities import exact_quantity
 from f0rge_core.exceptions import ConflictError, ValidationError
 
 
@@ -28,9 +29,10 @@ class StockMovementService:
         self,
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
-        qty_delta: int,
+        qty_delta: Decimal,
         bin_id: Optional[uuid.UUID] = None,
     ) -> Optional[LocationStock]:
+        qty_delta = exact_quantity(qty_delta)
         if qty_delta == 0:
             return await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
 
@@ -59,14 +61,13 @@ class StockMovementService:
             bin_stock = BinStock(sku_id=sku_id, bin_id=loc_bin.id, on_hand=0)
             await self.bin_stock_crud.add_and_flush(bin_stock)
 
-        new_bin_qty = bin_stock.on_hand + qty_delta
+        new_bin_qty = exact_quantity(bin_stock.on_hand + qty_delta)
         if new_bin_qty < 0:
             raise ConflictError("Insufficient on-hand quantity")
         bin_stock.on_hand = new_bin_qty
         await self.bin_stock_crud.flush()
-        loc_stock.on_hand = await self.bin_stock_crud.sum_on_hand_for_sku_location(
-            sku_id,
-            location_id,
+        loc_stock.on_hand = exact_quantity(
+            await self.bin_stock_crud.sum_on_hand_for_sku_location(sku_id, location_id)
         )
         return loc_stock
 
@@ -74,8 +75,8 @@ class StockMovementService:
         self,
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
-        qty: int,
-        unit_cost_zar: Decimal,
+        qty: Decimal,
+        unit_cost_zar: Optional[Decimal],
         user_id: uuid.UUID,
         source: UnitCostAuditSource,
         note: str,
@@ -84,6 +85,9 @@ class StockMovementService:
         po_line_id: Optional[uuid.UUID] = None,
         record_audit: bool = True,
     ) -> LocationStock:
+        qty = exact_quantity(qty)
+        if qty <= 0:
+            raise ValidationError("Incoming quantity must be positive")
         loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
         old_on_hand = loc_stock.on_hand if loc_stock is not None else 0
         old_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
@@ -97,12 +101,16 @@ class StockMovementService:
         assert updated is not None
 
         new_on_hand = updated.on_hand
-        if old_on_hand == 0 or old_cost is None:
+        if old_on_hand == 0:
             blended = unit_cost_zar
+        elif old_cost is None or unit_cost_zar is None:
+            # A known receipt cannot establish the cost of existing unknown
+            # stock. Only an explicit cost correction can resolve that balance.
+            blended = None
         else:
             blended = (old_on_hand * old_cost + qty * unit_cost_zar) / new_on_hand
         updated.unit_cost_zar = blended
-        if record_audit:
+        if record_audit and blended is not None:
             await self.cost_audit.record(
                 sku_id=sku_id,
                 location_id=location_id,
@@ -120,13 +128,16 @@ class StockMovementService:
         self,
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
-        qty: int,
+        qty: Decimal,
         user_id: uuid.UUID,
         source: UnitCostAuditSource,
         note: str,
         bin_id: Optional[uuid.UUID] = None,
         record_audit: bool = True,
     ) -> LocationStock:
+        qty = exact_quantity(qty)
+        if qty <= 0:
+            raise ValidationError("Outgoing quantity must be positive")
         loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
         if loc_stock is None or loc_stock.on_hand < qty:
             raise ConflictError("Insufficient on-hand quantity")
@@ -154,12 +165,13 @@ class StockMovementService:
         self,
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
-        delta: int,
+        delta: Decimal,
         user_id: uuid.UUID,
         source: UnitCostAuditSource,
         note: str,
         bin_id: Optional[uuid.UUID] = None,
     ) -> Optional[LocationStock]:
+        delta = exact_quantity(delta)
         if delta == 0:
             return await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
         if delta > 0:
@@ -194,13 +206,16 @@ class StockMovementService:
         self,
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
-        qty: int,
+        qty: Decimal,
         user_id: uuid.UUID,
         source: UnitCostAuditSource,
         note: str,
         unit_cost_zar: Optional[Decimal] = None,
         bin_id: Optional[uuid.UUID] = None,
     ) -> Optional[LocationStock]:
+        qty = exact_quantity(qty)
+        if qty < 0:
+            raise ValidationError("On-hand quantity must be nonnegative")
         loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
         current = loc_stock.on_hand if loc_stock is not None else 0
         delta = qty - current

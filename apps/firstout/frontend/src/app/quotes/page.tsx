@@ -282,6 +282,10 @@ function QuotesPageInner() {
       setError("Choose a customer");
       return;
     }
+    if (lines.some((line) => line.sku_id && !skus.find((sku) => sku.id === line.sku_id)?.is_sellable)) {
+      setError("Remove items marked not for sale before creating this quote.");
+      return;
+    }
     try {
       await createQuote({
         customer_id: customerId,
@@ -463,7 +467,7 @@ function QuotesPageInner() {
                   id={`quote-sku-${index}`}
                   titleText="SKU"
                   placeholder="Search by code, barcode, or name"
-                  items={skus}
+                  items={skus.filter((item) => item.is_sellable)}
                   itemToString={(item) =>
                     item ? formatQuoteSkuOption(item, selectedCustomer, priceLists) : ""
                   }

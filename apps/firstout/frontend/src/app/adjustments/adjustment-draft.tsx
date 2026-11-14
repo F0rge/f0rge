@@ -17,6 +17,7 @@ import {
   type InventorySku,
   type Sku,
 } from "@/lib/api";
+import { isQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 
 import {
   AdjustmentLinesTable,
@@ -133,7 +134,7 @@ export function AdjustmentDraft({
   );
   const selectedSku = skuOptions.find((sku) => sku.id === skuId) ?? null;
   const numericDelta = typeof qtyDelta === "number" ? qtyDelta : 0;
-  const canAdd = canMutate && Boolean(skuId) && qtyDelta !== "" && numericDelta !== 0;
+  const canAdd = canMutate && Boolean(skuId) && isQuantity(qtyDelta, "delta");
 
   function setDraftField(lineId: string, field: keyof LineDraft, value: LineDraftValue) {
     setDrafts((current) => {
@@ -174,9 +175,13 @@ export function AdjustmentDraft({
     if (!canMutate || !draft) {
       return null;
     }
+    const error = quantityError(draft.qty_delta, "delta");
+    if (error) {
+      throw new Error(`${line.our_ref}: ${error}`);
+    }
     const payload: { qty_delta?: number; unit_cost_zar?: string } = {};
     if (isQtyDirty(line, draft)) {
-      payload.qty_delta = Math.trunc(draft.qty_delta as number);
+      payload.qty_delta = draft.qty_delta as number;
     }
     if (isCostDirty(line, draft, inventory, adjustment.location_id)) {
       payload.unit_cost_zar = formatPriceAmount(draft.unit_cost as number);
@@ -201,6 +206,13 @@ export function AdjustmentDraft({
   }
 
   async function flushDrafts() {
+    for (const line of adjustment.lines) {
+      const draft = draftsRef.current[line.id];
+      const error = draft ? quantityError(draft.qty_delta, "delta") : null;
+      if (error) {
+        throw new Error(`${line.our_ref}: ${error}`);
+      }
+    }
     let next = [...adjustment.lines];
     for (const line of adjustment.lines) {
       const current = next.find((entry) => entry.id === line.id) ?? line;
@@ -345,9 +357,11 @@ export function AdjustmentDraft({
           <NumberInput
             id="adjustment-qty-delta"
             label="Quantity delta"
-            helperText="Positive increases on-hand; negative decreases"
+            helperText="Positive increases on-hand; negative decreases. Up to 4 decimal places."
             allowEmpty
-            step={1}
+            step={QUANTITY_STEP}
+            invalid={qtyDelta !== "" && Boolean(quantityError(qtyDelta, "delta"))}
+            invalidText={quantityError(qtyDelta, "delta") ?? undefined}
             value={qtyDelta}
             onChange={(_event, { value }) => {
               setQtyDelta(value === "" ? "" : Number(value));

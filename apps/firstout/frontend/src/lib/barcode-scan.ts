@@ -25,7 +25,7 @@ type BarcodeDetectorCtor = {
   getSupportedFormats?: () => Promise<string[]>;
 };
 
-export type TillScanError = "unknown" | "no_retail" | "not_on_floor" | "over_floor";
+export type TillScanError = "unknown" | "not_sellable" | "no_retail" | "not_on_floor" | "over_floor";
 
 export type TillScanResult =
   | { ok: true; sku: Sku; qty: number }
@@ -79,6 +79,8 @@ export function tillScanErrorMessage(error: TillScanError): string {
   switch (error) {
     case "unknown":
       return "Unknown barcode.";
+    case "not_sellable":
+      return "This SKU is not for sale.";
     case "no_retail":
       return "No retail price for this SKU.";
     case "not_on_floor":
@@ -109,6 +111,9 @@ export function resolveTillScan(options: {
 
   if (!sku) {
     return { ok: false, error: "unknown" };
+  }
+  if (!sku.is_sellable) {
+    return { ok: false, error: "not_sellable" };
   }
   if (!sku.retail_ex_vat) {
     return { ok: false, error: "no_retail" };

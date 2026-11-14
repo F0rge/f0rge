@@ -380,7 +380,7 @@ function LaybysPageContent() {
       ]);
       setCustomers(customerData);
       setLocations(locationData);
-      setSkus(skuData.filter((sku) => sku.retail_ex_vat));
+      setSkus(skuData.filter((sku) => sku.is_sellable && sku.retail_ex_vat));
       const active = locationData.filter(isActiveLocation);
       const showrooms = active.filter((entry) => entry.type === "showroom");
       setLocationId((current) => current || defaultLocationId(showrooms.length > 0 ? showrooms : active));

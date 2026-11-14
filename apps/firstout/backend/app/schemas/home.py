@@ -6,6 +6,9 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 
+from app.schemas.quantity import QuantityTotal
+
+
 class HomeAttentionItem(BaseModel):
     kind: str
     title: str
@@ -22,9 +25,9 @@ class HomeRecentMovement(BaseModel):
 
 
 class HomeSummaryResponse(BaseModel):
-    on_order_qty: int
+    on_order_qty: QuantityTotal
     on_order_value_zar: Decimal
-    on_hand_qty: int
+    on_hand_qty: QuantityTotal
     on_hand_value_zar: Decimal
     home_currency: str
     aged_stock_value_zar: Decimal

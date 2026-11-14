@@ -14,6 +14,7 @@ import {
 import { useMemo } from "react";
 
 import type { StocktakeLine } from "@/lib/api";
+import { formatQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 
 export type DraftQty = number | "";
 
@@ -46,9 +47,9 @@ function formatVariance(variance: number | null): string {
     return "—";
   }
   if (variance > 0) {
-    return `+${variance}`;
+    return `+${formatQuantity(variance)}`;
   }
-  return String(variance);
+  return formatQuantity(variance);
 }
 
 function varianceColor(variance: number | null): string | undefined {
@@ -83,7 +84,7 @@ export function StocktakeLinesTable({
         name: line.name,
         category: line.category?.trim() || "—",
         our_barcode: line.our_barcode,
-        expected_qty: String(line.expected_qty),
+        expected_qty: formatQuantity(line.expected_qty),
         counted_qty: line.id,
         variance: line.id,
       })),
@@ -126,15 +127,18 @@ export function StocktakeLinesTable({
                       if (cell.info.header === "counted_qty") {
                         return (
                           <TableCell key={cell.id}>
-                            <div style={{ maxWidth: "6.5rem" }}>
+                            <div style={{ maxWidth: "8rem" }}>
                               <NumberInput
                                 id={`stocktake-counted-${row.id}`}
                                 label="Counted"
                                 hideLabel
+                                allowEmpty
                                 min={0}
-                                step={1}
+                                step={QUANTITY_STEP}
                                 size="sm"
                                 value={draft}
+                                invalid={draft !== "" && Boolean(quantityError(draft, "nonnegative"))}
+                                invalidText={quantityError(draft, "nonnegative") ?? undefined}
                                 disabled={!canMutate || busy}
                                 onChange={(_event, { value }) => {
                                   onDraftChange(row.id, value === "" ? "" : Number(value));

@@ -46,6 +46,7 @@ import {
   type StorefrontRefundStatus,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatSourceAmount } from "@/lib/source-history";
 
 const TABLE_HEADERS = [
   { key: "so_number", header: "Reference" },
@@ -280,10 +281,10 @@ export default function OrdersPage() {
         so_number: order.so_number,
         customer_name: order.customer_name,
         items: order.items_label,
-        total_inc_vat: formatZarAmount(order.total_inc_vat),
-        amount_paid: formatZarAmount(order.amount_paid),
-        balance: formatZarAmount(order.balance),
-        status: order.status,
+        total_inc_vat: formatSourceAmount(order.total_inc_vat, order),
+        amount_paid: formatSourceAmount(order.amount_paid, order),
+        balance: formatSourceAmount(order.balance, order),
+        status: order.is_archive ? `${order.status} · Imported history` : order.status,
         actions: order.id,
       })),
     [orders],
@@ -293,6 +294,15 @@ export default function OrdersPage() {
     <Stack gap={5}>
       {error ? <InlineNotification kind="error" title={error} hideCloseButton /> : null}
       <h1>{canMutate ? "Sales orders" : canCollect ? "Storefront collection" : "Storefront refunds"}</h1>
+      {canMutate && orders.some((order) => order.is_archive) ? (
+        <InlineNotification
+          kind="info"
+          title="This is imported history"
+          subtitle="Orders marked Imported history are read-only. Missing amounts and currency are shown as not provided in the source."
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
       {canReadHandoffs ? (
         <section aria-labelledby="storefront-handoffs-heading">
           <Stack gap={3}>
@@ -405,7 +415,9 @@ export default function OrdersPage() {
                     <TableRow key={key} {...rowProps}>
                       {row.cells.map((cell) => (
                         <TableCell key={cell.id}>
-                          {cell.info.header === "actions" && order && canMutate ? (
+                          {cell.info.header === "actions" && order?.is_archive ? (
+                            "Imported history"
+                          ) : cell.info.header === "actions" && order && canMutate ? (
                             <Stack gap={2} orientation="horizontal">
                               {order.status === "draft" ? (
                                 <Button size="sm" onClick={() => setConfirmRow(order)}>
@@ -503,7 +515,7 @@ export default function OrdersPage() {
         secondaryButtonText="Cancel"
         onRequestClose={() => setConfirmRow(null)}
         onRequestSubmit={() => {
-          if (!confirmRow) {
+          if (!confirmRow || confirmRow.is_archive) {
             return;
           }
           void confirmSalesOrder(confirmRow.id, {

@@ -18,7 +18,7 @@ from sqlalchemy import (
     event,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -63,6 +63,9 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     )
     is_archive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
     )
     reminders_paused: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")

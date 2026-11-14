@@ -64,6 +64,9 @@ class CreditNoteService:
         invoice = await self.invoice_crud.get_by_id(data.invoice_id, for_update=True)
         if invoice is None:
             raise NotFoundError("Invoice not found")
+        from app.services.archive_documents import assert_operational_document
+
+        assert_operational_document(invoice)
 
         existing = await self.crud.get_by_invoice_id(data.invoice_id)
         if existing is not None:

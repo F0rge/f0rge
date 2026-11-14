@@ -10,6 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.invoice import InvoiceLineResponse
 
 
+from app.schemas.quantity import Quantity
+
+
 class TillSaleLineCreate(BaseModel):
     sku_id: uuid.UUID
     qty: int = Field(gt=0)
@@ -30,7 +33,7 @@ class TillSaleCreate(BaseModel):
 class TillSaleLocationStock(BaseModel):
     location_id: uuid.UUID
     location_name: str
-    on_hand: int
+    on_hand: Quantity
 
 
 class TillSaleResponse(BaseModel):

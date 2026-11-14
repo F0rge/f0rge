@@ -91,7 +91,7 @@ def _bucket_label(bucket: str) -> str:
     return labels.get(bucket, bucket)
 
 
-def _line_stock_value(on_hand: int, unit_cost_zar: Optional[Decimal]) -> Decimal:
+def _line_stock_value(on_hand: Decimal, unit_cost_zar: Optional[Decimal]) -> Decimal:
     if unit_cost_zar is None or on_hand <= 0:
         return Decimal(0)
     return (Decimal(on_hand) * Decimal(unit_cost_zar)).quantize(Decimal("0.01"))
@@ -425,7 +425,7 @@ class ReportsService:
         bucket_lines: dict[str, list[AgedStockLine]] = {
             key: [] for key, _ in AGED_STOCK_BUCKET_SPECS
         }
-        bucket_qty: dict[str, int] = {key: 0 for key, _ in AGED_STOCK_BUCKET_SPECS}
+        bucket_qty: dict[str, Decimal] = {key: Decimal(0) for key, _ in AGED_STOCK_BUCKET_SPECS}
         bucket_value: dict[str, Decimal] = {key: Decimal(0) for key, _ in AGED_STOCK_BUCKET_SPECS}
 
         for stock, location_name, our_ref, sku_name in result.all():

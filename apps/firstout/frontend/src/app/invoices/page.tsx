@@ -40,6 +40,7 @@ import {
   type InvoiceListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatSettlementAmount } from "@/lib/source-history";
 import { suspectUnitPriceWarning } from "@/lib/quote-sku-price";
 import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
 
@@ -262,8 +263,8 @@ function InvoicesPageContent() {
     subtotal_ex_vat: formatZarAmount(entry.subtotal_ex_vat),
     vat_amount: formatZarAmount(entry.vat_amount),
     total_inc_vat: formatZarAmount(entry.total_inc_vat),
-    amount_paid: formatZarAmount(entry.amount_paid),
-    balance: formatZarAmount(entry.balance),
+    amount_paid: formatSettlementAmount(entry.amount_paid, entry.is_archive),
+    balance: formatSettlementAmount(entry.balance, entry.is_archive),
     payment_status: settlementStatusLabel(entry.payment_status),
     actions: entry.id,
   }));
@@ -321,6 +322,7 @@ function InvoicesPageContent() {
       {loading ? (
         <p className="cds--type-body-01">Loading invoices…</p>
       ) : total === 0 ? (
+        <>
         <InlineNotification
           kind="info"
           title="No invoices"
@@ -332,6 +334,10 @@ function InvoicesPageContent() {
           hideCloseButton
           lowContrast
         />
+        <p className="cds--type-body-01">
+          Imported records are available in <a className="cds--link" href="/history">Searchable history</a>.
+        </p>
+        </>
       ) : (
         <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
@@ -385,7 +391,7 @@ function InvoicesPageContent() {
                                 >
                                   Open
                                 </Button>
-                                <Button
+                                {!invoice?.is_archive ? <Button
                                   kind="ghost"
                                   size="sm"
                                   onClick={(event) => {
@@ -396,7 +402,7 @@ function InvoicesPageContent() {
                                   }}
                                 >
                                   Download
-                                </Button>
+                                </Button> : null}
                               </Stack>
                             </TableCell>
                           );

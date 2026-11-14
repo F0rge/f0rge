@@ -67,7 +67,7 @@ class SohCsvRow:
     row: int
     our_ref: Optional[str] = None
     location: Optional[str] = None
-    qty: Optional[int] = None
+    qty: Optional[Decimal] = None
     unit_cost_zar: Optional[Decimal] = None
     errors: list[str] = field(default_factory=list)
 
@@ -217,10 +217,13 @@ def _parse_money(value: str, field_name: str) -> Decimal:
     return amount
 
 
-def _parse_qty(value: str) -> int:
-    if not re.fullmatch(r"\d+", value):
-        raise ValidationError(f"qty must be an integer ≥ 0: {value}")
-    return int(value)
+def _parse_qty(value: str) -> Decimal:
+    from app.services.quantities import exact_quantity
+
+    qty = exact_quantity(value)
+    if qty < 0:
+        raise ValidationError("qty must be nonnegative")
+    return qty
 
 
 def _parse_carton_count(value: str) -> int:

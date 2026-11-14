@@ -34,6 +34,7 @@ from app.services.credit_notes import CreditNoteService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.vat import CENT, ex_to_inc
+from app.services.archive_documents import assert_operational_document
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -75,6 +76,7 @@ class StockReturnsService:
         invoice = await self.invoice_crud.get_by_id(data.invoice_id, for_update=True)
         if invoice is None:
             raise NotFoundError("Invoice not found")
+        assert_operational_document(invoice)
 
         await self._assert_invoice_not_credited(data.invoice_id)
         await self._assert_no_active_return(data.invoice_id)

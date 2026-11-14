@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import assert_customer_active
+from app.services.sellability import assert_sku_sellable
 from app.crud.quote import QuoteCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.user import UserCRUD
@@ -116,6 +117,7 @@ class QuotesService:
             sku = await self.sku_crud.get_by_id(sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+            assert_sku_sellable(sku)
             unit_ex = inc_to_ex(unit_inc)
             ex_vat = (Decimal(qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = (Decimal(qty) * unit_inc).quantize(CENT, rounding=ROUND_HALF_UP)
@@ -325,6 +327,8 @@ class QuotesService:
             if sku is None:
                 raise NotFoundError("SKU not found")
             prior = next((row for row in unmatched if row.sku_id == sku.id), None)
+            if prior is None:
+                assert_sku_sellable(sku)
             if prior is not None:
                 unmatched.remove(prior)
             unit_ex, warning = await self._line_unit_ex_vat(

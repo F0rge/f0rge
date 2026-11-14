@@ -408,6 +408,9 @@ class PickService:
         invoice = await self.invoice_crud.get_by_id(invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
+        from app.services.archive_documents import assert_operational_document
+
+        assert_operational_document(invoice)
         if invoice.amount_paid != invoice.total_inc_vat:
             raise ValidationError("Invoice is not fully paid")
         kit_sku_id, kit_qty, needs = await self._explode_document_lines(
@@ -476,6 +479,9 @@ class PickService:
         if line is None:
             raise NotFoundError("Sales order line not found")
         order = line.sales_order
+        from app.services.archive_documents import assert_operational_document
+
+        assert_operational_document(order)
         if order.status == SalesOrderStatus.CANCELLED:
             raise ConflictError("Sales order is cancelled")
         existing = await self.crud.get_active_by_sales_order_line_id(line.id)
@@ -484,7 +490,9 @@ class PickService:
         bom = await self.bom_crud.list_by_parent(line.sku_id)
         if bom:
             needs = [
-                ComponentNeed(sku_id=row.component_sku_id, qty_needed=row.qty * line.qty)
+                ComponentNeed(
+                    sku_id=row.component_sku_id, qty_needed=whole_component_qty(row.qty, line.qty)
+                )
                 for row in bom
             ]
             kit_sku_id = line.sku_id

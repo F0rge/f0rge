@@ -1,4 +1,4 @@
-export type SettlementStatus = "unpaid" | "partially_paid" | "paid";
+export type SettlementStatus = "unpaid" | "partially_paid" | "paid" | "unknown";
 
 export function settlementStatusLabel(status: SettlementStatus): string {
   switch (status) {
@@ -8,6 +8,8 @@ export function settlementStatusLabel(status: SettlementStatus): string {
       return "Partially paid";
     case "paid":
       return "Paid";
+    case "unknown":
+      return "Not imported";
   }
 }
 
@@ -19,6 +21,8 @@ export function settlementTagType(status: SettlementStatus): "gray" | "blue" | "
       return "blue";
     case "paid":
       return "green";
+    case "unknown":
+      return "gray";
   }
 }
 

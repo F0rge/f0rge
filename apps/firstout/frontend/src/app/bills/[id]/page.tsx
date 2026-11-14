@@ -34,6 +34,7 @@ import {
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatSettlementAmount } from "@/lib/source-history";
 import {
   partialPaymentError,
   settlementStatusLabel,
@@ -72,6 +73,11 @@ export default function BillDetailPage() {
     setError(null);
     try {
       const data = await getBill(params.id);
+      if (data.is_archive) {
+        setBill(data);
+        setPayments([]);
+        return;
+      }
       const paymentPage = await listPayments({ bill_id: data.id, limit: 100 });
       setBill(data);
       setPayments(paymentPage.items);
@@ -104,7 +110,7 @@ export default function BillDetailPage() {
   }
 
   async function handleUpload() {
-    if (!bill || !uploadFile) {
+    if (!bill || bill.is_archive || !uploadFile) {
       return;
     }
     setActionLoading(true);
@@ -122,7 +128,7 @@ export default function BillDetailPage() {
   }
 
   function openPaymentModal() {
-    if (!bill) {
+    if (!bill || bill.is_archive) {
       return;
     }
     setPaymentAmount(bill.balance_foreign);
@@ -133,7 +139,7 @@ export default function BillDetailPage() {
   }
 
   async function handleRecordPayment() {
-    if (!bill) {
+    if (!bill || bill.is_archive) {
       return;
     }
     const validationError = partialPaymentError({
@@ -186,7 +192,8 @@ export default function BillDetailPage() {
     );
   }
 
-  const showPayment = canMutate && hasPositiveBalance(bill.balance_foreign);
+  const showPayment = !bill.is_archive && canMutate && hasPositiveBalance(bill.balance_foreign);
+  const paymentStatus = bill.is_archive ? "unknown" : bill.payment_status;
 
   return (
     <Stack gap={6}>
@@ -200,10 +207,20 @@ export default function BillDetailPage() {
         <p className="cds--type-body-01">
           {bill.supplier_name} · Ref {bill.supplier_ref} · {bill.issue_date}
         </p>
-        <Tag type={settlementTagType(bill.payment_status)} size="sm">
-          {settlementStatusLabel(bill.payment_status)}
+        <Tag type={settlementTagType(paymentStatus)} size="sm">
+          {settlementStatusLabel(paymentStatus)}
         </Tag>
       </div>
+
+      {bill.is_archive ? (
+        <InlineNotification
+          kind="info"
+          title="Imported history; payments and opening balances were not imported"
+          subtitle="This bill is read-only. Source totals are preserved; payment status and balances are not imported."
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
 
       {success ? (
         <InlineNotification
@@ -228,7 +245,7 @@ export default function BillDetailPage() {
       <Stack gap={4} orientation="horizontal">
         {bill.pdf_storage_key ? (
           <Button kind="secondary" disabled={actionLoading} onClick={() => void handleDownload()}>
-            Download attachment
+            {bill.is_archive ? "Download original attachment" : "Download attachment"}
           </Button>
         ) : null}
         {showPayment ? (
@@ -242,19 +259,19 @@ export default function BillDetailPage() {
         <p className="cds--type-body-01">
           Total: {bill.currency} {bill.amount_foreign}
         </p>
-        <p className="cds--type-body-01">FX to ZAR: {bill.fx_to_zar}</p>
-        <p className="cds--type-body-01">Total ZAR: {formatZarAmount(bill.amount_zar)}</p>
+        <p className="cds--type-body-01">FX to ZAR: {bill.fx_rate_known ? bill.fx_to_zar : "Not provided in source"}</p>
+        <p className="cds--type-body-01">Total ZAR: {bill.fx_rate_known ? formatZarAmount(bill.amount_zar) : "Not provided in source"}</p>
         <p className="cds--type-body-01">
-          Paid: {bill.currency} {bill.amount_paid_foreign}
+          Paid: {formatSettlementAmount(bill.amount_paid_foreign, bill.is_archive, (value) => `${bill.currency} ${value}`)}
         </p>
-        <p className="cds--type-body-01">Paid ZAR: {formatZarAmount(bill.amount_paid_zar)}</p>
+        <p className="cds--type-body-01">Paid ZAR: {formatSettlementAmount(bill.amount_paid_zar, bill.is_archive)}</p>
         <p className="cds--type-body-01">
-          Balance owing: {bill.currency} {bill.balance_foreign}
+          Balance owing: {formatSettlementAmount(bill.balance_foreign, bill.is_archive, (value) => `${bill.currency} ${value}`)}
         </p>
-        <p className="cds--type-body-01">Balance ZAR: {formatZarAmount(bill.balance_zar)}</p>
+        <p className="cds--type-body-01">Balance ZAR: {formatSettlementAmount(bill.balance_zar, bill.is_archive)}</p>
       </div>
 
-      <TableContainer title="Payments" description="Money paid against this bill">
+      {bill.is_archive ? <p className="cds--type-body-01">Payments: Not imported</p> : <TableContainer title="Payments" description="Money paid against this bill">
         <Table>
           <TableHead>
             <TableRow>
@@ -283,9 +300,9 @@ export default function BillDetailPage() {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer>}
 
-      {lastPayment ? (
+      {!bill.is_archive && lastPayment ? (
         <InlineNotification
           kind="info"
           title="FX gain/loss"
@@ -301,7 +318,7 @@ export default function BillDetailPage() {
             <TableRow>
               <TableHeader>Description</TableHeader>
               <TableHeader>Qty</TableHeader>
-              <TableHeader>Unit</TableHeader>
+              {!bill.is_archive ? <TableHeader>Unit</TableHeader> : null}
               <TableHeader>Amount</TableHeader>
             </TableRow>
           </TableHead>
@@ -310,9 +327,9 @@ export default function BillDetailPage() {
               <TableRow key={line.id}>
                 <TableCell>{line.description}</TableCell>
                 <TableCell>{line.qty}</TableCell>
-                <TableCell>
+                {!bill.is_archive ? <TableCell>
                   {bill.currency} {line.unit_amount}
-                </TableCell>
+                </TableCell> : null}
                 <TableCell>
                   {bill.currency} {line.amount_foreign}
                 </TableCell>
@@ -324,7 +341,7 @@ export default function BillDetailPage() {
 
       <BooksHistory documentType="bill" documentId={bill.id} />
 
-      {canMutate ? (
+      {!bill.is_archive && canMutate ? (
         <Stack gap={4}>
           <p className="cds--type-productive-heading-02">Attachment</p>
           {bill.pdf_storage_key ? (
@@ -360,7 +377,7 @@ export default function BillDetailPage() {
         </Stack>
       ) : null}
 
-      <Modal
+      {!bill.is_archive ? <Modal
         open={paymentOpen}
         modalHeading="Record payment out"
         primaryButtonText={actionLoading ? "Recording…" : "Record payment"}
@@ -410,7 +427,7 @@ export default function BillDetailPage() {
             required
           />
         </Stack>
-      </Modal>
+      </Modal> : null}
     </Stack>
   );
 }

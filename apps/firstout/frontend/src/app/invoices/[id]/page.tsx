@@ -49,6 +49,7 @@ import {
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatSettlementAmount } from "@/lib/source-history";
 import {
   partialPaymentError,
   settlementStatusLabel,
@@ -91,6 +92,15 @@ export default function InvoiceDetailPage() {
     setError(null);
     try {
       const invoiceData = await getInvoice(params.id);
+      if (invoiceData.is_archive) {
+        setInvoice(invoiceData);
+        setCustomer(null);
+        setPayments([]);
+        setCreditNote(null);
+        setCompanySettings(null);
+        setSmtpConfigured(false);
+        return;
+      }
       const [crmCustomer, creditNotePage, settingsData, comms, paymentPage] = await Promise.all([
         getCustomer(invoiceData.customer_id),
         listCreditNotes({ limit: 100 }),
@@ -120,7 +130,7 @@ export default function InvoiceDetailPage() {
   }, [user, params.id, loadInvoice]);
 
   async function handleToggleReminders() {
-    if (!invoice) {
+    if (!invoice || invoice.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -143,7 +153,7 @@ export default function InvoiceDetailPage() {
   }
 
   async function handleDownload() {
-    if (!invoice) {
+    if (!invoice || invoice.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -158,7 +168,7 @@ export default function InvoiceDetailPage() {
   }
 
   async function handleEmail() {
-    if (!invoice) {
+    if (!invoice || invoice.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -175,7 +185,7 @@ export default function InvoiceDetailPage() {
   }
 
   async function handleWhatsApp() {
-    if (!invoice) {
+    if (!invoice || invoice.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -197,7 +207,7 @@ export default function InvoiceDetailPage() {
   }
 
   function openPaymentModal() {
-    if (!invoice) {
+    if (!invoice || invoice.is_archive) {
       return;
     }
     setPaymentAmount(invoice.balance);
@@ -206,7 +216,7 @@ export default function InvoiceDetailPage() {
   }
 
   async function handleRecordPayment() {
-    if (!invoice) {
+    if (!invoice || invoice.is_archive) {
       return;
     }
     const validationError = partialPaymentError({
@@ -240,7 +250,7 @@ export default function InvoiceDetailPage() {
   }
 
   async function handleIssueCreditNote() {
-    if (!invoice) {
+    if (!invoice || invoice.is_archive) {
       return;
     }
     setActionLoading(true);
@@ -277,8 +287,9 @@ export default function InvoiceDetailPage() {
     );
   }
 
-  const showPayment = canMutate && hasPositiveBalance(invoice.balance);
-  const showCreditNote = canMutate && !creditNote;
+  const showPayment = !invoice.is_archive && canMutate && hasPositiveBalance(invoice.balance);
+  const showCreditNote = !invoice.is_archive && canMutate && !creditNote;
+  const paymentStatus = invoice.is_archive ? "unknown" : invoice.payment_status;
 
   return (
     <Stack gap={6}>
@@ -292,10 +303,20 @@ export default function InvoiceDetailPage() {
         <p className="cds--type-body-01">
           {invoice.customer_name} · Issued {invoice.issue_date}
         </p>
-        <Tag type={settlementTagType(invoice.payment_status)} size="sm">
-          {settlementStatusLabel(invoice.payment_status)}
+        <Tag type={settlementTagType(paymentStatus)} size="sm">
+          {settlementStatusLabel(paymentStatus)}
         </Tag>
       </div>
+
+      {invoice.is_archive ? (
+        <InlineNotification
+          kind="info"
+          title="Imported history; payments and opening balances were not imported"
+          subtitle="This invoice is read-only. Source totals are preserved; payment status and balances are not imported."
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
 
       {success ? (
         <InlineNotification
@@ -317,7 +338,7 @@ export default function InvoiceDetailPage() {
         />
       ) : null}
 
-      <Stack gap={4} orientation="horizontal">
+      {!invoice.is_archive ? <Stack gap={4} orientation="horizontal">
         <Button kind="secondary" disabled={actionLoading} onClick={() => void handleDownload()}>
           Download tax invoice
         </Button>
@@ -358,24 +379,24 @@ export default function InvoiceDetailPage() {
             Issue credit note
           </Button>
         ) : null}
-      </Stack>
-      {canSend && !customer?.email ? (
+      </Stack> : null}
+      {!invoice.is_archive && canSend && !customer?.email ? (
         <p className="cds--type-helper-text-01 firstout-muted-text">
           Add a customer email before sending this invoice.
         </p>
       ) : null}
-      {canSend && customer?.email && !smtpConfigured ? (
+      {!invoice.is_archive && canSend && customer?.email && !smtpConfigured ? (
         <p className="cds--type-helper-text-01 firstout-muted-text">
           Connect SMTP in Settings → Communications before emailing.
         </p>
       ) : null}
-      {canSend && !customer?.whatsapp_e164 ? (
+      {!invoice.is_archive && canSend && !customer?.whatsapp_e164 ? (
         <p className="cds--type-helper-text-01 firstout-muted-text">
           Add a South African mobile number before sending this invoice on WhatsApp.
         </p>
       ) : null}
 
-      {creditNote ? (
+      {!invoice.is_archive && creditNote ? (
         <Stack gap={3}>
           <InlineNotification
             kind="info"
@@ -395,16 +416,16 @@ export default function InvoiceDetailPage() {
       <section className="firstout-tax-invoice">
         <div className="firstout-tax-invoice__header">
           <div>
-            <p className="cds--type-productive-heading-03">Tax invoice</p>
+            <p className="cds--type-productive-heading-03">{invoice.is_archive ? "Imported invoice history" : "Tax invoice"}</p>
             <p className="cds--type-body-01">{invoice.invoice_number}</p>
             <p className="cds--type-body-01">Issue date: {invoice.issue_date}</p>
-            {invoice.due_date ? (
+            {!invoice.is_archive && invoice.due_date ? (
               <p className="cds--type-body-01">Due date: {invoice.due_date}</p>
             ) : null}
           </div>
         </div>
         <div className="firstout-tax-invoice__parties">
-          <div>
+          {!invoice.is_archive ? <div>
             <p className="cds--type-label-01">Seller</p>
             {companySettings?.has_logo ? (
               <StaffImage className="firstout-company-logo" src={settingsLogoUrl()} alt="" />
@@ -414,7 +435,7 @@ export default function InvoiceDetailPage() {
             <p className="cds--type-body-01">
               VAT {companySettings?.vat_number ?? "—"}
             </p>
-          </div>
+          </div> : null}
           <div>
             <p className="cds--type-label-01">Buyer</p>
             <p className="cds--type-body-01">{invoice.customer_name}</p>
@@ -433,11 +454,11 @@ export default function InvoiceDetailPage() {
               <TableRow>
                 <TableHeader>Description</TableHeader>
                 <TableHeader>Qty</TableHeader>
-                <TableHeader>
+                {!invoice.is_archive ? <TableHeader>
                   {invoice.prices_include_vat ? "Unit incl. VAT" : "Unit excl. VAT"}
-                </TableHeader>
+                </TableHeader> : null}
                 <TableHeader>Ex VAT</TableHeader>
-                <TableHeader>VAT ({companySettings?.vat_percent ?? "15"}%)</TableHeader>
+                <TableHeader>{invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}</TableHeader>
                 <TableHeader>Inc VAT</TableHeader>
               </TableRow>
             </TableHead>
@@ -446,21 +467,21 @@ export default function InvoiceDetailPage() {
                 <TableRow key={line.id}>
                   <TableCell>
                     {line.description}
-                    {line.price_warning ? (
+                    {!invoice.is_archive && line.price_warning ? (
                       <div className="firstout-muted-text">{line.price_warning}</div>
                     ) : null}
-                    {line.suspect_price_warning ? (
+                    {!invoice.is_archive && line.suspect_price_warning ? (
                       <div className="firstout-price-warning">{line.suspect_price_warning}</div>
                     ) : null}
                   </TableCell>
                   <TableCell>{line.qty}</TableCell>
-                  <TableCell>
+                  {!invoice.is_archive ? <TableCell>
                     {formatZarAmount(
                       invoice.prices_include_vat
                         ? formatPriceAmount(exVatToIncVat(Number(line.unit_ex_vat)))
                         : line.unit_ex_vat,
                     )}
-                  </TableCell>
+                  </TableCell> : null}
                   <TableCell>{formatZarAmount(line.ex_vat)}</TableCell>
                   <TableCell>{formatZarAmount(line.vat_amount)}</TableCell>
                   <TableCell>{formatZarAmount(line.inc_vat)}</TableCell>
@@ -474,19 +495,19 @@ export default function InvoiceDetailPage() {
             Subtotal ex VAT: {formatZarAmount(invoice.subtotal_ex_vat)}
           </p>
           <p className="cds--type-body-01">
-            VAT ({companySettings?.vat_percent ?? "15"}%): {formatZarAmount(invoice.vat_amount)}
+            {invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}: {formatZarAmount(invoice.vat_amount)}
           </p>
           <p className="cds--type-productive-heading-02">
             Total: {formatZarAmount(invoice.total_inc_vat)}
           </p>
-          <p className="cds--type-body-01">Paid: {formatZarAmount(invoice.amount_paid)}</p>
+          <p className="cds--type-body-01">Paid: {formatSettlementAmount(invoice.amount_paid, invoice.is_archive)}</p>
           <p className="cds--type-body-01">
-            Balance owing: {formatZarAmount(invoice.balance)}
+            Balance owing: {formatSettlementAmount(invoice.balance, invoice.is_archive)}
           </p>
         </div>
       </section>
 
-      <TableContainer title="Payments" description="Money received against this invoice">
+      {invoice.is_archive ? <p className="cds--type-body-01">Payments: Not imported</p> : <TableContainer title="Payments" description="Money received against this invoice">
         <Table>
           <TableHead>
             <TableRow>
@@ -513,11 +534,11 @@ export default function InvoiceDetailPage() {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer>}
 
       <BooksHistory documentType="invoice" documentId={invoice.id} />
 
-      <Modal
+      {!invoice.is_archive ? <Modal
         open={paymentOpen}
         modalHeading="Record payment in"
         primaryButtonText={actionLoading ? "Recording…" : "Record payment"}
@@ -544,9 +565,9 @@ export default function InvoiceDetailPage() {
             required
           />
         </Stack>
-      </Modal>
+      </Modal> : null}
 
-      <Modal
+      {!invoice.is_archive ? <Modal
         open={creditOpen}
         modalHeading="Issue credit note"
         primaryButtonText={actionLoading ? "Issuing…" : "Issue credit note"}
@@ -562,9 +583,9 @@ export default function InvoiceDetailPage() {
           onChange={(event) => setCreditReason(event.target.value)}
           rows={3}
         />
-      </Modal>
+      </Modal> : null}
 
-      {lastPayment ? (
+      {!invoice.is_archive && lastPayment ? (
         <InlineNotification
           kind="info"
           title="Last payment"
