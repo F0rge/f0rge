@@ -14,7 +14,7 @@ A diff-only review does not prove runtime behavior. When the assigned reviewer l
 
 Cite the committed rule and inspected source evidence in each block-level comment. Include historical provenance only when it was actually consulted; an unavailable memory file does not supply evidence.
 
-- **`platform:` tag on new projects** — any new `project.json` must carry `platform:py` or `platform:ts` tag or CI silently ignores it. Block on new projects missing tags. Exception: `marrow-ios` (`scope:marrow` only). Full Nx checklist: `docs/agents/review-checklist.md` / `docs/agents/rules/nx.md`.
+- **`platform:` tag on new projects** — any new `project.json` must carry the matching `platform:py`, `platform:ts` or `platform:rust` tag or CI silently ignores it. Block on new projects missing tags. Exception: `marrow-ios` (`scope:marrow` only). Full Nx checklist: `docs/agents/review-checklist.md` / `docs/agents/rules/nx.md`.
 - **Lib test coverage** — changes to `libs/**` must include or update tests in the lib's `tests/` directory. Block on lib changes with no test updates when behavior changes.
 - **Re-implementation grep** — when reviewing app code, grep diff for local copies of lib-owned helpers (`DomainError`, `BaseCRUD`, `unit_of_work`, `ApiError`, shadcn primitives). Block on re-implementations.
 - **Thin routers** — any new or modified route in `apps/marrow/backend/app/routers/` must be ≤ 3 lines (signature + delegation + return). Block on presence of `if`, `try:`, `raise HTTPException`, `db.query(`, `db.add(`, `db.commit(`, `setattr(`, or any inline helper. Pre-existing redirect branches in `photos.serve_photo` and `account.serve_avatar` are grandfathered — only flag NEW violations. See `feedback_thin_routers.md`.
