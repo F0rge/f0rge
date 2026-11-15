@@ -16,16 +16,28 @@ from app.schemas.price_list import (
     PriceListUpdate,
 )
 from app.services.price_lists import PriceListService
+from app.schemas.party_archive import PartyArchiveUpdate
 
 price_lists_router = APIRouter(prefix="/api/v1/price-lists", tags=["price-lists"])
 
 
 @price_lists_router.get("", response_model=list[PriceListResponse])
 async def list_price_lists(
+    archived: bool = False,
     _: uuid.UUID = Depends(get_current_user_id),
     service: PriceListService = Depends(get_price_list_service),
 ) -> list[PriceListResponse]:
-    return await service.list()
+    return await service.list(archived=archived)
+
+
+@price_lists_router.patch("/{price_list_id}/archive", response_model=PriceListResponse)
+async def archive_price_list(
+    price_list_id: uuid.UUID,
+    body: PartyArchiveUpdate,
+    _: uuid.UUID = Depends(require_catalogue_mutate),
+    service: PriceListService = Depends(get_price_list_service),
+) -> PriceListResponse:
+    return await service.set_archived(price_list_id, body.is_archived)
 
 
 @price_lists_router.post(

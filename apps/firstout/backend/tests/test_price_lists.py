@@ -293,3 +293,42 @@ async def test_buyer_can_post_price_lists_till_cannot(
         json={"name": "Till list"},
     )
     assert blocked.status_code == 403
+
+
+async def test_delete_preserves_assigned_price_list_until_explicitly_unassigned(
+    owner_client: AsyncClient,
+) -> None:
+    created = await owner_client.post(
+        "/api/v1/price-lists", json={"name": "Protected assigned list"}
+    )
+    assert created.status_code == 201
+    price_list_id = created.json()["id"]
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "Protected list customer", "price_list_id": price_list_id},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+
+    blocked = await owner_client.delete(f"/api/v1/price-lists/{price_list_id}")
+    assert blocked.status_code == 409
+    assert "archive it instead" in blocked.text
+    assert (await owner_client.get(f"/api/v1/price-lists/{price_list_id}")).status_code == 200
+    assert (await owner_client.get(f"/api/v1/customers/{customer_id}")).json()[
+        "price_list_id"
+    ] == price_list_id
+
+    archived = await owner_client.patch(
+        f"/api/v1/customers/{customer_id}/archive", json={"is_archived": True}
+    )
+    assert archived.status_code == 200
+    assert (await owner_client.delete(f"/api/v1/price-lists/{price_list_id}")).status_code == 409
+
+    unassigned = await owner_client.patch(
+        f"/api/v1/customers/{customer_id}", json={"price_list_id": None}
+    )
+    assert unassigned.status_code == 200
+    assert unassigned.json()["price_list_id"] is None
+    deleted = await owner_client.delete(f"/api/v1/price-lists/{price_list_id}")
+    assert deleted.status_code == 204
+    assert (await owner_client.get(f"/api/v1/price-lists/{price_list_id}")).status_code == 404

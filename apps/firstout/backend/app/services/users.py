@@ -38,31 +38,35 @@ class UserService:
 
     async def list(self) -> list[UserResponse]:
         users = await self.crud.list_all()
+        return [await self._response(user) for user in users]
+
+    async def get(self, user_id: uuid.UUID) -> UserResponse:
+        user = await self.crud.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        return await self._response(user)
+
+    async def _response(self, user: User) -> UserResponse:
         team_id = tenant_id_ctx.get()
         team = await self.team_crud.get_first()
-        results = []
-        for user in users:
-            member = await self.db.scalar(
-                select(Membership).where(
-                    Membership.user_id == user.id, Membership.team_id == team_id
-                )
+        member = await self.db.scalar(
+            select(Membership).where(Membership.user_id == user.id, Membership.team_id == team_id)
+        )
+        record = UserResponse.model_validate(user)
+        if member is not None:
+            record = record.model_copy(
+                update={"is_disabled": user.is_disabled or member.is_disabled}
             )
-            record = UserResponse.model_validate(user)
-            if member is not None:
-                record = record.model_copy(
-                    update={"is_disabled": user.is_disabled or member.is_disabled}
-                )
-            if member is not None and not member.is_legacy_home:
-                record = record.model_copy(
-                    update={
-                        "team_id": team_id,
-                        "team": TeamBrief(id=team.id, name=team.name),
-                        "role": member.role,
-                        "default_location_id": member.default_location_id,
-                    }
-                )
-            results.append(record)
-        return results
+        if member is not None and not member.is_legacy_home:
+            record = record.model_copy(
+                update={
+                    "team_id": team_id,
+                    "team": TeamBrief(id=team.id, name=team.name),
+                    "role": member.role,
+                    "default_location_id": member.default_location_id,
+                }
+            )
+        return record
 
     async def update(self, user_id: uuid.UUID, data: UserUpdate) -> UserResponse:
         # Serialize tenant role/disabled edits before counting remaining owners.

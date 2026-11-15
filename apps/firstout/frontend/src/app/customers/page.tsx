@@ -2,27 +2,19 @@
 
 import {
   Button,
-  DataTable,
   InlineNotification,
   Modal,
-  Pagination,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   Tag,
-  TextInput,
 } from "@carbon/react";
-import { DocumentExport, Edit } from "@carbon/icons-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
-import { PartyArchiveTabs } from "@/components/party-archive-actions";
 import {
   CustomerDuplicateModal,
   DUPLICATE_NAME_TAKEN,
@@ -34,672 +26,502 @@ import {
   emptyCustomerForm,
   formFromCustomer,
 } from "@/components/customer-form-fields";
+import { CustomerPortalAccessPanel } from "@/components/customer-portal-access";
+import {
+  RecordDetail,
+  RecordDetails,
+  RecordWorkspace,
+  type RecordWorkspaceAdapter,
+  type WorkspaceField,
+} from "@/components/record-workspace";
+import { SalesHistoryTable } from "@/components/records/history-tables";
+import { PartyRecords } from "@/components/records/party-records";
 import {
   ApiError,
   PRICE_CLASSIFICATIONS,
   canManageCustomerCredit,
   canMutateCustomers,
   createCustomer,
-  repriceCustomerDrafts,
   findCustomerDuplicates,
   formatZarAmount,
-  getCustomerArchiveCounts,
-  listCustomers,
+  repriceCustomerDrafts,
   updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
   type CustomerDuplicateMatch,
-  type ArchiveCounts,
 } from "@/lib/api";
-import { CUSTOMER_SEARCH_PLACEHOLDER } from "@/lib/customer-search";
 import { useAuth } from "@/lib/auth";
+import { workspaceIdentity } from "@/lib/record-workspace";
+import {
+  formatIsoDate,
+  laybyActiveBadgeLabel,
+  overdueBadgeLabel,
+} from "@/lib/customer-crm";
 import { downloadCsv } from "@/lib/csv";
-import { formatIsoDate, laybyActiveBadgeLabel, overdueBadgeLabel } from "@/lib/customer-crm";
+import {
+  queryWorkspace,
+  type WorkspaceQuery,
+} from "@/lib/record-workspace-api";
 
-const TABLE_HEADERS = [
-  { key: "customer", header: "Customer" },
-  { key: "type_tier", header: "Type & Tier" },
-  { key: "contact", header: "Contact" },
-  { key: "open_invoices", header: "Open Invoices" },
-  { key: "active_laybys", header: "Active Laybys" },
-] as const;
+const classificationOptions = PRICE_CLASSIFICATIONS.map((value) => ({
+  value,
+  label: value,
+}));
+const currency = (value: string | null | undefined) =>
+  value == null ? "—" : formatZarAmount(value);
 
-const ACTIONS_HEADER = { key: "actions", header: "" };
-
-const CSV_HEADERS = [
-  "Customer",
-  "Classification",
-  "Cin7 price tier",
-  "Email",
-  "Phone",
-  "Open invoices",
-  "Active laybys",
-  "Overdue",
-  "Layby active",
-  "Last purchase",
-];
-
-type TypeFilter = "all" | (typeof PRICE_CLASSIFICATIONS)[number];
-type BalanceFilter = "any" | "open_invoices" | "active_laybys";
-
-type CustomerRow = {
-  id: string;
-  customer: string;
-  type_tier: string;
-  contact: string;
-  open_invoices: string;
-  active_laybys: string;
-  actions: string;
-};
-
-function formatContact(customer: CustomerCrm): string {
-  const parts = [customer.email, customer.phone].filter(Boolean);
-  return parts.length > 0 ? parts.join(" • ") : "—";
+export default function CustomersPage() {
+  const { user } = useAuth();
+  return <CustomersScreen key={workspaceIdentity(user)} />;
 }
-
-function formatOpenInvoices(customer: CustomerCrm): { amount: string; detail: string | null } {
-  if (customer.open_invoices_count === 0) {
-    return { amount: "—", detail: null };
-  }
-  return { amount: formatZarAmount(customer.open_invoices_zar), detail: null };
-}
-
-function formatActiveLaybys(customer: CustomerCrm): { amount: string; detail: string | null } {
-  if (customer.active_laybys_count === 0) {
-    return { amount: "—", detail: null };
-  }
-  const label = customer.active_laybys_count === 1 ? "1 layby" : `${customer.active_laybys_count} laybys`;
-  return { amount: formatZarAmount(customer.active_laybys_zar), detail: label };
-}
-
-function classificationTagType(
-  classification: (typeof PRICE_CLASSIFICATIONS)[number],
-): "blue" | "purple" | "teal" | "magenta" {
-  if (classification === "Retail") {
-    return "blue";
-  }
-  if (classification === "Wholesale") {
-    return "purple";
-  }
-  if (classification === "Stockist") {
-    return "teal";
-  }
-  return "magenta";
-}
-
-function csvMoney(count: number, amount: string): string {
-  return count > 0 ? formatZarAmount(amount) : "";
-}
-
 function CustomersScreen() {
   const router = useRouter();
-  const archived = useSearchParams().get("archived") === "true";
   const { user } = useAuth();
-  const canMutate = canMutateCustomers(user);
+  const allowed = canMutateCustomers(user);
   const canEditCredit = canManageCustomerCredit(user);
-  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [refreshKey, refresh] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<CustomerCrm | null>(null);
+  const [form, setForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [counts, setCounts] = useState<ArchiveCounts | null>(null);
-  const requestId = useRef(0);
-  const [searchFilter, setSearchFilter] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>("any");
-  const [overdueFilter, setOverdueFilter] = useState(false);
-  const [activeLaybyFilter, setActiveLaybyFilter] = useState(false);
-  const [onHoldFilter, setOnHoldFilter] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
-  const [editCustomer, setEditCustomer] = useState<CustomerCrm | null>(null);
-  const [editForm, setEditForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
-  const [saving, setSaving] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
-  const [duplicateMatches, setDuplicateMatches] = useState<CustomerDuplicateMatch[]>([]);
+  const [duplicates, setDuplicates] = useState<CustomerDuplicateMatch[]>([]);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
-  const [repriceCustomer, setRepriceCustomer] = useState<CustomerCrm | null>(null);
+  const [reprice, setReprice] = useState<CustomerCrm | null>(null);
   const [repriceBusy, setRepriceBusy] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(searchFilter), 250);
-    return () => window.clearTimeout(timer);
-  }, [searchFilter]);
-
-  const loadCustomers = useCallback(async () => {
-    const request = ++requestId.current;
-    setLoading(true);
-    setCustomers([]);
-    setError(null);
-    try {
-      const [data, archiveCounts] = await Promise.all([
-        listCustomers({ archived, overdue: overdueFilter || undefined, active_layby: activeLaybyFilter || undefined, on_hold: onHoldFilter || undefined, q: debouncedSearch }),
-        getCustomerArchiveCounts(),
-      ]);
-      if (request !== requestId.current) return;
-      setCustomers(data);
-      setCounts(archiveCounts);
-    } catch (err) {
-      if (request !== requestId.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load customers.");
-    } finally {
-      if (request === requestId.current) setLoading(false);
-    }
-  }, [archived, overdueFilter, activeLaybyFilter, onHoldFilter, debouncedSearch]);
-
-  useEffect(() => {
-    if (user) {
-      void loadCustomers();
-    }
-    return () => { requestId.current += 1; };
-  }, [user, loadCustomers]);
-
-  const filteredCustomers = useMemo(() => {
-    return customers.filter((customer) => {
-      if (typeFilter !== "all" && customer.price_classification !== typeFilter) {
-        return false;
-      }
-      if (balanceFilter === "open_invoices" && customer.open_invoices_count === 0) {
-        return false;
-      }
-      if (balanceFilter === "active_laybys" && customer.active_laybys_count === 0) {
-        return false;
-      }
-      return true;
-    });
-  }, [customers, typeFilter, balanceFilter]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [archived, searchFilter, typeFilter, balanceFilter, overdueFilter, activeLaybyFilter, onHoldFilter]);
-
-  const effectivePage = Math.min(page, Math.max(1, Math.ceil(filteredCustomers.length / pageSize)));
-  const pagedCustomers = useMemo(() => {
-    const start = (effectivePage - 1) * pageSize;
-    return filteredCustomers.slice(start, start + pageSize);
-  }, [filteredCustomers, effectivePage, pageSize]);
-
-  const tableHeaders = canMutate && !archived ? [...TABLE_HEADERS, ACTIONS_HEADER] : [...TABLE_HEADERS];
-
-  const rows: CustomerRow[] = pagedCustomers.map((entry) => ({
-    id: entry.id,
-    customer: entry.id,
-    type_tier: entry.id,
-    contact: entry.id,
-    open_invoices: entry.id,
-    active_laybys: entry.id,
-    actions: entry.id,
-  }));
-
-  function openCustomer(entry: CustomerCrm) {
-    setEditCustomer(entry);
-    setEditForm(formFromCustomer(entry));
-  }
-
-  function handleExport() {
-    downloadCsv(
-      archived ? "firstout-archived-customers.csv" : "firstout-customers.csv",
-      CSV_HEADERS,
-      filteredCustomers.map((customer) => [
-        customer.name,
-        customer.price_classification,
-        customer.price_tier,
-        customer.email ?? "",
-        customer.phone ?? "",
-        csvMoney(customer.open_invoices_count, customer.open_invoices_zar),
-        csvMoney(customer.active_laybys_count, customer.active_laybys_zar),
-        customer.overdue_invoices_count > 0 ? overdueBadgeLabel(customer) : "",
-        customer.active_laybys_count > 0 ? laybyActiveBadgeLabel(customer) : "",
-        formatIsoDate(customer.last_purchase_date),
-      ]),
-    );
-  }
-
-  function closeDuplicates() {
+  const [portal, setPortal] = useState<CustomerCrm | null>(null);
+  const closeDuplicates = () => {
     setDuplicateOpen(false);
-    setDuplicateMatches([]);
+    setDuplicates([]);
     setDuplicateError(null);
-  }
-
-  async function handleCreate(force = false) {
-    const name = createForm.name.trim();
-    if (!name) {
-      setError("Customer name is required.");
-      return;
-    }
-    setSaving(true);
+  };
+  const start = (item?: CustomerCrm) => {
+    setError(null);
+    setEditing(item ?? null);
+    setForm(item ? formFromCustomer(item) : { ...emptyCustomerForm });
+    setCreating(!item);
+  };
+  const close = () => {
+    setCreating(false);
+    setEditing(null);
+    closeDuplicates();
+  };
+  async function save(force = false) {
+    if (!form.name.trim()) return;
+    setBusy(true);
     setError(null);
     try {
-      if (!force) {
-        const matches = await findCustomerDuplicates({
-          name,
-          email: createForm.email,
-          phone: createForm.phone,
-        });
-        if (matches.length > 0) {
-          setDuplicateMatches(matches);
-          setDuplicateError(null);
-          setDuplicateOpen(true);
-          return;
-        }
-      }
-      await createCustomer(customerWritePayload(createForm, canEditCredit));
-      closeDuplicates();
-      setCreateOpen(false);
-      setCreateForm(emptyCustomerForm);
-      await loadCustomers();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setDuplicateError(DUPLICATE_NAME_TAKEN);
-        setDuplicateOpen(true);
-        if (duplicateMatches.length === 0) {
-          try {
-            const matches = await findCustomerDuplicates({
-              name,
-              email: createForm.email,
-              phone: createForm.phone,
-            });
-            setDuplicateMatches(matches);
-          } catch {
-            setDuplicateMatches([]);
+      const payload = customerWritePayload(form, canEditCredit);
+      if (editing) {
+        const previousClassification = editing.price_classification;
+        const updated = await updateCustomer(editing.id, payload);
+        close();
+        refresh((value) => value + 1);
+        if (
+          previousClassification !== updated.price_classification &&
+          (updated.draft_quote_count ?? 0) +
+            (updated.draft_sales_order_count ?? 0) >
+            0
+        )
+          setReprice(updated);
+      } else {
+        if (!force) {
+          const matches = await findCustomerDuplicates({
+            name: form.name.trim(),
+            email: form.email,
+            phone: form.phone,
+          });
+          if (matches.length) {
+            setDuplicates(matches);
+            setDuplicateError(null);
+            setDuplicateOpen(true);
+            return;
           }
         }
-        return;
-      }
-      setError(err instanceof Error ? err.message : "Failed to create customer.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleUpdate() {
-    if (!editCustomer || !canMutate) {
-      return;
-    }
-    const name = editForm.name.trim();
-    if (!name) {
-      setError("Customer name is required.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const previous = editCustomer.price_classification;
-      const updated = await updateCustomer(
-        editCustomer.id,
-        customerWritePayload(editForm, canEditCredit),
-      );
-      setEditCustomer(null);
-      setEditForm(emptyCustomerForm);
-      await loadCustomers();
-      const drafts = (updated.draft_quote_count ?? 0) + (updated.draft_sales_order_count ?? 0);
-      if (previous !== updated.price_classification && drafts > 0) {
-        setRepriceCustomer(updated);
+        await createCustomer(payload);
+        close();
+        setForm({ ...emptyCustomerForm });
+        refresh((value) => value + 1);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update customer.");
+      if (!editing && err instanceof ApiError && err.status === 409) {
+        setDuplicateError(DUPLICATE_NAME_TAKEN);
+        setDuplicateOpen(true);
+        if (!duplicates.length) {
+          try {
+            setDuplicates(
+              await findCustomerDuplicates({
+                name: form.name.trim(),
+                email: form.email,
+                phone: form.phone,
+              }),
+            );
+          } catch {
+            setDuplicates([]);
+          }
+        }
+      } else
+        setError(
+          err instanceof Error ? err.message : "Could not save customer.",
+        );
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
-
   async function confirmReprice() {
-    if (!repriceCustomer) {
-      return;
-    }
+    if (!reprice) return;
     setRepriceBusy(true);
     setError(null);
     try {
-      await repriceCustomerDrafts(repriceCustomer.id);
-      setRepriceCustomer(null);
-      await loadCustomers();
+      await repriceCustomerDrafts(reprice.id);
+      setReprice(null);
+      refresh((value) => value + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not reprice drafts.");
+      setError(
+        err instanceof Error ? err.message : "Could not reprice drafts.",
+      );
     } finally {
       setRepriceBusy(false);
     }
   }
-
+  async function exportCustomers(query: WorkspaceQuery) {
+    const customers: CustomerCrm[] = [];
+    for (let offset = 0; offset < 20000; offset += 100) {
+      const page = await queryWorkspace<CustomerCrm>("customers", {
+        ...query,
+        offset,
+        limit: 100,
+      });
+      customers.push(...page.items);
+      if (customers.length >= page.total) break;
+      if (offset === 19900)
+        throw new Error(
+          "Refine the filters before exporting more than 20,000 customers.",
+        );
+    }
+    downloadCsv(
+      query.lifecycle === "archived"
+        ? "firstout-archived-customers.csv"
+        : "firstout-customers.csv",
+      [
+        "Customer",
+        "Classification",
+        "Cin7 price tier",
+        "Email",
+        "Phone",
+        "Open invoices",
+        "Active laybys",
+        "Overdue",
+        "Layby active",
+        "Last purchase",
+      ],
+      customers.map((item) => [
+        item.name,
+        item.price_classification,
+        item.price_tier,
+        item.email ?? "",
+        item.phone ?? "",
+        item.open_invoices_count > 0 ? currency(item.open_invoices_zar) : "",
+        item.active_laybys_count > 0 ? currency(item.active_laybys_zar) : "",
+        item.overdue_invoices_count > 0 ? overdueBadgeLabel(item) : "",
+        item.active_laybys_count > 0 ? laybyActiveBadgeLabel(item) : "",
+        formatIsoDate(item.last_purchase_date),
+      ]),
+    );
+  }
+  const bulkFields: WorkspaceField[] = [
+    {
+      key: "price_classification",
+      label: "Classification",
+      type: "enum",
+      options: classificationOptions,
+    },
+    {
+      key: "payment_terms_days",
+      label: "Payment terms (days)",
+      type: "number",
+      nullable: true,
+    },
+    {
+      key: "payment_reminders_opt_out",
+      label: "Opt out of reminders",
+      type: "boolean",
+    },
+    ...(canEditCredit
+      ? [
+          {
+            key: "on_hold",
+            label: "Account on hold",
+            type: "boolean" as const,
+          },
+          {
+            key: "on_hold_reason",
+            label: "Hold reason",
+            type: "text" as const,
+            nullable: true,
+          },
+          {
+            key: "credit_limit",
+            label: "Credit limit",
+            type: "number" as const,
+            nullable: true,
+          },
+        ]
+      : []),
+  ];
+  const adapter: RecordWorkspaceAdapter<CustomerCrm> = {
+    resource: "customers",
+    title: "Customers",
+    singular: "customer",
+    breadcrumb: "Sales",
+    description: "Find customers, review balances and manage account details.",
+    columns: [
+      {
+        key: "name",
+        label: "Customer / reference",
+        render: (item) => item.name,
+        sortable: true,
+      },
+      {
+        key: "price_classification",
+        label: "Classification",
+        render: (item) => (
+          <Tag type="gray" size="sm">
+            {item.price_classification}
+          </Tag>
+        ),
+        sortable: true,
+      },
+      {
+        key: "open_invoices_zar",
+        label: "Open balance",
+        render: (item) => (
+          <>
+            {currency(item.open_invoices_zar)}
+            {item.overdue_invoices_count > 0 && (
+              <div className="firstout-muted-text">Overdue</div>
+            )}
+          </>
+        ),
+        numeric: true,
+        sortable: true,
+      },
+    ],
+    filters: [
+      { key: "name", label: "Name", type: "text" },
+      { key: "email", label: "Email", type: "text" },
+      { key: "phone", label: "Phone", type: "text" },
+      {
+        key: "price_classification",
+        label: "Classification",
+        type: "enum",
+        options: classificationOptions,
+        quick: true,
+      },
+      {
+        key: "open_invoices_zar",
+        label: "Open balance",
+        type: "number",
+        quick: true,
+      },
+      { key: "overdue_invoices_zar", label: "Overdue balance", type: "number" },
+      { key: "active_laybys_zar", label: "Active laybys", type: "number" },
+      ...(canEditCredit
+        ? [
+            {
+              key: "on_hold",
+              label: "Account on hold",
+              type: "boolean" as const,
+            },
+          ]
+        : []),
+    ],
+    bulkFields,
+    lifecycle: { activeLabel: "Active", archivedLabel: "Archived" },
+    actions: allowed
+      ? [
+          { key: "edit", label: "Edit" },
+          { key: "archive", label: "Archive" },
+          { key: "restore", label: "Restore" },
+        ]
+      : [],
+    getTitle: (item) => item.name,
+    getSubtitle: (item) => item.email || item.phone || item.price_tier,
+    canEdit: (item) => !item.is_archived,
+  };
   return (
-    <Stack gap={6}>
-      <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Customers CRM</h1>
-          <p className="cds--type-body-01">
-            Manage retail and trade customers, view balances, laybys, and pricing tiers.
-          </p>
-        </div>
-        <div className="firstout-catalogue-actions">
-          <Button
-            kind="secondary"
-            renderIcon={DocumentExport}
-            disabled={loading || filteredCustomers.length === 0}
-            onClick={handleExport}
-          >
-            Export CSV
-          </Button>
-          {canMutate && !archived ? (
-            <Button
-              onClick={() => {
-                setCreateForm(emptyCustomerForm);
-                closeDuplicates();
-                setCreateOpen(true);
-              }}
-            >
-              New customer
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      {error ? (
+    <>
+      {error && !creating && !editing && (
         <InlineNotification
           kind="error"
-          title="Error"
+          title="Could not complete action"
           subtitle={error}
           onCloseButtonClick={() => setError(null)}
           lowContrast
         />
-      ) : null}
-
-      <PartyArchiveTabs
-        kind="customers"
-        archived={archived}
-        counts={counts}
-        onChange={(next) => {
-          setPage(1);setCreateOpen(false);setEditCustomer(null);closeDuplicates();
-          router.replace(`/customers${next ? "?archived=true" : ""}`, { scroll: false });
-        }}
-      >
-      <div className="firstout-catalogue-panel">
-        <div className="firstout-catalogue-toolbar">
-          <div className="firstout-catalogue-toolbar__left">
-            <TextInput
-              id="customers-search"
-              labelText="Filter customers"
-              hideLabel
-              placeholder={CUSTOMER_SEARCH_PLACEHOLDER}
-              value={searchFilter}
-              onChange={(event) => setSearchFilter(event.target.value)}
-            />
-            <span className="firstout-catalogue-toolbar__divider" aria-hidden />
-            <div className="firstout-catalogue-chips" role="group" aria-label="Price classification filter">
-              <Button
-                kind={typeFilter === "all" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setTypeFilter("all")}
-              >
-                All
-              </Button>
-              {PRICE_CLASSIFICATIONS.map((classification) => (
-                <Button
-                  key={classification}
-                  kind={typeFilter === classification ? "primary" : "ghost"}
-                  size="sm"
-                  onClick={() => setTypeFilter(classification)}
-                >
-                  {classification}
-                </Button>
-              ))}
-            </div>
-            <span className="firstout-catalogue-toolbar__divider" aria-hidden />
-            <div className="firstout-catalogue-chips" role="group" aria-label="Balance filter">
-              <Button
-                kind={balanceFilter === "any" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setBalanceFilter("any")}
-              >
-                Any balance
-              </Button>
-              <Button
-                kind={balanceFilter === "open_invoices" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setBalanceFilter("open_invoices")}
-              >
-                Has open invoices
-              </Button>
-              <Button
-                kind={balanceFilter === "active_laybys" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setBalanceFilter("active_laybys")}
-              >
-                Has active laybys
-              </Button>
-            </div>
-            <span className="firstout-catalogue-toolbar__divider" aria-hidden />
-            <div className="firstout-catalogue-chips" role="group" aria-label="CRM filters">
-              <Button
-                kind={overdueFilter ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setOverdueFilter((current) => !current)}
-              >
-                Overdue
-              </Button>
-              <Button
-                kind={activeLaybyFilter ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setActiveLaybyFilter((current) => !current)}
-              >
-                Active layby
-              </Button>
-              <Button
-                kind={onHoldFilter ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setOnHoldFilter((current) => !current)}
-              >
-                On hold
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {loading ? (
-          <p className="cds--type-body-01" style={{ padding: "1rem" }}>
-            Loading customers…
-          </p>
-        ) : error ? (
-          <div style={{ padding: "1rem" }}><Button kind="tertiary" onClick={() => void loadCustomers()}>Retry loading customers</Button></div>
-        ) : customers.length === 0 ? (
-          <InlineNotification
-            kind="info"
-            title={archived ? "No archived customers" : "No active customers"}
-            subtitle="No customers match the current filters."
-            hideCloseButton
-            lowContrast
-            style={{ margin: "1rem" }}
-          />
-        ) : (
-          <>
-            <DataTable rows={rows} headers={tableHeaders}>
-              {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                <TableContainer title={archived ? "Archived customers" : "Active customers"} description="Retail and trade customer balances">
-                  <Table {...getTableProps()}>
-                    <TableHead>
-                      <TableRow>
-                        {headers.map((header) => (
-                          <TableHeader
-                            {...getHeaderProps({ header })}
-                            key={header.key}
-                            isSortable={false}
-                          >
-                            {header.header}
-                          </TableHeader>
-                        ))}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {tableRows.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={headers.length}>
-                            No customers match the current filters.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        tableRows.map((row) => {
-                          const entry = pagedCustomers.find((customer) => customer.id === row.id);
-                          if (!entry) {
-                            return null;
-                          }
-                          const invoices = formatOpenInvoices(entry);
-                          const laybys = formatActiveLaybys(entry);
-                          return (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              <TableCell className="firstout-customer-cell">
-                                <Button
-                                  type="button"
-                                  kind="ghost"
-                                  size="sm"
-                                  onClick={() => router.push(`/customers/${entry.id}`)}
-                                  style={{ paddingInlineStart: 0 }}
-                                >
-                                  {entry.name}
-                                </Button>
-                                <CustomerCrmBadges customer={entry} />
-                              </TableCell>
-                              <TableCell>
-                                <Tag type={classificationTagType(entry.price_classification)} size="sm">
-                                  {entry.price_classification}
-                                </Tag>
-                                <div className="firstout-muted-text" style={{ marginTop: "0.25rem" }}>
-                                  {entry.price_classification === "Retail" ? "incl. VAT" : "excl. VAT"}
-                                  {entry.price_tier && entry.price_tier !== "standard"
-                                    ? ` · Cin7 ${entry.price_tier}`
-                                    : ""}
-                                </div>
-                              </TableCell>
-                              <TableCell className="firstout-cell-wrap">
-                                <div className="cds--type-body-compact-01 firstout-break-text">
-                                  {formatContact(entry)}
-                                </div>
-                              </TableCell>
-                              <TableCell style={{ textAlign: "right" }}>
-                                <div
-                                  className="cds--type-body-compact-01"
-                                  style={{ fontWeight: invoices.amount === "—" ? 400 : 600 }}
-                                >
-                                  {invoices.amount}
-                                </div>
-                              </TableCell>
-                              <TableCell style={{ textAlign: "right" }}>
-                                <div
-                                  className="cds--type-body-compact-01"
-                                  style={{ fontWeight: laybys.amount === "—" ? 400 : 600 }}
-                                >
-                                  {laybys.amount}
-                                </div>
-                                {laybys.detail ? (
-                                  <div className="firstout-muted-text">{laybys.detail}</div>
-                                ) : null}
-                              </TableCell>
-                              {canMutate && !archived ? (
-                                <TableCell style={{ textAlign: "center" }}>
-                                  <Button
-                                    type="button"
-                                    kind="ghost"
-                                    size="sm"
-                                    hasIconOnly
-                                    iconDescription="Edit customer"
-                                    renderIcon={Edit}
-                                    onClick={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      openCustomer(entry);
-                                    }}
-                                  />
-                                </TableCell>
-                              ) : null}
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </DataTable>
-            <Pagination
-              page={effectivePage}
-              pageSize={pageSize}
-              pageSizes={[10, 25, 50]}
-              totalItems={filteredCustomers.length}
-              onChange={({ page: nextPage, pageSize: nextSize }) => {
-                setPage(nextPage);
-                setPageSize(nextSize);
-              }}
-            />
-          </>
+      )}
+      <RecordWorkspace
+        adapter={adapter}
+        refreshKey={refreshKey}
+        onCreate={allowed ? () => start() : undefined}
+        onEdit={allowed ? (item) => start(item) : undefined}
+        onExport={exportCustomers}
+        renderDetails={(item) => (
+          <Tabs>
+            <TabList aria-label="Customer information">
+              <Tab>Overview</Tab>
+              <Tab>Records</Tab>
+              <Tab>History</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel>
+                <Stack gap={5}>
+                  <CustomerCrmBadges customer={item} />
+                  <RecordDetails>
+                    <RecordDetail label="Open balance">
+                      {currency(item.open_invoices_zar)}
+                    </RecordDetail>
+                    <RecordDetail label="Overdue">
+                      {currency(item.overdue_invoices_zar)}
+                    </RecordDetail>
+                    <RecordDetail label="Active laybys">
+                      {currency(item.active_laybys_zar)}
+                    </RecordDetail>
+                    <RecordDetail label="Classification">
+                      {item.price_classification} ·{" "}
+                      {item.price_classification === "Retail"
+                        ? "incl. VAT"
+                        : "excl. VAT"}
+                    </RecordDetail>
+                    <RecordDetail label="Price tier">
+                      {item.price_tier}
+                    </RecordDetail>
+                    <RecordDetail label="Email">{item.email}</RecordDetail>
+                    <RecordDetail label="Phone">{item.phone}</RecordDetail>
+                    <RecordDetail label="VAT number">
+                      {item.vat_number}
+                    </RecordDetail>
+                    <RecordDetail label="Billing address">
+                      {item.billing_address}
+                    </RecordDetail>
+                    <RecordDetail label="Payment terms">
+                      {item.payment_terms_days == null
+                        ? "Default"
+                        : `${item.payment_terms_days} days`}
+                    </RecordDetail>
+                    {canEditCredit && (
+                      <RecordDetail label="Credit limit">
+                        {currency(item.credit_limit)}
+                      </RecordDetail>
+                    )}
+                    <RecordDetail label="Last purchase">
+                      {formatIsoDate(item.last_purchase_date)}
+                    </RecordDetail>
+                  </RecordDetails>
+                  <div className="firstout-catalogue-actions">
+                    <Button
+                      kind="ghost"
+                      size="sm"
+                      href={`/invoices?customer=${item.id}`}
+                    >
+                      View invoices
+                    </Button>
+                    <Button
+                      kind="ghost"
+                      size="sm"
+                      href={`/laybys?customer=${item.id}`}
+                    >
+                      View laybys
+                    </Button>
+                  </div>
+                  {allowed &&
+                    !item.is_archived &&
+                    item.customer_type === "trade" && (
+                      <Button kind="tertiary" onClick={() => setPortal(item)}>
+                        Manage trade access
+                      </Button>
+                    )}
+                </Stack>
+              </TabPanel>
+              <TabPanel>
+                <PartyRecords key={item.id} kind="customers" id={item.id} />
+              </TabPanel>
+              <TabPanel>
+                <SalesHistoryTable key={item.id} customerId={item.id} />
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
         )}
-      </div>
-      </PartyArchiveTabs>
-
+      />
       <Modal
-        open={createOpen && !duplicateOpen}
-        modalHeading="New customer"
-        primaryButtonText="Create customer"
+        open={(creating || editing !== null) && !duplicateOpen}
+        modalHeading={editing ? "Edit customer" : "New customer"}
+        primaryButtonText={busy ? "Saving…" : "Save customer"}
         secondaryButtonText="Cancel"
+        primaryButtonDisabled={busy || !form.name.trim()}
         onRequestClose={() => {
-          closeDuplicates();
-          setCreateOpen(false);
+          if (!busy) close();
         }}
-        onRequestSubmit={() => void handleCreate(false)}
-        primaryButtonDisabled={saving || !createForm.name.trim()}
+        onRequestSubmit={() => void save()}
         size="md"
       >
-        <CustomerFormFields
-          idPrefix="create-customer"
-          form={createForm}
-          onChange={(patch) => setCreateForm((form) => ({ ...form, ...patch }))}
-          showCreditFields={canEditCredit}
-        />
+        <Stack gap={5}>
+          {error && (
+            <InlineNotification
+              kind="error"
+              title="Could not save"
+              subtitle={error}
+              hideCloseButton
+              lowContrast
+            />
+          )}
+          <CustomerFormFields
+            disabled={busy}
+            idPrefix={editing ? "edit-customer" : "create-customer"}
+            form={form}
+            onChange={(patch) =>
+              setForm((current) => ({ ...current, ...patch }))
+            }
+            showCreditFields={canEditCredit}
+          />
+        </Stack>
       </Modal>
-
       <CustomerDuplicateModal
         open={duplicateOpen}
-        matches={duplicateMatches}
-        saving={saving}
+        matches={duplicates}
+        saving={busy}
         error={duplicateError}
         onCancel={closeDuplicates}
-        onCreateAnyway={() => void handleCreate(true)}
-        onOpenExisting={(customerId) => {
-          closeDuplicates();
-          setCreateOpen(false);
-          router.push(`/customers/${customerId}`);
+        onCreateAnyway={() => void save(true)}
+        onOpenExisting={(id) => {
+          close();
+          router.push(`/customers/${id}`);
         }}
       />
-
-      <Modal
-        open={editCustomer !== null}
-        modalHeading="Edit customer"
-        primaryButtonText="Save"
-        secondaryButtonText="Cancel"
-        onRequestClose={() => {
-          setEditCustomer(null);
-          setEditForm(emptyCustomerForm);
-        }}
-        onRequestSubmit={() => void handleUpdate()}
-        primaryButtonDisabled={saving || !editForm.name.trim()}
-        size="md"
-      >
-        <CustomerFormFields
-          idPrefix="edit-customer"
-          form={editForm}
-          onChange={(patch) => setEditForm((form) => ({ ...form, ...patch }))}
-          showCreditFields={canEditCredit}
-        />
-      </Modal>
       <RepriceDraftsModal
-        open={repriceCustomer !== null}
-        quotes={repriceCustomer?.draft_quote_count ?? 0}
-        orders={repriceCustomer?.draft_sales_order_count ?? 0}
+        open={reprice !== null}
+        quotes={reprice?.draft_quote_count ?? 0}
+        orders={reprice?.draft_sales_order_count ?? 0}
         busy={repriceBusy}
         onConfirm={() => void confirmReprice()}
-        onCancel={() => setRepriceCustomer(null)}
+        onCancel={() => setReprice(null)}
       />
-    </Stack>
+      <Modal
+        open={portal !== null}
+        passiveModal
+        modalHeading="Trade portal access"
+        size="lg"
+        onRequestClose={() => setPortal(null)}
+      >
+        {portal && (
+          <CustomerPortalAccessPanel
+            key={portal.id}
+            customerId={portal.id}
+            defaultEmail={portal.email ?? ""}
+          />
+        )}
+      </Modal>
+    </>
   );
-}
-
-export default function CustomersPage() {
-  return <Suspense fallback={<p className="cds--type-body-01">Loading customers…</p>}><CustomersScreen /></Suspense>;
 }

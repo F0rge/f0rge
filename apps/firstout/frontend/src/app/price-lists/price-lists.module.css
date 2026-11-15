@@ -1,0 +1,5 @@
+.items { max-width: 100%; overflow-x: auto; }
+.items td { vertical-align: middle; }
+.items td:last-child { font-variant-numeric: tabular-nums; }
+.items :global(.cds--tag) { display: block; width: fit-content; margin: .375rem 0 0; }
+.editorActions { display: flex; flex-wrap: wrap; gap: .75rem; }

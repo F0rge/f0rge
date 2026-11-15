@@ -7,6 +7,16 @@ class ForbiddenError(DomainError):
     """Caller lacks a required permission. Mapped to HTTP 403."""
 
 
+class RecordWorkspaceUnconfiguredError(DomainError):
+    """Bulk snapshots require an operator-configured durable signing key. HTTP 503."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Bulk actions are unavailable. Configure RECORD_WORKSPACE_SIGNING_KEY "
+            "with at least 32 characters on the API, then review the selection again."
+        )
+
+
 class DocumentLlmUnconfiguredError(DomainError):
     """OpenRouter key missing for supplier-document reading. HTTP 503."""
 

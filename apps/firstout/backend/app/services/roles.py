@@ -3,9 +3,12 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.crud.role import RoleCRUD
 from app.models.role import Role, RolePermission
+from app.models.team import Team
+from f0rge_db.organisation import tenant_id_ctx
 from app.permissions import (
     PERMISSION_CATALOG,
     ROLE_PRESET_NAMES,
@@ -73,6 +76,10 @@ class RoleService:
         return self._to_response(reloaded)
 
     async def delete(self, role_id: uuid.UUID) -> None:
+        # Assignment changes take the same tenant lock in UserService.update.
+        await self.db.execute(
+            select(Team.id).where(Team.id == tenant_id_ctx.get()).with_for_update()
+        )
         role = await self.crud.get_by_id(role_id)
         if role is None:
             raise NotFoundError("Role not found")

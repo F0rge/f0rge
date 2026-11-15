@@ -18,6 +18,7 @@ class PriceListItemResponse(BaseModel):
 class PriceListResponse(BaseModel):
     id: uuid.UUID
     name: str
+    is_archived: bool = False
     items: list[PriceListItemResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime

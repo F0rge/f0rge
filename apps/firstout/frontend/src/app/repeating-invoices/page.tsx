@@ -2,19 +2,10 @@
 
 import {
   Button,
-  DataTable,
   InlineNotification,
   Modal,
   NumberInput,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tag,
   TextInput,
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,7 +17,7 @@ import {
   createRepeatingInvoice,
   formatPriceAmount,
   listCustomers,
-  listRepeatingInvoices,
+  apiFetch,
   runRepeatingInvoice,
   sumInvoiceLinesExVat,
   type CreateInvoiceLinePayload,
@@ -34,27 +25,8 @@ import {
   type RepeatingInvoice,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-
-const TABLE_HEADERS = [
-  { key: "name", header: "Name" },
-  { key: "customer_name", header: "Customer" },
-  { key: "day_of_month", header: "Day of month" },
-  { key: "next_date", header: "Next date" },
-  { key: "status", header: "Status" },
-  { key: "lines", header: "Lines" },
-  { key: "actions", header: "" },
-] as const;
-
-type ScheduleRow = {
-  id: string;
-  name: string;
-  customer_name: string;
-  day_of_month: string;
-  next_date: string;
-  status: string;
-  lines: string;
-  actions: string;
-};
+import { workspaceIdentity } from "@/lib/record-workspace";
+import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
 
 type InvoiceLineForm = {
   description: string;
@@ -78,11 +50,20 @@ function defaultDayOfMonth(): number {
 
 export default function RepeatingInvoicesPage() {
   const { user } = useAuth();
+  return <RepeatingInvoicesContent key={workspaceIdentity(user)} />;
+}
+
+function RepeatingInvoicesContent() {
+  const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [schedules, setSchedules] = useState<RepeatingInvoice[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [editing, setEditing] = useState<RepeatingInvoice | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDay, setEditDay] = useState<number | "">(1);
+  const [editDate, setEditDate] = useState("");
+  const [runTarget, setRunTarget] = useState<RepeatingInvoice | null>(null);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [archivedCustomers, setArchivedCustomers] = useState<CustomerCrm[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -104,21 +85,16 @@ export default function RepeatingInvoicesPage() {
   const archivedCustomerIds = useMemo(() => new Set(archivedCustomers.map((customer) => customer.id)), [archivedCustomers]);
 
   const loadSchedules = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
-      const [scheduleData, customerData, archivedData] = await Promise.all([
-        listRepeatingInvoices(),
+      const [customerData, archivedData] = await Promise.all([
         listCustomers(),
         listCustomers({ archived: true }),
       ]);
-      setSchedules(scheduleData);
       setCustomers(customerData);
       setArchivedCustomers(archivedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load repeating invoices.");
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -196,7 +172,7 @@ export default function RepeatingInvoicesPage() {
       setCreateOpen(false);
       resetCreateForm();
       setSuccess("Schedule created.");
-      await loadSchedules();
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create repeating invoice.");
     } finally {
@@ -211,7 +187,8 @@ export default function RepeatingInvoicesPage() {
     try {
       const result = await runRepeatingInvoice(id);
       setSuccess(`Created ${result.invoice.invoice_number}.`);
-      await loadSchedules();
+      setRunTarget(null);
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run repeating invoice.");
     } finally {
@@ -219,41 +196,24 @@ export default function RepeatingInvoicesPage() {
     }
   }
 
-  const rows: ScheduleRow[] = schedules.map((entry) => ({
-    id: entry.id,
-    name: entry.name?.trim() || "—",
-    customer_name: customerNameById.get(entry.customer_id) ?? "—",
-    day_of_month: String(entry.day_of_month),
-    next_date: entry.next_date,
-    status: entry.is_active ? "Active" : "Inactive",
-    lines: String(entry.lines.length),
-    actions: entry.id,
-  }));
+  function openEdit(item: RepeatingInvoice) {
+    setEditing(item); setEditName(item.name ?? ""); setEditDay(item.day_of_month); setEditDate(item.next_date);
+  }
 
-  const scheduleById = useMemo(
-    () => Object.fromEntries(schedules.map((entry) => [entry.id, entry])),
-    [schedules],
-  );
+  async function saveEdit() {
+    if (!editing || typeof editDay !== "number" || !editDate) return;
+    setSaving(true); setError(null);
+    try {
+      await apiFetch<RepeatingInvoice>(`/repeating-invoices/${editing.id}`, {
+        method: "PATCH", body: JSON.stringify({ name: editName.trim() || null, day_of_month: editDay, next_date: editDate }),
+      });
+      setEditing(null); setRefreshKey((value) => value + 1); setSuccess("Schedule updated.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not update schedule."); }
+    finally { setSaving(false); }
+  }
 
   return (
     <Stack gap={6}>
-      <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Repeating invoices</h1>
-          <p className="cds--type-body-01">Monthly tax invoice schedules. Run now posts an INV-.</p>
-        </div>
-        {canMutate ? (
-          <Button
-            onClick={() => {
-              resetCreateForm();
-              setCreateOpen(true);
-            }}
-          >
-            Create schedule
-          </Button>
-        ) : null}
-      </div>
-
       {error ? (
         <InlineNotification
           kind="error"
@@ -274,77 +234,62 @@ export default function RepeatingInvoicesPage() {
         />
       ) : null}
 
-      {loading ? (
-        <p className="cds--type-body-01">Loading repeating invoices…</p>
-      ) : schedules.length === 0 ? (
-        <InlineNotification
-          kind="info"
-          title="No repeating invoices"
-          subtitle="No schedules have been created yet."
-          hideCloseButton
-          lowContrast
-        />
-      ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Repeating invoices" description="Monthly invoice schedules">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => {
-                    const entry = scheduleById[row.id];
-                    const busy = runningId === row.id;
-                    return (
-                      <TableRow {...getRowProps({ row })} key={row.id}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "customer_name" && entry) {
-                            return <TableCell key={cell.id}>{cell.value}{archivedCustomerIds.has(entry.customer_id) ? <Tag type="gray">Archived customer</Tag> : null}</TableCell>;
-                          }
-                          if (cell.info.header === "status" && entry) {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Tag type={entry.is_active ? "green" : "gray"}>
-                                  {entry.is_active ? "Active" : "Inactive"}
-                                </Tag>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "actions") {
-                            return (
-                              <TableCell key={cell.id}>
-                                {canMutate && entry?.is_active && !archivedCustomerIds.has(entry.customer_id) ? (
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    disabled={busy}
-                                    onClick={() => void handleRun(row.id)}
-                                  >
-                                    {busy ? "Running…" : "Run now"}
-                                  </Button>
-                                ) : null}
-                                {entry && archivedCustomerIds.has(entry.customer_id) ? <Button kind="ghost" size="sm" href={`/customers/${entry.customer_id}`}>Open archived customer</Button> : null}
-                              </TableCell>
-                            );
-                          }
-                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-      )}
+      <RecordWorkspace<RepeatingInvoice>
+        adapter={{
+          resource: "repeating-invoices", title: "Repeating invoices", singular: "schedule", breadcrumb: "Books",
+          description: "Review monthly schedules, pause them and create invoices when ready.", defaultSort: "next_date",
+          lifecycle: { activeLabel: "Active", archivedLabel: "Paused" },
+          columns: [
+            { key: "name", label: "Schedule / customer", render: (item) => item.name || "Unnamed schedule" },
+            { key: "day_of_month", label: "Day of month", render: (item) => item.day_of_month, numeric: true },
+            { key: "next_date", label: "Next invoice", render: (item) => item.next_date },
+          ],
+          filters: [
+            { key: "name", label: "Schedule name", type: "text" },
+            { key: "customer_name", label: "Customer", type: "text" },
+            { key: "day_of_month", label: "Day of month", type: "number" },
+            { key: "next_date", label: "Next invoice", type: "date" },
+          ],
+          bulkFields: [{ key: "day_of_month", label: "Day of month", type: "number" }, { key: "next_date", label: "Next invoice", type: "date" }],
+          actions: canMutate ? [{ key: "edit", label: "Edit" }, { key: "pause", label: "Pause" }, { key: "resume", label: "Resume" }] : [],
+          getTitle: (item) => item.name || "Unnamed schedule", getSubtitle: (item) => customerNameById.get(item.customer_id) ?? "Customer",
+          canEdit: () => canMutate,
+        } satisfies RecordWorkspaceAdapter<RepeatingInvoice>}
+        refreshKey={refreshKey}
+        onCreate={canMutate ? () => { resetCreateForm(); setCreateOpen(true); } : undefined}
+        createLabel="Create schedule"
+        onEdit={canMutate ? openEdit : undefined}
+        renderDetails={(item) => <Stack gap={5}>
+          <RecordDetails>
+            <RecordDetail label="Customer">{customerNameById.get(item.customer_id) ?? item.customer_id}</RecordDetail>
+            <RecordDetail label="Status">{item.is_active ? "Active" : "Paused"}</RecordDetail>
+            <RecordDetail label="Day of month">{item.day_of_month}</RecordDetail>
+            <RecordDetail label="Next invoice">{item.next_date}</RecordDetail>
+          </RecordDetails>
+          <div><h3 className="cds--type-heading-compact-01">Invoice lines</h3><ul>{item.lines.map((line) => <li key={line.id}>{line.description} × {line.qty} · R {formatPriceAmount(Number(line.unit_ex_vat))} ex VAT</li>)}</ul></div>
+          {archivedCustomerIds.has(item.customer_id) ? <Button kind="ghost" href={`/customers/${item.customer_id}`}>Open archived customer</Button> :
+            canMutate && item.is_active ? <Button kind="tertiary" disabled={runningId !== null} onClick={() => setRunTarget(item)}>Run now</Button> : null}
+        </Stack>}
+      />
+      <Modal open={editing !== null} modalHeading="Edit schedule"
+        primaryButtonText={saving ? "Saving…" : "Save changes"} secondaryButtonText="Cancel"
+        primaryButtonDisabled={saving || typeof editDay !== "number" || editDay < 1 || editDay > 28 || !editDate}
+        onRequestClose={() => { if (!saving) setEditing(null); }} onRequestSubmit={() => void saveEdit()}>
+        <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack gap={5}>
+          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
+          <TextInput id="schedule-edit-name" labelText="Name" value={editName} onChange={(event) => setEditName(event.target.value)} />
+          <NumberInput id="schedule-edit-day" label="Day of month" min={1} max={28} value={editDay} onChange={(_, { value }) => setEditDay(value === "" ? "" : Number(value))} />
+          <TextInput id="schedule-edit-date" labelText="Next invoice" type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} />
+        </Stack></fieldset>
+      </Modal>
+      <Modal open={runTarget !== null} modalHeading="Run invoice schedule"
+        primaryButtonText={runningId ? "Creating invoice…" : "Create invoice"} secondaryButtonText="Cancel"
+        primaryButtonDisabled={runningId !== null}
+        onRequestClose={() => { if (!runningId) setRunTarget(null); }}
+        onRequestSubmit={() => { if (runTarget) void handleRun(runTarget.id); }}>
+        {error && <InlineNotification kind="error" title="Could not create invoice" subtitle={error} hideCloseButton lowContrast />}
+        <p>Create a tax invoice from {runTarget?.name || "this schedule"}? This posts the invoice and advances the next date.</p>
+      </Modal>
 
       <Modal
         open={createOpen}
@@ -352,15 +297,17 @@ export default function RepeatingInvoicesPage() {
         primaryButtonText={saving ? "Creating…" : "Create"}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={saving || !formValid}
-        onRequestClose={() => setCreateOpen(false)}
+        onRequestClose={() => { if (!saving) setCreateOpen(false); }}
         onRequestSubmit={() => void handleCreate()}
         size="lg"
       >
-        <Stack gap={5}>
+        <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack gap={5}>
+          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <CustomerPicker
             id="repeating-customer"
             customers={customers}
             selectedId={customerId}
+            disabled={saving}
             onChange={setCustomerId}
           />
           <TextInput
@@ -446,7 +393,7 @@ export default function RepeatingInvoicesPage() {
               <strong>Total inc VAT: R {formatPriceAmount(preview.totalIncVat)}</strong>
             </p>
           </div>
-        </Stack>
+        </Stack></fieldset>
       </Modal>
     </Stack>
   );

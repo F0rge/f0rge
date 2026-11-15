@@ -28,10 +28,20 @@ class PriceListService:
         self.crud = PriceListCRUD(db)
         self.sku_crud = SkuCRUD(db)
 
-    async def list(self) -> list[PriceListResponse]:
-        rows = await self.crud.list_all()
+    async def list(self, archived: Optional[bool] = False) -> list[PriceListResponse]:
+        rows = [
+            row
+            for row in await self.crud.list_all()
+            if archived is None or row.is_archived == archived
+        ]
         costs = await self._costs_for(rows)
         return [self._to_response(row, costs) for row in rows]
+
+    async def set_archived(self, price_list_id: uuid.UUID, is_archived: bool) -> PriceListResponse:
+        row = await self.crud.get_by_id(price_list_id, for_update=True)
+        row.is_archived = is_archived
+        await self.crud.commit_refresh(row)
+        return await self.get(price_list_id)
 
     async def get(self, price_list_id: uuid.UUID) -> PriceListResponse:
         row = await self.crud.get_by_id(price_list_id)
@@ -53,6 +63,7 @@ class PriceListService:
 
     async def update(self, price_list_id: uuid.UUID, data: PriceListUpdate) -> PriceListResponse:
         row = await self.crud.get_by_id(price_list_id)
+        self._require_active(row)
         other = await self.crud.get_by_name(data.name)
         if other is not None and other.id != price_list_id:
             raise ConflictError("A price list with this name already exists")
@@ -65,7 +76,10 @@ class PriceListService:
         return await self.get(price_list_id)
 
     async def delete(self, price_list_id: uuid.UUID) -> None:
-        row = await self.crud.get_by_id(price_list_id)
+        # Customer assignment takes this same lock until its write commits.
+        row = await self.crud.get_by_id(price_list_id, for_update=True)
+        if await self.crud.has_customer_assignments(price_list_id):
+            raise ConflictError("This price list is assigned to customers; archive it instead")
         async with unit_of_work(self.db):
             await self.db.delete(row)
 
@@ -74,7 +88,7 @@ class PriceListService:
         price_list_id: uuid.UUID,
         data: PriceListItemUpsert,
     ) -> PriceListResponse:
-        await self.crud.get_by_id(price_list_id)
+        self._require_active(await self.crud.get_by_id(price_list_id))
         sku = await self.sku_crud.get_by_id(data.sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
@@ -92,7 +106,7 @@ class PriceListService:
         return await self.get(price_list_id)
 
     async def delete_item(self, price_list_id: uuid.UUID, sku_id: uuid.UUID) -> PriceListResponse:
-        await self.crud.get_by_id(price_list_id)
+        self._require_active(await self.crud.get_by_id(price_list_id))
         item = await self.crud.get_item(price_list_id, sku_id)
         if item is None:
             raise NotFoundError("Price list item not found")
@@ -121,7 +135,13 @@ class PriceListService:
         return PriceListResponse(
             id=row.id,
             name=row.name,
+            is_archived=row.is_archived,
             items=items,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
+
+    @staticmethod
+    def _require_active(row: PriceList) -> None:
+        if row.is_archived:
+            raise ConflictError("Restore the price list before editing its prices")

@@ -1,8 +1,20 @@
-import { Modal, NumberInput, Select, SelectItem, Stack, TextArea, TextInput, Toggle } from "@carbon/react";
+import {
+  Modal,
+  NumberInput,
+  Select,
+  SelectItem,
+  Stack,
+  TextArea,
+  TextInput,
+  Toggle,
+} from "@carbon/react";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { workspaceIdentity } from "@/lib/record-workspace";
 
 import {
   PRICE_CLASSIFICATIONS,
+  apiFetch,
   listPriceLists,
   type CreateCustomerPayload,
   type CustomerCrm,
@@ -70,7 +82,10 @@ export function customerWritePayload(
     payload.on_hold = form.on_hold ?? false;
     payload.on_hold_reason = form.on_hold_reason;
   }
-  if (form.payment_terms_days != null && form.payment_terms_days !== undefined) {
+  if (
+    form.payment_terms_days != null &&
+    form.payment_terms_days !== undefined
+  ) {
     payload.payment_terms_days = form.payment_terms_days;
   } else {
     payload.payment_terms_days = null;
@@ -97,7 +112,8 @@ export function RepriceDraftsModal({
   onCancel: () => void;
 }) {
   const quoteLabel = quotes === 1 ? "1 draft quote" : `${quotes} draft quotes`;
-  const orderLabel = orders === 1 ? "1 draft sales order" : `${orders} draft sales orders`;
+  const orderLabel =
+    orders === 1 ? "1 draft sales order" : `${orders} draft sales orders`;
   return (
     <Modal
       open={open}
@@ -109,8 +125,8 @@ export function RepriceDraftsModal({
       onRequestClose={onCancel}
     >
       <p>
-        This customer has {quoteLabel} and {orderLabel}. Reprice them to the new classification?
-        Issued invoices will not change.
+        This customer has {quoteLabel} and {orderLabel}. Reprice them to the new
+        classification? Issued invoices will not change.
       </p>
     </Modal>
   );
@@ -129,35 +145,63 @@ export function CustomerFormFields({
   disabled?: boolean;
   showCreditFields?: boolean;
 }) {
-  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+  const { user } = useAuth();
+  const identity = workspaceIdentity(user);
+  const key = `${identity}:${form.price_list_id ?? ""}`;
+  const [listResult, setListResult] = useState<{
+    key: string;
+    items: PriceList[];
+  } | null>(null);
+  const priceLists = listResult?.key === key ? listResult.items : [];
 
   useEffect(() => {
     let cancelled = false;
-    void listPriceLists()
-      .then((lists) => {
+    void Promise.all([
+      listPriceLists(),
+      form.price_list_id
+        ? apiFetch<PriceList>(`/price-lists/${form.price_list_id}`).catch(
+            () => null,
+          )
+        : Promise.resolve(null),
+    ])
+      .then(([lists, assigned]) => {
         if (!cancelled) {
-          setPriceLists(lists);
+          setListResult({
+            key,
+            items:
+              assigned && !lists.some((entry) => entry.id === assigned.id)
+                ? [...lists, assigned]
+                : lists,
+          });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setPriceLists([]);
+          setListResult({ key, items: [] });
         }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [key, form.price_list_id]);
 
   const creditLimitValue =
-    form.credit_limit === "" || form.credit_limit == null ? "" : Number(form.credit_limit);
+    form.credit_limit === "" || form.credit_limit == null
+      ? ""
+      : Number(form.credit_limit);
   const paymentTermsValue =
     form.payment_terms_days == null ? "" : Number(form.payment_terms_days);
-  const assignedList = priceLists.find((entry) => entry.id === form.price_list_id);
+  const assignedList = priceLists.find(
+    (entry) => entry.id === form.price_list_id,
+  );
   const assignedCin7List =
-    assignedList && isCin7GeneratedPriceList(assignedList.name) ? assignedList : null;
+    assignedList && isCin7GeneratedPriceList(assignedList.name)
+      ? assignedList
+      : null;
   const selectableLists = priceLists.filter(
-    (entry) => !isCin7GeneratedPriceList(entry.name) || entry.id === form.price_list_id,
+    (entry) =>
+      (!entry.is_archived && !isCin7GeneratedPriceList(entry.name)) ||
+      entry.id === form.price_list_id,
   );
 
   return (
@@ -176,7 +220,9 @@ export function CustomerFormFields({
         helperText="Retail prices are shown including VAT. Stockist, Wholesale, and Decorator prices are excluding VAT. A list you create overrides this. Cin7 lists do not."
         value={form.price_classification ?? "Retail"}
         onChange={(event) =>
-          onChange({ price_classification: event.target.value as PriceClassification })
+          onChange({
+            price_classification: event.target.value as PriceClassification,
+          })
         }
         disabled={disabled}
       >
@@ -196,17 +242,31 @@ export function CustomerFormFields({
         id={`${idPrefix}-price-list`}
         labelText="Price list"
         helperText={
-          assignedCin7List
-            ? `${assignedCin7List.name} does not set the price. The classification does.`
-            : "A list you create overrides the classification. Cin7 lists do not."
+          assignedList?.is_archived
+            ? "The assigned price list is archived. Keep the current assignment or choose an active list."
+            : assignedCin7List
+              ? `${assignedCin7List.name} does not set the price. The classification does.`
+              : "A list you create overrides the classification. Cin7 lists do not."
         }
         value={form.price_list_id ?? ""}
         onChange={(event) => onChange({ price_list_id: event.target.value })}
         disabled={disabled}
       >
         <SelectItem value="" text="None" />
+        {form.price_list_id && !assignedList && (
+          <SelectItem
+            value={form.price_list_id}
+            text="Current assigned price list"
+            disabled
+          />
+        )}
         {selectableLists.map((entry) => (
-          <SelectItem key={entry.id} value={entry.id} text={entry.name} />
+          <SelectItem
+            key={entry.id}
+            value={entry.id}
+            text={`${entry.name}${entry.is_archived ? " (Archived · current)" : ""}`}
+            disabled={entry.is_archived}
+          />
         ))}
       </Select>
       <NumberInput
@@ -231,7 +291,9 @@ export function CustomerFormFields({
         labelA="Opted out"
         labelB="On"
         toggled={!form.payment_reminders_opt_out}
-        onToggle={(checked) => onChange({ payment_reminders_opt_out: !checked })}
+        onToggle={(checked) =>
+          onChange({ payment_reminders_opt_out: !checked })
+        }
         disabled={disabled}
       />
       <TextInput
@@ -290,7 +352,9 @@ export function CustomerFormFields({
             id={`${idPrefix}-on-hold-reason`}
             labelText="On hold reason"
             value={form.on_hold_reason ?? ""}
-            onChange={(event) => onChange({ on_hold_reason: event.target.value })}
+            onChange={(event) =>
+              onChange({ on_hold_reason: event.target.value })
+            }
             disabled={disabled}
           />
         </>

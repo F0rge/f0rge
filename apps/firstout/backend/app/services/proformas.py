@@ -27,9 +27,21 @@ class ProformaService:
         self.crud = ProformaCRUD(db)
         self.supplier_crud = SupplierCRUD(db)
 
-    async def list(self) -> list[ProformaResponse]:
-        proformas = await self.crud.list_all()
+    async def list(self, archived: Optional[bool] = False) -> list[ProformaResponse]:
+        proformas = [
+            row
+            for row in await self.crud.list_all()
+            if archived is None or row.is_archived == archived
+        ]
         return [self._to_response(p) for p in proformas]
+
+    async def set_archived(self, proforma_id: uuid.UUID, is_archived: bool) -> ProformaResponse:
+        proforma = await self.crud.get_by_id(proforma_id, for_update=True)
+        if proforma is None:
+            raise NotFoundError("Proforma not found")
+        proforma.is_archived = is_archived
+        await self.crud.commit_refresh(proforma)
+        return self._to_response(proforma)
 
     async def get(self, proforma_id: uuid.UUID) -> ProformaResponse:
         proforma = await self.crud.get_by_id(proforma_id)
@@ -97,6 +109,7 @@ class ProformaService:
             invoice_number=proforma.invoice_number,
             invoice_date=proforma.invoice_date,
             currency=proforma.currency,
+            is_archived=proforma.is_archived,
             pdf_storage_key=proforma.pdf_storage_key,
             created_at=proforma.created_at,
             updated_at=proforma.updated_at,

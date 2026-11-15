@@ -120,9 +120,13 @@ class PurchaseOrderService:
         supplier = await require_active_supplier(self.db, data.supplier_id)
 
         if data.proforma_id is not None:
-            proforma = await self.proforma_crud.get_by_id(data.proforma_id)
+            proforma = await self.proforma_crud.get_by_id(data.proforma_id, for_update=True)
             if proforma is None:
                 raise NotFoundError("Proforma not found")
+            if proforma.is_archived:
+                raise ValidationError(
+                    "Restore the proforma before using it on a new purchase order"
+                )
             if proforma.supplier_id != data.supplier_id:
                 raise ValidationError("Proforma must belong to the same supplier")
 
