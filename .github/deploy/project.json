@@ -1,14 +1,16 @@
 {
   "name": "f0rge-release-checks",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "tags": ["scope:shared"],
+  "tags": [
+    "scope:shared"
+  ],
   "targets": {
     "test": {
       "executor": "nx:run-commands",
       "cache": false,
       "options": {
         "cwd": ".github/deploy",
-        "command": "uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_cd_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py test_release_evidence.py test_firstout_release.py test_firstout_cd.py"
+        "command": "uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_cd_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py test_release_evidence.py test_firstout_release.py test_firstout_cd.py test_buycycle_release.py"
       }
     }
   }

@@ -1,0 +1,55 @@
+{
+  "name": "buycycle-frontend",
+  "projectType": "application",
+  "sourceRoot": "apps/buycycle/frontend/src",
+  "tags": ["platform:ts", "scope:buycycle"],
+  "implicitDependencies": ["buycycle-backend", "f0rge-primer"],
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "npm run dev -w @f0rge/buycycle-frontend"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "command": "npm run build -w @f0rge/buycycle-frontend"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run typecheck -w @f0rge/buycycle-frontend"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run test -w @f0rge/buycycle-frontend"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run lint -w @f0rge/buycycle-frontend"
+      }
+    },
+    "codegen:check": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "npm run codegen:check -w @f0rge/buycycle-frontend"
+      }
+    },
+    "e2e": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "npx playwright test --config apps/buycycle/frontend/playwright.config.ts"
+      }
+    }
+  }
+}

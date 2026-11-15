@@ -37,9 +37,10 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Policy status:** Accepted
 - **Temporary ID:** P-010
 - **Category:** Product
-- **Decision:** Use the holiday explorer as the platform pilot; no standalone off-platform deployment.
+- **Decision:** Implement the Buycycle ADR migration first; perform the holiday-explorer platform pilot later. Both stay on approved platform destinations; no standalone off-platform deployment.
+- **Decision update (15 November 2026):** Leo explicitly requested the complete Buycycle migration before the later pilot, in one PR with issue-sized commits. The holiday-explorer pilot is not a prerequisite for this authorized Buycycle migration. This sequencing change grants no merge, production release or destructive data-migration approval.
 - **Proposed enforcement (not installed):** Pilot checklist exercises shared UI, auth, API, local startup, CI and approved release controls; release routing accepts only approved platform destinations.
-- **Gate and limit:** Pilot review + release: end-to-end evidence before broader adoption. No pilot deployment authorized here.
+- **Gate and limit:** Pilot review + release: end-to-end evidence for each authorized migration and the later pilot. No production deployment is authorized by this record.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** None for a holiday-explorer pilot checklist.
 - **Implementation:** Pending. This record does not claim the decision is built.
 - **Assessment label:** gap (read-only assessment, not a gate).
