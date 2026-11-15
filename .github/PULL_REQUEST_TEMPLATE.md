@@ -34,7 +34,7 @@ An approved exception needs a link to Leo's explicit approval, scope and any con
 | [P-003 — ADR assessment on every PR](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-003) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-004 — Automated architecture checks](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-004) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-005 — Independent review](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-005) | No | Not assessed | Not assessed | Complete assessment. |
-| [P-006 — Leo approves production releases](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-006) | No | Not assessed | Not assessed | Complete assessment. |
+| [P-006 — Production release authorization](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-006) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-007 — Repository agent profiles](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-007) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-008 — Brief and mockup before substantial work](https://github.com/F0rge/f0rge/blob/main/docs/adr/product.md#p-008) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-009 — Design all user states](https://github.com/F0rge/f0rge/blob/main/docs/adr/product.md#p-009) | No | Not assessed | Not assessed | Complete assessment. |

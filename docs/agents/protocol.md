@@ -39,7 +39,7 @@ Use a reproducible failure for a bug, then verify the corrected behavior at the 
 For UI/API behavior, include the authorized live-server walkthrough required by the repository; report whether it used a local production build or a deployed service.
 Run the checks relevant to the change and preserve their actual results, including skipped or unavailable checks.
 Read `docs/adr/delivery.md` and `docs/adr/operations.md` before release or provider work.
-Leo approves every production release; green CI, merge state and configured automatic paths do not supply that approval. Keep auto-merge disabled.
+Follow P-006: Firstout’s dedicated CD pipeline may automatically release reviewed main commits after required checks; other apps require Leo’s per-release approval. Keep auto-merge disabled. Manual provider operations need task authorization.
 Use existing explicit authorization within its scope; do not ask again merely because a different agent handles the next step.
 Verify the target environment and current state before an authorized consequential action; retain its required recovery evidence.
 

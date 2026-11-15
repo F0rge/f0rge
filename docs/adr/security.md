@@ -66,7 +66,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Temporary ID:** P-039
 - **Category:** Security
 - **Decision:** Development agents may read real personal/customer data only when needed for the assigned task, read-only and with sensitive fields masked.
-- **Proposed enforcement (not installed):** Task-scoped read views/API access with masking and expiry; no production write/deployment credentials in dev/CI; audit access and prohibit real-data fixtures in git.
+- **Proposed enforcement:** Task-scoped read views/API access with masking and expiry; ordinary development and test jobs receive no production write/deployment credentials. Under P-006, only the isolated Firstout production deployment job may receive its scoped provider credential after trusted main provenance and required checks pass. It must not expose that credential to PR/fork jobs, image builds, test fixtures or release journals. Audit access and prohibit real-data fixtures in git; provider credential scope and environment protections require activation verification.
 - **Gate and limit:** Runtime access + review: scoped access approval/log and masking tests. A read-only label in agent instructions is insufficient.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** gitignore for local databases and env files. No task-scoped masked view, expiry, or access audit.
 - **Implementation:** Pending. This record does not claim the decision is built.

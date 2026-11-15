@@ -1,22 +1,19 @@
 # Release paths and retained holds
 
-The Firstout frontend has a narrowly scoped, operator-driven release path in
-[firstout-release.md](firstout-release.md). Its manual image workflow builds and
-tests one Linux image, records its immutable digest, and retains release
-evidence. The operator promotion helper checks that evidence and the fixed
-Firstout target before deploying the same image and verifying Railway's
-serving deployment and instance mapping. Explicit release approval is still
-required; publishing an image or creating a release tag does not grant it.
+Firstout has a dedicated [continuous-deployment pipeline](firstout-cd.md) for
+reviewed main commits, coordinated backend/frontend images, controlled compatible
+migrations and automatic application recovery under P-006. Activation requires
+the documented credential, backup and rollback-baseline setup; this PR does not
+claim those live prerequisites have been configured.
 
-This path does not enable automatic releases, migrate other apps, move
-production credentials into GitHub, or make the GitHub environment protect
-operator CLI access. The generic entry points and other apps remain under the
-holds below. Existing legacy credentials and alternate historical paths remain
-separate operational risks, not protections established by this release.
+The earlier [frontend operator release](firstout-release.md) remains a manual
+legacy path requiring task-specific approval. It does not activate CD or extend
+its authorization to arbitrary operator deployments. Generic workflows and
+other apps remain under the holds below.
 
 ## Generic release hold and historical deploy manifest
 
-The repository release entry points in this change are **inert**. The manual
+The generic repository release entry points are **inert**; Firstout uses only its dedicated CD path. The manual
 `deploy.yml` and callable `deploy-reusable.yml` target the fixed GitHub
 `production` environment without calling a provider, reading deployment
 credentials or running a smoke against production. Both jobs set
@@ -82,8 +79,7 @@ running digest and health. Test reruns, mismatches and recovery in an isolated
 environment. Audit and control Railway, Coolify, manual, historical rerun and
 other alternate provider paths; their current live state is not established by
 this change. Do not put deployment credentials into repository-level secrets or
-activate a provider trigger merely to make this hold pass. Every production
-release still needs Leo's explicit approval.
+activate a provider trigger merely to make this hold pass. P-006 permits Firstout releases only through its dedicated CD path; other apps still need Leo's explicit per-release approval.
 
 ## Historical configuration — not an active release path
 

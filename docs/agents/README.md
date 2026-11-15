@@ -102,6 +102,6 @@ Instruction-only changes need these checks and independent review. App behavior
 changes still need their applicable builds, tests and live-server walkthroughs.
 P-001 through P-064 remain accepted and C-001/C-002 conditional. The profiles do
 not install missing ADR enforcement or implement the release-tag and immutable
-artifact mechanisms described by P-045/P-046. The all-ADR PR checklist and Leo's
-production-release approval remain required; no agent or generated file supplies
-that consent.
+artifact mechanisms described by P-045/P-046. The all-ADR PR checklist and
+P-006's release authorization scope remain required. Agent reviews and generated
+files do not authorize manual production operations.

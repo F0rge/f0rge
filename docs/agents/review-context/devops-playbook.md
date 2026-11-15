@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Existing app commands and safety rules remain applicable. Leo approves every production release. Do not enable auto-merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Existing app commands and safety rules remain applicable. Release authorization follows P-006’s Firstout CD scope and per-release approval requirement for other apps. Keep auto-merge disabled.
 
 # Delivery and DevOps Review Playbook
 

@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Release authorization follows P-006: Firstout uses its dedicated CD path; other apps require Leo’s explicit per-release approval. Keep auto-merge disabled; manual production operations require task authorization.
 
 # Orchestration — Plan, Delegate, Verify
 
@@ -22,4 +22,4 @@ Select an available runtime/model through the host's supported configuration. If
 
 ## PR and release boundary
 
-Use a short-lived branch and a pull request into `main`. Run applicable checks, include the all-ADR compliance assessment, and obtain independent review. Squash merge is a git action, not a production release. Leo approves each production release; do not enable auto-merge or infer approval from CI, agent findings or deploy configuration. Use the repository protocol for shipping work.
+Use a short-lived branch and a pull request into `main`. Run applicable checks, include the all-ADR compliance assessment, and obtain independent review. Squash merge is a git action, not a production release. Follow P-006’s Firstout CD scope and other apps’ per-release approval requirement; keep auto-merge disabled. CI, agent findings and provider configuration do not authorize manual production operations. Use the repository protocol for shipping work.

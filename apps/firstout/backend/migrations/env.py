@@ -16,7 +16,9 @@ import app.models  # noqa: F401
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # The release runner embeds Alembic in-process. Preserve application
+    # loggers, including request diagnostics, across that configuration step.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
@@ -59,4 +61,10 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online())
+    connection = config.attributes.get("connection")
+    if connection is not None:
+        # The release runner supplies one locked transaction for migrations
+        # and their durable acknowledgement. Ordinary Alembic CLI is unchanged.
+        do_run_migrations(connection)
+    else:
+        asyncio.run(run_migrations_online())

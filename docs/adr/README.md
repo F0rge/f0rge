@@ -18,7 +18,7 @@ The decisions were reconstructed from the 7 November 2026 architecture conversat
 
 ## New work versus what is already here
 
-New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Leo approves every production release. Do not enable auto-merge. Every PR includes the full ADR assessment required by [the PR process](../agents/pr-process.md). The table below is the decision index, not a compliance assessment. This repo does not yet have a mechanical compliance checker.
+New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. P-006 permits Firstout continuous deployment after reviewed main merges and successful checks; other apps require Leo’s approval for every production release. Do not enable auto-merge. Every PR includes the full ADR assessment required by [the PR process](../agents/pr-process.md). The table below is the decision index, not a compliance assessment. This repo does not yet have a mechanical compliance checker.
 
 Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, Turso, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
 
@@ -39,7 +39,7 @@ These are not decisions. Do not invent a selection.
 
 ## Release and checklist
 
-Leo approves every production release, bound to a commit and an artifact digest once that mechanism exists. It does not exist yet. Do not enable auto-merge. Do not merge or deploy without that approval. Existing GitHub workflows and host docs still describe automatic paths. Those paths are not an approved exception, and editing these records does not turn them off or authorize them.
+Firstout’s dedicated CD pipeline binds reviewed main commits, tested image digests, migration policy and fixed production target. Other apps require Leo’s per-release approval. Keep auto-merge disabled; manual provider operations require explicit task authorization. Existing GitHub workflows and host docs still describe automatic paths. Those paths are not an approved exception, and editing these records does not turn them off or authorize them.
 
 Every pull request into `main` follows [the PR process](../agents/pr-process.md) and includes all 66 IDs with short titles. The assessment distinguishes review, compliance for the change, existing gaps and supporting reasons. Unrelated work does not certify the existing app; known migration gaps remain visible. The process defines the table values and sort order. There is no `adr-coverage` job in CI; human review still judges the evidence and rationale.
 
@@ -52,7 +52,7 @@ Every pull request into `main` follows [the PR process](../agents/pr-process.md)
 | P-003 | ADR assessment on every PR | Accepted | Every PR to main includes an ALL-ADR compliance checklist, with statuses and justified exceptions. | [P-003](governance.md#p-003) |
 | P-004 | Automated architecture checks | Accepted | Deterministic automated architecture checks block merge and release where enforceable; exceptions need Leo. | [P-004](governance.md#p-004) |
 | P-005 | Independent review | Accepted | Independent agent review plus CI, not the implementing agent alone. | [P-005](governance.md#p-005) |
-| P-006 | Leo approves production releases | Accepted | Leo approves every production release. | [P-006](governance.md#p-006) |
+| P-006 | Production release authorization | Accepted | P-006 permits Firstout continuous deployment after reviewed main merges and successful checks; other apps require Leo’s approval for every production release. | [P-006](governance.md#p-006) |
 | P-007 | Repository agent profiles | Accepted | Codex is the supported repository coding harness, with canonical shared instructions and generated role profiles. | [P-007](governance.md#p-007) |
 | P-008 | Brief and mockup before substantial work | Accepted | Before an app or substantial feature: agree a short brief, testable outcomes and clickable mockup with Leo. | [P-008](product.md#p-008) |
 | P-009 | Design all user states | Accepted | Design and test loading, empty, error, denied, success and edit-conflict states. | [P-009](product.md#p-009) |
@@ -66,7 +66,7 @@ Every pull request into `main` follows [the PR process](../agents/pr-process.md)
 | P-017 | App-owned data and APIs | Accepted | Each app owns its data. Other apps and Airflow use approved APIs, never direct cross-app database reads/writes. | [P-017](data.md#p-017) |
 | P-018 | Separate app databases on Pi | Accepted | On Pi, one PostgreSQL cluster with separate app databases and restricted app logins. | [P-018](data.md#p-018) |
 | P-019 | Separate Railway projects | Accepted | On Railway, each app keeps its own project and PostgreSQL service; no giant shared F0rge app project. | [P-019](data.md#p-019) |
-| P-020 | Controlled release migrations | Accepted | Tested migrations run as a controlled step in an approved release, not independently at each instance startup. Preserve compatibility; destructive changes need explicit approval and recovery. | [P-020](data.md#p-020) |
+| P-020 | Controlled release migrations | Accepted | Tested compatible Firstout migrations run once in its controlled CD release; other apps retain approved-release migrations. Destructive changes require explicit recovery planning. | [P-020](data.md#p-020) |
 | P-021 | Rust contracts and generated clients | Accepted | Rust endpoint/request/response definitions are authoritative; generate the API contract and typed React clients, with compatibility checked in CI. | [P-021](api.md#p-021) |
 | P-022 | Shared API errors | Accepted | Shared API error format and shared frontend handling for field errors, permission failures and edit conflicts; no internal debug-detail leaks. | [P-022](api.md#p-022) |
 | P-023 | Standalone React frontend | Accepted | Standalone React frontend; Rust owns the backend. | [P-023](frontend.md#p-023) |

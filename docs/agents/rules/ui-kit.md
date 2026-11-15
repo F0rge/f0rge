@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Release authorization follows P-006: Firstout uses its dedicated CD path; other apps require Leo’s explicit per-release approval. Keep auto-merge disabled; manual production operations require task authorization.
 
 # UI Kit — `@f0rge/ui`
 
