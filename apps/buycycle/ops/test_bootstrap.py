@@ -199,6 +199,10 @@ class ImageHarnessLogTests(unittest.TestCase):
                 return json.dumps([{"Image": image_id}])
             if args[-1] == "/probe.mjs":
                 return json.dumps({"synthetic_probe": True})
+            if args[-2:] == ("postgres", "--version"):
+                return "postgres (PostgreSQL) 17.12"
+            if args[-1] == "SHOW server_version_num":
+                return "170012"
             return ""
 
         for contaminated_stream in ("stdout", "stderr"):
@@ -227,6 +231,52 @@ class ImageHarnessLogTests(unittest.TestCase):
                 self.assertIs(seen_logs[0]["capture_output"], True)
                 self.assertNotIn("synthetic-image-only", stdout.getvalue() + stderr.getvalue())
                 self.assertFalse((Path(directory) / "evidence.json").exists())
+
+    def test_unsupported_image_database_choice_is_denied_before_docker_or_build(self):
+        spec = importlib.util.spec_from_file_location("buycycle_image_choice_test", OPS / "image_rehearsal.py")
+        harness = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(harness)
+        with (
+            patch.object(harness.subprocess, "run") as external,
+            patch.object(sys, "argv", ["image_rehearsal", "--postgres-major", "16"]),
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            harness.main()
+        self.assertEqual(stopped.exception.code, 2)
+        external.assert_not_called()
+
+    def test_image_source_override_is_restricted_and_still_checks_actual_label(self):
+        spec = importlib.util.spec_from_file_location("buycycle_image_revision_test", OPS / "image_rehearsal.py")
+        harness = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(harness)
+        for flags in (["--expected-commit", "a" * 40], ["--image", "synthetic-image", "--expected-commit", "bad-revision"]):
+            with (
+                self.subTest(flags=flags),
+                patch.object(harness.subprocess, "run") as external,
+                patch.object(sys, "argv", ["image_rehearsal", *flags]),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                harness.main()
+            external.assert_not_called()
+
+        def external(args, **_kwargs):
+            if args[:2] == ("git", "rev-parse"):
+                return "b" * 40
+            if args[:2] == ("git", "status"):
+                return ""
+            if args[:3] == ("docker", "image", "inspect"):
+                return json.dumps([{"Architecture": "arm64", "Os": "linux", "Config": {"Labels": {"org.opencontainers.image.revision": "b" * 40}}}])
+            raise AssertionError("A source label mismatch must not run or rebuild an image")
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(harness, "command", lambda *args, **kwargs: external(args, **kwargs)),
+            patch.object(sys, "argv", ["image_rehearsal", "--image", "synthetic-image", "--expected-commit", "a" * 40, "--output", directory]),
+            self.assertRaisesRegex(AssertionError, "Wrong image commit"),
+        ):
+            harness.main()
 
 
 if __name__ == "__main__":

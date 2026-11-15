@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -34,9 +35,13 @@ def run(*args, input=None, env=None):
     return subprocess.run(args, input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, check=True).stdout
 
 
-def verify_container(container, port):
-    if container != "buycycle-migration-pg" or port != 5549:
-        raise ValueError("Only the task-owned synthetic rehearsal container on port 5549 is allowed")
+def verify_container(container, port, postgres_major=17):
+    if type(postgres_major) is not int or postgres_major not in {15, 17}:
+        raise ValueError("Only explicitly selected PostgreSQL 15 or 17 rehearsal is allowed")
+    expected_name = "buycycle-migration-pg15" if postgres_major == 15 else "buycycle-migration-pg"
+    valid_port = type(port) is int and (1024 <= port <= 65535 if postgres_major == 15 else port == 5549)
+    if container != expected_name or not valid_port:
+        raise ValueError("Only the task-owned synthetic rehearsal container and port are allowed")
     info = json.loads(run("docker", "inspect", container))[0]
     variables = dict(item.split("=", 1) for item in info["Config"]["Env"] if "=" in item)
     bindings = info["NetworkSettings"]["Ports"].get("5432/tcp", [])
@@ -46,8 +51,19 @@ def verify_container(container, port):
         or any(binding != {"HostIp": "127.0.0.1", "HostPort": str(port)} for binding in bindings)
     ):
         raise ValueError("Container is not the expected isolated PostgreSQL rehearsal")
-    if not info["Config"]["Image"].startswith("postgres:17"):
-        raise ValueError("Expected PostgreSQL 17")
+    if not info["Config"]["Image"].startswith(f"postgres:{postgres_major}"):
+        raise ValueError("The rehearsal image does not match the selected PostgreSQL major")
+    versions = {}
+    for binary in ("postgres", "pg_dump", "pg_restore", "psql"):
+        version = run("docker", "exec", container, binary, "--version").decode().strip()
+        match = re.fullmatch(re.escape(binary) + r" \(PostgreSQL\) ([0-9]+)(?:\.[0-9]+)?[^\n]*", version)
+        if match is None or int(match[1]) != postgres_major:
+            raise ValueError("Rehearsal server and dump/restore/query clients must match the selected major")
+        versions[binary] = version
+    server_version = int(psql(container, "buycycle_rehearsal", "SHOW server_version_num").strip())
+    if server_version // 10000 != postgres_major:
+        raise ValueError("Observed rehearsal server major differs from its configuration")
+    return {"server_version_num": server_version, "client_versions": versions, "image": info["Config"]["Image"]}
 
 
 def psql(container, database, sql):
@@ -93,8 +109,8 @@ def assert_candidate_current(authoritative, candidate):
         raise ValueError("Recovery candidate is stale; activation is blocked until later writes are preserved")
 
 
-def rehearse(container, port, bin_dir):
-    verify_container(container, port)
+def rehearse(container, port, bin_dir, postgres_major=17):
+    engine = verify_container(container, port, postgres_major)
     suffix = uuid.uuid4().hex
     source, restored, refreshed = [f"buycycle_rehearsal_{purpose}_{suffix}" for purpose in ("source", "restored", "refreshed")]
     databases = []
@@ -149,7 +165,8 @@ COMMIT;""",
             assert_candidate_current(latest, final_restore)
             return {
                 "version": 1,
-                "engine": "PostgreSQL 17",
+                "engine": f"PostgreSQL {postgres_major}",
+                **engine,
                 "synthetic_only": True,
                 "before_edit_backup_sha256": backup_sha,
                 "after_edit_backup_sha256": fresh_sha,
@@ -167,12 +184,16 @@ COMMIT;""",
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--container", default="buycycle-migration-pg")
-    parser.add_argument("--port", type=int, default=5549)
+    parser.add_argument("--port", type=int)
+    parser.add_argument("--postgres-major", type=int, choices=(15, 17), default=17)
     parser.add_argument("--bin-dir", type=Path, default=Path("target/nx/buycycle-backend/debug"))
     parser.add_argument("--evidence", type=Path, required=True)
     args = parser.parse_args()
+    if args.postgres_major == 15 and args.port is None:
+        parser.error("PostgreSQL 15 rehearsal requires an explicit unused loopback --port")
+    port = args.port if args.port is not None else 5549
     try:
-        evidence = rehearse(args.container, args.port, args.bin_dir.absolute())
+        evidence = rehearse(args.container, port, args.bin_dir.absolute(), args.postgres_major)
         fd = os.open(args.evidence, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(fd, "w") as stream:
             json.dump(evidence, stream, sort_keys=True, indent=2)

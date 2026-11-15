@@ -22,6 +22,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from ops_common import postgres_major
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / ".github" / "deploy"))
 from buycycle_release import managed_docker_environment
 
@@ -178,10 +180,10 @@ def validate_compose(config: dict, compose: dict, containers: list[dict]) -> Non
             require(not any(container.get("ports", {}).values()), "running_origin_published")
 
 
-def database_query() -> str:
+def database_query(major: int = 17) -> str:
     """Read only catalog privileges, never app/customer rows or connection strings."""
     checks = [
-        "current_setting('server_version_num')::integer BETWEEN 170000 AND 179999",
+        f"current_setting('server_version_num')::integer / 10000 = {postgres_major({'postgres_major': major})}",
         "EXISTS(SELECT 1 FROM pg_roles WHERE rolname='buycycle_runtime' AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND NOT rolbypassrls)",
         "NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname='buycycle_runtime'))",
         "has_schema_privilege('buycycle_runtime','public','USAGE')",
@@ -220,7 +222,62 @@ def database_query() -> str:
     ]:
         checks += [f"has_table_privilege('buycycle_backup','public.{table}','SELECT')"]
         checks += [f"NOT has_table_privilege('buycycle_backup','public.{table}','INSERT,UPDATE,DELETE,TRUNCATE')"]
-    return "SELECT json_build_object('passed'," + " AND ".join("(" + check + ")" for check in checks) + ");"
+    return (
+        "SELECT json_build_object('passed',"
+        + " AND ".join("(" + check + ")" for check in checks)
+        + ",'server_version_num',current_setting('server_version_num')::integer,'current_user',current_user,'current_database',current_database());"
+    )
+
+
+def postgres_inventory(config: dict, containers: list[dict], read) -> list[dict]:
+    """Bind known clusters without treating a label as an ADR exemption."""
+    declared = config.get("postgres_inventory")
+    require(isinstance(declared, list) and 0 < len(declared) <= 50, "postgres_inventory_required")
+    selected = config.get("postgres_container")
+    require(isinstance(selected, str) and re.fullmatch(r"[0-9a-f]{64}", selected), "postgres_selected_full_id")
+    by_id = {}
+    for entry in declared:
+        require(isinstance(entry, dict) and re.fullmatch(r"[0-9a-f]{64}", entry.get("container_id", "")), "postgres_inventory_identity")
+        require(entry["container_id"] not in by_id, "postgres_inventory_duplicate")
+        require(entry.get("classification") in {"application_data", "coolify_control_plane", "airflow_metadata"}, "postgres_inventory_classification")
+        require(isinstance(entry.get("purpose"), str) and 0 < len(entry["purpose"]) <= 200, "postgres_inventory_purpose")
+        require(
+            isinstance(entry.get("compose_project"), str) and entry["compose_project"] and isinstance(entry.get("compose_service"), str) and entry["compose_service"],
+            "postgres_inventory_labels",
+        )
+        require(re.fullmatch(r"sha256:[0-9a-f]{64}", entry.get("image_id", "")), "postgres_inventory_image_id")
+        require(type(entry.get("postgres_major")) is int and entry["postgres_major"] in {15, 16, 17}, "postgres_inventory_major")
+        by_id[entry["container_id"]] = entry
+    discovered = [
+        container
+        for container in containers
+        if container.get("id") in by_id
+        or re.fullmatch(r"(?:(?:docker\.io|registry-1\.docker\.io)/)?(?:library/)?postgres(?::[^/@\s]+)?(?:@sha256:[0-9a-f]{64})?", container.get("image", ""))
+    ]
+    require({container["id"] for container in discovered} == set(by_id), "postgres_inventory_incomplete")
+    application = [entry for entry in declared if entry["classification"] == "application_data"]
+    require(len(application) == 1 and application[0]["container_id"] == selected, "postgres_single_managed_cluster")
+    observed = []
+    for container in discovered:
+        entry = by_id[container["id"]]
+        labels = container.get("labels") or {}
+        require(
+            container.get("image_id") == entry["image_id"]
+            and container.get("image") == entry.get("image")
+            and labels.get("com.docker.compose.project") == entry["compose_project"]
+            and labels.get("com.docker.compose.service") == entry["compose_service"],
+            "postgres_inventory_binding",
+        )
+        running = container.get("running") is True
+        version = None
+        if running:
+            version = read(["exec", container["id"], "postgres", "--version"]).strip()
+            match = re.fullmatch(r"postgres \(PostgreSQL\) ([0-9]+)(?:\.[0-9]+)?[^\n]*", version)
+            require(match is not None and int(match[1]) == entry["postgres_major"], "postgres_inventory_observed_major")
+        if container["id"] == selected:
+            require(entry["postgres_major"] == postgres_major(config), "postgres_selected_major")
+        observed.append(dict(entry, running=running, observed_version=version, version_evidence="running_binary" if running else "declared_image_binding_only"))
+    return observed
 
 
 def docker(args: list[str]) -> str:
@@ -233,6 +290,9 @@ def docker(args: list[str]) -> str:
 
 def observe(config: dict, *, fetch=get_json, read=docker, files=managed_file, directories=managed_directory) -> dict:
     require(config.get("app") == APP and config.get("project_name") == "buycycle" and SHA.fullmatch(config.get("commit", "")), "preflight_target")
+    major = postgres_major(config)
+    admin_role = config.get("postgres_admin_role")
+    require(isinstance(admin_role, str) and re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", admin_role), "postgres_admin_role")
     issuer = urllib.parse.urlsplit(config.get("access_issuer", ""))
     require(
         config.get("domain") == DOMAIN
@@ -263,7 +323,7 @@ def observe(config: dict, *, fetch=get_json, read=docker, files=managed_file, di
     require(engine.get("ID") == config["expected_docker_engine_id"] and engine.get("Architecture") in {"arm64", "aarch64"} and engine.get("OSType") == "linux", "preflight_engine")
     ids = read(["ps", "-aq", "--no-trunc"]).split()
     require(len(ids) <= 500, "preflight_container_inventory")
-    template = '{"id":{{json .Id}},"name":{{json .Name}},"labels":{{json .Config.Labels}},"running":{{json .State.Running}},"restart":{{json .HostConfig.RestartPolicy.Name}},"ports":{{json .NetworkSettings.Ports}},"image":{{json .Config.Image}}}'
+    template = '{"id":{{json .Id}},"name":{{json .Name}},"labels":{{json .Config.Labels}},"running":{{json .State.Running}},"restart":{{json .HostConfig.RestartPolicy.Name}},"ports":{{json .NetworkSettings.Ports}},"image":{{json .Config.Image}},"image_id":{{json .Image}}}'
     containers = [json.loads(read(["inspect", "--format", template, identifier])) for identifier in ids]
     compose = json.loads(read(["compose", "--project-name", "buycycle", "--env-file", str(env_file), "-f", str(compose_file), "config", "--format", "json"]))
     validate_compose(config, compose, containers)
@@ -302,14 +362,16 @@ def observe(config: dict, *, fetch=get_json, read=docker, files=managed_file, di
         all(binding.get("HostIp") in {"127.0.0.1", "::1"} for bindings in (selected_pg[0].get("ports") or {}).values() for binding in bindings or []),
         "postgres_running_loopback_only",
     )
-    clusters = [
-        container
-        for container in containers
-        if container.get("running") is True and re.fullmatch(r"(?:docker.io/library/)?postgres(?::[^@]+|@sha256:[0-9a-f]{64})?", container.get("image", ""))
-    ]
-    require(len(clusters) == 1 and clusters[0]["id"] == selected_pg[0]["id"], "postgres_single_managed_cluster")
-    grants = json.loads(read(["exec", pg, "psql", "--no-psqlrc", "-U", "postgres", "-d", "buycycle", "-At", "-v", "ON_ERROR_STOP=1", "-c", database_query()]))
-    require(grants == {"passed": True}, "database_grants")
+    inventory = postgres_inventory(config, containers, read)
+    grants = json.loads(read(["exec", pg, "psql", "--no-psqlrc", "-U", admin_role, "-d", "buycycle", "-At", "-v", "ON_ERROR_STOP=1", "-c", database_query(major)]))
+    require(
+        grants.get("passed") is True
+        and type(grants.get("server_version_num")) is int
+        and grants["server_version_num"] // 10000 == major
+        and grants.get("current_user") == admin_role
+        and grants.get("current_database") == "buycycle",
+        "database_grants",
+    )
     return {
         "version": 1,
         "passed": True,
@@ -325,6 +387,11 @@ def observe(config: dict, *, fetch=get_json, read=docker, files=managed_file, di
         "access_policy_verified": True,
         "database_grants_verified": True,
         "managed_secrets_verified": True,
+        "postgres_major": major,
+        "postgres_server_version_num": grants["server_version_num"],
+        "postgres_inventory": inventory,
+        "p018_single_cluster_observed": len(inventory) == 1,
+        "p018_host_wide_compliance_verified": False,
     }
 
 

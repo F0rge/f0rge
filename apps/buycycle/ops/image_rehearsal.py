@@ -8,6 +8,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -17,6 +18,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 NODE = "node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee"
+POSTGRES = {
+    15: "postgres:15.19-bookworm@sha256:19b8449e2187e8a174b40c8832a7ed9da45813b74c2779b1c614e7e7d0ee47f0",
+    17: "postgres:17.12-bookworm@sha256:40865bc877a289da75963d97d72b59633f639fc5af7a4e856bfa3714cae5b536",
+}
+POSTGRES_VERSION = {15: 150019, 17: 170012}
 
 
 def command(*args: str, capture: bool = False) -> str:
@@ -48,12 +54,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path(os.environ.get("BUYCYCLE_IMAGE_OUTPUT", tempfile.gettempdir() + "/buycycle-tested-image")))
     parser.add_argument("--image", help="Test an existing image without rebuilding it")
+    parser.add_argument("--expected-commit", help="Require this exact source revision when re-testing an existing image")
+    parser.add_argument("--postgres-major", type=int, choices=(15, 17), default=17, help="Select the fixed, digest-pinned synthetic database fixture")
     parser.add_argument("--allow-dirty", action="store_true", help="Exploratory local evidence only; never promotable")
     args = parser.parse_args()
+    if args.expected_commit is not None and (not args.image or re.fullmatch(r"[0-9a-f]{40}", args.expected_commit) is None):
+        parser.error("--expected-commit requires --image and its exact 40-character lowercase source SHA")
     output = args.output.resolve()
     if output == ROOT or ROOT in output.parents:
         raise SystemExit("Artifacts must remain outside the public checkout")
-    commit = command("git", "rev-parse", "HEAD", capture=True)
+    harness_commit = command("git", "rev-parse", "HEAD", capture=True)
+    commit = args.expected_commit or harness_commit
     dirty = bool(command("git", "status", "--porcelain", capture=True))
     if dirty and not args.allow_dirty:
         raise SystemExit("Commit the selected source before producing trusted image evidence")
@@ -106,7 +117,7 @@ def main() -> None:
         command("docker", "network", "create", "--internal", network)
         start(anchor, "--network", network, NODE, "node", "-e", "setInterval(()=>{}, 1000000)")
         postgres = "buycycle-test-pg-" + suffix
-        start(postgres, "--network", "container:" + anchor, "-e", "POSTGRES_PASSWORD=synthetic-image-only", "-e", "POSTGRES_DB=buycycle_rehearsal", "postgres:17-bookworm")
+        start(postgres, "--network", "container:" + anchor, "-e", "POSTGRES_PASSWORD=synthetic-image-only", "-e", "POSTGRES_DB=buycycle_rehearsal", POSTGRES[args.postgres_major])
         for _ in range(120):
             ready = subprocess.run(["docker", "exec", postgres, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "buycycle_rehearsal"], capture_output=True, check=False)
             if ready.returncode == 0:
@@ -114,6 +125,13 @@ def main() -> None:
             time.sleep(0.5)
         else:
             raise RuntimeError("Synthetic PostgreSQL readiness timed out")
+        postgres_version = command("docker", "exec", postgres, "postgres", "--version", capture=True)
+        version = re.fullmatch(r"postgres \(PostgreSQL\) ([0-9]+)(?:\.[0-9]+)?[^\n]*", postgres_version)
+        assert version is not None and int(version[1]) == args.postgres_major, "Wrong PostgreSQL fixture major"
+        postgres_server_version = int(
+            command("docker", "exec", postgres, "psql", "-X", "-U", "postgres", "-d", "buycycle_rehearsal", "-At", "-c", "SHOW server_version_num", capture=True)
+        )
+        assert postgres_server_version == POSTGRES_VERSION[args.postgres_major], "Wrong observed PostgreSQL fixture version"
         # The exact app image must work with the production privilege split,
         # rather than a superuser fixture masking missing runtime grants.
         subprocess.run(
@@ -231,6 +249,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE buycycle_migrator IN SCHEMA public GRANT USAGE
             "version": 1,
             "repository": "F0rge/f0rge",
             "commit": commit,
+            "harness_commit": harness_commit,
             "platform": "linux/arm64",
             "image_id": info["Id"],
             "config_digest": config_digest(archive, commit),
@@ -239,6 +258,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE buycycle_migrator IN SCHEMA public GRANT USAGE
             "tested": True,
             "tests": tests,
             "dirty": dirty,
+            "postgres_major": args.postgres_major,
+            "postgres_server_version_num": postgres_server_version,
+            "postgres_version": postgres_version,
+            "postgres_image": POSTGRES[args.postgres_major],
             "created_at": dt.datetime.now(dt.UTC).isoformat(),
         }
         (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")

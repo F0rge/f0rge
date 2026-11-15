@@ -50,6 +50,13 @@ def commit(value: object) -> str:
     return value
 
 
+def postgres_major(config: dict) -> int:
+    value = config.get("postgres_major")
+    if type(value) is not int or value not in {15, 17}:
+        raise OpsError("Explicitly select the verified PostgreSQL 15 or 17 application cluster")
+    return value
+
+
 def local_database(config: dict, *, uid: int = 0) -> tuple[list[str], dict[str, str]]:
     if config.get("host") != "127.0.0.1" or config.get("database") != "buycycle" or config.get("username") != "buycycle_backup":
         raise OpsError("Only the approved local Buycycle backup endpoint and role are allowed")

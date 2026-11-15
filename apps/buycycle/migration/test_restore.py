@@ -40,3 +40,31 @@ def test_later_acknowledged_write_blocks_old_candidate():
     with pytest.raises(ValueError, match="stale.*activation is blocked"):
         rehearse_restore.assert_candidate_current(latest, before)
     rehearse_restore.assert_candidate_current(latest, latest)
+
+
+def test_pg15_is_explicit_and_keeps_a_separate_task_owned_fixture(monkeypatch):
+    response = [
+        {
+            "Config": {"Env": ["POSTGRES_DB=buycycle_rehearsal"], "Image": "postgres:15.19-bookworm@sha256:" + "a" * 64},
+            "NetworkSettings": {"Ports": {"5432/tcp": [{"HostIp": "127.0.0.1", "HostPort": "5550"}]}},
+        }
+    ]
+
+    def command(*args, **kwargs):
+        if args[:2] == ("docker", "inspect"):
+            return json.dumps(response).encode()
+        if args[-1] == "--version":
+            return f"{args[-2]} (PostgreSQL) 15.19\n".encode()
+        return b"150019\n"
+
+    monkeypatch.setattr(rehearse_restore, "run", command)
+    observed = rehearse_restore.verify_container("buycycle-migration-pg15", 5550, 15)
+    assert observed["server_version_num"] == 150019
+    with pytest.raises(ValueError, match="task-owned"):
+        rehearse_restore.verify_container("buycycle-migration-pg", 5549, 15)
+    for port in (None, True, 0, 543, 65536):
+        with pytest.raises(ValueError, match="task-owned"):
+            rehearse_restore.verify_container("buycycle-migration-pg15", port, 15)
+    response[0]["Config"]["Image"] = "postgres:17"
+    with pytest.raises(ValueError, match="selected"):
+        rehearse_restore.verify_container("buycycle-migration-pg15", 5550, 15)

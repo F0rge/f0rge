@@ -36,6 +36,20 @@
   "tunnel_id": "REPLACE_WITH_OBSERVED_BUYCYCLE_TUNNEL_UUID",
   "database_network": "REPLACE_WITH_VERIFIED_EXISTING_PLATFORM_DATABASE_NETWORK",
   "postgres_container": "REPLACE_WITH_VERIFIED_PLATFORM_POSTGRES_CONTAINER",
+  "postgres_admin_role": "REPLACE_WITH_VERIFIED_LOCAL_ADMIN_ROLE",
+  "postgres_major": 15,
+  "postgres_inventory": [
+    {
+      "container_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "image": "postgres:15-alpine",
+      "image_id": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "compose_project": "REPLACE_WITH_OBSERVED_PROJECT",
+      "compose_service": "REPLACE_WITH_OBSERVED_SERVICE",
+      "postgres_major": 15,
+      "classification": "application_data",
+      "purpose": "Selected existing shared application-data cluster; complete the entire observed inventory privately"
+    }
+  ],
   "cloudflare_token_file": "/etc/buycycle/preflight/cloudflare-read-token",
   "coolify_base_url": "https://REPLACE_WITH_VERIFIED_COOLIFY_HOST/api/v1",
   "coolify_token_file": "/etc/buycycle/preflight/coolify-read-token",

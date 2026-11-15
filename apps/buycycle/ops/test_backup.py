@@ -29,6 +29,8 @@ class BackupTests(unittest.TestCase):
             "pg_dump", "import sys\nif '--version' in sys.argv: print('pg_dump (PostgreSQL) 17.6')\nelse: sys.stdout.buffer.write(b'PGDMPsynthetic-records')\n"
         )
         self.age = self.executable("age", "import sys\nsys.stdout.buffer.write(b'FAKE-AGE-BOUNDARY\\n'+sys.stdin.buffer.read())\n")
+        self.psql = self.executable("psql", "import sys\nprint('psql (PostgreSQL) 17.6' if '--version' in sys.argv else '170006')\n")
+        self.restore = self.executable("pg_restore", "print('pg_restore (PostgreSQL) 17.6')\n")
         self.config = {
             "schema_version": 1,
             "host": "127.0.0.1",
@@ -41,6 +43,9 @@ class BackupTests(unittest.TestCase):
             "source_commit": "a" * 40,
             "timeout_seconds": 5,
             "pg_dump": str(self.dump),
+            "pg_restore": str(self.restore),
+            "psql": str(self.psql),
+            "postgres_major": 17,
             "age": str(self.age),
         }
 
@@ -66,6 +71,8 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(manifest["sha256"], hashlib.sha256(encrypted.read_bytes()).hexdigest())
         self.assertEqual(manifest["bytes"], encrypted.stat().st_size)
         self.assertEqual(manifest["source_commit"], "a" * 40)
+        self.assertEqual(manifest["postgres_major"], 17)
+        self.assertEqual(manifest["server_version_num"], 170006)
         self.assertEqual(stat.S_IMODE(final.stat().st_mode), 0o700)
         for path in final.iterdir():
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
@@ -115,7 +122,7 @@ class BackupTests(unittest.TestCase):
             with self.subTest(text_length=len(text)), self.assertRaises(OpsError):
                 self.run_backup()
 
-    def test_only_public_recipients_and_pg17_allowed(self):
+    def test_only_public_recipients_and_matching_major_allowed(self):
         self.recipients.write_text("AGE-SECRET-KEY-SYNTHETIC\n")
         with self.assertRaises(OpsError):
             self.run_backup()
@@ -123,6 +130,29 @@ class BackupTests(unittest.TestCase):
         self.executable("pg_dump", "print('pg_dump (PostgreSQL) 18.0')\n")
         with self.assertRaises(OpsError):
             self.run_backup()
+
+    def test_explicit_pg15_clients_and_server_are_supported(self):
+        self.config["postgres_major"] = 15
+        self.executable("pg_dump", "import sys\nif '--version' in sys.argv: print('pg_dump (PostgreSQL) 15.19')\nelse: sys.stdout.buffer.write(b'PGDMPfixture')\n")
+        self.executable("pg_restore", "print('pg_restore (PostgreSQL) 15.19')\n")
+        self.executable("psql", "import sys\nprint('psql (PostgreSQL) 15.19' if '--version' in sys.argv else '150019')\n")
+        manifest = json.loads((self.run_backup() / "manifest.json").read_text())
+        self.assertEqual(manifest["postgres_major"], 15)
+        self.assertEqual(manifest["server_version_num"], 150019)
+
+    def test_missing_major_or_mismatched_client_server_is_rejected(self):
+        for value in (None, True, 16, 18, "15"):
+            with self.subTest(value=value), self.assertRaises(OpsError):
+                backup({**self.config, "postgres_major": value}, uid=self.uid)
+        for name in ("pg_dump", "pg_restore", "psql"):
+            self.executable(name, f"print('{name} (PostgreSQL) 15.19')\n")
+            with self.subTest(client=name), self.assertRaises(OpsError):
+                self.run_backup()
+            self.executable(name, f"print('{name} (PostgreSQL) 17.6')\n")
+        self.executable("psql", "import sys\nprint('psql (PostgreSQL) 17.6' if '--version' in sys.argv else '150019')\n")
+        with self.assertRaises(OpsError):
+            self.run_backup()
+        self.assertEqual(list(self.destination.iterdir()), [])
 
     def test_subprocess_environment_has_no_password_or_inherited_remote_configuration(self):
         args, env = local_database(self.config, uid=self.uid)

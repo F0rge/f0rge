@@ -44,7 +44,21 @@ class ProviderFixture:
             "cloudflare_token_file": "/managed/cf-token",
             "coolify_token_file": "/managed/coolify-token",
             "coolify_base_url": "https://fixture.invalid/api/v1",
-            "postgres_container": "platform-postgres",
+            "postgres_container": "c" * 64,
+            "postgres_major": 17,
+            "postgres_admin_role": "postgres",
+            "postgres_inventory": [
+                {
+                    "container_id": "c" * 64,
+                    "image": "postgres:17-bookworm",
+                    "image_id": "sha256:" + "1" * 64,
+                    "compose_project": "platform",
+                    "compose_service": "postgres",
+                    "postgres_major": 17,
+                    "classification": "application_data",
+                    "purpose": "Synthetic shared application database",
+                }
+            ],
             "secret_owners": {"/managed/runtime-url": 10001, "/managed/migrator-url": 10001, "/managed/tunnel-token": 65532},
         }
         self.application = {
@@ -72,7 +86,18 @@ class ProviderFixture:
             "manual_webhook_secret_gitea": None,
         }
         self.tasks = []
-        self.containers = [{"id": "c" * 64, "name": "/platform-postgres", "labels": {}, "running": True, "restart": "unless-stopped", "ports": {}, "image": "postgres:17-bookworm"}]
+        self.containers = [
+            {
+                "id": "c" * 64,
+                "name": "/platform-postgres",
+                "labels": {"com.docker.compose.project": "platform", "com.docker.compose.service": "postgres"},
+                "running": True,
+                "restart": "unless-stopped",
+                "ports": {},
+                "image": "postgres:17-bookworm",
+                "image_id": "sha256:" + "1" * 64,
+            }
+        ]
         base = {"read_only": True, "cap_drop": ["ALL"], "image": "ghcr.io/f0rge/buycycle@sha256:" + "e" * 64}
         self.compose = {
             "services": {
@@ -96,7 +121,10 @@ class ProviderFixture:
                 "tunnel_token": {"file": "/managed/tunnel-token"},
             },
         }
-        self.grants, self.engine = {"passed": True}, {"ID": self.config["expected_docker_engine_id"], "Architecture": "arm64", "OSType": "linux"}
+        self.grants, self.engine = (
+            {"passed": True, "server_version_num": 170006, "current_user": "postgres", "current_database": "buycycle"},
+            {"ID": self.config["expected_docker_engine_id"], "Architecture": "arm64", "OSType": "linux"},
+        )
         self.files_seen, self.urls, self.commands = [], [], []
 
     @staticmethod
@@ -137,6 +165,9 @@ class ProviderFixture:
         if command[0] == "compose":
             return json.dumps(self.compose)
         if command[0] == "exec":
+            if command[-2:] == ["postgres", "--version"]:
+                entry = next(entry for entry in self.config["postgres_inventory"] if entry["container_id"] == command[1])
+                return f"postgres (PostgreSQL) {entry['postgres_major']}.6"
             return json.dumps(self.grants)
         raise AssertionError("Unexpected local command")
 
@@ -261,7 +292,109 @@ class PreflightTests(unittest.TestCase):
         duplicate = copy.deepcopy(self.fixture.containers[0])
         duplicate.update(id="d" * 64, name="/unapproved-second-postgres")
         self.fixture.containers.append(duplicate)
+        with self.assertRaisesRegex(preflight.Refused, "postgres_inventory_incomplete"):
+            self.fixture.observe()
+
+    def test_unlisted_digest_pinned_and_registry_qualified_clusters_are_denied(self):
+        for image in ("postgres:15.19-bookworm@sha256:" + "f" * 64, "docker.io/library/postgres:16", "registry-1.docker.io/library/postgres@sha256:" + "e" * 64):
+            duplicate = copy.deepcopy(self.fixture.containers[0])
+            duplicate.update(id="d" * 64, name="/unlisted-postgres", image=image)
+            self.fixture.containers.append(duplicate)
+            with self.subTest(image=image), self.assertRaisesRegex(preflight.Refused, "postgres_inventory_incomplete"):
+                self.fixture.observe()
+            self.fixture.containers.pop()
+
+    def test_stopped_control_plane_is_recorded_without_starting_or_executing_it(self):
+        entry = dict(
+            self.fixture.config["postgres_inventory"][0], container_id="d" * 64, classification="coolify_control_plane", purpose="Synthetic stopped historical control plane"
+        )
+        self.fixture.config["postgres_inventory"].append(entry)
+        stopped = dict(self.fixture.containers[0], id=entry["container_id"], running=False)
+        self.fixture.containers.append(stopped)
+        receipt = self.fixture.observe()
+        observed = next(item for item in receipt["postgres_inventory"] if item["container_id"] == entry["container_id"])
+        self.assertFalse(observed["running"])
+        self.assertIsNone(observed["observed_version"])
+        self.assertEqual(observed["version_evidence"], "declared_image_binding_only")
+        self.assertFalse(any(command[:2] == ["exec", entry["container_id"]] for command in self.fixture.commands))
+        self.assertFalse(receipt["p018_single_cluster_observed"])
+
+    def test_missing_duplicate_or_unknown_inventory_cannot_pass(self):
+        original = copy.deepcopy(self.fixture.config["postgres_inventory"])
+        for value, reason in ((None, "postgres_inventory_required"), ([], "postgres_inventory_required"), (original * 2, "postgres_inventory_duplicate")):
+            self.fixture.config["postgres_inventory"] = value
+            with self.subTest(reason=reason), self.assertRaisesRegex(preflight.Refused, reason):
+                self.fixture.observe()
+        self.fixture.config["postgres_inventory"] = original
+        self.fixture.config["postgres_inventory"][0]["classification"] = "ignore"
+        with self.assertRaisesRegex(preflight.Refused, "postgres_inventory_classification"):
+            self.fixture.observe()
+
+    def test_selected_pg15_and_concrete_control_plane_inventory_remain_explicit(self):
+        self.fixture.config["postgres_major"] = 15
+        selected = self.fixture.config["postgres_inventory"][0]
+        selected.update(postgres_major=15, image="postgres:15-alpine")
+        self.fixture.containers[0]["image"] = selected["image"]
+        self.fixture.grants["server_version_num"] = 150019
+        for letter, project, classification, major in [("d", "airflow", "airflow_metadata", 16), ("e", "source", "coolify_control_plane", 15)]:
+            entry = {
+                "container_id": letter * 64,
+                "image": f"postgres:{major}",
+                "image_id": "sha256:" + letter * 64,
+                "compose_project": project,
+                "compose_service": "postgres",
+                "postgres_major": major,
+                "classification": classification,
+                "purpose": "Synthetic existing control-plane metadata",
+            }
+            self.fixture.config["postgres_inventory"].append(entry)
+            self.fixture.containers.append(
+                {
+                    "id": entry["container_id"],
+                    "image": entry["image"],
+                    "image_id": entry["image_id"],
+                    "running": True,
+                    "labels": {"com.docker.compose.project": project, "com.docker.compose.service": "postgres"},
+                }
+            )
+        receipt = self.fixture.observe()
+        self.assertEqual(receipt["postgres_major"], 15)
+        self.assertEqual(receipt["postgres_server_version_num"], 150019)
+        self.assertEqual(len(receipt["postgres_inventory"]), 3)
+        self.assertFalse(receipt["p018_single_cluster_observed"])
+        self.assertFalse(receipt["p018_host_wide_compliance_verified"])
+        self.fixture.config["postgres_inventory"][1]["classification"] = "application_data"
         with self.assertRaisesRegex(preflight.Refused, "postgres_single_managed_cluster"):
+            self.fixture.observe()
+
+    def test_inventory_and_server_major_mismatches_are_not_ignored(self):
+        for key, value in [
+            ("image_id", "sha256:" + "f" * 64),
+            ("image", "postgres:15"),
+            ("compose_project", "other-project"),
+            ("compose_service", "other-service"),
+            ("postgres_major", 15),
+        ]:
+            original = self.fixture.config["postgres_inventory"][0][key]
+            self.fixture.config["postgres_inventory"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(preflight.Refused):
+                self.fixture.observe()
+            self.fixture.config["postgres_inventory"][0][key] = original
+        self.fixture.grants["server_version_num"] = 150019
+        with self.assertRaisesRegex(preflight.Refused, "database_grants"):
+            self.fixture.observe()
+
+    def test_admin_role_is_explicit_and_cannot_inject_options_or_sql(self):
+        for role in (None, "", "-postgres", "postgres;DROP DATABASE buycycle", "postgres\nother", "a" * 64):
+            self.fixture.config["postgres_admin_role"] = role
+            with self.subTest(role=role), self.assertRaisesRegex(preflight.Refused, "postgres_admin_role"):
+                self.fixture.observe()
+        self.fixture.config["postgres_admin_role"] = "nextcloud"
+        self.fixture.grants["current_user"] = "nextcloud"
+        self.fixture.observe()
+        self.assertIn("nextcloud", self.fixture.commands[-1])
+        self.fixture.grants["current_user"] = "another_role"
+        with self.assertRaisesRegex(preflight.Refused, "database_grants"):
             self.fixture.observe()
 
     def test_active_legacy_collector_schedule_or_webhook_is_denied(self):

@@ -14,7 +14,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ops_common import OpsError, commit, local_database, positive, protected_path, read_config, require_root
+from ops_common import OpsError, commit, local_database, positive, postgres_major, protected_path, read_config, require_root
 
 
 def backup(config: dict, *, uid: int = 0) -> Path:
@@ -26,13 +26,28 @@ def backup(config: dict, *, uid: int = 0) -> Path:
         raise OpsError("Configure approved age public recipients only; keep recovery identities offline")
     source_commit = commit(config.get("source_commit"))
     timeout = positive(config.get("timeout_seconds"), "backup timeout", maximum=86400)
-    pg_dump = protected_path(config["pg_dump"], uid=uid)
+    major = postgres_major(config)
+    clients = {name: protected_path(config[name], uid=uid) for name in ("pg_dump", "pg_restore", "psql")}
+    pg_dump = clients["pg_dump"]
     age = protected_path(config["age"], uid=uid)
-    if not os.access(pg_dump, os.X_OK) or not os.access(age, os.X_OK):
-        raise OpsError("Install executable PostgreSQL 17 pg_dump and age prerequisites")
-    version = subprocess.run([str(pg_dump), "--version"], capture_output=True, env=env, check=True, timeout=10)
-    if not re.fullmatch(rb"pg_dump \(PostgreSQL\) 17(?:\.[0-9]+)?[^\n]*\n?", version.stdout):
-        raise OpsError("The controlled backup requires PostgreSQL 17 pg_dump")
+    if any(not os.access(path, os.X_OK) for path in [*clients.values(), age]):
+        raise OpsError("Install the protected PostgreSQL client and age prerequisites")
+    versions = {}
+    for name, path in clients.items():
+        version = subprocess.run([str(path), "--version"], capture_output=True, env=env, check=True, timeout=10).stdout
+        match = re.fullmatch(name.encode() + rb" \(PostgreSQL\) ([0-9]+)(?:\.[0-9]+)?[^\n]*\n?", version)
+        if match is None or int(match[1]) != major:
+            raise OpsError("PostgreSQL dump, restore and query clients must match the selected server major")
+        versions[name] = version.decode().strip()
+    server = subprocess.run(
+        [str(clients["psql"]), *args, "--no-psqlrc", "--tuples-only", "--no-align", "--set", "ON_ERROR_STOP=1", "--command", "SHOW server_version_num"],
+        capture_output=True,
+        env=env,
+        check=True,
+        timeout=15,
+    ).stdout.strip()
+    if not server.isdigit() or int(server) // 10000 != major:
+        raise OpsError("Observed PostgreSQL server major differs from the reviewed backup configuration")
     temporary = Path(tempfile.mkdtemp(prefix=".incomplete-", dir=destination))
     dump_process = None
     age_process = None
@@ -63,6 +78,9 @@ def backup(config: dict, *, uid: int = 0) -> Path:
             "source_commit": source_commit,
             "bytes": ciphertext.stat().st_size,
             "sha256": sha256,
+            "postgres_major": major,
+            "server_version_num": int(server),
+            "client_versions": versions,
         }
         manifest_file = temporary / "manifest.json"
         with manifest_file.open("x") as output:

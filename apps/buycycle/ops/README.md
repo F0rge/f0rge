@@ -43,6 +43,12 @@ and conflicts. Keep its archive and evidence outside Git. `--allow-dirty` is for
 exploration; its output cannot pass release verification. A production release
 needs the final clean commit's tested archive, successful main CI and protected
 immutable release tag, then approval of its published digest and receipt hashes.
+Use `--postgres-major 15` to test the selected PostgreSQL 15.19 fixture; the default
+remains 17.12. Both fixtures are digest-pinned and the observed version is retained
+in evidence. `--image IMAGE --expected-commit SHA` re-tests an existing image
+without rebuilding it and still requires its actual source label to match.
+Evidence records the separate `harness_commit` and actual checkout dirty state;
+a local supplemental compatibility probe cannot replace trusted main CI evidence.
 
 ## Production configuration
 
@@ -51,11 +57,51 @@ only inbound route; the API independently verifies the Access signature, issuer,
 exact audience, expiry and allowed signed owner email. Health endpoints contain
 no user data. Collection remains disabled in the proposed production Compose.
 
-Use an app-owned `buycycle` database on the **one existing Pi PostgreSQL cluster**.
+Use an app-owned `buycycle` database on the **selected existing Pi application-data cluster**.
 `BUYCYCLE_DATABASE_NETWORK` is mandatory. The `bootstrap-cluster` profile is only
 for a verified absence of an existing platform cluster; it is never an automatic
 fallback. Inventory custom/host-managed PostgreSQL too: the preflight can count
 official PostgreSQL Docker images, not prove that no other database process exists.
+
+Select the observed server major explicitly with `postgres_major` (15 or the
+retained 17 test target), and set `postgres_admin_role` to the existing verified
+local administrative login; the preflight does not assume a `postgres` role or
+create one. It performs only fixed catalog reads through that login.
+`postgres_inventory` must enumerate every observed PostgreSQL container using
+its full ID, image reference/local image ID, exact Compose project/service labels,
+major, purpose and classification. Exactly one entry is the selected
+`application_data` cluster; known Coolify/Airflow metadata instances must be
+recorded explicitly as `coolify_control_plane`/`airflow_metadata`. Missing,
+changed, duplicate or additional application-data clusters fail closed. Stopped
+instances stay in the inventory with image/configuration binding only, explicitly
+without a running-version observation; the preflight never starts them. The
+selected application cluster must be running and its SQL server version is read.
+Classifications are inventory, **not ADR exceptions**. The receipt includes all
+entries and reports `p018_single_cluster_observed` separately; host-wide P-018
+compliance remains unverified even when the selected Buycycle database is safe.
+Multiple observed control-plane instances remain a visible host-wide legacy gap
+against P-018's one-cluster target; classification does not accept that gap.
+Do not upgrade, create or consolidate another application's database to satisfy
+this check without separately reviewed authorization.
+
+The default synthetic recovery drill retains PostgreSQL 17 on loopback port 5549.
+For a selected PostgreSQL 15 server, create a separate task-owned synthetic
+`buycycle-migration-pg15` fixture using a reviewed PostgreSQL 15 image, database
+`buycycle_rehearsal` and an unused **loopback-only** port, then run (replace 5551
+with the actual unused port selected for that fixture):
+
+```sh
+python3 apps/buycycle/migration/rehearse_restore.py \
+  --postgres-major 15 --container buycycle-migration-pg15 --port 5551 \
+  --evidence /private/tmp/buycycle-pg15-restore-rehearsal.json
+```
+
+The drill verifies the actual server and dump/restore/query client versions,
+reconciles all nine tables and rejects a backup that predates an acknowledged
+watch/trade/cost edit. It never reads the deployed database. The Ops regression
+also uses a digest-pinned PostgreSQL 15.19 fixture with the existing-admin-name
+case, actual schema/grants and a read-only backup role. Its fake age process
+proves streaming only; real encryption and offline custody need their own drill.
 
 Install files under root-owned, non-symlink, non-group/world-writable ancestors.
 Keep `runtime.env`, provider read tokens, policy and receipt files mode 0600.
@@ -178,7 +224,11 @@ thresholds before enabling them. A timer definition does not prove it ran.
 `backup.py` consumes root-owned mode-0600 `/etc/buycycle/backup.json`: exact
 loopback PostgreSQL endpoint/port, database `buycycle`, role `buycycle_backup`,
 scoped `pgpassfile`, protected `destination`, public age `recipients_file`, exact
-`source_commit`, `timeout_seconds` and canonical `pg_dump`/`age` executables.
+`source_commit`, `timeout_seconds`, explicit `postgres_major` and canonical
+`psql`/`pg_dump`/`pg_restore`/`age` executables. The observed server and all three
+PostgreSQL clients must match that reviewed major. The ciphertext manifest
+retains their version evidence. Use PostgreSQL 15 tools for an observed 15
+cluster; do not upgrade an existing database merely to fit the test baseline.
 The backup role needs SELECT on all nine tables, without DML/schema authority.
 Plaintext is streamed into age; complete backups publish atomically as protected
 `database.dump.age` plus a byte-count/hash/time manifest. No retention deletion
