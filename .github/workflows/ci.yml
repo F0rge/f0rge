@@ -29,6 +29,20 @@ jobs:
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_DB: buycycle_rehearsal
+          POSTGRES_PASSWORD: buycycle-ci-fixture
+        ports: ['5549:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d buycycle_rehearsal"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      BUYCYCLE_TEST_DATABASE_URL: postgres://postgres:buycycle-ci-fixture@127.0.0.1:5549/buycycle_rehearsal
+      # Rust 1.95 debug-incremental ICE reproduced locally for async Diesel closures.
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +53,9 @@ jobs:
           main-branch-name: ${{ env.TARGET_BRANCH }}
 
       - uses: ./.github/actions/setup-node-workspace
+
+      - name: Install PostgreSQL build headers
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpq-dev
 
       - name: Install pinned Rust toolchain
         run: |
@@ -260,6 +277,22 @@ jobs:
             fi
           fi
 
+      - name: Buycycle browser and accessibility checks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            npx playwright install --with-deps chromium
+            npx nx run-many -t=e2e --projects=buycycle-frontend
+          else
+            AFFECTED=$(npx nx show projects --affected --projects=buycycle-frontend --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -er 'if type == "array" and all(.[]; type == "string") then (index("buycycle-frontend") != null) | tostring else error("Invalid Nx project list") end')
+            if [ "$AFFECTED" = true ]; then
+              npx playwright install --with-deps chromium
+              npx nx affected -t=e2e --exclude='*,!buycycle-frontend' --base="${NX_BASE}" --head="${NX_HEAD}"
+            fi
+          fi
+
       - name: Check retained commerce image
         id: commerce-image
         env:
@@ -294,9 +327,71 @@ jobs:
             ${{ runner.temp }}/f0rge-commerce-image.tar.json
           if-no-files-found: error
 
+  buycycle-image:
+    name: buycycle image
+    concurrency:
+      group: ci-buycycle-image-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      BUYCYCLE_IMAGE_OUTPUT: ${{ runner.temp }}/buycycle-image
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: ${{ env.TARGET_BRANCH }}
+      - uses: ./.github/actions/setup-node-workspace
+      - uses: ./.github/actions/setup-python-uv
+      - uses: docker/setup-buildx-action@v3
+      - name: Test affected ARM64 image through Nx
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            npx nx run-many -t=container-test --projects=tag:platform:rust
+          else
+            npx nx affected -t=container-test --exclude='*,!tag:platform:rust' --base="${NX_BASE}" --head="${NX_HEAD}"
+          fi
+      - name: Check retained Buycycle image
+        id: buycycle-image
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            EXPECTED=true
+          else
+            EXPECTED=$(npx nx show projects --affected --projects=buycycle-backend --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -er 'if type == "array" and all(.[]; type == "string") then (index("buycycle-backend") != null) | tostring else error("Invalid Nx project list") end')
+          fi
+          if [ "$EXPECTED" = true ]; then
+            test -s "$BUYCYCLE_IMAGE_OUTPUT/image.tar"
+            test -s "$BUYCYCLE_IMAGE_OUTPUT/evidence.json"
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            test ! -e "$BUYCYCLE_IMAGE_OUTPUT/image.tar"
+            test ! -e "$BUYCYCLE_IMAGE_OUTPUT/evidence.json"
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Retain tested Buycycle image
+        if: steps.buycycle-image.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-buycycle-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/buycycle-image/image.tar
+            ${{ runner.temp }}/buycycle-image/evidence.json
+          if-no-files-found: error
+
   ci:
     name: ci
-    needs: [python, frontend, rust]
+    needs: [python, frontend, rust, buycycle-image]
     if: always()
     concurrency:
       group: ci-${{ github.ref }}
@@ -309,6 +404,7 @@ jobs:
           PYTHON_RESULT: ${{ needs.python.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           RUST_RESULT: ${{ needs.rust.result }}
+          BUYCYCLE_IMAGE_RESULT: ${{ needs.buycycle-image.result }}
         run: |
           if [ "$PYTHON_RESULT" != "success" ]; then
             echo "python job required but result was: $PYTHON_RESULT"
@@ -316,6 +412,10 @@ jobs:
           fi
           if [ "$FRONTEND_RESULT" != "success" ]; then
             echo "frontend job required but result was: $FRONTEND_RESULT"
+            exit 1
+          fi
+          if [ "$BUYCYCLE_IMAGE_RESULT" != "success" ]; then
+            echo "buycycle image job required but result was: $BUYCYCLE_IMAGE_RESULT"
             exit 1
           fi
           if [ "$RUST_RESULT" != "success" ]; then

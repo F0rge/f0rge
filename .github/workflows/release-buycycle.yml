@@ -1,0 +1,180 @@
+name: Buycycle tested image publication
+
+# Downloads and republishes a tested main-CI image. Never builds or deploys.
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact successful main-push CI commit (40 lowercase hex)
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful main CI run containing the tested ARM64 archive
+        required: true
+        type: string
+      release_tag:
+        description: release/buycycle/pi/YYYYMMDDTHHMMSSZ
+        required: true
+        type: string
+      request_approval:
+        description: Request Leo approval through the configured independent GitHub App
+        default: false
+        type: boolean
+      migration_receipt_sha256:
+        description: Local controlled migration/import receipt hash (required for approval)
+        default: ''
+        type: string
+      restore_receipt_sha256:
+        description: Local current backup/restore receipt hash (required for approval)
+        default: ''
+        type: string
+      provider_receipt_sha256:
+        description: Local private-origin/provider fence receipt hash (required for approval)
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: buycycle-publication-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'F0rge/f0rge' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      SOURCE_CI_RUN: ${{ inputs.ci_run_id }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      REQUEST_APPROVAL: ${{ inputs.request_approval }}
+      MIGRATION_HASH: ${{ inputs.migration_receipt_sha256 }}
+      RESTORE_HASH: ${{ inputs.restore_receipt_sha256 }}
+      PROVIDER_HASH: ${{ inputs.provider_receipt_sha256 }}
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate closed release inputs
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_CI_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RELEASE_TAG" =~ ^release/buycycle/pi/[0-9]{8}T[0-9]{6}Z$ ]]
+          if [ "$REQUEST_APPROVAL" = true ]; then
+            [[ "$MIGRATION_HASH" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$RESTORE_HASH" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$PROVIDER_HASH" =~ ^[0-9a-f]{64}$ ]]
+            test "$GITHUB_RUN_ATTEMPT" = 1
+          fi
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$SOURCE_COMMIT"
+          git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          persist-credentials: false
+      - name: Download and validate the exact tested main archive
+        run: |
+          python3 .github/deploy/buycycle_release.py prepare \
+            --ci-run-id "$SOURCE_CI_RUN" --commit "$SOURCE_COMMIT" \
+            --tag "$RELEASE_TAG" --output "$RUNNER_TEMP/buycycle-source" > "$RUNNER_TEMP/candidate-result.json"
+      - name: Retest loaded image without rebuilding
+        run: |
+          set -euo pipefail
+          IMAGE_ID=$(jq -er '.loaded_image_id' "$RUNNER_TEMP/buycycle-source/candidate.json")
+          python3 apps/buycycle/ops/image_rehearsal.py --image "$IMAGE_ID" --output "$RUNNER_TEMP/buycycle-retest"
+          test "$(jq -er '.image_id' "$RUNNER_TEMP/buycycle-retest/evidence.json")" = "$IMAGE_ID"
+          test "$(jq -er '.config_digest' "$RUNNER_TEMP/buycycle-retest/evidence.json")" = "$(jq -er '.image_evidence.config_digest' "$RUNNER_TEMP/buycycle-source/candidate.json")"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish and verify the same image
+        id: publish
+        run: |
+          set -euo pipefail
+          IMAGE_ID=$(jq -er '.loaded_image_id' "$RUNNER_TEMP/buycycle-source/candidate.json")
+          CONFIG_DIGEST=$(jq -er '.image_evidence.config_digest' "$RUNNER_TEMP/buycycle-source/candidate.json")
+          CANDIDATE="ghcr.io/f0rge/buycycle:ci-$SOURCE_COMMIT-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker tag "$IMAGE_ID" "$CANDIDATE"
+          docker push "$CANDIDATE"
+          PINNED_IMAGE=$(docker image inspect "$CANDIDATE" --format '{{json .RepoDigests}}' | jq -er '[.[] | select(startswith("ghcr.io/f0rge/buycycle@sha256:"))] | if length == 1 then .[0] else error("Unclear registry digest") end')
+          docker pull --platform linux/arm64 "$PINNED_IMAGE"
+          python3 .github/deploy/buycycle_release.py verify-registry --image "$PINNED_IMAGE" --config-digest "$CONFIG_DIGEST"
+          export PINNED_IMAGE
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          candidate = json.loads((root/'buycycle-source/candidate.json').read_text())
+          evidence = json.loads((root/'buycycle-retest/evidence.json').read_text())
+          assert evidence['image_id'] == candidate['loaded_image_id'] and evidence['dirty'] is False
+          assert evidence['config_digest'] == candidate['image_evidence']['config_digest']
+          manifest = dict(candidate, version=1, repository='F0rge/f0rge', commit=os.environ['SOURCE_COMMIT'],
+                          image=os.environ['PINNED_IMAGE'], digest=os.environ['PINNED_IMAGE'].split('@')[1],
+                          target={'host':'pi','app':'xi0qwpbyl2d8gf8u3xl13jkv'},
+                          workflow_run_id=int(os.environ['GITHUB_RUN_ID']), workflow_attempt=int(os.environ['GITHUB_RUN_ATTEMPT']),
+                          workflow_commit=os.environ['GITHUB_SHA'], image_evidence=evidence,
+                          receipt_hashes={'migration':os.environ['MIGRATION_HASH'],'restore':os.environ['RESTORE_HASH'],'provider':os.environ['PROVIDER_HASH']})
+          pathlib.Path('buycycle-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as stream: stream.write('digest='+manifest['digest']+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as stream:
+              stream.write('## Buycycle candidate\n\nCommit: `'+manifest['commit']+'`\n\nImage: `'+manifest['image']+'`\n\nTag: `'+manifest['release_tag']+'`\n\nReceipt hashes: `'+json.dumps(manifest['receipt_hashes'],sort_keys=True)+'`\n\nPublication is not deployment.\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: buycycle-release-publication
+          path: buycycle-release.json
+          if-no-files-found: error
+
+  approve:
+    name: Approve Buycycle ${{ needs.publish.outputs.digest }}
+    if: inputs.request_approval
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    environment:
+      name: production
+      deployment: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUESTER_APP_SLUG: ${{ vars.BUYCYCLE_RELEASE_REQUESTER_APP_SLUG }}
+      REQUESTER_APP_ID: ${{ vars.BUYCYCLE_RELEASE_REQUESTER_APP_ID }}
+    steps:
+      - name: Require the configured independent automation identity
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          [[ "$REQUESTER_APP_SLUG" =~ ^[a-z0-9-]{1,100}$ ]]
+          [[ "$REQUESTER_APP_ID" =~ ^[1-9][0-9]*$ ]]
+          test "$GITHUB_ACTOR" = "$REQUESTER_APP_SLUG[bot]"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_ACTOR"
+          test "$(gh api "apps/$REQUESTER_APP_SLUG" --jq .id)" = "$REQUESTER_APP_ID"
+      - uses: actions/download-artifact@v4
+        with:
+          name: buycycle-release-publication
+      - name: Bind this protected job to the exact publication
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          manifest=json.loads(pathlib.Path('buycycle-release.json').read_text())
+          value={'version':1,'run_id':int(os.environ['GITHUB_RUN_ID']),'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+                 'publication_sha256':hashlib.sha256(json.dumps(manifest,sort_keys=True,separators=(',',':')).encode()).hexdigest()}
+          pathlib.Path('approval.json').write_text(json.dumps(value,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: buycycle-release-approval
+          path: approval.json
+          if-no-files-found: error

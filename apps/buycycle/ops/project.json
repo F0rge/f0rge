@@ -1,0 +1,15 @@
+{
+  "name": "buycycle-ops",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "tags": ["platform:py", "scope:buycycle"],
+  "implicitDependencies": [],
+  "targets": {
+    "lint": {"executor": "nx:run-commands", "options": {"command": "uvx ruff@0.16.1 check apps/buycycle/ops"}},
+    "format-check": {"executor": "nx:run-commands", "options": {"command": "uvx ruff@0.16.1 format --check apps/buycycle/ops"}},
+    "test": {
+      "executor": "nx:run-commands", "cache": false,
+      "options": {"command": "uv run --project apps/buycycle/ops --frozen python -m unittest discover -s apps/buycycle/ops -p 'test_*.py' && node --test apps/buycycle/ops/local-access.test.mjs"}
+    }
+  }
+}

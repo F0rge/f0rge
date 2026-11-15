@@ -1,0 +1,12 @@
+[Unit]
+Description=Buycycle 06:15 Luxembourg daily collection
+
+[Timer]
+OnCalendar=*-*-* 06:15:00 Europe/Luxembourg
+# No replay after downtime and no second UTC/DST invocation.
+Persistent=false
+RandomizedDelaySec=0
+Unit=buycycle-collect.service
+
+[Install]
+WantedBy=timers.target

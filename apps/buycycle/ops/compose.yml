@@ -1,0 +1,120 @@
+name: buycycle
+services:
+  postgres:
+    # Activate only after proving that the Pi has no existing platform cluster.
+    profiles: [bootstrap-cluster]
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: buycycle
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+    secrets:
+      - postgres_admin_password
+      - runtime_password
+      - migrator_password
+      - backup_password
+    ports: ['127.0.0.1:5547:5432']
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-buycycle.sh:ro
+    networks: [data]
+    restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1
+    pids_limit: 256
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d buycycle]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  app:
+    image: ${BUYCYCLE_IMAGE:?Supply the approved tested image by sha256 digest}
+    environment:
+      BUYCYCLE_DATABASE_URL_FILE: /run/secrets/runtime_database_url
+      BUYCYCLE_BIND: 0.0.0.0:8080
+      BUYCYCLE_FRONTEND_DIR: /app/frontend
+      ACCESS_ISSUER: ${ACCESS_ISSUER:?Cloudflare Access team issuer required}
+      ACCESS_AUDIENCE: ${ACCESS_AUDIENCE:?Cloudflare Access application audience required}
+      ACCESS_ALLOWED_EMAILS: ${ACCESS_ALLOWED_EMAILS:?Approved owner identity required}
+      BUYCYCLE_COLLECTION_ENABLED: '0'
+      RUST_LOG: info
+    secrets: [runtime_database_url]
+    networks: [data, origin, outbound]
+    # No host ports. Cloudflare's connector is the sole inbound route.
+    read_only: true
+    tmpfs: [/tmp:size=16m,mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  tunnel:
+    image: cloudflare/cloudflared:2026.11.0@sha256:b94b96edf2c9c4360f8879c8580cfaa99077f19c849ec595ca2f711b27d4f344
+    command: [tunnel, --no-autoupdate, run, --token-file, /run/secrets/tunnel_token]
+    secrets: [tunnel_token]
+    networks: [origin, outbound]
+    depends_on: [app]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 64
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  migrate:
+    image: ${BUYCYCLE_IMAGE:?Supply the tested image digest}
+    command: [migrate, --grant-runtime]
+    environment:
+      BUYCYCLE_MIGRATION_DATABASE_URL_FILE: /run/secrets/migrator_database_url
+    secrets: [migrator_database_url]
+    networks: [data]
+    profiles: [maintenance]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  collector:
+    image: ${BUYCYCLE_IMAGE:?Supply the approved tested image digest}
+    command: [collect]
+    profiles: [collection]
+    environment:
+      BUYCYCLE_DATABASE_URL_FILE: /run/secrets/runtime_database_url
+      BUYCYCLE_API_KEY_FILE: /run/secrets/feed_key
+      BUYCYCLE_COLLECTION_ENABLED: ${BUYCYCLE_COLLECTION_ENABLED:-false}
+    secrets: [runtime_database_url, feed_key]
+    networks: [data, outbound]
+    read_only: true
+    tmpfs: [/tmp:size=16m,mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 1
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+networks:
+  data:
+    external: true
+    name: ${BUYCYCLE_DATABASE_NETWORK:?Verified existing Pi PostgreSQL network required}
+  origin: {internal: true}
+  outbound: {}
+volumes:
+  postgres: {}
+secrets:
+  postgres_admin_password: {file: '${BUYCYCLE_SECRETS_DIR:?Managed secrets directory required}/postgres_admin_password'}
+  runtime_password: {file: '${BUYCYCLE_SECRETS_DIR}/runtime_password'}
+  migrator_password: {file: '${BUYCYCLE_SECRETS_DIR}/migrator_password'}
+  backup_password: {file: '${BUYCYCLE_SECRETS_DIR}/backup_password'}
+  runtime_database_url: {file: '${BUYCYCLE_SECRETS_DIR}/runtime_database_url'}
+  migrator_database_url: {file: '${BUYCYCLE_SECRETS_DIR}/migrator_database_url'}
+  tunnel_token: {file: '${BUYCYCLE_SECRETS_DIR}/tunnel_token'}
+  feed_key: {file: '${BUYCYCLE_SECRETS_DIR}/feed_key'}

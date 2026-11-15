@@ -1,0 +1,12 @@
+[Unit]
+Description=Proposed daily Buycycle encrypted backup schedule
+
+[Timer]
+# Proposed cadence, requiring review against measured recovery needs before enablement.
+OnCalendar=*-*-* 05:30:00 Europe/Luxembourg
+Persistent=false
+RandomizedDelaySec=0
+Unit=buycycle-backup.service
+
+[Install]
+WantedBy=timers.target
