@@ -169,6 +169,19 @@ test starting points. They are not approved availability, capacity or latency
 targets. Logs rotate at 10 MiB × 3; persistent raw observations, imports and
 browser journals have no automatic purge.
 
+Full report requests reserve one in-process capacity permit before loading the
+database snapshot. Calculation and JSON serialization run off the HTTP worker;
+the response retains that permit until EOF or disconnect. Delivery uses copied
+chunks of at most 64 KiB, so an outstanding transport chunk cannot retain the
+whole encoded report. An independent fixed 120-second safeguard drops both the
+encoded allocation and permit even if the transport stops polling. Expiry
+terminates an incomplete response as an error; its original content length stays
+fixed, preventing an apparent successful empty response. Health, readiness and
+status do not wait for this permit. This is an implementation failure bound,
+not an approved SLO or a guarantee of spare memory for future dataset growth.
+Local slow-reader and full-size browser tests do not prove that Cloudflare
+propagates client disconnects; verify that transport during activation.
+
 ## Stage the separately approved cutover
 
 1. Verify the actual Pi, Docker engine ID/ARM64 architecture, existing PostgreSQL
