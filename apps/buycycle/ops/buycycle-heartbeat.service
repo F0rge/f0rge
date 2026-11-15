@@ -1,0 +1,38 @@
+[Unit]
+Description=Buycycle unprivileged outbound heartbeat courier
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=buycycle-heartbeat
+Group=buycycle-heartbeat
+UMask=0077
+LoadCredential=policy:/etc/buycycle/heartbeat.json
+LoadCredential=monitor:/etc/buycycle/heartbeat-credentials/monitor
+LoadCredential=collector:/etc/buycycle/heartbeat-credentials/collector
+LoadCredential=backup:/etc/buycycle/heartbeat-credentials/backup
+LoadCredential=offhost:/etc/buycycle/heartbeat-credentials/offhost
+ExecStart=/usr/bin/python3 /opt/f0rge/apps/buycycle/ops/heartbeat.py --config %d/policy
+StateDirectory=buycycle-heartbeat
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/run/buycycle-alerts
+InaccessiblePaths=-/var/run/docker.sock -/var/backups/buycycle
+TimeoutStartSec=55s
+MemoryMax=64M
+CPUQuota=10%
+StandardOutput=journal
+StandardError=journal
+
+# No inbound listener, Docker/database grants or Cloudflare Access bypass.

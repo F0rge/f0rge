@@ -341,3 +341,125 @@ journalctl -u buycycle-backup.service -u buycycle-monitor.service --since today
 Retain successful encrypted-restore/reconciliation evidence and observed timer
 runs. Backup freshness, timer enablement and ciphertext hashes each prove a
 different part of recovery; none alone proves a recoverable, current backup.
+
+## Owner notifications and off-host heartbeat
+
+The proposed free external monitor is [Healthchecks.io Hobbyist](https://healthchecks.io/pricing/):
+currently $0/month, 20 checks and a rolling 100 ping records per check. This is
+operational telemetry, not the backup archive. It can detect missing outbound
+pings when the whole Pi or its network is unavailable. No public Buycycle health
+route, Cloudflare service-token bypass or inbound monitoring port is added.
+Account creation, email sharing and actual notification sends are separate
+activation steps; source tests never contact the hosted service.
+
+```mermaid
+flowchart LR
+  Jobs[Private monitor / collector / backup / off-host copy] -->|generic lifecycle only| Signals[Root-owned bounded status files]
+  Signals --> Courier[Unprivileged heartbeat courier]
+  Courier -->|outbound HTTPS| External[External deadline monitor]
+  External -->|failure or missing heartbeat| Owner[Leo email]
+  Owner --> Private[Owner-only Cloudflare dashboard and runbook]
+```
+
+`job-status.py` runs the fixed command from each reviewed systemd unit exactly
+once and records start/success/failure under `/run/buycycle-alerts`. It preserves
+the original exit code, including a failed collector, even when status recording
+fails. A killed job leaves an unfinished start; it never fabricates success or
+reruns collection. Files contain only schema, job, random run ID, phase and time;
+no listing data, logs, watchlists or keys. Missing runtime directories do not
+prevent the original jobs from running. Remote missing-ping detection remains
+necessary in that case.
+
+`buycycle-heartbeat.service` is a separate unprivileged courier. The existing
+collector/backup/monitor network restrictions remain intact. Create a dedicated
+system user/group `buycycle-heartbeat` with no login, Docker group or app grants.
+Install `buycycle-heartbeat.tmpfiles.conf` as
+`/etc/tmpfiles.d/buycycle-heartbeat.conf` and create its runtime directory before
+enabling the reviewed units: root owns it, the courier group can only read.
+Keep `/opt/f0rge` code root-owned and read-only to the courier. Its only writable
+durable state is `/var/lib/buycycle-heartbeat` (0700).
+
+Install the reviewed `heartbeat.example.json` as root:0600
+`/etc/buycycle/heartbeat.json`. Store four **different individual check URLs** in
+root:0600 `/etc/buycycle/heartbeat-credentials/{monitor,collector,backup,offhost}`
+under a root:0700 directory. The URLs must be exactly the documented individual
+UUID form at `https://hc-ping.com/`; never use a project key. systemd
+`LoadCredential` passes private copies to the courier. No secret goes in argv,
+environment variables, journals, receipts or git. See the provider's
+[secret URL and deadline semantics](https://healthchecks.io/docs/).
+
+The courier makes direct validated TLS requests, ignores proxy environment
+settings, sends an empty body, refuses redirects and bounds transport retries.
+Provider acknowledgement is required before durable deduplication. It sends each
+new lifecycle event once; it does not repeatedly refresh an old success. Stale,
+overdue, invalid, missing or replayed status becomes failure. Restoring an old
+status file or reversing the clock cannot claim recovery. A lost response or
+crash before recording acknowledgement can repeat the same idempotent signal;
+this is not an exactly-once notification guarantee. A new successful job event
+is required for recovery.
+
+Configure Leo as owner and email recipient; enable hourly reminders for checks
+that remain down. Use only generic job names/error codes and this private runbook
+or the authenticated dashboard link in provider descriptions. The hosted service
+receives email, source IP, timing and operational status, as described by its
+[privacy policy](https://healthchecks.io/privacy/). Do not attach logs. Proposed
+initial deadlines below must match installed timers and measured runtimes before
+activation; they are not repository-wide SLOs:
+
+| Check | Schedule | Grace / maximum runtime | Local status age bound |
+| --- | --- | --- | --- |
+| monitor | Every 15 minutes | 10 minutes grace; 5-minute job maximum | 20 minutes |
+| collector | 06:15 Europe/Luxembourg daily | 5 hours 15 minutes grace; 5-hour job maximum | 26 hours |
+| backup | 05:30 Europe/Luxembourg daily | 2 hours 15 minutes grace; 2-hour job maximum | 26 hours |
+| offhost | 07:45 Europe/Luxembourg daily | 2 hours 15 minutes grace; 2-hour job maximum | 26 hours |
+
+The courier runs once per minute. Remote deadlines must remain enabled even
+when its local unit fails. Keep checks paused until the relevant producers and
+owner routing are ready; unpause them as an explicit activation step. Do not
+seed success manually to hide missing production evidence. Verify a dedicated
+synthetic failure, reminder, missing heartbeat and recovery, and have Leo confirm
+receipt. No production job needs to be stopped or scraped for this test.
+**P-062 remains partial until Chief-of-Staff escalation is configured and tested**;
+direct owner emails alone do not satisfy that escalation requirement.
+
+## Separate encrypted off-host copy
+
+The existing all-app `/usr/local/sbin/pi-backup.sh` is not sourced, executed or
+changed by these additions. Its inventory does not include `/var/backups/buycycle`.
+`offhost.py` and its own timer copy only the selected complete, verified encrypted
+Buycycle snapshot. The intended reuse is the existing approved SFTP repository
+and password custody, through a new protected repository file and strictly
+scoped SSH configuration; actual repository and SSH identity must be verified
+during the authorized provider setup. No repository is initialized by this code.
+
+Review `offhost.example.json` and `offhost-ssh.example.conf`. All configuration,
+password, SSH key and known-host files must be root:0600 under safe directories.
+The repository file contains `sftp:buycycle-backup:/<approved-absolute-path>`;
+its real contents stay private. The SSH alias is fixed, with an independently
+verified known-host entry, exact identity, batch-only authentication and strict
+host checking. Includes, proxy/local commands, alternative identities and unsafe
+repository syntax are rejected. Do not obtain host trust using an unverified
+key scan. The configured server must actually be off the Pi. Existing shared
+repository credentials are still broad repository credentials: this source does
+not claim per-app remote ACLs or protection from a compromised root host.
+
+The managed unit uses the installed `/usr/bin/restic` with a sanitized environment,
+repository/password **file paths** and fixed SSH option. Output, ciphertext size
+and total runtime are bounded; errors never print credentials or remote details.
+After backup it verifies the exact returned snapshot ID, source path, host and
+per-run tags. It reads back the byte-exact manifest and encrypted dump from that
+snapshot, checks dump size/hash, then writes root:0600
+`/var/lib/buycycle-offhost/latest.json`. Restored bytes go to a fresh private
+temporary directory with fixed filenames, not archive-supplied paths; the code
+does not extract a tree or follow restored symlinks. Temporary readback is removed
+on completion or failure. The original encrypted backup and previous receipt are
+preserved on failure, and the job wrapper reports failure to the courier.
+
+There is no remote prune, snapshot deletion, unlock, retention change or automatic
+retry. An ambiguous failed attempt may have created a harmless additional snapshot;
+inspect it before manually rerunning. The new timer is independent of the existing
+all-app backup and may fail safely on repository locking; it must never break that
+lock automatically. Proposed size/resource bounds and timing require actual
+target verification. An off-host ciphertext readback proves transfer integrity,
+not decryption or PostgreSQL recovery: maintain separately tested off-device
+age/restic/SSH recovery custody and a database restore/reconciliation drill.

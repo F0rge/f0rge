@@ -1,0 +1,33 @@
+[Unit]
+Description=Buycycle encrypted backup off-host copy and bounded readback
+After=network-online.target buycycle-backup.service
+Wants=network-online.target
+ConditionPathExists=/etc/buycycle/offhost.json
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/f0rge/apps/buycycle/ops/job-status.py --job offhost -- /usr/bin/python3 /opt/f0rge/apps/buycycle/ops/offhost.py --config /etc/buycycle/offhost.json
+StateDirectory=buycycle-offhost
+StateDirectoryMode=0700
+ReadWritePaths=-/run/buycycle-alerts
+ReadOnlyPaths=/var/backups/buycycle
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+InaccessiblePaths=-/var/run/docker.sock
+TimeoutStartSec=2h
+MemoryMax=256M
+CPUQuota=25%
+StandardOutput=journal
+StandardError=journal
+
+# No remote prune/delete/unlock, source DB mutation or other-app backup operation.

@@ -20,7 +20,7 @@ FROM (SELECT day,max(recorded_at) AS recorded_at FROM collector_runs
 WHERE complete GROUP BY day HAVING count(DISTINCT kind)=2) completed_days;"""
 
 
-def check_backup(config: dict, *, uid: int = 0, now: datetime | None = None) -> None:
+def check_backup(config: dict, *, uid: int = 0, now: datetime | None = None) -> Path:
     directory = protected_path(config["backup_directory"], directory=True, uid=uid, mode=0o700)
     maximum_age = positive(config.get("backup_max_age_seconds"), "backup freshness limit")
     snapshots = sorted(path for path in directory.iterdir() if re.fullmatch(r"buycycle-[0-9]{8}T[0-9]{6}Z-[a-z0-9_]+", path.name))
@@ -42,6 +42,7 @@ def check_backup(config: dict, *, uid: int = 0, now: datetime | None = None) -> 
     age = ((now or datetime.now(UTC)) - created).total_seconds()
     if age < 0 or age > maximum_age:
         raise OpsError("Encrypted backup is stale: inspect backup service and recovery custody")
+    return latest
 
 
 def monitor(config: dict, *, uid: int = 0) -> None:

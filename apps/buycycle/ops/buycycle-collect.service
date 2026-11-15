@@ -9,7 +9,7 @@ Type=oneshot
 User=root
 Group=root
 UMask=0077
-ExecStart=/opt/f0rge/apps/buycycle/ops/collect-daily.sh
+ExecStart=/usr/bin/python3 /opt/f0rge/apps/buycycle/ops/job-status.py --job collector -- /opt/f0rge/apps/buycycle/ops/collect-daily.sh
 # Timeout applies to the dispatch client. Rust/PostgreSQL still retain quota and
 # pending/blocked state if interrupted; never reset state to force a retry.
 TimeoutStartSec=5h
@@ -17,7 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/var/run/docker.sock
+ReadWritePaths=/var/run/docker.sock -/run/buycycle-alerts
 RestrictAddressFamilies=AF_UNIX
 MemoryMax=128M
 CPUQuota=25%

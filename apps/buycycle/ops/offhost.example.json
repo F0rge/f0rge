@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "restic": "/usr/bin/restic",
+  "repository_file": "/etc/buycycle/offhost-repository",
+  "password_file": "/root/.restic-pass",
+  "ssh_config": "/etc/buycycle/offhost-ssh.conf",
+  "state_directory": "/var/lib/buycycle-offhost",
+  "backup_directory": "/var/backups/buycycle",
+  "backup_max_age_seconds": 86400,
+  "maximum_ciphertext_bytes": 1073741824,
+  "timeout_seconds": 6600
+}

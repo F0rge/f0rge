@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "checks": {
+    "monitor": {"max_age_seconds": 1200, "runtime_seconds": 300},
+    "collector": {"max_age_seconds": 93600, "runtime_seconds": 18000},
+    "backup": {"max_age_seconds": 93600, "runtime_seconds": 7200},
+    "offhost": {"max_age_seconds": 93600, "runtime_seconds": 7200}
+  }
+}

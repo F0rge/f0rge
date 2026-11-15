@@ -1,0 +1,12 @@
+[Unit]
+Description=Buycycle outbound heartbeat delivery interval
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=false
+Unit=buycycle-heartbeat.service
+
+[Install]
+WantedBy=timers.target

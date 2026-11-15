@@ -1,0 +1,11 @@
+[Unit]
+Description=Buycycle daily encrypted off-host backup verification
+
+[Timer]
+OnCalendar=*-*-* 07:45:00 Europe/Luxembourg
+Persistent=false
+RandomizedDelaySec=0
+Unit=buycycle-offhost.service
+
+[Install]
+WantedBy=timers.target
