@@ -16,10 +16,12 @@ async fn listings(
     _: Principal,
     db: web::Data<Db>,
     query: web::Query<ListingQuery>,
-) -> Result<web::Json<ListingsResponse>, ApiError> {
-    services::listings(&db, query.into_inner().kind)
-        .await
-        .map(web::Json)
+) -> Result<HttpResponse<services::ListingsBody>, ApiError> {
+    let body = services::listings(&db, query.into_inner().kind).await?;
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .message_body(body)
+        .map_err(ApiError::internal_from)
 }
 #[utoipa::path(get,path="/api/v1/status",responses((status=200,body=StatusResponse),(status="default",body=f0rge_api_errors::ErrorEnvelope)),security(("cloudflare_access"=[])))]
 async fn status(user: Principal, db: web::Data<Db>) -> Result<web::Json<StatusResponse>, ApiError> {

@@ -3,6 +3,64 @@ use actix_web::{App, test as web_test, web};
 use buycycle_backend::{contracts::BrowserState, http};
 use serde_json::{Value, json};
 #[actix_web::test]
+async fn unread_report_blocks_the_next_report_until_drain_or_disconnect_but_not_health() {
+    let (db, base, name) = support::database().await;
+    let (auth, handle, issuer) = support::setup().await;
+    let jwt = support::signed(support::claims(&issuer));
+    let app = web_test::init_service(
+        App::new()
+            .app_data(web::Data::new(db.clone()))
+            .app_data(web::Data::new(auth))
+            .configure(http::configure),
+    )
+    .await;
+    let request = || {
+        web_test::TestRequest::get()
+            .uri("/api/v1/listings?kind=bikes")
+            .insert_header(("Cf-Access-Jwt-Assertion", jwt.clone()))
+            .to_request()
+    };
+    for disconnect in [false, true] {
+        let first = web_test::call_service(&app, request()).await;
+        assert_eq!(first.status(), 200);
+        let next = web_test::call_service(&app, request());
+        tokio::pin!(next);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), &mut next)
+                .await
+                .is_err(),
+            "an unread report must retain the capacity permit"
+        );
+        for path in ["/health", "/ready", "/api/v1/status"] {
+            let health = web_test::call_service(
+                &app,
+                web_test::TestRequest::get()
+                    .uri(path)
+                    .insert_header(("Cf-Access-Jwt-Assertion", jwt.clone()))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(health.status(), 200);
+            let _: Value = web_test::read_body_json(health).await;
+        }
+        if disconnect {
+            drop(first);
+        } else {
+            let payload: Value = web_test::read_body_json(first).await;
+            assert!(payload["items"].as_array().unwrap().is_empty());
+        }
+        let next = tokio::time::timeout(std::time::Duration::from_secs(5), &mut next)
+            .await
+            .expect("drain or disconnect must release capacity");
+        assert_eq!(next.status(), 200);
+        let _: Value = web_test::read_body_json(next).await;
+    }
+    drop(app);
+    drop(db);
+    handle.stop(true).await;
+    support::drop_database(&base, &name).await;
+}
+#[actix_web::test]
 async fn postgres_api_enforces_access_validation_revision_conflicts_and_import_recovery() {
     let (db, base, name) = support::database().await;
     let (auth, handle, issuer) = support::setup().await;

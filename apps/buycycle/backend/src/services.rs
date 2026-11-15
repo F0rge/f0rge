@@ -3,9 +3,104 @@ use crate::{
     metrics,
     persistence::{DataError, Db, StoredState},
 };
+use actix_web::web;
 use chrono::{NaiveDate, Utc};
 use f0rge_api_errors::{ApiError, FieldError, FieldErrorCode};
 use serde_json::Value;
+use std::{
+    pin::Pin,
+    sync::{Arc, LazyLock, Mutex},
+    task::{Context, Poll, Waker},
+    time::Duration,
+};
+
+/// Keep one report's capacity reserved until its body is drained or disconnected.
+/// Each transport chunk owns only its bounded copy, never the whole allocation.
+pub struct ListingsBody {
+    encoded_length: u64,
+    state: Arc<Mutex<ReportState>>,
+    deadline: tokio::task::JoinHandle<()>,
+}
+struct ReportState {
+    bytes: Option<Vec<u8>>,
+    offset: usize,
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    expired: bool,
+    waker: Option<Waker>,
+}
+impl ListingsBody {
+    fn new(bytes: Vec<u8>, permit: tokio::sync::OwnedSemaphorePermit, bound: Duration) -> Self {
+        let encoded_length = bytes.len() as u64;
+        let state = Arc::new(Mutex::new(ReportState {
+            bytes: Some(bytes),
+            offset: 0,
+            permit: Some(permit),
+            expired: false,
+            waker: None,
+        }));
+        let weak = Arc::downgrade(&state);
+        let deadline = tokio::spawn(async move {
+            tokio::time::sleep(bound).await;
+            if let Some(state) = weak.upgrade() {
+                let mut state = state.lock().expect("report body state");
+                // A stalled transport may never poll the body again. Drop its
+                // allocation and capacity independently of transport progress.
+                state.expired = state.bytes.take().is_some();
+                state.permit.take();
+                if let Some(waker) = state.waker.take() {
+                    waker.wake();
+                }
+            }
+        });
+        Self {
+            encoded_length,
+            state,
+            deadline,
+        }
+    }
+}
+impl Drop for ListingsBody {
+    fn drop(&mut self) {
+        self.deadline.abort();
+    }
+}
+impl actix_web::body::MessageBody for ListingsBody {
+    type Error = std::io::Error;
+
+    fn size(&self) -> actix_web::body::BodySize {
+        // Expiry before encoding must still poll the timeout error, rather than
+        // allowing the transport to claim a successful empty response.
+        actix_web::body::BodySize::Sized(self.encoded_length)
+    }
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<web::Bytes, Self::Error>>> {
+        let mut state = self.state.lock().expect("report body state");
+        if state.expired {
+            state.expired = false;
+            return Poll::Ready(Some(Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Report body delivery timed out",
+            ))));
+        }
+        state.waker = Some(cx.waker().clone());
+        let Some(bytes) = state.bytes.as_ref() else {
+            state.permit.take();
+            return Poll::Ready(None);
+        };
+        let end = (state.offset + 64 * 1024).min(bytes.len());
+        let chunk = web::Bytes::copy_from_slice(&bytes[state.offset..end]);
+        if end == bytes.len() {
+            // The returned last chunk must not keep this allocation alive after
+            // the next poll releases capacity for another calculation.
+            state.bytes = None;
+        }
+        state.offset = end;
+        Poll::Ready(Some(Ok(chunk)))
+    }
+}
 
 pub fn data_error(error: DataError) -> ApiError {
     match error {
@@ -117,18 +212,26 @@ pub async fn calculation_input(
         calculated_at: now,
     })
 }
-pub async fn listings(db: &Db, kind: Kind) -> Result<ListingsResponse, ApiError> {
+pub async fn listings(db: &Db, kind: Kind) -> Result<ListingsBody, ApiError> {
     // Acquire before loading a snapshot. Keep the permit in the blocking task:
     // cancelling a caller must not allow a second heavy calculation beside it.
-    static REPORT: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
-    let permit = REPORT.acquire().await.map_err(ApiError::internal_from)?;
+    static REPORT: LazyLock<Arc<tokio::sync::Semaphore>> =
+        LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(1)));
+    let permit = REPORT
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(ApiError::internal_from)?;
     let input = calculation_input(db, kind, Utc::now()).await?;
     actix_web::rt::task::spawn_blocking(move || {
-        let _permit = permit;
-        metrics::report_raw(input)
+        let report = metrics::report_raw(input);
+        let bytes = serde_json::to_vec(&report).map_err(ApiError::internal_from)?;
+        drop(report);
+        // This is a memory-safety failure bound for stalled delivery, not an SLO.
+        Ok(ListingsBody::new(bytes, permit, Duration::from_secs(120)))
     })
     .await
-    .map_err(ApiError::internal_from)
+    .map_err(ApiError::internal_from)?
 }
 pub async fn read_state(db: &Db, subject: &str) -> Result<StateResponse, ApiError> {
     state_response(db.user_state(subject).await.map_err(data_error)?)
@@ -230,4 +333,79 @@ pub async fn status(db: &Db, subject: String) -> Result<StatusResponse, ApiError
         version: env!("CARGO_PKG_VERSION").into(),
         identity: Identity { subject },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::body::MessageBody;
+
+    #[tokio::test]
+    async fn report_body_bounds_transport_allocations_and_releases_capacity_on_eof_or_drop() {
+        let gate = Arc::new(tokio::sync::Semaphore::new(1));
+        let bytes: Vec<u8> = (0..150_000).map(|i| (i % 251) as u8).collect();
+        let mut body = ListingsBody::new(
+            bytes.clone(),
+            gate.clone().acquire_owned().await.unwrap(),
+            Duration::from_secs(120),
+        );
+        let mut received = Vec::new();
+        let mut chunks = Vec::new();
+        while let Some(chunk) =
+            futures_util::future::poll_fn(|cx| Pin::new(&mut body).poll_next(cx)).await
+        {
+            let chunk = chunk.unwrap();
+            assert!(chunk.len() <= 64 * 1024);
+            assert_eq!(gate.available_permits(), 0);
+            received.extend_from_slice(&chunk);
+            chunks.push(chunk);
+        }
+        assert_eq!(received, bytes);
+        assert!(body.state.lock().unwrap().bytes.is_none());
+        // Retaining transport chunks after EOF does not retain the full source
+        // allocation or its report permit, including the last partial chunk.
+        assert_eq!(chunks.last().unwrap().len(), 18_928);
+        assert_eq!(gate.available_permits(), 1);
+
+        let body = ListingsBody::new(
+            bytes,
+            gate.clone().acquire_owned().await.unwrap(),
+            Duration::from_secs(120),
+        );
+        assert_eq!(gate.available_permits(), 0);
+        drop(body);
+        assert_eq!(gate.available_permits(), 1);
+    }
+
+    #[tokio::test]
+    async fn stalled_report_expires_without_polling_and_a_dropped_body_has_no_retained_state() {
+        let gate = Arc::new(tokio::sync::Semaphore::new(1));
+        let mut body = ListingsBody::new(
+            vec![7; 150_000],
+            gate.clone().acquire_owned().await.unwrap(),
+            Duration::from_millis(10),
+        );
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert_eq!(gate.available_permits(), 1);
+        assert!(body.state.lock().unwrap().bytes.is_none());
+        assert_eq!(body.size(), actix_web::body::BodySize::Sized(150_000));
+        let error = futures_util::future::poll_fn(|cx| Pin::new(&mut body).poll_next(cx))
+            .await
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+
+        for bound in [Duration::ZERO, Duration::from_secs(120)] {
+            let body = ListingsBody::new(
+                vec![7; 150_000],
+                gate.clone().acquire_owned().await.unwrap(),
+                bound,
+            );
+            let weak = Arc::downgrade(&body.state);
+            drop(body);
+            tokio::task::yield_now().await;
+            assert!(weak.upgrade().is_none());
+            assert_eq!(gate.available_permits(), 1);
+        }
+    }
 }
