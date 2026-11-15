@@ -80,6 +80,9 @@ class World:
         self.mode = "ok"
         self.backup_age = 1
         self.backup_expired = False
+        self.backup_used_mb = 123
+        self.backup_referenced_mb = 795
+        self.backup_expires = True
         self.approved = True
         self.reviewer_permission = "write"
         self.merged = True
@@ -213,9 +216,12 @@ class World:
                         "expiresAt": (
                             current
                             + dt.timedelta(hours=-1 if self.backup_expired else 5)
-                        ).isoformat(),
+                        ).isoformat()
+                        if self.backup_expires
+                        else None,
                         "externalId": "provider-id",
-                        "usedMB": 123,
+                        "usedMB": self.backup_used_mb,
+                        "referencedMB": self.backup_referenced_mb,
                     }
                 ]
             }
@@ -512,6 +518,48 @@ class CDTests(unittest.TestCase):
         with self.assertRaisesRegex(cd.ReleaseError, "rollback baseline"):
             cd.deploy(value, self.path)
         self.assertFalse(self.world.issues)
+
+    def test_copy_on_write_backup_with_no_exclusive_bytes_is_usable(self):
+        # A new Railway snapshot shares all blocks with its source volume.
+        self.world.backup_used_mb = 0
+        self.world.backup_referenced_mb = 795
+        self.world.backup_expires = False
+        result = cd.backup_preflight()
+        self.assertEqual(result["backup_id"], "backup")
+
+    def test_backup_without_positive_referenced_data_blocks_release(self):
+        for referenced in (None, 0, -1, True, "795", 795.5):
+            with self.subTest(referenced=referenced):
+                self.world.backup_referenced_mb = referenced
+                with self.assertRaisesRegex(cd.ReleaseError, "backup"):
+                    cd.deploy(manifest(), self.path)
+        self.assertFalse(self.world.issues)
+        self.assertFalse(any(call[0] == "submit" for call in self.world.calls))
+
+    def test_malformed_backup_identity_or_time_blocks_release(self):
+        original = self.world.railway
+        for key, value in (
+            ("id", ""),
+            ("externalId", " "),
+            ("createdAt", "invalid"),
+            ("createdAt", dt.datetime.now().isoformat()),
+            ("expiresAt", ""),
+            ("expiresAt", dt.datetime.now().isoformat()),
+            ("expiresAt", 7),
+        ):
+            with self.subTest(key=key, value=value):
+
+                def railway(query, variables):
+                    result = original(query, variables)
+                    if "volumeInstanceBackupList" in result:
+                        result["volumeInstanceBackupList"][0][key] = value
+                    return result
+
+                with patch.object(cd.legacy, "railway", railway):
+                    with self.assertRaisesRegex(cd.ReleaseError, "backup"):
+                        cd.deploy(manifest(), self.path)
+        self.assertFalse(self.world.issues)
+        self.assertFalse(any(call[0] == "submit" for call in self.world.calls))
 
     def test_backup_stale_or_expired_blocks_release(self):
         for age, expired in ((25, False), (1, True), (-1, False)):

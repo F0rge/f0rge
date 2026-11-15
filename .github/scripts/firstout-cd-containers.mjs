@@ -110,7 +110,8 @@ try {
   if (!localPrevious) docker(["pull", "--platform", "linux/amd64", previous]);
   docker(["network", "create", "--internal", network]);
   containers.push(pg);
-  docker(["run", "--detach", "--name", pg, "--network", network, "--env", "POSTGRES_USER=firstout", "--env", "POSTGRES_PASSWORD=firstout", "--env", "POSTGRES_DB=firstout_cd_test_fixture", "postgres:16"]);
+  // Match Firstout production and the retained manual API image probe's major.
+  docker(["run", "--detach", "--name", pg, "--network", network, "--env", "POSTGRES_USER=firstout", "--env", "POSTGRES_PASSWORD=firstout", "--env", "POSTGRES_DB=firstout_cd_test_fixture", "postgres:18"]);
   docker(["exec", pg, "sh", "-c", "until pg_isready -U firstout -d firstout_cd_test_fixture; do sleep 1; done"]);
   docker(["run", "--rm", "--platform", "linux/amd64", "--network", network, ...env, "--entrypoint", ".venv/bin/python", image, "-m", "app.commands.release_migrate", "--bootstrap-test-database"]);
   // A second invocation must be idempotent; readiness requires its durable receipt.

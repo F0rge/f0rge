@@ -362,29 +362,45 @@ def backup_preflight() -> dict[str, Any]:
     require(volume["environmentId"] == ENVIRONMENT, "Wrong backup environment")
     backups = legacy.railway(
         """query($id:String!){volumeInstanceBackupList(volumeInstanceId:$id){
-      id createdAt expiresAt externalId usedMB }}""",
+      id createdAt expiresAt externalId referencedMB }}""",
         {"id": volume["id"]},
     )["volumeInstanceBackupList"]
     current = dt.datetime.now(dt.UTC)
     usable = []
     for item in backups:
-        created = dt.datetime.fromisoformat(item["createdAt"].replace("Z", "+00:00"))
-        expiry = (
-            dt.datetime.fromisoformat(item["expiresAt"].replace("Z", "+00:00"))
-            if item["expiresAt"]
-            else None
-        )
-        if (
-            item["externalId"]
-            and (item["usedMB"] or 0) > 0
-            and (expiry is None or expiry > current)
-            and dt.timedelta(0)
-            <= current - created
-            <= dt.timedelta(hours=BACKUP_MAX_AGE_HOURS)
+        if not isinstance(item, dict):
+            continue
+        # Railway snapshots are copy-on-write. Their incremental exclusive
+        # storage (usedMB) can be zero while referencedMB includes shared data.
+        # Neither number proves the snapshot has been restored successfully.
+        referenced_mb = item.get("referencedMB")
+        if type(referenced_mb) is not int or referenced_mb <= 0:
+            continue
+        if any(
+            not isinstance(item.get(key), str) or not item[key].strip()
+            for key in ("id", "externalId", "createdAt")
         ):
-            usable.append(item)
+            continue
+        try:
+            created = dt.datetime.fromisoformat(
+                item["createdAt"].replace("Z", "+00:00")
+            )
+            expiry = (
+                dt.datetime.fromisoformat(item["expiresAt"].replace("Z", "+00:00"))
+                if item["expiresAt"] is not None
+                else None
+            )
+        except (KeyError, ValueError, TypeError, AttributeError):
+            continue
+        if created.tzinfo is None or (expiry is not None and expiry.tzinfo is None):
+            continue
+        age = current - created
+        if (expiry is None or expiry > current) and dt.timedelta(
+            0
+        ) <= age <= dt.timedelta(hours=BACKUP_MAX_AGE_HOURS):
+            usable.append((created, item))
     require(usable, "No recent unexpired provider backup record; deployment blocked")
-    latest = max(usable, key=lambda item: item["createdAt"])
+    latest = max(usable, key=lambda item: item[0])[1]
     return {
         "volume_instance_id": volume["id"],
         "backup_id": latest["id"],
