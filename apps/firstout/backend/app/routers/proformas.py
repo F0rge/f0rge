@@ -13,6 +13,7 @@ from app.dependencies.auth import (
     require_catalogue_mutate,
 )
 from app.schemas.proforma import ProformaResponse
+from app.schemas.party_archive import PartyArchiveUpdate
 from app.services.proformas import ProformaService
 
 proformas_router = APIRouter(prefix="/api/v1/proformas", tags=["proformas"])
@@ -20,10 +21,21 @@ proformas_router = APIRouter(prefix="/api/v1/proformas", tags=["proformas"])
 
 @proformas_router.get("", response_model=list[ProformaResponse])
 async def list_proformas(
+    archived: bool = False,
     _: uuid.UUID = Depends(get_current_user_id),
     service: ProformaService = Depends(get_proforma_service),
 ):
-    return await service.list()
+    return await service.list(archived=archived)
+
+
+@proformas_router.patch("/{proforma_id}/archive", response_model=ProformaResponse)
+async def archive_proforma(
+    proforma_id: uuid.UUID,
+    body: PartyArchiveUpdate,
+    _: uuid.UUID = Depends(require_catalogue_mutate),
+    service: ProformaService = Depends(get_proforma_service),
+):
+    return await service.set_archived(proforma_id, body.is_archived)
 
 
 @proformas_router.post("", response_model=ProformaResponse, status_code=status.HTTP_201_CREATED)

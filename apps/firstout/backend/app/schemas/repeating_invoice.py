@@ -38,6 +38,7 @@ class RepeatingInvoiceLineResponse(BaseModel):
 class RepeatingInvoiceResponse(BaseModel):
     id: uuid.UUID
     customer_id: uuid.UUID
+    customer_name: Optional[str] = None
     name: Optional[str]
     day_of_month: int
     next_date: datetime.date

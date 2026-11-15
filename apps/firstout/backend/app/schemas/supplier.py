@@ -26,3 +26,11 @@ class SupplierResponse(BaseModel):
     updated_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SupplierUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: Optional[str] = Field(default=None, min_length=1)
+    default_currency: Optional[str] = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    vat_number: Optional[str] = Field(default=None, max_length=64)
+    address: Optional[str] = None

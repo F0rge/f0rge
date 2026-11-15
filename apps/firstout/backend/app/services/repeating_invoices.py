@@ -129,6 +129,7 @@ class RepeatingInvoiceService:
         return RepeatingInvoiceResponse(
             id=schedule.id,
             customer_id=schedule.customer_id,
+            customer_name=schedule.customer.name,
             name=schedule.name,
             day_of_month=schedule.day_of_month,
             next_date=schedule.next_date,

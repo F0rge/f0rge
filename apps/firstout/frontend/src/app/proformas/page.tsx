@@ -2,7 +2,6 @@
 
 import {
   Button,
-  DataTable,
   FileUploaderDropContainer,
   FileUploaderItem,
   InlineNotification,
@@ -10,13 +9,6 @@ import {
   Select,
   SelectItem,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
   TextInput,
 } from "@carbon/react";
 import { useCallback, useEffect, useState } from "react";
@@ -25,29 +17,13 @@ import {
   canMutateCatalogue,
   createProforma,
   downloadProformaPdf,
-  listProformas,
   listSuppliers,
   type Proforma,
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-
-const TABLE_HEADERS = [
-  { key: "supplier_name", header: "Supplier" },
-  { key: "invoice_number", header: "Invoice number" },
-  { key: "invoice_date", header: "Date" },
-  { key: "currency", header: "Currency" },
-  { key: "pdf", header: "PDF" },
-] as const;
-
-type ProformaRow = {
-  id: string;
-  supplier_name: string;
-  invoice_number: string;
-  invoice_date: string;
-  currency: string;
-  pdf: string;
-};
+import { workspaceIdentity } from "@/lib/record-workspace";
+import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
 
 type ProformaForm = {
   supplier_id: string;
@@ -65,28 +41,19 @@ const emptyForm: ProformaForm = {
 
 export default function ProformasPage() {
   const { user } = useAuth();
+  return <ProformasContent key={workspaceIdentity(user)} />;
+}
+
+function ProformasContent() {
+  const { user } = useAuth();
   const canMutate = canMutateCatalogue(user);
-  const [proformas, setProformas] = useState<Proforma[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<ProformaForm>(emptyForm);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const loadProformas = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listProformas();
-      setProformas(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load proformas.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const loadSuppliers = useCallback(async () => {
     try {
@@ -98,25 +65,10 @@ export default function ProformasPage() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      void loadProformas();
-    }
-  }, [user, loadProformas]);
-
-  useEffect(() => {
     if (createOpen && canMutate) {
       void loadSuppliers();
     }
   }, [createOpen, canMutate, loadSuppliers]);
-
-  const rows: ProformaRow[] = proformas.map((entry) => ({
-    id: entry.id,
-    supplier_name: entry.supplier_name,
-    invoice_number: entry.invoice_number,
-    invoice_date: entry.invoice_date,
-    currency: entry.currency,
-    pdf: entry.id,
-  }));
 
   function resetForm() {
     setForm(emptyForm);
@@ -145,7 +97,7 @@ export default function ProformasPage() {
       });
       setCreateOpen(false);
       resetForm();
-      await loadProformas();
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to file proforma invoice.");
     } finally {
@@ -167,23 +119,6 @@ export default function ProformasPage() {
 
   return (
     <Stack gap={6}>
-      <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Proformas</h1>
-          <p className="cds--type-body-01">Proforma invoices filed against suppliers.</p>
-        </div>
-        {canMutate ? (
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <Button kind="secondary" href="/proformas/read">
-              Read a proforma
-            </Button>
-            <Button onClick={openCreate}>
-              File proforma invoice
-            </Button>
-          </div>
-        ) : null}
-      </div>
-
       {error ? (
         <InlineNotification
           kind="error"
@@ -194,62 +129,38 @@ export default function ProformasPage() {
         />
       ) : null}
 
-      {loading ? (
-        <p className="cds--type-body-01">Loading proformas…</p>
-      ) : proformas.length === 0 ? (
-        <InlineNotification
-          kind="info"
-          title="No proformas"
-          subtitle="No proforma invoices have been filed yet."
-          hideCloseButton
-          lowContrast
-        />
-      ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Proformas" description="All filed proforma invoices">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => (
-                    <TableRow {...getRowProps({ row })} key={row.id}>
-                      {row.cells.map((cell) => {
-                        if (cell.info.header === "pdf") {
-                          const entry = proformas.find((item) => item.id === row.id);
-                          return (
-                            <TableCell key={cell.id}>
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  if (entry) {
-                                    void handleDownload(entry.id, entry.invoice_number);
-                                  }
-                                }}
-                              >
-                                Download PDF
-                              </Button>
-                            </TableCell>
-                          );
-                        }
-                        return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                      })}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-      )}
+      <RecordWorkspace<Proforma>
+        adapter={{
+          resource: "proformas", title: "Proformas", singular: "proforma", breadcrumb: "Catalogue management",
+          description: "Review supplier documents and keep filed invoices organised.", defaultSort: "invoice_date",
+          lifecycle: { activeLabel: "Active", archivedLabel: "Archived" },
+          columns: [
+            { key: "invoice_number", label: "Proforma", render: (item) => item.invoice_number },
+            { key: "invoice_date", label: "Invoice date", render: (item) => item.invoice_date },
+            { key: "currency", label: "Currency", render: (item) => item.currency },
+          ],
+          filters: [
+            { key: "supplier_name", label: "Supplier", type: "text" },
+            { key: "invoice_date", label: "Invoice date", type: "date" },
+            { key: "currency", label: "Currency", type: "text" },
+          ],
+          actions: canMutate ? [{ key: "archive", label: "Archive" }, { key: "restore", label: "Restore" }] : [],
+          getTitle: (item) => item.invoice_number, getSubtitle: (item) => item.supplier_name,
+        } satisfies RecordWorkspaceAdapter<Proforma>}
+        refreshKey={refreshKey}
+        onCreate={canMutate ? openCreate : undefined}
+        createLabel="File proforma"
+        headerActions={canMutate ? <Button kind="tertiary" href="/proformas/read">Read a proforma</Button> : undefined}
+        renderDetails={(item) => <Stack gap={5}>
+          <RecordDetails>
+            <RecordDetail label="Supplier">{item.supplier_name}</RecordDetail>
+            <RecordDetail label="Invoice date">{item.invoice_date}</RecordDetail>
+            <RecordDetail label="Currency">{item.currency}</RecordDetail>
+            <RecordDetail label="Status">{item.is_archived ? "Archived" : "Active"}</RecordDetail>
+          </RecordDetails>
+          <Button kind="tertiary" onClick={() => void handleDownload(item.id, item.invoice_number)}>Download PDF</Button>
+        </Stack>}
+      />
 
       <Modal
         open={createOpen}
@@ -257,10 +168,11 @@ export default function ProformasPage() {
         primaryButtonText={saving ? "Filing…" : "File"}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={saving || !formValid}
-        onRequestClose={() => setCreateOpen(false)}
+        onRequestClose={() => { if (!saving) setCreateOpen(false); }}
         onRequestSubmit={() => void handleCreate()}
       >
-        <Stack gap={5}>
+        <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack gap={5}>
+          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <Select
             id="proforma-supplier"
             labelText="Supplier"
@@ -305,10 +217,12 @@ export default function ProformasPage() {
           <div>
             <p className="cds--label">PDF</p>
             <FileUploaderDropContainer
+              disabled={saving}
               accept={["application/pdf", ".pdf"]}
               labelText="Drag and drop a PDF here or click to upload"
               multiple={false}
               onAddFiles={(_, { addedFiles }) => {
+                if (saving) return;
                 const file = addedFiles[0];
                 if (file && !file.invalidFileType) {
                   setPdfFile(file);
@@ -319,11 +233,11 @@ export default function ProformasPage() {
               <FileUploaderItem
                 name={pdfFile.name}
                 status="complete"
-                onDelete={() => setPdfFile(null)}
+                onDelete={() => { if (!saving) setPdfFile(null); }}
               />
             ) : null}
           </div>
-        </Stack>
+        </Stack></fieldset>
       </Modal>
     </Stack>
   );

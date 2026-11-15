@@ -555,6 +555,7 @@ export type PriceListItem = {
 
 export type PriceList = {
   id: string;
+  is_archived?: boolean;
   name: string;
   items: PriceListItem[];
   created_at: string;
@@ -616,6 +617,7 @@ export function deletePriceListItem(priceListId: string, skuId: string): Promise
 
 export type Proforma = {
   id: string;
+  is_archived?: boolean;
   supplier_id: string;
   supplier_name: string;
   invoice_number: string;

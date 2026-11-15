@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -10,6 +11,7 @@ class Settings(BaseSettings):
     direct_database_url: str = ""
     cors_origins: list[str] = ["http://localhost:3003"]
     jwt_secret: str = ""
+    record_workspace_signing_key: str = ""
     clerk_enabled: bool = False
     clerk_issuer: str = ""
     clerk_authorized_parties: list[str] = []
@@ -62,6 +64,13 @@ class Settings(BaseSettings):
     ops_commerce_token: str = ""
     ops_commerce_company_id: str = ""
     ops_commerce_allowed_host: str = ""
+
+    @field_validator("record_workspace_signing_key")
+    @classmethod
+    def validate_record_workspace_signing_key(cls, value: str) -> str:
+        if value and len(value) < 32:
+            raise ValueError("RECORD_WORKSPACE_SIGNING_KEY must contain at least 32 characters")
+        return value
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

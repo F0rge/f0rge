@@ -56,6 +56,7 @@ from app.models.purchase_order import (
     PurchaseOrderStatus,
 )
 from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
+from app.models.record_workspace import RecordWorkspaceBatch
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
 from app.models.sku_supplier_price import SkuSupplierPrice
@@ -181,6 +182,7 @@ __all__ = [
     "PurchaseOrderStatus",
     "RepeatingInvoice",
     "RepeatingInvoiceLine",
+    "RecordWorkspaceBatch",
     "Role",
     "RolePermission",
     "Sku",

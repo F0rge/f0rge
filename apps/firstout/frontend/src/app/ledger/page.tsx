@@ -41,16 +41,9 @@ import {
   type UpsertCategoryMapPayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { workspaceIdentity } from "@/lib/record-workspace";
+import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
 import { CLIENT_PAGE_SIZES, useClientPagination } from "@/lib/use-client-pagination";
-
-const TABLE_HEADERS = [
-  { key: "code", header: "Code" },
-  { key: "name", header: "Name" },
-  { key: "type", header: "Type" },
-  { key: "tax", header: "Tax" },
-  { key: "balance_zar", header: "Balance (ZAR)" },
-  { key: "actions", header: "" },
-] as const;
 
 const MAP_HEADERS = [
   { key: "category", header: "Category" },
@@ -60,16 +53,6 @@ const MAP_HEADERS = [
   { key: "count_var_code", header: "Count var" },
   { key: "actions", header: "" },
 ] as const;
-
-type AccountRow = {
-  id: string;
-  code: string;
-  name: string;
-  type: string;
-  tax: string;
-  balance_zar: string;
-  actions: string;
-};
 
 type MapRow = {
   id: string;
@@ -106,8 +89,15 @@ function accountsOfType(accounts: Account[], type: AccountType): Account[] {
 
 export default function ChartOfAccountsPage() {
   const { user } = useAuth();
+  return <ChartOfAccountsContent key={workspaceIdentity(user)} />;
+}
+
+function ChartOfAccountsContent() {
+  const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [maps, setMaps] = useState<CategoryMap[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +112,6 @@ export default function ChartOfAccountsPage() {
   const [mapMode, setMapMode] = useState<"add" | "edit">("add");
   const [mapForm, setMapForm] = useState<UpsertCategoryMapPayload>(emptyMapForm);
   const [saving, setSaving] = useState(false);
-  const [accountSearch, setAccountSearch] = useState("");
   const [mapSearch, setMapSearch] = useState("");
 
   const incomeAccounts = useMemo(() => accountsOfType(accounts, "income"), [accounts]);
@@ -148,19 +137,6 @@ export default function ChartOfAccountsPage() {
     }
   }, [user, loadLedger]);
 
-  const filteredAccounts = useMemo(() => {
-    const query = accountSearch.trim().toLowerCase();
-    if (!query) {
-      return accounts;
-    }
-    return accounts.filter(
-      (entry) =>
-        entry.code.toLowerCase().includes(query) ||
-        entry.name.toLowerCase().includes(query) ||
-        entry.type.toLowerCase().includes(query),
-    );
-  }, [accounts, accountSearch]);
-
   const filteredMaps = useMemo(() => {
     const query = mapSearch.trim().toLowerCase();
     if (!query) {
@@ -174,18 +150,7 @@ export default function ChartOfAccountsPage() {
     );
   }, [maps, mapSearch]);
 
-  const accountPage = useClientPagination(filteredAccounts, accountSearch);
   const mapPage = useClientPagination(filteredMaps, mapSearch);
-
-  const rows: AccountRow[] = accountPage.pagedItems.map((entry) => ({
-    id: entry.id,
-    code: entry.code,
-    name: entry.is_archived ? `${entry.name} (archived)` : entry.name,
-    type: entry.type,
-    tax: taxTreatmentLabel(entry.tax_treatment),
-    balance_zar: formatZarAmount(entry.balance_zar),
-    actions: entry.id,
-  }));
 
   const mapRows: MapRow[] = mapPage.pagedItems.map((entry) => ({
     id: entry.id,
@@ -210,6 +175,7 @@ export default function ChartOfAccountsPage() {
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
       await loadLedger();
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create account.");
     } finally {
@@ -218,6 +184,7 @@ export default function ChartOfAccountsPage() {
   }
 
   function openEdit(account: Account) {
+    setError(null);
     setEditAccount(account);
     setEditName(account.name);
     setEditArchived(account.is_archived);
@@ -240,6 +207,7 @@ export default function ChartOfAccountsPage() {
       setEditOpen(false);
       setEditAccount(null);
       await loadLedger();
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update account.");
     } finally {
@@ -248,12 +216,16 @@ export default function ChartOfAccountsPage() {
   }
 
   function openAddMap() {
+    setCategoryOpen(false);
+    setError(null);
     setMapMode("add");
     setMapForm(emptyMapForm);
     setMapOpen(true);
   }
 
   function openEditMap(entry: CategoryMap) {
+    setCategoryOpen(false);
+    setError(null);
     setMapMode("edit");
     setMapForm({
       category: entry.category,
@@ -284,8 +256,10 @@ export default function ChartOfAccountsPage() {
         count_var_code: mapForm.count_var_code,
       });
       setMapOpen(false);
+      setCategoryOpen(true);
       setMapForm(emptyMapForm);
       await loadLedger();
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save category map.");
     } finally {
@@ -295,17 +269,7 @@ export default function ChartOfAccountsPage() {
 
   return (
     <Stack gap={6}>
-      <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Chart of accounts</h1>
-          <p className="cds--type-body-01">
-            Double-entry ledger accounts with live ZAR balances.
-          </p>
-        </div>
-        {canMutate ? <Button onClick={() => setCreateOpen(true)}>Add account</Button> : null}
-      </div>
-
-      {error ? (
+      {error && !createOpen && !editOpen && !mapOpen && !categoryOpen ? (
         <InlineNotification
           kind="error"
           title="Error"
@@ -315,87 +279,53 @@ export default function ChartOfAccountsPage() {
         />
       ) : null}
 
-      {loading ? (
-        <p className="cds--type-body-01">Loading accounts…</p>
-      ) : accounts.length === 0 ? (
-        <InlineNotification
-          kind="info"
-          title="No accounts"
-          subtitle="No chart of accounts found."
-          hideCloseButton
-          lowContrast
-        />
-      ) : (
-        <div className="firstout-catalogue-panel">
-          <div className="firstout-catalogue-toolbar">
-            <div className="firstout-catalogue-toolbar__left">
-              <TextInput
-                id="accounts-search"
-                labelText="Filter accounts"
-                hideLabel
-                placeholder="Filter by code or name…"
-                value={accountSearch}
-                onChange={(event) => setAccountSearch(event.target.value)}
-              />
-            </div>
-          </div>
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Accounts" description="Firstout chart of accounts">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={headers.length}>No accounts match the current filter.</TableCell>
-                    </TableRow>
-                  ) : (
-                  tableRows.map((row) => {
-                    const account = accounts.find((entry) => entry.id === row.id);
-                    return (
-                      <TableRow {...getRowProps({ row })} key={row.id}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "actions" && canMutate && account && !account.is_system) {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Button kind="ghost" size="sm" onClick={() => openEdit(account)}>
-                                  Edit
-                                </Button>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "actions") {
-                            return <TableCell key={cell.id} />;
-                          }
-                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-          <Pagination
-            page={accountPage.page}
-            pageSize={accountPage.pageSize}
-            pageSizes={[...CLIENT_PAGE_SIZES]}
-            totalItems={accountPage.totalItems}
-            onChange={accountPage.onPaginationChange}
-          />
-        </div>
-      )}
+      <RecordWorkspace<Account>
+        adapter={{
+          resource: "accounts", title: "Chart of accounts", singular: "account", breadcrumb: "Books",
+          description: "Review ledger accounts and their live ZAR balances.", defaultSort: "code",
+          lifecycle: { activeLabel: "Active", archivedLabel: "Archived" },
+          columns: [
+            { key: "code", label: "Account / code", render: (item) => `${item.code} — ${item.name}`, sortable: true },
+            { key: "type", label: "Type", render: (item) => ACCOUNT_TYPES.find((entry) => entry.value === item.type)?.label ?? item.type, sortable: true },
+            { key: "balance_zar", label: "Balance", render: (item) => formatZarAmount(item.balance_zar), numeric: true, sortable: true },
+          ],
+          filters: [
+            { key: "code", label: "Code", type: "text" },
+            { key: "name", label: "Name", type: "text" },
+            { key: "type", label: "Type", type: "enum", options: ACCOUNT_TYPES, quick: true },
+            { key: "tax_treatment", label: "Tax treatment", type: "enum", options: TAX_TREATMENTS },
+            { key: "balance_zar", label: "Balance", type: "number" },
+          ],
+          bulkFields: canMutate ? [
+            { key: "tax_treatment", label: "Tax treatment", type: "enum", options: TAX_TREATMENTS },
+            { key: "is_bank", label: "Bank account", type: "boolean" },
+          ] : [],
+          actions: canMutate ? [{ key: "edit", label: "Edit" }, { key: "archive", label: "Archive" }, { key: "restore", label: "Restore" }] : [],
+          getTitle: (item) => item.name, getSubtitle: (item) => item.code,
+          canEdit: (item) => canMutate && !item.is_system,
+        } satisfies RecordWorkspaceAdapter<Account>}
+        refreshKey={refreshKey}
+        onCreate={canMutate ? () => { setError(null); setCreateOpen(true); } : undefined}
+        createLabel="Add account"
+        onEdit={canMutate ? openEdit : undefined}
+        headerActions={<Button kind="tertiary" onClick={() => { setCategoryOpen(true); void loadLedger(); }}>Category posting</Button>}
+        renderDetails={(item) => <Stack gap={5}>
+          <div><p className="cds--type-label-01">Balance · ZAR</p><p className="cds--type-productive-heading-04">{formatZarAmount(item.balance_zar)}</p></div>
+          <RecordDetails>
+            <RecordDetail label="Code">{item.code}</RecordDetail>
+            <RecordDetail label="Type">{ACCOUNT_TYPES.find((entry) => entry.value === item.type)?.label ?? item.type}</RecordDetail>
+            <RecordDetail label="Tax treatment">{taxTreatmentLabel(item.tax_treatment)}</RecordDetail>
+            <RecordDetail label="Status">{item.is_archived ? "Archived" : "Active"}</RecordDetail>
+            <RecordDetail label="Bank account">{item.is_bank ? "Yes" : "No"}</RecordDetail>
+            <RecordDetail label="Protection">{item.is_system ? "System account — protected" : "Custom account"}</RecordDetail>
+          </RecordDetails>
+          <p className="cds--type-body-01">Posted balances and journal history remain linked when an account is archived.</p>
+        </Stack>}
+      />
 
+      <Modal open={categoryOpen} modalHeading="Category posting" passiveModal size="lg" onRequestClose={() => setCategoryOpen(false)}>
+        {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
+        {loading ? <p role="status">Loading category posting…</p> : null}
       {!loading ? (
         <Stack gap={4}>
           <div className="firstout-page-header">
@@ -492,18 +422,22 @@ export default function ChartOfAccountsPage() {
         </Stack>
       ) : null}
 
+      </Modal>
+
       <Modal
         open={createOpen}
         modalHeading="Add account"
         primaryButtonText={saving ? "Adding…" : "Add"}
         secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !createForm.code.trim() || !createForm.name.trim()}
-        onRequestClose={() => setCreateOpen(false)}
+        primaryButtonDisabled={!canMutate || saving || !createForm.code.trim() || !createForm.name.trim()}
+        onRequestClose={() => { if (!saving) setCreateOpen(false); }}
         onRequestSubmit={() => void handleCreate()}
       >
         <Stack gap={5}>
+          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <TextInput
             id="create-account-code"
+            disabled={saving}
             labelText="Code"
             value={createForm.code}
             onChange={(event) =>
@@ -513,6 +447,7 @@ export default function ChartOfAccountsPage() {
           />
           <TextInput
             id="create-account-name"
+            disabled={saving}
             labelText="Name"
             value={createForm.name}
             onChange={(event) =>
@@ -522,6 +457,7 @@ export default function ChartOfAccountsPage() {
           />
           <Select
             id="create-account-type"
+            disabled={saving}
             labelText="Type"
             value={createForm.type}
             onChange={(event) => {
@@ -539,6 +475,7 @@ export default function ChartOfAccountsPage() {
           </Select>
           <Select
             id="create-account-tax"
+            disabled={saving}
             labelText="Tax treatment"
             value={createForm.tax_treatment ?? defaultTaxTreatment(createForm.type)}
             onChange={(event) =>
@@ -560,13 +497,15 @@ export default function ChartOfAccountsPage() {
         modalHeading="Edit account"
         primaryButtonText={saving ? "Saving…" : "Save"}
         secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !editName.trim()}
-        onRequestClose={() => setEditOpen(false)}
+        primaryButtonDisabled={!canMutate || saving || !editName.trim()}
+        onRequestClose={() => { if (!saving) setEditOpen(false); }}
         onRequestSubmit={() => void handleEdit()}
       >
         <Stack gap={5}>
+          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <TextInput
             id="edit-account-name"
+            disabled={saving}
             labelText="Name"
             value={editName}
             onChange={(event) => setEditName(event.target.value)}
@@ -574,6 +513,7 @@ export default function ChartOfAccountsPage() {
           />
           <Select
             id="edit-account-tax"
+            disabled={saving}
             labelText="Tax treatment"
             value={editTax}
             onChange={(event) => setEditTax(event.target.value as TaxTreatment)}
@@ -584,6 +524,7 @@ export default function ChartOfAccountsPage() {
           </Select>
           <Checkbox
             id="edit-account-archived"
+            disabled={saving}
             labelText="Archived"
             checked={editArchived}
             onChange={(_, { checked }) => setEditArchived(checked)}
@@ -596,11 +537,12 @@ export default function ChartOfAccountsPage() {
         modalHeading={mapMode === "add" ? "Add category map" : "Edit category map"}
         primaryButtonText={saving ? "Saving…" : "Save"}
         secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !mapReady}
-        onRequestClose={() => setMapOpen(false)}
+        primaryButtonDisabled={!canMutate || saving || !mapReady}
+        onRequestClose={() => { if (!saving) { setMapOpen(false); setCategoryOpen(true); } }}
         onRequestSubmit={() => void handleSaveMap()}
       >
         <Stack gap={5}>
+          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <TextInput
             id="category-map-name"
             labelText="Category"
@@ -608,11 +550,12 @@ export default function ChartOfAccountsPage() {
             onChange={(event) =>
               setMapForm((form) => ({ ...form, category: event.target.value }))
             }
-            disabled={mapMode === "edit"}
+            disabled={saving || mapMode === "edit"}
             required
           />
           <Select
             id="category-map-sales"
+            disabled={saving}
             labelText="Sales account"
             value={mapForm.sales_code}
             onChange={(event) =>
@@ -630,6 +573,7 @@ export default function ChartOfAccountsPage() {
           </Select>
           <Select
             id="category-map-cogs"
+            disabled={saving}
             labelText="COGS account"
             value={mapForm.cogs_code}
             onChange={(event) =>
@@ -647,6 +591,7 @@ export default function ChartOfAccountsPage() {
           </Select>
           <Select
             id="category-map-stock-adj"
+            disabled={saving}
             labelText="Stock adj account"
             value={mapForm.stock_adj_code}
             onChange={(event) =>
@@ -664,6 +609,7 @@ export default function ChartOfAccountsPage() {
           </Select>
           <Select
             id="category-map-count-var"
+            disabled={saving}
             labelText="Count var account"
             value={mapForm.count_var_code}
             onChange={(event) =>

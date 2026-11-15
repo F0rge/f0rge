@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.supplier import SupplierCRUD
 from app.models.supplier import Supplier
-from app.schemas.supplier import SupplierCreate, SupplierResponse
+from app.schemas.supplier import SupplierCreate, SupplierResponse, SupplierUpdate
 from app.schemas.party_archive import PartyArchiveCounts
-from f0rge_core.exceptions import ConflictError, NotFoundError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 
@@ -61,6 +61,34 @@ class SupplierService:
         reloaded = await self.crud.get_by_id(supplier.id)
         assert reloaded is not None
         return SupplierResponse.model_validate(reloaded)
+
+    async def update(self, supplier_id: uuid.UUID, data: SupplierUpdate) -> SupplierResponse:
+        supplier = await self.crud.get_by_id(supplier_id)
+        if supplier is None:
+            raise NotFoundError("Supplier not found")
+        if supplier.is_archived:
+            raise ConflictError("Restore the supplier before editing its account")
+        fields = data.model_fields_set
+        if "name" in fields:
+            if data.name is None or not data.name.strip():
+                raise ValidationError("Supplier name is required")
+            existing = await self.crud.get_by_name_insensitive(data.name.strip())
+            if existing is not None and existing.id != supplier.id:
+                raise ConflictError("A supplier with this name already exists")
+            supplier.name = data.name.strip()
+        if "default_currency" in fields:
+            if data.default_currency is None:
+                raise ValidationError("Currency cannot be cleared")
+            supplier.default_currency = data.default_currency.upper()
+        if "vat_number" in fields:
+            supplier.vat_number = normalize_vat_number(data.vat_number)
+        if "address" in fields:
+            supplier.address = (data.address or "").strip() or None
+        try:
+            await self.crud.commit_refresh(supplier)
+        except IntegrityError as exc:
+            raise ConflictError("A supplier with this name already exists") from exc
+        return await self.get(supplier.id)
 
     @staticmethod
     def normalize_currency(value: Optional[str]) -> str:

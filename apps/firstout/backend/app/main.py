@@ -22,6 +22,7 @@ from app.exceptions import (
     CommsSmtpFailedError,
     CommsSmtpUnconfiguredError,
     DocumentLlmUnconfiguredError,
+    RecordWorkspaceUnconfiguredError,
     ForbiddenError,
     KitRequiresPickError,
     RateLimitedError,
@@ -32,6 +33,7 @@ from app.routers import (
     clerk_webhooks,
     tenant_signup,
     records,
+    record_workspace,
     accounts,
     adjustments,
     audit,
@@ -93,6 +95,7 @@ from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
 from app.services.storefront_system_actor import StorefrontSystemActorService
 from app.services.payment_reminders import PaymentReminderService
+from app.services.record_workspace_tokens import signing_key
 from app.services.users import BootstrapService
 
 logger = logging.getLogger(__name__)
@@ -134,6 +137,10 @@ async def _payment_reminder_loop(stop: asyncio.Event) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    if signing_key() is None:
+        logger.warning(
+            "Record workspace bulk actions disabled: configure RECORD_WORKSPACE_SIGNING_KEY"
+        )
     # Identity bootstrap precedes domain seeding; all business work runs with an
     # explicit organisation, including recovery after process restarts.
     async with tenant_session() as directory:
@@ -202,6 +209,13 @@ async def _forbidden_handler(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
+async def _workspace_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RecordWorkspaceUnconfiguredError)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": exc.detail}
+    )
+
+
 async def _comms_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, (CommsEncryptionUnconfiguredError, CommsSmtpUnconfiguredError))
     return JSONResponse(
@@ -250,6 +264,10 @@ async def _document_llm_unconfigured_handler(_: Request, exc: Exception) -> JSON
 app.add_exception_handler(KitRequiresPickError, cast(ExceptionHandler, _kit_requires_pick_handler))
 app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handler))
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+app.add_exception_handler(
+    RecordWorkspaceUnconfiguredError,
+    cast(ExceptionHandler, _workspace_unconfigured_handler),
+)
 app.add_exception_handler(RateLimitedError, cast(ExceptionHandler, _rate_limited_handler))
 app.add_exception_handler(
     DocumentLlmUnconfiguredError,
@@ -283,6 +301,7 @@ app.include_router(auth.router)
 app.include_router(users.users_router)
 app.include_router(users.profile_router)
 app.include_router(roles.roles_router)
+app.include_router(record_workspace.record_workspace_router)
 app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(price_lists.price_lists_router)

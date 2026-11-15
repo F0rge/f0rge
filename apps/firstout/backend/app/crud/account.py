@@ -34,8 +34,10 @@ class AccountCRUD(BaseCRUD):
         result = await self.db.execute(select(func.count()).select_from(Account))
         return int(result.scalar_one())
 
-    async def get_balances(self) -> dict[uuid.UUID, Decimal]:
-        result = await self.db.execute(
+    async def get_balances(
+        self, account_id: Optional[uuid.UUID] = None
+    ) -> dict[uuid.UUID, Decimal]:
+        statement = (
             select(
                 JournalLine.account_id,
                 func.coalesce(func.sum(JournalLine.debit_zar), 0)
@@ -46,4 +48,7 @@ class AccountCRUD(BaseCRUD):
             .where(JournalEntry.status != JournalStatus.DRAFT)
             .group_by(JournalLine.account_id)
         )
+        if account_id is not None:
+            statement = statement.where(JournalLine.account_id == account_id)
+        result = await self.db.execute(statement)
         return {row[0]: Decimal(row[1]) for row in result.all()}

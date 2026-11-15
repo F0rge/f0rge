@@ -233,7 +233,8 @@ class CustomersCrmService:
                 raise ValidationError("payment_reminders_opt_out cannot be null")
             customer.payment_reminders_opt_out = data.payment_reminders_opt_out
         if "price_list_id" in fields_set:
-            await self._assert_price_list_id(data.price_list_id)
+            if data.price_list_id != customer.price_list_id:
+                await self._assert_price_list_id(data.price_list_id)
             customer.price_list_id = data.price_list_id
         if "credit_limit" in fields_set:
             customer.credit_limit = data.credit_limit
@@ -342,4 +343,6 @@ class CustomersCrmService:
     async def _assert_price_list_id(self, price_list_id: Optional[uuid.UUID]) -> None:
         if price_list_id is None:
             return
-        await PriceListCRUD(self.db).get_by_id(price_list_id)
+        price_list = await PriceListCRUD(self.db).get_by_id(price_list_id, for_update=True)
+        if price_list.is_archived:
+            raise ValidationError("Restore the price list before assigning it to a customer")

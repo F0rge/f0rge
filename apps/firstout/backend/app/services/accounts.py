@@ -25,6 +25,13 @@ class AccountService:
             self._to_response(account, balances.get(account.id, Decimal(0))) for account in accounts
         ]
 
+    async def get(self, account_id: uuid.UUID) -> AccountResponse:
+        account = await self.crud.get_by_id(account_id)
+        if account is None:
+            raise NotFoundError("Account not found")
+        balances = await self.crud.get_balances(account_id)
+        return self._to_response(account, balances.get(account.id, Decimal(0)))
+
     async def create(self, data: AccountCreate) -> AccountResponse:
         existing = await self.crud.get_by_code(data.code)
         if existing is not None:
@@ -67,7 +74,7 @@ class AccountService:
             account.is_bank = data.is_bank
 
         await self.crud.commit_refresh(account)
-        balances = await self.crud.get_balances()
+        balances = await self.crud.get_balances(account_id)
         return self._to_response(account, balances.get(account.id, Decimal(0)))
 
     @staticmethod

@@ -971,7 +971,7 @@ async def test_rollback_refuses_additional_tenants_without_disabling_rls(
             "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity"
         )
         before = await owner.scalar(protected)
-        assert before == 82
+        assert before == 83
         assert await owner.scalar(
             sa.text(
                 "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class "

@@ -1,285 +1,214 @@
 "use client";
-
 import {
-  Button,
   Checkbox,
-  DataTable,
   InlineNotification,
   Modal,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   Tag,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
-
+import { useState } from "react";
 import {
-  can,
-  createRole,
-  deleteRole,
-  listRoles,
-  type Role,
-} from "@/lib/api";
-import { PERMISSION_CATALOG } from "@/lib/permissions";
+  RecordDetail,
+  RecordDetails,
+  RecordWorkspace,
+  type RecordWorkspaceAdapter,
+} from "@/components/record-workspace";
+import { can, createRole, updateRole, type Role } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-
-const TABLE_HEADERS = [
-  { key: "name", header: "Name" },
-  { key: "slug", header: "Slug" },
-  { key: "permissions", header: "Permissions" },
-  { key: "actions", header: "Actions" },
-] as const;
-
-type RoleRow = {
-  id: string;
-  name: string;
-  slug: string;
-  permissions: string;
-  actions: string;
-};
+import { workspaceIdentity } from "@/lib/record-workspace";
+import { PERMISSION_CATALOG } from "@/lib/permissions";
 
 export default function RolesPage() {
   const { user } = useAuth();
-  const canManageUsers = can(user, "users.manage");
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  return <RolesScreen key={workspaceIdentity(user)} />;
+}
+function RolesScreen() {
+  const { user } = useAuth();
+  const allowed = can(user, "users.manage");
+  const [refreshKey, refresh] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Role | null>(null);
   const [name, setName] = useState("");
-  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  const loadRoles = useCallback(async () => {
-    setLoading(true);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const start = (role?: Role) => {
+    setEditing(role ?? null);
+    setName(role?.name ?? "");
+    setPermissions(role?.permissions ?? []);
+    setError(null);
+    setOpen(true);
+  };
+  async function save() {
+    setBusy(true);
     setError(null);
     try {
-      setRoles(await listRoles());
+      if (editing)
+        await updateRole(editing.id, { name: name.trim(), permissions });
+      else await createRole({ name: name.trim(), permissions });
+      setOpen(false);
+      refresh((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load roles.");
+      setError(err instanceof Error ? err.message : "Could not save role.");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (canManageUsers) {
-      void loadRoles();
-    }
-  }, [canManageUsers, loadRoles]);
-
-  if (!user || !canManageUsers) {
+  }
+  const adapter: RecordWorkspaceAdapter<Role> = {
+    resource: "roles",
+    title: "Roles",
+    singular: "role",
+    breadcrumb: "Administration",
+    description:
+      "Review permission bundles and manage custom roles. System presets remain protected.",
+    columns: [
+      {
+        key: "name",
+        label: "Role",
+        render: (item) => item.name,
+        sortable: true,
+      },
+      {
+        key: "slug",
+        label: "Slug",
+        render: (item) => item.slug,
+        sortable: true,
+      },
+      {
+        key: "permissions",
+        label: "Permissions",
+        render: (item) => item.permissions.length,
+        numeric: true,
+      },
+    ],
+    filters: [
+      { key: "name", label: "Name", type: "text" },
+      { key: "slug", label: "Slug", type: "text" },
+      {
+        key: "is_system",
+        label: "System preset",
+        type: "boolean",
+        quick: true,
+      },
+      { key: "permissions", label: "Permission key", type: "text" },
+    ],
+    actions: allowed ? [{ key: "delete", label: "Delete", danger: true }] : [],
+    getTitle: (item) => item.name,
+    getSubtitle: (item) =>
+      item.is_owner_preset
+        ? "Owner preset · immutable"
+        : item.is_system
+          ? "System preset"
+          : "Custom role",
+    canEdit: (item) => !item.is_system,
+  };
+  if (!allowed)
     return (
-      <section className="firstout-forbidden">
-        <InlineNotification
-          kind="error"
-          title="Forbidden"
-          subtitle="You do not have permission to manage roles."
-          hideCloseButton
-        />
-      </section>
+      <InlineNotification
+        kind="error"
+        title="Forbidden"
+        subtitle="You do not have permission to manage roles."
+        hideCloseButton
+      />
     );
-  }
-
-  const rows: RoleRow[] = roles.map((role) => ({
-    id: role.id,
-    name: role.name,
-    slug: role.slug,
-    permissions: role.permissions.join(", "),
-    actions: role.id,
-  }));
-
-  function toggleKey(key: string) {
-    setSelectedKeys((current) =>
-      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
-    );
-  }
-
-  function openCreate() {
-    setName("");
-    setSelectedKeys([]);
-    setCreateOpen(true);
-  }
-
-  async function handleCreate() {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await createRole({ name: trimmed, permissions: selectedKeys });
-      setCreateOpen(false);
-      await loadRoles();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create role.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(role: Role) {
-    setSaving(true);
-    setError(null);
-    try {
-      await deleteRole(role.id);
-      await loadRoles();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete role.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <Stack gap={6}>
-      <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Roles</h1>
-          <p className="cds--type-body-01">
-            Preset roles are read-only. Create a custom role, then assign it on Users.
-          </p>
-        </div>
-        <Button onClick={openCreate}>Create role</Button>
-      </div>
-
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
-
-      {loading ? (
-        <p className="cds--type-body-01">Loading roles…</p>
-      ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Roles" description="System presets and custom roles">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => {
-                    const entry = roles.find((role) => role.id === row.id);
-                    return (
-                      <TableRow {...getRowProps({ row })} key={row.id}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "name" && entry) {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Stack gap={2} orientation="horizontal">
-                                  <span>{entry.name}</span>
-                                  {entry.is_system ? (
-                                    <Tag type="blue" size="sm">
-                                      Preset
-                                    </Tag>
-                                  ) : null}
-                                  {entry.is_owner_preset ? (
-                                    <Tag type="high-contrast" size="sm">
-                                      Immutable
-                                    </Tag>
-                                  ) : null}
-                                </Stack>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "permissions" && entry) {
-                            return (
-                              <TableCell key={cell.id} className="firstout-cell-wrap">
-                                {entry.permissions.length === 0 ? (
-                                  "—"
-                                ) : (
-                                  <div className="firstout-tag-wrap">
-                                    {entry.permissions.map((key) => (
-                                      <Tag key={key} type="gray" size="sm">
-                                        {key}
-                                      </Tag>
-                                    ))}
-                                  </div>
-                                )}
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "actions" && entry) {
-                            return (
-                              <TableCell key={cell.id}>
-                                {entry.is_system ? (
-                                  "—"
-                                ) : (
-                                  <Button
-                                    kind="danger--ghost"
-                                    size="sm"
-                                    disabled={saving}
-                                    onClick={() => void handleDelete(entry)}
-                                  >
-                                    Delete
-                                  </Button>
-                                )}
-                              </TableCell>
-                            );
-                          }
-                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-      )}
-
+    <>
+      <RecordWorkspace
+        adapter={adapter}
+        refreshKey={refreshKey}
+        onCreate={() => start()}
+        onEdit={(item) => start(item)}
+        renderDetails={(item) => (
+          <Tabs>
+            <TabList aria-label="Role information">
+              <Tab>Overview</Tab>
+              <Tab>Permissions</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel>
+                <RecordDetails>
+                  <RecordDetail label="Slug">{item.slug}</RecordDetail>
+                  <RecordDetail label="Origin">
+                    {item.is_system ? "System preset" : "Custom role"}
+                  </RecordDetail>
+                  <RecordDetail label="Permission count">
+                    {item.permissions.length}
+                  </RecordDetail>
+                  <RecordDetail label="Protection">
+                    {item.is_system
+                      ? "Preset roles cannot be edited or deleted."
+                      : "A custom role can be deleted only when no staff members use it."}
+                  </RecordDetail>
+                </RecordDetails>
+              </TabPanel>
+              <TabPanel>
+                <div className="firstout-tag-wrap">
+                  {item.permissions.map((key) => (
+                    <Tag key={key} type="gray">
+                      {key}
+                    </Tag>
+                  ))}
+                </div>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        )}
+      />
       <Modal
-        open={createOpen}
-        modalHeading="Create role"
-        primaryButtonText={saving ? "Creating…" : "Create"}
+        open={open}
+        modalHeading={editing ? "Edit custom role" : "Create role"}
+        primaryButtonText={busy ? "Saving…" : "Save role"}
         secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !name.trim()}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
+        primaryButtonDisabled={busy || !name.trim()}
+        onRequestClose={() => {
+          if (!busy) setOpen(false);
+        }}
+        onRequestSubmit={() => void save()}
       >
         <Stack gap={5}>
+          {error && (
+            <InlineNotification
+              kind="error"
+              title="Could not save"
+              subtitle={error}
+              hideCloseButton
+              lowContrast
+            />
+          )}
           <TextInput
-            id="create-role-name"
+            id="role-name"
+            disabled={busy}
             labelText="Name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
           />
-          <fieldset className="cds--fieldset">
+          <fieldset disabled={busy}>
             <legend className="cds--label">Permissions</legend>
-            <Stack gap={3}>
-              {PERMISSION_CATALOG.map((key) => (
-                <Checkbox
-                  key={key}
-                  id={`create-role-perm-${key}`}
-                  labelText={key}
-                  checked={selectedKeys.includes(key)}
-                  onChange={() => toggleKey(key)}
-                />
-              ))}
-            </Stack>
+            {PERMISSION_CATALOG.map((key) => (
+              <Checkbox
+                key={key}
+                id={`role-${key}`}
+                labelText={key}
+                checked={permissions.includes(key)}
+                onChange={(_, { checked }) =>
+                  setPermissions((current) =>
+                    checked
+                      ? [...current, key]
+                      : current.filter((item) => item !== key),
+                  )
+                }
+              />
+            ))}
           </fieldset>
         </Stack>
       </Modal>
-    </Stack>
+    </>
   );
 }

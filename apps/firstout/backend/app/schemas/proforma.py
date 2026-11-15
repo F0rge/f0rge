@@ -13,6 +13,7 @@ class ProformaResponse(BaseModel):
     invoice_number: str
     invoice_date: datetime.date
     currency: str
+    is_archived: bool = False
     pdf_storage_key: str
     created_at: datetime.datetime
     updated_at: datetime.datetime

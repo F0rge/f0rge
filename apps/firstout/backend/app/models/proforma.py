@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Date, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,9 @@ class Proforma(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     invoice_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     pdf_storage_key: Mapped[str] = mapped_column(String, nullable=False)
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     supplier: Mapped["Supplier"] = relationship()
 
@@ -34,6 +37,7 @@ class Proforma(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
             name="uq_proformas_supplier_invoice",
         ),
         Index("ix_proformas_supplier_id", "supplier_id"),
+        Index("ix_proformas_team_id_is_archived", "team_id", "is_archived"),
     )
 
 

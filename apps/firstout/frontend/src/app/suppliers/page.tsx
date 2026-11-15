@@ -1,292 +1,311 @@
 "use client";
-
 import {
-  Button,
-  DataTable,
   InlineNotification,
   Modal,
-  Pagination,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
+  TextArea,
   TextInput,
 } from "@carbon/react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PartyArchiveTabs } from "@/components/party-archive-actions";
-
+import { useEffect, useState } from "react";
 import {
+  RecordDetail,
+  RecordDetails,
+  RecordWorkspace,
+  type RecordWorkspaceAdapter,
+} from "@/components/record-workspace";
+import { PartyRecords } from "@/components/records/party-records";
+import {
+  PurchaseHistoryTable,
+  SupplierPricesTable,
+} from "@/components/records/history-tables";
+import {
+  apiFetch,
   canMutateCatalogue,
   createSupplier,
   getSupplierLeadTimes,
-  getSupplierArchiveCounts,
-  listSuppliers,
+  type SupplierLeadTimeRow,
   type CreateSupplierPayload,
   type Supplier,
-  type SupplierLeadTimeRow,
-  type ArchiveCounts,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatObservedMedianLine, supplierLeadTimeById } from "@/lib/lead-times";
-import { CLIENT_PAGE_SIZES, useClientPagination } from "@/lib/use-client-pagination";
+import { workspaceIdentity } from "@/lib/record-workspace";
+import {
+  formatObservedMedianLine,
+  supplierLeadTimeById,
+} from "@/lib/lead-times";
 
-const TABLE_HEADERS = [
-  { key: "name", header: "Name" },
-  { key: "default_currency", header: "Default currency" },
-  { key: "observed_median", header: "Observed median" },
-] as const;
-
-type SupplierRow = {
-  id: string;
-  name: string;
-  default_currency: string;
-  observed_median: string;
-};
-
-const emptyCreateForm: CreateSupplierPayload = {
-  name: "",
-  default_currency: "",
-};
-
-function SuppliersScreen() {
-  const router = useRouter();
-  const archived = useSearchParams().get("archived") === "true";
+const currencies = ["ZAR", "USD", "EUR", "GBP"].map((value) => ({
+  value,
+  label: value,
+}));
+export default function SuppliersPage() {
   const { user } = useAuth();
-  const canMutate = canMutateCatalogue(user);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [leadTimes, setLeadTimes] = useState<SupplierLeadTimeRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [counts, setCounts] = useState<ArchiveCounts | null>(null);
-  const requestId = useRef(0);
-  const [searchFilter, setSearchFilter] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState<CreateSupplierPayload>(emptyCreateForm);
-  const [saving, setSaving] = useState(false);
-
-  const loadSuppliers = useCallback(async () => {
-    const request = ++requestId.current;
-    setLoading(true);
-    setSuppliers([]);
-    setError(null);
-    try {
-      const [data, leadReport, archiveCounts] = await Promise.all([
-        listSuppliers({ archived }),
-        getSupplierLeadTimes().catch(() => ({ rows: [] as SupplierLeadTimeRow[] })),
-        getSupplierArchiveCounts(),
-      ]);
-      if (request !== requestId.current) return;
-      setSuppliers(data);
-      setLeadTimes(leadReport.rows);
-      setCounts(archiveCounts);
-    } catch (err) {
-      if (request !== requestId.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load suppliers.");
-    } finally {
-      if (request === requestId.current) setLoading(false);
-    }
-  }, [archived]);
-
+  return <SuppliersScreen key={workspaceIdentity(user)} />;
+}
+function SuppliersScreen() {
+  const { user } = useAuth();
+  const allowed = canMutateCatalogue(user);
+  const identity = workspaceIdentity(user);
+  const [leadResult, setLeadResult] = useState<{
+    identity: string;
+    rows: SupplierLeadTimeRow[];
+    failed?: boolean;
+  } | null>(null);
   useEffect(() => {
-    if (user) {
-      void loadSuppliers();
-    }
-    return () => { requestId.current += 1; };
-  }, [user, loadSuppliers]);
-
-  const leadBySupplier = supplierLeadTimeById(leadTimes);
-  const filteredSuppliers = useMemo(() => {
-    const query = searchFilter.trim().toLowerCase();
-    if (!query) {
-      return suppliers;
-    }
-    return suppliers.filter(
-      (entry) =>
-        entry.name.toLowerCase().includes(query) ||
-        entry.default_currency.toLowerCase().includes(query),
-    );
-  }, [suppliers, searchFilter]);
-
-  const { page, pageSize, pagedItems, totalItems, onPaginationChange } = useClientPagination(
-    filteredSuppliers,
-    `${archived}:${searchFilter}`,
+    if (!user) return;
+    let cancelled = false;
+    getSupplierLeadTimes()
+      .then((report) => {
+        if (!cancelled) setLeadResult({ identity, rows: report.rows });
+      })
+      .catch(() => {
+        if (!cancelled) setLeadResult({ identity, rows: [], failed: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [identity, user]);
+  const leadTimes = supplierLeadTimeById(
+    leadResult?.identity === identity ? leadResult.rows : [],
   );
-
-  const rows: SupplierRow[] = pagedItems.map((entry) => ({
-    id: entry.id,
-    name: entry.name,
-    default_currency: entry.default_currency,
-    observed_median: formatObservedMedianLine(leadBySupplier.get(entry.id)),
-  }));
-
-  async function handleCreate() {
-    setSaving(true);
+  const observedLead = (id: string) =>
+    leadResult?.identity !== identity
+      ? "Loading…"
+      : leadResult.failed
+        ? "Unavailable"
+        : formatObservedMedianLine(leadTimes.get(id));
+  const [refreshKey, refresh] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Supplier | null>(null);
+  const [form, setForm] = useState<CreateSupplierPayload>({
+    name: "",
+    default_currency: "USD",
+    vat_number: "",
+    address: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const start = (item?: Supplier) => {
+    setEditing(item ?? null);
+    setForm({
+      name: item?.name ?? "",
+      default_currency: item?.default_currency ?? "USD",
+      vat_number: item?.vat_number ?? "",
+      address: item?.address ?? "",
+    });
+    setError(null);
+    setOpen(true);
+  };
+  async function save() {
+    setBusy(true);
     setError(null);
     try {
-      const payload: CreateSupplierPayload = {
-        name: createForm.name.trim(),
+      const payload = {
+        ...form,
+        name: form.name.trim(),
+        default_currency: form.default_currency?.trim().toUpperCase(),
+        vat_number: form.vat_number?.trim() || null,
+        address: form.address?.trim() || null,
       };
-      const currency = createForm.default_currency?.trim();
-      if (currency) {
-        payload.default_currency = currency;
-      }
-      await createSupplier(payload);
-      setCreateOpen(false);
-      setCreateForm(emptyCreateForm);
-      await loadSuppliers();
+      if (editing)
+        await apiFetch<Supplier>(`/suppliers/${editing.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      else await createSupplier(payload);
+      setOpen(false);
+      refresh((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create supplier.");
+      setError(err instanceof Error ? err.message : "Could not save supplier.");
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
-
+  const adapter: RecordWorkspaceAdapter<Supplier> = {
+    resource: "suppliers",
+    title: "Suppliers",
+    singular: "supplier",
+    breadcrumb: "Catalogue management",
+    description:
+      "Find supplier accounts, review purchasing history and manage supplier details.",
+    columns: [
+      {
+        key: "name",
+        label: "Supplier",
+        render: (item) => item.name,
+        sortable: true,
+      },
+      {
+        key: "default_currency",
+        label: "Currency",
+        render: (item) => item.default_currency,
+        sortable: true,
+      },
+      {
+        key: "observed_lead_time",
+        label: "Observed median",
+        render: (item) => observedLead(item.id),
+      },
+    ],
+    filters: [
+      { key: "name", label: "Name", type: "text" },
+      {
+        key: "default_currency",
+        label: "Currency",
+        type: "enum",
+        options: currencies,
+        quick: true,
+        allLabel: "All currencies",
+      },
+      { key: "vat_number", label: "VAT number", type: "text" },
+      { key: "address", label: "Address", type: "text" },
+    ],
+    bulkFields: [
+      { key: "default_currency", label: "Default currency", type: "text" },
+    ],
+    lifecycle: { activeLabel: "Active", archivedLabel: "Archived" },
+    actions: allowed
+      ? [
+          { key: "edit", label: "Edit" },
+          { key: "archive", label: "Archive" },
+          { key: "restore", label: "Restore" },
+        ]
+      : [],
+    getTitle: (item) => item.name,
+    getSubtitle: (item) => item.default_currency,
+    canEdit: (item) => !item.is_archived,
+  };
   return (
-    <Stack gap={6}>
-      <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Suppliers</h1>
-          <p className="cds--type-body-01">Furniture suppliers and their default currencies.</p>
-        </div>
-        {canMutate && !archived ? (
-          <Button onClick={() => setCreateOpen(true)}>Add supplier</Button>
-        ) : null}
-      </div>
-
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
-
-      <PartyArchiveTabs
-        kind="suppliers"
-        archived={archived}
-        counts={counts}
-        onChange={(next) => {
-          setCreateOpen(false);
-          router.replace(`/suppliers${next ? "?archived=true" : ""}`, { scroll: false });
-        }}
-      >
-      {loading ? (
-        <p className="cds--type-body-01">Loading suppliers…</p>
-      ) : error ? (
-        <Button kind="tertiary" onClick={() => void loadSuppliers()}>Retry loading suppliers</Button>
-      ) : suppliers.length === 0 ? (
-        <InlineNotification
-          kind="info"
-          title={archived ? "No archived suppliers" : "No active suppliers"}
-          subtitle={archived ? "Archived suppliers will appear here with their account details and history preserved." : "No active suppliers have been added yet."}
-          hideCloseButton
-          lowContrast
-        />
-      ) : (
-        <div className="firstout-catalogue-panel">
-          <div className="firstout-catalogue-toolbar">
-            <div className="firstout-catalogue-toolbar__left">
-              <TextInput
-                id="suppliers-search"
-                labelText="Filter suppliers"
-                hideLabel
-                placeholder="Filter by name or currency…"
-                value={searchFilter}
-                onChange={(event) => setSearchFilter(event.target.value)}
-              />
-            </div>
-          </div>
-          <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <TableContainer title={archived ? "Archived suppliers" : "Active suppliers"} description="Supplier accounts and purchasing history">
-                <Table {...getTableProps()}>
-                  <TableHead>
-                    <TableRow>
-                      {headers.map((header) => (
-                        <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                          {header.header}
-                        </TableHeader>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {tableRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={headers.length}>No suppliers match the current filter.</TableCell>
-                      </TableRow>
-                    ) : (
-                      tableRows.map((row) => (
-                        <TableRow {...getRowProps({ row })} key={row.id}>
-                          {row.cells.map((cell) => (
-                            <TableCell key={cell.id}>
-                              {cell.info.header === "name" ? (
-                                <Link href={`/suppliers/${row.id}`}>{cell.value}</Link>
-                              ) : (
-                                cell.value
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </DataTable>
-          <Pagination
-            page={page}
-            pageSize={pageSize}
-            pageSizes={[...CLIENT_PAGE_SIZES]}
-            totalItems={totalItems}
-            onChange={onPaginationChange}
-          />
-        </div>
-      )}
-      </PartyArchiveTabs>
-
+    <>
+      <RecordWorkspace
+        adapter={adapter}
+        refreshKey={refreshKey}
+        onCreate={allowed ? () => start() : undefined}
+        onEdit={allowed ? (item) => start(item) : undefined}
+        renderDetails={(item) => (
+          <Tabs>
+            <TabList aria-label="Supplier information">
+              <Tab>Overview</Tab>
+              <Tab>Records</Tab>
+              <Tab>History</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel>
+                <RecordDetails>
+                  <RecordDetail label="Default currency">
+                    {item.default_currency}
+                  </RecordDetail>
+                  <RecordDetail label="Observed lead time">
+                    {observedLead(item.id)}
+                  </RecordDetail>
+                  <RecordDetail label="VAT number">
+                    {item.vat_number}
+                  </RecordDetail>
+                  <RecordDetail label="Address">{item.address}</RecordDetail>
+                  <RecordDetail label="Status">
+                    {item.is_archived ? "Archived" : "Active"}
+                  </RecordDetail>
+                </RecordDetails>
+              </TabPanel>
+              <TabPanel>
+                <PartyRecords key={item.id} kind="suppliers" id={item.id} />
+              </TabPanel>
+              <TabPanel>
+                <Stack gap={6}>
+                  <SupplierPricesTable
+                    key={`prices-${item.id}`}
+                    supplierId={item.id}
+                  />
+                  <PurchaseHistoryTable
+                    key={`history-${item.id}`}
+                    supplierId={item.id}
+                  />
+                </Stack>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        )}
+      />
       <Modal
-        open={createOpen}
-        modalHeading="Add supplier"
-        primaryButtonText={saving ? "Adding…" : "Add"}
+        open={open}
+        modalHeading={editing ? "Edit supplier" : "New supplier"}
+        primaryButtonText={busy ? "Saving…" : "Save supplier"}
         secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !createForm.name.trim()}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
+        primaryButtonDisabled={
+          busy ||
+          !form.name.trim() ||
+          !/^[A-Za-z]{3}$/.test(form.default_currency ?? "")
+        }
+        onRequestClose={() => {
+          if (!busy) setOpen(false);
+        }}
+        onRequestSubmit={() => void save()}
       >
         <Stack gap={5}>
+          {error && (
+            <InlineNotification
+              kind="error"
+              title="Could not save"
+              subtitle={error}
+              hideCloseButton
+              lowContrast
+            />
+          )}
           <TextInput
-            id="create-supplier-name"
+            id="supplier-name"
+            disabled={busy}
             labelText="Name"
-            value={createForm.name}
+            value={form.name}
             onChange={(event) =>
-              setCreateForm((form) => ({ ...form, name: event.target.value }))
+              setForm((current) => ({ ...current, name: event.target.value }))
             }
             required
           />
           <TextInput
-            id="create-supplier-currency"
+            id="supplier-currency"
+            disabled={busy}
             labelText="Default currency"
-            helperText="Defaults to USD"
-            value={createForm.default_currency ?? ""}
+            helperText="Three-letter currency code, for example ZAR or USD."
+            value={form.default_currency ?? ""}
+            maxLength={3}
             onChange={(event) =>
-              setCreateForm((form) => ({ ...form, default_currency: event.target.value }))
+              setForm((current) => ({
+                ...current,
+                default_currency: event.target.value.toUpperCase(),
+              }))
+            }
+          />
+          <TextInput
+            id="supplier-vat"
+            disabled={busy}
+            labelText="VAT number"
+            value={form.vat_number ?? ""}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                vat_number: event.target.value,
+              }))
+            }
+          />
+          <TextArea
+            id="supplier-address"
+            disabled={busy}
+            labelText="Address"
+            value={form.address ?? ""}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                address: event.target.value,
+              }))
             }
           />
         </Stack>
       </Modal>
-    </Stack>
+    </>
   );
-}
-
-export default function SuppliersPage() {
-  return <Suspense fallback={<p className="cds--type-body-01">Loading suppliers…</p>}><SuppliersScreen /></Suspense>;
 }

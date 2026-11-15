@@ -19,7 +19,9 @@ class RepeatingInvoiceCRUD(BaseCRUD):
         return (
             await self.db.execute(
                 select(RepeatingInvoice)
-                .options(selectinload(RepeatingInvoice.lines))
+                .options(
+                    selectinload(RepeatingInvoice.lines), selectinload(RepeatingInvoice.customer)
+                )
                 .where(RepeatingInvoice.id == schedule_id)
             )
         ).scalar_one_or_none()
@@ -27,7 +29,7 @@ class RepeatingInvoiceCRUD(BaseCRUD):
     async def list_all(self) -> list[RepeatingInvoice]:
         result = await self.db.execute(
             select(RepeatingInvoice)
-            .options(selectinload(RepeatingInvoice.lines))
+            .options(selectinload(RepeatingInvoice.lines), selectinload(RepeatingInvoice.customer))
             .order_by(RepeatingInvoice.next_date, RepeatingInvoice.created_at)
         )
         return list(result.scalars().all())

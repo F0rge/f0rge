@@ -9,7 +9,7 @@ from app.dependencies.auth import (
     get_supplier_service,
     require_catalogue_mutate,
 )
-from app.schemas.supplier import SupplierCreate, SupplierResponse
+from app.schemas.supplier import SupplierCreate, SupplierResponse, SupplierUpdate
 from app.schemas.party_archive import PartyArchiveCounts, PartyArchiveUpdate
 from app.services.suppliers import SupplierService
 
@@ -50,6 +50,16 @@ async def archive_supplier(
     service: SupplierService = Depends(get_supplier_service),
 ):
     return await service.set_archived(supplier_id, body.is_archived)
+
+
+@suppliers_router.patch("/{supplier_id}", response_model=SupplierResponse)
+async def update_supplier(
+    supplier_id: uuid.UUID,
+    body: SupplierUpdate,
+    _: uuid.UUID = Depends(require_catalogue_mutate),
+    service: SupplierService = Depends(get_supplier_service),
+):
+    return await service.update(supplier_id, body)
 
 
 @suppliers_router.post("", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)
