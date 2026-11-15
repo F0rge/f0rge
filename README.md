@@ -18,11 +18,11 @@ Personal Nx monorepo. Each app owns its business rules and data; reusable infras
 
 The 18 registered projects include existing Python, Next.js, Medusa, Swift, and sensor/dashboard apps. New apps follow [the canonical ADRs](docs/adr/README.md); those decisions do not migrate the existing apps automatically.
 
-Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Deploy conventions: [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`.github/deploy/README.md`](.github/deploy/README.md).
+Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Deploy conventions: [`docs/agents/rules/infra.md`](docs/agents/rules/infra.md), [`.github/deploy/README.md`](.github/deploy/README.md).
 
 ## Nx workspace
 
-Project names and tags live in each `project.json`. Inferred targets cover Next, ESLint, Vitest, Playwright, and Python dependency graphs. Task caching is configured in `nx.json`, with `main` as the default base. See [Nx conventions](.cursor/rules/nx.mdc).
+Project names and tags live in each `project.json`. Inferred targets cover Next, ESLint, Vitest, Playwright, and Python dependency graphs. Task caching is configured in `nx.json`, with `main` as the default base. See [Nx conventions](docs/agents/rules/nx.md).
 
 ```bash
 npx nx graph                                   # interactive dependency graph

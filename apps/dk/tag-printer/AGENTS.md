@@ -52,7 +52,7 @@ The manifest and webhook names `COOLIFY_WEBHOOK_DASKASAS_BACKEND` / `COOLIFY_WEB
 - **Tailwind 4** — `globals.css` `@source` must scan `libs/ui`
 - Frontend Dockerfile must `COPY libs/ui` (same pattern as marrow) — build context is repo root
 - Do **not** use `@f0rge/ui/api` — keep axios + `getApiBase()` for this stateless app
-- Full import/token contract: `.cursor/rules/ui-kit.mdc`
+- Full import/token contract: `docs/agents/rules/ui-kit.md`
 
 ## Branches
 

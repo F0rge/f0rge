@@ -1,22 +1,22 @@
-> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Shared Conventions — All Reviewers
 
-Hard rules every reviewing agent must honour, regardless of domain. Use the [shared protocol](../../../docs/agents/protocol.md) and canonical [routing manifest](../../../docs/agents/manifest.json) for role assignments. Legacy incident-note filenames below are provenance, not required global files or current role IDs; findings must stand on committed rules and inspected evidence.
+Hard rules every reviewing agent must honour, regardless of domain. Use the [shared protocol](../../protocol.md) and canonical [routing manifest](../../manifest.json) for role assignments. Legacy incident-note filenames below are provenance, not required global files or current role IDs; findings must stand on committed rules and inspected evidence.
 
 ## Shared libraries — non-duplication
 
 Apps import from `libs/` — never the reverse. Block on:
 - `libs/**` importing from `apps/` or `@/` paths resolving to apps
-- App code re-implementing lib-owned helpers (see `.cursor/rules/shared-libs.mdc`)
+- App code re-implementing lib-owned helpers (see `docs/agents/rules/shared-libs.md`)
 - New projects missing `platform:` / `scope:` tags in `project.json`
 - Creating a root `uv.lock` (breaks per-project lock isolation)
 
-See `AGENTS.md` § Shared libraries for the canonical inventory. **Nx gates** (affected CI, OpenAPI `codegen:check`, Playwright via Nx, project registration): `.cursor/rules/nx.mdc` and `.cursor/BUGBOT.md` — do not duplicate the checklist here.
+See `AGENTS.md` § Shared libraries for the canonical inventory. **Nx gates** (affected CI, OpenAPI `codegen:check`, Playwright via Nx, project registration): `docs/agents/rules/nx.md` and `docs/agents/review-checklist.md` — do not duplicate the checklist here.
 
 ## Plans must delegate to sub-agents
 
-**At planning time** (before implementation), the coordinator names a manifest-resolved `f0rge-` primary and independent reviewers for each chunk, with deliverable and dependencies. Use `node scripts/agents/agents.mjs route <repo-relative-path...>` and `.cursor/rules/orchestration.mdc`. Specialists implement their assigned slice and request cross-domain work or review through the coordinator; they do not recursively delegate every step. `.cursor/skills/ship-feature/SKILL.md` is absent; use the shared protocol.
+**At planning time** (before implementation), the coordinator names a manifest-resolved `f0rge-` primary and independent reviewers for each chunk, with deliverable and dependencies. Use `node scripts/agents/agents.mjs route <repo-relative-path...>` and `docs/agents/rules/orchestration.md`. Specialists implement their assigned slice and request cross-domain work or review through the coordinator; they do not recursively delegate every step.
 
 At PR review time, flag substantial work without a named primary and independent review. A list of role names without completed review evidence is insufficient.
 
@@ -68,7 +68,7 @@ FastAPI routers are 1-3 lines: signature, single service-call delegation, return
 
 ## Review context and handoff
 
-Read root and applicable nested `AGENTS.md`, the shared protocol, relevant ADRs, `.cursor/review-context/_shared/*.md`, and the existing playbooks selected by the [agent guide's review-reference mapping](../../../docs/agents/README.md). Playbook filenames are retained historical names; do not construct a filename from a new role ID. Return findings in the playbook's documented format with source locations, evidence and verification limits. Include reusable gotchas in the handoff; global memory is not a prerequisite and is not written without separate user instruction.
+Read root and applicable nested `AGENTS.md`, the shared protocol, relevant ADRs, `docs/agents/review-context/_shared/*.md`, and the existing playbooks selected by the [agent guide's review-reference mapping](../../README.md). Playbook filenames are retained historical names; do not construct a filename from a new role ID. Return findings in the playbook's documented format with source locations, evidence and verification limits. Include reusable gotchas in the handoff; global memory is not a prerequisite and is not written without separate user instruction.
 
 ## Branch & PR conventions
 

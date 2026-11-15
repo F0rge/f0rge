@@ -1,10 +1,4 @@
----
-description: QA gate protocol — static analysis, rule adherence, tests, integration, e2e, deployment config audit. Use proactively before any PR or after completing a feature that needs verification.
-globs: apps/marrow/backend/tests/**, libs/**, .github/workflows/**
-alwaysApply: false
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # QA Gate Protocol
 
@@ -16,7 +10,7 @@ You are the final gate before a PR is ready for review. **Build, test, verify ru
 2. Ensure tests exist for new code
 3. Run all checks and confirm they pass
 4. Build and smoke-test with real requests
-5. Validate applicable ADRs, repository instructions and the [shared protocol](../../docs/agents/protocol.md)
+5. Validate applicable ADRs, repository instructions and the [shared protocol](../protocol.md)
 6. Produce a structured **QA Gate Report**
 
 ## Phases (execute ALL in order)
@@ -39,9 +33,9 @@ Report every violation with `file:line`.
 
 **Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.11. Shared libs stay valid on 3.10.
 
-**Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first. No `@base-ui/react` or `@mantine/*` imports in `apps/**` (see `ui-kit.mdc`). When `libs/ui` is affected and Storybook exists, run `npx nx run f0rge-ui:storybook` build. Enforce restricted-imports ESLint when configured.
+**Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first. No `@base-ui/react` or `@mantine/*` imports in `apps/**` (see `docs/agents/rules/ui-kit.md`). When `libs/ui` is affected and Storybook exists, run `npx nx run f0rge-ui:storybook` build. Enforce restricted-imports ESLint when configured.
 
-**Shared libs / Nx:** lib tests pass; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`. Follow `.cursor/rules/nx.mdc` (affected CI, OpenAPI `codegen:check`, Playwright via Nx `e2e`).
+**Shared libs / Nx:** lib tests pass; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`. Follow `docs/agents/rules/nx.md` (affected CI, OpenAPI `codegen:check`, Playwright via Nx `e2e`).
 
 **Data:** confidence scores on AI output, idempotent ETL, versioned/traceable source data.
 
@@ -139,4 +133,4 @@ For every new `app/config.py` setting:
 4. **Test it yourself** — build, start, hit it.
 5. **No shortcuts** — run every phase, report every phase.
 
-The coordinator assigns an independent `f0rge-quality-testing` review for full QA runs under the [shared protocol](../../docs/agents/protocol.md). Verification results do not authorize merge or release.
+The coordinator assigns an independent `f0rge-quality-testing` review for full QA runs under the [shared protocol](../protocol.md). Verification results do not authorize merge or release.

@@ -1,13 +1,13 @@
-> Canonical decisions: [`docs/adr/README.md`](../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
-# Bugbot / Agent Review — f0rge Nx gates
+# Codex PR review checklist
 
-Implementation detail: `.cursor/rules/nx.mdc`. Block on the following when reviewing PRs.
+Implementation detail: `docs/agents/rules/nx.md`. Block on the following when reviewing PRs.
 
 ## Instant block
 
-1. **New app/lib without `project.json`** under `apps/**` or `libs/**` that has `package.json`, `pyproject.toml` or a Cargo package manifest. Virtual Cargo workspace manifests follow the [Rust registration rules](../.github/rust/README.md).
-2. **Missing matching `platform:py`, `platform:ts` or `platform:rust` tag** on a registered project (exception: `marrow-ios` — `scope:marrow` only). Rust projects must satisfy the [fixed target and dependency contract](../.github/rust/README.md); a tag alone does not establish build/test coverage.
+1. **New app/lib without `project.json`** under `apps/**` or `libs/**` that has `package.json`, `pyproject.toml` or a Cargo package manifest. Virtual Cargo workspace manifests follow the [Rust registration rules](../../.github/rust/README.md).
+2. **Missing matching `platform:py`, `platform:ts` or `platform:rust` tag** on a registered project (exception: `marrow-ios` — `scope:marrow` only). Rust projects must satisfy the [fixed target and dependency contract](../../.github/rust/README.md); a tag alone does not establish build/test coverage.
 3. **Custom CI detect / project-list plumbing** — reintroducing `nx show projects --affected` into a detect job that feeds `run-many --projects "$LIST"`. Prefer `nx affected -t=… --exclude='*,!tag:platform:…'`. Do not pass `--projects` to `nx affected` (it is forwarded into the task).
 4. **Libs importing apps** — `libs/**` → `apps/` (TS or Python).
 5. **OpenAPI drift bypass** — removing `codegen:check`, `marrow-backend:openapi`, or frontend `implicitDependencies: ["marrow-backend"]` without an equivalent graph-aware check.

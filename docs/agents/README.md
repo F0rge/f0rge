@@ -12,20 +12,18 @@ holds role metadata and ordered routing rules. `docs/agents/protocol.md` supplie
 the shared brief; `docs/agents/profiles/` holds the role bodies. Keep instruction
 changes in those sources and regenerate the adapters.
 
-Only Codex and Cursor adapters are generated:
-
-- `.codex/agents/f0rge-*.toml`
-- `.cursor/agents/f0rge-*.md`
+Codex is the supported repository coding harness. The generator writes eight
+`.codex/agents/f0rge-*.toml` profiles; shared skills remain under `.agents/skills/`.
 
 The generator embeds the shared protocol and selected profile body. References
 inside them are literal repository-root-relative paths so they retain their
-meaning in either adapter. Edit the source, not an embedded generated copy.
+meaning in the Codex profiles. Edit the source, not an embedded generated copy.
 The manifest is repository metadata, not a native tool permission configuration.
 No model or provider is selected by these profiles.
 
-Native formats are documented by [Codex](https://learn.chatgpt.com/docs/agent-configuration/subagents)
-and [Cursor](https://cursor.com/docs/subagents). The shared Markdown sources and
-routing manifest are repository conventions; neither is a universal agent loader.
+The native format is documented by [Codex](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+The shared Markdown sources and routing manifest are repository conventions;
+Codex profile discovery and the available delegation tools belong to the host.
 
 ## Routing and handoffs
 
@@ -54,15 +52,16 @@ Role selection and plaintext instructions do not grant access or enforce a sandb
 
 ## Review references
 
-Every reviewer reads `.cursor/review-context/_shared/*.md`, then the relevant
-existing area playbook. These are review references, not another ownership map.
+Every reviewer reads `docs/agents/review-checklist.md`,
+`docs/agents/review-context/_shared/*.md`, then the relevant area playbook.
+Read these files explicitly; they are review references, not another ownership map.
 
 | Review area | Existing playbook |
 | --- | --- |
-| Backend; legacy Python persistence/API changes | `.cursor/review-context/fastapi-backend-playbook.md` |
-| Frontend and client contracts | `.cursor/review-context/frontend-dev-playbook.md` |
-| Delivery and DevOps | `.cursor/review-context/devops-playbook.md` |
-| Quality/testing evidence | `.cursor/review-context/qa-engineer-playbook.md` |
+| Backend; legacy Python persistence/API changes | `docs/agents/review-context/fastapi-backend-playbook.md` |
+| Frontend and client contracts | `docs/agents/review-context/frontend-dev-playbook.md` |
+| Delivery and DevOps | `docs/agents/review-context/devops-playbook.md` |
+| Quality/testing evidence | `docs/agents/review-context/qa-engineer-playbook.md` |
 
 Data, security and workflows reviewers select the affected-area playbooks from
 their diff, alongside their own required ADR readings. There are no invented
@@ -93,11 +92,10 @@ consistency, valid references, generated output and routing cases. They do not
 prove that a native harness discovered or invoked a profile, that its worker
 followed every instruction, or that the accepted ADRs are implemented.
 
-For each installed supported harness, use its supported discovery/invocation
-mechanism in a fresh repository session. Dispatch a read-only task to a generated
+Use Codex’s supported discovery/invocation mechanism in a fresh repository session. Dispatch a read-only task to a generated
 role, confirm which profile was selected, and record the invocation, observed
 result and any unavailable capability. Keep this native smoke evidence separate
-from generator tests. An unavailable Cursor or Codex smoke is reported as not run,
+from generator tests. An unavailable Codex smoke is reported as not run,
 not replaced by a successful file scan.
 
 Instruction-only changes need these checks and independent review. App behavior

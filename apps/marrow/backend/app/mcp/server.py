@@ -17,9 +17,8 @@ def create_server() -> FastMCP:
 
     The BearerTokenVerifier gates every request. FastMCP requires AuthSettings
     whenever token_verifier is set; issuer_url is unused placeholder metadata.
-    resource_server_url stays unset so we do not publish
-    /.well-known/oauth-protected-resource — Cursor treats a 200 there as
-    "use OAuth" and never sends the static Authorization header from mcp.json.
+    resource_server_url stays unset because this server accepts static bearer
+    tokens and does not provide an OAuth authorization flow or discovery metadata.
     """
     # FastMCP refuses token_verifier without auth settings. We don't run an
     # OAuth flow. issuer_url must be a syntactically valid URL; clients must

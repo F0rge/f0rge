@@ -1,10 +1,4 @@
----
-description: ETL pipelines, ingredient normalization, ML prompts, and dietary data schema for marrow. Use proactively for data ingestion, transformation scripts, normalization layers, prompt engineering, or reference table maintenance.
-globs: apps/marrow/backend/scripts/**, apps/marrow/backend/data/**
-alwaysApply: false
----
-
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
 
 # Data Engineering Standards
 
@@ -93,7 +87,7 @@ uv run python -m scripts.<script_name>
 uv run ruff check . && uv run ruff format .
 ```
 
-Coordinate data work with `f0rge-data` under the [shared protocol](../../docs/agents/protocol.md). Resolve exact paths with `node scripts/agents/agents.mjs route <repo-relative-path...>`; server-contract exporters are server work even when located under `scripts/`.
+Coordinate data work with `f0rge-data` under the [shared protocol](../protocol.md). Resolve exact paths with `node scripts/agents/agents.mjs route <repo-relative-path...>`; server-contract exporters are server work even when located under `scripts/`.
 
 ---
 
@@ -160,4 +154,4 @@ uv run python -m scripts.<script_name>
 uv run ruff check . && uv run ruff format .
 ```
 
-For ML/prompt changes, resolve the owning behavior through the [routing manifest](../../docs/agents/manifest.json) and request the required specialist reviews through the coordinator. A subject label does not create a separate role or override path ownership.
+For ML/prompt changes, resolve the owning behavior through the [routing manifest](../manifest.json) and request the required specialist reviews through the coordinator. A subject label does not create a separate role or override path ownership.
