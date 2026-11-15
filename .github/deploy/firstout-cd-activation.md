@@ -1,15 +1,16 @@
 # Firstout CD activation record
 
-Status on 15 November 2026: **setup in progress; automatic production releases
-remain paused**. This record separates configured controls from the remaining
-production work. Follow the [CD runbook](firstout-cd.md) and
+Status on 15 November 2026: **production rollback baseline verified; automatic
+releases remain paused pending a qualified reviewed source**. This record
+separates completed operations from the remaining automatic activation. Follow
+the [CD runbook](firstout-cd.md) and
 [controlled image promotion](firstout-release.md); the canonical decisions remain
 [P-006](../../docs/adr/governance.md#p-006),
 [P-020](../../docs/adr/data.md#p-020),
 [P-045/P-046](../../docs/adr/delivery.md#p-045) and
 [P-054](../../docs/adr/operations.md#p-054).
 
-## Verified configuration
+## Verified setup
 
 - GitHub environment `firstout-production` accepts deployments from `main`
   only. Other apps' release environments and holds are unchanged.
@@ -20,18 +21,20 @@ production work. Follow the [CD runbook](firstout-cd.md) and
   authenticated token metadata verifies its Firstout production scope.
   Superseded setup credentials are revoked. No secret value is recorded here.
 - Main review ruleset `27305147` is active with no bypass, required code-owner
-  review and stale-approval dismissal. The original activation checkpoint had a
-  zero general approval count; the publisher setup strengthened it to **one**
-  while retaining the other review protections. Existing main ownership is
-  enforced. The new global Leo-only ownership remains pending its reviewed
-  source merge; see [the publisher checkpoint](../../docs/agents/github-publisher.md#verified-checkpoint-15-november-2026).
-- Firstout PostgreSQL has daily, weekly and monthly backup schedules. Its
-  fresh, nonexpiring snapshot `ad4d3f94` reports `referencedMB=795` and `usedMB=0`
-  and passes the corrected live backup gate. Railway's
+  review and stale-approval dismissal. The publisher setup strengthened its
+  general approval count from zero to **one**. The global Leo-only
+  [CODEOWNERS file](../CODEOWNERS) reached protected `main` in
+  [PR #948](https://github.com/F0rge/f0rge/pull/948), so Leo's personal code-owner
+  approval is required. The PR author cannot supply their own approval.
+- Firstout PostgreSQL has daily, weekly and monthly backup schedules.
+  Pre-090 snapshot `dbc79515-ae59-4bf6-b877-9a6196999119`, created at 09:52 UTC,
+  is nonexpiring, reports `referencedMB=786` and passes the live backup gate.
+  Earlier snapshot `ad4d3f94` reported `referencedMB=795` and `usedMB=0`.
+  Railway's
   [copy-on-write backups](https://docs.railway.com/volumes/backups#pricing) can
   share all data with the source volume, so zero exclusive bytes do not mean an
   empty snapshot. Positive referenced data does not prove successful restoration;
-  this activation task has not performed a restore rehearsal.
+  the separately verified logical-database recovery below has a different scope.
 - Merged pipeline source `2d31ed971c635f18dd5487873982d79774ccedf2`
   ([PR #940](https://github.com/F0rge/f0rge/pull/940)) passed
   [main CI](https://github.com/F0rge/f0rge/actions/runs/43695015574) and
@@ -43,23 +46,74 @@ production work. Follow the [CD runbook](firstout-cd.md) and
   `ghcr.io/f0rge/firstout-api@sha256:9072596ac45b8429fb0d5fc8227cc31395bf2a3db2bf2fcd3d354f66eae59713`
   and
   `ghcr.io/f0rge/firstout-frontend@sha256:7e462a7328cb4998c9c297fa06931d3dfefec62b0f64261e29367a9eac280860`.
-  The API digest was pulled anonymously. Publication does not establish the
-  images currently serving production.
-- The published API and the actual old 089 image passed the updated PostgreSQL
-  18 compatibility harness: migration/replay, authenticated HTTP, and old-image
+  The API digest was pulled anonymously. Subsequent production serving-version
+  verification is recorded below; publication alone did not establish it.
+- The published API and the actual old 089 image passed the PostgreSQL 18
+  compatibility harness: migration/replay, authenticated HTTP, and old-image
   reads of new-version writes. These tests used isolated synthetic data.
+- [PR #942](https://github.com/F0rge/f0rge/pull/942) merged as
+  `d2c5fd2f2ec81268f7af6d41d1ae227a7d98eb60`. It adds the ownership controls,
+  corrects the snapshot gate to check referenced data, and aligns the automatic
+  migration rehearsal with PostgreSQL 18. Its
+  [main CI](https://github.com/F0rge/f0rge/actions/runs/43698244488) and
+  [E2E smoke](https://github.com/F0rge/f0rge/actions/runs/43698244559) passed.
+  Activation-change verification also passed 30 controller tests, 94 release
+  unit tests and 11 CD pipeline tests. This is source validation; it does not
+  establish a successful automatic release.
+
+### Isolated provider rehearsals
+
+- The tested API image was deployed to a temporary service using synthetic
+  variables, application lifespan disabled, and no database, public domain or
+  volume. Its provider digest and one running replica matched the artifact.
+  HTTP health returned 200 with `no-store`; this checks image/provider identity,
+  not normal startup or production database readiness.
+- Intentionally failing readiness deployment
+  `1665ac20-48f4-4020-969b-8b1f4cb0c681` failed while healthy deployment
+  `d3c36c7e-f9c8-457d-b304-173b2ffdd5d6` remained available. Operator recovery
+  deployment `520ba9e4-d55d-4351-9381-6a71863de368` restored the expected API digest
+  with one running replica and verified health.
+  This was an operator-run failure/recovery rehearsal, **not execution of the
+  automatic CD rollback controller**.
+- Frontend deployment `98f358dd-9aab-46a5-a686-6e66ceb54521` also verified the
+  tested image's exact digest, one running replica and HTTP 200 with `no-store`.
+- Both temporary services were deleted after their outcomes were verified.
+  Private provider receipts retain their deployment identities.
+
+### Logical database recovery
+
+- After the concurrent data replacement committed, a full, unfiltered native
+  backup of Firstout's database and roles was saved as a private AES-GCM
+  encrypted artifact and restored into isolated PostgreSQL 18. Both native
+  database restoration and role restoration completed with exit code zero.
+- The first restored database reached `089_merge_record_workspaces`. Metadata
+  checks confirmed `firstout_app` is a non-owner, `NOSUPERUSER`, `NOBYPASSRLS`
+  role without membership permitting a privileged role assumption. These role
+  flags alone did not establish read-only migration-metadata permissions.
+- At 10:24 UTC, a new saved encrypted full-database-and-role archive from the
+  completed 090 baseline also restored successfully into isolated PostgreSQL
+  18. Its exact source/schema/policy receipt and read-only runtime metadata
+  permissions were preserved. The recovery container was removed afterward.
+- The recovery container had no network, published ports or application
+  process. This rehearsal made no production writes; its container cleanup was
+  verified. Independent data review checked the recovery script and metadata.
+- This establishes logical database-and-role recovery at that checkpoint. It
+  does **not** establish photo/bucket recovery or provider-snapshot restoration.
+  Archive contents, business row counts, credentials, encryption key and private
+  recovery receipts are not included in this public record.
 
 ## Review protection in this change
 
-The prepared [CODEOWNERS file](../CODEOWNERS) assigns every repository path to
+The [CODEOWNERS file](../CODEOWNERS) assigns every repository path to
 Leo as the sole required code owner, retaining coverage of Firstout source,
-shared backend dependencies and build inputs. It replaces the older two-owner
-file only after the reviewed change reaches protected `main`; the live file can
-still request Luis until then. The configured main rule still requires actual
-code-owner approval. The bot authors PRs and Leo personally reviews them;
+shared backend dependencies and build inputs. It replaced the older two-owner
+file on protected `main` through [PR #948](https://github.com/F0rge/f0rge/pull/948).
+The configured main rule requires one approval and Leo's actual code-owner
+review. The bot authors PRs and Leo personally reviews them;
 agents do not submit his approval. See the [publisher and native merge procedure](../../docs/agents/github-publisher.md)
 and canonical [P-005](../../docs/adr/governance.md#p-005). Repository auto-merge
-availability alone does not activate the new default or arm a PR.
+availability alone does not arm a particular PR. The rule and ownership file
+are separate controls; both are required.
 
 Shared workflows, actions, scripts and deployment helpers also require review:
 another workflow could request the `firstout-production` environment and copy
@@ -72,37 +126,74 @@ Nx evaluates workspace project metadata and executable plugin configuration
 before selecting tasks, so those configuration files also require review.
 Other apps' release authorization remains unchanged under P-006.
 
-## Work still required
+## Production rollback baseline verified
 
-- Keep the authorized [pause issue #941](https://github.com/F0rge/f0rge/issues/941)
-  open until activation prerequisites and the serving baseline are verified.
-- Concurrent authorized Primavera maintenance advanced production from
-  `083_portal_clerk_identity` through `089_merge_record_workspaces`. That upgrade
-  was not performed by this activation task. Wait for its cutover to finish and
-  recheck production state before running the pinned CD-aware image's command
-  for `090_release_migration_receipts` or promoting either baseline image.
-  Preserve backup, restore-rehearsal, role and migration evidence; never use the
-  test-database bootstrap option in production.
-  The concurrent maintenance's tenant-scoped logical backup does not establish
-  whole-database recovery. Retain a full-database backup and verify isolated
-  restoration after that cutover before the 090 baseline operation.
-- Verify pinned, actually serving API and frontend images. The API must expose
-  database-backed `/api/v1/ready` with its exact source, schema, policy and
-  completed receipt. Set `FIRSTOUT_BOOTSTRAP_BACKEND_IMAGE` to that verified
-  serving API digest. An older 089 image cannot provide this baseline.
-- Verify alternate provider triggers are disabled, pending provider changes are
-  reconciled, and the recovery rehearsal succeeds using isolated resources.
-  Isolated API rehearsal service `d0465656` reached deployment `f11581d7`
-  `SUCCESS` with one healthy replica, the expected API digest above, and HTTP 200
-  with `no-store`. It uses synthetic variables, application lifespan disabled and no
-  database, domain or volume. This proves the temporary target's image/provider
-  identity, not normal startup, production database connectivity or readiness.
-  Its bad-health/recovery rehearsal is still pending a verified outcome.
-- Obtain an independent authorized GitHub approval on a new PR's final head,
-  merge to `main`, and observe successful CI followed by the automatic CD run.
-  PR #940 has no GitHub approval record, so it cannot pass the automatic source
-  gate. Record the resulting release journal, immutable image identities,
-  readiness, assets and recovery evidence before claiming activation complete.
+- Concurrent authorized Primavera maintenance performed the historical upgrade
+  from `083_portal_clerk_identity` to `089_merge_record_workspaces` and committed
+  its data replacement. This activation task then rechecked production before
+  the controlled 090 migration and image promotion.
+- At 10:00 UTC, trusted-image job `a40a5d1c-310b-4f13-908b-608e115ec197` ran the
+  packaged 090 migration and a separately reviewed operator permission
+  correction. Both phases succeeded. The receipt binds source
+  `2d31ed971c635f18dd5487873982d79774ccedf2`, revision
+  `090_release_migration_receipts` and policy
+  `b3a7954e956a8e60bbeee13efaeaa600755a866529aeece3fe63ddfff10b3bc2`.
+- The published `9072596a…` image's runner alone **did not** remove existing
+  runtime write grants on migration metadata. The operator correction revoked
+  runtime/PUBLIC privileges on both metadata tables and granted runtime SELECT.
+  These were two database transactions; image promotion remained held until
+  hardening and fresh runtime verification succeeded. The verified application
+  baseline includes this explicit correction; it does not certify that image's
+  runner as sufficient by itself.
+- Fresh runtime checks established metadata SELECT access and no checked
+  metadata write privileges, including inherited or assumable paths. An
+  independent query through the live API confirmed Alembic UPDATE is denied
+  while existing default business-table DML remains available. This PR fixes
+  the runner so metadata permission hardening commits atomically with migration
+  and receipt creation. PostgreSQL regressions include restricted runtime,
+  forced-RLS/cross-tenant denial and no administrator credential in the strict
+  PostgreSQL 18 image probe; future normal CD needs no operator correction hook.
+- API deployment `fb3793a0-dd25-4511-83c9-eaf34e4ee557` serves the exact
+  `9072596a…` digest with one `RUNNING` replica and provider rollback support.
+  `/api/v1/ready` returned HTTP 200 with `no-store`, exact source above, schema
+  090, image/receipt schema 090, matching policy and `migration_receipt=true`.
+  The fixed provider target, disabled image updates, absent Git triggers and
+  cleared legacy start/pre-deploy hooks were verified.
+- Frontend deployment `92c0c294-da60-447f-aca3-e4b89aa59459` serves the exact
+  `7e462a73…` digest with one `RUNNING`, rollback-capable replica. Health returned
+  HTTP 200 with `no-store`; served JavaScript and CSS hashes matched the exact
+  tested image.
+- `FIRSTOUT_BOOTSTRAP_BACKEND_IMAGE` now equals the verified serving API digest.
+  The one-time migration job was deleted after its outcome was verified; no
+  task-owned ephemeral service remains.
+- The saved 090 logical database-and-role restore described above verifies the
+  receipt and restricted metadata permissions survive recovery. This is SQL
+  archive recovery, not provider-volume or photo/bucket restoration. Application
+  rollback keeps the expanded schema and new transactions; it never restores
+  either database backup automatically.
+
+## Automatic activation pending
+
+The authorized [pause issue #941](https://github.com/F0rge/f0rge/issues/941)
+remains open. PRs #940 and #942 have no qualifying GitHub approval on their final
+heads. Their merges and green checks do not satisfy the current automatic source
+gate, which requires an `APPROVED` record from a non-author with repository
+write, maintain or admin permission. P-005's independent agent review and CI are
+separate requirements; this chat's operations authorization also cannot create
+that GitHub review record. The
+[automatic run for #942](https://github.com/F0rge/f0rge/actions/runs/43698452247)
+stopped before deployment.
+
+Obtain the qualifying GitHub approval on this activation PR's final head and
+merge it to `main`. Once the reviewed runner correction and prerequisites are
+verified, reconcile the pause issue and observe successful CI followed by the
+actual automatic CD run. The installed production credential has not yet been
+exercised by a successful GitHub Actions deployment. Retain the resulting
+release journal, running image digests,
+readiness/migration receipt, served assets and recovery-test evidence before
+claiming activation complete. Distinguish controller tests using synthetic
+provider responses from the isolated operator recovery above; neither alone
+establishes automatic production rollback execution.
 
 Keep credentials and private recovery receipts outside this public repository.
 Update this checkpoint as each operation is verified; do not infer completion

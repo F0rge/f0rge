@@ -126,6 +126,62 @@ async def verify_database_identity(connection: AsyncConnection, runtime_url: str
         await connection.commit()
 
 
+async def restrict_runtime_metadata(
+    connection: AsyncConnection, runtime_role: str, *, allow_test_runtime_owner: bool
+) -> None:
+    """Remove direct metadata ACLs; reject inherited or assumable write access.
+
+    Default privileges may grant DML when a metadata table is created. A later
+    GRANT SELECT does not remove those grants. Never change role memberships,
+    PUBLIC grants, schema defaults or application business-table permissions.
+    """
+    quoted_role = connection.dialect.identifier_preparer.quote_identifier(runtime_role)
+    await connection.execute(
+        sa.text(
+            f"REVOKE ALL PRIVILEGES ON TABLE release_migration_receipts, alembic_version FROM {quoted_role}"
+        )
+    )
+    await connection.execute(
+        sa.text(
+            f"GRANT SELECT ON TABLE release_migration_receipts, alembic_version TO {quoted_role}"
+        )
+    )
+    if allow_test_runtime_owner:
+        database = await connection.scalar(sa.text("SELECT current_database()"))
+        migration_role = await connection.scalar(sa.text("SELECT current_user"))
+        if not database.startswith(("firstout_test_second_", "firstout_cd_test_")):
+            raise MigrationRefused("Owner-runtime test option requires a disposable test database")
+        # Direct test calls may use their fixture owner. The CLI never supplies
+        # this option, including when it bootstraps its named CI database.
+        if migration_role == runtime_role:
+            return
+    for table in ("release_migration_receipts", "alembic_version"):
+        writable = await connection.scalar(
+            sa.text("""SELECT EXISTS (
+                SELECT 1 FROM pg_roles r CROSS JOIN pg_class metadata
+                WHERE metadata.oid=CAST(:table AS regclass)
+                AND (r.rolname=:runtime OR pg_has_role(:runtime, r.oid, 'MEMBER'))
+                AND (
+                    r.rolsuper OR r.rolbypassrls OR metadata.relowner=r.oid
+                    OR EXISTS (
+                        SELECT 1 FROM aclexplode(acldefault('r', metadata.relowner)) p
+                        WHERE p.privilege_type <> 'SELECT'
+                        AND has_table_privilege(r.oid, metadata.oid, p.privilege_type)
+                    )
+                    OR has_any_column_privilege(r.oid, CAST(:table AS regclass), 'INSERT')
+                    OR has_any_column_privilege(r.oid, CAST(:table AS regclass), 'UPDATE')
+                    OR has_any_column_privilege(r.oid, CAST(:table AS regclass), 'REFERENCES')
+                )
+            )"""),
+            {"runtime": runtime_role, "table": table},
+        )
+        if writable:
+            raise MigrationRefused(
+                "Runtime retains inherited, PUBLIC, column or owner write access to release metadata; "
+                "review database privileges before deployment"
+            )
+
+
 async def migrate(
     migration_url: str,
     runtime_url: str,
@@ -133,6 +189,7 @@ async def migrate(
     *,
     bootstrap_test_database: bool = False,
     lock_timeout_seconds: float = 30,
+    allow_test_runtime_owner: bool = False,
 ) -> dict:
     if not SOURCE_SHA.fullmatch(source_commit):
         raise MigrationRefused("SOURCE_COMMIT must be the image's full source SHA")
@@ -219,12 +276,10 @@ async def migrate(
                     quoted_role = connection.dialect.identifier_preparer.quote_identifier(
                         runtime_role
                     )
-                    # Readiness reads both the release receipt and Alembic's
-                    # current schema version; runtime needs read-only metadata.
-                    await connection.execute(
-                        sa.text(
-                            f"GRANT SELECT ON TABLE release_migration_receipts, alembic_version TO {quoted_role}"
-                        )
+                    await restrict_runtime_metadata(
+                        connection,
+                        runtime_role,
+                        allow_test_runtime_owner=allow_test_runtime_owner,
                     )
                     # 085 adds this tenant-owned table; keep its existing RLS
                     # stage and grant only the app's normal DML capabilities.
