@@ -336,7 +336,9 @@ pub(crate) async fn verify(
         connection.batch_execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY").await?;
         // Legacy direct objects retain their complete JSONB value, including
         // unknown outer metadata. New envelopes must have exactly two keys.
-        let records=sql_query("WITH candidate AS (SELECT payload,sha256 FROM source_snapshots WHERE run_id=$1 AND source_kind='replay' ORDER BY recorded_at DESC LIMIT 1), documents AS (SELECT sha256, (payload ? 'input') IS NOT TRUE AS encoded, CASE WHEN jsonb_typeof(payload)='object' THEN CASE WHEN payload ? 'input' THEN payload::text WHEN payload->>'encoding'=$2 AND jsonb_typeof(payload->'document')='string' AND (SELECT count(*) FROM jsonb_object_keys(payload))=2 THEN payload->>'document' ELSE NULL END ELSE NULL END AS document FROM candidate) SELECT document,sha256,encoded FROM documents WHERE octet_length(document) BETWEEN 1 AND $3")
+        // Materialize the extracted document once: inlining repeats the large
+        // detoast/decoding expression for both bounds and the returned column.
+        let records=sql_query("WITH candidate AS (SELECT payload,sha256 FROM source_snapshots WHERE run_id=$1 AND source_kind='replay' ORDER BY recorded_at DESC LIMIT 1), documents AS MATERIALIZED (SELECT sha256, (payload ? 'input') IS NOT TRUE AS encoded, CASE WHEN jsonb_typeof(payload)='object' THEN CASE WHEN payload ? 'input' THEN payload::text WHEN payload->>'encoding'=$2 AND jsonb_typeof(payload->'document')='string' AND (SELECT count(*) FROM jsonb_object_keys(payload))=2 THEN payload->>'document' ELSE NULL END ELSE NULL END AS document FROM candidate) SELECT document,sha256,encoded FROM documents WHERE octet_length(document) BETWEEN 1 AND $3")
             .bind::<SqlUuid,_>(run).bind::<Text,_>(ENCODING).bind::<BigInt,_>(MAX_DOCUMENT_BYTES as i64).load::<SavedDocument>(connection).await?;
         Ok(records.into_iter().next())
     }).await?.ok_or(CollectionError::Incomplete)?;
