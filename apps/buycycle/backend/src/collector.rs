@@ -519,7 +519,7 @@ pub async fn collect<S: Source>(
                 .await
                 .map_err(|_| CollectionError::Storage)?;
             let rows = input.rows.clone();
-            let derived = metrics::build(
+            let derived = metrics::build_raw(
                 kind.clone(),
                 input.rows,
                 input.details,
@@ -625,7 +625,7 @@ pub async fn collect<S: Source>(
         let input = crate::services::calculation_input(db, kind.clone(), source.now())
             .await
             .map_err(|_| CollectionError::Storage)?;
-        let expected = metrics::report(input.clone());
+        let expected = metrics::report_raw(input.clone());
         snapshot(
             &mut gate.connection,
             run,

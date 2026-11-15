@@ -102,30 +102,33 @@ pub async fn calculation_input(
     db: &Db,
     kind: Kind,
     now: chrono::DateTime<Utc>,
-) -> Result<metrics::CalculationInput, ApiError> {
-    let mut snapshot = db
-        .read_tables_snapshot(&["listing", "detail", "price_history", "country_map", "runs"])
+) -> Result<metrics::CalculationInput<Box<serde_json::value::RawValue>>, ApiError> {
+    let snapshot = db
+        .calculation_snapshot(kind.as_str())
         .await
         .map_err(data_error)?;
     Ok(metrics::CalculationInput {
-        rows: snapshot
-            .remove("listing")
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|r| r.get("kind").and_then(Value::as_str) == Some(kind.as_str()))
-            .collect(),
-        details: snapshot.remove("detail").unwrap_or_default(),
-        history: snapshot.remove("price_history").unwrap_or_default(),
-        countries: snapshot.remove("country_map").unwrap_or_default(),
-        runs: snapshot.remove("runs").unwrap_or_default(),
+        rows: snapshot.rows,
+        details: snapshot.details,
+        history: snapshot.history,
+        countries: snapshot.countries,
+        runs: snapshot.runs,
         kind,
         calculated_at: now,
     })
 }
 pub async fn listings(db: &Db, kind: Kind) -> Result<ListingsResponse, ApiError> {
-    Ok(metrics::report(
-        calculation_input(db, kind, Utc::now()).await?,
-    ))
+    // Acquire before loading a snapshot. Keep the permit in the blocking task:
+    // cancelling a caller must not allow a second heavy calculation beside it.
+    static REPORT: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+    let permit = REPORT.acquire().await.map_err(ApiError::internal_from)?;
+    let input = calculation_input(db, kind, Utc::now()).await?;
+    actix_web::rt::task::spawn_blocking(move || {
+        let _permit = permit;
+        metrics::report_raw(input)
+    })
+    .await
+    .map_err(ApiError::internal_from)
 }
 pub async fn read_state(db: &Db, subject: &str) -> Result<StateResponse, ApiError> {
     state_response(db.user_state(subject).await.map_err(data_error)?)

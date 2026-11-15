@@ -5,36 +5,48 @@ use chrono_tz::Europe::Luxembourg;
 use regex::Regex;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::LazyLock;
 
 const STOPB: &str = "road gravel bike bicycle disc disk di2 etap axs ultegra dura ace dura-ace 105 grx sram shimano campagnolo rival force red apex tiagra sora claris super record chorus centaur ekar potenza edition team limited the and with carbon alu aluminium aluminum frameset complete new mechanical hydraulic hrd ltd 1x 2x 11 12 speed 12s 11s rim custom size cm";
 const STOPW: &str = "complete wheels wheel wheelset wheelsets laufradsatz laufräder laufrad set pair paire de roues ruote coppia par ruedas disc disk disco brake brakes rim rims carbon carbone carbono alloy aluminium aluminum alu tubeless tubular clincher tle tl cl centerlock center centre lock 6-bolt 6 bolt 700c 700 28 29 27.5 650b 26 zoll inch mm thru axle ta qr shimano sram hg xdr xd 11s 12s 11 12 speed road gravel mtb new with and for the front rear tyres tires tyre tire freehub hub hubs body only";
+static YEAR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(19|20)\d\d\b").unwrap());
+static MILLIMETRES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+)\s*mm\b").unwrap());
+static WORDS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9.+-]+").unwrap());
+static BIKE_STOP: LazyLock<HashSet<&str>> = LazyLock::new(|| STOPB.split_whitespace().collect());
+static WHEEL_STOP: LazyLock<HashSet<&str>> = LazyLock::new(|| STOPW.split_whitespace().collect());
 pub fn model_key(kind: &Kind, name: &str, brand: &str) -> String {
+    normalized_model(kind, name, &brand_patterns(brand))
+}
+fn brand_patterns(brand: &str) -> Vec<Regex> {
+    brand
+        .to_lowercase()
+        .split_whitespace()
+        .map(|word| {
+            Regex::new(&format!(
+                r"(?P<a>^|[^a-z0-9]){}(?P<b>[^a-z0-9]|$)",
+                regex::escape(word)
+            ))
+            .expect("escaped brand")
+        })
+        .collect()
+}
+fn normalized_model(kind: &Kind, name: &str, patterns: &[Regex]) -> String {
     let mut name = format!(" {} ", name.to_lowercase());
-    for word in brand.to_lowercase().split_whitespace() {
-        let re = Regex::new(&format!(
-            r"(?P<a>^|[^a-z0-9]){}(?P<b>[^a-z0-9]|$)",
-            regex::escape(word)
-        ))
-        .expect("escaped brand");
+    for re in patterns {
         // A consumed separator can hide an adjacent repeated brand in one pass.
         // Iterate to match Python's zero-width boundary replacement semantics.
         while re.is_match(&name) {
             name = re.replace_all(&name, "${a} ${b}").into_owned();
         }
     }
-    name = Regex::new(r"\b(19|20)\d\d\b")
-        .unwrap()
-        .replace_all(&name, " ")
-        .into_owned();
-    name = Regex::new(r"(\d+)\s*mm\b")
-        .unwrap()
-        .replace_all(&name, "$1")
-        .into_owned();
-    let stop: HashSet<&str> = if *kind == Kind::Wheels { STOPW } else { STOPB }
-        .split_whitespace()
-        .collect();
-    Regex::new(r"[a-z0-9.+-]+")
-        .unwrap()
+    name = YEAR.replace_all(&name, " ").into_owned();
+    name = MILLIMETRES.replace_all(&name, "$1").into_owned();
+    let stop = if *kind == Kind::Wheels {
+        &*WHEEL_STOP
+    } else {
+        &*BIKE_STOP
+    };
+    WORDS
         .find_iter(&name)
         .map(|x| x.as_str())
         .filter(|x| !stop.contains(x) && !x.trim_matches(['.', '-', '+']).is_empty())
@@ -116,29 +128,20 @@ fn country_km(country: &str) -> Option<f64> {
     })
 }
 #[derive(Clone)]
-struct Row {
-    raw: Value,
-    detail: Value,
+struct Row<'a> {
+    raw: &'a Value,
+    detail: &'a Value,
+    id: &'a str,
+    year: Option<f64>,
+    group: String,
     model: String,
     brake: String,
     material: String,
     days: f64,
 }
-fn comparable(a: &Row, b: &Row, kind: &Kind) -> bool {
-    string(&a.raw, "id") != string(&b.raw, "id")
-        && (*kind == Kind::Wheels
-            || number(&a.raw, "year")
-                .zip(number(&b.raw, "year"))
-                .is_none_or(|(x, y)| (x - y).abs() <= 1.))
-}
-fn key(row: &Row) -> String {
-    format!(
-        "{}\0{}\0{}\0{}",
-        string(&row.raw, "brand").to_lowercase(),
-        row.model,
-        row.brake,
-        row.material
-    )
+fn comparable(a: &Row<'_>, b: &Row<'_>, kind: &Kind) -> bool {
+    a.id != b.id
+        && (*kind == Kind::Wheels || a.year.zip(b.year).is_none_or(|(x, y)| (x - y).abs() <= 1.))
 }
 fn days_listed(raw: &Value, now: DateTime<Utc>) -> f64 {
     let start = number(raw, "activated_at")
@@ -151,6 +154,44 @@ fn days_listed(raw: &Value, now: DateTime<Utc>) -> f64 {
         .unwrap_or(now.timestamp() as f64);
     (end - start) / 86400.
 }
+struct HistoryIndex(HashMap<String, Vec<PricePoint>>);
+impl HistoryIndex {
+    fn push(&mut self, row: &Value) {
+        if let Some(price) = number(row, "price") {
+            self.0
+                .entry(string(row, "id"))
+                .or_default()
+                .push(PricePoint {
+                    day: string(row, "day"),
+                    price,
+                });
+        }
+    }
+    fn finish(mut self) -> Self {
+        for points in self.0.values_mut() {
+            points.sort_by(|a, b| a.day.cmp(&b.day));
+        }
+        self
+    }
+    fn values(rows: &[Value]) -> Self {
+        let mut index = Self(HashMap::new());
+        for row in rows {
+            index.push(row);
+        }
+        index.finish()
+    }
+    fn raw(rows: Vec<Box<serde_json::value::RawValue>>) -> Self {
+        let mut index = Self(HashMap::new());
+        for row in rows {
+            // RawValue is validated JSON from PostgreSQL or serde. Materialize
+            // exactly one row, then release it instead of building a full tree.
+            let row = serde_json::from_str(row.get()).expect("validated history JSON");
+            index.push(&row);
+        }
+        index.finish()
+    }
+}
+
 /// All observations are retained; output includes disappeared rows for history and explicit UI filtering.
 pub fn build(
     kind: Kind,
@@ -160,29 +201,42 @@ pub fn build(
     countries: Vec<Value>,
     now: DateTime<Utc>,
 ) -> Vec<Listing> {
-    let details: HashMap<String, Value> =
-        details.into_iter().map(|d| (string(&d, "id"), d)).collect();
+    let indexed = HistoryIndex::values(&history);
+    drop(history);
+    build_indexed(kind, &raw_rows, &details, &indexed, &countries, now)
+}
+
+pub fn build_raw(
+    kind: Kind,
+    raw_rows: Vec<Value>,
+    details: Vec<Value>,
+    history: Vec<Box<serde_json::value::RawValue>>,
+    countries: Vec<Value>,
+    now: DateTime<Utc>,
+) -> Vec<Listing> {
+    let indexed = HistoryIndex::raw(history);
+    build_indexed(kind, &raw_rows, &details, &indexed, &countries, now)
+}
+
+fn build_indexed(
+    kind: Kind,
+    raw_rows: &[Value],
+    details: &[Value],
+    history: &HistoryIndex,
+    countries: &[Value],
+    now: DateTime<Utc>,
+) -> Vec<Listing> {
+    let details: HashMap<String, &Value> = details.iter().map(|d| (string(d, "id"), d)).collect();
     let countries: HashMap<i64, String> = countries
-        .into_iter()
-        .filter_map(|c| Some((c.get("cid")?.as_i64()?, string(&c, "country"))))
+        .iter()
+        .filter_map(|c| Some((c.get("cid")?.as_i64()?, string(c, "country"))))
         .collect();
-    let mut hist: HashMap<String, Vec<PricePoint>> = HashMap::new();
-    for h in history {
-        if let Some(price) = number(&h, "price") {
-            hist.entry(string(&h, "id")).or_default().push(PricePoint {
-                day: string(&h, "day"),
-                price,
-            })
-        }
-    }
-    for h in hist.values_mut() {
-        h.sort_by(|a, b| a.day.cmp(&b.day));
-    }
-    let rows: Vec<Row> = raw_rows
-        .into_iter()
+    let mut brands = HashMap::new();
+    let rows: Vec<Row<'_>> = raw_rows
+        .iter()
         .filter(|r| string(r, "kind") == kind.as_str())
         .filter_map(|raw| {
-            if number(&raw, "price").is_none_or(|price| price <= 0.) {
+            if number(raw, "price").is_none_or(|price| price <= 0.) {
                 return None;
             }
             let spec = raw
@@ -198,7 +252,11 @@ pub fn build(
             {
                 return None;
             }
-            let model = model_key(&kind, &string(&raw, "name"), &string(&raw, "brand"));
+            let brand = string(raw, "brand");
+            let patterns = brands
+                .entry(brand.to_lowercase())
+                .or_insert_with(|| brand_patterns(&brand));
+            let model = normalized_model(&kind, &string(raw, "name"), patterns);
             let brake = if kind == Kind::Wheels {
                 match s.get("complete-wheels-brakes-type").and_then(Value::as_str) {
                     Some("1430") => "disc",
@@ -221,13 +279,22 @@ pub fn build(
             }
             .to_owned();
             let detail = details
-                .get(&string(&raw, "id"))
-                .cloned()
-                .unwrap_or(Value::Null);
-            let days = days_listed(&raw, now);
+                .get(&string(raw, "id"))
+                .copied()
+                .unwrap_or(&Value::Null);
+            let days = days_listed(raw, now);
             Some(Row {
                 raw,
                 detail,
+                id: raw.get("id").and_then(Value::as_str).unwrap_or(""),
+                year: number(raw, "year"),
+                group: format!(
+                    "{}\0{}\0{}\0{}",
+                    brand.to_lowercase(),
+                    model,
+                    brake,
+                    material
+                ),
                 model,
                 brake,
                 material,
@@ -235,38 +302,38 @@ pub fn build(
             })
         })
         .collect();
-    let mut groups: BTreeMap<String, Vec<&Row>> = BTreeMap::new();
+    let mut groups: BTreeMap<String, Vec<&Row<'_>>> = BTreeMap::new();
     for row in &rows {
         if !row.model.is_empty() {
-            groups.entry(key(row)).or_default().push(row)
+            groups.entry(row.group.clone()).or_default().push(row)
         }
     }
     let today = now.with_timezone(&Luxembourg).date_naive();
     let cut = today - Duration::days(30);
     let earliest = rows
         .iter()
-        .filter_map(|r| day(&string(&r.raw, "first_seen")))
+        .filter_map(|r| day(&string(r.raw, "first_seen")))
         .min();
     rows.iter()
         .map(|row| {
             let price =
-                number(&row.raw, "price").expect("priced rows are validated before grouping");
-            let id = string(&row.raw, "id");
-            let cohort: Vec<&Row> = groups
-                .get(&key(row))
+                number(row.raw, "price").expect("priced rows are validated before grouping");
+            let id = string(row.raw, "id");
+            let cohort: Vec<&Row<'_>> = groups
+                .get(&row.group)
                 .into_iter()
                 .flatten()
                 .copied()
                 .filter(|other| comparable(row, other, &kind))
                 .collect();
-            let comps: Vec<&Row> = cohort
+            let comps: Vec<&Row<'_>> = cohort
                 .iter()
                 .copied()
-                .filter(|r| optional(&r.raw, "gone_at").is_none())
+                .filter(|r| optional(r.raw, "gone_at").is_none())
                 .collect();
             let prices: Vec<f64> = comps
                 .iter()
-                .filter_map(|r| number(&r.raw, "price"))
+                .filter_map(|r| number(r.raw, "price"))
                 .collect();
             let reference = if prices.len() >= 3 {
                 median(&prices)
@@ -313,8 +380,8 @@ pub fn build(
             let discount = reference
                 .filter(|r| *r > 0.)
                 .map(|r| round((r - price) / r * 100., 1));
-            let h = hist.get(&id).cloned().unwrap_or_default();
-            let original = number(&row.raw, "original_price")
+            let h = history.0.get(&id).map(Vec::as_slice).unwrap_or_default();
+            let original = number(row.raw, "original_price")
                 .filter(|p| *p != 0.)
                 .unwrap_or(price);
             let cut_per_day = if h.is_empty() {
@@ -330,10 +397,10 @@ pub fn build(
                     Some(round(delta / round(row.days, 1), 2))
                 }
             };
-            let mature: Vec<&Row> = cohort
+            let mature: Vec<&Row<'_>> = cohort
                 .iter()
                 .copied()
-                .filter(|r| day(&string(&r.raw, "first_seen")).is_some_and(|d| d <= cut))
+                .filter(|r| day(&string(r.raw, "first_seen")).is_some_and(|d| d <= cut))
                 .collect();
             let (sold, sold_n) = if mature.len() < 5 {
                 (None, None)
@@ -341,8 +408,8 @@ pub fn build(
                 let fast = mature
                     .iter()
                     .filter(|r| {
-                        day(&string(&r.raw, "gone_at"))
-                            .zip(day(&string(&r.raw, "first_seen")))
+                        day(&string(r.raw, "gone_at"))
+                            .zip(day(&string(r.raw, "first_seen")))
                             .is_some_and(|(g, f)| (0..=30).contains(&(g - f).num_days()))
                     })
                     .count();
@@ -354,8 +421,8 @@ pub fn build(
             let disappeared: Vec<f64> = cohort
                 .iter()
                 .filter(|r| {
-                    optional(&r.raw, "gone_at").is_some()
-                        && day(&string(&r.raw, "first_seen")).is_some()
+                    optional(r.raw, "gone_at").is_some()
+                        && day(&string(r.raw, "first_seen")).is_some()
                 })
                 .map(|r| r.days)
                 .collect();
@@ -379,13 +446,13 @@ pub fn build(
             if reference.is_none() {
                 risk.push("no comparables".into())
             }
-            if number(&row.detail, "seller_reviews") == Some(0.) {
+            if number(row.detail, "seller_reviews") == Some(0.) {
                 risk.push("zero-review seller".into())
             }
-            if number(&row.raw, "n_media").unwrap_or(0.) < 4. {
+            if number(row.raw, "n_media").unwrap_or(0.) < 4. {
                 risk.push("few photos".into())
             }
-            if number(&row.raw, "desc_len").unwrap_or(0.) < 60. {
+            if number(row.raw, "desc_len").unwrap_or(0.) < 60. {
                 risk.push("thin description".into())
             }
             if dispersion.is_some_and(|d| d > 60.) {
@@ -397,42 +464,42 @@ pub fn build(
                 .filter(|p| *p > price)
                 .min_by(f64::total_cmp);
             let next_up = next_price.map(|p| {
-                let mut ties: Vec<&Row> = comps
+                let mut ties: Vec<&Row<'_>> = comps
                     .iter()
                     .copied()
-                    .filter(|r| number(&r.raw, "price") == Some(p))
+                    .filter(|r| number(r.raw, "price") == Some(p))
                     .collect();
                 ties.sort_by_key(|r| {
                     std::cmp::Reverse(
-                        day(&string(&r.raw, "first_seen"))
+                        day(&string(r.raw, "first_seen"))
                             .map(|d| (today - d).num_days().max(0))
                             .unwrap_or(-1),
                     )
                 });
                 let pick = ties[0];
-                let first = day(&string(&pick.raw, "first_seen"));
+                let first = day(&string(pick.raw, "first_seen"));
                 NextUp {
                     price: p,
                     url: format!(
                         "https://buycycle.com/en-lu/product/{}",
-                        string(&pick.raw, "slug")
+                        string(pick.raw, "slug")
                     ),
                     days_listed: first.map(|d| (today - d).num_days().max(0)),
                     ties: ties.len() - 1,
                     age_lower_bound: first.is_some() && first == earliest,
                 }
             });
-            let country = optional(&row.detail, "country")
+            let country = optional(row.detail, "country")
                 .or_else(|| {
-                    number(&row.raw, "country_id").and_then(|n| countries.get(&(n as i64)).cloned())
+                    number(row.raw, "country_id").and_then(|n| countries.get(&(n as i64)).cloned())
                 })
                 .unwrap_or_default();
             let distance_km = country_km(&country);
             Listing {
                 id,
                 kind: kind.clone(),
-                name: string(&row.raw, "name"),
-                brand: string(&row.raw, "brand"),
+                name: string(row.raw, "name"),
+                brand: string(row.raw, "brand"),
                 model: row.model.clone(),
                 price,
                 original_price: original,
@@ -448,21 +515,22 @@ pub fn build(
                 dispersion,
                 discount_percent: discount,
                 days_listed: round(row.days, 1),
-                first_seen: string(&row.raw, "first_seen"),
-                gone_at: optional(&row.raw, "gone_at"),
+                first_seen: string(row.raw, "first_seen"),
+                gone_at: optional(row.raw, "gone_at"),
                 url: format!(
                     "https://buycycle.com/en-lu/product/{}",
-                    string(&row.raw, "slug")
+                    string(row.raw, "slug")
                 ),
-                year: number(&row.raw, "year").map(|n| n as i32),
-                size: optional(&row.raw, "size"),
+                year: number(row.raw, "year").map(|n| n as i32),
+                size: optional(row.raw, "size"),
                 country,
                 risk_flags: risk,
                 next_up,
                 history: h
-                    .into_iter()
+                    .iter()
                     .rev()
                     .take(30)
+                    .cloned()
                     .collect::<Vec<_>>()
                     .into_iter()
                     .rev()
@@ -484,14 +552,14 @@ pub fn build(
                     }
                     .to_owned()
                 },
-                seller_reviews: number(&row.detail, "seller_reviews").map(|n| n as i64),
-                photo_count: number(&row.detail, "n_images")
+                seller_reviews: number(row.detail, "seller_reviews").map(|n| n as i64),
+                photo_count: number(row.detail, "n_images")
                     .filter(|n| *n != 0.)
-                    .or_else(|| number(&row.raw, "n_media"))
+                    .or_else(|| number(row.raw, "n_media"))
                     .unwrap_or(0.) as i64,
-                description_length: number(&row.raw, "desc_len").unwrap_or(0.) as i64,
+                description_length: number(row.raw, "desc_len").unwrap_or(0.) as i64,
                 distance_km,
-                price_reduced: number(&row.raw, "pr").is_some_and(|n| n != 0.)
+                price_reduced: number(row.raw, "pr").is_some_and(|n| n != 0.)
                     || row.raw.get("pr").and_then(Value::as_bool) == Some(true),
                 price_drop_percent: (original > 0.)
                     .then(|| round((original - price) / original * 100., 1)),
@@ -537,6 +605,13 @@ pub fn model_market(
     history: &[Value],
     today: NaiveDate,
 ) -> Vec<crate::contracts::ModelMarket> {
+    model_market_indexed(items, &HistoryIndex::values(history), today)
+}
+fn model_market_indexed(
+    items: &[Listing],
+    history: &HistoryIndex,
+    today: NaiveDate,
+) -> Vec<crate::contracts::ModelMarket> {
     use crate::contracts::{ModelMarket, ModelTrend};
     let cut = today - Duration::days(30);
     let mut groups: BTreeMap<String, Vec<&Listing>> = BTreeMap::new();
@@ -547,16 +622,16 @@ pub fn model_market(
         groups.entry(name).or_default().push(item);
     }
     let mut trends: BTreeMap<String, BTreeMap<String, Vec<f64>>> = BTreeMap::new();
-    for h in history {
-        if let Some(name) = id_model.get(&string(h, "id"))
-            && let Some(price) = number(h, "price")
-        {
-            trends
-                .entry(name.clone())
-                .or_default()
-                .entry(string(h, "day"))
-                .or_default()
-                .push(price)
+    for (id, points) in &history.0 {
+        if let Some(name) = id_model.get(id) {
+            for point in points {
+                trends
+                    .entry(name.clone())
+                    .or_default()
+                    .entry(point.day.clone())
+                    .or_default()
+                    .push(point.price);
+            }
         }
     }
     groups
@@ -688,57 +763,83 @@ pub fn alerts(
     result
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct CalculationInput {
+pub struct CalculationInput<H = Value> {
     pub kind: Kind,
     pub calculated_at: DateTime<Utc>,
     pub rows: Vec<Value>,
     pub details: Vec<Value>,
-    pub history: Vec<Value>,
+    pub history: Vec<H>,
     pub countries: Vec<Value>,
     pub runs: Vec<Value>,
 }
 /// The same pure computation serves HTTP, the collector's retained output, and offline replay.
 pub fn report(input: CalculationInput) -> crate::contracts::ListingsResponse {
-    let quarantined = input
-        .rows
+    let indexed = HistoryIndex::values(&input.history);
+    drop(input.history);
+    report_indexed(
+        input.kind,
+        input.calculated_at,
+        input.rows,
+        input.details,
+        indexed,
+        input.countries,
+        input.runs,
+    )
+}
+
+pub fn report_raw(
+    input: CalculationInput<Box<serde_json::value::RawValue>>,
+) -> crate::contracts::ListingsResponse {
+    report_indexed(
+        input.kind,
+        input.calculated_at,
+        input.rows,
+        input.details,
+        HistoryIndex::raw(input.history),
+        input.countries,
+        input.runs,
+    )
+}
+
+fn report_indexed(
+    kind: Kind,
+    now: DateTime<Utc>,
+    rows: Vec<Value>,
+    details: Vec<Value>,
+    history: HistoryIndex,
+    countries: Vec<Value>,
+    runs: Vec<Value>,
+) -> crate::contracts::ListingsResponse {
+    let quarantined = rows
         .iter()
         .filter(|r| {
-            string(r, "kind") == input.kind.as_str()
-                && number(r, "price").is_none_or(|price| price <= 0.)
+            string(r, "kind") == kind.as_str() && number(r, "price").is_none_or(|price| price <= 0.)
         })
         .map(|r| crate::contracts::QuarantinedListing {
             id: string(r, "id"),
             reason: "missing_or_invalid_price".into(),
         })
         .collect();
-    let now = input.calculated_at;
     let today = now.with_timezone(&Luxembourg).date_naive().to_string();
-    let items = build(
-        input.kind.clone(),
-        input.rows.clone(),
-        input.details,
-        input.history.clone(),
-        input.countries,
-        now,
-    );
-    let models = model_market(
+    let items = build_indexed(kind.clone(), &rows, &details, &history, &countries, now);
+    let models = model_market_indexed(
         &items,
-        &input.history,
+        &history,
         now.with_timezone(&Luxembourg).date_naive(),
     );
-    let had_prior = input.runs.iter().any(|r| {
-        r.get("kind").and_then(Value::as_str) == Some(input.kind.as_str())
+    let had_prior = runs.iter().any(|r| {
+        r.get("kind").and_then(Value::as_str) == Some(kind.as_str())
             && r.get("day")
                 .and_then(Value::as_str)
                 .is_some_and(|d| d < today.as_str())
             && r.get("complete").and_then(Value::as_i64) == Some(1)
     });
-    let alerts = alerts(&items, &models, &input.rows, &input.kind, &today, had_prior);
+    let alerts = alerts(&items, &models, &rows, &kind, &today, had_prior);
     let active = items.iter().filter(|x| x.gone_at.is_none()).count();
     let gone = items.len() - active;
     crate::contracts::ListingsResponse {
         quarantined,
-        kind: input.kind,
+        kind,
         generated: now.to_rfc3339(),
         today,
         items,

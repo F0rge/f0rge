@@ -9,6 +9,7 @@ use diesel_async::{
     AsyncConnection, AsyncPgConnection, RunQueryDsl, SimpleAsyncConnection,
     pooled_connection::{AsyncDieselConnectionManager, bb8::Pool},
 };
+use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -63,6 +64,21 @@ pub struct StoredState {
 struct JsonRow {
     #[diesel(sql_type = Jsonb)]
     payload: Value,
+}
+#[derive(diesel::QueryableByName)]
+struct RawJsonRow {
+    #[diesel(sql_type = Text)]
+    payload: String,
+}
+
+/// A calculation snapshot keeps the large history encoded until it is indexed.
+/// The complete original JSON is retained, including unknown source columns.
+pub struct CalculationSnapshot {
+    pub rows: Vec<Value>,
+    pub details: Vec<Value>,
+    pub history: Vec<Box<serde_json::value::RawValue>>,
+    pub countries: Vec<Value>,
+    pub runs: Vec<Value>,
 }
 
 pub fn empty_state() -> Value {
@@ -188,6 +204,61 @@ impl Db {
         Ok(rows.into_iter().map(|row| row.payload).collect())
     }
     /// Related reads share one immutable PostgreSQL MVCC snapshot, including during publication.
+    pub async fn calculation_snapshot(&self, kind: &str) -> Result<CalculationSnapshot, DataError> {
+        if !["bikes", "wheels"].contains(&kind) {
+            return Err(DataError::InvalidInput);
+        }
+        let kind = kind.to_owned();
+        let mut connection = self.pool.get().await.map_err(|_| DataError::Database)?;
+        AsyncPgConnection::transaction::<_, DataError, _>(
+            &mut connection,
+            async move |connection| {
+                connection
+                    .batch_execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+                    .await?;
+                let mut snapshot = CalculationSnapshot {
+                    rows: Vec::new(),
+                    details: Vec::new(),
+                    history: Vec::new(),
+                    countries: Vec::new(),
+                    runs: Vec::new(),
+                };
+                for table in ["listing", "detail", "country_map", "runs"] {
+                    let mut stream = sql_query(
+                        "SELECT payload FROM legacy_record WHERE table_name=$1 AND ($1 <> 'listing' OR payload->>'kind'=$2) ORDER BY row_key",
+                    )
+                    .bind::<Text, _>(table)
+                    .bind::<Text, _>(&kind)
+                    .load_stream::<JsonRow>(connection)
+                    .await?;
+                    let target = match table {
+                        "listing" => &mut snapshot.rows,
+                        "detail" => &mut snapshot.details,
+                        "country_map" => &mut snapshot.countries,
+                        _ => &mut snapshot.runs,
+                    };
+                    while let Some(row) = stream.try_next().await? {
+                        target.push(row.payload);
+                    }
+                }
+                let mut stream = sql_query(
+                    "SELECT payload::text AS payload FROM legacy_record WHERE table_name='price_history' ORDER BY row_key",
+                )
+                .load_stream::<RawJsonRow>(connection)
+                .await?;
+                while let Some(row) = stream.try_next().await? {
+                    snapshot.history.push(
+                        serde_json::value::RawValue::from_string(row.payload)
+                            .map_err(|_| DataError::Database)?,
+                    );
+                }
+                Ok(snapshot)
+            },
+        )
+        .await
+    }
+
+    /// General-purpose retained table reads; calculations use the bounded path above.
     pub async fn read_tables_snapshot(
         &self,
         tables: &[&str],

@@ -20,7 +20,7 @@ diesel = { version = "2.3", default-features = false, features = ["postgres", "s
 diesel-async = { version = "0.10", features = ["postgres", "bb8"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal", "sync"] }
 sha2 = "0.10"
 thiserror = "2"
 regex = "1"

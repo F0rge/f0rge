@@ -268,3 +268,36 @@ fn missing_or_invalid_asking_prices_are_retained_but_explicitly_quarantined() {
     );
     assert_eq!(report.alerts.len(), 0);
 }
+
+#[test]
+fn encoded_history_matches_value_reports_and_preserves_complete_replay_input() {
+    let fixture: Value = serde_json::from_str(include_str!("metrics-golden.json")).unwrap();
+    for kind in [Kind::Bikes, Kind::Wheels] {
+        let tables = &fixture["tables"];
+        let rows = |table: &str| tables[table].as_array().unwrap().clone();
+        let mut history = rows("price_history");
+        history.extend((0..150).map(|i| {
+            json!({
+                "id":"unmatched-history-is-retained", "day":format!("2026-{i:03}"),
+                "price":1000+i, "unknown_future_field":"café", "nullable":null
+            })
+        }));
+        let input = metrics::CalculationInput {
+            kind,
+            calculated_at: now(),
+            rows: rows("listing"),
+            details: rows("detail"),
+            history,
+            countries: rows("country_map"),
+            runs: rows("runs"),
+        };
+        let original = serde_json::to_value(&input).unwrap();
+        let encoded: metrics::CalculationInput<Box<serde_json::value::RawValue>> =
+            serde_json::from_str(&serde_json::to_string(&input).unwrap()).unwrap();
+        assert_eq!(serde_json::to_value(&encoded).unwrap(), original);
+        assert_eq!(
+            serde_json::to_value(metrics::report_raw(encoded)).unwrap(),
+            serde_json::to_value(metrics::report(input)).unwrap()
+        );
+    }
+}

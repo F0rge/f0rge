@@ -349,6 +349,13 @@ async fn calculation_reads_one_repeatable_snapshot_during_concurrent_atomic_publ
             listing, detail,
             "Reader straddled two atomically published versions"
         );
+        let bounded = db.calculation_snapshot("bikes").await.unwrap();
+        let listing = bounded.rows[0]["version"].as_i64().unwrap();
+        assert_eq!(
+            listing,
+            bounded.details[0]["version"].as_i64().unwrap(),
+            "Bounded calculation reader straddled two published versions"
+        );
         listing
     }
 
