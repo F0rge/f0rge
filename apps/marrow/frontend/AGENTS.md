@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). Follow [P-005](../../../docs/adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../../docs/adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
@@ -17,4 +17,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Branches
 
-Use the `main`-only workflow. A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Branch off `main`. Do not merge or deploy without Leo's release approval. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).
+Use the `main`-only workflow. A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Branch off `main`. Follow P-005 for review/merge and P-006 separately for release authorization. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).

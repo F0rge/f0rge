@@ -1,5 +1,7 @@
 # Firstout multi-tenancy release and recovery runbook
 
+> Historical 8 November 2026 release record. Current review/merge policy follows [P-005](../../../docs/adr/governance.md#p-005), and release authorization follows [P-006](../../../docs/adr/governance.md#p-006). Preserved observations below are not fresh provider checks.
+
 Leo approves every production release. The 2026-11-08 task authorizes the Clerk integration, explicit staff linking that preserves passwords/access, and free public self-service after its verification gates pass. That authorization does not waive failed CI, restore, isolation or access checks. Billing remains disabled; no paid upgrade is authorized. Read the [current release evidence](multitenancy-release-evidence-20261108.md) before acting; the [older local tests](multitenancy-test-evidence.md) are historical.
 
 ## Current serving boundary
@@ -20,7 +22,7 @@ The 2026-11-08 rehearsal and release/enforcement/import snapshots remain under `
 
 ## Source, build and deployment verification
 
-Use a short-lived feature branch and PR into `main`, independent review and green required checks. Never enable auto-merge. Select an explicitly approved merged source revision for deployment; record the actual service/deployment IDs and observe healthy completion. For this release, Railway built the approved sources after CI. This does not prove promotion of a CI-built immutable artifact. Record image digests and configuration-only image reuse accurately.
+Use a short-lived feature branch and PR into `main`, independent review and green required checks. Follow [P-005](../../../docs/adr/governance.md#p-005) for the current human-review and native squash-merge policy. Select an explicitly approved merged source revision for deployment; record the actual service/deployment IDs and observe healthy completion. For this historical release, Railway built the approved sources after CI. This does not prove promotion of a CI-built immutable artifact. Record image digests and configuration-only image reuse accurately.
 
 Compare the clean tested operator source against the actual runtime before migration/import operations. The release checked an exact 456-file operator/runtime manifest, SHA-256 `dc62199f1aa5aa2757a64b4936221d9eabe2b0a91ab9471ec4aab44955b80214`. The CI-tested PR heads and their deployed squash commits have identical source trees. This is source equality, not a claim that CI and Railway produced identical binary artifacts; verification links are in the release evidence.
 

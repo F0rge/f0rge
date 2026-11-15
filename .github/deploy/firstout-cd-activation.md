@@ -20,9 +20,11 @@ production work. Follow the [CD runbook](firstout-cd.md) and
   authenticated token metadata verifies its Firstout production scope.
   Superseded setup credentials are revoked. No secret value is recorded here.
 - Main review ruleset `27305147` is active with no bypass, required code-owner
-  review and stale-approval dismissal. Its general approval count is zero;
-  code-owner approval is still required for owned files once CODEOWNERS reaches
-  main. This PR has not yet established that ownership on main.
+  review and stale-approval dismissal. The original activation checkpoint had a
+  zero general approval count; the publisher setup strengthened it to **one**
+  while retaining the other review protections. Existing main ownership is
+  enforced. The new global Leo-only ownership remains pending its reviewed
+  source merge; see [the publisher checkpoint](../../docs/agents/github-publisher.md#verified-checkpoint-15-november-2026).
 - Firstout PostgreSQL has daily, weekly and monthly backup schedules. Its
   fresh, nonexpiring snapshot `ad4d3f94` reports `referencedMB=795` and `usedMB=0`
   and passes the corrected live backup gate. Railway's
@@ -49,21 +51,26 @@ production work. Follow the [CD runbook](firstout-cd.md) and
 
 ## Review protection in this change
 
-The [CODEOWNERS file](../CODEOWNERS) assigns Firstout source, its shared backend
-dependencies and build inputs to the two existing maintainers. The configured
-main rule will require an independent code-owner approval after this file is
-merged; adding the file alone does not enable enforcement. The PR author cannot
-supply their own approval.
+The prepared [CODEOWNERS file](../CODEOWNERS) assigns every repository path to
+Leo as the sole required code owner, retaining coverage of Firstout source,
+shared backend dependencies and build inputs. It replaces the older two-owner
+file only after the reviewed change reaches protected `main`; the live file can
+still request Luis until then. The configured main rule still requires actual
+code-owner approval. The bot authors PRs and Leo personally reviews them;
+agents do not submit his approval. See the [publisher and native merge procedure](../../docs/agents/github-publisher.md)
+and canonical [P-005](../../docs/adr/governance.md#p-005). Repository auto-merge
+availability alone does not activate the new default or arm a PR.
 
 Shared workflows, actions, scripts and deployment helpers also require review:
 another workflow could request the `firstout-production` environment and copy
 its deployment credential elsewhere. Reviewing only `cd-firstout.yml` would
 leave that path open. All Firstout source is covered because a later reviewed
 release includes earlier changes already on main. The shared-library and root
-build rules affect other apps only where those files are also Firstout inputs.
+build rules remain Firstout inputs; the new global ownership rule also covers
+other apps' source for human review.
 Nx evaluates workspace project metadata and executable plugin configuration
 before selecting tasks, so those configuration files also require review.
-Other apps' business source and release authorization remain unchanged.
+Other apps' release authorization remains unchanged under P-006.
 
 ## Work still required
 
