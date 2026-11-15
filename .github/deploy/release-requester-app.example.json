@@ -1,7 +1,7 @@
 {
-  "name": "f0rge-release-requester",
+  "name": "F0rge Buycycle Release Requester",
   "url": "https://github.com/F0rge/f0rge",
-  "description": "Proposed release requester; subject to the release hold.",
+  "description": "Posts strict Buycycle release requests for Leo approval; cannot dispatch workflows or deploy.",
   "public": false,
   "hook_attributes": {
     "url": "https://example.invalid/github/webhook",
@@ -10,6 +10,8 @@
   "request_oauth_on_install": false,
   "default_events": [],
   "default_permissions": {
-    "actions": "write"
+    "actions": "read",
+    "contents": "read",
+    "pull_requests": "write"
   }
 }

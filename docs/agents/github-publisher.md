@@ -18,7 +18,8 @@ The App requests only repository **Contents: read**, **Pull requests: write** an
 GitHub's **Metadata: read**. Install it on the selected `F0rge/f0rge` repository
 only, verified by repository ID `1194719185`. It has no Actions, administration,
 deployment, secrets or content-write permission. This publisher is separate from
-the proposed [release requester](../../.github/deploy/release-requester-app.md).
+the separately prepared [Buycycle comment requester](../../.github/deploy/release-requester-app.md),
+which requests PR write and Contents/Actions read, with no Actions write.
 
 GitHub's PR-write permission covers more operations than this helper exposes.
 The reviewed [publisher helper](../../.github/scripts/f0rge_pr_publisher.py) offers

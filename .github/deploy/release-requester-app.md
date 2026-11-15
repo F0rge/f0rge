@@ -1,94 +1,75 @@
-# Proposed GitHub App release requester
+# Buycycle GitHub App release requester
 
-This is a **design and example**, not a registered App or an active release
-path. The [example manifest](release-requester-app.example.json) has not been
-submitted to GitHub; its name, webhook fields and final registration must be
-validated in an isolated sandbox. It does not install an App or authorize a
-release. The [release hold](README.md) remains in force.
+This is a registration and activation plan for the prepared
+[comment-based release path](buycycle-release.md). Source checks do not prove
+that the separate App is registered, installed or verified. Other apps retain
+their own release controls; this document grants no release permission.
 
-## Scope and risks
+## Registration and custody
 
-The proposed private App requests only repository **Actions: write** for
-dispatch; GitHub also supplies repository metadata access as applicable. It
-requests no event subscriptions or user OAuth authorization. It should be
-installed on the single intended repository, never all organization
-repositories. When minting a token, explicitly select that repository and the
-needed permissions. GitHub installation tokens expire after one hour, but the
-App's private key can mint more tokens and must be protected for its full life.
+Register a private, F0rge-owned **F0rge Buycycle Release Requester**, with homepage
+`https://github.com/F0rge/f0rge`. Verify its resulting slug and IDs rather than
+assuming the requested name was available. The
+[example manifest](release-requester-app.example.json) is unsubmitted inventory.
+Its inactive placeholder webhook is never an operational endpoint.
 
-**Actions: write can enable disabled workflows and rerun historical workflows.**
-Limiting the token to a repository does not restrict it to the new workflow or
-prevent a rerun from using an old workflow definition. Before any
-production-repository installation or key distribution, identify and contain historical deployment
-credentials, workflow reruns, direct provider access, automatic provider
-triggers and other alternate release paths. Verify the controls independently.
-An App identity alone does not provide that containment.
+Use exactly repository **Pull requests: write**, **Contents: read** and
+**Actions: read**, plus GitHub's implicit **Metadata: read**. Install only on
+`F0rge/f0rge`, repository ID `1194719185`. Leave webhook delivery, event
+subscriptions, user OAuth authorization, device flow and organization/account
+permissions off. No Actions write permission is required: this App posts a
+comment; trusted default-branch automation validates it.
 
-Use a managed, access-controlled signing key or vault; do not commit the key,
-print tokens, expose them to pull-request code, or place them in a broadly
-accessible repository secret. Define key ownership, rotation and revocation,
-and restrict who and what can request signatures. The requester must not grant
-itself approval or access to deployment credentials. An agent acting as Leo is
-not an independent requester.
+Keep the requester separate from the PR publisher. Store its signing key in the
+explicit macOS Keychain backend through the shared pinned helper, using its own
+App-slug account. Keep keys and tokens out of source, argv, environment and logs.
+The private mode-0600 config contains only observed App/installation/repository
+IDs, slug and the fixed, already merged release PR number. The helper verifies
+the exact installation and scopes, mints a short-lived single-repository token
+and revokes it after use. Its only write is a strict request comment on that PR.
+GitHub's PR-write permission is broader than the helper, so key custody remains
+a security boundary.
 
-## Sandbox setup and validation
+## Safe identity rehearsal
 
-These steps are for a separate disposable, nonproduction repository with no
-production credentials, providers or connections. Use a public sandbox or a
-private sandbox on a GitHub plan that supports required reviewers and the
-relevant protection rules; verify those rules are effective. Registration,
-installation and secret changes are separate operations; this document performs
-none.
+After independent review and the workflow reaching `main`:
 
-1. Arrange secure capture and custody of the private key returned by the
-   manifest registration flow before registering. Create a private test App
-   from the example, replacing the candidate name if needed. Check GitHub
-   accepts the inactive webhook settings and that no event or user authorization
-   is requested. Never use the placeholder webhook
-   as a real endpoint. Install the test App only on the sandbox repository.
-2. Put a no-effect `workflow_dispatch` workflow on the sandbox default branch.
-   Its protected test environment must require Leo as reviewer, prevent
-   self-review and disable administrator bypass. Its jobs must have no
-   deployment credentials, provider calls or production target. Record the
-   effective settings; the `production` environment in the real repository is
-   not part of this test.
-3. Dispatch with a short-lived installation token and check the run's actual
-   `github.actor` and `github.actor_id`. Confirm the no-effect job waits for
-   Leo, and that Leo's explicit review permits it to finish. Separately confirm
-   that a run initiated as Leo cannot be approved by Leo. Never infer the actor
-   from how the token was obtained.
-4. Rerun an approved and a rejected or cancelled sandbox run, including a rerun
-   initiated by a different actor. Record `github.actor`,
-   `github.triggering_actor`, run ID and attempt, and whether a fresh review is
-   required. Treat missing, reused or bypassed approval as a failure; do not
-   assume GitHub reruns provide fresh approval. Confirm a historical no-effect
-   sandbox workflow can be rerun with the App token to demonstrate the scope of
-   Actions: write.
-5. Verify a token narrowed to the sandbox repository cannot dispatch in a
-   second repository. Check the App's effective installation permissions and
-   token expiry without recording token values. Revoke sandbox credentials and
-   remove the sandbox installation after the test.
+1. Verify the installed App's actual permissions and single-repository selection.
+   Configure its observed bot/App IDs and fixed merged PR in the workflow and
+   protected Pi policy. Test the workflow and managed read identities can read
+   the required App/comment metadata; missing or denied evidence blocks release.
+2. Prepare one strict request with a real successful main CI run, selected
+   PostgreSQL major, new UUID, synthetic receipt hashes, and a well-formed release
+   tag that has been confirmed absent. Do not create that tag.
+3. Post through the narrow requester helper. Check the real event actor and
+   authoritative REST `performed_via_github_app`, comment ID and body hash.
+   The trusted validator must accept the identity, then publication must stop
+   at the absent tag before Docker, GHCR, protected approval or any Pi call.
+   Retain the comment/run URLs and redacted result. Do not retry an ambiguous
+   comment write automatically.
+4. Record this as identity/event evidence only. It does not prove Leo's protected
+   environment approval or authorize deployment. Rejection of changed, deleted,
+   duplicate and rerun requests also needs its implemented checks and evidence.
 
-`workflow_dispatch` only triggers when the workflow exists on the default
-branch. A PR-only workflow in the real repository is therefore not proof of
-the production behavior. Preserve run URLs and redacted results for independent
-security, delivery, operations and quality review.
+## Activation requirements
 
-## Before activation
+The complete path binds the exact request, successful main CI archive, immutable
+tag, tested ARM64 image, PostgreSQL compatibility target and three private receipt
+hashes through Leo's protected approval and independent managed-agent checks.
+Manual workflow dispatch publishes only. The managed agent durably reserves the
+run, comment and nonce before Docker effects; it accepts no caller-selected
+image, command or path. See [the full protocol](buycycle-release.md).
 
-Beyond the identity and alternate-path controls above, the release still needs
-a protected tag design selecting the destination (P-045), trusted evidence
-linking the exact tested immutable artifact to the commit and target, promotion
-without a rebuild, and independent verification of the running artifact and
-health (P-046). Establish durable expiry and replay handling and demonstrate
-it across retries. GitHub approval must be Leo's explicit approval of each
-production release (P-006). Until those conditions and the release hold are
-met, do not enable a deployment path or give the App production access.
+Contain legacy automatic deploys, manual webhooks, scheduled writers, historical
+credentials and other alternate release paths independently. Existing Actions
+write credentials can rerun historical workflows; removing that permission from
+this new App does not revoke other identities. Verify current data preservation,
+encrypted off-device recovery, provider configuration, secret custody, origin
+isolation and the actual running image before declaring cutover complete.
+Leo must personally approve the protected release; agents never approve through
+his account. A comment, passing test or merged PR is not release approval.
 
 References: [App manifest fields](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest),
-[workflow dispatch permission](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event),
-[rerun permission](https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-workflow),
-[installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app),
-[private-key security](https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app),
-[actor and rerun contexts](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context),
-and [workflow dispatch behavior](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch).
+[issue-comment workflow behavior](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#issue_comment),
+[installation token scope and expiry](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app),
+and [private-key security](https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app).

@@ -41,13 +41,14 @@ grammar and corresponding protected tag allowlist need design before a
 tag-triggered release.
 
 No separate release requester has been verified. `workflow_run` does not by
-itself establish a bot identity. A candidate private GitHub App and its
-setup and validation plan are documented in [release-requester-app.md](release-requester-app.md).
-A token with repository Actions write access can enable disabled workflows and
-rerun historical workflows; do not grant it until historical release paths and
-production credentials are contained. Before activation, verify a
-separate least-privilege requester, Leo's independent approval, and fresh
-approval on reruns in an isolated nonproduction setting.
+itself establish a bot identity. Buycycle's prepared requester posts a strict
+comment on one configured merged PR, using PR write and Contents/Actions read;
+it receives no Actions write permission. Its [setup plan](release-requester-app.md)
+and [tested-image path](buycycle-release.md) distinguish prepared source from live
+activation. Existing Actions write credentials can still enable disabled
+workflows or rerun historical ones; contain those paths independently. Before
+activation, verify the real App comment identity, Leo's independent approval,
+and rejection of edited, deleted or repeated requests without deployment.
 
 `release_evidence.py` compares supplied candidate, artifact and check fields
 offline. `test_release_evidence.py` exercises mismatches and the no-effect
