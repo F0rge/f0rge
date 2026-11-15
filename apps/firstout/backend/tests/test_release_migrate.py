@@ -48,6 +48,7 @@ def test_policy_has_one_head_and_no_unreviewed_automatic_history() -> None:
     assert len(digest) == 64
     assert plan_pending(policy, scripts, "089_merge_record_workspaces") == [
         "090_release_migration_receipts",
+        "091_sku_archive",
     ]
     policy["revisions"]["090_release_migration_receipts"]["automatic"] = False
     with pytest.raises(MigrationRefused, match="not approved"):
@@ -103,6 +104,7 @@ async def test_release_upgrade_preserves_old_reads_and_receipt_is_repeat_safe(
         assert logging.getLogger("app.http").disabled is False
         assert first["applied_revisions"] == [
             "090_release_migration_receipts",
+            "091_sku_archive",
         ]
         assert first["replayed"] is False
         second = await migrate(url, url, COMMIT)
@@ -130,15 +132,15 @@ async def test_release_upgrade_preserves_old_reads_and_receipt_is_repeat_safe(
         payload = json.loads(response.body)
         assert payload["migration_receipt"] is True
         assert payload["source_commit"] == COMMIT
-        assert payload["schema_revision"] == "090_release_migration_receipts"
+        assert payload["schema_revision"] == "091_sku_archive"
         # Old retained image readiness may observe a newer, additive schema.
         async with engine.begin() as conn:
             await conn.execute(
-                sa.text("UPDATE alembic_version SET version_num='091_future_compatible'")
+                sa.text("UPDATE alembic_version SET version_num='092_future_compatible'")
             )
         response = await release_readiness(engine)
         assert response.status_code == 200
-        assert json.loads(response.body)["schema_revision"] == "091_future_compatible"
+        assert json.loads(response.body)["schema_revision"] == "092_future_compatible"
         monkeypatch.setenv("SOURCE_COMMIT", "b" * 40)
         assert (await release_readiness(engine)).status_code == 503
     finally:
@@ -276,8 +278,8 @@ async def test_explicit_empty_ci_database_bootstrap_reaches_ready_schema(
         async with admin.connect() as conn:
             await conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
         receipt = await migrate(url, url, COMMIT, bootstrap_test_database=True)
-        assert receipt["schema_revision"] == "090_release_migration_receipts"
-        assert len(receipt["applied_revisions"]) == 91
+        assert receipt["schema_revision"] == "091_sku_archive"
+        assert len(receipt["applied_revisions"]) == 92
         with pytest.raises(MigrationRefused, match="empty firstout_cd_test_"):
             await migrate(url, url, COMMIT, bootstrap_test_database=True)
         assert (await migrate(url, url, COMMIT))["replayed"] is True

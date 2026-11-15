@@ -1039,3 +1039,27 @@ async def test_maintenance_fence_retries_machine_calls_without_any_business_writ
         response = await owner_client.request(method, route, headers=ops_headers, json=body)
         assert response.status_code == 503, (route, response.text)
     assert await counts() == before
+
+
+async def test_late_already_paid_order_is_recorded_after_sku_archive(
+    owner_client,
+    async_db,
+    ops_headers,
+):
+    payload, sku_id = await _paid_order_payload(owner_client, fixture_tag="archive-late")
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    sku = await async_db.get(Sku, UUID(sku_id))
+    sku.is_archived = True
+    await async_db.flush()
+    first = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert first.status_code == 201, first.text
+    replay = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert replay.status_code == 200, replay.text
+    assert first.json()["id"] == replay.json()["id"]
+    assert await async_db.scalar(select(func.count()).select_from(OpsCommerceOrder)) == 1
+    await async_db.refresh(sku)
+    assert sku.is_archived is True

@@ -35,6 +35,7 @@ from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.payment_terms import compute_due_date
 from app.services.party_archive import require_active_customer
 from app.services.sellability import assert_sku_sellable
+from app.services.sku_archive import SkuArchiveService
 from app.services.archive_documents import assert_operational_document
 from app.services.pricing import (
     format_pdf_unit,
@@ -84,6 +85,12 @@ class InvoiceService:
     async def create(
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
     ) -> InvoiceResponse:
+        # First-use settings initialization commits. Do it before catalogue locks
+        # so active-SKU validation stays locked through the invoice write.
+        team_settings = await self._team_settings()
+        await SkuArchiveService(self.db).lock_skus(
+            [line.sku_id for line in data.lines if line.sku_id is not None]
+        )
         customer = await require_active_customer(self.db, data.customer_id)
         await assert_date_postable(self.db, data.issue_date)
 
@@ -136,7 +143,6 @@ class InvoiceService:
             user_id=user_id,
         )
 
-        team_settings = await self._team_settings()
         due_date = compute_due_date(data.issue_date, customer, team_settings)
 
         async with unit_of_work(self.db):

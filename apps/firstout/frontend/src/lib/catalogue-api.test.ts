@@ -11,6 +11,7 @@ it("keeps supplier, search and category scope aligned for pages, costs and expor
   );
   vi.stubGlobal("fetch", fetch);
   const filters = {
+    lifecycle: "archived" as const,
     preferred_supplier_id: "c18472f1-36db-48fa-99ca-c0c540df31bd",
     q: "quilt & linen",
     category: "Rugs, Cushions & Linen",
@@ -28,6 +29,7 @@ it("keeps supplier, search and category scope aligned for pages, costs and expor
     "/api/v1/skus",
   ]);
   for (const url of urls) {
+    expect(url.searchParams.get("lifecycle")).toBe("archived");
     expect(url.searchParams.get("preferred_supplier_id")).toBe(
       filters.preferred_supplier_id,
     );

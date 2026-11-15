@@ -32,6 +32,7 @@ const locations: Location[] = [
 ];
 
 const entry: InventorySku = {
+  is_archived: false,
   sku_id: "sku-1",
   our_ref: "PG-CHAIR",
   name: "Playground dining chair",

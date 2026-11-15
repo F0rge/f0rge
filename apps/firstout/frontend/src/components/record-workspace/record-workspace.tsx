@@ -77,6 +77,7 @@ function WorkspaceContent<T extends { id: string }>({
   onEdit,
   renderDetails,
   headerActions,
+  renderSelectionActions,
   onExport,
   children,
 }: RecordWorkspaceProps<T>) {
@@ -86,6 +87,7 @@ function WorkspaceContent<T extends { id: string }>({
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const archived = query.lifecycle === "archived";
+  const plural = adapter.plural ?? adapter.title.toLowerCase();
   const bulkAvailable = result.data?.bulk_available === true;
   const actions = (adapter.actions ?? []).filter((action) =>
     archived
@@ -95,11 +97,12 @@ function WorkspaceContent<T extends { id: string }>({
   const canBulkEdit =
     actions.some((action) => action.key === "edit") &&
     !!adapter.bulkFields?.length;
-  const selectable = actions.length > 0;
+  const selectable = actions.length > 0 || !!renderSelectionActions;
   const allPageChecked =
     items.length > 0 && items.every((item) => workspace.isChecked(item.id));
   const somePageChecked = items.some((item) => workspace.isChecked(item.id));
   const start = (action: WorkspaceActionDefinition, single = false) => {
+    if (result.isFetching) return;
     if (!bulkAvailable) {
       setNotice("Bulk actions unavailable. Contact your administrator.");
       return;
@@ -216,12 +219,12 @@ function WorkspaceContent<T extends { id: string }>({
                 {archived
                   ? (adapter.lifecycle?.archivedLabel ?? "Archived")
                   : "All"}{" "}
-                {adapter.title.toLowerCase()}
+                {plural}
               </h2>
               <p role="status" aria-live="polite">
                 {result.isPending
                   ? "Loading records…"
-                  : `${result.data?.total ?? 0} ${adapter.title.toLowerCase()}${query.q || query.filters.length ? " match your filters" : ""}`}
+                  : `${result.data?.total ?? 0} ${plural}${query.q || query.filters.length ? " match your filters" : ""}`}
               </p>
             </div>
           </div>
@@ -253,7 +256,7 @@ function WorkspaceContent<T extends { id: string }>({
               ))}
             </div>
           )}
-          {workspace.selectedCount > 0 && bulkAvailable && (
+          {workspace.selectedCount > 0 && (bulkAvailable || renderSelectionActions) && (
             <>
               <div
                 className={styles.batch}
@@ -261,7 +264,8 @@ function WorkspaceContent<T extends { id: string }>({
                 aria-label="Bulk actions"
               >
                 <strong>{workspace.selectedCount} selected</strong>
-                {canBulkEdit && !archived && (
+                {renderSelectionActions?.({ ids: workspace.selectedIds, query })}
+                {canBulkEdit && bulkAvailable && !archived && (
                   <Button
                     kind="ghost"
                     size="sm"
@@ -272,12 +276,13 @@ function WorkspaceContent<T extends { id: string }>({
                   </Button>
                 )}
                 {actions
-                  .filter((action) => action.key !== "edit")
+                  .filter((action) => action.key !== "edit" && bulkAvailable)
                   .map((action) => (
                     <Button
                       key={action.key}
                       kind="ghost"
                       size="sm"
+                      disabled={result.isFetching}
                       onClick={() => start(action)}
                     >
                       {action.label}
@@ -323,7 +328,7 @@ function WorkspaceContent<T extends { id: string }>({
                           id={`${adapter.resource}-select-page`}
                           labelText="Select records on this page"
                           hideLabel
-                          disabled={!bulkAvailable}
+                          disabled={(!bulkAvailable && !renderSelectionActions) || result.isFetching}
                           checked={allPageChecked}
                           indeterminate={somePageChecked && !allPageChecked}
                           onChange={(_, { checked }) =>
@@ -389,7 +394,7 @@ function WorkspaceContent<T extends { id: string }>({
                             labelText={`Select ${adapter.getTitle(item)}`}
                             hideLabel
                             disabled={
-                              !bulkAvailable || !workspace.canSelect(item.id)
+                              (!bulkAvailable && !renderSelectionActions) || result.isFetching || !workspace.canSelect(item.id)
                             }
                             checked={workspace.isChecked(item.id)}
                             onChange={(_, { checked }) =>
@@ -417,7 +422,7 @@ function WorkspaceContent<T extends { id: string }>({
                                 className={styles.avatar}
                                 aria-hidden="true"
                               >
-                                {adapter
+                                {adapter.renderAvatar?.(item) ?? adapter
                                   .getTitle(item)
                                   .split(" ")
                                   .slice(0, 2)
@@ -448,7 +453,7 @@ function WorkspaceContent<T extends { id: string }>({
                     ? "Loading records…"
                     : error
                       ? "Records unavailable"
-                      : `No ${adapter.title.toLowerCase()} found`}
+                      : `No ${plural} found`}
                 </h3>
                 <p>
                   {error
@@ -504,7 +509,7 @@ function WorkspaceContent<T extends { id: string }>({
               </div>
               <div className={styles.identity}>
                 <span className={styles.avatar} aria-hidden="true">
-                  {adapter
+                  {adapter.renderAvatar?.(active) ?? adapter
                     .getTitle(active)
                     .split(" ")
                     .slice(0, 2)
@@ -527,7 +532,7 @@ function WorkspaceContent<T extends { id: string }>({
                       key={action.key}
                       kind={action.danger ? "danger--tertiary" : "tertiary"}
                       size="sm"
-                      disabled={!bulkAvailable}
+                      disabled={!bulkAvailable || result.isFetching}
                       renderIcon={
                         action.key === "archive" ? Archive : undefined
                       }

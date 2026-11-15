@@ -13,6 +13,7 @@ from app.models.repeating_invoice import RepeatingInvoice
 from app.models.role import Role
 from app.models.supplier import Supplier
 from app.models.user import User
+from app.models.sku import Sku
 from app.permissions import (
     BOOKS_MUTATE,
     CATALOGUE_MUTATE,
@@ -36,6 +37,24 @@ class WorkspaceDefinition:
 COMMON = {"created_at": "date", "updated_at": "date"}
 ARCHIVE = frozenset({"archive", "restore"})
 DEFINITIONS = {
+    "skus": WorkspaceDefinition(
+        Sku,
+        {
+            **COMMON,
+            "name": "text",
+            "our_ref": "text",
+            "our_barcode": "text",
+            "category": "text",
+            "preferred_supplier_id": "text",
+            "preferred_supplier_name": "text",
+            "is_kit": "boolean",
+            "is_sellable": "boolean",
+            "retail_inc_vat": "number",
+        },
+        frozenset(),
+        ARCHIVE,
+        CATALOGUE_MUTATE,
+    ),
     "customers": WorkspaceDefinition(
         Customer,
         {

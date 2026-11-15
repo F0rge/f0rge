@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.sku import Sku
+from f0rge_db.organisation import tenant_id_ctx
 from f0rge_db.crud import BaseCRUD
 
 
@@ -19,16 +20,25 @@ class SkuCRUD(BaseCRUD):
         super().__init__(db)
 
     async def get_by_id(self, sku_id: uuid.UUID) -> Optional[Sku]:
-        return (await self.db.execute(select(Sku).where(Sku.id == sku_id))).scalar_one_or_none()
+        return (
+            await self.db.execute(
+                select(Sku).where(Sku.id == sku_id, Sku.team_id == tenant_id_ctx.get())
+            )
+        ).scalar_one_or_none()
 
     async def list_all(
         self,
         category: Optional[str] = None,
         q: Optional[str] = None,
         preferred_supplier_id: Optional[uuid.UUID] = None,
+        lifecycle: str = "active",
     ) -> list[Sku]:
         rows, _total = await self.list_filtered(
-            category=category, q=q, preferred_supplier_id=preferred_supplier_id, limit=None
+            category=category,
+            q=q,
+            preferred_supplier_id=preferred_supplier_id,
+            limit=None,
+            lifecycle=lifecycle,
         )
         return rows
 
@@ -38,10 +48,11 @@ class SkuCRUD(BaseCRUD):
         category: Optional[str] = None,
         q: Optional[str] = None,
         preferred_supplier_id: Optional[uuid.UUID] = None,
+        lifecycle: str = "active",
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> tuple[list[Sku], int]:
-        filters = self._filters(category, q, preferred_supplier_id)
+        filters = self._filters(category, q, preferred_supplier_id, lifecycle)
         count_stmt = select(func.count()).select_from(Sku)
         if filters:
             count_stmt = count_stmt.where(*filters)
@@ -55,9 +66,11 @@ class SkuCRUD(BaseCRUD):
         result = await self.db.execute(stmt)
         return list(result.scalars().all()), total
 
-    async def list_categories(self) -> list[str]:
+    async def list_categories(self, lifecycle: str = "active") -> list[str]:
         result = await self.db.execute(
-            select(Sku.category).where(Sku.category.is_not(None)).distinct()
+            select(Sku.category)
+            .where(Sku.category.is_not(None), *self._filters(None, None, lifecycle=lifecycle))
+            .distinct()
         )
         values: set[str] = set()
         for category in result.scalars().all():
@@ -73,8 +86,11 @@ class SkuCRUD(BaseCRUD):
         category: Optional[str],
         q: Optional[str],
         preferred_supplier_id: Optional[uuid.UUID] = None,
+        lifecycle: str = "active",
     ) -> list:
-        filters = []
+        filters = [Sku.team_id == tenant_id_ctx.get()]
+        if lifecycle != "all":
+            filters.append(Sku.is_archived.is_(lifecycle == "archived"))
         if preferred_supplier_id is not None:
             filters.append(Sku.preferred_supplier_id == preferred_supplier_id)
         if category is not None:

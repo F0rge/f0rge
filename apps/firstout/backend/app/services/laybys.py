@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import require_active_customer
 from app.services.sellability import assert_sku_sellable
+from app.services.sku_archive import SkuArchiveService
 from app.crud.layby import LaybyCRUD
 from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
@@ -383,6 +384,7 @@ class LaybysService:
         hold_stock: bool,
     ) -> tuple[list[LaybyLine], Decimal, Decimal, Decimal]:
         qty_by_sku: dict[uuid.UUID, int] = {}
+        await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
         models: list[LaybyLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)

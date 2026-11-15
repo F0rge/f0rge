@@ -55,11 +55,13 @@ class StocktakeService:
         await self.assert_location_unlocked(data.location_id)
 
         category = (data.category or "").strip() or None
-        skus = await self.sku_crud.list_all(category=category)
-        if category is not None and not skus:
-            raise ConflictError("No SKUs in that category")
+        skus = await self.sku_crud.list_all(category=category, lifecycle="all")
         stocks = await self.location_stock_crud.list_by_location_id(data.location_id)
         on_hand_by_sku = {row.sku_id: row.on_hand for row in stocks}
+        # Archived physical stock still needs counting; old sheets keep every snapshot.
+        skus = [sku for sku in skus if not sku.is_archived or on_hand_by_sku.get(sku.id, 0) != 0]
+        if category is not None and not skus:
+            raise ConflictError("No SKUs in that category")
 
         stocktake = Stocktake(
             location_id=data.location_id,

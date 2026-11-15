@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import assert_customer_active
 from app.services.sellability import assert_sku_sellable
+from app.services.sku_archive import SkuArchiveService
 from app.services.archive_documents import assert_operational_document, source_document_flags
 from app.crud.location import LocationCRUD
 from app.crud.ops_commerce_orders import OpsCommerceOrdersCRUD
@@ -645,6 +646,7 @@ class SalesOrdersService:
         customer,
         lines,
     ) -> tuple[list[SalesOrderLine], Decimal, Decimal, Decimal]:
+        await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
         models: list[SalesOrderLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)

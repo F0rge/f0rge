@@ -29,6 +29,7 @@ from app.services.catalogue_csv import (
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.vat import inc_to_ex
+from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -91,6 +92,7 @@ class CatalogueImportService:
         soh_map: Optional[str],
         user_id: uuid.UUID,
     ) -> CatalogueImportCommitResponse:
+        await SkuArchiveService(self.db).lock_skus([])
         inventory_bytes = await inventory.read()
         soh_bytes = await soh.read() if soh is not None else None
         parsed_inventory, parsed_soh, errors = await self._parse_and_validate(
@@ -158,6 +160,15 @@ class CatalogueImportService:
                 continue
             seen_refs[row.our_ref] = row.row
             existing = await self.sku_crud.get_by_our_ref(row.our_ref)
+            if existing is not None and existing.is_archived:
+                errors.append(
+                    CatalogueImportRowError(
+                        file="inventory",
+                        row=row.row,
+                        message=f"Restore SKU {row.our_ref} before editing it through CSV import",
+                    )
+                )
+                continue
             barcode = row.barcode
             if barcode is None and existing is None:
                 barcode = f"csv:{row.our_ref}"

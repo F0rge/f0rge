@@ -49,7 +49,7 @@ export function skuItemToString(item: Sku | null): string {
   if (!item) {
     return "";
   }
-  return `${item.our_ref} — ${item.name}`;
+  return `${item.our_ref} — ${item.name}${item.is_archived ? " (Archived)" : ""}`;
 }
 
 function shouldFilterSku({

@@ -265,6 +265,7 @@ class RecordsService:
                 LocationBin.id.label("bin_id"),
                 LocationBin.code.label("bin_code"),
                 Sku.id.label("sku_id"),
+                Sku.is_archived.label("is_archived"),
                 Sku.our_ref.label("our_ref"),
                 Sku.name.label("sku_name"),
                 BinStock.on_hand.label("on_hand"),

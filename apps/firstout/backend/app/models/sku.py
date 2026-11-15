@@ -64,8 +64,16 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     storefront_published: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    archived_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
 
     __table_args__ = (
+        Index("ix_skus_team_id_is_archived", "team_id", "is_archived"),
         Index(
             "ix_skus_design_fabric_lower",
             text("lower(design)"),

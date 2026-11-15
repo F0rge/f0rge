@@ -62,6 +62,8 @@ class SkuCreate(BaseModel):
 
 
 class SkuUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     is_sellable: Optional[bool] = None
     our_ref: Optional[str] = Field(default=None, min_length=1, max_length=64)
     our_barcode: Optional[str] = Field(default=None, min_length=1, max_length=64)
@@ -89,6 +91,9 @@ class SkuUpdate(BaseModel):
 
 
 class SkuResponse(BaseModel):
+    is_archived: bool = False
+    archived_at: Optional[datetime.datetime] = None
+    archived_by_id: Optional[uuid.UUID] = None
     is_sellable: bool
     id: uuid.UUID
     our_ref: str

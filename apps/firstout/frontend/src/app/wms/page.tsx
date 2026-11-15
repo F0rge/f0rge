@@ -172,7 +172,7 @@ function WmsMobileConsole() {
         await Promise.all([
           listLocations(),
           listPurchaseOrders({ limit: 100 }),
-          listSkus(),
+          listSkus({ lifecycle: "all" }),
           listInventory(),
           listStocktakes(),
           getSettings(),

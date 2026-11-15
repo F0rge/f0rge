@@ -112,7 +112,7 @@ export function resolveTillScan(options: {
   if (!sku) {
     return { ok: false, error: "unknown" };
   }
-  if (!sku.is_sellable) {
+  if (sku.is_archived || !sku.is_sellable) {
     return { ok: false, error: "not_sellable" };
   }
   if (!sku.retail_ex_vat) {

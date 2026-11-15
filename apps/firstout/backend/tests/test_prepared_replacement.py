@@ -22,6 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.commands.replace_primavera import (
     KNOWN,
+    EXTERNAL_PRESERVE,
+    SCHEMA_REVISION,
     PRIMAVERA_TEAM_ID,
     _snapshot,
     read_mapping,
@@ -283,7 +285,7 @@ async def replacement_database(second_postgres_url, monkeypatch):
     from app.commands.tenant_cutover import activate_rls
 
     monkeypatch.setattr(settings, "frontend_proxy_secret", "synthetic-replacement-proxy")
-    migrate(second_postgres_url, "089_merge_record_workspaces")
+    migrate(second_postgres_url, "091_sku_archive")
     admin = create_async_engine(second_postgres_url)
     role = "prepared_runtime_" + uuid.uuid4().hex[:12]
     password = "synthetic-" + uuid.uuid4().hex
@@ -297,6 +299,17 @@ async def replacement_database(second_postgres_url, monkeypatch):
         )
         await conn.execute(
             sa.text(f'GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO "{role}"')
+        )
+        await conn.execute(
+            sa.text(f'REVOKE INSERT,UPDATE,DELETE ON release_migration_receipts FROM "{role}"')
+        )
+        await conn.execute(
+            sa.text(
+                "INSERT INTO release_migration_receipts "
+                "(source_commit,schema_revision,policy_sha256,from_revision,completed_at) "
+                "VALUES (:commit,:revision,:policy,'089_merge_record_workspaces','2026-11-15 12:00:00')"
+            ),
+            {"commit": "a" * 40, "revision": SCHEMA_REVISION, "policy": "b" * 64},
         )
     runtime = create_async_engine(
         make_url(second_postgres_url).set(username=role, password=password)
@@ -894,7 +907,9 @@ async def test_replacement_refusal_gates_leave_business_data_intact(
         before = await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN)
         with pytest.raises(
             ValidationError,
-            match="exact reviewed schema revision089" if gate == "multiple_heads" else None,
+            match="exact reviewed schema revision091_sku_archive"
+            if gate == "multiple_heads"
+            else None,
         ):
             await replace_in_transaction(
                 db,
@@ -999,3 +1014,158 @@ async def test_real_cli_dry_run_and_commit_evidence_handshake(replacement_databa
             )
             == 2
         )
+
+
+async def test_replacement_preserves_external_release_receipts_with_select_only_runtime(
+    replacement_database, tmp_path
+):
+    from app.database import Base
+
+    admin, maker, info = replacement_database
+    assert set(EXTERNAL_PRESERVE) == {"release_migration_receipts"}
+    assert "release_migration_receipts" not in Base.metadata.tables
+    package = write_package(tmp_path / "package")
+    (mappings, changes), mapping_hash = mapping_file(tmp_path / "map.json", info)
+    async with organisation_session(maker, PRIMAVERA_TEAM_ID) as db:
+        can_change = await db.scalar(
+            sa.text(
+                "SELECT has_table_privilege(current_user, 'public.release_migration_receipts', 'INSERT,UPDATE,DELETE')"
+            )
+        )
+        assert not can_change
+        before = await _snapshot(db, PRIMAVERA_TEAM_ID, EXTERNAL_PRESERVE)
+        assert before["tables"]["release_migration_receipts"]["count"] == 1
+        report = await replace_in_transaction(
+            db,
+            package,
+            mappings,
+            changes,
+            expected_database=info["database"],
+            mapping_sha256=mapping_hash,
+        )
+        assert report["protected_external"] == before["tables"]
+        await db.commit()
+        assert await _snapshot(db, PRIMAVERA_TEAM_ID, EXTERNAL_PRESERVE) == before
+    async with AsyncSession(admin) as db:
+        receipt = (
+            await db.execute(
+                sa.text(
+                    "SELECT source_commit,schema_revision,policy_sha256,from_revision FROM release_migration_receipts"
+                )
+            )
+        ).one()
+        assert tuple(receipt) == (
+            "a" * 40,
+            SCHEMA_REVISION,
+            "b" * 64,
+            "089_merge_record_workspaces",
+        )
+
+
+@pytest.mark.parametrize("metadata", ["is_archived", "archived_at", "archived_by_id"])
+async def test_replacement_refuses_existing_sku_archive_metadata_and_preserves_recipe(
+    replacement_database, tmp_path, metadata
+):
+    from app.models.sku_bom_line import SkuBomLine
+
+    admin, maker, info = replacement_database
+    package = write_package(tmp_path / "package")
+    (mappings, changes), mapping_hash = mapping_file(tmp_path / "map.json", info)
+    async with AsyncSession(admin) as db:
+        retained = await db.get(Sku, info["retained"])
+        excluded = await db.scalar(
+            sa.select(Sku).where(Sku.team_id == PRIMAVERA_TEAM_ID, Sku.our_ref == "OLD-EXCLUDED")
+        )
+        if metadata == "is_archived":
+            retained.is_archived = True
+        elif metadata == "archived_at":
+            retained.archived_at = datetime.datetime(2026, 11, 15)
+        else:
+            retained.archived_by_id = await db.scalar(
+                sa.select(User.id).where(User.team_id == PRIMAVERA_TEAM_ID)
+            )
+        db.add(
+            SkuBomLine(
+                team_id=PRIMAVERA_TEAM_ID,
+                parent_sku_id=retained.id,
+                component_sku_id=excluded.id,
+                qty=Decimal("0.125"),
+            )
+        )
+        await db.commit()
+    async with organisation_session(maker, PRIMAVERA_TEAM_ID) as db:
+        before = await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN)
+        with pytest.raises(
+            ValidationError,
+            match="Existing SKU archive state requires a separate reviewed replacement plan",
+        ):
+            await replace_in_transaction(
+                db,
+                package,
+                mappings,
+                changes,
+                expected_database=info["database"],
+                mapping_sha256=mapping_hash,
+            )
+        await db.rollback()
+        assert await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN) == before
+        recipe = await db.scalar(
+            sa.select(SkuBomLine).where(SkuBomLine.parent_sku_id == info["retained"])
+        )
+        assert recipe is not None and recipe.qty == Decimal("0.125")
+
+
+async def test_replacement_refuses_old_schema_before_reading_new_sku_columns(
+    replacement_database, tmp_path
+):
+    admin, maker, info = replacement_database
+    package = write_package(tmp_path / "package")
+    (mappings, changes), mapping_hash = mapping_file(tmp_path / "map.json", info)
+    async with admin.begin() as conn:
+        await conn.execute(
+            sa.text("UPDATE alembic_version SET version_num='089_merge_record_workspaces'")
+        )
+        # Prove the schema gate fires before even trying to read the new ORM fields.
+        await conn.execute(
+            sa.text(
+                "ALTER TABLE skus DROP COLUMN archived_by_id, DROP COLUMN archived_at, DROP COLUMN is_archived"
+            )
+        )
+    async with organisation_session(maker, PRIMAVERA_TEAM_ID) as db:
+        before = await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN)
+        with pytest.raises(ValidationError, match="exact reviewed schema revision091_sku_archive"):
+            await replace_in_transaction(
+                db,
+                package,
+                mappings,
+                changes,
+                expected_database=info["database"],
+                mapping_sha256=mapping_hash,
+            )
+        await db.rollback()
+        assert await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN) == before
+
+
+async def test_replacement_refuses_unknown_release_receipt_columns(replacement_database, tmp_path):
+    admin, maker, info = replacement_database
+    package = write_package(tmp_path / "package")
+    (mappings, changes), mapping_hash = mapping_file(tmp_path / "map.json", info)
+    async with admin.begin() as conn:
+        await conn.execute(
+            sa.text(
+                "ALTER TABLE release_migration_receipts ADD COLUMN unreviewed_receipt_state text"
+            )
+        )
+    async with organisation_session(maker, PRIMAVERA_TEAM_ID) as db:
+        before = await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN)
+        with pytest.raises(ValidationError, match="Release receipt columns differ"):
+            await replace_in_transaction(
+                db,
+                package,
+                mappings,
+                changes,
+                expected_database=info["database"],
+                mapping_sha256=mapping_hash,
+            )
+        await db.rollback()
+        assert await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN) == before

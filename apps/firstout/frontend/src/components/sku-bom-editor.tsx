@@ -93,6 +93,8 @@ export function SkuBomEditor({
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const editable = canMutate && !sku?.is_archived;
+
   const isActive = variant === "section" ? sku !== null : open && sku !== null;
 
   useEffect(() => {
@@ -132,7 +134,7 @@ export function SkuBomEditor({
 
   const usedIds = useMemo(() => new Set(lines.map((line) => line.component_sku_id)), [lines]);
   const skuOptions = useMemo(
-    () => skus.filter((entry) => entry.id !== sku?.id && !usedIds.has(entry.id)),
+    () => skus.filter((entry) => entry.id !== sku?.id && !entry.is_archived && !usedIds.has(entry.id)),
     [skus, sku?.id, usedIds],
   );
   const qtyValid = isValidBomQty(qty);
@@ -151,7 +153,7 @@ export function SkuBomEditor({
   }
 
   async function handleSave() {
-    if (!sku || !canMutate || !linesValid) {
+    if (!sku || sku.is_archived || !canMutate || !linesValid) {
       return;
     }
     setSaving(true);
@@ -188,7 +190,7 @@ export function SkuBomEditor({
         />
       ) : null}
       {loading ? <p className="cds--type-body-01">Loading components…</p> : null}
-      {canMutate ? (
+      {editable ? (
         <Stack gap={4}>
           <ComboBox
             id="kit-bom-sku"
@@ -199,7 +201,7 @@ export function SkuBomEditor({
             shouldFilterItem={shouldFilterSku}
             selectedItem={selectedSku}
             onChange={({ selectedItem }) => setSelectedSku(selectedItem ?? null)}
-            helperText="Parent SKU is excluded."
+            helperText="Archived products and the parent SKU are excluded."
             disabled={loading || saving}
           />
           <NumberInput
@@ -235,7 +237,7 @@ export function SkuBomEditor({
             <TableRow>
               <TableHeader>Component</TableHeader>
               <TableHeader>Qty</TableHeader>
-              {canMutate ? <TableHeader> </TableHeader> : null}
+              {editable ? <TableHeader> </TableHeader> : null}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -243,7 +245,7 @@ export function SkuBomEditor({
               <TableRow key={line.component_sku_id}>
                 <TableCell>{componentLabel(skus, line.component_sku_id)}</TableCell>
                 <TableCell>{line.qty}</TableCell>
-                {canMutate ? (
+                {editable ? (
                   <TableCell>
                     <Button
                       kind="ghost"
@@ -265,7 +267,7 @@ export function SkuBomEditor({
           </TableBody>
         </Table>
       )}
-      {variant === "section" && canMutate ? (
+      {variant === "section" && editable ? (
         <Button
           kind="primary"
           disabled={saving || loading || !linesValid}
@@ -288,7 +290,7 @@ export function SkuBomEditor({
     <Modal
       open={open && sku !== null}
       modalHeading={sku ? `Kit components — ${sku.our_ref}` : "Kit components"}
-      passiveModal={!canMutate}
+      passiveModal={!editable}
       primaryButtonText={saving ? "Saving…" : "Save"}
       secondaryButtonText="Cancel"
       onRequestClose={onClose}
