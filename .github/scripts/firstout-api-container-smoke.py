@@ -17,7 +17,7 @@ from pathlib import Path
 PYTHON = "/app/apps/firstout/backend/.venv/bin/python"
 IMAGE_REF = re.compile(r"[a-z0-9][a-z0-9/_.:@-]*\Z")
 SOURCE_SHA = re.compile(r"[0-9a-f]{40}\Z")
-REQUIRED_MIGRATION = "088_archive_sales_precision"
+REQUIRED_MIGRATION = "089_merge_record_workspaces"
 
 
 def docker(*args: str, capture: bool = True, check: bool = True) -> str:
@@ -100,8 +100,8 @@ with get('/openapi.json') as response:
 
 scripts = ScriptDirectory.from_config(Config('alembic.ini'))
 heads = scripts.get_heads()
-assert len(heads) == 1
-assert '088_archive_sales_precision' in {revision.revision for revision in scripts.walk_revisions()}
+assert heads == ['089_merge_record_workspaces']
+assert {'088_archive_sales_precision', '085_record_workspaces'} <= {revision.revision for revision in scripts.walk_revisions()}
 async def database_check():
     connection = await asyncpg.connect(os.environ['DATABASE_URL'].replace('+asyncpg', ''))
     try:

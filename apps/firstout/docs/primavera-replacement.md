@@ -47,7 +47,7 @@ movement reports must not be replayed, which would duplicate activity.
 
 ## Application and schema prerequisites
 
-The replacement requires exact schema head `088_archive_sales_precision` and a
+The replacement requires exact schema head `089_merge_record_workspaces` and a
 compatible API and frontend before fractional rows are loaded.
 
 | Migration | Change and recovery constraint |
@@ -57,6 +57,7 @@ compatible API and frontend before fractional rows are loaded.
 | 086 | Adds `skus.is_sellable`, true by default for existing products. A downgrade would remove that information. |
 | 087 | Adds canonical Cin7 JSON payloads to five archive parents, permits unknown PO factory amounts as null, and limits supplier-reference uniqueness to live bills. Downgrade refuses retained payloads, null factory amounts or references incompatible with the previous index. |
 | 088 | Widens eight sales VAT/gross columns to `Numeric(16,4)` while retaining the previous twelve integer digits. This preserves 288 source rows across 166 documents with subcent amounts. Live sales still calculate and return cents; archive screens show up to four decimals. Downgrade locks all four affected tables and checks all organisations, refusing any non-cent, nonfinite or out-of-range amount. |
+| 089 | Merges the existing inventory/history branch at 088 with record workspaces at 085. Both branch identities stay unchanged; the merge itself performs no DDL or data changes. Replacement preserves workspace operation receipts for Primavera and every other organisation. |
 
 Follow the [Firstout tested-image release procedure](../../../.github/deploy/firstout-release.md).
 Its API and frontend profiles are fixed; the API image never migrates on startup.
@@ -82,7 +83,7 @@ the required customer-address result is all 965 prepared rows, not an extra
 re-import comparisons independent of decimal scale representation.
 
 The command is restricted to the fixed Primavera team identity, exact database
-name, schema 088, maintenance status and verified non-owner runtime role under
+name, schema 089, maintenance status and verified non-owner runtime role under
 FORCE RLS. It rejects an active import, unknown table inventory and nonempty
 protected portal/commerce dependencies that would make replacement unsafe.
 
@@ -198,7 +199,7 @@ Before any production replacement write:
    Verify its restore and bind the evidence to the reviewed baseline. The
    earlier backup does not cover subsequent changes.
 4. Complete the controlled migrations and compatible application releases,
-   verify schema 088 and health, then run and independently review the final
+   verify schema 089 and health, then run and independently review the final
    replacement dry run against the fenced target. Reconcile any changed
    baseline and backup before commit.
 5. Commit only the reviewed package/mapping/plan. Check archive partitions,

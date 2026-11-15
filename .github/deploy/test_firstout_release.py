@@ -581,6 +581,10 @@ class ApiProfileTests(unittest.TestCase):
                 if statement.startswith("SELECT current_user"):
                     return Result(role)
                 if statement.startswith("SELECT current_database()"):
+                    # PostgreSQL inet::text contains /32 or /128. The probe
+                    # must return a bare IP while strict identity checks stay.
+                    assert "host(inet_server_addr()) AS server_address" in statement
+                    assert "inet_server_addr()::text" not in statement
                     return Result(metadata["database_identity"])
                 if not statement.startswith("SET LOCAL statement_timeout"):
                     raise AssertionError("Unexpected schema probe statement")

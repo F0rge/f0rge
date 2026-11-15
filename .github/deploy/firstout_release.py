@@ -490,7 +490,7 @@ async def main():
                 versions=(await conn.execute(text('SELECT version_num FROM alembic_version'))).scalars().all()
                 if len(versions)!=1:raise RuntimeError('Expected one migration head')
                 role=dict((await conn.execute(text("SELECT current_user AS role,rolsuper,rolbypassrls,EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER')) AS owns_public_tables,EXISTS(SELECT 1 FROM pg_roles r WHERE (r.rolsuper OR r.rolbypassrls) AND pg_has_role(current_user,r.oid,'MEMBER')) AS can_assume_bypass_role FROM pg_roles WHERE rolname=current_user"))).mappings().one())
-                identity=dict((await conn.execute(text('SELECT current_database() AS database_name,inet_server_addr()::text AS server_address,inet_server_port() AS server_port'))).mappings().one())
+                identity=dict((await conn.execute(text('SELECT current_database() AS database_name,host(inet_server_addr()) AS server_address,inet_server_port() AS server_port'))).mappings().one())
                 print(json.dumps({'schema_revision':versions[0],'runtime_role':role,'database_identity':identity}))
     finally:
         await engine.dispose()
