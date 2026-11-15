@@ -382,6 +382,24 @@ def redact_configuration(value: Any) -> Any:
     return value
 
 
+def running_instance_ids(deployment: dict[str, Any]) -> list[str]:
+    """Verify one serving replica while retaining fail-closed rollout checks.
+
+    Railway retains terminal REMOVED instance history on successful deployments,
+    including deployments that ran a pre-deploy command. Every other status still
+    participates in the single-replica check; unhealthy or unsettled instances
+    must not disappear merely because they are not RUNNING yet.
+    """
+    instances = [
+        item for item in deployment["instances"] if item["status"] != "REMOVED"
+    ]
+    require(
+        len(instances) == 1 and instances[0]["status"] == "RUNNING",
+        "Expected the configured single running replica",
+    )
+    return [instances[0]["id"]]
+
+
 def stable_deployment(
     state: dict[str, Any],
     digest: str,
@@ -431,12 +449,7 @@ def stable_deployment(
     require(
         deployment["image_digest"] == digest, "Provider running-image digest differs"
     )
-    instances = deployment["instances"]
-    require(
-        len(instances) == 1 and all(item["status"] == "RUNNING" for item in instances),
-        "Expected the configured single running replica",
-    )
-    return sorted(item["id"] for item in instances)
+    return running_instance_ids(deployment)
 
 
 def unchanged_runtime(
