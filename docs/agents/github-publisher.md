@@ -95,10 +95,16 @@ GitHub's `allow_auto_merge` setting is enabled, with squash title/body defaults
 `PR_TITLE`/`PR_BODY`. Main review ruleset `27305147` was strengthened from zero
 to **one required general approval**, retaining code-owner review, stale-review
 dismissal, resolved threads and no bypass. The global
-Leo-only CODEOWNERS change is prepared for review and has **not reached main**;
-the old file can still request Luis. Default automatic merging remains pending
-that reviewed ownership change and verification of the effective rules below.
-No current PR was armed, merged or deployed by this setup task.
+Leo-only CODEOWNERS change was still pending at the initial smoke test; the old
+file could request Luis then. That smoke test did not arm, merge or deploy a PR.
+
+**Subsequent activation:** [PR #948](https://github.com/F0rge/f0rge/pull/948)
+merged the global Leo-only CODEOWNERS file. A fresh read on 15 November 2026
+verified `* @leothesouthafrican` on `main`, one required approval plus code-owner
+review, stale-review dismissal, resolved threads and active ruleset `27305147`
+with no bypass actors. The required `ci` and `playwright smoke` checks remain.
+Reverify these controls before arming any PR; this activation is neither a human
+review of another PR nor production approval.
 
 ## Publish a prepared branch
 
