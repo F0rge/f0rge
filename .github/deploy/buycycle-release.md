@@ -9,7 +9,18 @@ until Leo approves the exact cutover and recovery scope.
 1. The required CI `buycycle image` job runs on native `ubuntu-24.04-arm`, selected
    through Nx affected `container-test`. It builds once and tests the actual image
    with PostgreSQL, synthetic signed Access assertions and the production React
-   build. It retains `image.tar` and `evidence.json` outside the public checkout.
+   build. The same harness requires a 702,151-record synthetic import preview
+   in a separate no-network container capped at one CPU and 768 MiB with no extra
+   swap. All five table counts and hashes must match; missing or failed capacity
+   evidence blocks publication. A separate full-size synthetic API fixture uses
+   the same image and selected PostgreSQL major: both categories are checked cold
+   and warm, then mixed and two-bike concurrent requests drain complete responses
+   while health, database readiness and authenticated status are probed. The app
+   stays capped at one CPU/768 MiB without extra swap; its disposable PostgreSQL
+   fixture uses the explicitly reviewed one-CPU/2 GiB migration budget. This is
+   workload regression evidence, not a promise of spare capacity for future data.
+   Missing or failed full-API evidence also blocks publication.
+   It retains `image.tar` and `evidence.json` outside the public checkout.
    An unaffected job does no image build; an affected job missing its evidence
    fails. The required `ci` aggregate includes this job.
 2. Create a tag matching `release/buycycle/pi/YYYYMMDDTHHMMSSZ` at the selected main

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -51,6 +52,8 @@ def config_digest(archive: Path, commit: str) -> str:
 
 
 def main() -> None:
+    if not __debug__:
+        raise SystemExit("Image verification refuses Python optimization; all validation must remain enabled")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path(os.environ.get("BUYCYCLE_IMAGE_OUTPUT", tempfile.gettempdir() + "/buycycle-tested-image")))
     parser.add_argument("--image", help="Test an existing image without rebuilding it")
@@ -89,19 +92,32 @@ def main() -> None:
     assert info["Architecture"] == "arm64" and info["Os"] == "linux", "Wrong target architecture"
     assert info["Config"]["Labels"]["org.opencontainers.image.revision"] == commit, "Wrong image commit"
     assert info["Config"]["User"] == "10001:10001", "Image must use the runtime identity"
+    command(sys.executable, "-m", "unittest", "discover", "-s", "apps/buycycle/backend/tests", "-p", "test_capacity_harness.py")
+    # Run the full-size synthetic regression against these exact image bytes.
+    # Its isolated CLI container enforces the production CPU/RAM ceiling, with
+    # no network, database or extra swap; small seed tests missed this failure.
+    command(sys.executable, "apps/buycycle/backend/tests/capacity_preview.py", "--image", info["Id"])
+    command(sys.executable, "apps/buycycle/backend/tests/capacity_api.py", "--image", info["Id"], "--postgres-major", str(args.postgres_major))
     suffix = uuid.uuid4().hex[:12]
     network, anchor = "buycycle-test-net-" + suffix, "buycycle-test-pod-" + suffix
+    fixture_label = "buycycle-image-" + suffix
     containers: list[str] = []
 
     def start(name: str, *options: str) -> None:
-        command("docker", "run", "-d", "--name", name, "--label", "com.f0rge.fixture=buycycle-image", *options)
         containers.append(name)
+        command("docker", "run", "-d", "--name", name, "--label", "com.f0rge.fixture=" + fixture_label, *options)
 
     def db_binary(binary: str, *arguments: str) -> None:
+        name = "buycycle-test-maintenance-" + uuid.uuid4().hex
+        containers.append(name)
         command(
             "docker",
             "run",
             "--rm",
+            "--name",
+            name,
+            "--label",
+            "com.f0rge.fixture=" + fixture_label,
             "--network",
             "container:" + anchor,
             "-e",
@@ -114,7 +130,7 @@ def main() -> None:
         )
 
     try:
-        command("docker", "network", "create", "--internal", network)
+        command("docker", "network", "create", "--internal", "--label", "com.f0rge.fixture=" + fixture_label, network)
         start(anchor, "--network", network, NODE, "node", "-e", "setInterval(()=>{}, 1000000)")
         postgres = "buycycle-test-pg-" + suffix
         start(postgres, "--network", "container:" + anchor, "-e", "POSTGRES_PASSWORD=synthetic-image-only", "-e", "POSTGRES_DB=buycycle_rehearsal", POSTGRES[args.postgres_major])
@@ -236,6 +252,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE buycycle_migrator IN SCHEMA public GRANT USAGE
         tests["running_image_identity"] = True
         tests["log_redaction"] = True
         tests["restricted_runtime_role"] = True
+        tests["bounded_memory_import_preview"] = True
+        tests["bounded_memory_full_api"] = True
         output.mkdir(parents=True, exist_ok=True, mode=0o700)
         archive = output / "image.tar"
         command("docker", "save", "--output", str(archive), image)
@@ -269,8 +287,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE buycycle_migrator IN SCHEMA public GRANT USAGE
         print(json.dumps({"output": str(output), "image_id": info["Id"], "tested": True, "dirty": dirty}))
     finally:
         for container in reversed(containers):
-            subprocess.run(["docker", "rm", "-f", "-v", container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        subprocess.run(["docker", "network", "rm", network], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            owned = subprocess.run(["docker", "inspect", "--format", '{{index .Config.Labels "com.f0rge.fixture"}}', container], capture_output=True, text=True, check=False)
+            if owned.returncode == 0 and owned.stdout.strip() == fixture_label:
+                subprocess.run(["docker", "rm", "-f", "-v", container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        owned_network = subprocess.run(["docker", "network", "inspect", "--format", '{{index .Labels "com.f0rge.fixture"}}', network], capture_output=True, text=True, check=False)
+        if owned_network.returncode == 0 and owned_network.stdout.strip() == fixture_label:
+            subprocess.run(["docker", "network", "rm", network], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
 
 if __name__ == "__main__":

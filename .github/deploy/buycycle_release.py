@@ -54,6 +54,8 @@ TESTS = frozenset(
         "running_image_identity",
         "log_redaction",
         "restricted_runtime_role",
+        "bounded_memory_import_preview",
+        "bounded_memory_full_api",
     }
 )
 RECEIPTS = ("migration", "restore", "provider")

@@ -219,6 +219,16 @@ class ContractTests(unittest.TestCase):
                 origin_bypass_denied=False
             ),
             lambda m, r: m["image_evidence"].update(tests={}),
+            lambda m, r: m["image_evidence"]["tests"].pop(
+                "bounded_memory_import_preview"
+            ),
+            lambda m, r: m["image_evidence"]["tests"].update(
+                bounded_memory_import_preview=False
+            ),
+            lambda m, r: m["image_evidence"]["tests"].pop("bounded_memory_full_api"),
+            lambda m, r: m["image_evidence"]["tests"].update(
+                bounded_memory_full_api=False
+            ),
             lambda m, r: r.update(event="pull_request"),
             lambda m, r: r.update(head_branch="feature"),
             lambda m, r: r.update(conclusion="failure"),
