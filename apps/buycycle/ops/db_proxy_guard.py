@@ -135,7 +135,7 @@ def verify_proxy(policy_path: Path, *, uid: int = 0, runner=None, proc_root: Pat
         require(properties.get("Id") == (SOCKET if name == "socket" else SERVICE) and properties.get("LoadState") == "loaded")
         require(properties.get("FragmentPath") == policy[name + "_file"] and properties.get("DropInPaths") == "" and properties.get("Transient") == "no")
         require(properties.get("NeedDaemonReload") == "no")
-    require(socket.get("ActiveState") == "active" and socket.get("SubState") == "listening" and socket.get("Listen") == ENDPOINT + " (Stream)")
+    require(socket.get("ActiveState") == "active" and socket.get("Listen") == ENDPOINT + " (Stream)")
     require(socket.get("Accept") == "no" and socket.get("Triggers") == SERVICE)
     argv = [str(executables["proxy_executable"]), "--connections-max=4", str(address) + ":5432"]
     # Loaded unit properties, not only files on disk, must retain the approved
@@ -154,9 +154,9 @@ def verify_proxy(policy_path: Path, *, uid: int = 0, runner=None, proc_root: Pat
     pid = service.get("MainPID", "")
     require(pid.isdigit())
     if service.get("ActiveState") == "inactive":
-        require(service.get("SubState") == "dead" and pid == "0")
+        require(socket.get("SubState") == "listening" and service.get("SubState") == "dead" and pid == "0")
     else:
-        require(service.get("ActiveState") == "active" and service.get("SubState") == "running" and int(pid) > 1)
+        require(socket.get("SubState") == "running" and service.get("ActiveState") == "active" and service.get("SubState") == "running" and int(pid) > 1)
         process = proc_root / pid
         require(os.readlink(process / "exe") == str(executables["proxy_executable"]))
         require((process / "cmdline").read_bytes() == b"\0".join(item.encode() for item in argv) + b"\0")

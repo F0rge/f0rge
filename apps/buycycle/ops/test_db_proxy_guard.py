@@ -148,6 +148,7 @@ class DatabaseProxyGuardTests(unittest.TestCase):
     def test_verified_inactive_socket_activation_and_running_process(self):
         self.verify()
         self.service.update(ActiveState="active", SubState="running", MainPID="123")
+        self.socket["SubState"] = "running"
         process = self.root / "proc" / "123"
         process.mkdir(parents=True)
         (process / "exe").symlink_to(self.policy["proxy_executable"])
@@ -156,6 +157,23 @@ class DatabaseProxyGuardTests(unittest.TestCase):
         (process / "cmdline").write_bytes(b"wrong-target\0")
         with self.assertRaises(OpsError):
             self.verify()
+
+    def test_socket_service_states_must_match_exact_waiting_or_running_pair(self):
+        # systemd257 Accept=no sockets become running after activating their
+        # service; listening is the distinct pre-activation state.
+        for socket_state, service_active, service_state, pid in (
+            ("running", "inactive", "dead", "0"),
+            ("listening", "active", "running", "123"),
+            ("listening", "inactive", "dead", "123"),
+            ("listening", "inactive", "failed", "0"),
+            ("running", "active", "running", "0"),
+            ("running", "activating", "start", "123"),
+            ("start-pre", "active", "running", "123"),
+        ):
+            self.socket["SubState"] = socket_state
+            self.service.update(ActiveState=service_active, SubState=service_state, MainPID=pid)
+            with self.subTest(socket=socket_state, service=service_active, substate=service_state, pid=pid), self.assertRaises(OpsError):
+                self.verify()
 
     def test_changed_container_network_image_and_ip_fail_before_connect(self):
         changes = [
