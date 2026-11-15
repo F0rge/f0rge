@@ -8,11 +8,11 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
     Index,
-    Integer,
     Numeric,
     String,
     Text,
@@ -82,6 +82,9 @@ class PurchaseOrder(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     is_archive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     # Charges, VAT and terms captured when a proforma was read into this order.
     intake_snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     supplier_ref: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
@@ -110,14 +113,15 @@ class PoLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     supplier_code: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    qty: Mapped[int] = mapped_column(Integer, nullable=False)
-    factory_unit_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    qty: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    factory_unit_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
     unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="lines")
     sku: Mapped[Optional["Sku"]] = relationship()
 
     __table_args__ = (
+        CheckConstraint("factory_unit_amount > 0", name="ck_po_lines_factory_unit_amount"),
         Index(
             "uq_po_lines_po_sku",
             "po_id",

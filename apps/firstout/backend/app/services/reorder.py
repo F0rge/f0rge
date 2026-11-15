@@ -39,6 +39,10 @@ class ReorderService:
                 raise ValidationError("SKU is not on the reorder list")
             if row.preferred_supplier_id is None:
                 raise ValidationError("Preferred supplier is required")
+            if row.suggested_qty != row.suggested_qty.to_integral_value():
+                raise ValidationError(
+                    "Recommended reorder quantity is fractional. Create a purchase order with an explicit whole quantity."
+                )
 
         factory_amounts = (
             await self.purchase_order_service.crud.latest_factory_unit_amounts_by_sku_ids(

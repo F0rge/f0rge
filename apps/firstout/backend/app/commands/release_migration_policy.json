@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "baseline_revision": "083_portal_clerk_identity",
-  "target_revision": "086_release_migration_receipts",
+  "baseline_revision": "089_merge_record_workspaces",
+  "target_revision": "090_release_migration_receipts",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -337,14 +337,34 @@
     },
     "084_party_archives": {
       "sha256": "f5d25ebf7c310b62bdd50d16fa7144f07076cc24fe589ec754196c0e4c0ccc21",
-      "automatic": true
+      "automatic": false
+    },
+    "085_fractional_inventory": {
+      "sha256": "37d8fd5d9e620175f4c6a1fe6fed7fd89f97b7d8f9ab4b267721196b0f99c1e6",
+      "automatic": false
     },
     "085_record_workspaces": {
       "sha256": "3e4e4de24ca0f0ffa2c2d450ac17825e018e363649873f0e46a7ba76ec7fea9f",
-      "automatic": true
+      "automatic": false
     },
-    "086_release_migration_receipts": {
-      "sha256": "d1e5d256f31d7d706938d22c416326d2b6e44a54d4db7c0eda3604532100afe3",
+    "086_cin7_sellability": {
+      "sha256": "83bd5929c75fe3c8d0f625351b958772ca9e2e8a0d30058178f725e7cbc092cb",
+      "automatic": false
+    },
+    "087_cin7_archive_provenance": {
+      "sha256": "db3aead3b0bdbc98933f42dd8f1e0aefcfcb3c3fdde263184a373f5a78a3cf97",
+      "automatic": false
+    },
+    "088_archive_sales_precision": {
+      "sha256": "4ced514add395225f67bd6ef6aac362fecda19464069500cce401bb5ca9e8bcc",
+      "automatic": false
+    },
+    "089_merge_record_workspaces": {
+      "sha256": "35c480c77ba64f0b96d87c11dbac895f220a9ae13a54bec0aa5e2e04556989ac",
+      "automatic": false
+    },
+    "090_release_migration_receipts": {
+      "sha256": "77da827b326461b94a2e51a4d645238160527a04b286c61144eee1e1a0a6ccbf",
       "automatic": true
     }
   }

@@ -65,6 +65,7 @@ import type { PickDocument } from "@/lib/picks";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
+import { formatQuantity, isQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 import {
   getWmsMobileViewportServerSnapshot,
   getWmsMobileViewportSnapshot,
@@ -203,7 +204,7 @@ function WmsMobileConsole() {
   }, [user, loadData]);
 
   const landedOrders = useMemo(
-    () => orders.filter((entry) => entry.status === "landed"),
+    () => orders.filter((entry) => !entry.is_archive && entry.status === "landed"),
     [orders],
   );
 
@@ -385,7 +386,7 @@ function ReceiveTab({
       ? selectedPoDetail.lines.find((line) => line.sku_id === matchedSku.id)
       : undefined;
 
-  const formValid = Boolean(poId && locationId);
+  const formValid = Boolean(selectedPoSummary && !selectedPoSummary.is_archive && locationId);
 
   if (!canMutate) {
     return (
@@ -492,7 +493,7 @@ function ReceiveTab({
             <strong>{matchedSku.our_ref}</strong> — {matchedSku.name}
           </p>
           <p className="cds--type-label-01 firstout-muted-text">
-            On PO: qty {poLine.qty}
+            On PO: qty {formatQuantity(poLine.qty)}
           </p>
         </div>
       ) : null}
@@ -552,6 +553,8 @@ function CountTab({
   const [lookingUp, setLookingUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const numericCountQty = countQty.trim() === "" ? "" : Number(countQty);
+  const countError = quantityError(numericCountQty, "nonnegative");
 
   if (!canMutate) {
     return (
@@ -604,7 +607,7 @@ function CountTab({
         line.counted_qty !== null && line.counted_qty !== undefined
           ? line.counted_qty + 1
           : 1;
-      setCountQty(String(nextQty));
+      setCountQty(formatQuantity(nextQty));
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         onError(err.message || "No line matches that barcode.");
@@ -620,16 +623,15 @@ function CountTab({
     if (!stocktake || !activeLine) {
       return;
     }
-    const qty = parsePositiveInt(countQty);
-    if (qty === null) {
-      onError("Enter a valid counted quantity (0 or more).");
+    if (!isQuantity(numericCountQty, "nonnegative")) {
+      onError(countError ?? "Enter a valid counted quantity.");
       return;
     }
     setSaving(true);
     onError("");
     try {
       const updated = await patchStocktakeLine(stocktake.id, activeLine.id, {
-        counted_qty: qty,
+        counted_qty: numericCountQty,
       });
       setActiveLine(updated);
       onStocktakeChange({
@@ -638,7 +640,7 @@ function CountTab({
           entry.id === updated.id ? updated : entry,
         ),
       });
-      onSuccess(`Counted ${updated.our_ref}: ${qty}`);
+      onSuccess(`Counted ${updated.our_ref}: ${formatQuantity(numericCountQty)}`);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to save count.");
     } finally {
@@ -722,17 +724,23 @@ function CountTab({
             <strong>{activeLine.our_ref}</strong> — {activeLine.name}
           </p>
           <p className="cds--type-label-01 firstout-muted-text">
-            Expected {activeLine.expected_qty}
-            {activeLine.counted_qty !== null ? ` • Counted ${activeLine.counted_qty}` : ""}
+            Expected {formatQuantity(activeLine.expected_qty)}
+            {activeLine.counted_qty !== null ? ` • Counted ${formatQuantity(activeLine.counted_qty)}` : ""}
           </p>
           <TextInput
             id="wms-count-qty"
             labelText="Counted qty"
+            type="number"
+            min={0}
+            step={QUANTITY_STEP}
+            helperText="Zero or more, with up to 4 decimal places."
             value={countQty}
             onChange={(event) => setCountQty(event.target.value)}
-            inputMode="numeric"
+            inputMode="decimal"
+            invalid={numericCountQty !== "" && Boolean(countError)}
+            invalidText={countError ?? undefined}
           />
-          <Button size="lg" disabled={saving} onClick={() => void handleSaveCount()}>
+          <Button size="lg" disabled={saving || !isQuantity(numericCountQty, "nonnegative")} onClick={() => void handleSaveCount()}>
             {saving ? "Saving…" : "Save count"}
           </Button>
         </div>
@@ -801,11 +809,11 @@ function TransferTab({
   const destinationOptions = locations.filter((loc) => loc.id !== fromLocationId);
   const sourceOptions = locations.filter((loc) => loc.id !== toLocationId);
 
-  const numericQty = parsePositiveInt(qty);
+  const numericQty = qty.trim() === "" ? "" : Number(qty);
+  const qtyError = quantityError(numericQty);
   const formValid =
     Boolean(fromLocationId && toLocationId && resolvedSkuId) &&
-    numericQty !== null &&
-    numericQty > 0 &&
+    isQuantity(numericQty) &&
     numericQty <= sourceOnHand;
 
   const loadInbound = useCallback(async (destId: string) => {
@@ -850,7 +858,7 @@ function TransferTab({
   }
 
   function draftPayload() {
-    if (!formValid || numericQty === null) {
+    if (!formValid || !isQuantity(numericQty)) {
       return null;
     }
     return {
@@ -992,11 +1000,15 @@ function TransferTab({
       <TextInput
         id="wms-transfer-qty"
         labelText="Quantity"
+        type="number"
+        min={QUANTITY_STEP}
+        step={QUANTITY_STEP}
+        helperText="Greater than zero, with up to 4 decimal places."
         value={qty}
         onChange={(event) => setQty(event.target.value)}
-        inputMode="numeric"
-        invalid={numericQty !== null && sourceOnHand > 0 && numericQty > sourceOnHand}
-        invalidText={`Only ${sourceOnHand} available at source`}
+        inputMode="decimal"
+        invalid={Boolean(resolvedSkuId) && (Boolean(qtyError) || Number(numericQty) > sourceOnHand)}
+        invalidText={qtyError ?? `Only ${formatQuantity(sourceOnHand)} available at source`}
         disabled={!resolvedSkuId}
       />
       {lastDraft ? (
@@ -1058,7 +1070,7 @@ function TransferTab({
       ) : null}
       {fromLocationId && resolvedSkuId ? (
         <p className="cds--type-body-01">
-          On hand at source: <strong>{sourceOnHand}</strong>
+          On hand at source: <strong>{formatQuantity(sourceOnHand)}</strong>
         </p>
       ) : null}
       <p className="cds--type-label-01 firstout-muted-text">
@@ -1102,7 +1114,7 @@ function TransferTab({
       {inbound.map((entry) => {
         const busy = inboundBusyId === entry.id;
         const summary = entry.lines
-          .map((line) => `${line.qty_dispatched} × ${line.sku_our_ref}`)
+          .map((line) => `${formatQuantity(line.qty_dispatched)} × ${line.sku_our_ref}`)
           .join(", ");
         return (
           <div key={entry.id} className="firstout-wms-line-card">

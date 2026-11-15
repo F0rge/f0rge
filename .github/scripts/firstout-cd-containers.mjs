@@ -19,7 +19,7 @@ if (!image || !/^[a-z0-9][a-z0-9/_.:@-]+$/.test(image)) throw new Error("Pass th
 const localPrevious = process.argv[3]?.startsWith("--previous-local-image=") ? process.argv[3].split("=",2)[1] : null;
 if (localPrevious && !/^firstout-backend:cd-baseline$/.test(localPrevious)) throw new Error("Invalid local rehearsal image");
 const previous = localPrevious || process.env.PREVIOUS_BACKEND_IMAGE;
-if (!localPrevious && (!previous || !/^ghcr\.io\/f0rge\/firstout-backend@sha256:[0-9a-f]{64}$/.test(previous))) throw new Error("A verified previous backend digest is required for compatibility testing");
+if (!localPrevious && (!previous || !/^ghcr\.io\/f0rge\/firstout-api@sha256:[0-9a-f]{64}$/.test(previous))) throw new Error("A verified previous API digest is required for compatibility testing");
 const prefix = `firstout-cd-${randomBytes(6).toString("hex")}`;
 const network = prefix + "-net", pg = prefix + "-pg";
 const directory = mkdtempSync(join(tmpdir(), prefix));

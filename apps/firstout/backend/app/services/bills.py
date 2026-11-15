@@ -14,6 +14,7 @@ from app.crud.bill import BillCRUD
 from app.crud.supplier import SupplierCRUD
 from app.crud.purchase_order import PurchaseOrderCRUD
 from app.services.party_archive import require_active_supplier
+from app.services.archive_documents import assert_operational_document, bill_display_number
 from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
@@ -78,6 +79,7 @@ class BillService:
         po = await PurchaseOrderCRUD(self.db).get_by_id(purchase_order_id)
         if po is None or po.team_id != tenant_id_ctx.get():
             raise NotFoundError("Purchase order not found")
+        assert_operational_document(po)
         if po.supplier_id != data.supplier_id:
             raise ValidationError("Bill supplier must match the existing purchase order")
         return await self._create(data, user_id=user_id, note=note, purchase_order_id=po.id)
@@ -161,6 +163,7 @@ class BillService:
         bill = await self.crud.get_by_id(bill_id)
         if bill is None:
             raise NotFoundError("Bill not found")
+        assert_operational_document(bill)
 
         pdf_bytes = await file.read()
         if not pdf_bytes:
@@ -197,6 +200,7 @@ class BillService:
         existing = (
             await self.db.execute(
                 select(Bill.id).where(
+                    Bill.is_archive.is_(False),
                     Bill.supplier_id == supplier_id,
                     func.lower(Bill.supplier_ref) == ref.lower(),
                 )
@@ -218,8 +222,10 @@ class BillService:
         balance_zar = bill.amount_zar - bill.amount_paid_zar
         balance_foreign = bill.amount_foreign - bill.amount_paid_foreign
         return BillListItem(
+            is_archive=bill.is_archive,
+            fx_rate_known=bill.fx_rate_known,
             id=bill.id,
-            bill_number=bill.bill_number,
+            bill_number=bill_display_number(bill),
             supplier_id=bill.supplier_id,
             supplier_name=bill.supplier.name,
             supplier_ref=bill.supplier_ref,
@@ -232,7 +238,7 @@ class BillService:
             amount_paid_foreign=bill.amount_paid_foreign,
             balance_zar=balance_zar,
             balance_foreign=balance_foreign,
-            payment_status=bill.payment_status.value,
+            payment_status="unknown" if bill.is_archive else bill.payment_status.value,
             pdf_storage_key=bill.pdf_storage_key,
             purchase_order_id=bill.purchase_order_id,
             created_at=bill.created_at,
@@ -244,8 +250,10 @@ class BillService:
         balance_zar = bill.amount_zar - bill.amount_paid_zar
         balance_foreign = bill.amount_foreign - bill.amount_paid_foreign
         return BillResponse(
+            is_archive=bill.is_archive,
+            fx_rate_known=bill.fx_rate_known,
             id=bill.id,
-            bill_number=bill.bill_number,
+            bill_number=bill_display_number(bill),
             supplier_id=bill.supplier_id,
             supplier_name=bill.supplier.name,
             supplier_ref=bill.supplier_ref,
@@ -258,7 +266,7 @@ class BillService:
             amount_paid_foreign=bill.amount_paid_foreign,
             balance_zar=balance_zar,
             balance_foreign=balance_foreign,
-            payment_status=bill.payment_status.value,
+            payment_status="unknown" if bill.is_archive else bill.payment_status.value,
             pdf_storage_key=bill.pdf_storage_key,
             purchase_order_id=bill.purchase_order_id,
             lines=[

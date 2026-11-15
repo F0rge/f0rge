@@ -6,10 +6,17 @@ migrations and automatic application recovery under P-006. Activation requires
 the documented credential, backup and rollback-baseline setup; this PR does not
 claim those live prerequisites have been configured.
 
-The earlier [frontend operator release](firstout-release.md) remains a manual
-legacy path requiring task-specific approval. It does not activate CD or extend
-its authorization to arbitrary operator deployments. Generic workflows and
-other apps remain under the holds below.
+The [frontend and API operator release paths](firstout-release.md) remain
+available for explicitly authorized manual operations. Their closed component
+profiles bind tested immutable images to fixed services, verify serving
+identities and require a separately controlled API migration head. Publication,
+merge and successful CI do not authorize arbitrary operator deployment or data
+replacement. There is no fallback through source rebuilds or hotpatches when
+artifact verification fails.
+
+Those manual paths do not activate CD or extend its standing authorization to
+other apps. Generic entry points and other apps remain under the holds below;
+GitHub environments do not protect direct operator CLI access.
 
 ## Generic release hold and historical deploy manifest
 

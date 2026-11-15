@@ -32,7 +32,7 @@ pytestmark = pytest.mark.no_db
 COMMIT = "a" * 40
 
 
-def baseline(url: str, revision: str = "083_portal_clerk_identity") -> None:
+def baseline(url: str, revision: str = "089_merge_record_workspaces") -> None:
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", revision],
         cwd=BACKEND,
@@ -46,14 +46,12 @@ def baseline(url: str, revision: str = "083_portal_clerk_identity") -> None:
 def test_policy_has_one_head_and_no_unreviewed_automatic_history() -> None:
     policy, digest, scripts = load_policy()
     assert len(digest) == 64
-    assert plan_pending(policy, scripts, "083_portal_clerk_identity") == [
-        "084_party_archives",
-        "085_record_workspaces",
-        "086_release_migration_receipts",
+    assert plan_pending(policy, scripts, "089_merge_record_workspaces") == [
+        "090_release_migration_receipts",
     ]
-    policy["revisions"]["085_record_workspaces"]["automatic"] = False
+    policy["revisions"]["090_release_migration_receipts"]["automatic"] = False
     with pytest.raises(MigrationRefused, match="not approved"):
-        plan_pending(policy, scripts, "083_portal_clerk_identity")
+        plan_pending(policy, scripts, "089_merge_record_workspaces")
     with pytest.raises(MigrationRefused, match="baseline upgrade"):
         plan_pending(policy, scripts, "082_tenant_onboarding")
     with pytest.raises(MigrationRefused, match="not an ancestor"):
@@ -104,9 +102,7 @@ async def test_release_upgrade_preserves_old_reads_and_receipt_is_repeat_safe(
         first = await migrate(url, url, COMMIT)
         assert logging.getLogger("app.http").disabled is False
         assert first["applied_revisions"] == [
-            "084_party_archives",
-            "085_record_workspaces",
-            "086_release_migration_receipts",
+            "090_release_migration_receipts",
         ]
         assert first["replayed"] is False
         second = await migrate(url, url, COMMIT)
@@ -134,15 +130,15 @@ async def test_release_upgrade_preserves_old_reads_and_receipt_is_repeat_safe(
         payload = json.loads(response.body)
         assert payload["migration_receipt"] is True
         assert payload["source_commit"] == COMMIT
-        assert payload["schema_revision"] == "086_release_migration_receipts"
+        assert payload["schema_revision"] == "090_release_migration_receipts"
         # Old retained image readiness may observe a newer, additive schema.
         async with engine.begin() as conn:
             await conn.execute(
-                sa.text("UPDATE alembic_version SET version_num='087_future_compatible'")
+                sa.text("UPDATE alembic_version SET version_num='091_future_compatible'")
             )
         response = await release_readiness(engine)
         assert response.status_code == 200
-        assert json.loads(response.body)["schema_revision"] == "087_future_compatible"
+        assert json.loads(response.body)["schema_revision"] == "091_future_compatible"
         monkeypatch.setenv("SOURCE_COMMIT", "b" * 40)
         assert (await release_readiness(engine)).status_code == 503
     finally:
@@ -220,7 +216,7 @@ async def test_separate_session_lock_timeout_does_not_mutate(second_postgres_url
                 await migrate(url, url, COMMIT, lock_timeout_seconds=0.05)
             assert (
                 await holding.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "083_portal_clerk_identity"
+                == "089_merge_record_workspaces"
             )
             await holding.execute(sa.text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
         assert (await migrate(url, url, COMMIT))["status"] == "ok"
@@ -235,8 +231,8 @@ async def test_migration_receipt_error_rolls_back_all_pending_schema(
     baseline(url)
     engine = create_async_engine(url)
     try:
-        # A real conflicting table makes revision086 fail after revisions084
-        # and085 execute. Their schema/version changes must roll back together.
+        # A real conflicting table makes revision090 fail. The schema version
+        # and receipt must remain at the reviewed089 baseline together.
         async with engine.begin() as conn:
             await conn.execute(
                 sa.text("CREATE TABLE release_migration_receipts (fixture_only integer)")
@@ -246,7 +242,7 @@ async def test_migration_receipt_error_rolls_back_all_pending_schema(
         async with engine.begin() as conn:
             assert (
                 await conn.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "083_portal_clerk_identity"
+                == "089_merge_record_workspaces"
             )
             assert (
                 await conn.scalar(
@@ -254,7 +250,7 @@ async def test_migration_receipt_error_rolls_back_all_pending_schema(
                         "SELECT count(*) FROM information_schema.columns WHERE table_name='customers' AND column_name='is_archived'"
                     )
                 )
-                == 0
+                == 1
             )
             await conn.execute(sa.text("DROP TABLE release_migration_receipts"))
         assert (await migrate(url, url, COMMIT))["status"] == "ok"
@@ -280,8 +276,8 @@ async def test_explicit_empty_ci_database_bootstrap_reaches_ready_schema(
         async with admin.connect() as conn:
             await conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
         receipt = await migrate(url, url, COMMIT, bootstrap_test_database=True)
-        assert receipt["schema_revision"] == "086_release_migration_receipts"
-        assert len(receipt["applied_revisions"]) == 86
+        assert receipt["schema_revision"] == "090_release_migration_receipts"
+        assert len(receipt["applied_revisions"]) == 91
         with pytest.raises(MigrationRefused, match="empty firstout_cd_test_"):
             await migrate(url, url, COMMIT, bootstrap_test_database=True)
         assert (await migrate(url, url, COMMIT))["replayed"] is True
@@ -343,7 +339,7 @@ async def test_equal_names_on_separate_postgres_servers_are_denied_before_ddl(
             async with migration.connect() as conn:
                 assert (
                     await conn.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                    == "083_portal_clerk_identity"
+                    == "089_merge_record_workspaces"
                 )
                 assert (
                     await conn.scalar(sa.text("SELECT to_regclass('release_migration_receipts')"))

@@ -30,6 +30,7 @@ from app.schemas.records import (
     SupplierPriceRow,
 )
 from app.services.permissions import PermissionService
+from app.services.archive_documents import bill_display_number
 from f0rge_core.exceptions import NotFoundError
 
 
@@ -223,6 +224,7 @@ class RecordsService:
             stmt = stmt.where(
                 or_(
                     Bill.bill_number.ilike(pattern),
+                    Bill.supplier_ref.ilike(pattern),
                     BillLine.description.ilike(pattern),
                     Supplier.name.ilike(pattern),
                 )
@@ -232,14 +234,17 @@ class RecordsService:
         items = [
             PurchaseHistoryRow(
                 bill_id=bill.id,
-                bill_number=bill.bill_number,
+                bill_number=bill_display_number(bill),
                 issue_date=bill.issue_date,
                 supplier_id=supplier.id,
                 supplier_name=supplier.name,
                 description=line.description,
                 qty=line.qty,
                 currency=bill.currency,
-                unit_amount=line.unit_amount if show_cost else None,
+                unit_amount=line.unit_amount
+                if show_cost
+                and (bill.cin7_source_payload or {}).get("format") != "cin7-prepared-v1"
+                else None,
                 amount_foreign=line.amount_foreign if show_cost else None,
                 fx_rate_known=bill.fx_rate_known,
                 bill_amount_zar=bill.amount_zar if show_cost and bill.fx_rate_known else None,

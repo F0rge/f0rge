@@ -92,6 +92,13 @@ def validate_zip(data: bytes) -> None:
     uncompressed = 0
     with archive:
         for info in archive.infolist():
+            if any(
+                part.casefold() == "stagemanifest.json"
+                for part in info.filename.replace("\\", "/").split("/")
+            ):
+                raise ValidationError(
+                    "Prepared StageManifest packages require the reviewed Primavera replacement command"
+                )
             parts = _check_member(info)
             if parts is None or info.is_dir():
                 continue

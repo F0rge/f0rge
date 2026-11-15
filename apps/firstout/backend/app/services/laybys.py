@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import require_active_customer
+from app.services.sellability import assert_sku_sellable
 from app.crud.layby import LaybyCRUD
 from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
@@ -391,6 +392,7 @@ class LaybysService:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+            assert_sku_sellable(sku)
             if sku.retail_ex_vat is None or sku.retail_ex_vat <= 0:
                 raise ValidationError(f"SKU {sku.our_ref} has no retail price")
 

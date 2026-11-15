@@ -167,6 +167,11 @@ class SkuService:
 
         fields_set = data.model_fields_set
 
+        if "is_sellable" in fields_set:
+            if data.is_sellable is None:
+                raise ValidationError("is_sellable must not be null")
+            sku.is_sellable = data.is_sellable
+
         if "our_ref" in fields_set:
             assert data.our_ref is not None
             if await self.crud.get_by_our_ref(data.our_ref, exclude_id=sku.id) is not None:
@@ -322,6 +327,7 @@ class SkuService:
                 raise ConflictError("Cannot set opening stock at archived location")
 
         sku = Sku(
+            is_sellable=data.is_sellable,
             our_ref=data.our_ref,
             our_barcode=barcode,
             name=data.name,
@@ -456,6 +462,7 @@ class SkuService:
         retail_below_cost: bool = False,
     ) -> SkuResponse:
         return SkuResponse(
+            is_sellable=sku.is_sellable,
             id=sku.id,
             our_ref=sku.our_ref,
             our_barcode=sku.our_barcode,

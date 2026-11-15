@@ -29,16 +29,11 @@ import firstout_release as legacy
 PROJECT = legacy.PROJECT
 ENVIRONMENT = legacy.ENVIRONMENT
 REPOSITORY = legacy.REPOSITORY
-SERVICES = {
-    "backend": "77a83033-b75e-4da1-88d0-b6db39bcedaf",
-    "frontend": legacy.SERVICE,
-}
+PROFILES = {"backend": legacy.API, "frontend": legacy.FRONTEND}
+SERVICES = {name: profile.service for name, profile in PROFILES.items()}
 DATABASE = "a1a6695d-b8fb-4c79-92a6-664b48bc07e4"
-IMAGES = {name: f"ghcr.io/f0rge/firstout-{name}" for name in SERVICES}
-HEALTH = {
-    "backend": "https://api.firstout.co.za/api/v1/health",
-    "frontend": legacy.HEALTH,
-}
+IMAGES = {name: profile.image for name, profile in PROFILES.items()}
+HEALTH = {name: profile.health for name, profile in PROFILES.items()}
 READY = "https://api.firstout.co.za/api/v1/ready"
 PAUSE = "[Firstout CD paused]"
 PREFIX = "[Firstout CD] "
@@ -438,6 +433,12 @@ def frontend_probe(assets: list[dict[str, str]]) -> None:
         )
 
 
+def provider_state(name: str) -> dict[str, Any]:
+    # The shared operator helper now accepts only its fixed typed profiles.
+    require(name in PROFILES, "Unsupported Firstout component")
+    return legacy.provider_state(PROFILES[name])
+
+
 def safe_before(name: str, state: dict[str, Any]) -> dict[str, Any]:
     require(
         state["service"] == SERVICES[name]
@@ -541,7 +542,7 @@ def observed(
         name != "backend" or ready_commit or previous_readiness,
         "Backend observation needs a database receipt context",
     )
-    state = legacy.provider_state(SERVICES[name])
+    state = provider_state(name)
     require(
         state["source"].get("image") == image and not state["source"].get("repo"),
         "Serving source mismatch",
@@ -650,10 +651,7 @@ def recover(journal: dict[str, Any], path: Path) -> None:
         # A settled previous image proves a recovery intent succeeded, but cannot
         # prove that an unacknowledged candidate submission never happened.
         intent = journal["intent"]
-        latest = (
-            legacy.provider_state(SERVICES[intent["service"]]).get("latest_deployment")
-            or {}
-        )
+        latest = provider_state(intent["service"]).get("latest_deployment") or {}
         require(
             latest.get("image") == intent["image"]
             and latest.get("status")
@@ -675,7 +673,7 @@ def recover(journal: dict[str, Any], path: Path) -> None:
         try:
             restored = observed(name, prior["image"], **readiness_args)
         except (ReleaseError, urllib.error.URLError, OSError):
-            current = legacy.provider_state(SERVICES[name])
+            current = provider_state(name)
             require(
                 current["source"].get("image")
                 in (prior["image"], journal["manifest"]["images"][name]["image"])
@@ -759,10 +757,7 @@ def deploy(manifest: dict[str, Any], path: Path) -> dict[str, Any]:
             )
             break
     backup = backup_preflight()
-    before = {
-        name: safe_before(name, legacy.provider_state(service))
-        for name, service in SERVICES.items()
-    }
+    before = {name: safe_before(name, provider_state(name)) for name in SERVICES}
     require(
         manifest["previous_backend_image"] == before["backend"]["image"],
         "Tested previous binary differs from serving rollback baseline",
@@ -809,9 +804,7 @@ def deploy(manifest: dict[str, Any], path: Path) -> dict[str, Any]:
             require(
                 all(
                     journal["before"][name].get(key) == value
-                    for key, value in safe_before(
-                        name, legacy.provider_state(SERVICES[name])
-                    ).items()
+                    for key, value in safe_before(name, provider_state(name)).items()
                 ),
                 "Provider baseline changed before mutation",
             )
@@ -854,9 +847,7 @@ def deploy(manifest: dict[str, Any], path: Path) -> dict[str, Any]:
                     raise AmbiguousRelease(
                         "Provider submission outcome remains unknown"
                     ) from None
-                latest = (
-                    legacy.provider_state(SERVICES[name]).get("latest_deployment") or {}
-                )
+                latest = provider_state(name).get("latest_deployment") or {}
                 if latest.get("image") != manifest["images"][name][
                     "image"
                 ] or latest.get("status") not in (

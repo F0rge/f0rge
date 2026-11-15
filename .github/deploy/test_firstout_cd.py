@@ -32,7 +32,7 @@ def manifest():
         "source_commit": SHA,
         "release_tag": f"release/firstout/railway/{SHA}",
         "platform": "linux/amd64",
-        "database": {"schema_revision": "086", "policy_sha256": "d" * 64},
+        "database": {"schema_revision": "090", "policy_sha256": "d" * 64},
         "workflow_commit": SHA,
         "workflow_run_id": 103,
         "workflow_run_attempt": 1,
@@ -84,7 +84,7 @@ class World:
         self.reviewer_permission = "write"
         self.merged = True
         self.ready_receipt = True
-        self.database_head = "085"
+        self.database_head = "089"
         self.database_down = False
         self.health_paths = {"backend": "/api/v1/ready", "frontend": "/healthz"}
         self.pending = False
@@ -232,7 +232,7 @@ class World:
             self.images[name] = value["source"]["image"]
             self.health_paths[name] = value["deploy"]["healthcheckPath"]
             if name == "backend" and self.images[name] == NEW["backend"]:
-                self.database_head = "086"
+                self.database_head = "090"
             if (
                 name == "backend"
                 and self.images[name] == OLD["backend"]
@@ -304,8 +304,8 @@ class World:
                 "source_commit": SHA if candidate else OLD_SHA,
                 "migration_receipt": self.ready_receipt if candidate else True,
                 "schema_revision": self.database_head,
-                "image_schema_revision": "086" if candidate else "085",
-                "receipt_schema_revision": "086" if candidate else "085",
+                "image_schema_revision": "090" if candidate else "089",
+                "receipt_schema_revision": "090" if candidate else "089",
                 "policy_sha256": ("d" if candidate else "c") * 64,
             }
         if (
@@ -354,6 +354,17 @@ class CDTests(unittest.TestCase):
         self.assertEqual([call[1] for call in submissions], ["backend", "frontend"])
         self.assertEqual(submissions[0][2]["deploy"]["preDeployCommand"], [cd.MIGRATE])
         self.assertEqual(json.loads(self.path.read_text())["state"], "succeeded")
+
+    def test_profiles_reuse_canonical_manual_release_targets(self):
+        self.assertIs(cd.PROFILES["backend"], cd.legacy.API)
+        self.assertIs(cd.PROFILES["frontend"], cd.legacy.FRONTEND)
+        self.assertEqual(cd.IMAGES["backend"], "ghcr.io/f0rge/firstout-api")
+        self.assertEqual(cd.provider_state("backend")["service"], cd.legacy.API.service)
+        self.assertEqual(
+            cd.provider_state("frontend")["service"], cd.legacy.FRONTEND.service
+        )
+        with self.assertRaisesRegex(cd.ReleaseError, "Unsupported"):
+            cd.provider_state("other-app")
 
     def test_initial_issue_patch_failure_is_recoverable_without_provider_writes(self):
         self.world.mode = "initial_checkpoint_lost"
@@ -582,10 +593,10 @@ class CDTests(unittest.TestCase):
                 config["deploy"]["healthcheckPath"],
                 "/api/v1/ready" if name == "backend" else "/healthz",
             )
-        self.assertEqual(self.world.database_head, "086")
+        self.assertEqual(self.world.database_head, "090")
         old_ready = self.world.http(cd.READY)
         self.assertEqual(old_ready["source_commit"], OLD_SHA)
-        self.assertEqual(old_ready["image_schema_revision"], "085")
+        self.assertEqual(old_ready["image_schema_revision"], "089")
 
     def test_failed_recovery_stays_open_and_pauses(self):
         self.world.mode = "rollback_bad"

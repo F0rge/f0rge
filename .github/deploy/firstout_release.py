@@ -11,27 +11,74 @@ import argparse
 import datetime as dt
 import hashlib
 import io
+import ipaddress
 import json
 import re
+import shlex
 import subprocess
 import sys
 import urllib.request
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 REPOSITORY = "F0rge/f0rge"
 PROJECT = "c76d8df1-d839-454c-a94a-79b930deaf38"
 ENVIRONMENT = "9f7b0c34-bd95-442b-b746-a9791dcc2895"
-SERVICE = "10838be1-7a37-4dfc-810a-8805d040d5d7"
 WORKFLOW = ".github/workflows/release-firstout.yml"
-IMAGE = "ghcr.io/f0rge/firstout-frontend"
-TAG = re.compile(r"release/firstout-frontend/railway/[0-9]{8}T[0-9]{6}Z\Z")
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
-CHECKS = ("unit", "lint", "typecheck", "container_smoke")
-HEALTH = "https://firstout.co.za/healthz"
+SCHEMA_REVISION = re.compile(r"[0-9]{3}_[a-z0-9_]{1,60}\Z")
+
+
+class ReleaseProfile(NamedTuple):
+    component: str
+    service: str
+    service_name: str
+    image: str
+    tag: re.Pattern[str]
+    artifact: str
+    manifest_file: str
+    checks: tuple[str, ...]
+    health: str
+
+
+FRONTEND = ReleaseProfile(
+    "frontend",
+    "10838be1-7a37-4dfc-810a-8805d040d5d7",
+    "firstout-frontend",
+    "ghcr.io/f0rge/firstout-frontend",
+    re.compile(r"release/firstout-frontend/railway/[0-9]{8}T[0-9]{6}Z\Z"),
+    "firstout-release-evidence",
+    "firstout-release.json",
+    ("unit", "lint", "typecheck", "container_smoke"),
+    "https://firstout.co.za/healthz",
+)
+API = ReleaseProfile(
+    "api",
+    "77a83033-b75e-4da1-88d0-b6db39bcedaf",
+    "firstout-api",
+    "ghcr.io/f0rge/firstout-api",
+    re.compile(r"release/firstout-api/railway/[0-9]{8}T[0-9]{6}Z\Z"),
+    "firstout-api-release-evidence",
+    "firstout-api-release.json",
+    ("unit", "lint", "format", "migrations", "container_smoke"),
+    "https://api.firstout.co.za/api/v1/health",
+)
+PROFILES = {profile.component: profile for profile in (FRONTEND, API)}
+# Retained aliases keep existing frontend operator integrations compatible.
+SERVICE, IMAGE, TAG, CHECKS, HEALTH = (
+    FRONTEND.service,
+    FRONTEND.image,
+    FRONTEND.tag,
+    FRONTEND.checks,
+    FRONTEND.health,
+)
+API_LEGACY_START = "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+API_LEGACY_PREDEPLOY = [
+    "/bin/sh -c 'DATABASE_URL=\"${MIGRATION_DATABASE_URL:-$DATABASE_URL}\" uv run alembic upgrade head'"
+]
 
 
 class ReleaseError(RuntimeError):
@@ -41,6 +88,15 @@ class ReleaseError(RuntimeError):
 def require(condition: Any, message: str) -> None:
     if not condition:
         raise ReleaseError(message)
+
+
+def profile_for(component: str) -> ReleaseProfile:
+    require(component in PROFILES, "Unsupported Firstout component")
+    return PROFILES[component]
+
+
+def known_profile(profile: ReleaseProfile) -> None:
+    require(profile in (FRONTEND, API), "Unsupported Firstout release profile")
 
 
 def command(args: list[str], *, binary: bool = False) -> Any:
@@ -60,8 +116,15 @@ def railway(query: str, variables: dict[str, Any]) -> dict[str, Any]:
     return result["data"]
 
 
-def validate_manifest(manifest: dict[str, Any], run: dict[str, Any]) -> None:
+def validate_manifest(
+    manifest: dict[str, Any], run: dict[str, Any], profile: ReleaseProfile = FRONTEND
+) -> None:
+    known_profile(profile)
     require(manifest.get("schema_version") == 1, "Unsupported artifact schema")
+    require(
+        manifest.get("component", "frontend") == profile.component,
+        "Artifact component mismatch",
+    )
     require(manifest.get("repository") == REPOSITORY, "Wrong artifact repository")
     require(
         SHA.fullmatch(str(manifest.get("source_commit", ""))), "Invalid source commit"
@@ -70,23 +133,31 @@ def validate_manifest(manifest: dict[str, Any], run: dict[str, Any]) -> None:
         SHA.fullmatch(str(manifest.get("workflow_commit", ""))),
         "Invalid workflow commit",
     )
-    require(TAG.fullmatch(str(manifest.get("release_tag", ""))), "Invalid release tag")
+    require(
+        profile.tag.fullmatch(str(manifest.get("release_tag", ""))),
+        "Invalid release tag",
+    )
     require(manifest.get("platform") == "linux/amd64", "Wrong image platform")
     require(
         manifest.get("target")
-        == {"project": PROJECT, "environment": ENVIRONMENT, "service": SERVICE},
+        == {"project": PROJECT, "environment": ENVIRONMENT, "service": profile.service},
         "Wrong artifact target",
     )
     require(DIGEST.fullmatch(str(manifest.get("digest", ""))), "Invalid image digest")
     require(
-        manifest.get("image") == f"{IMAGE}@{manifest['digest']}",
+        manifest.get("image") == f"{profile.image}@{manifest['digest']}",
         "Wrong image reference",
     )
     require(manifest.get("tested") is True, "Artifact is not tested")
     require(
-        all(manifest.get("checks", {}).get(key) is True for key in CHECKS),
+        all(manifest.get("checks", {}).get(key) is True for key in profile.checks),
         "Missing tests",
     )
+    if profile == API:
+        require(
+            SCHEMA_REVISION.fullmatch(str(manifest.get("schema_revision", ""))),
+            "Missing or invalid tested API schema revision",
+        )
     require(
         run.get("status") == "completed" and run.get("conclusion") == "success",
         "Run not successful",
@@ -161,7 +232,10 @@ def verified_source_checks(commit: str) -> list[dict[str, Any]]:
     return checks
 
 
-def verified_artifact(run_id: int) -> dict[str, Any]:
+def verified_artifact(
+    run_id: int, profile: ReleaseProfile = FRONTEND
+) -> dict[str, Any]:
+    known_profile(profile)
     require(run_id > 0, "Invalid run ID")
     run = github(f"actions/runs/{run_id}")
     artifact_list = github(f"actions/runs/{run_id}/artifacts?per_page=100")
@@ -171,7 +245,7 @@ def verified_artifact(run_id: int) -> dict[str, Any]:
     artifacts = [
         item
         for item in artifact_list.get("artifacts", [])
-        if item.get("name") == "firstout-release-evidence" and not item.get("expired")
+        if item.get("name") == profile.artifact and not item.get("expired")
     ]
     require(len(artifacts) == 1, "Need one current release-evidence artifact")
     artifact = artifacts[0]
@@ -187,13 +261,13 @@ def verified_artifact(run_id: int) -> dict[str, Any]:
     )
     with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
         require(
-            zipped.namelist() == ["firstout-release.json"],
+            zipped.namelist() == [profile.manifest_file],
             "Unexpected artifact entries",
         )
-        info = zipped.getinfo("firstout-release.json")
+        info = zipped.getinfo(profile.manifest_file)
         require(info.file_size < 100_000, "Evidence manifest is unexpectedly large")
         manifest = json.loads(zipped.read(info))
-    validate_manifest(manifest, run)
+    validate_manifest(manifest, run, profile)
     ref = github("git/ref/tags/" + manifest["release_tag"])["object"]
     if ref["type"] == "tag":
         ref = github("git/tags/" + ref["sha"])["object"]
@@ -218,7 +292,9 @@ def verified_artifact(run_id: int) -> dict[str, Any]:
     }
 
 
-def provider_state(service: str = SERVICE) -> dict[str, Any]:
+def provider_state(profile: ReleaseProfile = FRONTEND) -> dict[str, Any]:
+    known_profile(profile)
+    service = profile.service
     # config is requested encrypted. Only this service's nonsecret fields leave
     # this function; credentials and other services' configuration are discarded.
     data = railway(
@@ -307,10 +383,15 @@ def redact_configuration(value: Any) -> Any:
 
 
 def stable_deployment(
-    state: dict[str, Any], digest: str, deployment_id: str
+    state: dict[str, Any],
+    digest: str,
+    deployment_id: str,
+    profile: ReleaseProfile = FRONTEND,
 ) -> list[str]:
+    known_profile(profile)
+    require(state["service"] == profile.service, "Serving component target mismatch")
     require(
-        state["source"].get("image") == f"{IMAGE}@{digest}",
+        state["source"].get("image") == f"{profile.image}@{digest}",
         "Image source differs from approved artifact",
     )
     require(not state["source"].get("repo"), "Git source remains enabled")
@@ -327,6 +408,12 @@ def stable_deployment(
     )
     require(not state.get("pending_patch"), "Environment has pending changes")
     require(not state.get("deployment_triggers"), "Git deployment triggers are enabled")
+    if profile == API:
+        deploy = state["config"].get("deploy", {})
+        require(
+            not deploy.get("preDeployCommand") and not deploy.get("startCommand"),
+            "API must use the tested image command without automatic migrations",
+        )
     active = state["active_deployments"]
     require(
         len(active) == 1,
@@ -352,12 +439,125 @@ def stable_deployment(
     return sorted(item["id"] for item in instances)
 
 
-def unchanged_runtime(before: dict[str, Any], after: dict[str, Any]) -> None:
+def unchanged_runtime(
+    before: dict[str, Any], after: dict[str, Any], profile: ReleaseProfile = FRONTEND
+) -> None:
+    known_profile(profile)
     for key in ("build", "deploy", "networking"):
+        original = before["config"].get(key)
+        current = after["config"].get(key)
+        if profile == API and key == "deploy":
+            original = dict(original or {})
+            current = dict(current or {})
+            for override in ("preDeployCommand", "startCommand"):
+                require(
+                    not current.pop(override, None),
+                    "API command override remains configured",
+                )
+                original.pop(override, None)
         require(
-            before["config"].get(key) == after["config"].get(key),
+            original == current,
             f"Unexpected {key} configuration change",
         )
+
+
+def api_runtime_patch(before: dict[str, Any]) -> dict[str, Any]:
+    """Remove only the known legacy hooks as part of an approved API promotion."""
+    deploy = before["config"].get("deploy", {})
+    require(
+        deploy.get("preDeployCommand") in (None, [], "", API_LEGACY_PREDEPLOY),
+        "Unexpected API predeploy command; review it before promotion",
+    )
+    require(
+        deploy.get("startCommand") in (None, "", API_LEGACY_START),
+        "Unexpected API start command; review it before promotion",
+    )
+    return {"preDeployCommand": None, "startCommand": None}
+
+
+def api_schema() -> dict[str, Any]:
+    """Read the database revision through the fixed API runtime, without credentials."""
+    script = """import asyncio,json,sys
+sys.path.insert(0,'/app/apps/firstout/backend')
+from sqlalchemy import text
+from app.database import engine
+async def main():
+    try:
+        async with engine.connect() as conn:
+            conn=await conn.execution_options(isolation_level='SERIALIZABLE',postgresql_readonly=True)
+            async with conn.begin():
+                await conn.execute(text("SET LOCAL statement_timeout='10000'"))
+                versions=(await conn.execute(text('SELECT version_num FROM alembic_version'))).scalars().all()
+                if len(versions)!=1:raise RuntimeError('Expected one migration head')
+                role=dict((await conn.execute(text("SELECT current_user AS role,rolsuper,rolbypassrls,EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' AND pg_has_role(current_user,c.relowner,'MEMBER')) AS owns_public_tables,EXISTS(SELECT 1 FROM pg_roles r WHERE (r.rolsuper OR r.rolbypassrls) AND pg_has_role(current_user,r.oid,'MEMBER')) AS can_assume_bypass_role FROM pg_roles WHERE rolname=current_user"))).mappings().one())
+                identity=dict((await conn.execute(text('SELECT current_database() AS database_name,host(inet_server_addr()) AS server_address,inet_server_port() AS server_port'))).mappings().one())
+                print(json.dumps({'schema_revision':versions[0],'runtime_role':role,'database_identity':identity}))
+    finally:
+        await engine.dispose()
+asyncio.run(main())
+"""
+    result = command(
+        [
+            "railway",
+            "ssh",
+            "--project",
+            PROJECT,
+            "--environment",
+            ENVIRONMENT,
+            "--service",
+            API.service,
+            "--",
+            shlex.join(["/app/apps/firstout/backend/.venv/bin/python", "-c", script]),
+        ]
+    )
+    validate_api_schema_metadata(result)
+    return result
+
+
+def validate_api_schema_metadata(result: dict[str, Any]) -> None:
+    require(
+        isinstance(result, dict)
+        and set(result) == {"schema_revision", "runtime_role", "database_identity"},
+        "Unexpected API database metadata shape",
+    )
+    require(
+        SCHEMA_REVISION.fullmatch(str(result.get("schema_revision", ""))),
+        "Unexpected API database revision",
+    )
+    role = result.get("runtime_role", {})
+    require(
+        isinstance(role, dict)
+        and set(role)
+        == {
+            "role",
+            "rolsuper",
+            "rolbypassrls",
+            "owns_public_tables",
+            "can_assume_bypass_role",
+        }
+        and isinstance(role.get("role"), str)
+        and 0 < len(role["role"].encode()) <= 63
+        and role.get("rolsuper") is False
+        and role.get("rolbypassrls") is False
+        and role.get("owns_public_tables") is False
+        and role.get("can_assume_bypass_role") is False,
+        "API database role bypasses isolation",
+    )
+    identity = result["database_identity"]
+    require(
+        isinstance(identity, dict)
+        and set(identity) == {"database_name", "server_address", "server_port"}
+        and isinstance(identity.get("database_name"), str)
+        and 0 < len(identity["database_name"].encode()) <= 63
+        and isinstance(identity.get("server_address"), str)
+        and type(identity.get("server_port")) is int
+        and 1 <= identity["server_port"] <= 65535,
+        "Unexpected API database identity",
+    )
+    try:
+        ipaddress.ip_address(identity["server_address"])
+    except ValueError as exc:
+        raise ReleaseError("Unexpected API database server address") from exc
 
 
 def write_receipt(
@@ -375,14 +575,20 @@ def write_receipt(
         temporary.replace(path)
 
 
-def promote(run_id: int, receipt_path: Path, approval_reference: str) -> dict[str, Any]:
+def promote(
+    run_id: int,
+    receipt_path: Path,
+    approval_reference: str,
+    profile: ReleaseProfile = FRONTEND,
+) -> dict[str, Any]:
+    known_profile(profile)
     require(
         bool(approval_reference.strip()),
         "An existing explicit approval reference is required",
     )
-    evidence = verified_artifact(run_id)
-    before = provider_state()
-    require(before["service_name"] == "firstout-frontend", "Unexpected service name")
+    evidence = verified_artifact(run_id, profile)
+    before = provider_state(profile)
+    require(before["service_name"] == profile.service_name, "Unexpected service name")
     require(
         not before["pending_patch"],
         "Refusing to commit an environment with pending changes",
@@ -406,20 +612,32 @@ def promote(run_id: int, receipt_path: Path, approval_reference: str) -> dict[st
         before["source"].get("image") != evidence["manifest"]["image"],
         "Artifact already selected; verify it instead of redeploying",
     )
+    runtime_patch = api_runtime_patch(before) if profile == API else None
+    schema_before = api_schema() if profile == API else None
+    if schema_before:
+        require(
+            schema_before["schema_revision"] == evidence["manifest"]["schema_revision"],
+            "Run the controlled API migration step before promotion",
+        )
     receipt = {
         "schema_version": 1,
+        "component": profile.component,
         "state": "submission_started",
         "approval_reference": approval_reference,
         "created_at": dt.datetime.now(dt.UTC).isoformat(),
         "evidence": evidence,
         "before": before,
     }
+    if schema_before:
+        receipt.update(
+            schema_before=schema_before, planned_runtime_overrides=runtime_patch
+        )
     # A durable exclusive journal prevents accidentally reusing the same operator
     # command after a lost submission response. Never blindly retry a mutation.
     write_receipt(receipt_path, receipt, exclusive=True)
     patch = {
         "services": {
-            SERVICE: {
+            profile.service: {
                 "source": {
                     "repo": None,
                     "branch": None,
@@ -430,6 +648,8 @@ def promote(run_id: int, receipt_path: Path, approval_reference: str) -> dict[st
             }
         }
     }
+    if runtime_patch is not None:
+        patch["services"][profile.service]["deploy"] = runtime_patch
     try:
         result = railway(
             """mutation($env:String!,$patch:EnvironmentConfig!,$message:String!) {
@@ -450,21 +670,40 @@ def promote(run_id: int, receipt_path: Path, approval_reference: str) -> dict[st
     return receipt
 
 
-def verify(receipt_path: Path, deployment_id: str) -> dict[str, Any]:
+def verify(
+    receipt_path: Path, deployment_id: str, profile: ReleaseProfile = FRONTEND
+) -> dict[str, Any]:
+    known_profile(profile)
     uuid.UUID(deployment_id)
     receipt = json.loads(receipt_path.read_text())
-    evidence = verified_artifact(receipt["evidence"]["run_id"])
+    require(
+        receipt.get("component", "frontend") == profile.component,
+        "Receipt component mismatch",
+    )
+    if profile == API:
+        validate_api_schema_metadata(receipt.get("schema_before"))
+    evidence = verified_artifact(receipt["evidence"]["run_id"], profile)
     require(evidence == receipt["evidence"], "Trusted artifact evidence changed")
     digest = evidence["manifest"]["digest"]
-    first = provider_state()
-    unchanged_runtime(receipt["before"], first)
-    instances = stable_deployment(first, digest, deployment_id)
+    first = provider_state(profile)
+    unchanged_runtime(receipt["before"], first, profile)
+    instances = stable_deployment(first, digest, deployment_id, profile)
+    schema_first = api_schema() if profile == API else None
+    if schema_first:
+        require(
+            schema_first["schema_revision"] == evidence["manifest"]["schema_revision"],
+            "Serving API schema differs from the tested artifact",
+        )
+        require(
+            schema_first == receipt["schema_before"],
+            "Serving API database identity or runtime role differs from pre-promotion evidence",
+        )
     request = urllib.request.Request(
-        HEALTH, headers={"User-Agent": "Firstout-release-verification"}
+        profile.health, headers={"User-Agent": "Firstout-release-verification"}
     )
     with urllib.request.urlopen(request, timeout=20) as response:
         require(
-            response.status == 200 and response.geturl() == HEALTH,
+            response.status == 200 and response.geturl() == profile.health,
             "Unexpected health response",
         )
         require(
@@ -474,11 +713,16 @@ def verify(receipt_path: Path, deployment_id: str) -> dict[str, Any]:
         health_body = response.read(4097)
     require(len(health_body) <= 4096, "Unexpected health payload")
     require(json.loads(health_body) == {"status": "ok"}, "Application is not healthy")
-    second = provider_state()
-    unchanged_runtime(receipt["before"], second)
+    second = provider_state(profile)
+    unchanged_runtime(receipt["before"], second, profile)
     require(
-        stable_deployment(second, digest, deployment_id) == instances,
+        stable_deployment(second, digest, deployment_id, profile) == instances,
         "Serving instances changed during health check",
+    )
+    schema_second = api_schema() if profile == API else None
+    require(
+        schema_second == schema_first,
+        "API database identity changed during verification",
     )
     receipt.update(
         state="verified",
@@ -486,9 +730,11 @@ def verify(receipt_path: Path, deployment_id: str) -> dict[str, Any]:
         deployment_id=deployment_id,
         instances=instances,
         provider=second,
-        health={"url": HEALTH, "status": 200},
+        health={"url": profile.health, "status": 200},
         verification_limit="Provider deployment imageDigest mapped to its running instances; not executable attestation",
     )
+    if schema_second:
+        receipt["schema_after"] = schema_second
     write_receipt(receipt_path, receipt)
     return receipt
 
@@ -507,7 +753,8 @@ def main() -> int:
     prepare.add_argument("--run-id", type=int, required=True)
     prepare.add_argument("--output", type=Path, required=True)
     release = subs.add_parser(
-        "promote", help="Deploy the approved CI image to the fixed frontend only"
+        "promote",
+        help="Deploy the approved CI image to the selected fixed Firstout service",
     )
     release.add_argument("--run-id", type=int, required=True)
     release.add_argument("--approval-reference", required=True)
@@ -517,16 +764,21 @@ def main() -> int:
     )
     verification.add_argument("--receipt", type=Path, required=True)
     verification.add_argument("--deployment-id", required=True)
+    for sub in (inspect, prepare, release, verification):
+        sub.add_argument("--component", choices=tuple(PROFILES), default="frontend")
     args = parser.parse_args()
     try:
+        profile = profile_for(args.component)
         if args.command == "inspect":
-            write_receipt(args.output, provider_state(), exclusive=True)
+            write_receipt(args.output, provider_state(profile), exclusive=True)
         elif args.command == "evidence":
-            write_receipt(args.output, verified_artifact(args.run_id), exclusive=True)
+            write_receipt(
+                args.output, verified_artifact(args.run_id, profile), exclusive=True
+            )
         elif args.command == "promote":
-            promote(args.run_id, args.receipt, args.approval_reference)
+            promote(args.run_id, args.receipt, args.approval_reference, profile)
         else:
-            verify(args.receipt, args.deployment_id)
+            verify(args.receipt, args.deployment_id, profile)
         print(f"Firstout release {args.command}: completed")
         return 0
     except (

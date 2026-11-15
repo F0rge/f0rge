@@ -8,7 +8,11 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+from app.schemas.quantity import Quantity
+
+
 class SkuCreate(BaseModel):
+    is_sellable: bool = True
     our_ref: str = Field(min_length=1, max_length=64)
     # Blank means the service assigns ``csv:<our_ref>``. The column itself stays required.
     our_barcode: Optional[str] = Field(default=None, max_length=64)
@@ -18,7 +22,7 @@ class SkuCreate(BaseModel):
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
     category: Optional[str] = Field(default=None, max_length=64)
     opening_location_id: Optional[uuid.UUID] = None
-    opening_qty: Optional[int] = Field(default=None, ge=1)
+    opening_qty: Optional[Quantity] = Field(default=None, gt=0)
     opening_unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
     opening_date: Optional[datetime.date] = None
     carton_count: int = Field(default=1, ge=1)
@@ -58,6 +62,7 @@ class SkuCreate(BaseModel):
 
 
 class SkuUpdate(BaseModel):
+    is_sellable: Optional[bool] = None
     our_ref: Optional[str] = Field(default=None, min_length=1, max_length=64)
     our_barcode: Optional[str] = Field(default=None, min_length=1, max_length=64)
     name: Optional[str] = Field(default=None, min_length=1)
@@ -84,6 +89,7 @@ class SkuUpdate(BaseModel):
 
 
 class SkuResponse(BaseModel):
+    is_sellable: bool
     id: uuid.UUID
     our_ref: str
     our_barcode: str

@@ -11,7 +11,6 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
-    Integer,
     Numeric,
     Text,
     UniqueConstraint,
@@ -121,8 +120,8 @@ class TransferLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("skus.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    qty_dispatched: Mapped[int] = mapped_column(Integer, nullable=False)
-    qty_received: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    qty_dispatched: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    qty_received: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
     from_bin_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("location_bins.id", ondelete="SET NULL"),

@@ -91,7 +91,7 @@ def _bucket_label(bucket: str) -> str:
     return labels.get(bucket, bucket)
 
 
-def _line_stock_value(on_hand: int, unit_cost_zar: Optional[Decimal]) -> Decimal:
+def _line_stock_value(on_hand: Decimal, unit_cost_zar: Optional[Decimal]) -> Decimal:
     if unit_cost_zar is None or on_hand <= 0:
         return Decimal(0)
     return (Decimal(on_hand) * Decimal(unit_cost_zar)).quantize(Decimal("0.01"))
@@ -133,7 +133,7 @@ class ReportsService:
         }
 
         for invoice, customer_name in result.all():
-            balance = invoice.total_inc_vat - invoice.amount_paid
+            balance = (invoice.total_inc_vat - invoice.amount_paid).quantize(Decimal("0.01"))
             if balance <= 0:
                 continue
             days = (as_of - invoice.issue_date).days
@@ -339,7 +339,7 @@ class ReportsService:
         cn_vat = cn_vat_result.scalar_one()
 
         standard_rated = Decimal(invoice_ex) - Decimal(cn_ex)
-        output_tax = Decimal(invoice_vat) - Decimal(cn_vat)
+        output_tax = (Decimal(invoice_vat) - Decimal(cn_vat)).quantize(Decimal("0.01"))
         input_tax = Decimal(0)
 
         team = await TeamCRUD(self.db).get_first()
@@ -425,7 +425,7 @@ class ReportsService:
         bucket_lines: dict[str, list[AgedStockLine]] = {
             key: [] for key, _ in AGED_STOCK_BUCKET_SPECS
         }
-        bucket_qty: dict[str, int] = {key: 0 for key, _ in AGED_STOCK_BUCKET_SPECS}
+        bucket_qty: dict[str, Decimal] = {key: Decimal(0) for key, _ in AGED_STOCK_BUCKET_SPECS}
         bucket_value: dict[str, Decimal] = {key: Decimal(0) for key, _ in AGED_STOCK_BUCKET_SPECS}
 
         for stock, location_name, our_ref, sku_name in result.all():
@@ -631,8 +631,8 @@ class ReportsService:
             to_date=to_date,
             invoice_count=int(invoice_count),
             subtotal_ex_vat=Decimal(subtotal),
-            vat_amount=Decimal(vat_amount),
-            total_inc_vat=Decimal(total_inc),
+            vat_amount=Decimal(vat_amount).quantize(Decimal("0.01")),
+            total_inc_vat=Decimal(total_inc).quantize(Decimal("0.01")),
             amount_paid=Decimal(amount_paid),
         )
 

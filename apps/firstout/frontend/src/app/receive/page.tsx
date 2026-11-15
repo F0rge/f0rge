@@ -40,6 +40,7 @@ import {
 import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
+import { formatQuantity } from "@/lib/quantity";
 
 function ReceivePageContent() {
   const router = useRouter();
@@ -71,7 +72,7 @@ function ReceivePageContent() {
         getSettings(),
       ]);
       const activeLocations = locationData.filter(isActiveLocation);
-      setOrders(orderData.items);
+      setOrders(orderData.items.filter((order) => !order.is_archive));
       setLocations(activeLocations);
       setInventory(inventoryData);
       setSkus(skuData);
@@ -114,7 +115,7 @@ function ReceivePageContent() {
 
   const selectedPoSummary = orders.find((entry) => entry.id === poId);
   const [selectedPoDetail, setSelectedPoDetail] = useState<PurchaseOrder | null>(null);
-  const formValid = poId && locationId;
+  const formValid = Boolean(selectedPoSummary && !selectedPoSummary.is_archive && locationId);
 
   useEffect(() => {
     if (!poId) {
@@ -301,8 +302,8 @@ function ReceivePageContent() {
                   <TableRow key={entry.sku_id}>
                     <TableCell>{entry.our_ref}</TableCell>
                     <TableCell>{entry.name}</TableCell>
-                    <TableCell>{entry.on_order}</TableCell>
-                    <TableCell>{entry.on_hand}</TableCell>
+                    <TableCell>{formatQuantity(entry.on_order)}</TableCell>
+                    <TableCell>{formatQuantity(entry.on_hand)}</TableCell>
                     <TableCell>{entry.sellable ? "Yes" : "Not sellable"}</TableCell>
                     <TableCell>{entry.unit_cost_zar ?? "—"}</TableCell>
                   </TableRow>

@@ -29,6 +29,7 @@ from app.schemas.payment_reminder import (
     ReminderRow,
 )
 from app.services.comms.send import CommsSendService
+from app.services.archive_documents import assert_operational_document
 from app.services.payment_reminder_schedule import (
     PLACEHOLDERS,
     TERMINAL_STATUSES,
@@ -474,6 +475,7 @@ class PaymentReminderService:
         invoice = result.scalar_one_or_none()
         if invoice is None:
             raise NotFoundError("Invoice not found")
+        assert_operational_document(invoice)
         return invoice
 
     async def _team_settings(self):

@@ -14,6 +14,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / ".github/deploy"))
+from firstout_release import API, FRONTEND
+
+IMAGE_REPOSITORIES = {"backend": API.image, "frontend": FRONTEND.image}
 REPOSITORY = "F0rge/f0rge"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -118,9 +121,7 @@ def gate() -> None:
             if journal
             else os.environ.get("BOOTSTRAP_BACKEND_IMAGE", "")
         )
-        if not re.fullmatch(
-            r"ghcr\.io/f0rge/firstout-backend@sha256:[0-9a-f]{64}", previous
-        ):
+        if not re.fullmatch(re.escape(API.image) + r"@sha256:[0-9a-f]{64}", previous):
             raise RuntimeError(
                 "Configure the verified FIRSTOUT_BOOTSTRAP_BACKEND_IMAGE digest for the first release"
             )
@@ -193,7 +194,7 @@ def publish() -> None:
             != commit
         ):
             raise RuntimeError("Candidate image source mismatch")
-        repository = f"ghcr.io/f0rge/firstout-{component}"
+        repository = IMAGE_REPOSITORIES[component]
         candidate = f"{repository}:cd-{commit}-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
         command(["docker", "tag", local, candidate])
         command(["docker", "push", candidate])

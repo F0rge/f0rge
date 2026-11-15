@@ -904,6 +904,7 @@ export type Sku = {
   retail_below_cost?: boolean;
   carton_count: number;
   is_kit: boolean;
+  is_sellable: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -932,6 +933,7 @@ export type UpdateSkuPricePayload = {
   reorder_min?: number | null;
   supplier_ref?: string | null;
   carton_count?: number;
+  is_sellable?: boolean;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -984,6 +986,7 @@ export type CreateSkuPayload = {
   opening_unit_cost_zar?: string;
   opening_date?: string;
   carton_count?: number;
+  is_sellable?: boolean;
 };
 
 export type SkuListParams = {
@@ -1250,7 +1253,9 @@ export type PoLine = {
   notes: string | null;
   needs_sku: boolean;
   qty: number;
-  factory_unit_amount: string;
+  factory_unit_amount: string | null;
+  source_cost: string | null;
+  source_total: string | null;
   unit_cost_zar: string | null;
 };
 
@@ -1263,6 +1268,9 @@ export type LandingBill = {
 
 export type PurchaseOrderListItem = {
   id: string;
+  is_archive: boolean;
+  source_amounts_known: boolean;
+  source_currency_known: boolean;
   po_number: string;
   status: PurchaseOrderStatus;
   supplier_id: string;
@@ -2022,6 +2030,7 @@ export type InvoiceLine = {
 
 export type InvoiceListItem = {
   id: string;
+  is_archive: boolean;
   invoice_number: string;
   customer_id: string;
   customer_name: string;
@@ -2032,7 +2041,7 @@ export type InvoiceListItem = {
   total_inc_vat: string;
   amount_paid: string;
   balance: string;
-  payment_status: "unpaid" | "partially_paid" | "paid";
+  payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
   created_at: string;
   updated_at: string;
 };
@@ -2276,6 +2285,7 @@ export type BillLine = {
 
 export type Bill = {
   id: string;
+  is_archive: boolean;
   bill_number: string;
   supplier_id: string;
   supplier_name: string;
@@ -2283,13 +2293,14 @@ export type Bill = {
   issue_date: string;
   currency: string;
   fx_to_zar: string;
+  fx_rate_known: boolean;
   amount_foreign: string;
   amount_zar: string;
   amount_paid_zar: string;
   amount_paid_foreign: string;
   balance_zar: string;
   balance_foreign: string;
-  payment_status: "unpaid" | "partially_paid" | "paid";
+  payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
   pdf_storage_key: string | null;
   purchase_order_id: string | null;
   lines: BillLine[];
@@ -4044,6 +4055,9 @@ export type SalesOrderPayment = {
 
 export type SalesOrderListItem = {
   id: string;
+  is_archive: boolean;
+  source_amounts_known: boolean;
+  source_currency_known: boolean;
   so_number: string;
   customer_id: string;
   customer_name: string;

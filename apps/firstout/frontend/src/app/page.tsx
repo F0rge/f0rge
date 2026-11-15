@@ -26,6 +26,7 @@ import {
   type HomeAttentionKind,
   type HomeSummary,
 } from "@/lib/api";
+import { formatQuantity } from "@/lib/quantity";
 
 function formatZar(value: string, currency: string): string {
   const amount = Number(value);
@@ -207,7 +208,7 @@ export default function HomePage() {
             <Tile className="firstout-home-tile">
               <h2 className="cds--type-productive-heading-03">On order</h2>
               <p className="cds--type-body-01 firstout-home-metric">
-                {summary.on_order_qty.toLocaleString("en-ZA")} units
+                {formatQuantity(summary.on_order_qty)} units
               </p>
               <p className="cds--type-helper-text-01">
                 {formatZar(summary.on_order_value_zar, summary.home_currency)} estimated
@@ -216,7 +217,7 @@ export default function HomePage() {
             <Tile className="firstout-home-tile">
               <h2 className="cds--type-productive-heading-03">On hand</h2>
               <p className="cds--type-body-01 firstout-home-metric">
-                {summary.on_hand_qty.toLocaleString("en-ZA")} units
+                {formatQuantity(summary.on_hand_qty)} units
               </p>
               <p className="cds--type-helper-text-01">
                 {formatZar(summary.on_hand_value_zar, summary.home_currency)} landed cost

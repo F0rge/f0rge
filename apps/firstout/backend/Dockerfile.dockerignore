@@ -1,8 +1,10 @@
-# Only the backend package, locked local dependencies and checked-in seed assets.
+# Dockerfile-specific, repository-root-relative build context allowlist.
 *
 !apps/
 !apps/firstout/
 !apps/firstout/backend/
+!apps/firstout/backend/Dockerfile
+!apps/firstout/backend/Dockerfile.dockerignore
 !apps/firstout/backend/pyproject.toml
 !apps/firstout/backend/uv.lock
 !apps/firstout/backend/alembic.ini
@@ -16,14 +18,30 @@
 !libs/
 !libs/backend/
 !libs/backend/core/
-!libs/backend/core/**
+!libs/backend/core/pyproject.toml
+!libs/backend/core/src/
+!libs/backend/core/src/**
 !libs/backend/db/
-!libs/backend/db/**
+!libs/backend/db/pyproject.toml
+!libs/backend/db/src/
+!libs/backend/db/src/**
 !libs/backend/storage/
-!libs/backend/storage/**
+!libs/backend/storage/pyproject.toml
+!libs/backend/storage/src/
+!libs/backend/storage/src/**
 !libs/backend/testing/
-!libs/backend/testing/**
+!libs/backend/testing/pyproject.toml
+!libs/backend/testing/src/
+!libs/backend/testing/src/**
 **/.env*
-**/__pycache__
 **/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.log
+**/node_modules
+**/.git
+**/tests
+**/exports
+**/prepared-data
 **/.pytest_cache

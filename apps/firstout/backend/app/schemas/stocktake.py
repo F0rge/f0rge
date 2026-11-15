@@ -9,13 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.stocktake import StocktakeStatus
 
 
+from app.schemas.quantity import Quantity
+
+
 class StocktakeCreate(BaseModel):
     location_id: uuid.UUID
     category: Optional[str] = Field(default=None, max_length=64)
 
 
 class StocktakeLineCountUpdate(BaseModel):
-    counted_qty: int = Field(ge=0)
+    counted_qty: Quantity = Field(ge=0)
 
 
 class StocktakeLookupRequest(BaseModel):
@@ -29,9 +32,9 @@ class StocktakeLineResponse(BaseModel):
     our_barcode: str
     name: str
     category: Optional[str]
-    expected_qty: int
-    counted_qty: Optional[int]
-    variance: Optional[int]
+    expected_qty: Quantity
+    counted_qty: Optional[Quantity]
+    variance: Optional[Quantity]
 
     model_config = ConfigDict(from_attributes=True)
 

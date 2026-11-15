@@ -12,6 +12,7 @@ import {
   type Location,
   type StockByBinRow,
 } from "@/lib/api";
+import { formatQuantity } from "@/lib/quantity";
 
 const COLUMNS: RecordsColumn<StockByBinRow>[] = [
   { key: "location_name", header: "Location", render: (row) => row.location_name },
@@ -22,7 +23,7 @@ const COLUMNS: RecordsColumn<StockByBinRow>[] = [
     render: (row) => <Link href={`/catalogue/${row.sku_id}`}>{row.our_ref}</Link>,
   },
   { key: "sku_name", header: "Product", render: (row) => row.sku_name },
-  { key: "on_hand", header: "On hand", render: (row) => row.on_hand },
+  { key: "on_hand", header: "On hand", render: (row) => formatQuantity(row.on_hand) },
 ];
 
 export default function StockByBinPage() {

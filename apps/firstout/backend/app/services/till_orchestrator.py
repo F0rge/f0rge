@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import assert_customer_active
+from app.services.sellability import assert_sku_sellable
+from app.services.quantities import whole_available_quantity
 from app.crud.payment import PaymentCRUD
 from app.crud.pick import PickCRUD
 from app.crud.purchase_order import LocationStockCRUD
@@ -140,6 +142,7 @@ class TillOrchestrator:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+            assert_sku_sellable(sku)
             resolved = await resolve_unit_price(self.db, sku, customer)
             base_unit = resolved.unit_ex_vat
             price_warning = resolved.warning
@@ -356,8 +359,8 @@ class TillOrchestrator:
             tender=data.tender,
             issue_date=reloaded.issue_date,
             subtotal_ex_vat=reloaded.subtotal_ex_vat,
-            vat_amount=reloaded.vat_amount,
-            total_inc_vat=reloaded.total_inc_vat,
+            vat_amount=reloaded.vat_amount.quantize(CENT),
+            total_inc_vat=reloaded.total_inc_vat.quantize(CENT),
             prices_include_vat=reloaded.prices_include_vat,
             lines=[
                 InvoiceLineResponse(
@@ -366,8 +369,8 @@ class TillOrchestrator:
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
                     ex_vat=line.ex_vat,
-                    inc_vat=line.inc_vat,
-                    vat_amount=line.vat_amount,
+                    inc_vat=line.inc_vat.quantize(CENT),
+                    vat_amount=line.vat_amount.quantize(CENT),
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
                     price_warning=line.price_warning,
@@ -423,7 +426,7 @@ class TillOrchestrator:
             location = row.location
             if location is not None and location.is_archived:
                 continue
-            total += row.on_hand
+            total += whole_available_quantity(row.on_hand)
         return total
 
     async def _kit_block_reason(

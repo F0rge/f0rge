@@ -21,6 +21,7 @@ import {
   type AdjustmentLine,
   type InventorySku,
 } from "@/lib/api";
+import { formatQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 
 export type LineDraftValue = number | "";
 
@@ -137,9 +138,9 @@ export function formatValueImpact(total: number): string {
 
 function formatDelta(delta: number): string {
   if (delta > 0) {
-    return `+${delta}`;
+    return `+${formatQuantity(delta)}`;
   }
-  return String(delta);
+  return formatQuantity(delta);
 }
 
 function formatCost(value: number | null): string {
@@ -181,9 +182,9 @@ export function AdjustmentLinesTable({
         return {
           id: line.id,
           product: line.id,
-          current_qty: String(currentQty),
+          current_qty: formatQuantity(currentQty),
           qty_delta: formatDelta(delta),
-          new_qty: String(lineNewQty(line, currentQty, delta)),
+          new_qty: formatQuantity(lineNewQty(line, currentQty, delta)),
           unit_cost_zar: formatCost(cost),
           actions: line.id,
         };
@@ -243,15 +244,17 @@ export function AdjustmentLinesTable({
                       if (cell.info.header === "qty_delta" && editable) {
                         return (
                           <TableCell key={cell.id}>
-                            <div style={{ maxWidth: "6.5rem" }}>
+                            <div style={{ maxWidth: "8rem" }}>
                               <NumberInput
                                 id={`adjustment-delta-${row.id}`}
                                 label="Delta"
                                 hideLabel
                                 allowEmpty
-                                step={1}
+                                step={QUANTITY_STEP}
                                 size="sm"
                                 value={draft?.qty_delta ?? ""}
+                                invalid={Boolean(quantityError(draft?.qty_delta ?? "", "delta"))}
+                                invalidText={quantityError(draft?.qty_delta ?? "", "delta") ?? undefined}
                                 disabled={busy}
                                 onChange={(_event, { value }) => {
                                   onDraftChange?.(row.id, "qty_delta", numberFromInput(value));

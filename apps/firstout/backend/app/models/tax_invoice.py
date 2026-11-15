@@ -18,7 +18,7 @@ from sqlalchemy import (
     event,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -40,8 +40,8 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     issue_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     due_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     payment_status: Mapped[SettlementStatus] = mapped_column(
         Enum(
@@ -63,6 +63,9 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     )
     is_archive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
     )
     reminders_paused: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
@@ -96,8 +99,8 @@ class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sku_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

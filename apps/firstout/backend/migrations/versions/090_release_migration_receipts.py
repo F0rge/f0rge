@@ -1,7 +1,7 @@
 """Retain non-tenant deployment acknowledgements without customer data.
 
-Revision ID: 086_release_migration_receipts
-Revises: 085_record_workspaces
+Revision ID: 090_release_migration_receipts
+Revises: 089_merge_record_workspaces
 
 The migration identity writes these operational receipts. The CD migration
 runner grants only SELECT to the configured application runtime role. No
@@ -14,8 +14,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "086_release_migration_receipts"
-down_revision = "085_record_workspaces"
+revision = "090_release_migration_receipts"
+down_revision = "089_merge_record_workspaces"
 branch_labels = None
 depends_on = None
 

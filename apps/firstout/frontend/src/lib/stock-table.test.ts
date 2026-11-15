@@ -61,6 +61,8 @@ describe("stock-table helpers", () => {
   it("formats zero qty as em dash", () => {
     expect(formatStockQty(0)).toBe("—");
     expect(formatStockQty(3)).toBe("3");
+    expect(formatStockQty(2.9001)).toBe("2.9001");
+    expect(formatStockQty(0.0001)).toBe("0.0001");
   });
 
   it("filters by search and pipeline chips with OR logic", () => {

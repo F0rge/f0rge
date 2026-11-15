@@ -187,7 +187,7 @@ class StockAdjustmentService:
                     _CENT,
                     rounding=ROUND_HALF_UP,
                 )
-                note = f"Adjustment {adjustment.reason.value} qty {line.qty_delta:+d}"
+                note = f"Adjustment {adjustment.reason.value} qty {line.qty_delta:+f}"
                 if is_increase:
                     await self.stock_movements.apply_incoming_qty(
                         sku_id=line.sku_id,
@@ -249,7 +249,7 @@ class StockAdjustmentService:
         return adjustment
 
     @staticmethod
-    def _validate_qty_delta(reason: StockAdjustmentReason, qty_delta: int) -> None:
+    def _validate_qty_delta(reason: StockAdjustmentReason, qty_delta: Decimal) -> None:
         if qty_delta == 0:
             raise ValidationError("qty_delta must not be zero")
         if reason == StockAdjustmentReason.OPENING and qty_delta <= 0:
@@ -257,7 +257,7 @@ class StockAdjustmentService:
         if reason in _NEGATIVE_REASONS and qty_delta >= 0:
             raise ValidationError("qty_delta must be negative for this reason")
 
-    async def _on_hand(self, sku_id: uuid.UUID, location_id: uuid.UUID) -> int:
+    async def _on_hand(self, sku_id: uuid.UUID, location_id: uuid.UUID) -> Decimal:
         loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
         if loc_stock is None:
             return 0
@@ -267,7 +267,7 @@ class StockAdjustmentService:
         self,
         line: StockAdjustmentLine,
         location_id: uuid.UUID,
-        on_hand_by_sku: Optional[dict[uuid.UUID, int]] = None,
+        on_hand_by_sku: Optional[dict[uuid.UUID, Decimal]] = None,
         status: StockAdjustmentStatus = StockAdjustmentStatus.DRAFT,
     ) -> StockAdjustmentLineResponse:
         if on_hand_by_sku is None:

@@ -34,6 +34,8 @@ from app.services.chart_of_accounts import (
 from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.payment_terms import compute_due_date
 from app.services.party_archive import require_active_customer
+from app.services.sellability import assert_sku_sellable
+from app.services.archive_documents import assert_operational_document
 from app.services.pricing import (
     format_pdf_unit,
     pdf_unit_basis_note,
@@ -94,10 +96,12 @@ class InvoiceService:
             unit_ex_vat = line.unit_ex_vat
             sku_id = line.sku_id
             price_warning = None
-            if unit_ex_vat is None:
+            if sku_id is not None:
                 sku = await self.sku_crud.get_by_id(sku_id)
                 if sku is None:
                     raise NotFoundError("SKU not found")
+                assert_sku_sellable(sku)
+            if unit_ex_vat is None:
                 resolved = await resolve_unit_price(self.db, sku, customer)
                 unit_ex_vat = resolved.unit_ex_vat
                 price_warning = resolved.warning
@@ -187,6 +191,7 @@ class InvoiceService:
         invoice = await self.crud.get_by_id(invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
+        assert_operational_document(invoice)
 
         lines = []
         for line in invoice.lines:
@@ -238,6 +243,7 @@ class InvoiceService:
     def _to_list_item(invoice: TaxInvoice) -> InvoiceListItem:
         balance = invoice.total_inc_vat - invoice.amount_paid
         return InvoiceListItem(
+            is_archive=invoice.is_archive,
             id=invoice.id,
             invoice_number=invoice.invoice_number,
             customer_id=invoice.customer_id,
@@ -245,11 +251,11 @@ class InvoiceService:
             issue_date=invoice.issue_date,
             due_date=invoice.due_date,
             subtotal_ex_vat=invoice.subtotal_ex_vat,
-            vat_amount=invoice.vat_amount,
-            total_inc_vat=invoice.total_inc_vat,
+            vat_amount=_response_money(invoice, invoice.vat_amount),
+            total_inc_vat=_response_money(invoice, invoice.total_inc_vat),
             amount_paid=invoice.amount_paid,
-            balance=balance,
-            payment_status=invoice.payment_status.value,
+            balance=_response_money(invoice, balance),
+            payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
         )
@@ -261,6 +267,7 @@ class InvoiceService:
     ) -> InvoiceResponse:
         balance = invoice.total_inc_vat - invoice.amount_paid
         response = InvoiceResponse(
+            is_archive=invoice.is_archive,
             id=invoice.id,
             invoice_number=invoice.invoice_number,
             customer_id=invoice.customer_id,
@@ -268,11 +275,11 @@ class InvoiceService:
             issue_date=invoice.issue_date,
             due_date=invoice.due_date,
             subtotal_ex_vat=invoice.subtotal_ex_vat,
-            vat_amount=invoice.vat_amount,
-            total_inc_vat=invoice.total_inc_vat,
+            vat_amount=_response_money(invoice, invoice.vat_amount),
+            total_inc_vat=_response_money(invoice, invoice.total_inc_vat),
             amount_paid=invoice.amount_paid,
-            balance=balance,
-            payment_status=invoice.payment_status.value,
+            balance=_response_money(invoice, balance),
+            payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
             reminders_paused=invoice.reminders_paused,
             prices_include_vat=invoice.prices_include_vat,
             lines=[
@@ -282,8 +289,8 @@ class InvoiceService:
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
                     ex_vat=line.ex_vat,
-                    inc_vat=line.inc_vat,
-                    vat_amount=line.vat_amount,
+                    inc_vat=_response_money(invoice, line.inc_vat),
+                    vat_amount=_response_money(invoice, line.vat_amount),
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
                     price_warning=line.price_warning,
@@ -300,3 +307,9 @@ class InvoiceService:
             prices_include_vat=invoice.prices_include_vat,
         )
         return response
+
+
+def _response_money(invoice: TaxInvoice, value: Decimal) -> Decimal:
+    # Live operations keep their established cent-valued API contract. Historical
+    # source VAT and gross amounts retain all four stored decimal places.
+    return value if invoice.is_archive else value.quantize(CENT)

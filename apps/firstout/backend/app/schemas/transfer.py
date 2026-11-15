@@ -10,9 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.transfer import TransferStatus
 
 
+from app.schemas.quantity import Quantity
+
+
 class TransferLineCreate(BaseModel):
     sku_id: uuid.UUID
-    qty: int = Field(gt=0)
+    qty: Quantity = Field(gt=0)
     from_bin_id: Optional[uuid.UUID] = None
     to_bin_id: Optional[uuid.UUID] = None
 
@@ -27,7 +30,7 @@ class TransferCreate(BaseModel):
 
 class TransferReceiveLine(BaseModel):
     line_id: uuid.UUID
-    qty_received: int = Field(ge=0)
+    qty_received: Quantity = Field(ge=0)
 
 
 class TransferReceive(BaseModel):
@@ -39,8 +42,8 @@ class TransferLineResponse(BaseModel):
     sku_id: uuid.UUID
     sku_our_ref: str
     sku_name: str
-    qty_dispatched: int
-    qty_received: Optional[int]
+    qty_dispatched: Quantity
+    qty_received: Optional[Quantity]
     from_bin_id: Optional[uuid.UUID]
     to_bin_id: Optional[uuid.UUID]
     unit_cost_zar: Optional[Decimal]

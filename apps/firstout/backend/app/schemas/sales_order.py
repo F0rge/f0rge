@@ -61,6 +61,9 @@ class SalesOrderPaymentResponse(BaseModel):
 
 
 class SalesOrderListItem(BaseModel):
+    is_archive: bool = False
+    source_amounts_known: bool = True
+    source_currency_known: bool = True
     id: uuid.UUID
     so_number: str
     customer_id: uuid.UUID
@@ -86,6 +89,9 @@ class SalesOrderListItem(BaseModel):
 
 
 class SalesOrderResponse(BaseModel):
+    is_archive: bool = False
+    source_amounts_known: bool = True
+    source_currency_known: bool = True
     id: uuid.UUID
     so_number: str
     customer_id: uuid.UUID

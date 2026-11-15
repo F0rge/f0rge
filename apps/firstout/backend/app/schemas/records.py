@@ -8,6 +8,9 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict
 
 
+from app.schemas.quantity import Quantity
+
+
 class AddressResponse(BaseModel):
     id: uuid.UUID
     address_type: Optional[str]
@@ -75,7 +78,7 @@ class PurchaseHistoryRow(BaseModel):
     supplier_id: uuid.UUID
     supplier_name: str
     description: str
-    qty: int
+    qty: Quantity
     currency: str
     # Amounts are null without ``stock.cost.view``. ``amount_zar`` is also null when the
     # bill is foreign-currency history with no known ZAR rate.
@@ -93,4 +96,4 @@ class StockByBinRow(BaseModel):
     sku_id: uuid.UUID
     our_ref: str
     sku_name: str
-    on_hand: int
+    on_hand: Quantity
