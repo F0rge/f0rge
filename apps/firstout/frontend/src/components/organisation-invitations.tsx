@@ -18,7 +18,7 @@ import {
   TextInput,
   Tile,
 } from "@carbon/react";
-import { useState, type FormEvent } from "react";
+import { useCallback, useRef, useState, type FormEvent } from "react";
 import type { Role } from "@/lib/api";
 import {
   getOrganisationInvitations,
@@ -47,10 +47,16 @@ export function OrganisationInvitations({
   const [role, setRole] = useState("");
   const [invitations, setInvitations] = useState(initialInvitations);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] =
     useState<OrganisationInvitation | null>(null);
+  // Carbon's Escape listener retains its opening callback. Read the current
+  // request lock so dismissal cannot hide an in-flight revoke or its error.
+  const closeRevoke = useCallback(() => {
+    if (!busyRef.current) setConfirmRevoke(null);
+  }, []);
   const full = organisationInvitesFull(organisation, invitations);
   const placesAvailable = Math.max(
     0,
@@ -76,7 +82,8 @@ export function OrganisationInvitations({
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !email.trim() || !role || full) return;
+    if (busyRef.current || !email.trim() || !role || full) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -99,12 +106,14 @@ export function OrganisationInvitations({
           : "Unable to send the invitation.",
       );
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
   async function revoke(invitation: OrganisationInvitation) {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -125,6 +134,7 @@ export function OrganisationInvitations({
           : "Unable to revoke the invitation.",
       );
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -284,15 +294,11 @@ export function OrganisationInvitations({
         danger
         primaryButtonDisabled={busy}
         preventCloseOnClickOutside
-        onRequestClose={() => {
-          if (!busy) setConfirmRevoke(null);
-        }}
+        onRequestClose={closeRevoke}
         onRequestSubmit={() => {
           if (confirmRevoke) void revoke(confirmRevoke);
         }}
-        onSecondarySubmit={() => {
-          if (!busy) setConfirmRevoke(null);
-        }}
+        onSecondarySubmit={closeRevoke}
       >
         <p>
           Revoke the invitation to {confirmRevoke?.email}? They will no longer

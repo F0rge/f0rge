@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import {
   Button,
@@ -98,6 +98,11 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
   const [discard, setDiscard] = useState(false);
   const [saving, setSaving] = useState(false);
   const busy = useRef(false);
+  const closeState = useRef({ dirty, discard, onClose });
+
+  useLayoutEffect(() => {
+    closeState.current = { dirty, discard, onClose };
+  }, [dirty, discard, onClose]);
 
   useEffect(() => {
     if (!discard) return;
@@ -205,14 +210,16 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
     if (sku && draft.supplier_id)
       void prefillSupplierCode(setLines, line.key, draft.supplier_id, sku);
   }
-  function requestClose() {
+  // Carbon's document Escape listener retains the callback from when it opens.
+  const requestClose = useCallback(() => {
     if (busy.current) return;
-    if (discard) {
+    const current = closeState.current;
+    if (current.discard) {
       setDiscard(false);
       focusField("po-create-step-heading");
-    } else if (dirty) setDiscard(true);
-    else onClose();
-  }
+    } else if (current.dirty) setDiscard(true);
+    else current.onClose();
+  }, []);
   function back() {
     if (busy.current) return;
     if (discard) {
