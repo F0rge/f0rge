@@ -342,10 +342,12 @@
       "patterns": [
         "libs/rust/api-errors/src/**",
         "libs/rust/api-errors/tests/**",
-        "libs/rust/api-errors/examples/**"
+        "libs/rust/api-errors/examples/**",
+        "libs/rust/identity/src/**",
+        "libs/rust/identity/tests/**"
       ],
       "owner": "f0rge-backend",
-      "reason": "Shared Rust API error types and Actix mapping; app business rules stay app-local."
+      "reason": "Small shared Rust response and verified-identity mechanisms; app business rules stay app-local."
     },
     {
       "patterns": [
@@ -714,6 +716,17 @@
         "f0rge-frontend",
         "f0rge-security",
         "f0rge-quality-testing"
+      ]
+    },
+    {
+      "patterns": [
+        "libs/rust/identity/**"
+      ],
+      "reviewers": [
+        "f0rge-backend",
+        "f0rge-security",
+        "f0rge-quality-testing",
+        "f0rge-delivery"
       ]
     }
   ],

@@ -1,0 +1,1264 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "buycycle-backend",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/listings": {
+      "get": {
+        "tags": [],
+        "operationId": "listings",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cloudflare_access": []
+          }
+        ]
+      }
+    },
+    "/api/v1/state": {
+      "get": {
+        "tags": [],
+        "operationId": "state",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cloudflare_access": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [],
+        "operationId": "update_state",
+        "parameters": [
+          {
+            "name": "X-Buycycle-Expected-Identity",
+            "in": "header",
+            "description": "Subject captured with the browser draft; must match verified identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StateWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cloudflare_access": []
+          }
+        ]
+      }
+    },
+    "/api/v1/state/import": {
+      "post": {
+        "tags": [],
+        "operationId": "import",
+        "parameters": [
+          {
+            "name": "X-Buycycle-Expected-Identity",
+            "in": "header",
+            "description": "Subject captured with the browser draft; must match verified identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cloudflare_access": []
+          }
+        ]
+      }
+    },
+    "/api/v1/state/import-preview": {
+      "post": {
+        "tags": [],
+        "operationId": "preview",
+        "parameters": [
+          {
+            "name": "X-Buycycle-Expected-Identity",
+            "in": "header",
+            "description": "Subject captured with the browser draft; must match verified identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreview"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cloudflare_access": []
+          }
+        ]
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "tags": [],
+        "operationId": "status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cloudflare_access": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [],
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [],
+        "operationId": "ready",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Alert": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "url",
+          "price",
+          "reference_price",
+          "comparables",
+          "confidence",
+          "estimated_profit",
+          "roi_percent",
+          "reason",
+          "country",
+          "risk_flags"
+        ],
+        "properties": {
+          "comparables": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "estimated_profit": {
+            "type": "number",
+            "format": "double"
+          },
+          "id": {
+            "type": "string"
+          },
+          "model_median_days": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "model_sell_through": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reference_price": {
+            "type": "number",
+            "format": "double"
+          },
+          "risk_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "roi_percent": {
+            "type": "number",
+            "format": "double"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "BrowserState": {
+        "type": "object",
+        "properties": {
+          "bikes": {
+            "$ref": "#/components/schemas/CategoryState"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "wheels": {
+            "$ref": "#/components/schemas/CategoryState"
+          }
+        },
+        "additionalProperties": {}
+      },
+      "CategoryState": {
+        "type": "object",
+        "properties": {
+          "costs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "log": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            }
+          },
+          "watch": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WatchEntry"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": {}
+      },
+      "ErrorBody": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "error_id",
+          "field_errors"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "error_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "field_errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorCode": {
+        "type": "string",
+        "description": "Stable machine-readable classifications, independent of application rules.",
+        "enum": [
+          "validation_failed",
+          "unauthenticated",
+          "forbidden",
+          "not_found",
+          "method_not_allowed",
+          "conflict",
+          "internal_error"
+        ]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        }
+      },
+      "FieldError": {
+        "type": "object",
+        "description": "A developer-defined schema field path and a safe validation classification.\n\nPaths are static ASCII identifiers separated by dots, at most 128 bytes.\nEach segment starts with a letter or underscore and continues with letters,\ndigits or underscores. Use schema paths, not submitted keys, IDs or values.\nArray indices and bracket notation are intentionally unsupported.",
+        "required": [
+          "field",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/FieldErrorCode"
+          },
+          "field": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "FieldErrorCode": {
+        "type": "string",
+        "description": "Only fixed field-error messages are published; input values are never held.",
+        "enum": [
+          "required",
+          "invalid",
+          "out_of_range"
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "source_commit"
+        ],
+        "properties": {
+          "source_commit": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "Identity": {
+        "type": "object",
+        "required": [
+          "subject"
+        ],
+        "properties": {
+          "subject": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportCounts": {
+        "type": "object",
+        "required": [
+          "watches",
+          "trades",
+          "costs"
+        ],
+        "properties": {
+          "costs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "trades": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "watches": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ImportPreview": {
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "counts",
+          "warnings"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ImportWrite": {
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "state",
+          "source"
+        ],
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {},
+          "state": {
+            "$ref": "#/components/schemas/BrowserState"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Kind": {
+        "type": "string",
+        "enum": [
+          "bikes",
+          "wheels"
+        ]
+      },
+      "Listing": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "brand",
+          "model",
+          "price",
+          "original_price",
+          "comparables",
+          "confidence",
+          "days_listed",
+          "first_seen",
+          "url",
+          "country",
+          "risk_flags",
+          "history",
+          "brake",
+          "rim_material",
+          "wheel_system",
+          "photo_count",
+          "description_length",
+          "price_reduced"
+        ],
+        "properties": {
+          "average_ask": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "brake": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "comparables": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "cut_per_day": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "days_listed": {
+            "type": "number",
+            "format": "double"
+          },
+          "description_length": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "discount_percent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "dispersion": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "distance_km": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "first_seen": {
+            "type": "string"
+          },
+          "gone_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PricePoint"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Kind"
+          },
+          "model": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_up": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NextUp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "original_price": {
+            "type": "number",
+            "format": "double"
+          },
+          "photo_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          },
+          "price_drop_percent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "price_reduced": {
+            "type": "boolean"
+          },
+          "reference_price": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "rim_material": {
+            "type": "string"
+          },
+          "risk_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "seller_reviews": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sold_percent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "sold_sample": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "url": {
+            "type": "string"
+          },
+          "versus_typical": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "wheel_system": {
+            "type": "string"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "z_score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "ListingsResponse": {
+        "type": "object",
+        "required": [
+          "quarantined",
+          "models",
+          "alerts",
+          "kind",
+          "generated",
+          "today",
+          "items",
+          "active",
+          "gone"
+        ],
+        "properties": {
+          "active": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            }
+          },
+          "generated": {
+            "type": "string"
+          },
+          "gone": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            }
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Kind"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelMarket"
+            }
+          },
+          "quarantined": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuarantinedListing"
+            }
+          },
+          "today": {
+            "type": "string"
+          }
+        }
+      },
+      "ModelMarket": {
+        "type": "object",
+        "required": [
+          "name",
+          "active",
+          "gone30",
+          "trend",
+          "disappeared"
+        ],
+        "properties": {
+          "active": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "disappeared": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PricePoint"
+            }
+          },
+          "gone30": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "median_days": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sell_through": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "trend": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelTrend"
+            }
+          }
+        }
+      },
+      "ModelTrend": {
+        "type": "object",
+        "required": [
+          "day",
+          "median_price",
+          "n"
+        ],
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "median_price": {
+            "type": "number",
+            "format": "double"
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "NextUp": {
+        "type": "object",
+        "required": [
+          "price",
+          "url",
+          "ties",
+          "age_lower_bound"
+        ],
+        "properties": {
+          "age_lower_bound": {
+            "type": "boolean"
+          },
+          "days_listed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          },
+          "ties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "PricePoint": {
+        "type": "object",
+        "required": [
+          "day",
+          "price"
+        ],
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "QuarantinedListing": {
+        "type": "object",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "StateResponse": {
+        "type": "object",
+        "required": [
+          "revision",
+          "state"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "$ref": "#/components/schemas/BrowserState"
+          }
+        }
+      },
+      "StateWrite": {
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "state"
+        ],
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "$ref": "#/components/schemas/BrowserState"
+          }
+        },
+        "additionalProperties": false
+      },
+      "StatusResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "stale",
+          "blocked",
+          "detail_attempts",
+          "detail_limit",
+          "version",
+          "identity"
+        ],
+        "properties": {
+          "blocked": {
+            "type": "boolean"
+          },
+          "detail_attempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "detail_limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "last_success": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "Trade": {
+        "type": "object",
+        "required": [
+          "name",
+          "url",
+          "buy",
+          "bd"
+        ],
+        "properties": {
+          "bd": {
+            "type": "string"
+          },
+          "buy": {
+            "type": "number",
+            "format": "double"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "sd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sell": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      },
+      "WatchEntry": {
+        "type": "object",
+        "required": [
+          "n",
+          "u",
+          "p",
+          "t"
+        ],
+        "properties": {
+          "n": {
+            "type": "string"
+          },
+          "p": {
+            "type": "number",
+            "format": "double"
+          },
+          "t": {
+            "type": "string"
+          },
+          "u": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      }
+    },
+    "securitySchemes": {
+      "cloudflare_access": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Cf-Access-Jwt-Assertion"
+      }
+    }
+  }
+}

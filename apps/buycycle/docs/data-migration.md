@@ -61,7 +61,7 @@ truncate authority. The privileged import program is an operator/release step:
 
 ```sh
 # MIGRATION_DATABASE_URL comes from the approved managed-secret path.
-target/nx/buycycle-backend/debug/migrate
+target/nx/buycycle-backend/debug/migrate --grant-runtime
 target/nx/buycycle-backend/debug/import-legacy --preview /private/buycycle-legacy.json
 target/nx/buycycle-backend/debug/import-legacy --import /private/buycycle-legacy.json
 target/nx/buycycle-backend/debug/import-legacy --reconcile /private/buycycle-legacy.json
@@ -71,6 +71,13 @@ Production uses these entry points from the approved tested image, not a locally
 rebuilt executable. Output contains counts and digests, not rows or connection
 strings. Preserve the report alongside the release receipt. Do not enable the new
 writer until every source count/hash and browser-origin export is accounted for.
+
+Provision the runtime role first. The explicit `--grant-runtime` flag applies the
+single canonical `ops/grant-runtime.sql` in a transaction after migration;
+missing roles or insufficient owner privileges fail the maintenance step. It
+does not create identities or grant schema-changing authority to the runtime.
+Local rehearsal's plain `migrate` remains role-neutral. Neither migration nor
+grants execute during API startup.
 
 The migration imports current-day proven safety consumption conservatively.
 Missing/older state or a pending request holds the entire activation Luxembourg

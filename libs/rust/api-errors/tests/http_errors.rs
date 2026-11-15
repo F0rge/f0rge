@@ -20,7 +20,7 @@ type ErrorCase = (fn() -> ApiError, StatusCode, &'static str, &'static str);
 
 #[actix_web::test]
 async fn every_error_has_the_exact_safe_envelope_status_and_headers() {
-    let cases: [ErrorCase; 6] = [
+    let cases: [ErrorCase; 7] = [
         (
             validation,
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -44,6 +44,12 @@ async fn every_error_has_the_exact_safe_envelope_status_and_headers() {
             StatusCode::NOT_FOUND,
             "not_found",
             "The requested resource was not found.",
+        ),
+        (
+            ApiError::method_not_allowed,
+            StatusCode::METHOD_NOT_ALLOWED,
+            "method_not_allowed",
+            "This request method is not allowed.",
         ),
         (
             ApiError::conflict,

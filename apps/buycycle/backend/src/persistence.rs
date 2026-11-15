@@ -151,6 +151,21 @@ impl Db {
             Ok(())
         }).await
     }
+    /// Release/operator step only. The runtime login and its schema privileges
+    /// must already be provisioned; failure rolls back every table grant.
+    pub async fn grant_runtime(&self) -> Result<(), DataError> {
+        let mut connection = self.connection().await?;
+        AsyncPgConnection::transaction::<_, DataError, _>(
+            &mut connection,
+            async move |connection| {
+                connection
+                    .batch_execute(include_str!("../../ops/grant-runtime.sql"))
+                    .await?;
+                Ok(())
+            },
+        )
+        .await
+    }
     pub async fn rows(&self, table: &str) -> Result<Vec<Value>, DataError> {
         if !LEGACY_TABLES.contains(&table) {
             return Err(DataError::InvalidInput);
