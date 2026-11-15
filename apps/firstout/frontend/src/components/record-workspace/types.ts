@@ -34,6 +34,7 @@ export interface RecordWorkspaceAdapter<T extends { id: string }> {
   resource: WorkspaceResource;
   title: string;
   singular: string;
+  plural?: string;
   breadcrumb: string;
   description: string;
   columns: readonly WorkspaceColumn<T>[];
@@ -43,6 +44,7 @@ export interface RecordWorkspaceAdapter<T extends { id: string }> {
   lifecycle?: { activeLabel: string; archivedLabel: string };
   defaultSort?: string;
   getTitle: (item: T) => string;
+  renderAvatar?: (item: T) => ReactNode;
   getSubtitle?: (item: T) => ReactNode;
   canEdit?: (item: T) => boolean;
 }
@@ -58,6 +60,7 @@ export interface RecordWorkspaceProps<T extends { id: string }> {
   onEdit?: (item: T) => void;
   renderDetails: (item: T, context: RecordWorkspaceContext) => ReactNode;
   headerActions?: ReactNode;
+  renderSelectionActions?: (selection: { ids: string[]; query: WorkspaceQuery }) => ReactNode;
   onExport?: (query: WorkspaceQuery) => void | Promise<void>;
   children?: ReactNode;
 }

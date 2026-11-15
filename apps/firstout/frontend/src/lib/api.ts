@@ -871,6 +871,9 @@ export function createIntakeSku(payload: {
 
 export type Sku = {
   id: string;
+  is_archived: boolean;
+  archived_at?: string | null;
+  archived_by_id?: string | null;
   our_ref: string;
   our_barcode: string;
   name: string;
@@ -990,6 +993,7 @@ export type CreateSkuPayload = {
 };
 
 export type SkuListParams = {
+  lifecycle?: "active" | "archived" | "all";
   limit?: number;
   offset?: number;
   q?: string;
@@ -1006,6 +1010,7 @@ export type SkuUnitCost = {
 
 function skuListQuery(options?: SkuListParams): string {
   const params = new URLSearchParams();
+  if (options?.lifecycle) params.set("lifecycle", options.lifecycle);
   if (options?.limit !== undefined) {
     params.set("limit", String(options.limit));
   }
@@ -1028,7 +1033,7 @@ function skuListQuery(options?: SkuListParams): string {
 }
 
 export function listSkus(
-  options?: Pick<SkuListParams, "category" | "q" | "preferred_supplier_id">,
+  options?: Pick<SkuListParams, "category" | "q" | "preferred_supplier_id" | "lifecycle">,
 ): Promise<Sku[]> {
   return apiFetch<Sku[]>(`/skus${skuListQuery(options)}`);
 }
@@ -1340,6 +1345,7 @@ export type PoLineSkuCreate = {
 
 export type InventorySku = {
   sku_id: string;
+  is_archived: boolean;
   our_ref: string;
   name: string;
   on_order: number;
@@ -4836,6 +4842,7 @@ export type PurchaseHistoryRow = {
 };
 
 export type StockByBinRow = {
+  is_archived: boolean;
   location_id: string;
   location_name: string;
   bin_id: string;

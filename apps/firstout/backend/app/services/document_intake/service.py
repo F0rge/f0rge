@@ -57,6 +57,7 @@ from app.services.document_intake.pricing import (
 from app.services.object_storage import save_bytes
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
+from app.services.sku_archive import SkuArchiveService
 from app.services.skus import SkuService
 from app.schemas.supplier import SupplierCreate
 from app.services.suppliers import SupplierService, normalize_vat_number
@@ -193,6 +194,7 @@ class DocumentIntakeService:
         if not kept:
             raise ValidationError("Keep at least one line on the purchase order.")
         sku_ids = [line.sku_id for line in kept if line.sku_id is not None]
+        await SkuArchiveService(self.db).lock_skus(sku_ids)
         if len(set(sku_ids)) != len(sku_ids):
             raise ValidationError("Two lines point at the same SKU. Combine them or skip one.")
         for line in kept:
@@ -201,6 +203,8 @@ class DocumentIntakeService:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+            if sku.is_archived:
+                raise ValidationError(f"Restore SKU {sku.our_ref} before creating a purchase order")
         unmatched = any(line.sku_id is None for line in kept)
 
         supplier_id = await self._resolve_supplier(data)

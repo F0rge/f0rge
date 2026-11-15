@@ -34,6 +34,7 @@ const sku: Sku = {
   retail_inc_vat: "115.00",
   carton_count: 1,
   is_kit: false,
+  is_archived: false,
   is_sellable: true,
   created_at: "2026-11-14T00:00:00Z",
   updated_at: "2026-11-14T00:00:00Z",
@@ -61,4 +62,9 @@ describe("till sellable stock", () => {
     expect(scan(notForSale, notForSale.our_ref)).toEqual({ ok: false, error: "not_sellable" });
     expect(tillScanErrorMessage("not_sellable")).toBe("This SKU is not for sale.");
   });
+});
+
+it("does not add an archived SKU through the normal scanner even if passed in a lookup list", () => {
+  const result = resolveTillScan({ code: sku.our_barcode, skus: [{ ...sku, is_archived: true, is_sellable: true }], allowOurRef: false, addQty: 1, floorOnHand: () => 10, cartQty: () => 0 });
+  expect(result).toEqual({ ok: false, error: "not_sellable" });
 });

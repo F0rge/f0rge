@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import assert_customer_active
 from app.services.sellability import assert_sku_sellable
+from app.services.sku_archive import SkuArchiveService
 from app.services.quantities import whole_available_quantity
 from app.crud.payment import PaymentCRUD
 from app.crud.pick import PickCRUD
@@ -20,7 +21,7 @@ from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
-from app.models.pick import Pick, PickStatus
+from app.models.pick import Pick, PickSourceType, PickStatus
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
@@ -138,17 +139,29 @@ class TillOrchestrator:
                 candidate_pick_ids.append(candidate)
         total_cogs = Decimal(0)
 
+        await SkuArchiveService(self.db).lock_skus([line.sku_id for line in data.lines])
         for line in data.lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
-            assert_sku_sellable(sku)
+            existing_pick = None
+            if sku.is_sellable is False:
+                assert_sku_sellable(sku)
+            if sku.is_archived:
+                existing_pick = await self._existing_archived_pick(
+                    candidate_pick_ids, sku, line.qty, customer.id, used_pick_ids
+                )
+            else:
+                assert_sku_sellable(sku)
             resolved = await resolve_unit_price(self.db, sku, customer)
             base_unit = resolved.unit_ex_vat
             price_warning = resolved.warning
 
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
-            if bom_lines:
+            if existing_pick is not None:
+                line_cogs = await self._pick_cogs(existing_pick, data.location_id)
+                picks_to_link.append(existing_pick)
+            elif bom_lines:
                 line_cogs, pick, block = await self._kit_line_cogs(
                     sku=sku,
                     line_qty=line.qty,
@@ -391,6 +404,41 @@ class TillOrchestrator:
         )
         return sale
 
+    async def _existing_archived_pick(
+        self,
+        pick_ids,
+        sku,
+        qty,
+        customer_id,
+        used_pick_ids,
+    ) -> Pick:
+        """Finish an exact pre-archive commitment; never mint another archived sale."""
+        if sku.archived_at is None:
+            raise ValidationError(f"Restore SKU {sku.our_ref} before adding it to new business")
+        for pick_id in sorted(pick_ids, key=str):
+            if pick_id in used_pick_ids:
+                continue
+            # The lifecycle team lock serializes till sales; the pick row lock also
+            # protects against an existing pick cancellation during this handoff.
+            pick = await self.pick_crud.get_by_id(pick_id, for_update=True)
+            if (
+                pick is None
+                or pick.source_type != PickSourceType.TILL
+                or pick.kit_sku_id != sku.id
+                or pick.kit_qty != qty
+                or pick.invoice_id is not None
+                or pick.status not in (PickStatus.CONFIRMED, PickStatus.PICKING, PickStatus.STAGED)
+                or pick.created_at > sku.archived_at
+                or (pick.customer_id is not None and pick.customer_id != customer_id)
+            ):
+                continue
+            used_pick_ids.add(pick.id)
+            return pick
+        raise ValidationError(
+            f"Restore SKU {sku.our_ref} before adding it to new business; "
+            "only its exact, unconsumed pre-archive pick can be completed"
+        )
+
     async def _matching_kit_pick(
         self,
         pick_ids: list[uuid.UUID],
@@ -509,6 +557,9 @@ class TillOrchestrator:
                 },
             )
 
+        return await self._pick_cogs(pick, location_id), pick, None
+
+    async def _pick_cogs(self, pick: Pick, location_id: uuid.UUID) -> Decimal:
         line_cogs = Decimal(0)
         for pick_line in pick.lines:
             component = await self.sku_crud.get_by_id(pick_line.sku_id)
@@ -529,7 +580,7 @@ class TillOrchestrator:
                 if cost is None:
                     raise ConflictError(f"No unit cost for {component.our_ref}")
                 line_cogs += (cost * alloc.qty).quantize(CENT, rounding=ROUND_HALF_UP)
-        return line_cogs, pick, None
+        return line_cogs
 
     async def _get_walk_in_customer(self):
         from app.models.customer import Customer

@@ -227,6 +227,7 @@ export function useWorkspace<T extends { id: string }>(
     focus,
     selected,
     selectedCount,
+    selectedIds: [...selection.ids].filter((id) => !selection.excluded.has(id)),
     isChecked,
     canSelect,
     toggle,

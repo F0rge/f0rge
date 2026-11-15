@@ -89,6 +89,7 @@ class PurchaseHistoryRow(BaseModel):
 
 
 class StockByBinRow(BaseModel):
+    is_archived: bool
     location_id: uuid.UUID
     location_name: str
     bin_id: uuid.UUID

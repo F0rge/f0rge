@@ -1,6 +1,6 @@
 "use client";
 
-import { Select, SelectItem, Stack } from "@carbon/react";
+import { Select, SelectItem, Stack, Tag } from "@carbon/react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -22,7 +22,7 @@ const COLUMNS: RecordsColumn<StockByBinRow>[] = [
     header: "SKU",
     render: (row) => <Link href={`/catalogue/${row.sku_id}`}>{row.our_ref}</Link>,
   },
-  { key: "sku_name", header: "Product", render: (row) => row.sku_name },
+  { key: "sku_name", header: "Product", render: (row) => <>{row.sku_name}{row.is_archived && <Tag type="gray" size="sm">Archived</Tag>}</> },
   { key: "on_hand", header: "On hand", render: (row) => formatQuantity(row.on_hand) },
 ];
 

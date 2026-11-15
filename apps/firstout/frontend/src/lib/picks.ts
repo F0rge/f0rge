@@ -19,6 +19,9 @@ export type PickLine = {
 };
 
 export type PickDocument = {
+  source_type?: string | null;
+  kit_sku_id?: string | null;
+  kit_qty?: number | null;
   id: string;
   pick_number: string;
   status: PickStatus;
@@ -231,6 +234,9 @@ export function normalizePick(value: unknown): PickDocument {
   const kitId = pickString(row, ["sku_id", "kit_sku_id", "skuId"]);
   const statusRaw = pickString(row, ["status"]);
   return {
+    source_type: pickNullable(row, ["source_type"]),
+    kit_sku_id: pickNullable(row, ["kit_sku_id"]),
+    kit_qty: typeof row.kit_qty === "number" ? row.kit_qty : null,
     id: pickString(row, ["id"]),
     pick_number: pickString(row, ["pick_number", "number", "pickNumber"]),
     status: PICK_STATUSES.has(statusRaw) ? (statusRaw as PickStatus) : "draft",

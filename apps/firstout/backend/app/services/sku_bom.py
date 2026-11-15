@@ -11,6 +11,7 @@ from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.models.sku_bom_line import SkuBomLine
 from app.schemas.sku_bom import SkuBomLineResponse, SkuBomReplace
+from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -46,7 +47,27 @@ class SkuBomService:
         parent_sku_id: uuid.UUID,
         data: SkuBomReplace,
     ) -> list[SkuBomLineResponse]:
-        await self._get_sku_or_404(parent_sku_id)
+        archive = SkuArchiveService(self.db)
+        await archive.lock_skus([parent_sku_id] + [line.component_sku_id for line in data.lines])
+        parent = await self.sku_crud.get_by_id(parent_sku_id)
+        if parent is None:
+            raise NotFoundError("SKU not found")
+        if parent.is_archived:
+            raise ConflictError("Restore the kit before editing its recipe")
+        skus, edges, _ = await archive.graph(parent_sku_id)
+        existing = {
+            edge.component_sku_id: edge.qty for edge in edges if edge.parent_sku_id == parent_sku_id
+        }
+        # Imported bad graphs must be repairable one parent at a time. A strict
+        # subset can only remove dependencies; it cannot introduce or grow one.
+        removal_only = (
+            archive.graph_problem(skus, edges) is not None
+            and len(data.lines) < len(existing)
+            and all(
+                line.component_sku_id in existing and line.qty <= existing[line.component_sku_id]
+                for line in data.lines
+            )
+        )
         seen: set[uuid.UUID] = set()
         prepared: list[tuple[uuid.UUID, Decimal]] = []
         for line in data.lines:
@@ -57,8 +78,20 @@ class SkuBomService:
             component = await self.sku_crud.get_by_id(line.component_sku_id)
             if component is None:
                 raise NotFoundError("SKU not found")
+            if component.is_archived:
+                raise ConflictError("Restore the component before adding it to a kit")
+            if not removal_only and await self.crud.list_by_parent(component.id):
+                raise ValidationError("Nested kits are not supported")
             seen.add(line.component_sku_id)
             prepared.append((line.component_sku_id, line.qty))
+
+        prospective = [edge for edge in edges if edge.parent_sku_id != parent_sku_id] + [
+            SkuBomLine(parent_sku_id=parent_sku_id, component_sku_id=key, qty=qty)
+            for key, qty in prepared
+        ]
+        reason = archive.graph_problem(skus, prospective)
+        if reason and not removal_only:
+            raise ConflictError(reason)
 
         created: list[SkuBomLine] = []
         try:

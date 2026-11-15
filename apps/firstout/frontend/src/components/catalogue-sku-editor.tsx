@@ -99,14 +99,14 @@ export function CatalogueSkuEditor({
   }
 
   function requestClose() {
-    if (savingRef.current) return;
+    if (savingRef.current || sku.is_archived) return;
     if (discardOpen) setDiscardOpen(false);
     else if (dirty) setDiscardOpen(true);
     else onClose();
   }
 
   async function save() {
-    if (savingRef.current) return;
+    if (savingRef.current || sku.is_archived) return;
     if (discardOpen) {
       onClose();
       return;
@@ -185,7 +185,7 @@ export function CatalogueSkuEditor({
       primaryButtonText={
         discardOpen ? "Discard changes" : saving ? "Saving…" : "Save changes"
       }
-      primaryButtonDisabled={saving || (!discardOpen && !dirty)}
+      primaryButtonDisabled={saving || sku.is_archived || (!discardOpen && !dirty)}
       secondaryButtonText={discardOpen ? "Keep editing" : "Cancel"}
     >
       {discardOpen ? (

@@ -31,6 +31,7 @@ from app.models.purchase_order import (
     PurchaseOrderStatus,
 )
 from app.models.supplier import Supplier
+from app.models.team_settings import TeamSettings
 from app.schemas.page import Page, PageParams
 from app.models.sku_supplier_price import SkuSupplierPrice
 from app.schemas.purchase_order import (
@@ -63,6 +64,7 @@ from app.services.settings import SettingsService
 from app.services.suppliers import SupplierService
 from app.permissions import USERS_MANAGE
 from app.services.permissions import PermissionService
+from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -118,6 +120,14 @@ class PurchaseOrderService:
         return self._to_response(po)
 
     async def create(self, data: PurchaseOrderCreate, user_id: uuid.UUID) -> PurchaseOrderResponse:
+        user = await self.user_crud.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        # A missing settings row is committed by get_or_create. Initialize it
+        # before taking proforma/catalogue locks, and reuse it below.
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(
+            (tenant_id_ctx.get() or user.team_id)
+        )
         supplier = await require_active_supplier(self.db, data.supplier_id)
 
         if data.proforma_id is not None:
@@ -138,7 +148,7 @@ class PurchaseOrderService:
         ]
 
         total_zar = await self._factory_total_zar(supplier, data.lines)
-        create_status = await self._resolve_create_status(user_id, total_zar)
+        create_status = await self._resolve_create_status(user_id, total_zar, team_settings)
         if data.submit_for_approval or any(line.sku_id is None for line in data.lines):
             create_status = PurchaseOrderStatus.PENDING_APPROVAL
 
@@ -167,11 +177,12 @@ class PurchaseOrderService:
         po_id: uuid.UUID,
         data: PurchaseOrderLinesUpdate,
     ) -> PurchaseOrderResponse:
+        await SkuArchiveService(self.db).lock_skus([])
         po = await self._reload(po_id)
         assert_operational_document(po)
         if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
             raise ConflictError("Only a purchase order waiting for approval can be edited.")
-        await self._validate_line_writes(data.lines)
+        await self._validate_line_writes(data.lines, previous_lines=po.lines)
         resolved_codes = [
             await self._resolved_supplier_code(po.supplier_id, line.sku_id, line.supplier_code)
             for line in data.lines
@@ -230,9 +241,16 @@ class PurchaseOrderService:
         )
         # This SKU resolves a line on an existing PO, so retain its committed supplier.
         # Standalone catalogue assignments still require an active supplier.
+        # SKU creation committed independently. Reacquire and refresh before
+        # assigning it: it may have been archived during that commit boundary.
+        await SkuArchiveService(self.db).lock_skus([created.id])
         created_sku = await self.sku_crud.get_by_id(created.id)
         if created_sku is None:
             raise NotFoundError("SKU not found")
+        if created_sku.is_archived:
+            raise ValidationError(
+                f"Restore SKU {created_sku.our_ref} before assigning it to a purchase order"
+            )
         po = await self._reload(po_id)
         current = next((row for row in po.lines if row.id == line_id), None)
         if current is None:
@@ -577,10 +595,17 @@ class PurchaseOrderService:
             return stored
         return await self._resolved_supplier_code(po.supplier_id, line.sku_id, None)
 
-    async def _validate_line_writes(self, lines: list[PoLineCreate] | list[PoLineWrite]) -> None:
+    async def _validate_line_writes(
+        self,
+        lines: list[PoLineCreate] | list[PoLineWrite],
+        *,
+        previous_lines: Optional[list[PoLine]] = None,
+    ) -> None:
         if not lines:
             raise ValidationError("At least one line is required")
         sku_ids = [line.sku_id for line in lines if line.sku_id is not None]
+        await SkuArchiveService(self.db).lock_skus(sku_ids)
+        previous = {line.id: line for line in previous_lines or []}
         if len(sku_ids) != len(set(sku_ids)):
             raise ValidationError("Duplicate SKU lines are not allowed")
         for line in lines:
@@ -590,6 +615,12 @@ class PurchaseOrderService:
                 sku = await self.sku_crud.get_by_id(line.sku_id)
                 if sku is None:
                     raise NotFoundError("SKU not found")
+                if sku.is_archived:
+                    prior = previous.get(getattr(line, "id", None))
+                    if prior is None or prior.sku_id != sku.id or line.qty > prior.qty:
+                        raise ValidationError(
+                            f"Restore SKU {sku.our_ref} before adding or increasing a purchase order line"
+                        )
 
     async def _reload(self, po_id: uuid.UUID) -> PurchaseOrder:
         """Re-read lines from the database.
@@ -633,13 +664,8 @@ class PurchaseOrderService:
         self,
         user_id: uuid.UUID,
         total_zar: Optional[Decimal],
+        team_settings: TeamSettings,
     ) -> PurchaseOrderStatus:
-        user = await self.user_crud.get_by_id(user_id)
-        if user is None:
-            raise NotFoundError("User not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(
-            (tenant_id_ctx.get() or user.team_id)
-        )
         threshold = team_settings.po_approval_threshold_zar
         if threshold is None:
             return PurchaseOrderStatus.OPEN

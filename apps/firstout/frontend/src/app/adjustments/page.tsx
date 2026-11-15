@@ -85,7 +85,7 @@ export default function AdjustmentsPage() {
       const [summaryData, locationData, skuData, inventoryData] = await Promise.all([
         listAdjustments(),
         listLocations(),
-        listSkus(),
+        listSkus({ lifecycle: "all" }),
         listInventory(),
       ]);
       setSummaries(summaryData);

@@ -191,7 +191,7 @@ export default function PurchaseOrderDetailPage() {
   useEffect(() => {
     if (!editingPending || !order) return;
     let cancelled = false;
-    void listSkus().then((data) => {
+    void listSkus({ lifecycle: "all" }).then((data) => {
       if (cancelled) return;
       setSkus(data);
       for (const line of order.lines) {
@@ -699,11 +699,11 @@ export default function PurchaseOrderDetailPage() {
                         onChange={(event) => onDraftSkuPicked(line.key, event.target.value)}
                       >
                         <SelectItem value="" text="No SKU yet" />
-                        {skus.map((sku) => (
+                        {skus.filter((sku) => !sku.is_archived || sku.id === line.sku_id).map((sku) => (
                           <SelectItem
                             key={sku.id}
                             value={sku.id}
-                            text={`${sku.our_ref} — ${sku.name}`}
+                            text={`${sku.our_ref} — ${sku.name}${sku.is_archived ? " (Archived — existing line)" : ""}`}
                           />
                         ))}
                       </Select>

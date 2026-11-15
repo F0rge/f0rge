@@ -27,10 +27,16 @@ class PickCRUD(BaseCRUD):
             .selectinload(PickAllocation.location),
         )
 
-    async def get_by_id(self, pick_id: uuid.UUID) -> Optional[Pick]:
-        return (
-            await self.db.execute(select(Pick).options(*self._options()).where(Pick.id == pick_id))
-        ).scalar_one_or_none()
+    async def get_by_id(
+        self,
+        pick_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+    ) -> Optional[Pick]:
+        statement = select(Pick).options(*self._options()).where(Pick.id == pick_id)
+        if for_update:
+            statement = statement.with_for_update().execution_options(populate_existing=True)
+        return (await self.db.execute(statement)).scalar_one_or_none()
 
     async def list_all(self) -> list[Pick]:
         result = await self.db.execute(

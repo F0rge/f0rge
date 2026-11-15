@@ -74,6 +74,7 @@ class ReorderCRUD(BaseCRUD):
             .outerjoin(SkuStock, SkuStock.sku_id == Sku.id)
             .outerjoin(open_po_subq, open_po_subq.c.sku_id == Sku.id)
             .where(Sku.reorder_min.isnot(None))
+            .where(Sku.is_archived.is_(False))
             .where(total_col < Sku.reorder_min)
             .order_by(Sku.our_ref)
         )

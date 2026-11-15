@@ -62,6 +62,7 @@ from app.services.cin7_import.children import (
 )
 from app.services.cin7_import.report import EntityResult, ImportReport
 from app.services.quantities import exact_quantity
+from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ValidationError
 from app.services.pricing import (
     classification_from_cin7_tier,
@@ -273,6 +274,8 @@ class Cin7Loader:
         return self.report.entity(name)
 
     async def run(self) -> ImportReport:
+        # Keep archive and BOM checks atomic with catalogue lifecycle changes.
+        await SkuArchiveService(self.session).lock_skus([])
         self.report.assumptions = list(ASSUMPTIONS)
         await self._load_payment_terms()
         await self._load_tax_rules()
@@ -815,7 +818,12 @@ class Cin7Loader:
             result.skip("InventoryList file not found")
             return
         rows, _shifted = await self._read_csv(path)
-        existing = {row.our_ref: row for row in (await self.session.scalars(select(Sku))).all()}
+        existing = {
+            row.our_ref: row
+            for row in (
+                await self.session.scalars(select(Sku).execution_options(populate_existing=True))
+            ).all()
+        }
         taken = {row.our_barcode for row in existing.values()}
         pairs = [
             (row.get("ProductCode", "").strip(), row.get("Barcode", "").strip()) for row in rows
@@ -1101,6 +1109,13 @@ class Cin7Loader:
             if parent is None or component is None:
                 result.skip("BOM SKU was not imported")
                 continue
+            if parent.is_archived:
+                result.skip("Archived kit recipe is preserved; restore it before changing parts")
+                continue
+            if component.is_archived:
+                raise ValidationError(
+                    f"Restore component SKU {component.our_ref} before adding it to active kit {parent.our_ref}"
+                )
             if parent.id == component.id:
                 result.skip("BOM line names the parent as its own component")
                 continue

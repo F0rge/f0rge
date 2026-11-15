@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,8 @@ from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.roles import RoleService
 from app.services.suppliers import SupplierService
 from app.services.users import UserService
+from app.services.skus import SkuService
+from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import NotFoundError, ValidationError
 
 
@@ -57,7 +60,9 @@ class RecordWorkspaceService:
             raise ValidationError("This action is not supported for these records")
         return definition
 
-    async def rows(self, resource: str) -> list[BaseModel]:
+    async def rows(self, resource: str, actor: Optional[uuid.UUID] = None) -> list[BaseModel]:
+        if resource == "skus":
+            return await SkuService(self.db).list(user_id=actor, lifecycle="all")
         if resource == "customers":
             service = CustomersCrmService(self.db)
             return await service.list() + await service.list(archived=True)
@@ -81,8 +86,12 @@ class RecordWorkspaceService:
             return await AccountService(self.db).list()
         return await RepeatingInvoiceService(self.db).list()
 
-    async def row(self, resource: str, record_id: uuid.UUID) -> BaseModel:
+    async def row(
+        self, resource: str, record_id: uuid.UUID, actor: Optional[uuid.UUID] = None
+    ) -> BaseModel:
         """Reload just the reviewed record, through its original response mapping."""
+        if resource == "skus":
+            return await SkuService(self.db).get(record_id, actor)
         if resource == "customers":
             return await CustomersCrmService(self.db).get(record_id)
         if resource == "suppliers":
@@ -120,7 +129,7 @@ class RecordWorkspaceService:
             and not await self.permissions.has_any(actor, CREDIT_OVERRIDE_KEYS)
         ):
             raise ForbiddenError("Credit fields require additional permission")
-        rows = await self.rows(resource)
+        rows = await self.rows(resource, actor)
         active = [row for row in rows if not archived(row, definition.archive_field)]
         past = [row for row in rows if archived(row, definition.archive_field)]
         candidates = (
@@ -175,8 +184,8 @@ class RecordWorkspaceService:
             )
         if len(str(patch)) > 16000:
             raise ValidationError("The bulk changes are too large")
-        records = {str(row.id): row for row in await self.rows(resource)}
-        eligible, blocked, expected = [], [], {}
+        records = {str(row.id): row for row in await self.rows(resource, actor)}
+        eligible, blocked, expected, dependencies = [], [], {}, {}
         for record_id in ids:
             row = records.get(record_id)
             reason = "Record is no longer available" if row is None else None
@@ -185,17 +194,43 @@ class RecordWorkspaceService:
                 if revisions.get(record_id, current_revision) != current_revision:
                     reason = "Record changed since selection; refresh and review again"
                 else:
-                    reason = await self.eligibility(resource, body.action, row, len(ids), patch)
+                    if resource == "skus":
+                        past = archived(row, definition.archive_field)
+                        if (body.action == "archive") == past:
+                            reason = (
+                                "This record is already inactive"
+                                if past
+                                else "This record is already active"
+                            )
+                    else:
+                        reason = await self.eligibility(resource, body.action, row, len(ids), patch)
+            impact = (
+                await SkuArchiveService(self.db).impact(row.id, body.action)
+                if resource == "skus" and row is not None
+                else None
+            )
+            if impact and not reason:
+                reason = impact.reason
             if reason:
                 blocked.append(
                     WorkspaceBlocked(
                         id=record_id,
                         label=label(row) if row else "Unavailable record",
                         reason=reason,
+                        warnings=impact.warnings if impact else [],
+                        dependencies=impact.dependencies if impact else [],
                     )
                 )
             else:
-                eligible.append(WorkspaceEligible(id=row.id, label=label(row)))
+                eligible.append(
+                    WorkspaceEligible(
+                        id=row.id,
+                        label=label(row),
+                        warnings=impact.warnings if impact else [],
+                    )
+                )
+                if impact:
+                    dependencies[record_id] = impact.fingerprint
                 expected[record_id] = revision(row)
         token = issue_token(
             "preflight",
@@ -206,6 +241,7 @@ class RecordWorkspaceService:
                 "patch": patch,
                 "ids": [str(row.id) for row in eligible],
                 "revisions": expected,
+                "dependencies": dependencies,
             },
         )
         return WorkspacePreflightResponse(

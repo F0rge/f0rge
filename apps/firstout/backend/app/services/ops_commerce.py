@@ -324,6 +324,9 @@ class OpsCommerceService:
         if team is None:
             raise HTTPException(status_code=503, detail="Operational company is unavailable")
 
+        # This is an already-paid external commitment, not a new catalogue
+        # selection. A late delivery after archive must still record the payment
+        # and order; the public catalogue excludes archived SKUs.
         sku_ids = [line.source_sku_id for line in data.lines]
         skus = list(
             (await self.db.execute(select(Sku).where(Sku.id.in_(sku_ids)).order_by(Sku.id)))

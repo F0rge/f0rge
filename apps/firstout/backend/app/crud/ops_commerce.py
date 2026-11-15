@@ -53,7 +53,8 @@ class OpsCommerceCRUD:
             .where(
                 mapped.product_group_id == ProductGroup.id,
                 (
-                    member.storefront_published.is_(False)
+                    member.is_archived.is_(True)
+                    | member.storefront_published.is_(False)
                     | member.is_sellable.is_(False)
                     | (member.retail_ex_vat <= 0)
                     | member.retail_ex_vat.is_(None)
@@ -89,6 +90,7 @@ class OpsCommerceCRUD:
             .outerjoin(ProductGroup, ProductGroup.id == ProductGroupVariant.product_group_id)
             .where(
                 Sku.storefront_published.is_(True),
+                Sku.is_archived.is_(False),
                 Sku.is_sellable.is_(True),
                 Sku.retail_ex_vat > 0,
                 (

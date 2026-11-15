@@ -14,6 +14,7 @@ from app.models.team import Team
 from app.models.user import User
 from app.schemas.record_workspace import WorkspaceExecute, WorkspaceExecuteResponse
 from app.services.record_workspace import RecordWorkspaceService
+from app.services.sku_archive import SkuArchiveService
 from app.services.record_workspace_actions import apply_action
 from app.services.record_workspace_filters import label, payload_hash, revision
 from app.services.record_workspace_registry import DEFINITIONS
@@ -74,6 +75,7 @@ class RecordWorkspaceExecuteService:
                 "patch": patch,
                 "ids": ids,
                 "revisions": claims["revisions"],
+                "dependencies": claims.get("dependencies", {}),
             }
         )
         await self._team_lock()
@@ -105,10 +107,16 @@ class RecordWorkspaceExecuteService:
             try:
                 if await self._lock_record(resource, uuid.UUID(record_id)) is None:
                     raise ConflictError("Record is no longer available")
-                row = await self.workspace.row(resource, uuid.UUID(record_id))
+                row = await self.workspace.row(resource, uuid.UUID(record_id), actor)
                 record_label = label(row)
                 if revision(row) != claims["revisions"][record_id]:
                     raise ConflictError("Record changed after review; refresh and review again")
+                if resource == "skus":
+                    impact = await SkuArchiveService(self.db).impact(uuid.UUID(record_id), action)
+                    if impact.fingerprint != claims.get("dependencies", {}).get(record_id):
+                        raise ConflictError(
+                            "SKU stock, commitments or kit dependencies changed after review; refresh and review again"
+                        )
                 await self.workspace.require_access(resource, actor, action, patch)
                 reason = await self.workspace.eligibility(resource, action, row, len(ids), patch)
                 if reason:

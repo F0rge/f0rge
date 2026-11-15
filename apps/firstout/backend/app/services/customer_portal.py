@@ -68,7 +68,7 @@ class CustomerPortalService:
         skus = await self.sku_crud.list_all()
         items: list[PortalCatalogueItem] = []
         for sku in skus:
-            if not sku.is_sellable:
+            if sku.is_archived or not sku.is_sellable:
                 continue
             try:
                 unit_ex = await resolve_unit_ex_vat(self.db, sku, user.customer)

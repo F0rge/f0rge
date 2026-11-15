@@ -31,6 +31,7 @@ class SearchService:
 
         sku_result = await self.db.execute(
             select(Sku)
+            .where(Sku.is_archived.is_(False))
             .where(
                 or_(
                     Sku.our_ref.ilike(pattern),

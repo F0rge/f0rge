@@ -56,6 +56,7 @@ from app.services.pick_allocator import (
 from app.services.pick_sheet import build_pick_sheet_pdf
 from app.services.settings import SettingsService, parse_pick_priority
 from app.services.transfers import TransferService
+from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -80,6 +81,7 @@ class PickService:
         self.deliveries = DeliveriesService(db)
 
     async def preview(self, data: PickPreviewRequest, user_id: uuid.UUID) -> PickPreviewResponse:
+        await self._assert_new_sku_active(data.sku_id)
         kit, qty, needs = await self._explode_sku(data.sku_id, data.qty)
         result = await self._allocate(needs, user_id)
         return PickPreviewResponse(
@@ -90,6 +92,9 @@ class PickService:
         )
 
     async def create(self, data: PickCreate, user_id: uuid.UUID) -> PickResponse:
+        # Default settings may commit on first use; initialize before taking
+        # catalogue locks so the new-pick validation stays locked until commit.
+        await self._settings(user_id)
         if data.invoice_id is not None:
             origin = await self._origin_from_invoice(data.invoice_id)
         elif data.layby_id is not None:
@@ -271,7 +276,10 @@ class PickService:
         return await self.get(pick_id)
 
     async def cancel(self, pick_id: uuid.UUID) -> PickResponse:
+        await SkuArchiveService(self.db).lock_skus([])
         pick = await self._get_or_404(pick_id)
+        if pick.invoice_id is not None:
+            raise ConflictError("An invoiced pick cannot be cancelled")
         if pick.status not in (PickStatus.DRAFT, PickStatus.CONFIRMED):
             raise ConflictError("Pick cannot be cancelled")
         async with unit_of_work(self.db):
@@ -383,12 +391,21 @@ class PickService:
             lines_override=overrides,
         )
 
+    async def _assert_new_sku_active(self, sku_id: uuid.UUID) -> None:
+        await SkuArchiveService(self.db).lock_skus([sku_id])
+        sku = await self.sku_crud.get_by_id(sku_id)
+        if sku is None:
+            raise NotFoundError("SKU not found")
+        if sku.is_archived:
+            raise ValidationError(f"Restore SKU {sku.our_ref} before creating a new pick")
+
     async def _origin_from_till(
         self,
         sku_id: uuid.UUID,
         qty: int,
         customer_id: Optional[uuid.UUID],
     ) -> "_PickOrigin":
+        await self._assert_new_sku_active(sku_id)
         kit, kit_qty, needs = await self._explode_sku(sku_id, qty)
         if customer_id is not None:
             customer = await self.customer_crud.get_by_id(customer_id)

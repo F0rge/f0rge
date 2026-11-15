@@ -80,12 +80,13 @@ class InventoryService:
                 unit_cost = None
             responses.append(
                 InventorySkuResponse(
+                    is_archived=sku.is_archived,
                     sku_id=sku.id,
                     our_ref=sku.our_ref,
                     name=sku.name,
                     on_order=on_order_by_sku.get(sku.id, 0),
                     on_hand=on_hand,
-                    sellable=sku.is_sellable and on_hand > 0,
+                    sellable=not sku.is_archived and sku.is_sellable and on_hand > 0,
                     unit_cost_zar=unit_cost,
                     locations=locations,
                 )

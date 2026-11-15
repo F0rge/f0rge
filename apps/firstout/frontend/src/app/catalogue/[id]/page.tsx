@@ -7,7 +7,6 @@ import {
   FileUploaderDropContainer,
   FileUploaderItem,
   InlineNotification,
-  Modal,
   NumberInput,
   Stack,
   Tab,
@@ -29,6 +28,7 @@ import { Barcode } from "@carbon/icons-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { WorkspaceBulkDialog } from "@/components/record-workspace/workspace-bulk-dialog";
 import { CostAuditPanel } from "@/components/cost-audit-panel";
 import { SkuBomEditor } from "@/components/sku-bom-editor";
 import { SkuPriceEditor } from "@/components/sku-price-editor";
@@ -36,7 +36,6 @@ import {
   ApiError,
   canMutateCatalogue,
   canViewCostAudit,
-  deleteSku,
   formatZarAmount,
   getSku,
   getSkuLeadTimes,
@@ -106,9 +105,10 @@ export default function SkuDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const canMutate = canMutateCatalogue(user);
+  const allowed = canMutateCatalogue(user);
   const canViewCost = canViewCostAudit(user);
   const [sku, setSku] = useState<Sku | null>(null);
+  const canMutate = allowed && !sku?.is_archived;
   const [inventoryRow, setInventoryRow] = useState<InventorySku | null>(null);
   const [allSkus, setAllSkus] = useState<Sku[]>([]);
   const [observedLeadTime, setObservedLeadTime] = useState<
@@ -120,8 +120,7 @@ export default function SkuDetailPage() {
   const [identitySaving, setIdentitySaving] = useState(false);
   const [priceSaving, setPriceSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [deleteSaving, setDeleteSaving] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<"archive" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -133,7 +132,7 @@ export default function SkuDetailPage() {
         getSku(params.id),
         listInventory(),
         getSkuLeadTimes().catch(() => ({ rows: [] as SkuLeadTimeRow[] })),
-        listSkus(),
+        listSkus({ lifecycle: "all" }),
       ]);
       setSku(skuData);
       setIdentityForm(identityFormFromSku(skuData));
@@ -210,27 +209,6 @@ export default function SkuDetailPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!sku || !canMutate) {
-      return;
-    }
-    setDeleteSaving(true);
-    setError(null);
-    try {
-      await deleteSku(sku.id);
-      router.push("/catalogue");
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setError(err.message);
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to delete SKU.");
-      }
-      setDeleteOpen(false);
-    } finally {
-      setDeleteSaving(false);
-    }
-  }
-
   const unitCostZar = inventoryRow?.unit_cost_zar ?? null;
 
   return (
@@ -254,6 +232,7 @@ export default function SkuDetailPage() {
               <h1 className="cds--type-productive-heading-04">
                 {sku ? `${sku.our_ref} — ${sku.name}` : "SKU"}
               </h1>
+              {sku?.is_archived && <Tag type="gray" size="sm">Archived</Tag>}
               {sku?.is_kit ? (
                 <Tag type="teal" size="sm">
                   Kit
@@ -276,14 +255,21 @@ export default function SkuDetailPage() {
             >
               Print label
             </Button>
-            {canMutate ? (
-              <Button kind="danger--tertiary" onClick={() => setDeleteOpen(true)}>
-                Delete
+            {allowed ? (
+              <Button kind="tertiary" onClick={() => setLifecycleAction(sku.is_archived ? "restore" : "archive")}>
+                {sku.is_archived ? "Restore SKU" : "Archive SKU"}
               </Button>
             ) : null}
           </div>
         ) : null}
       </div>
+
+      {sku?.is_archived && <InlineNotification
+        kind="info"
+        title="Archived SKU — restore before editing"
+        subtitle="Stock and past records are kept. Existing commitments, returns and stock corrections remain available. This kit recipe is read-only while archived. Restoring keeps the previous sales setting and does not republish online."
+        lowContrast hideCloseButton
+      />}
 
       {error ? (
         <InlineNotification
@@ -577,20 +563,15 @@ export default function SkuDetailPage() {
         />
       )}
 
-      <Modal
-        open={deleteOpen}
-        modalHeading="Delete SKU"
-        primaryButtonText={deleteSaving ? "Deleting…" : "Delete"}
-        secondaryButtonText="Cancel"
-        danger
-        primaryButtonDisabled={deleteSaving}
-        onRequestClose={() => setDeleteOpen(false)}
-        onRequestSubmit={() => void handleDelete()}
-      >
-        <p className="cds--type-body-01">
-          Delete <strong>{sku?.our_ref}</strong> ({sku?.name})? This cannot be undone.
-        </p>
-      </Modal>
+      {lifecycleAction && sku && allowed && (
+        <WorkspaceBulkDialog
+          resource="skus"
+          operation={{ action: lifecycleAction, label: lifecycleAction === "restore" ? "Restore" : "Archive", count: 1, selection: { ids: [sku.id] } }}
+          fields={[]}
+          onClose={() => setLifecycleAction(null)}
+          onComplete={(message) => { setSuccess(message); void loadSku(); }}
+        />
+      )}
     </Stack>
   );
 }

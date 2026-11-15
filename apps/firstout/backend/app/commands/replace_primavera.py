@@ -37,7 +37,21 @@ from f0rge_core.exceptions import ValidationError
 from f0rge_db.organisation import tenant_id_ctx
 
 PRIMAVERA_TEAM_ID = uuid.UUID("54493247-36a3-4ed6-a3ff-5bd35cc4f522")
-SCHEMA_REVISION = "089_merge_record_workspaces"
+SCHEMA_REVISION = "091_sku_archive"
+# Deployment receipts are global operational evidence, owned by the migration
+# runner. Keep their description outside application Base metadata and never
+# include them in a business mutation.
+EXTERNAL_PRESERVE = {
+    "release_migration_receipts": sa.table(
+        "release_migration_receipts",
+        sa.column("source_commit", sa.String(40)),
+        sa.column("schema_revision", sa.String(64)),
+        sa.column("policy_sha256", sa.String(64)),
+        sa.column("from_revision", sa.String(64)),
+        sa.column("completed_at", sa.DateTime()),
+        schema="public",
+    ),
+}
 PRESERVE = frozenset(
     (
         "teams",
@@ -144,6 +158,7 @@ DELETE_BUSINESS = frozenset(
         "vat201_period_events",
     )
 )
+PRESERVE = PRESERVE | EXTERNAL_PRESERVE.keys()
 KNOWN = PRESERVE | DELETE_BUSINESS | REQUIRE_EMPTY
 
 
@@ -212,7 +227,7 @@ async def _snapshot(db: AsyncSession, team_id: uuid.UUID, names, *, location_cha
     tables = {}
     mutable_locations = {str(item["location_id"]): item for item in location_changes}
     for name in sorted(names):
-        table = Base.metadata.tables[name]
+        table = EXTERNAL_PRESERVE[name] if name in EXTERNAL_PRESERVE else Base.metadata.tables[name]
         predicate = _scope(table, team_id)
         # Raw customer data, settings and tokens never cross this read boundary.
         # Built-in MD5 is an integrity fingerprint, not an authentication primitive.
@@ -275,7 +290,9 @@ async def _preflight(db: AsyncSession, expected_database: str) -> Team:
         raise ValidationError("Database identity does not match the reviewed target")
     revisions = list(await db.scalars(sa.text("SELECT version_num FROM alembic_version")))
     if revisions != [SCHEMA_REVISION]:
-        raise ValidationError("Replacement requires the exact reviewed schema revision089")
+        raise ValidationError(
+            "Replacement requires the exact reviewed schema revision091_sku_archive"
+        )
     team = await db.scalar(sa.select(Team).where(Team.id == PRIMAVERA_TEAM_ID))
     if (
         team is None
@@ -287,9 +304,39 @@ async def _preflight(db: AsyncSession, expected_database: str) -> Team:
     live = set(
         await db.scalars(sa.text("SELECT tablename FROM pg_tables WHERE schemaname='public'"))
     )
-    if live != KNOWN | {"alembic_version"} or set(Base.metadata.tables) != KNOWN:
+    if (
+        live != KNOWN | {"alembic_version"}
+        or set(Base.metadata.tables) != KNOWN - EXTERNAL_PRESERVE.keys()
+    ):
         raise ValidationError(
             "Live tables differ from the explicitly reviewed replacement inventory"
+        )
+    receipt_columns = set(
+        await db.scalars(
+            sa.text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='public' AND table_name='release_migration_receipts'"
+            )
+        )
+    )
+    if receipt_columns != set(EXTERNAL_PRESERVE["release_migration_receipts"].c.keys()):
+        raise ValidationError(
+            "Release receipt columns differ from the reviewed protected inventory"
+        )
+    if await db.scalar(
+        sa.select(Sku.id)
+        .where(
+            Sku.team_id == team.id,
+            sa.or_(
+                Sku.is_archived.is_(True),
+                Sku.archived_at.is_not(None),
+                Sku.archived_by_id.is_not(None),
+            ),
+        )
+        .limit(1)
+    ):
+        raise ValidationError(
+            "Existing SKU archive state requires a separate reviewed replacement plan; archive metadata and recipes are preserved"
         )
     if not await Cin7ImportRunCRUD(db).try_lock():
         raise ValidationError("Another Cin7 transaction holds the target import lock")
@@ -333,7 +380,14 @@ async def replace_in_transaction(
                 "A published commerce SKU is absent from the reviewed retained catalogue"
             )
         if sku.our_ref in source_codes:
-            stable[sku.our_ref] = (str(sku.id), sku.storefront_published, sku.photo_storage_key)
+            stable[sku.our_ref] = (
+                str(sku.id),
+                sku.storefront_published,
+                sku.photo_storage_key,
+                sku.is_archived,
+                sku.archived_at,
+                sku.archived_by_id,
+            )
     checked_locations = []
     for change in location_changes:
         location = await db.scalar(
@@ -380,11 +434,18 @@ async def replace_in_transaction(
     db.expunge_all()
     result = await PreparedLoader(db, package, mappings).run()
     retained = {
-        sku.our_ref: (str(sku.id), sku.storefront_published, sku.photo_storage_key)
+        sku.our_ref: (
+            str(sku.id),
+            sku.storefront_published,
+            sku.photo_storage_key,
+            sku.is_archived,
+            sku.archived_at,
+            sku.archived_by_id,
+        )
         for sku in await db.scalars(sa.select(Sku).where(Sku.team_id == PRIMAVERA_TEAM_ID))
     }
     if any(retained.get(code) != identity for code, identity in stable.items()):
-        raise ValidationError("Retained product UUID/publication/photo identity changed")
+        raise ValidationError("Retained product UUID/publication/photo/archive identity changed")
     after_protected = await _snapshot(
         db, PRIMAVERA_TEAM_ID, PRESERVE, location_changes=location_changes
     )
@@ -399,6 +460,7 @@ async def replace_in_transaction(
         "mapping_sha256": mapping_sha256,
         "before_sha256": before["sha256"],
         "protected_sha256": protected["sha256"],
+        "protected_external": {name: protected["tables"][name] for name in EXTERNAL_PRESERVE},
         "other_organisations": other,
         "deleted": deleted,
         "retained_sku_ids": len(stable),
@@ -485,6 +547,7 @@ async def _run(args) -> dict:
             if reviewed:
                 for key in (
                     "protected_sha256",
+                    "protected_external",
                     "other_organisations",
                     "deleted",
                     "retained_sku_ids",

@@ -14,8 +14,10 @@ from app.schemas.repeating_invoice import RepeatingInvoiceResponse
 from app.schemas.role import RoleResponse
 from app.schemas.supplier import SupplierResponse
 from app.schemas.user import UserResponse
+from app.schemas.sku import SkuResponse
 
 WorkspaceResource = Literal[
+    "skus",
     "customers",
     "suppliers",
     "price-lists",
@@ -37,6 +39,7 @@ WorkspaceAction = Literal[
     "resume",
 ]
 WorkspaceRow = Union[
+    SkuResponse,
     CustomerCrmResponse,
     SupplierResponse,
     PriceListResponse,
@@ -111,9 +114,16 @@ class WorkspacePreflight(BaseModel):
         return self
 
 
+class WorkspaceDependency(BaseModel):
+    id: uuid.UUID
+    label: str
+
+
 class WorkspaceEligible(BaseModel):
     id: uuid.UUID
     label: str
+    warnings: list[str] = Field(default_factory=list)
+    dependencies: list[WorkspaceDependency] = Field(default_factory=list)
 
 
 class WorkspaceBlocked(WorkspaceEligible):
@@ -130,7 +140,7 @@ class WorkspacePreflightResponse(BaseModel):
 
 class WorkspaceExecute(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    preflight_token: str = Field(min_length=1, max_length=131072)
+    preflight_token: str = Field(min_length=1, max_length=262144)
     request_id: uuid.UUID
 
 

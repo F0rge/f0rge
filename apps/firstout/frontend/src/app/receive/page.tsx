@@ -13,6 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tag,
 } from "@carbon/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -68,7 +69,7 @@ function ReceivePageContent() {
         listPurchaseOrders({ status: "landed", limit: 100 }),
         listLocations(),
         listInventory(),
-        listSkus(),
+        listSkus({ lifecycle: "all" }),
         getSettings(),
       ]);
       const activeLocations = locationData.filter(isActiveLocation);
@@ -301,7 +302,7 @@ function ReceivePageContent() {
                 {inventory.map((entry) => (
                   <TableRow key={entry.sku_id}>
                     <TableCell>{entry.our_ref}</TableCell>
-                    <TableCell>{entry.name}</TableCell>
+                    <TableCell>{entry.name}{entry.is_archived && <Tag type="gray" size="sm">Archived</Tag>}</TableCell>
                     <TableCell>{formatQuantity(entry.on_order)}</TableCell>
                     <TableCell>{formatQuantity(entry.on_hand)}</TableCell>
                     <TableCell>{entry.sellable ? "Yes" : "Not sellable"}</TableCell>

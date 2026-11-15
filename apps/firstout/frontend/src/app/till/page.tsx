@@ -20,6 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tag,
   TextInput,
   Tile,
 } from "@carbon/react";
@@ -54,6 +55,8 @@ import {
   createTillSale,
   downloadInvoicePdf,
   getSettings,
+  getSku,
+  getCustomer,
   listPicks,
   exVatToIncVat,
   formatPriceAmount,
@@ -79,6 +82,7 @@ import {
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canResumeArchivedTillPick, isPendingTillPick, restoreTillCartSkus } from "@/lib/till-archive";
 import {
   displayUnitAmount,
   pricesIncludeVat,
@@ -241,6 +245,7 @@ function filterSkuItem({
 }
 
 function mergeCartBySku(current: CartLine[], sku: Sku, addQty: number): CartLine[] {
+  if (sku.is_archived) return current;
   const existing = current.find((line) => line.sku.id === sku.id);
   if (existing) {
     return current.map((line) =>
@@ -302,6 +307,10 @@ export default function TillPage() {
   const [pickId, setPickId] = useState("");
   const [linkedPickIds, setLinkedPickIds] = useState<Record<string, string>>({});
   const [confirmedPicks, setConfirmedPicks] = useState<PickDocument[]>([]);
+  const [tillPicks, setTillPicks] = useState<PickDocument[]>([]);
+  const [resumePickId, setResumePickId] = useState("");
+  const [resumingPick, setResumingPick] = useState(false);
+  const [commitmentCustomer, setCommitmentCustomer] = useState<CustomerCrm | null>(null);
   const [kitBlocks, setKitBlocks] = useState<TillKitBlock[]>([]);
   const [pickDraft, setPickDraft] = useState<{
     kit: TillKitBlock;
@@ -318,7 +327,7 @@ export default function TillPage() {
     setLoading(true);
     setError(null);
     try {
-      const [locationData, skuData, inventoryData, customerData, settingsData, priceListData] =
+      const [locationData, skuData, inventoryData, customerData, settingsData, priceListData, pickData] =
         await Promise.all([
           listLocations(),
           listSkus(),
@@ -326,13 +335,15 @@ export default function TillPage() {
           listCustomers(),
           getSettings(),
           listPriceLists(),
+          listPicks("till"),
         ]);
       const showrooms = locationData.filter(
         (loc) => isActiveLocation(loc) && loc.type === "showroom",
       );
       setLocations(showrooms);
       setCompanySettings(settingsData);
-      setSkus(skuData);
+      setSkus(skuData.filter((sku) => !sku.is_archived));
+      setTillPicks(pickData);
       setInventory(inventoryData);
       setCustomers(customerData);
       setPriceLists(priceListData);
@@ -371,7 +382,7 @@ export default function TillPage() {
     selectedInventory?.locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0;
 
   const skuOptions = skus.filter((sku) => {
-    if (!sku.is_sellable || !locationId || !sku.retail_ex_vat) {
+    if (sku.is_archived || !sku.is_sellable || !locationId || !sku.retail_ex_vat) {
       return false;
     }
     if (sku.is_kit) {
@@ -386,7 +397,9 @@ export default function TillPage() {
   });
 
   const selectedSkuOption = skuOptions.find((sku) => sku.id === skuId) ?? null;
-  const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
+  const selectedCustomer = customers.find((customer) => customer.id === customerId)
+    ?? (commitmentCustomer?.id === customerId ? commitmentCustomer : null);
+  const pendingTillPicks = tillPicks.filter(isPendingTillPick);
 
   useEffect(() => {
     setCreditOverride(false);
@@ -417,12 +430,11 @@ export default function TillPage() {
     }
     const kitIds = new Set(cartKitKey.split(","));
     let cancelled = false;
-    listPicks()
+    listPicks("till")
       .then((picks) => {
         if (!cancelled) {
-          setConfirmedPicks(
-            picks.filter((entry) => entry.status === "confirmed" && kitIds.has(entry.sku_id)),
-          );
+          setTillPicks(picks);
+          setConfirmedPicks(picks.filter((entry) => isPendingTillPick(entry) && kitIds.has(entry.sku_id)));
         }
       })
       .catch(() => {
@@ -436,48 +448,33 @@ export default function TillPage() {
   }, [cartKitKey]);
 
   useEffect(() => {
-    if (loading || cartReady) {
-      return;
-    }
+    if (loading || cartReady) return;
     const snapshot = loadTillCart();
-    if (!snapshot) {
-      setCartReady(true);
-      return;
-    }
-    if (skus.length === 0) {
-      return;
-    }
-    const byId = new Map(skus.map((sku) => [sku.id, sku]));
-    const lines: CartLine[] = [];
-    for (const line of snapshot.lines) {
-      const sku = byId.get(line.skuId);
-      if (!sku) {
-        continue;
-      }
-      lines.push({
-        key: sku.id,
-        sku,
-        qty: line.qty,
-        discountPercent: line.discountPercent,
+    if (!snapshot) { setCartReady(true); return; }
+    let cancelled = false;
+    void (async () => {
+      const byId = await restoreTillCartSkus(snapshot, skus, tillPicks, getSku);
+      const lines = snapshot.lines.flatMap((line) => {
+        const sku = byId.get(line.skuId);
+        return sku ? [{ key: sku.id, sku, qty: line.qty, discountPercent: line.discountPercent }] : [];
       });
-    }
-    if (lines.length > 0) {
+      const retainedCustomer = snapshot.customerId && !customers.some((item) => item.id === snapshot.customerId)
+        && lines.some((line) => line.sku.is_archived)
+        ? await getCustomer(snapshot.customerId) : null;
+      if (cancelled) return;
       setCart(lines);
-    }
-    if (snapshot.locationId) {
-      setLocationId(snapshot.locationId);
-    }
-    if (snapshot.customerId) {
-      setCustomerId(snapshot.customerId);
-    }
-    if (snapshot.pickId) {
+      setCommitmentCustomer(retainedCustomer);
+      if (snapshot.locationId) setLocationId(snapshot.locationId);
+      if (snapshot.customerId) setCustomerId(snapshot.customerId);
       setPickId(snapshot.pickId);
-    }
-    if (Object.keys(snapshot.linkedPickIds).length > 0) {
       setLinkedPickIds(snapshot.linkedPickIds);
-    }
-    setCartReady(true);
-  }, [cartReady, loading, skus]);
+      if (lines.length !== snapshot.lines.length) setError("Some saved items are no longer available for sale and have not been restored. Archived kits require their original, unconsumed till pick at its exact quantity.");
+      setCartReady(true);
+    })().catch(() => {
+      if (!cancelled) setError("The saved cart could not be restored. Reload the till to retry; the saved cart has not been changed.");
+    });
+    return () => { cancelled = true; };
+  }, [cartReady, customers, loading, skus, tillPicks]);
 
   useEffect(() => {
     if (!cartReady) {
@@ -513,6 +510,7 @@ export default function TillPage() {
     locationId &&
     skuId &&
     selectedSku?.is_sellable &&
+    !selectedSku.is_archived &&
     numericQty > 0 &&
     (selectedSku?.is_kit ||
       numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0)) &&
@@ -604,8 +602,11 @@ export default function TillPage() {
     locationId &&
     cart.length > 0 &&
     cart.every((line) => {
-      if (!line.sku.is_sellable) {
-        return false;
+      if (!line.sku.is_sellable) return false;
+      if (line.sku.is_archived) {
+        const linked = linkedPickIds[line.sku.id] || pickId;
+        return canResumeArchivedTillPick(line.sku, tillPicks.find((item) => item.id === linked), line.qty, customerId)
+          && cart.filter((item) => item.sku.id === line.sku.id).length === 1;
       }
       if (line.sku.is_kit) {
         return line.qty > 0;
@@ -640,7 +641,7 @@ export default function TillPage() {
         if (line.key !== key) {
           return line;
         }
-        const nextQty = patch.qty ?? line.qty;
+        const nextQty = line.sku.is_archived ? line.qty : (patch.qty ?? line.qty);
         const nextDiscount =
           patch.discountPercent !== undefined
             ? clampDiscount(patch.discountPercent)
@@ -652,6 +653,28 @@ export default function TillPage() {
 
   function removeCartLine(key: string) {
     setCart((current) => current.filter((line) => line.key !== key));
+  }
+
+  async function resumeExistingPick() {
+    const pick = pendingTillPicks.find((item) => item.id === resumePickId);
+    if (!pick?.kit_sku_id || !cartReady || resumingPick) return;
+    setResumingPick(true);
+    setError(null);
+    try {
+      const sku = await getSku(pick.kit_sku_id);
+      const nextCustomerId = pick.customer_id || customerId;
+      if (cart.some((line) => line.sku.id === sku.id)) throw new Error("This kit is already in the cart. Remove its current line before resuming this pick; quantities cannot be combined.");
+      if (cart.length > 0 && nextCustomerId !== customerId) throw new Error("This pick belongs to another customer. Empty the cart or select that customer before resuming it.");
+      if (!sku.is_sellable || !sku.is_kit || (sku.is_archived && !canResumeArchivedTillPick(sku, pick, pick.kit_qty ?? 0, nextCustomerId))) throw new Error("This pick cannot be resumed. The kit must be sellable and its original, unconsumed till pick must predate archiving.");
+      const customer = nextCustomerId && !customers.some((item) => item.id === nextCustomerId) ? await getCustomer(nextCustomerId) : null;
+      setCommitmentCustomer(customer);
+      setCustomerId(nextCustomerId);
+      setCart((current) => [...current, { key: sku.id, sku, qty: pick.kit_qty ?? 0, discountPercent: 0 }]);
+      setLinkedPickIds((current) => ({ ...current, [sku.id]: pick.id }));
+      setPickId(pick.id);
+      setResumePickId("");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not resume this pick."); }
+    finally { setResumingPick(false); }
   }
 
   async function handleCompleteSale() {
@@ -734,6 +757,7 @@ export default function TillPage() {
     setPickId(next.pickId);
     setLinkedPickIds(next.linkedPickIds);
     setKitBlocks(next.blocks);
+    setTillPicks((current) => [confirmed, ...current.filter((entry) => entry.id !== confirmed.id)]);
     setConfirmedPicks((current) => [
       confirmed,
       ...current.filter((entry) => entry.id !== confirmed.id),
@@ -986,6 +1010,15 @@ export default function TillPage() {
                   <Button kind="secondary" disabled={!addValid} onClick={handleAddToCart}>
                     Add to cart
                   </Button>
+                  {pendingTillPicks.length > 0 && <Stack gap={3}>
+                    <Select id="till-resume-pick" labelText="Resume an existing till pick" value={resumePickId} disabled={!cartReady || resumingPick || submitting} onChange={(event) => setResumePickId(event.target.value)}>
+                      <SelectItem value="" text="Select an existing pick" />
+                      {pendingTillPicks.map((pick) => <SelectItem key={pick.id} value={pick.id} text={`${pick.pick_number || pick.id} · ${pick.sku_our_ref} × ${pick.kit_qty}`} />)}
+                    </Select>
+                    <p className="cds--type-helper-text-01">An archived kit can finish its original pick at the exact quantity. It stays unavailable for a new sale; resuming does not restore the SKU.</p>
+                    <Button kind="tertiary" disabled={!resumePickId || !cartReady || resumingPick || submitting || !canSell} onClick={() => void resumeExistingPick()}>{resumingPick ? "Resuming…" : "Resume existing pick"}</Button>
+                  </Stack>}
+
                 </Stack>
               </Tile>
 
@@ -1030,6 +1063,7 @@ export default function TillPage() {
                             <TableCell>
                               <strong>{line.sku.name}</strong>
                               <div className="firstout-muted-text">SKU: {line.sku.our_ref}</div>
+                              {line.sku.is_archived && <><Tag type="gray" size="sm">Archived · existing pick only</Tag><p className="cds--type-helper-text-01">Quantity is fixed to the original pick. The bound customer must match. Remove this line to cancel this checkout.</p></>}
                               {!line.sku.is_sellable ? (
                                 <div className="cds--type-helper-text-01" style={{ color: "var(--cds-text-error)" }}>
                                   Not for sale. Remove this item to complete the sale.
@@ -1042,6 +1076,7 @@ export default function TillPage() {
                             <TableCell>
                               <NumberInput
                                 id={`cart-qty-${line.key}`}
+                                disabled={line.sku.is_archived}
                                 hideLabel
                                 label="Quantity"
                                 size="sm"
@@ -1179,7 +1214,7 @@ export default function TillPage() {
                   <CustomerPicker
                     id="till-customer"
                     titleText="Customer (optional)"
-                    customers={customers}
+                    customers={commitmentCustomer?.id === customerId && !customers.some((item) => item.id === customerId) ? [...customers, commitmentCustomer] : customers}
                     selectedId={customerId}
                     onChange={setCustomerId}
                   />
@@ -1208,7 +1243,7 @@ export default function TillPage() {
                 {confirmedPicks.length > 0 ? (
                   <Select
                     id="till-pick"
-                    labelText="Confirmed pick"
+                    labelText="Existing till pick"
                     value={pickId}
                     onChange={(event) => setPickId(event.target.value)}
                   >

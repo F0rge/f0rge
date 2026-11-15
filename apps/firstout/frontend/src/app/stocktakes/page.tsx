@@ -63,7 +63,7 @@ export default function StocktakesPage() {
       const [summaryData, locationData, skuData] = await Promise.all([
         listStocktakes(),
         listLocations(),
-        listSkus(),
+        listSkus({ lifecycle: "all" }),
       ]);
       setStocktakes(summaryData);
       setLocations(locationData.filter(isActiveLocation));

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import assert_customer_active
 from app.services.sellability import assert_sku_sellable
+from app.services.sku_archive import SkuArchiveService
 from app.crud.quote import QuoteCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.user import UserCRUD
@@ -38,7 +39,7 @@ from app.services.pricing import (
 from app.services.settings import SettingsService
 from app.services.suspect_price import annotate_line_warnings
 from app.services.vat import CENT, discounted_unit_ex, ex_to_inc, inc_to_ex
-from f0rge_core.exceptions import ConflictError, NotFoundError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 _DISCOUNT_ROLES = frozenset({UserRole.OWNER.value, UserRole.TILL.value, UserRole.WAREHOUSE.value})
@@ -109,6 +110,7 @@ class QuotesService:
     ) -> QuoteResponse:
         customer = await self._require_customer(customer_id)
         assert_customer_active(customer)
+        await SkuArchiveService(self.db).lock_skus([line[0] for line in lines])
         models: list[QuoteLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -157,6 +159,7 @@ class QuotesService:
         data: QuoteUpdate,
         user_id: uuid.UUID,
     ) -> QuoteResponse:
+        await SkuArchiveService(self.db).lock_skus([])
         quote = await self._get_or_404(quote_id)
         if quote.status != QuoteStatus.DRAFT:
             raise ConflictError("Quote is not a draft")
@@ -165,6 +168,13 @@ class QuotesService:
             customer = await self._require_customer(data.customer_id)
             if data.customer_id != quote.customer_id:
                 assert_customer_active(customer)
+                await SkuArchiveService(self.db).lock_skus([line.sku_id for line in quote.lines])
+                for line in quote.lines:
+                    sku = await self.sku_crud.get_by_id(line.sku_id)
+                    if sku is not None and sku.is_archived:
+                        raise ValidationError(
+                            f"Restore SKU {sku.our_ref} before assigning this quote to another customer"
+                        )
             quote.customer_id = customer.id
         if data.notes is not None:
             quote.notes = data.notes
@@ -317,6 +327,7 @@ class QuotesService:
         allow_discount: bool,
         previous_lines: Optional[list[QuoteLine]] = None,
     ) -> tuple[list[QuoteLine], Decimal, Decimal, Decimal]:
+        await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
         models: list[QuoteLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -329,6 +340,10 @@ class QuotesService:
             prior = next((row for row in unmatched if row.sku_id == sku.id), None)
             if prior is None:
                 assert_sku_sellable(sku)
+            elif sku.is_archived and line.qty > prior.qty:
+                raise ValidationError(
+                    f"Restore SKU {sku.our_ref} before increasing an existing order quantity"
+                )
             if prior is not None:
                 unmatched.remove(prior)
             unit_ex, warning = await self._line_unit_ex_vat(

@@ -21,6 +21,7 @@ class LocationStockResponse(BaseModel):
 
 
 class InventorySkuResponse(BaseModel):
+    is_archived: bool
     sku_id: uuid.UUID
     our_ref: str
     name: str

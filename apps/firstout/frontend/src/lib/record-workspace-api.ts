@@ -1,6 +1,7 @@
 import { apiFetch } from "./api";
 
 export type WorkspaceResource =
+  | "skus"
   | "customers"
   | "suppliers"
   | "price-lists"
@@ -66,8 +67,8 @@ export interface WorkspacePreflightRequest extends WorkspaceSelection {
 }
 export interface WorkspacePreflight {
   preflight_token: string;
-  eligible: { id: string; label: string }[];
-  blocked: { id: string; label: string; reason: string }[];
+  eligible: { id: string; label: string; warnings?: string[] }[];
+  blocked: { id: string; label: string; reason: string; warnings?: string[]; dependencies?: { id: string; label: string }[] }[];
   eligible_count: number;
   blocked_count: number;
 }

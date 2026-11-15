@@ -73,6 +73,10 @@ def validate_patch(resource: str, patch: dict, editable: frozenset[str]) -> dict
 async def blocked_reason(
     db: AsyncSession, resource: str, action: str, row, count: int, patch: dict
 ):
+    if resource == "skus":
+        from app.services.sku_archive import SkuArchiveService
+
+        return (await SkuArchiveService(db).impact(row.id, action)).reason
     if action == "edit":
         if getattr(row, "is_archived", False):
             return "Restore this record before editing it"
@@ -129,7 +133,11 @@ async def apply_action(
     patch: dict,
     actor: uuid.UUID,
 ) -> None:
-    if resource == "customers":
+    if resource == "skus":
+        from app.services.sku_archive import SkuArchiveService
+
+        await SkuArchiveService(db).set_archived(record_id, action == "archive", actor)
+    elif resource == "customers":
         service = CustomersCrmService(db)
         if action == "edit":
             await service.update(record_id, CustomerCrmUpdate.model_validate(patch), actor)

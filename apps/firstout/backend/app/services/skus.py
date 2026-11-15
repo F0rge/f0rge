@@ -104,25 +104,30 @@ class SkuService:
         offset: int = 0,
         q: Optional[str] = None,
         preferred_supplier_id: Optional[uuid.UUID] = None,
+        lifecycle: str = "active",
     ) -> Union[list[SkuResponse], SkuListPage]:
         category = _blank_to_none(category)
         q = _blank_to_none(q)
         if limit is None:
             skus = await self.crud.list_all(
-                category=category, q=q, preferred_supplier_id=preferred_supplier_id
+                category=category,
+                q=q,
+                preferred_supplier_id=preferred_supplier_id,
+                lifecycle=lifecycle,
             )
             return await self._to_responses(skus, user_id)
         skus, total = await self.crud.list_filtered(
             category=category,
             q=q,
             preferred_supplier_id=preferred_supplier_id,
+            lifecycle=lifecycle,
             limit=limit,
             offset=offset,
         )
         return SkuListPage(
             items=await self._to_responses(skus, user_id),
             total=total,
-            categories=await self.crud.list_categories(),
+            categories=await self.crud.list_categories(lifecycle=lifecycle),
         )
 
     async def list_unit_costs(
@@ -132,6 +137,7 @@ class SkuService:
         category: Optional[str] = None,
         q: Optional[str] = None,
         preferred_supplier_id: Optional[uuid.UUID] = None,
+        lifecycle: str = "active",
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> SkuUnitCostPage:
@@ -141,6 +147,7 @@ class SkuService:
             category=category,
             q=q,
             preferred_supplier_id=preferred_supplier_id,
+            lifecycle=lifecycle,
             limit=limit,
             offset=offset,
         )
@@ -161,9 +168,14 @@ class SkuService:
     async def update(
         self, sku_id: uuid.UUID, data: SkuUpdate, user_id: Optional[uuid.UUID] = None
     ) -> SkuResponse:
+        from app.services.sku_archive import SkuArchiveService
+
+        await SkuArchiveService(self.db).lock_skus([sku_id])
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
+        if sku.is_archived:
+            raise ConflictError("Restore the SKU before editing it")
 
         fields_set = data.model_fields_set
 
@@ -303,9 +315,16 @@ class SkuService:
         return (await self._to_responses([reloaded], user_id))[0]
 
     async def delete(self, sku_id: uuid.UUID) -> None:
+        from app.services.sku_archive import SkuArchiveService
+
+        await SkuArchiveService(self.db).lock_skus([sku_id])
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
+        if sku.is_archived:
+            raise ConflictError(
+                "Archived SKUs are retained with their history; restore the SKU instead"
+            )
         try:
             await self.crud.delete_and_commit(sku)
         except IntegrityError as exc:
@@ -362,9 +381,14 @@ class SkuService:
     async def upload_photo(
         self, sku_id: uuid.UUID, file: UploadFile, user_id: Optional[uuid.UUID] = None
     ) -> SkuResponse:
+        from app.services.sku_archive import SkuArchiveService
+
+        await SkuArchiveService(self.db).lock_skus([sku_id])
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
+        if sku.is_archived:
+            raise ConflictError("Restore the SKU before editing its photo")
 
         raw_bytes = await file.read()
         if not raw_bytes:
@@ -463,6 +487,9 @@ class SkuService:
     ) -> SkuResponse:
         return SkuResponse(
             is_sellable=sku.is_sellable,
+            is_archived=sku.is_archived,
+            archived_at=sku.archived_at,
+            archived_by_id=sku.archived_by_id,
             id=sku.id,
             our_ref=sku.our_ref,
             our_barcode=sku.our_barcode,

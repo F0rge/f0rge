@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
@@ -27,6 +27,7 @@ async def list_skus(
     offset: int = Query(default=0, ge=0),
     q: Optional[str] = None,
     preferred_supplier_id: Optional[uuid.UUID] = None,
+    lifecycle: Literal["active", "archived", "all"] = "active",
     user_id: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ):
@@ -37,6 +38,7 @@ async def list_skus(
         offset=offset,
         q=q,
         preferred_supplier_id=preferred_supplier_id,
+        lifecycle=lifecycle,
     )
 
 
@@ -47,6 +49,7 @@ async def list_sku_unit_costs(
     offset: int = Query(default=0, ge=0),
     q: Optional[str] = None,
     preferred_supplier_id: Optional[uuid.UUID] = None,
+    lifecycle: Literal["active", "archived", "all"] = "active",
     user_id: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ):
@@ -55,6 +58,7 @@ async def list_sku_unit_costs(
         category=category,
         q=q,
         preferred_supplier_id=preferred_supplier_id,
+        lifecycle=lifecycle,
         limit=limit,
         offset=offset,
     )

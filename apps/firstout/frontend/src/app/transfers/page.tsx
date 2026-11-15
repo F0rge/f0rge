@@ -82,7 +82,7 @@ function skuItemToString(item: Sku | null): string {
   if (!item) {
     return "";
   }
-  return `${item.our_ref} — ${item.name}`;
+  return `${item.our_ref} — ${item.name}${item.is_archived ? " (Archived)" : ""}`;
 }
 
 function shouldFilterSku({
@@ -185,7 +185,7 @@ export default function TransfersPage() {
     try {
       const [locationData, skuData, inventoryData, transferData] = await Promise.all([
         listLocations(),
-        listSkus(),
+        listSkus({ lifecycle: "all" }),
         listInventory(),
         listTransfers(),
       ]);

@@ -1,13 +1,16 @@
 "use client";
 
 import {
+  Checkbox,
   InlineNotification,
+  Link,
   Modal,
   Select,
   SelectItem,
   TextInput,
 } from "@carbon/react";
 import { useState } from "react";
+import { ApiError } from "@/lib/api";
 import { bulkPatch, type BulkFieldChange } from "@/lib/record-workspace";
 import {
   executeWorkspace,
@@ -48,6 +51,10 @@ export function WorkspaceBulkDialog({
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const skuArchive = resource === "skus" && operation.action === "archive";
+  const hasWarnings = preview?.eligible.some((item) => item.warnings?.length) ?? false;
+  const needsAcknowledgement = !!preview && (preview.blocked_count > 0 || (skuArchive && hasWarnings));
   const editing = operation.action === "edit";
   const destructive = operation.action === "delete";
   const change = (field: string, patch: Partial<BulkFieldChange>) => {
@@ -56,6 +63,7 @@ export function WorkspaceBulkDialog({
       [field]: { ...(current[field] ?? { mode: "keep", value: "" }), ...patch },
     }));
     setPreview(null);
+    setAcknowledged(false);
     setRequestId(null);
     setError(null);
   };
@@ -75,6 +83,7 @@ export function WorkspaceBulkDialog({
           ...(patch ? { patch } : {}),
         });
         setPreview(next);
+        setAcknowledged(false);
         setRequestId(crypto.randomUUID());
       } else if (requestId) {
         const next = await executeWorkspace(
@@ -88,6 +97,11 @@ export function WorkspaceBulkDialog({
         );
       }
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setPreview(null);
+        setRequestId(null);
+        setAcknowledged(false);
+      }
       setError(
         err instanceof Error
           ? err.message
@@ -108,7 +122,7 @@ export function WorkspaceBulkDialog({
     <Modal
       open
       modalHeading={`${operation.label} ${operation.count} record${operation.count === 1 ? "" : "s"}`}
-      modalLabel="Review changes"
+      modalLabel="Confirm changes"
       primaryButtonText={primary}
       secondaryButtonText={result ? undefined : "Cancel"}
       danger={destructive && !result}
@@ -117,6 +131,7 @@ export function WorkspaceBulkDialog({
         (!!preview &&
           !result &&
           (preview.eligible_count === 0 ||
+            (needsAcknowledgement && !acknowledged) ||
             (destructive && confirmation !== "DELETE")))
       }
       onRequestClose={() => {
@@ -190,7 +205,11 @@ export function WorkspaceBulkDialog({
           <p>
             {destructive
               ? "Permanent deletion is limited to records the server confirms are eligible. This cannot be undone."
-              : "Records retain their details and history. Review eligibility before applying this operation."}
+              : skuArchive
+                ? "Archived SKUs are hidden from new sales, purchasing, reorders and kit selection. Stock, existing commitments and past records are kept. Archiving does not correct stock or cancel orders."
+                : resource === "skus"
+                  ? "Restore the same SKU with its details and history. Its sales setting stays unchanged, and it will not be republished online."
+                  : "Records retain their details and history. Check eligibility before applying this operation."}
           </p>
         )}
         {preview && !result && (
@@ -221,16 +240,50 @@ export function WorkspaceBulkDialog({
               {preview.eligible.map((item) => (
                 <li key={item.id}>
                   <span>{item.label}</span>
-                  <span>Eligible</span>
+                  <span>
+                    Eligible
+                    {item.warnings?.map((warning) => (
+                      <p key={warning}>{warning}</p>
+                    ))}
+                  </span>
                 </li>
               ))}
               {preview.blocked.map((item) => (
                 <li key={item.id}>
                   <span>{item.label}</span>
-                  <span>{item.reason}</span>
+                  <span>
+                    {item.reason}
+                    {resource === "skus" && item.dependencies?.map((dependency) => (
+                      <p key={dependency.id}>
+                        <Link href={`/catalogue/${dependency.id}`}>
+                          Open {dependency.label}
+                        </Link>
+                      </p>
+                    ))}
+                  </span>
                 </li>
               ))}
             </ul>
+            {skuArchive && hasWarnings && (
+              <InlineNotification
+                kind="warning"
+                title="Stock or existing work will remain"
+                subtitle="Existing orders, picks and transfers can finish at their agreed quantities. Stocktakes, stock corrections and returns remain available. Adding units or copying into a new order requires restoring first."
+                hideCloseButton
+                lowContrast
+              />
+            )}
+            {needsAcknowledgement && preview.eligible_count > 0 && (
+              <Checkbox
+                id={`${resource}-eligible-acknowledgement`}
+                checked={acknowledged}
+                disabled={busy}
+                onChange={(_, { checked }) => setAcknowledged(checked)}
+                labelText={preview.blocked_count > 0
+                  ? `Change only the ${preview.eligible_count} eligible records; leave blocked records unchanged${skuArchive && hasWarnings ? ". I understand that stock and existing commitments remain" : ""}.`
+                  : "I understand that archiving does not remove stock or cancel existing commitments."}
+              />
+            )}
             {destructive && (
               <TextInput
                 id="workspace-delete-confirm"
