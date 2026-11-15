@@ -23,13 +23,18 @@ from app.commands.release_migrate import (
     POLICY,
     MigrationRefused,
     load_policy,
-    migrate,
+    migrate as run_migration,
     plan_pending,
 )
 from app.services.release_readiness import release_readiness
 
 pytestmark = pytest.mark.no_db
 COMMIT = "a" * 40
+
+
+async def migrate(*args, **kwargs):
+    """Own disposable fixtures may use their migration owner; CLI may not."""
+    return await run_migration(*args, allow_test_runtime_owner=True, **kwargs)
 
 
 def baseline(url: str, revision: str = "089_merge_record_workspaces") -> None:
@@ -165,8 +170,22 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
                     f"CREATE ROLE \"{name}\" LOGIN PASSWORD '{password}' NOSUPERUSER NOBYPASSRLS"
                 )
             )
+            # Production grants defaults for future business tables. A new
+            # metadata table inherits these unless the runner removes them.
+            await conn.execute(
+                sa.text(
+                    f'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "{name}"'
+                )
+            )
+            await conn.execute(
+                sa.text(f'GRANT INSERT, UPDATE, DELETE ON TABLE alembic_version TO "{name}"')
+            )
+            await conn.execute(
+                sa.text(f'GRANT UPDATE (version_num) ON TABLE alembic_version TO "{name}"')
+            )
         receipt = await migrate(url, runtime_url, COMMIT)
         assert receipt["migration_receipt"] is True
+        assert (await migrate(url, runtime_url, COMMIT))["replayed"] is True
         monkeypatch.setenv("SOURCE_COMMIT", COMMIT)
         readiness = await release_readiness(runtime)
         assert readiness.status_code == 200
@@ -195,14 +214,137 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
                 )
                 is True
             )
-            with pytest.raises(sa.exc.DBAPIError):
-                await conn.execute(sa.text("DELETE FROM release_migration_receipts"))
+            for statement in (
+                "DELETE FROM release_migration_receipts",
+                "UPDATE alembic_version SET version_num=version_num",
+            ):
+                with pytest.raises(sa.exc.DBAPIError):
+                    async with conn.begin_nested():
+                        await conn.execute(sa.text(statement))
+        async with admin.begin() as conn:
+            await conn.execute(sa.text("CREATE TABLE metadata_acl_business_fixture (id integer)"))
+            assert (
+                await conn.scalar(
+                    sa.text(
+                        "SELECT has_table_privilege(:role,'metadata_acl_business_fixture','INSERT')"
+                    ),
+                    {"role": name},
+                )
+                is True
+            )
     finally:
         await runtime.dispose()
         async with admin.begin() as conn:
             await conn.execute(sa.text(f'DROP OWNED BY "{name}"'))
             await conn.execute(sa.text(f'DROP ROLE "{name}"'))
         await admin.dispose()
+
+
+@pytest.mark.parametrize(
+    "inherited_via", ["public", "group", "set-role", "column", "owner", "group-owner"]
+)
+async def test_metadata_write_inheritance_refuses_without_altering_shared_grants(
+    second_postgres_url: str, inherited_via: str
+) -> None:
+    url = second_postgres_url
+    baseline(url)
+    admin = create_async_engine(url)
+    suffix = uuid.uuid4().hex[:12]
+    role, group, password = "cd_app_" + suffix, "cd_group_" + suffix, uuid.uuid4().hex
+    runtime_url = (
+        make_url(url).set(username=role, password=password).render_as_string(hide_password=False)
+    )
+    try:
+        async with admin.begin() as conn:
+            inherit = "NOINHERIT" if inherited_via == "set-role" else "INHERIT"
+            await conn.execute(
+                sa.text(
+                    f"CREATE ROLE \"{role}\" LOGIN PASSWORD '{password}' {inherit} NOSUPERUSER NOBYPASSRLS"
+                )
+            )
+            if inherited_via in ("group", "set-role", "column", "group-owner"):
+                await conn.execute(sa.text(f'CREATE ROLE "{group}" NOLOGIN'))
+                await conn.execute(sa.text(f'GRANT "{group}" TO "{role}"'))
+                if inherited_via == "group-owner":
+                    await conn.execute(sa.text(f'ALTER TABLE alembic_version OWNER TO "{group}"'))
+                    await conn.execute(
+                        sa.text(f'REVOKE ALL PRIVILEGES ON TABLE alembic_version FROM "{group}"')
+                    )
+                elif inherited_via == "column":
+                    await conn.execute(
+                        sa.text(f'GRANT UPDATE (version_num) ON TABLE alembic_version TO "{group}"')
+                    )
+                else:
+                    await conn.execute(
+                        sa.text(f'GRANT UPDATE ON TABLE alembic_version TO "{group}"')
+                    )
+            elif inherited_via == "public":
+                await conn.execute(sa.text("GRANT UPDATE ON TABLE alembic_version TO PUBLIC"))
+            elif inherited_via == "owner":
+                await conn.execute(sa.text(f'ALTER TABLE alembic_version OWNER TO "{role}"'))
+                await conn.execute(
+                    sa.text(f'REVOKE ALL PRIVILEGES ON TABLE alembic_version FROM "{role}"')
+                )
+        with pytest.raises(MigrationRefused, match="write access to release metadata"):
+            await migrate(url, runtime_url, COMMIT)
+        async with admin.begin() as conn:
+            assert (
+                await conn.scalar(sa.text("SELECT version_num FROM alembic_version"))
+                == "089_merge_record_workspaces"
+            )
+            assert (
+                await conn.scalar(sa.text("SELECT to_regclass('release_migration_receipts')"))
+                is None
+            )
+            if inherited_via in ("group", "set-role"):
+                assert (
+                    await conn.scalar(
+                        sa.text("SELECT has_table_privilege(:role,'alembic_version','UPDATE')"),
+                        {"role": group},
+                    )
+                    is True
+                )
+            elif inherited_via == "column":
+                assert (
+                    await conn.scalar(
+                        sa.text(
+                            "SELECT has_column_privilege(:role,'alembic_version','version_num','UPDATE')"
+                        ),
+                        {"role": group},
+                    )
+                    is True
+                )
+            elif inherited_via in ("owner", "group-owner"):
+                assert await conn.scalar(
+                    sa.text(
+                        "SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid='alembic_version'::regclass"
+                    )
+                ) == (role if inherited_via == "owner" else group)
+            else:
+                assert (
+                    await conn.scalar(
+                        sa.text(
+                            "SELECT EXISTS (SELECT 1 FROM pg_class c, LATERAL aclexplode(c.relacl) a WHERE c.oid='alembic_version'::regclass AND a.grantee=0 AND a.privilege_type='UPDATE')"
+                        )
+                    )
+                    is True
+                )
+    finally:
+        async with admin.begin() as conn:
+            await conn.execute(sa.text(f'DROP OWNED BY "{role}"'))
+            await conn.execute(sa.text(f'DROP ROLE "{role}"'))
+            if inherited_via in ("group", "set-role", "column", "group-owner"):
+                await conn.execute(sa.text(f'DROP OWNED BY "{group}"'))
+                await conn.execute(sa.text(f'DROP ROLE "{group}"'))
+        await admin.dispose()
+
+
+async def test_production_runner_rejects_owner_runtime_even_on_named_test_database(
+    second_postgres_url: str,
+) -> None:
+    baseline(second_postgres_url)
+    with pytest.raises(MigrationRefused, match="owner write access"):
+        await run_migration(second_postgres_url, second_postgres_url, COMMIT)
 
 
 async def test_separate_session_lock_timeout_does_not_mutate(second_postgres_url: str) -> None:
