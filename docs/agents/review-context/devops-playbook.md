@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Existing app commands and safety rules remain applicable. Release authorization follows P-006’s Firstout CD scope and per-release approval requirement for other apps. Keep auto-merge disabled.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
 
 # Delivery and DevOps Review Playbook
 

@@ -33,7 +33,7 @@ An approved exception needs a link to Leo's explicit approval, scope and any con
 | [P-002 — Default stack and migrations](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-002) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-003 — ADR assessment on every PR](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-003) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-004 — Automated architecture checks](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-004) | No | Not assessed | Not assessed | Complete assessment. |
-| [P-005 — Independent review](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-005) | No | Not assessed | Not assessed | Complete assessment. |
+| [P-005 — Human review and automatic squash merge](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-005) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-006 — Production release authorization](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-006) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-007 — Repository agent profiles](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-007) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-008 — Brief and mockup before substantial work](https://github.com/F0rge/f0rge/blob/main/docs/adr/product.md#p-008) | No | Not assessed | Not assessed | Complete assessment. |

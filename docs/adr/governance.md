@@ -65,12 +65,13 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Policy status:** Accepted
 - **Temporary ID:** P-005
 - **Category:** Governance
-- **Decision:** Independent agent review plus CI, not the implementing agent alone.
-- **Proposed enforcement (not installed):** Separate reviewer receives diff, full ADR appendix and test artifacts; records findings and unresolved risks. CI independently computes mechanical results.
-- **Gate and limit:** Review evidence + required tests. AI review is fallible/advisory evidence, not a security boundary or substitute for an authorized approval.
+- **Decision:** Independent agent review and required CI accompany Leo's personal review of the code. Leo is the sole required code owner. Agent-prepared PRs default to GitHub's native automatic squash merge after his approval and all GitHub requirements pass; another merge confirmation is not required unless the task withholds merge authorization.
+- **Amendment (15 November 2026):** Leo requested removal of Luis from required approvers and automatic squash merging after Leo's review. This replaces the earlier blanket prohibition on auto-merge. App-authored PRs let Leo review without being their author; agents never submit the required human approval through Leo's account.
+- **Enforcement:** The App authors the PR; the existing authorized GitHub CLI identity requests native squash auto-merge with the expected current head checked when arming it. Effective protected-main rules must require Leo's code-owner review, dismiss stale approvals when reviewable code changes, require successful checks and resolved threads, and allow no bypass. Independent review receives the diff, complete ADR assessment and test evidence; CI independently computes mechanical results. The publisher App remains separate and cannot push or merge contents.
+- **Gate and limit:** The head check applies when auto-merge is armed, not an immutable lease on its eventual merge SHA. GitHub may retain approval for unchanged-diff rebases or empty commits; do not promise fresh review after every SHA change. Native GitHub requirements govern the queued merge. Activation requires the global sole-owner file on protected `main` and verified settings/rules; source policy and a working bot alone do not establish it. AI review never substitutes for Leo's personal review. Production authorization remains governed by P-006.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** CI aggregate job ci. No required human or independent-reviewer check. No CODEOWNERS file.
-- **Implementation:** Pending. This record does not claim the decision is built.
-- **Assessment label:** gap (read-only assessment, not a gate).
+- **Implementation:** Publisher identity and human-review smoke are verified separately from the prepared ownership/default-merge changes; activation evidence belongs in the [publisher guide](../agents/github-publisher.md). This policy amendment does not arm any PR for merging.
+- **Assessment label:** partial.
 - **Risk noted in that assessment:** high.
 - **Approved exception:** None.
 
@@ -79,7 +80,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Policy status:** Accepted
 - **Temporary ID:** P-006
 - **Category:** Governance
-- **Decision:** Firstout uses continuous deployment: reviewed merges to `main` with successful required checks authorize the dedicated Firstout pipeline to release the exact tested backend/frontend images and compatible database migrations, including automatic application rollback. Other apps still require Leo's explicit approval for every production release. Auto-merge remains disabled.
+- **Decision:** Firstout uses continuous deployment: reviewed merges to `main` with successful required checks authorize the dedicated Firstout pipeline to release the exact tested backend/frontend images and compatible database migrations, including automatic application rollback. Other apps still require Leo's explicit approval for every production release. Review and automatic squash merging follow P-005; merging another app does not authorize its deployment.
 - **Amendment (15 November 2026):** Leo requested automatic deployment for Firstout, then explicitly requested implementation of the pipeline and ADR updates. This standing authorization is limited to the Firstout project/production environment and reviewed pipeline; it does not authorize arbitrary operator deployments, destructive database recovery, host changes or other apps.
 - **Enforcement:** Firstout releases bind the successful main CI run, source SHA, immutable image digests, migration policy and fixed target. Deploy credentials are isolated to its production job; failed/ambiguous releases pause further deployment until reconciled. Other apps retain their protected per-release approval requirements. Implementation and activation evidence are recorded separately in the [Firstout CD runbook](../../.github/deploy/firstout-cd.md).
 - **Gate and limit:** Firstout requires reviewed main provenance, mandatory successful tests, exact artifact/serving-version verification, one release at a time and durable recovery state. Its production environment has no per-release human approval once bootstrapped. Missing credentials, backup evidence or required configuration stop the release. Other apps require Leo approval bound to their commit/artifact/target. This ADR change does not itself configure provider credentials or activate a deployment.

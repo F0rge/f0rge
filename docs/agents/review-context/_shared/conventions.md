@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Release authorization follows P-006: Firstout uses its dedicated CD path; other apps require Leo’s explicit per-release approval. Keep auto-merge disabled; manual production operations require task authorization.
+> Canonical decisions: [`docs/adr/README.md`](../../../adr/README.md). Follow [P-005](../../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
 
 # Shared Conventions — All Reviewers
 
@@ -74,7 +74,7 @@ Read root and applicable nested `AGENTS.md`, the shared protocol, relevant ADRs,
 
 - Trunk-based: pull requests go to `main`. A remote `develop` ref may still exist; block any PR targeting it. It is not an approved long-lived branch.
 - Short-lived branches off `main`: `feat/…`, `fix/…`, `chore/…`, `docs/…`, `refactor/…`, `test/…`, `hotfix/…`.
-- PRs into `main` only, `.github/workflows/ci.yml` green, squash merge after review. P-006 limits automatic release authorization to the dedicated Firstout CD pipeline. Do not enable auto-merge.
+- PRs into `main` only; follow P-005 for human review, required checks and default native squash auto-merge. Follow P-006 separately for release authorization. A no-merge task leaves its PR unarmed.
 - Hotfixes are ordinary PRs into `main`.
 - Do not direct-push to `main`. A personal-config exception is not a production release approval.
 

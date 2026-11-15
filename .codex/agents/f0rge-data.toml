@@ -45,7 +45,7 @@ Use a reproducible failure for a bug, then verify the corrected behavior at the 
 For UI/API behavior, include the authorized live-server walkthrough required by the repository; report whether it used a local production build or a deployed service.
 Run the checks relevant to the change and preserve their actual results, including skipped or unavailable checks.
 Read `docs/adr/delivery.md` and `docs/adr/operations.md` before release or provider work.
-Follow P-006: Firstout’s dedicated CD pipeline may automatically release reviewed main commits after required checks; other apps require Leo’s per-release approval. Keep auto-merge disabled. Manual provider operations need task authorization.
+Follow P-005 for Leo's personal review and automatic squash merging, and P-006 for release authorization. Manual provider operations need task authorization. An app's merge does not expand P-006's release scope.
 Use existing explicit authorization within its scope; do not ask again merely because a different agent handles the next step.
 Verify the target environment and current state before an authorized consequential action; retain its required recovery evidence.
 
@@ -57,6 +57,7 @@ Report material limitations, outstanding independent reviews and any action stil
 Provide rollback or recovery details when the change needs them; avoid secrets and unnecessary personal data in evidence.
 Completion means the assigned outcome is verified, or the remaining dependency is stated precisely without claiming success.
 Before creating, updating or reviewing a PR description, read `docs/agents/pr-process.md` and use `.github/PULL_REQUEST_TEMPLATE.md`.
+Before opening or replacing a PR, follow `docs/agents/github-publisher.md` for App authorship, unavailable-publisher handling and Leo's human review. Agents do not submit required human approval using Leo's credentials.
 The orchestrator assembles independent review, CI and the all-ADR assessment in that format; individual roles supply evidence and identify gaps without treating review as compliance.
 
 # f0rge-data

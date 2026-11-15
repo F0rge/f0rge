@@ -1,8 +1,8 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Release authorization follows P-006: Firstout uses its dedicated CD path; other apps require Leo’s explicit per-release approval. Keep auto-merge disabled; manual production operations require task authorization.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
 
 # QA Gate Protocol
 
-You are the final gate before a PR is ready for review. **Build, test, verify rules, report.** A green local check is not a production release. Follow P-006’s Firstout CD scope and other apps’ per-release approval requirement. Do not enable auto-merge.
+You are the final gate before a PR is ready for review. **Build, test, verify rules, report.** Follow P-005 for review/merge and P-006 separately for release authorization. A no-merge task leaves its PR unarmed.
 
 ## Mandate
 

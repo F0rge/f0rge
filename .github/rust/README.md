@@ -123,5 +123,5 @@ published or promoted, and no provider credential is used.
 
 Before any app adoption, complete its approved brief and pilot prerequisites.
 Every PR uses [the PR process](../../docs/agents/pr-process.md), including the
-full named ADR assessment with actual gaps. Leo's separate production-release
-approval remains required; keep auto-merge disabled.
+full named ADR assessment with actual gaps. Release authorization follows P-006;
+review and automatic squash merging follow P-005.
