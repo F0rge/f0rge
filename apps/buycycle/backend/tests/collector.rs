@@ -368,3 +368,143 @@ async fn calculation_reads_one_repeatable_snapshot_during_concurrent_atomic_publ
     drop(db);
     support::drop_database(&base, &name).await;
 }
+#[tokio::test]
+async fn echoed_feed_credentials_are_redacted_before_every_retained_and_derived_payload() {
+    use diesel::{
+        sql_query,
+        sql_types::{Jsonb, Text, Uuid as SqlUuid},
+    };
+    use diesel_async::RunQueryDsl;
+    const SECRET: &str = "synthetic-active-feed-credential-never-retain";
+    const SECONDARY: &str = "synthetic-secondary-authorization-never-retain";
+    #[derive(diesel::QueryableByName)]
+    struct Snapshot {
+        #[diesel(sql_type=Jsonb)]
+        payload: serde_json::Value,
+        #[diesel(sql_type=Text)]
+        source_kind: String,
+        #[diesel(sql_type=SqlUuid)]
+        run_id: uuid::Uuid,
+    }
+    #[derive(diesel::QueryableByName)]
+    struct Metadata {
+        #[diesel(sql_type=Jsonb)]
+        metadata: serde_json::Value,
+    }
+    for split in [false, true] {
+        let (db, base, name) = support::database().await;
+        let mut feed: serde_json::Value = serde_json::from_str(&candidate_feed()).unwrap();
+        feed["request_metadata"] = json!({"key":SECRET,"url":format!("https://example.test/?key={SECRET}"),"headers":{"authorization":format!("Bearer {SECONDARY}")},"echo":[[format!("before-{SECRET}-after")]]});
+        feed["response"]["business_key_holder"] = json!({"key":"keep-this-business-model-key"});
+        for item in feed["response"]["results"].as_array_mut().unwrap() {
+            item["value"] = json!(format!("Synthetic Carbon 50 Wheelset {SECRET}"));
+            item["data"]["description"] = json!(format!("Unrelated descriptive text {SECRET}"));
+            item["data"]["specifications"] = json!({"key":"keep-this-specification-key","business_note":format!("A business value echoing {SECRET}"),"nested":[{"echo":SECRET}]});
+        }
+        let product = json!({"id":"cheap","slug":"cheap","price":1000,"country":"Germany","country_id":150,"seller":{"member_since":format!("2020 {SECRET}")},"request":{"authorization":SECONDARY},"key":"keep-this-product-model-key","images":[]});
+        let full = serde_json::to_string(&product).unwrap();
+        let mut html = format!("<!-- outer echo {SECRET} -->");
+        if split {
+            let boundary = full.find(SECRET).unwrap() + SECRET.len() / 2;
+            for chunk in [&full[..boundary], &full[boundary..]] {
+                html.push_str(&format!(
+                    "self.__next_f.push([1,{}])</script>",
+                    serde_json::to_string(chunk).unwrap()
+                ));
+            }
+        } else {
+            html.push_str(&format!(
+                "self.__next_f.push([1,{}])</script>",
+                serde_json::to_string(&full).unwrap()
+            ));
+        }
+        let source = FakeSource::new(vec![
+            SourceResponse {
+                status: 200,
+                body: feed.to_string(),
+            },
+            SourceResponse {
+                status: 200,
+                body: html,
+            },
+        ]);
+        collect(&db, &source, SECRET, vec![Kind::Wheels])
+            .await
+            .unwrap();
+        let mut connection = db.connection().await.unwrap();
+        let snapshots = sql_query(
+            "SELECT payload,source_kind,run_id FROM source_snapshots ORDER BY recorded_at",
+        )
+        .load::<Snapshot>(&mut connection)
+        .await
+        .unwrap();
+        let metadata = sql_query("SELECT metadata FROM collector_runs")
+            .load::<Metadata>(&mut connection)
+            .await
+            .unwrap();
+        for snapshot in &snapshots {
+            let text = snapshot.payload.to_string();
+            assert!(!text.contains(SECRET));
+            assert!(!text.contains(SECONDARY));
+        }
+        for row in metadata {
+            let text = row.metadata.to_string();
+            assert!(!text.contains(SECRET));
+            assert!(!text.contains(SECONDARY));
+            assert_eq!(row.metadata["source_redaction_version"], 1);
+        }
+        let retained_feed = &snapshots
+            .iter()
+            .find(|r| r.source_kind == "feed")
+            .unwrap()
+            .payload;
+        assert_eq!(
+            retained_feed["response"]["business_key_holder"]["key"],
+            "keep-this-business-model-key"
+        );
+        assert_eq!(
+            retained_feed["response"]["results"][0]["data"]["specifications"]["key"],
+            "keep-this-specification-key"
+        );
+        assert!(
+            retained_feed["request_metadata"]["key"]
+                .as_str()
+                .unwrap()
+                .contains("REDACTED")
+        );
+        assert!(
+            retained_feed["request_metadata"]["headers"]["authorization"]
+                .as_str()
+                .unwrap()
+                .contains("REDACTED")
+        );
+        for table in ["listing", "price_history", "detail", "runs", "country_map"] {
+            for row in db.rows(table).await.unwrap() {
+                let text = row.to_string();
+                assert!(!text.contains(SECRET));
+                assert!(!text.contains(SECONDARY));
+            }
+        }
+        let listings = db.listings("wheels").await.unwrap();
+        assert_eq!(listings.len(), 4);
+        assert_eq!(db.rows("price_history").await.unwrap().len(), 4);
+        assert!(listings.iter().any(|r| r["price"] == 1000));
+        let detail = db.rows("detail").await.unwrap().remove(0);
+        assert!(
+            detail["member_since"]
+                .as_str()
+                .unwrap()
+                .contains("REDACTED")
+        );
+        let replay = buycycle_backend::collector::replay(&db, snapshots[0].run_id, false)
+            .await
+            .unwrap();
+        let text = replay.to_string();
+        assert!(!text.contains(SECRET));
+        assert!(!text.contains(SECONDARY));
+        assert_eq!(replay["mode"], "original_replay");
+        drop(connection);
+        drop(db);
+        support::drop_database(&base, &name).await;
+    }
+}

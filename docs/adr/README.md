@@ -56,7 +56,7 @@ Every pull request into `main` follows [the PR process](../agents/pr-process.md)
 | P-007 | Repository agent profiles | Accepted | Codex is the supported repository coding harness, with canonical shared instructions and generated role profiles. | [P-007](governance.md#p-007) |
 | P-008 | Brief and mockup before substantial work | Accepted | Before an app or substantial feature: agree a short brief, testable outcomes and clickable mockup with Leo. | [P-008](product.md#p-008) |
 | P-009 | Design all user states | Accepted | Design and test loading, empty, error, denied, success and edit-conflict states. | [P-009](product.md#p-009) |
-| P-010 | Holiday explorer pilot | Accepted | Implement Buycycle first; holiday-explorer pilot follows later. No off-platform deployment. | [P-010](product.md#p-010) |
+| P-010 | Buycycle first, pilot later | Accepted | Implement Buycycle first; holiday-explorer pilot follows later. No off-platform deployment. | [P-010](product.md#p-010) |
 | P-011 | Rust backends | Accepted | Rust for new backends; transition existing Python/FastAPI backends gradually. | [P-011](backend.md#p-011) |
 | P-012 | Actix Web HTTP framework | Accepted | Actix Web is the default Rust HTTP framework, not Axum. | [P-012](backend.md#p-012) |
 | P-013 | Diesel PostgreSQL ORM | Accepted | Diesel is the PostgreSQL ORM; asynchronous integration is the planned direction. | [P-013](backend.md#p-013) |

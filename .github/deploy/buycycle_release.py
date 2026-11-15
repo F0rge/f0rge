@@ -52,6 +52,7 @@ TESTS = frozenset(
         "health_commit",
         "running_image_identity",
         "log_redaction",
+        "restricted_runtime_role",
     }
 )
 RECEIPTS = ("migration", "restore", "provider")

@@ -548,5 +548,81 @@
   {
     "path": "libs/rust/unclassified/src/lib.rs",
     "error": "Unclassified path"
+  },
+  {
+    "path": "apps/buycycle/ops/backup.py",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-data",
+      "f0rge-security",
+      "f0rge-devops",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "apps/buycycle/backend/src/persistence.rs",
+    "owner": "f0rge-data",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-data",
+      "f0rge-security",
+      "f0rge-devops",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "apps/buycycle/migration/rehearse_restore.py",
+    "owner": "f0rge-data",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-data",
+      "f0rge-security",
+      "f0rge-devops",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/rust/identity/src/lib.rs",
+    "owner": "f0rge-backend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-security",
+      "f0rge-delivery"
+    ]
+  },
+  {
+    "path": "libs/primer/src/index.tsx",
+    "owner": "f0rge-frontend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-frontend",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/buycycle/frontend/src/api.ts",
+    "owner": "f0rge-frontend",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-frontend",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "apps/buycycle/ops/project.json",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-backend",
+      "f0rge-data",
+      "f0rge-security",
+      "f0rge-devops",
+      "f0rge-delivery"
+    ]
   }
 ]

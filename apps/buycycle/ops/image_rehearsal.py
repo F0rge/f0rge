@@ -86,7 +86,7 @@ def main() -> None:
         command("docker", "run", "-d", "--name", name, "--label", "com.f0rge.fixture=buycycle-image", *options)
         containers.append(name)
 
-    def db_binary(binary: str) -> None:
+    def db_binary(binary: str, *arguments: str) -> None:
         command(
             "docker",
             "run",
@@ -94,13 +94,12 @@ def main() -> None:
             "--network",
             "container:" + anchor,
             "-e",
-            "DATABASE_URL=postgres://postgres:synthetic-image-only@127.0.0.1:5432/buycycle_rehearsal",
-            "-e",
-            "MIGRATION_DATABASE_URL=postgres://postgres:synthetic-image-only@127.0.0.1:5432/buycycle_rehearsal",
+            "MIGRATION_DATABASE_URL=postgres://buycycle_migrator:synthetic-migrator-image-only@127.0.0.1:5432/buycycle_rehearsal",
             "-e",
             "BUYCYCLE_LOCAL_SEED=1",
             image,
             binary,
+            *arguments,
         )
 
     try:
@@ -109,12 +108,32 @@ def main() -> None:
         postgres = "buycycle-test-pg-" + suffix
         start(postgres, "--network", "container:" + anchor, "-e", "POSTGRES_PASSWORD=synthetic-image-only", "-e", "POSTGRES_DB=buycycle_rehearsal", "postgres:17-bookworm")
         for _ in range(120):
-            ready = subprocess.run(["docker", "exec", postgres, "pg_isready", "-U", "postgres", "-d", "buycycle_rehearsal"], capture_output=True, check=False)
+            ready = subprocess.run(["docker", "exec", postgres, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "buycycle_rehearsal"], capture_output=True, check=False)
             if ready.returncode == 0:
                 break
             time.sleep(0.5)
         else:
             raise RuntimeError("Synthetic PostgreSQL readiness timed out")
+        # The exact app image must work with the production privilege split,
+        # rather than a superuser fixture masking missing runtime grants.
+        subprocess.run(
+            ["docker", "exec", "-i", postgres, "psql", "-U", "postgres", "-d", "buycycle_rehearsal", "-v", "ON_ERROR_STOP=1"],
+            input="""
+CREATE ROLE buycycle_runtime LOGIN PASSWORD 'synthetic-runtime-image-only';
+CREATE ROLE buycycle_migrator LOGIN PASSWORD 'synthetic-migrator-image-only';
+REVOKE ALL ON DATABASE buycycle_rehearsal FROM PUBLIC;
+GRANT CONNECT ON DATABASE buycycle_rehearsal TO buycycle_runtime, buycycle_migrator;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO buycycle_runtime;
+GRANT USAGE, CREATE ON SCHEMA public TO buycycle_migrator;
+ALTER DEFAULT PRIVILEGES FOR ROLE buycycle_migrator IN SCHEMA public GRANT SELECT ON TABLES TO buycycle_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE buycycle_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO buycycle_runtime;
+""",
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
         fixture = "buycycle-test-access-" + suffix
         start(
             fixture,
@@ -141,7 +160,7 @@ def main() -> None:
             time.sleep(0.2)
         else:
             raise RuntimeError("Synthetic Access fixture did not start")
-        db_binary("migrate")
+        db_binary("migrate", "--grant-runtime")
         db_binary("seed")
         app = "buycycle-test-app-" + suffix
         start(
@@ -160,7 +179,7 @@ def main() -> None:
             "--cpus",
             "1",
             "-e",
-            "DATABASE_URL=postgres://postgres:synthetic-image-only@127.0.0.1:5432/buycycle_rehearsal",
+            "DATABASE_URL=postgres://buycycle_runtime:synthetic-runtime-image-only@127.0.0.1:5432/buycycle_rehearsal",
             "-e",
             "BUYCYCLE_ENV=local",
             "-e",
@@ -194,10 +213,11 @@ def main() -> None:
         assert running["Image"] == info["Id"], "Running image differs from tested candidate"
         log_result = subprocess.run(["docker", "logs", app], capture_output=True, text=True, check=True)
         logs = log_result.stdout + log_result.stderr
-        for marker in ["synthetic-image-only", "owner@example.test", "BEGIN PRIVATE KEY"]:
+        for marker in ["synthetic-image-only", "synthetic-runtime-image-only", "synthetic-migrator-image-only", "owner@example.test", "BEGIN PRIVATE KEY"]:
             assert marker not in logs, "Sensitive fixture value appeared in app logs"
         tests["running_image_identity"] = True
         tests["log_redaction"] = True
+        tests["restricted_runtime_role"] = True
         output.mkdir(parents=True, exist_ok=True, mode=0o700)
         archive = output / "image.tar"
         command("docker", "save", "--output", str(archive), image)

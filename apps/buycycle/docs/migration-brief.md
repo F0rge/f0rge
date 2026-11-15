@@ -118,8 +118,8 @@ and timezone behavior before moving calculations to Rust. Keep these invariants:
 
 1. Review this mockup and agree the final journey/state matrix and measurable
    acceptance criteria with Leo (P-008/P-009).
-2. Verify holiday-explorer pilot evidence or complete that pilot before broader
-   platform adoption (P-010); Buycycle does not silently replace it.
+2. Follow Leo's updated P-010 sequencing: implement Buycycle first and perform
+   the holiday-explorer pilot later. The original pilot prerequisite is superseded.
 3. Establish Rust/Nx affected CI, small shared Rust plumbing, actual shared Primer
    React bricks/Storybook/form adapters, and generated Rust contracts/clients.
    Classify new library paths in the routing manifest before implementation.
@@ -132,9 +132,11 @@ and timezone behavior before moving calculations to Rust. Keep these invariants:
    The existing no-domain constraint is not changed by this slice. Any later
    route change needs an approved design preserving private reachability.
 
-The identity vendor, Rust contract/client generator, Diesel asynchronous adapter,
-shared Primer package seam, and measured freshness/resource/recovery/retention
-values need evidence and a recorded decision at their implementation stage.
+The implementation now uses Cloudflare Access email-code login, utoipa/OpenAPI
+with generated TypeScript/openapi-fetch, diesel-async and `libs/primer`. See
+[the work plan](adr-migration-plan.md) and [Ops readiness](ops-readiness.md) for
+tested behavior and remaining live gates. Measured production freshness,
+resource, recovery and retention targets still need release evidence.
 C-001/C-002 remain conditional; neither Zod nor a particular testing toolkit is
 adopted by this design draft. A new heavyweight scheduler or Airflow is not
 required for the single daily app job.

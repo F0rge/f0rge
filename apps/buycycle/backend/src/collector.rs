@@ -382,7 +382,7 @@ pub async fn collect<S: Source>(
             continue;
         }
         let run = Uuid::new_v4();
-        sql_query("INSERT INTO collector_runs(id,day,kind,complete,metadata) VALUES($1,$2,$3,false,$4)").bind::<SqlUuid,_>(run).bind::<Date,_>(gate.day).bind::<Text,_>(kind.as_str()).bind::<Jsonb,_>(json!({"processing_version":COLLECTOR_VERSION,"build_sha":option_env!("BUYCYCLE_SOURCE_COMMIT").unwrap_or("unreleased"),"mode":"collection"})).execute(&mut gate.connection).await?;
+        sql_query("INSERT INTO collector_runs(id,day,kind,complete,metadata) VALUES($1,$2,$3,false,$4)").bind::<SqlUuid,_>(run).bind::<Date,_>(gate.day).bind::<Text,_>(kind.as_str()).bind::<Jsonb,_>(json!({"processing_version":COLLECTOR_VERSION,"source_redaction_version":crate::redaction::VERSION,"build_sha":option_env!("BUYCYCLE_SOURCE_COMMIT").unwrap_or("unreleased"),"mode":"collection"})).execute(&mut gate.connection).await?;
         let existing = db.listings(kind.as_str()).await?;
         let old: HashMap<String, Value> = existing
             .into_iter()
@@ -415,6 +415,7 @@ pub async fn collect<S: Source>(
                         break 'feeds;
                     }
                 };
+                let payload = crate::redaction::source(payload, api_key)?;
                 snapshot(&mut gate.connection, run, &kind, "feed", payload.clone()).await?;
                 let Some(response) = payload.get("response") else {
                     complete = false;
@@ -580,6 +581,7 @@ pub async fn collect<S: Source>(
                         continue;
                     }
                 };
+                let body = crate::redaction::detail_html(&body, api_key)?;
                 snapshot(&mut gate.connection, run, &kind, "detail", json!(body)).await?;
                 let mut detail = match parse_detail(&body, &candidate.id, &slug, &today) {
                     Ok(d) => d,
@@ -659,28 +661,26 @@ pub fn parse_detail(
             .map_err(|_| CollectionError::Incomplete)?;
         full.push_str(&decoded)
     }
-    let needle = format!(
-        "\"slug\":{},\"price\"",
-        serde_json::to_string(slug).map_err(|_| CollectionError::Incomplete)?
-    );
-    let start = full
-        .find(&needle)
-        .and_then(|p| full[..p].rfind("{\"id\""))
-        .ok_or(CollectionError::Incomplete)?;
-    let mut stream = serde_json::Deserializer::from_str(&full[start..]).into_iter::<Value>();
-    let object = stream
-        .next()
-        .ok_or(CollectionError::Incomplete)?
-        .map_err(|_| CollectionError::Incomplete)?;
-    if object.get("id").and_then(identifier).as_deref() != Some(id)
-        || object.get("slug").and_then(Value::as_str) != Some(slug)
-        || object
-            .get("price")
-            .and_then(Value::as_f64)
-            .is_none_or(|p| !p.is_finite() || p < 0.)
-    {
-        return Err(CollectionError::Incomplete);
+    fn product(value: &Value, id: &str, slug: &str) -> Option<Value> {
+        if value.get("id").and_then(identifier).as_deref() == Some(id)
+            && value.get("slug").and_then(Value::as_str) == Some(slug)
+            && value
+                .get("price")
+                .and_then(Value::as_f64)
+                .is_some_and(|p| p.is_finite() && p >= 0.)
+        {
+            return Some(value.clone());
+        }
+        match value {
+            Value::Array(values) => values.iter().find_map(|v| product(v, id, slug)),
+            Value::Object(values) => values.values().find_map(|v| product(v, id, slug)),
+            _ => None,
+        }
     }
+    let object = crate::redaction::fragments(&full)?
+        .iter()
+        .find_map(|value| product(value, id, slug))
+        .ok_or(CollectionError::Incomplete)?;
     let seller = object.get("seller").unwrap_or(&Value::Null);
     Ok(
         json!({"id":id,"fetched":today,"status":object.get("status"),"can_buy":i32::from(object.get("can_buy_product").and_then(Value::as_bool).unwrap_or(false)),"country":object.get("country"),"country_id":object.get("country_id"),"city":object.get("city"),"seller_reviews":seller.get("user_reviews_count"),"seller_rating":seller.get("avg_rating"),"member_since":seller.get("member_since"),"listings":null,"n_images":object.get("images").and_then(Value::as_array).map(Vec::len),"shipping":null,"bp":null,"total":object.get("total_with_fee_short").and_then(|t|t.get("total_price")),"badge":object.get("price_badge").and_then(|b|b.get("text_value"))}),
@@ -705,6 +705,7 @@ pub fn processing_digest() -> String {
         include_str!("contracts.rs"),
         include_str!("services.rs"),
         include_str!("collector.rs"),
+        include_str!("redaction.rs"),
         include_str!("../Cargo.lock"),
     ] {
         hash.update(source.as_bytes());
