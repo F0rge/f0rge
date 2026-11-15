@@ -9,7 +9,8 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Policy status:** Accepted
 - **Temporary ID:** P-035
 - **Category:** Security
-- **Decision:** Two auth modes: private approved-person access and customer accounts.
+- **Decision:** Apps choose an auth mode appropriate to their users. Personal approved-person apps may use Cloudflare Access with email one-time-code login; multi-user/customer apps may use Clerk. Each app records its choice and enforces verified backend identity and permissions.
+- **Decision update (15 November 2026):** Leo selected Cloudflare Access email-code login for Buycycle and explicitly allowed Clerk for more multi-user apps. This is an app choice, not a requirement to migrate all existing authentication immediately. A protected gateway must prevent origin bypass; signed Access assertions must be verified for the app audience and approved identity. No production route or release is authorized by this policy update.
 - **Proposed enforcement (not installed):** Schema-checked app auth-mode declaration; shared adapter interface and integration fixtures test allowed/denied/expired sessions for the chosen mode.
 - **Gate and limit:** Config + test + review: auth-mode matrix. Do not elevate Clerk or a particular Access product into a repo-wide vendor mandate without confirmed selection.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** App tests assert cookie names. No inventory schema validates the mode. A Firstout test rejects the string ht_session in that app.

@@ -1,0 +1,62 @@
+{
+  "name": "f0rge-identity",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "tags": [
+    "platform:rust",
+    "scope:shared"
+  ],
+  "implicitDependencies": [
+    "f0rge-api-errors"
+  ],
+  "targets": {
+    "format-check": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": [
+        "rust",
+        "^rust"
+      ],
+      "outputs": [],
+      "options": {
+        "command": "node .github/rust/run-target.mjs format-check libs/rust/identity"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": [
+        "rust",
+        "^rust"
+      ],
+      "outputs": [],
+      "options": {
+        "command": "node .github/rust/run-target.mjs lint libs/rust/identity"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": [
+        "rust",
+        "^rust"
+      ],
+      "outputs": [],
+      "options": {
+        "command": "node .github/rust/run-target.mjs test libs/rust/identity"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": [
+        "rust",
+        "^rust"
+      ],
+      "outputs": [],
+      "options": {
+        "command": "node .github/rust/run-target.mjs build libs/rust/identity"
+      }
+    }
+  }
+}

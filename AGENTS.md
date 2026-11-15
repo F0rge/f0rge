@@ -39,7 +39,7 @@ Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `z
 Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. These are provider configuration references; current runtime state has not been checked for this release-hold change. The proposed GitHub release entry points perform no deployment or production smoke. See [README.md](README.md#cicd), [`docs/agents/rules/infra.md`](docs/agents/rules/infra.md), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
 ## apps/buycycle
 
-Internal buycycle deal-finder dashboards on the Pi (Coolify, ports 8095/8096, no domain). See [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md). Public repo: never commit its DBs, data or feed key.
+Private Buycycle deal finder on the Pi. Legacy Coolify ports 8095/8096 remain the running inventory; the unreleased Rust/PostgreSQL/React migration adds verified Cloudflare Access and protected artifact promotion. Read [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md) for source boundaries, safe local checks and release gates. Public repo: never commit its DBs, data or feed key.
 
 ## apps/environment-monitor
 
@@ -139,7 +139,7 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Codex review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
 
-Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. The pinned toolchain and required Rust CI job provide build/test plumbing; they do not implement Buycycle's backend or satisfy the holiday-explorer pilot prerequisite.
+Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. Build/test plumbing alone does not prove app or release compliance. P-010 now sequences the authorized Buycycle migration before the later holiday-explorer pilot.
 
 ## Project rules
 

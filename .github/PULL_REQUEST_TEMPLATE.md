@@ -38,7 +38,7 @@ An approved exception needs a link to Leo's explicit approval, scope and any con
 | [P-007 — Repository agent profiles](https://github.com/F0rge/f0rge/blob/main/docs/adr/governance.md#p-007) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-008 — Brief and mockup before substantial work](https://github.com/F0rge/f0rge/blob/main/docs/adr/product.md#p-008) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-009 — Design all user states](https://github.com/F0rge/f0rge/blob/main/docs/adr/product.md#p-009) | No | Not assessed | Not assessed | Complete assessment. |
-| [P-010 — Holiday explorer pilot](https://github.com/F0rge/f0rge/blob/main/docs/adr/product.md#p-010) | No | Not assessed | Not assessed | Complete assessment. |
+| [P-010 — Buycycle first, pilot later](https://github.com/F0rge/f0rge/blob/main/docs/adr/product.md#p-010) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-011 — Rust backends](https://github.com/F0rge/f0rge/blob/main/docs/adr/backend.md#p-011) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-012 — Actix Web HTTP framework](https://github.com/F0rge/f0rge/blob/main/docs/adr/backend.md#p-012) | No | Not assessed | Not assessed | Complete assessment. |
 | [P-013 — Diesel PostgreSQL ORM](https://github.com/F0rge/f0rge/blob/main/docs/adr/backend.md#p-013) | No | Not assessed | Not assessed | Complete assessment. |

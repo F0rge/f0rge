@@ -12,6 +12,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 /// Stable machine-readable classifications, independent of application rules.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
@@ -19,6 +20,7 @@ pub enum ErrorCode {
     Unauthenticated,
     Forbidden,
     NotFound,
+    MethodNotAllowed,
     Conflict,
     InternalError,
 }
@@ -30,6 +32,7 @@ impl ErrorCode {
             Self::Unauthenticated => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::NotFound => StatusCode::NOT_FOUND,
+            Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             Self::Conflict => StatusCode::CONFLICT,
             Self::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -41,6 +44,7 @@ impl ErrorCode {
             Self::Unauthenticated => "Authentication is required.",
             Self::Forbidden => "You do not have permission to perform this action.",
             Self::NotFound => "The requested resource was not found.",
+            Self::MethodNotAllowed => "This request method is not allowed.",
             Self::Conflict => "The resource changed. Refresh and try again.",
             Self::InternalError => "An unexpected error occurred.",
         }
@@ -48,6 +52,7 @@ impl ErrorCode {
 }
 
 /// Only fixed field-error messages are published; input values are never held.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FieldErrorCode {
@@ -72,6 +77,7 @@ impl FieldErrorCode {
 /// Each segment starts with a letter or underscore and continues with letters,
 /// digits or underscores. Use schema paths, not submitted keys, IDs or values.
 /// Array indices and bracket notation are intentionally unsupported.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct FieldError {
     field: &'static str,
@@ -113,13 +119,15 @@ impl fmt::Display for InvalidFieldPath {
 
 impl std::error::Error for InvalidFieldPath {}
 
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Serialize)]
-struct ErrorEnvelope {
-    error: ErrorBody,
+pub struct ErrorEnvelope {
+    pub error: ErrorBody,
 }
 
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Serialize)]
-struct ErrorBody {
+pub struct ErrorBody {
     code: ErrorCode,
     message: &'static str,
     error_id: Uuid,
@@ -163,6 +171,10 @@ impl ApiError {
 
     pub fn not_found() -> Self {
         Self::new(ErrorCode::NotFound, Vec::new())
+    }
+
+    pub fn method_not_allowed() -> Self {
+        Self::new(ErrorCode::MethodNotAllowed, Vec::new())
     }
 
     pub fn conflict() -> Self {

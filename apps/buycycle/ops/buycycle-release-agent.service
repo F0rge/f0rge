@@ -1,0 +1,31 @@
+[Unit]
+Description=Verified Buycycle artifact promotion agent
+After=docker.service tailscaled.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+# This trusted control-plane process is privileged; the app never receives it.
+User=root
+LoadCredential=github_token:/etc/buycycle-release/github_token
+Environment=DOCKER_CONFIG=/etc/buycycle-release/docker
+Environment=DOCKER_HOST=unix:///run/docker.sock
+ExecStart=/usr/bin/python3 /opt/f0rge/apps/buycycle/ops/release-agent.py --policy /etc/buycycle-release/policy.json
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/buycycle-release /run/docker.sock
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+MemoryMax=256M
+CPUQuota=25%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
