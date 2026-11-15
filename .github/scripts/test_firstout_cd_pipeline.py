@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -197,6 +198,18 @@ class WorkflowBoundaryTests(unittest.TestCase):
         dockerfile = (ROOT / "apps/firstout/backend/Dockerfile").read_text()
         self.assertIn("org.opencontainers.image.revision=$SOURCE_COMMIT", dockerfile)
         self.assertIn("ENV SOURCE_COMMIT=$SOURCE_COMMIT", dockerfile)
+
+    def test_manual_and_automatic_release_probes_use_same_postgres_major(self):
+        manual = (ROOT / ".github/scripts/firstout-api-container-smoke.py").read_text()
+        automatic = (ROOT / ".github/scripts/firstout-cd-containers.mjs").read_text()
+        # Both paths exercise production-shaped migrations. Catch independent
+        # fixture-version drift; the live-version match still needs provider
+        # inspection and an actual image/database compatibility rehearsal.
+        image = r'"postgres:([0-9]+)"'
+        manual_majors = set(re.findall(image, manual))
+        automatic_majors = set(re.findall(image, automatic))
+        self.assertEqual(len(manual_majors), 1)
+        self.assertEqual(automatic_majors, manual_majors)
 
 
 if __name__ == "__main__":
