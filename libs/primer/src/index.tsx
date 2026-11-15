@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+import "@primer/primitives/dist/css/primitives.css";
+import "@primer/primitives/dist/css/functional/themes/light.css";
+import "@primer/primitives/dist/css/functional/themes/dark.css";
 import { BaseStyles, ThemeProvider } from "@primer/react";
 export {
   Button,
@@ -24,7 +27,14 @@ export {
 export function PrimerProvider({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider colorMode="auto" dayScheme="light" nightScheme="dark">
-      <BaseStyles>{children}</BaseStyles>
+      <BaseStyles
+        style={{
+          backgroundColor: "var(--bgColor-default)",
+          minHeight: "100vh",
+        }}
+      >
+        {children}
+      </BaseStyles>
     </ThemeProvider>
   );
 }

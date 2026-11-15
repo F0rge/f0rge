@@ -79,13 +79,15 @@ listing or guessed observation is manufactured.
 - Seven logic/session tests cover dual-category import, repeat safety, duplicate trade
   multiplicity, conflicts, source preservation, read-only browser export, return
   calculations and unsafe-link rejection.
-- Twelve Chromium tests against the **production build** pass with synthetic API
+- Twenty-one Chromium tests against the **production build** pass with synthetic API
   boundary fixtures: denied, loading, retryable error, empty, watch/save,
   trades/costs, 409 draft retention, reviewed dual-category import, stale-preview
   refusal, unpriced-record disclosure, partial-collection warnings and slow-response
   identity switching.
-- Desktop and 375px keyboard/overflow checks pass. Axe WCAG A/AA checks passed on
-  deals, trades, costs, import and status at both widths.
+- Desktop and 375px keyboard/overflow checks pass. Forty axe WCAG A/AA scans passed on
+  all eight workspace views plus loading/denied states, in light and dark at both
+  widths. Computed contrast and actual Primer button styling also pass in each
+  scheme; the default canvas and foreground switch with the system preference.
 - Shared Primer Storybook built and its real TanStack form was exercised in a
   browser for labelling, submission and keyboard focus.
 

@@ -29,7 +29,7 @@ function Scatter({
           <svg
             className="chart"
             viewBox="0 0 640 260"
-            role="img"
+            role="group"
             aria-labelledby={id}
           >
             <title id={id}>

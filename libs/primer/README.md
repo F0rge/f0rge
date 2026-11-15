@@ -4,6 +4,17 @@
 light/dark theme. It introduces no app-specific screen or brand skin. Apps compose
 screens locally and import these shared bricks rather than competing UI engines.
 
+The shared entry point loads the required pinned Primer primitives and functional
+light/dark theme CSS. `PrimerProvider` follows the system colour scheme and gives
+its full-height `BaseStyles` surface the default Primer canvas and foreground,
+including loading and denied screens. It also works in the Storybook decorator
+without application HTML attributes. Apps initialise `data-color-mode="auto"`,
+`data-light-theme="light"` and `data-dark-theme="dark"` on their root HTML element
+so the document canvas and portals use the same defaults before React starts.
+No application palette or duplicated token values are required.
+
+See [Primer's React setup](https://primer.style/product/getting-started/react/).
+
 `@f0rge/primer/forms` supplies the shared TanStack Form `usePrimerForm` hook,
 labelled text/number/date/URL field and pending submit button. It connects field
 value/blur/change, public client/server validation messages and submit state to

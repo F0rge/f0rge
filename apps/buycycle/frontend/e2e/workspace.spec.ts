@@ -34,6 +34,171 @@ const original = (): BrowserState =>
       },
     },
   });
+
+const luminance = (value: string) => {
+  const channels = value
+    .match(/[\d.]+/g)
+    ?.slice(0, 3)
+    .map(Number);
+  if (!channels || channels.length !== 3)
+    throw new Error("Expected computed RGB color: " + value);
+  const rgb = channels.map((channel) => {
+    const v = channel / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return (
+    0.2126 * (rgb[0] ?? 0) + 0.7152 * (rgb[1] ?? 0) + 0.0722 * (rgb[2] ?? 0)
+  );
+};
+function contrastRatio(foreground: string, background: string) {
+  const a = luminance(foreground),
+    b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+test("actual Primer theme tokens style light and dark production content and controls", async ({
+  page,
+}, testInfo) => {
+  await fixture(page);
+  const observed: { scheme: string; foreground: string; background: string }[] =
+    [];
+  for (const scheme of ["light", "dark"] as const)
+    for (const width of [1280, 375]) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/?page=insights");
+      await expect(
+        page.getByRole("heading", { name: "Market insights", exact: true }),
+      ).toBeVisible();
+      const chart = page.getByRole("group", { name: /^Profit vs ROI\./ });
+      const point = chart.getByRole("link", {
+        name: /Synthetic carbon bicycle/,
+      });
+      await point.focus();
+      await expect(point).toBeFocused();
+      await expect(point).toHaveAttribute(
+        "href",
+        "https://example.invalid/bicycle",
+      );
+      await chart
+        .locator("..")
+        .getByText("Accessible data table (1)", { exact: true })
+        .click();
+      await expect(
+        chart
+          .locator("..")
+          .getByRole("link", { name: "Synthetic carbon bicycle", exact: true }),
+      ).toBeVisible();
+      const theme = await page
+        .locator('[data-component="BaseStyles"]')
+        .evaluate((element) => {
+          const effectiveBackground = (node: Element) => {
+            let current: Element | null = node;
+            while (current) {
+              const color = getComputedStyle(current).backgroundColor;
+              if (color !== "rgba(0, 0, 0, 0)" && color !== "transparent")
+                return color;
+              current = current.parentElement;
+            }
+            return "rgba(0, 0, 0, 0)";
+          };
+          const resolveToken = (token: string) => {
+            const probe = document.createElement("span");
+            probe.style.color = "var(" + token + ")";
+            element.append(probe);
+            const value = getComputedStyle(probe).color;
+            probe.remove();
+            return value;
+          };
+          const style = getComputedStyle(element),
+            heading = document.querySelector("h1"),
+            button = document.querySelector('button[aria-current="page"]'),
+            select = document.querySelector("select");
+          if (!heading || !button || !select)
+            throw new Error("Core Primer controls are missing");
+          return {
+            foregroundToken: style.getPropertyValue("--fgColor-default").trim(),
+            backgroundToken: style.getPropertyValue("--bgColor-default").trim(),
+            foreground: style.color,
+            background: effectiveBackground(element),
+            heading: getComputedStyle(heading).color,
+            button: getComputedStyle(button).color,
+            buttonBackground: effectiveBackground(button),
+            buttonRadius: getComputedStyle(button).borderRadius,
+            select: getComputedStyle(select).color,
+            selectBackground: effectiveBackground(select),
+            font: style.fontFamily,
+            expectedButtonBackground: resolveToken(
+              "--button-primary-bgColor-rest",
+            ),
+            expectedButtonForeground: resolveToken(
+              "--button-primary-fgColor-rest",
+            ),
+          };
+        });
+      observed.push({
+        scheme,
+        foreground: theme.foreground,
+        background: theme.background,
+      });
+      if (scheme === "dark")
+        expect(luminance(theme.background)).toBeLessThan(
+          luminance(theme.foreground),
+        );
+      else
+        expect(luminance(theme.background)).toBeGreaterThan(
+          luminance(theme.foreground),
+        );
+      expect(
+        theme.foregroundToken,
+        "Primer functional theme foreground must be loaded",
+      ).not.toBe("");
+      expect(
+        theme.backgroundToken,
+        "Primer functional theme background must be loaded",
+      ).not.toBe("");
+      expect(
+        theme.background,
+        "The canvas must have an explicit Primer background",
+      ).not.toBe("rgba(0, 0, 0, 0)");
+      expect(
+        contrastRatio(theme.foreground, theme.background),
+        scheme + " body contrast",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(theme.heading, theme.background),
+        scheme + " heading contrast",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(theme.button, theme.buttonBackground),
+        scheme + " primary action contrast",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(theme.select, theme.selectBackground),
+        scheme + " form control contrast",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        theme.buttonBackground,
+        scheme + " actual Primer primary background",
+      ).toBe(theme.expectedButtonBackground);
+      expect(theme.button, scheme + " actual Primer primary foreground").toBe(
+        theme.expectedButtonForeground,
+      );
+      expect(
+        theme.buttonRadius,
+        "Actual Primer button CSS must be present",
+      ).not.toBe("0px");
+      expect(theme.font).toContain("Mona Sans");
+      await page.screenshot({
+        path: testInfo.outputPath(scheme + "-" + width + ".png"),
+        fullPage: false,
+      });
+    }
+  const light = observed.find((item) => item.scheme === "light"),
+    dark = observed.find((item) => item.scheme === "dark");
+  expect(light?.background).not.toBe(dark?.background);
+  expect(light?.foreground).not.toBe(dark?.foreground);
+});
+
 const listing = {
   id: "synthetic-bike",
   kind: "bikes",
@@ -407,27 +572,85 @@ test("loading and service failure states are explicit and retry safely", async (
     page.getByRole("heading", { name: "1 matching listings" }),
   ).toBeVisible();
 });
-test("core journeys satisfy automated WCAG rules at desktop and mobile widths", async ({
+test("core journeys satisfy automated WCAG rules in both themes and viewport widths", async ({
   page,
 }) => {
+  test.setTimeout(120000);
   await fixture(page);
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 900 });
-    for (const section of ["deals", "watch", "costs", "import", "status"]) {
-      await page.goto("/?page=" + section);
-      await expect(
-        page.getByRole("heading", {
-          name: "Buycycle deal finder",
-          exact: true,
-        }),
-      ).toBeVisible();
-      const result = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
-        .analyze();
-      expect(result.violations, section + " at " + width).toEqual([]);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const section of [
+        "deals",
+        "insights",
+        "alerts",
+        "watch",
+        "costs",
+        "import",
+        "status",
+        "method",
+      ]) {
+        await page.goto("/?page=" + section);
+        await expect(
+          page.getByRole("heading", {
+            name: "Buycycle deal finder",
+            exact: true,
+          }),
+        ).toBeVisible();
+        const result = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+          .analyze();
+        expect(
+          result.violations,
+          section + " " + colorScheme + " at " + width,
+        ).toEqual([]);
+      }
     }
   }
 });
+for (const colorScheme of ["light", "dark"] as const)
+  for (const width of [1280, 375])
+    for (const state of ["loading", "denied"] as const) {
+      test(
+        "accessible " + state + " state in " + colorScheme + " at " + width,
+        async ({ page }) => {
+          await page.emulateMedia({ colorScheme });
+          await page.setViewportSize({ width, height: 900 });
+          await fixture(page, { denied: state === "denied" });
+          let release: () => void = () => undefined;
+          if (state === "loading") {
+            const waiting = new Promise<void>((resolve) => {
+              release = resolve;
+            });
+            await page.route("**/api/v1/status", async (route) => {
+              await waiting;
+              await route.fallback();
+            });
+          }
+          try {
+            await page.goto("/");
+            if (state === "loading")
+              await expect(
+                page.getByText("Loading your private workspace…"),
+              ).toBeVisible();
+            else
+              await expect(
+                page.getByRole("heading", {
+                  name: "Private Buycycle",
+                  exact: true,
+                }),
+              ).toBeVisible();
+            const result = await new AxeBuilder({ page })
+              .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+              .analyze();
+            expect(result.violations).toEqual([]);
+          } finally {
+            release();
+          }
+        },
+      );
+    }
 
 test("identity switches discard old in-flight responses, private caches and drafts", async ({
   page,

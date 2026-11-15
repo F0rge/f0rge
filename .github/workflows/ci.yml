@@ -293,6 +293,15 @@ jobs:
             fi
           fi
 
+      # Browser evidence contains only the local synthetic Buycycle fixtures.
+      - name: Retain Buycycle browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buycycle-browser-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/buycycle/frontend/test-results/
+          if-no-files-found: ignore
+
       - name: Check retained commerce image
         id: commerce-image
         env:
