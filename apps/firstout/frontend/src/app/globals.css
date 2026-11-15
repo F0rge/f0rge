@@ -920,9 +920,10 @@ body {
 .cds--modal {
   z-index: 9000;
 }
+/* Elevate popup content, never the Tooltip trigger container: background
+   pagination controls must remain below an active modal. */
 .cds--overflow-menu-options,
 .cds--popover,
-.cds--tooltip,
 .cds--menu {
   z-index: 9100;
 }

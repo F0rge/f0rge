@@ -82,6 +82,10 @@
   }
 }
 @media (max-width: 600px) {
+  .productBrowser :global(.firstout-till-picker-row) {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .productGrid {
     grid-template-columns: minmax(0, 1fr);
   }
