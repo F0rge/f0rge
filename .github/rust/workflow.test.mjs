@@ -5,6 +5,14 @@ import test from 'node:test';
 
 const workflow = fs.readFileSync(new URL('../workflows/ci.yml', import.meta.url), 'utf8');
 
+test('image job sets runner-dependent output only after a runner starts', () => {
+  const section = workflow.split('\n  buycycle-image:\n')[1]?.split('\n  ci:')[0];
+  assert.ok(section);
+  const beforeSteps = section.split('\n    steps:')[0];
+  assert.doesNotMatch(beforeSteps, /\$\{\{\s*runner\./, 'runner context is unavailable in job-level env');
+  assert.match(section, /BUYCYCLE_IMAGE_OUTPUT=\$RUNNER_TEMP\/buycycle-image/);
+});
+
 test('Buycycle browser checks run through Nx when affected or explicitly dispatched', () => {
   const section = workflow.split('      - name: Buycycle browser and accessibility checks\n')[1]?.split('\n      - name:')[0];
   assert.ok(section, 'Buycycle browser checks must be in the required frontend job');

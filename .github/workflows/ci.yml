@@ -335,7 +335,6 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
-      BUYCYCLE_IMAGE_OUTPUT: ${{ runner.temp }}/buycycle-image
       NX_DAEMON: 'false'
       NX_ISOLATE_PLUGINS: 'false'
     steps:
@@ -349,6 +348,8 @@ jobs:
       - uses: ./.github/actions/setup-node-workspace
       - uses: ./.github/actions/setup-python-uv
       - uses: docker/setup-buildx-action@v3
+      - name: Select private image output
+        run: echo "BUYCYCLE_IMAGE_OUTPUT=$RUNNER_TEMP/buycycle-image" >> "$GITHUB_ENV"
       - name: Test affected ARM64 image through Nx
         env:
           EVENT_NAME: ${{ github.event_name }}
