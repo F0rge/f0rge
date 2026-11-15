@@ -32,7 +32,7 @@ These are not decisions. Do not invent a selection.
 - How a separate Airflow project would reach app APIs. Railway private DNS does not cross projects. Do not share app databases to solve that.
 - Airflow bundle packaging and whether a git bundle pin also pins helpers, the Rust API, or retained inputs. It does not.
 - Durable queue and the lighter scheduler. Apalis was a candidate, not a standard. Diesel transaction participation is unproven because Diesel is not in the tree.
-- Repo-wide permission library and auth vendor. RBAC plus ABAC, and the two auth modes, are accepted. Clerk is not a repo-wide mandate.
+- Repo-wide permission library. RBAC plus ABAC and the two auth modes are accepted. Personal apps may choose Cloudflare Access email-code login; multi-user apps may choose Clerk (15 November update to P-035). Neither is mandatory for every app.
 - Contract and client generator. Rust definitions stay authoritative. Zod stays conditional.
 - Package-manager choice, tool versions, and Dependabot versus Renovate. Nx remains the current monorepo tool. The register does not select a new build orchestrator.
 - Numeric runtime, freshness, memory, retry, retention, backup, and recovery targets. Numbers already in scripts are not approvals.
@@ -56,7 +56,7 @@ Every pull request into `main` follows [the PR process](../agents/pr-process.md)
 | P-007 | Repository agent profiles | Accepted | Codex is the supported repository coding harness, with canonical shared instructions and generated role profiles. | [P-007](governance.md#p-007) |
 | P-008 | Brief and mockup before substantial work | Accepted | Before an app or substantial feature: agree a short brief, testable outcomes and clickable mockup with Leo. | [P-008](product.md#p-008) |
 | P-009 | Design all user states | Accepted | Design and test loading, empty, error, denied, success and edit-conflict states. | [P-009](product.md#p-009) |
-| P-010 | Holiday explorer pilot | Accepted | Use the holiday explorer as the platform pilot; no standalone off-platform deployment. | [P-010](product.md#p-010) |
+| P-010 | Holiday explorer pilot | Accepted | Implement Buycycle first; holiday-explorer pilot follows later. No off-platform deployment. | [P-010](product.md#p-010) |
 | P-011 | Rust backends | Accepted | Rust for new backends; transition existing Python/FastAPI backends gradually. | [P-011](backend.md#p-011) |
 | P-012 | Actix Web HTTP framework | Accepted | Actix Web is the default Rust HTTP framework, not Axum. | [P-012](backend.md#p-012) |
 | P-013 | Diesel PostgreSQL ORM | Accepted | Diesel is the PostgreSQL ORM; asynchronous integration is the planned direction. | [P-013](backend.md#p-013) |
@@ -81,7 +81,7 @@ Every pull request into `main` follows [the PR process](../agents/pr-process.md)
 | P-032 | TanStack Form and Primer adapters | Accepted | TanStack Form with shared, tested Primer adapters. | [P-032](frontend.md#p-032) |
 | P-033 | Authoritative backend validation | Accepted | Frontend validation helps the user; Rust validates authoritatively. Keep both coherent without assuming business/permission rules can all be generated. | [P-033](api.md#p-033) |
 | P-034 | Accessibility: WCAG 2.2 AA | Accepted | WCAG 2.2 AA target, with automated checks plus keyboard and screen-reader checks on core journeys. | [P-034](frontend.md#p-034) |
-| P-035 | Private and customer auth modes | Accepted | Two auth modes: private approved-person access and customer accounts. | [P-035](security.md#p-035) |
+| P-035 | Private and customer auth modes | Accepted | Personal apps may use Cloudflare Access email-code login; multi-user apps may use Clerk. | [P-035](security.md#p-035) |
 | P-036 | Verified identity adapters | Accepted | Use shared verified identity adapters; backend identity must be trustworthy. | [P-036](security.md#p-036) |
 | P-037 | RBAC and ABAC permissions | Accepted | Combine RBAC and ABAC as needed through shared permission mechanisms; backend checks are authoritative and tenant-scoped. | [P-037](security.md#p-037) |
 | P-038 | Tenant isolation | Accepted | Keep personal apps simple; enforce organization data isolation when agreed scope includes multiple customer organizations. | [P-038](security.md#p-038) |

@@ -76,6 +76,25 @@
   "primaryRules": [
     {
       "patterns": [
+        "apps/buycycle/backend/src/persistence.rs",
+        "apps/buycycle/backend/src/import.rs",
+        "apps/buycycle/migration/**",
+        "apps/buycycle/backend/src/bin/migrate.rs",
+        "apps/buycycle/backend/src/bin/import-legacy.rs",
+        "apps/buycycle/backend/src/bin/seed.rs"
+      ],
+      "owner": "f0rge-data",
+      "reason": "Buycycle lossless legacy import, PostgreSQL persistence and reconciliation."
+    },
+    {
+      "patterns": [
+        "apps/buycycle/ops/**"
+      ],
+      "owner": "f0rge-devops",
+      "reason": "Buycycle private runtime, backup/restore and immutable release operations."
+    },
+    {
+      "patterns": [
         "docs/adr/backend.md",
         "docs/adr/api.md"
       ],
@@ -313,7 +332,8 @@
         "apps/storefront/web/**",
         "apps/marrow/ios/**",
         "apps/buycycle/dashboard/**",
-        "apps/firstout/.superdesign/**"
+        "apps/firstout/.superdesign/**",
+        "libs/primer/**"
       ],
       "owner": "f0rge-frontend",
       "reason": "UI, UI behavior tests and shared client libraries."
@@ -669,6 +689,31 @@
       ],
       "reviewers": [
         "f0rge-security"
+      ]
+    },
+    {
+      "patterns": [
+        "apps/buycycle/backend/**",
+        "apps/buycycle/migration/**",
+        "apps/buycycle/ops/**"
+      ],
+      "reviewers": [
+        "f0rge-backend",
+        "f0rge-data",
+        "f0rge-security",
+        "f0rge-devops",
+        "f0rge-delivery"
+      ]
+    },
+    {
+      "patterns": [
+        "libs/primer/**",
+        "apps/buycycle/frontend/**"
+      ],
+      "reviewers": [
+        "f0rge-frontend",
+        "f0rge-security",
+        "f0rge-quality-testing"
       ]
     }
   ],
