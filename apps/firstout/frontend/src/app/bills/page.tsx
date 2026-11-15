@@ -34,6 +34,7 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatSettlementAmount } from "@/lib/source-history";
 import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
 
 const TABLE_HEADERS = [
@@ -220,8 +221,8 @@ export default function BillsPage() {
     issue_date: entry.issue_date,
     currency: entry.currency,
     amount_foreign: `${entry.currency} ${entry.amount_foreign}`,
-    amount_zar: formatZarAmount(entry.amount_zar),
-    balance_zar: formatZarAmount(entry.balance_zar),
+    amount_zar: entry.fx_rate_known ? formatZarAmount(entry.amount_zar) : "Not provided in source",
+    balance_zar: formatSettlementAmount(entry.balance_zar, entry.is_archive),
     payment_status: settlementStatusLabel(entry.payment_status),
     actions: entry.id,
   }));
@@ -263,6 +264,7 @@ export default function BillsPage() {
       {loading ? (
         <p className="cds--type-body-01">Loading bills…</p>
       ) : total === 0 ? (
+        <>
         <InlineNotification
           kind="info"
           title="No bills"
@@ -270,6 +272,10 @@ export default function BillsPage() {
           hideCloseButton
           lowContrast
         />
+        <p className="cds--type-body-01">
+          Imported records are available in <a className="cds--link" href="/history">Searchable history</a>.
+        </p>
+        </>
       ) : (
         <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>

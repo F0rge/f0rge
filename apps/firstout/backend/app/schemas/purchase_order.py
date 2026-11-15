@@ -8,6 +8,9 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+from app.schemas.quantity import Quantity
+
+
 class PoLineCreate(BaseModel):
     sku_id: Optional[uuid.UUID] = None
     supplier_code: Optional[str] = Field(default=None, max_length=128)
@@ -62,9 +65,11 @@ class PoLineResponse(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     needs_sku: bool = False
-    qty: int
-    factory_unit_amount: Decimal
+    qty: Quantity
+    factory_unit_amount: Optional[Decimal]
     unit_cost_zar: Optional[Decimal] = None
+    source_cost: Optional[str] = None
+    source_total: Optional[str] = None
 
 
 class LandingBillResponse(BaseModel):
@@ -75,6 +80,9 @@ class LandingBillResponse(BaseModel):
 
 
 class PurchaseOrderListItem(BaseModel):
+    is_archive: bool = False
+    source_amounts_known: bool = True
+    source_currency_known: bool = True
     id: uuid.UUID
     po_number: str
     status: str
@@ -96,6 +104,9 @@ class PurchaseOrderListItem(BaseModel):
 
 
 class PurchaseOrderResponse(BaseModel):
+    is_archive: bool = False
+    source_amounts_known: bool = True
+    source_currency_known: bool = True
     id: uuid.UUID
     po_number: str
     status: str

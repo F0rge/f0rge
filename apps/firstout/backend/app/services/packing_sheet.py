@@ -89,7 +89,7 @@ def convert_bill_to_zar(
 
 
 def compute_landed_unit_costs(
-    lines: list[tuple[int, Decimal]],
+    lines: list[tuple[Decimal, Decimal]],
     factory_zar: Decimal,
     freight_zar: Decimal,
     clearance_zar: Decimal,
@@ -112,7 +112,7 @@ def compute_landed_unit_costs(
 
 
 def sku_level_unit_cost(
-    location_stocks: list[tuple[int, Optional[Decimal]]],
+    location_stocks: list[tuple[Decimal, Optional[Decimal]]],
 ) -> Optional[Decimal]:
     """Weighted average unit cost across locations with on_hand > 0."""
     total_qty = 0

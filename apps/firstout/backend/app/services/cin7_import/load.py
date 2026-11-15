@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import datetime
 import uuid
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -60,6 +61,8 @@ from app.services.cin7_import.children import (
     upsert_children,
 )
 from app.services.cin7_import.report import EntityResult, ImportReport
+from app.services.quantities import exact_quantity
+from f0rge_core.exceptions import ValidationError
 from app.services.pricing import (
     classification_from_cin7_tier,
     customer_type_for_classification,
@@ -246,9 +249,16 @@ def _match_location(
 
 
 class Cin7Loader:
-    def __init__(self, session: AsyncSession, export_dir: Path) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        export_dir: Path,
+        *,
+        price_tiers: tuple[int, ...] = tuple(range(1, 11)),
+    ) -> None:
         self.session = session
         self.export_dir = export_dir
+        self.price_tiers = price_tiers
         self.report = ImportReport(dry_run=True)
         self.suppliers: dict[str, Supplier] = {}
         self.customers: dict[str, Customer] = {}
@@ -851,6 +861,12 @@ class Cin7Loader:
             minimum = reorder_min(row.get("MinimumBeforeReorder", ""))
             cartons = carton_count(row.get("CartonQuantity", ""))
             current = existing.get(code)
+            sellable = current.is_sellable if current is not None else True
+            source_sellable = row.get("Sellable", "").strip().lower()
+            if source_sellable:
+                if source_sellable not in {"yes", "true", "1", "no", "false", "0"}:
+                    raise ValidationError("Product Sellable must be Yes or No when provided")
+                sellable = as_bool(source_sellable)
             if current is None:
                 design = f"cin7:{code}"[:255]
                 fabric = "-"
@@ -858,6 +874,7 @@ class Cin7Loader:
                 if owner is not None and owner != code:
                     design = f"cin7:{code}-2"[:255]
                 current = Sku(
+                    is_sellable=sellable,
                     our_ref=code[:64],
                     our_barcode=barcode,
                     name=name,
@@ -880,7 +897,8 @@ class Cin7Loader:
                 _note_price_changes(self.report, None, prices)
             else:
                 same = (
-                    current.name == name
+                    current.is_sellable == sellable
+                    and current.name == name
                     and current.category == category
                     and current.supplier_ref == supplier_ref
                     and current.preferred_supplier_id == (supplier.id if supplier else None)
@@ -898,6 +916,7 @@ class Cin7Loader:
                 else:
                     _note_price_changes(self.report, current, prices)
                     current.name = name
+                    current.is_sellable = sellable
                     current.category = category
                     current.supplier_ref = supplier_ref
                     current.preferred_supplier_id = supplier.id if supplier else None
@@ -926,7 +945,7 @@ class Cin7Loader:
         existing_lists = {
             row.name: row for row in (await self.session.scalars(select(PriceList))).all()
         }
-        for tier in range(1, 11):
+        for tier in self.price_tiers:
             positives = []
             for row in rows:
                 code = row.get("ProductCode", "").strip()
@@ -1124,11 +1143,7 @@ class Cin7Loader:
                 result.skip("stock location did not match a location")
                 continue
             qty_text = row.get("Quantity", "").strip()
-            try:
-                qty = Decimal(qty_text)
-            except Exception:
-                result.skip("stock quantity is not a number")
-                continue
+            qty = exact_quantity(qty_text)
             if qty <= 0:
                 result.skip("stock quantity is not positive")
                 continue
@@ -1151,12 +1166,9 @@ class Cin7Loader:
             for row in (await self.session.scalars(select(BinStock))).all()
         }
         for (sku_id, location_id), parts in totals.items():
-            raw_qty = sum(qty for qty, _cost in parts)
-            rounded = int(raw_qty.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-            if raw_qty != raw_qty.to_integral_value():
-                result.note("on-hand rounded to an integer")
-            if rounded <= 0:
-                result.skip("rounded on-hand is 0")
+            raw_qty = exact_quantity(sum(qty for qty, _cost in parts))
+            if raw_qty <= 0:
+                result.skip("on-hand is not positive")
                 continue
             cost = _weighted_cost(parts)
             current = existing.get((sku_id, location_id))
@@ -1164,16 +1176,16 @@ class Cin7Loader:
                 current = LocationStock(
                     sku_id=sku_id,
                     location_id=location_id,
-                    on_hand=rounded,
+                    on_hand=raw_qty,
                     unit_cost_zar=cost,
                 )
                 self.session.add(current)
                 existing[(sku_id, location_id)] = current
                 result.created += 1
-            elif current.on_hand == rounded and _dec_eq(current.unit_cost_zar, cost):
+            elif current.on_hand == raw_qty and _dec_eq(current.unit_cost_zar, cost):
                 result.unchanged += 1
             else:
-                current.on_hand = rounded
+                current.on_hand = raw_qty
                 current.unit_cost_zar = cost
                 result.updated += 1
             floor = floor_bins.get(location_id)
@@ -1181,9 +1193,9 @@ class Cin7Loader:
                 continue
             bin_row = bin_rows.get((sku_id, floor.id))
             if bin_row is None:
-                self.session.add(BinStock(sku_id=sku_id, bin_id=floor.id, on_hand=rounded))
+                self.session.add(BinStock(sku_id=sku_id, bin_id=floor.id, on_hand=raw_qty))
             else:
-                bin_row.on_hand = rounded
+                bin_row.on_hand = raw_qty
         await self.session.flush()
 
     async def _load_sales_orders(self) -> None:
@@ -1401,13 +1413,13 @@ class Cin7Loader:
             subtotal = sum((line["ex_vat"] for line in built), ZERO)
             vat = sum((line["vat_amount"] for line in built), ZERO)
             total = sum((line["inc_vat"] for line in built), ZERO)
-            signature = [tuple(str(line[k]) for k in sorted(line)) for line in built]
+            signature = [tuple(line[k] for k in sorted(line)) for line in built]
             customer_id = customer.id if customer else None
             current = existing.get(number)
             if current is not None:
                 current_sig = [
                     tuple(
-                        str(v)
+                        v
                         for _k, v in sorted(
                             {
                                 "description": line.description,
@@ -1570,7 +1582,7 @@ class Cin7Loader:
                 _utc(received) if status == PurchaseOrderStatus.RECEIVED and received else None
             )
             current = existing.get(number)
-            signature = [(line["sku_id"], line["qty"], str(line["cost"])) for line in built]
+            signature = [(line["sku_id"], line["qty"], line["cost"]) for line in built]
             if current is None:
                 current = PurchaseOrder(
                     po_number=number,
@@ -1659,7 +1671,7 @@ class Cin7Loader:
                 )
             fx_known = currency == "ZAR"
             current = existing.get(number)
-            signature = [(line["description"], line["qty"], str(line["amount"])) for line in built]
+            signature = [(line["description"], line["qty"], line["amount"]) for line in built]
             if current is None:
                 current = Bill(
                     bill_number=number,
@@ -1911,14 +1923,16 @@ def _credit_lines(
 
 
 def _invoice_signature(built: list[dict[str, object]]) -> list[tuple[object, ...]]:
+    # Decimal equality ignores storage scale while retaining every significant
+    # digit. String signatures made 15.00 differ from a Numeric(16,4) reload.
     return [
         (
             line["sku_id"],
             line["qty"],
             line["description"],
-            str(line["ex_vat"]),
-            str(line["vat_amount"]),
-            str(line["inc_vat"]),
+            line["ex_vat"],
+            line["vat_amount"],
+            line["inc_vat"],
         )
         for line in built
     ]
@@ -1947,9 +1961,9 @@ def _invoice_same(
             line.sku_id,
             line.qty,
             line.description,
-            str(line.ex_vat),
-            str(line.vat_amount),
-            str(line.inc_vat),
+            line.ex_vat,
+            line.vat_amount,
+            line.inc_vat,
         )
         for line in current.lines
     ]
@@ -1995,7 +2009,7 @@ def _po_same(
     status: PurchaseOrderStatus,
     ordered_at: Optional[datetime.datetime],
     received_at: Optional[datetime.datetime],
-    signature: list[tuple[object, object, str]],
+    signature: list[tuple[object, object, object]],
 ) -> bool:
     if (
         not current.is_archive
@@ -2005,9 +2019,7 @@ def _po_same(
         or current.received_at != received_at
     ):
         return False
-    existing = sorted(
-        (line.sku_id, line.qty, str(line.factory_unit_amount)) for line in current.lines
-    )
+    existing = sorted((line.sku_id, line.qty, line.factory_unit_amount) for line in current.lines)
     return existing == sorted(signature)
 
 
@@ -2035,7 +2047,7 @@ def _bill_same(
     fx: Decimal,
     foreign: Decimal,
     amount_zar: Decimal,
-    signature: list[tuple[object, object, str]],
+    signature: list[tuple[object, object, object]],
 ) -> bool:
     if (
         not current.is_archive
@@ -2047,11 +2059,31 @@ def _bill_same(
         or not _dec_eq(current.amount_zar, amount_zar)
     ):
         return False
-    existing = [(line.description, line.qty, str(line.amount_foreign)) for line in current.lines]
+    existing = [(line.description, line.qty, line.amount_foreign) for line in current.lines]
     return existing == signature
 
 
-async def run_import(session: AsyncSession, export_dir: Path) -> ImportReport:
+async def run_import(
+    session: AsyncSession, export_dir: Path, *, price_tiers: tuple[int, ...] = tuple(range(1, 11))
+) -> ImportReport:
     """Upsert a Cin7 Core export. The caller commits or rolls back."""
-    loader = Cin7Loader(session, export_dir)
+    for directory in (export_dir, export_dir.parent):
+        if any(
+            path.name.casefold() == "stagemanifest.json"
+            for path in directory.iterdir()
+            if path.is_file()
+        ):
+            raise ValidationError(
+                "Prepared StageManifest packages require the reviewed Primavera replacement command"
+            )
+    for prefix in ("Customers_", "Suppliers_"):
+        path = find_file(export_dir, prefix, ".csv")
+        if path is not None:
+            with path.open(encoding="utf-8-sig", newline="") as handle:
+                headers = next(csv.reader(handle), [])
+            if "_stage_source_file" in headers:
+                raise ValidationError(
+                    "Prepared party masters require the reviewed Primavera replacement command"
+                )
+    loader = Cin7Loader(session, export_dir, price_tiers=price_tiers)
     return await loader.run()

@@ -195,6 +195,9 @@ class DeliveriesService:
         invoice = await self.invoice_crud.get_by_id(data.invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
+        from app.services.archive_documents import assert_operational_document
+
+        assert_operational_document(invoice)
         if invoice.amount_paid != invoice.total_inc_vat:
             raise ValidationError("Invoice is not fully paid")
 
@@ -268,6 +271,9 @@ class DeliveriesService:
         order = await self.sales_order_crud.get_by_id(data.sales_order_id)
         if order is None:
             raise NotFoundError("Sales order not found")
+        from app.services.archive_documents import assert_operational_document
+
+        assert_operational_document(order)
         if order.status == SalesOrderStatus.CANCELLED:
             raise ConflictError("Sales order is cancelled")
 

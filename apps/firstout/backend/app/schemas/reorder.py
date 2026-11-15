@@ -9,14 +9,17 @@ from pydantic import BaseModel, Field
 from app.schemas.purchase_order import PurchaseOrderResponse
 
 
+from app.schemas.quantity import QuantityTotal
+
+
 class ReorderItemResponse(BaseModel):
     sku_id: uuid.UUID
     our_ref: str
     name: str
     reorder_min: int
-    on_hand: int
-    on_order: int
-    suggested_qty: int
+    on_hand: QuantityTotal
+    on_order: QuantityTotal
+    suggested_qty: QuantityTotal
     preferred_supplier_id: Optional[uuid.UUID] = None
     preferred_supplier_name: Optional[str] = None
     last_landed_cost_zar: Optional[Decimal] = None

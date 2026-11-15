@@ -14,6 +14,7 @@ import {
   type Stocktake,
   type StocktakeLine,
 } from "@/lib/api";
+import { quantityError } from "@/lib/quantity";
 
 import { StocktakeLinesTable, type DraftQty } from "./stocktake-lines-table";
 
@@ -86,6 +87,10 @@ export function StocktakeSession({
       return;
     }
     try {
+      const error = quantityError(draft, "nonnegative");
+      if (error) {
+        throw new Error(`${line.our_ref}: ${error}`);
+      }
       const updated = await patchStocktakeLine(stocktake.id, lineId, { counted_qty: draft });
       onLinePatched(updated);
     } catch (err) {
@@ -94,6 +99,15 @@ export function StocktakeSession({
   }
 
   async function flushDrafts() {
+    for (const line of stocktake.lines) {
+      const draft = draftsRef.current[line.id];
+      if (draft !== "") {
+        const error = quantityError(draft, "nonnegative");
+        if (error) {
+          throw new Error(`${line.our_ref}: ${error}`);
+        }
+      }
+    }
     const pending = stocktake.lines.filter((line) => {
       const draft = draftsRef.current[line.id];
       return draft !== "" && draft !== line.counted_qty;

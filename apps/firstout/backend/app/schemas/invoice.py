@@ -47,6 +47,7 @@ class InvoiceLineResponse(BaseModel):
 
 
 class InvoiceListItem(BaseModel):
+    is_archive: bool
     id: uuid.UUID
     invoice_number: str
     customer_id: uuid.UUID
@@ -58,7 +59,7 @@ class InvoiceListItem(BaseModel):
     total_inc_vat: Decimal
     amount_paid: Decimal
     balance: Decimal
-    payment_status: Literal["unpaid", "partially_paid", "paid"]
+    payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -66,6 +67,7 @@ class InvoiceListItem(BaseModel):
 
 
 class InvoiceResponse(BaseModel):
+    is_archive: bool
     id: uuid.UUID
     invoice_number: str
     customer_id: uuid.UUID
@@ -77,7 +79,7 @@ class InvoiceResponse(BaseModel):
     total_inc_vat: Decimal
     amount_paid: Decimal
     balance: Decimal
-    payment_status: Literal["unpaid", "partially_paid", "paid"]
+    payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]
     reminders_paused: bool = False
     prices_include_vat: bool
     lines: list[InvoiceLineResponse]

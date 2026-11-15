@@ -13,6 +13,8 @@ describe("settlement status", () => {
     expect(settlementStatusLabel("paid")).toBe("Paid");
     expect(settlementTagType("partially_paid")).toBe("blue");
     expect(settlementTagType("paid")).toBe("green");
+    expect(settlementStatusLabel("unknown")).toBe("Not imported");
+    expect(settlementTagType("unknown")).toBe("gray");
   });
 });
 

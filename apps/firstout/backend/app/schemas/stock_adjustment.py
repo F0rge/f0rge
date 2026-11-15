@@ -10,6 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.stock_adjustment import StockAdjustmentReason, StockAdjustmentStatus
 
 
+from app.schemas.quantity import Quantity
+
+
 class StockAdjustmentCreate(BaseModel):
     location_id: uuid.UUID
     reason: StockAdjustmentReason
@@ -18,12 +21,12 @@ class StockAdjustmentCreate(BaseModel):
 
 class StockAdjustmentLineCreate(BaseModel):
     sku_id: uuid.UUID
-    qty_delta: int
+    qty_delta: Quantity
     unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
 
 
 class StockAdjustmentLineUpdate(BaseModel):
-    qty_delta: Optional[int] = None
+    qty_delta: Optional[Quantity] = None
     unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
 
 
@@ -32,10 +35,10 @@ class StockAdjustmentLineResponse(BaseModel):
     sku_id: uuid.UUID
     our_ref: str
     name: str
-    qty_delta: int
+    qty_delta: Quantity
     unit_cost_zar: Optional[Decimal]
-    current_qty: int
-    new_qty: int
+    current_qty: Quantity
+    new_qty: Quantity
 
     model_config = ConfigDict(from_attributes=True)
 

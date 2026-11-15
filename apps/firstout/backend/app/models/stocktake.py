@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import enum
 import uuid
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
@@ -11,7 +12,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
-    Integer,
+    Numeric,
     String,
     UniqueConstraint,
     text,
@@ -90,8 +91,8 @@ class StocktakeLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("skus.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    expected_qty: Mapped[int] = mapped_column(Integer, nullable=False)
-    counted_qty: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    expected_qty: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    counted_qty: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
 
     stocktake: Mapped["Stocktake"] = relationship(back_populates="lines")
     sku: Mapped["Sku"] = relationship()

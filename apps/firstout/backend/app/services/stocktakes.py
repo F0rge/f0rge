@@ -127,7 +127,7 @@ class StocktakeService:
                     delta=delta,
                     user_id=user_id,
                     source=UnitCostAuditSource.STOCKTAKE,
-                    note=f"Stocktake qty {delta:+d}",
+                    note=f"Stocktake qty {delta:+f}",
                 )
             stocktake.status = StocktakeStatus.COMPLETED
             stocktake.completed_at = datetime.datetime.utcnow()

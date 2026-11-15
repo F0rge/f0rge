@@ -65,11 +65,11 @@ class HomeService:
             recent_movements=recent_movements,
         )
 
-    async def _sum_on_order_qty(self) -> int:
+    async def _sum_on_order_qty(self) -> Decimal:
         result = await self.db.execute(select(func.coalesce(func.sum(SkuStock.on_order), 0)))
-        return int(result.scalar_one())
+        return Decimal(result.scalar_one())
 
-    async def _sum_on_hand(self) -> tuple[int, Decimal]:
+    async def _sum_on_hand(self) -> tuple[Decimal, Decimal]:
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(LocationStock.on_hand), 0),
@@ -80,7 +80,7 @@ class HomeService:
             ).where(LocationStock.on_hand > 0)
         )
         row = result.one()
-        qty = int(row[0])
+        qty = Decimal(row[0])
         value = Decimal(str(row[1])) if row[1] is not None else Decimal("0")
         return qty, value
 
@@ -92,7 +92,10 @@ class HomeService:
                 selectinload(PurchaseOrder.supplier),
             )
             .where(
-                PurchaseOrder.status.in_([PurchaseOrderStatus.ON_WATER, PurchaseOrderStatus.LANDED])
+                PurchaseOrder.is_archive.is_(False),
+                PurchaseOrder.status.in_(
+                    [PurchaseOrderStatus.ON_WATER, PurchaseOrderStatus.LANDED]
+                ),
             )
         )
         orders = list(result.scalars().all())
@@ -150,7 +153,7 @@ class HomeService:
         )
         return int(result.scalar_one())
 
-    async def _low_stock_sku_rows(self, limit: int) -> list[tuple[str, str, int]]:
+    async def _low_stock_sku_rows(self, limit: int) -> list[tuple[str, str, Decimal]]:
         totals = self._sku_on_hand_totals_subquery()
         result = await self.db.execute(
             select(Sku.name, Sku.our_ref, totals.c.total_on_hand)
@@ -160,7 +163,7 @@ class HomeService:
             .order_by(totals.c.total_on_hand, Sku.our_ref)
             .limit(limit)
         )
-        return [(row[0], row[1], int(row[2])) for row in result.all()]
+        return [(row[0], row[1], Decimal(row[2])) for row in result.all()]
 
     def _sku_on_hand_totals_subquery(self):
         return (
@@ -242,7 +245,7 @@ class HomeService:
 
     @staticmethod
     def _build_needs_attention(
-        low_stock_rows: list[tuple[str, str, int]],
+        low_stock_rows: list[tuple[str, str, Decimal]],
         stocktake_rows: list[str],
         open_returns_count: int,
         overdue_laybys_count: int,

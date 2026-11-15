@@ -39,7 +39,9 @@ class OpsCommerceCRUD:
 
     async def has_company(self, company_id: uuid.UUID) -> bool:
         return (
-            await self.db.execute(select(Team.id).where(Team.id == company_id))
+            await self.db.execute(
+                select(Team.id).where(Team.id == company_id, Team.status == "active")
+            )
         ).scalar_one_or_none() is not None
 
     async def published_products(self) -> list[PublishedSkuSnapshot]:
@@ -52,6 +54,7 @@ class OpsCommerceCRUD:
                 mapped.product_group_id == ProductGroup.id,
                 (
                     member.storefront_published.is_(False)
+                    | member.is_sellable.is_(False)
                     | (member.retail_ex_vat <= 0)
                     | member.retail_ex_vat.is_(None)
                 ),
@@ -63,7 +66,8 @@ class OpsCommerceCRUD:
                 Sku.our_ref,
                 Sku.name,
                 Sku.retail_ex_vat,
-                func.coalesce(func.sum(LocationStock.on_hand), 0),
+                # The public shop sells whole items from individual locations.
+                func.coalesce(func.sum(func.floor(func.greatest(LocationStock.on_hand, 0))), 0),
                 func.greatest(
                     Sku.updated_at,
                     func.coalesce(func.max(LocationStock.updated_at), Sku.updated_at),
@@ -85,6 +89,7 @@ class OpsCommerceCRUD:
             .outerjoin(ProductGroup, ProductGroup.id == ProductGroupVariant.product_group_id)
             .where(
                 Sku.storefront_published.is_(True),
+                Sku.is_sellable.is_(True),
                 Sku.retail_ex_vat > 0,
                 (
                     ProductGroupVariant.id.is_(None)
@@ -118,7 +123,7 @@ class OpsCommerceCRUD:
                 sku=row[1],
                 name=row[2],
                 retail_ex_vat=row[3],
-                available_quantity=max(0, row[4]),
+                available_quantity=int(max(0, row[4])),
                 revision=max(row[5], acknowledgement_revisions.get(row[0], row[5])),
                 observed_at=row[6],
                 product_group_id=row[7],

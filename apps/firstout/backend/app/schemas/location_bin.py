@@ -7,6 +7,9 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+from app.schemas.quantity import Quantity
+
+
 class BinCreate(BaseModel):
     row_code: str = Field(min_length=1, max_length=8)
     bay: int = Field(ge=1)
@@ -41,4 +44,4 @@ class LocationBinResponse(BaseModel):
 class BinOnHandResponse(BaseModel):
     bin_id: uuid.UUID
     code: str
-    on_hand: int
+    on_hand: Quantity

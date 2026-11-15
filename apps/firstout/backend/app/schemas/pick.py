@@ -9,6 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.models.pick import PickSourceType, PickStatus
 
 
+from app.schemas.quantity import Quantity
+
+
 class PickPreviewRequest(BaseModel):
     sku_id: uuid.UUID
     qty: int = Field(gt=0)
@@ -64,7 +67,7 @@ class PickAllocationResponse(BaseModel):
     location_id: uuid.UUID
     location_name: str
     qty: int
-    on_hand: int = 0
+    on_hand: Quantity = 0
 
     model_config = ConfigDict(from_attributes=True)
 

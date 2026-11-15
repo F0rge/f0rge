@@ -46,7 +46,7 @@ class BillCRUD(BaseCRUD):
         offset: int,
         q: Optional[str] = None,
     ) -> tuple[list[Bill], int]:
-        filters = []
+        filters = [Bill.is_archive.is_(False)]
         if q:
             pattern = f"%{q}%"
             filters.append(

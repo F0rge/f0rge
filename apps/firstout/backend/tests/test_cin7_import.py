@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import io
 from decimal import Decimal
 from pathlib import Path
 
@@ -29,7 +30,10 @@ from app.services.cin7_import.parse import (
     generated_barcode_rows,
     named_sku_prices,
     realign_status_row,
+    read_csv_records,
 )
+from app.services.cin7_import.children import address_payload, natural_key
+from app.models.cin7_party import CustomerAddress
 from app.services.pricing import resolve_unit_ex_vat
 
 
@@ -38,6 +42,51 @@ def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
         writer = csv.writer(handle)
         writer.writerow(header)
         writer.writerows(rows)
+
+
+def _quoted_addresses(path: Path, newline: str) -> tuple[str, str]:
+    distinct = (f'Unit "A", 1{newline}North', 'Unit "A", 1North')
+    text = io.StringIO(newline="")
+    writer = csv.writer(text, lineterminator="\r\n")
+    writer.writerow(["Name", "AddressType", "AddressLine1"])
+    writer.writerows([["Fixture Buyer", "Shipping", address] for address in distinct])
+    path.write_bytes(b"\xef\xbb\xbf" + text.getvalue().encode())
+    return distinct
+
+
+@pytest.mark.no_db
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_csv_preserves_embedded_quoted_newlines_commas_and_quotes(tmp_path, newline):
+    path = tmp_path / "CustomerAddresses.csv"
+    expected = _quoted_addresses(path, newline)
+    records, shifted = read_csv_records(path)
+    assert shifted == 0 and len(records) == 2
+    assert tuple(row["AddressLine1"] for row in records) == expected
+    assert len({natural_key(address_payload(row)) for row in records}) == 2
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+async def test_import_keeps_addresses_distinct_when_only_a_quoted_newline_differs(
+    async_db, tmp_path, newline
+):
+    export_dir = _fixture_dir(tmp_path / "export")
+    expected = _quoted_addresses(export_dir / "CustomerAddresses_fixture.csv", newline)
+    first = await run_import(async_db, export_dir)
+    await async_db.commit()
+    customer = await async_db.scalar(select(Customer).where(Customer.name == "Fixture Buyer"))
+    stored = list(
+        await async_db.scalars(
+            select(CustomerAddress).where(CustomerAddress.customer_id == customer.id)
+        )
+    )
+    assert {row.line1 for row in stored} == set(expected)
+    assert len({row.natural_key for row in stored}) == 2
+    assert first.entity("customer_address").created == 2
+    second = await run_import(async_db, export_dir)
+    await async_db.commit()
+    assert second.entity("customer_address").created == 0
+    assert second.entity("customer_address").updated == 0
+    assert second.entity("customer_address").unchanged == 2
 
 
 def _write_xlsx(path: Path, header: list[str], rows: list[list[object]]) -> None:
@@ -625,7 +674,7 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     stock = (
         await async_db.execute(select(LocationStock).where(LocationStock.sku_id == chair.id))
     ).scalar_one()
-    assert stock.on_hand == 2
+    assert stock.on_hand == Decimal("2.4")
 
     bom = (await async_db.execute(select(SkuBomLine))).scalars().all()
     assert sorted(line.qty for line in bom) == [Decimal("0.5"), Decimal("2")]
@@ -654,7 +703,7 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     ).scalar_one()
     assert purchase.is_archive is True
     assert purchase.status.value == "received"
-    assert stock.on_hand == 2
+    assert stock.on_hand == Decimal("2.4")
 
     bill = (await async_db.execute(select(Bill).where(Bill.bill_number == "BILL-1"))).scalar_one()
     assert bill.is_archive is True

@@ -259,6 +259,11 @@ export default function SkuDetailPage() {
                   Kit
                 </Tag>
               ) : null}
+              {sku && !sku.is_sellable ? (
+                <Tag type="gray" size="sm">
+                  Not for sale
+                </Tag>
+              ) : null}
             </div>
           </div>
         </div>

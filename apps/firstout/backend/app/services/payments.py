@@ -36,6 +36,7 @@ from app.services.settlement import (
     overpayment_message,
 )
 from app.services.suppliers import SupplierService
+from app.services.archive_documents import assert_operational_document
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -92,6 +93,7 @@ class PaymentService:
         invoice = await self.invoice_crud.get_by_id(data.invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
+        assert_operational_document(invoice)
 
         amount = assert_payment_cents(data.amount)
         remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
@@ -153,6 +155,7 @@ class PaymentService:
         bill = await self.bill_crud.get_by_id(data.bill_id)
         if bill is None:
             raise NotFoundError("Bill not found")
+        assert_operational_document(bill)
 
         currency = SupplierService.normalize_currency(data.currency)
         if currency != bill.currency:

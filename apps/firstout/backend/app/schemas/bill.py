@@ -8,6 +8,9 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+from app.schemas.quantity import Quantity
+
+
 class BillLineCreate(BaseModel):
     description: str = Field(min_length=1)
     qty: int = Field(gt=0)
@@ -26,7 +29,7 @@ class BillCreate(BaseModel):
 class BillLineResponse(BaseModel):
     id: uuid.UUID
     description: str
-    qty: int
+    qty: Quantity
     unit_amount: Decimal
     amount_foreign: Decimal
     sort_order: int
@@ -35,6 +38,8 @@ class BillLineResponse(BaseModel):
 
 
 class BillListItem(BaseModel):
+    is_archive: bool
+    fx_rate_known: bool
     id: uuid.UUID
     bill_number: str
     supplier_id: uuid.UUID
@@ -49,7 +54,7 @@ class BillListItem(BaseModel):
     amount_paid_foreign: Decimal
     balance_zar: Decimal
     balance_foreign: Decimal
-    payment_status: Literal["unpaid", "partially_paid", "paid"]
+    payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]
     pdf_storage_key: Optional[str]
     purchase_order_id: Optional[uuid.UUID] = None
     created_at: datetime.datetime
@@ -59,6 +64,8 @@ class BillListItem(BaseModel):
 
 
 class BillResponse(BaseModel):
+    is_archive: bool
+    fx_rate_known: bool
     id: uuid.UUID
     bill_number: str
     supplier_id: uuid.UUID
@@ -73,7 +80,7 @@ class BillResponse(BaseModel):
     amount_paid_foreign: Decimal
     balance_zar: Decimal
     balance_foreign: Decimal
-    payment_status: Literal["unpaid", "partially_paid", "paid"]
+    payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]
     pdf_storage_key: Optional[str]
     purchase_order_id: Optional[uuid.UUID] = None
     lines: list[BillLineResponse]

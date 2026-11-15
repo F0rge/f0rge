@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,9 +33,12 @@ class ArchiveCreditNote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     )
     issue_date: Mapped[datetime.date] = mapped_column(Date, nullable=False, index=True)
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="cin7")
+    cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
 
     lines: Mapped[list["ArchiveCreditNoteLine"]] = relationship(
         "ArchiveCreditNoteLine",
@@ -61,8 +64,8 @@ class ArchiveCreditNoteLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     qty: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     credit_note: Mapped[ArchiveCreditNote] = relationship(ArchiveCreditNote, back_populates="lines")

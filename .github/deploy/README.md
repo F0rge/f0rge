@@ -1,18 +1,24 @@
 # Release paths and retained holds
 
-The Firstout frontend has a narrowly scoped, operator-driven release path in
-[firstout-release.md](firstout-release.md). Its manual image workflow builds and
-tests one Linux image, records its immutable digest, and retains release
-evidence. The operator promotion helper checks that evidence and the fixed
-Firstout target before deploying the same image and verifying Railway's
-serving deployment and instance mapping. Explicit release approval is still
-required; publishing an image or creating a release tag does not grant it.
+The Firstout frontend and API have narrowly scoped, operator-driven release
+paths in [firstout-release.md](firstout-release.md). A selected closed component
+profile binds the tested immutable image artifact to its fixed Firstout service.
+The manual artifact workflow builds, tests and publishes; the promotion helper
+verifies the evidence and target, promotes that same image, and checks Railway's
+serving deployment and instance mapping. API promotion additionally requires the
+separately controlled migration head and removes only the reviewed legacy start
+and predeploy command overrides.
 
-This path does not enable automatic releases, migrate other apps, move
+Explicit approval for the selected production release is still required.
+Publication, merge, successful CI or permission to replace organisation data does
+not grant that approval. There is no fallback through a legacy source rebuild,
+`railway up` or a hotpatch if artifact verification fails.
+
+These paths do not enable automatic releases, migrate other apps, move
 production credentials into GitHub, or make the GitHub environment protect
 operator CLI access. The generic entry points and other apps remain under the
 holds below. Existing legacy credentials and alternate historical paths remain
-separate operational risks, not protections established by this release.
+separate operational risks, not protections established by these paths.
 
 ## Generic release hold and historical deploy manifest
 

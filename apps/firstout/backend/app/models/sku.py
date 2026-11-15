@@ -58,6 +58,9 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     carton_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default=text("1")
     )
+    is_sellable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     storefront_published: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

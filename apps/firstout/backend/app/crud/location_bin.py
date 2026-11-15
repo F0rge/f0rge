@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -109,7 +110,7 @@ class BinStockCRUD(BaseCRUD):
         self,
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
-    ) -> int:
+    ) -> Decimal:
         result = await self.db.execute(
             select(func.coalesce(func.sum(BinStock.on_hand), 0))
             .select_from(BinStock)
@@ -119,7 +120,7 @@ class BinStockCRUD(BaseCRUD):
                 LocationBin.location_id == location_id,
             )
         )
-        return int(result.scalar_one())
+        return Decimal(result.scalar_one())
 
     async def list_nonzero_for_skus(self, sku_ids: list[uuid.UUID]) -> list[BinStock]:
         if not sku_ids:

@@ -61,7 +61,7 @@ class TaxInvoiceCRUD(BaseCRUD):
         offset: int,
         q: Optional[str] = None,
     ) -> tuple[list[TaxInvoice], int]:
-        filters = []
+        filters = [TaxInvoice.is_archive.is_(False)]
         if q:
             pattern = f"%{q}%"
             filters.append(

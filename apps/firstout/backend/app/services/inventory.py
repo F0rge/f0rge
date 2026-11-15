@@ -32,7 +32,7 @@ class InventoryService:
         on_hand_rows = await self.location_stock_crud.list_with_on_hand()
 
         sku_by_id: dict[uuid.UUID, Sku] = {}
-        on_order_by_sku: dict[uuid.UUID, int] = {}
+        on_order_by_sku: dict[uuid.UUID, Decimal] = {}
         for row in on_order_rows:
             sku_by_id[row.sku_id] = row.sku
             on_order_by_sku[row.sku_id] = row.on_order
@@ -85,7 +85,7 @@ class InventoryService:
                     name=sku.name,
                     on_order=on_order_by_sku.get(sku.id, 0),
                     on_hand=on_hand,
-                    sellable=on_hand > 0,
+                    sellable=sku.is_sellable and on_hand > 0,
                     unit_cost_zar=unit_cost,
                     locations=locations,
                 )

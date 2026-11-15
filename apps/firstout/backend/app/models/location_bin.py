@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
@@ -11,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
     text,
@@ -91,7 +93,7 @@ class BinStock(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("location_bins.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    on_hand: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    on_hand: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False, default=0)
 
     sku: Mapped["Sku"] = relationship()
     bin: Mapped["LocationBin"] = relationship()

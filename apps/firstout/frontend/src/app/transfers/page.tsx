@@ -48,6 +48,7 @@ import {
 } from "@/lib/api";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { useAuth } from "@/lib/auth";
+import { formatQuantity, isQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 
 type ListTab = "draft" | "in_transit" | "received";
 
@@ -112,7 +113,7 @@ function lineSummary(transfer: Transfer): string {
     return "—";
   }
   return transfer.lines
-    .map((line) => `${line.qty_dispatched} × ${line.sku_our_ref}`)
+    .map((line) => `${formatQuantity(line.qty_dispatched)} × ${line.sku_our_ref}`)
     .join(", ");
 }
 
@@ -224,12 +225,14 @@ export default function TransfersPage() {
     return sourceOnHandForSku(inventoryBySku, sku.id, fromLocationId) > 0;
   });
 
+  const selectedLines = lines.filter((line) => Boolean(line.skuId));
   const formValid =
     Boolean(fromLocationId && toLocationId) &&
-    lines.some((line) => {
-      const qty = typeof line.qty === "number" ? line.qty : 0;
-      return Boolean(line.skuId) && qty > 0;
-    });
+    selectedLines.length > 0 &&
+    selectedLines.every((line) =>
+      isQuantity(line.qty) &&
+      line.qty <= sourceOnHandForSku(inventoryBySku, line.skuId, fromLocationId),
+    );
 
   const visibleTransfers = transfers.filter((entry) => {
     if (!matchesTab(entry.status, tab)) {
@@ -249,23 +252,12 @@ export default function TransfersPage() {
     if (!canXfer || !formValid) {
       return;
     }
-    const payloadLines = lines
-      .map((line) => {
-        const qty = typeof line.qty === "number" ? line.qty : 0;
-        if (!line.skuId || qty <= 0) {
-          return null;
-        }
-        return {
-          sku_id: line.skuId,
-          qty,
-          from_bin_id: optionalMovementBinId(line.fromBinId, fromDefaultBinId),
-          to_bin_id: optionalMovementBinId(line.toBinId, toDefaultBinId),
-        };
-      })
-      .filter((line): line is NonNullable<typeof line> => line !== null);
-    if (payloadLines.length === 0) {
-      return;
-    }
+    const payloadLines = selectedLines.map((line) => ({
+      sku_id: line.skuId,
+      qty: line.qty as number,
+      from_bin_id: optionalMovementBinId(line.fromBinId, fromDefaultBinId),
+      to_bin_id: optionalMovementBinId(line.toBinId, toDefaultBinId),
+    }));
     setSubmitting(true);
     setError(null);
     setSuccess(null);
@@ -438,6 +430,7 @@ export default function TransfersPage() {
               ? sourceOnHandForSku(inventoryBySku, line.skuId, fromLocationId)
               : 0;
             const numericQty = typeof line.qty === "number" ? line.qty : 0;
+            const qtyError = quantityError(line.qty);
             return (
               <Stack key={line.key} gap={4}>
                 <h3 className="cds--type-productive-heading-01">Line {index + 1}</h3>
@@ -455,7 +448,7 @@ export default function TransfersPage() {
                   helperText={
                     fromLocationId
                       ? line.skuId
-                        ? `${onHand} on hand at source`
+                        ? `${formatQuantity(onHand)} on hand at source`
                         : "Only SKUs with on-hand stock at the source are listed"
                       : "Choose a source location first"
                   }
@@ -464,13 +457,16 @@ export default function TransfersPage() {
                 <NumberInput
                   id={`transfer-line-qty-${line.key}`}
                   label="Quantity"
-                  min={1}
+                  helperText="Up to 4 decimal places."
+                  allowEmpty
+                  min={QUANTITY_STEP}
+                  step={QUANTITY_STEP}
                   value={line.qty}
                   onChange={(_event, { value }) => {
                     updateLine(line.key, { qty: value === "" ? "" : Number(value) });
                   }}
-                  invalid={numericQty > onHand && onHand > 0}
-                  invalidText={`Only ${onHand} available at source`}
+                  invalid={Boolean(line.skuId) && (Boolean(qtyError) || numericQty > onHand)}
+                  invalidText={qtyError ?? `Only ${formatQuantity(onHand)} available at source`}
                   disabled={!line.skuId}
                 />
                 {fromLocationId ? (

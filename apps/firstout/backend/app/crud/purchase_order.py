@@ -142,7 +142,11 @@ class PurchaseOrderCRUD(BaseCRUD):
         result = await self.db.execute(
             select(PoLine.sku_id, PoLine.factory_unit_amount)
             .join(PurchaseOrder, PoLine.po_id == PurchaseOrder.id)
-            .where(PoLine.sku_id.in_(sku_ids))
+            .where(
+                PoLine.sku_id.in_(sku_ids),
+                PoLine.factory_unit_amount.isnot(None),
+                PurchaseOrder.is_archive.is_(False),
+            )
             .distinct(PoLine.sku_id)
             .order_by(PoLine.sku_id, PurchaseOrder.created_at.desc())
         )
@@ -216,7 +220,7 @@ class LocationStockCRUD(BaseCRUD):
 
     async def on_hand_cost_pairs(
         self, sku_ids: list[uuid.UUID]
-    ) -> dict[uuid.UUID, list[tuple[int, Optional[Decimal]]]]:
+    ) -> dict[uuid.UUID, list[tuple[Decimal, Optional[Decimal]]]]:
         if not sku_ids:
             return {}
         result = await self.db.execute(
@@ -229,9 +233,9 @@ class LocationStockCRUD(BaseCRUD):
                 LocationStock.on_hand > 0,
             )
         )
-        grouped: dict[uuid.UUID, list[tuple[int, Optional[Decimal]]]] = {}
+        grouped: dict[uuid.UUID, list[tuple[Decimal, Optional[Decimal]]]] = {}
         for sku_id, on_hand, unit_cost in result.all():
-            grouped.setdefault(sku_id, []).append((int(on_hand), unit_cost))
+            grouped.setdefault(sku_id, []).append((Decimal(on_hand), unit_cost))
         return grouped
 
     async def list_for_sku_ids(self, sku_ids: list[uuid.UUID]) -> list[LocationStock]:

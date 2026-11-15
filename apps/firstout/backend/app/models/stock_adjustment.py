@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Integer, Numeric, Text
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, Numeric, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -95,7 +95,7 @@ class StockAdjustmentLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("skus.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    qty_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    qty_delta: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
 
     adjustment: Mapped["StockAdjustment"] = relationship(back_populates="lines")

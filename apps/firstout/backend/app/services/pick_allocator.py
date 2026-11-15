@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from dataclasses import dataclass
 from typing import Optional, Sequence
+
+from app.services.quantities import whole_available_quantity
 
 
 LOCATION_TYPE_WAREHOUSE = "warehouse"
@@ -19,7 +22,7 @@ class ComponentNeed:
 class LocationStockRow:
     location_id: uuid.UUID
     sku_id: uuid.UUID
-    on_hand: int
+    on_hand: Decimal
     location_type: str
     location_name: str
     is_archived: bool
@@ -112,7 +115,7 @@ def allocations_need_confirm(
         for row in stocks
         if row.location_type == LOCATION_TYPE_WAREHOUSE and not row.is_archived
     }
-    on_hand: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    on_hand: dict[tuple[uuid.UUID, uuid.UUID], Decimal] = {}
     for row in stocks:
         if row.is_archived:
             continue
@@ -120,7 +123,10 @@ def allocations_need_confirm(
         on_hand[key] = on_hand.get(key, 0) + max(row.on_hand, 0)
 
     for need in needs:
-        warehouse_qty = sum(on_hand.get((need.sku_id, lid), 0) for lid in warehouse_ids)
+        warehouse_qty = sum(
+            whole_available_quantity(on_hand.get((need.sku_id, lid), Decimal(0)))
+            for lid in warehouse_ids
+        )
         warehouse_alloc = sum(
             item.qty
             for item in allocations
@@ -148,7 +154,7 @@ def allocate(
     pick_priority: Sequence[uuid.UUID],
 ) -> AllocationResult:
     metas: dict[uuid.UUID, LocationMeta] = {}
-    remaining: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    remaining: dict[tuple[uuid.UUID, uuid.UUID], Decimal] = {}
     for row in stocks:
         metas[row.location_id] = LocationMeta(
             location_id=row.location_id,
@@ -168,10 +174,13 @@ def allocate(
         left = need.qty_needed
         line_allocs: list[SuggestedAllocation] = []
         for location_id in order:
-            available = remaining.get((need.sku_id, location_id), 0)
+            # Kit picks require whole units at each location. Fractional stock stays
+            # unchanged and visible; remainders at separate locations do not combine.
+            available = remaining.get((need.sku_id, location_id), Decimal(0))
+            whole_available = whole_available_quantity(available)
             if available <= 0:
                 continue
-            take = available if available < left else left
+            take = min(whole_available, left)
             if take <= 0:
                 continue
             alloc = SuggestedAllocation(

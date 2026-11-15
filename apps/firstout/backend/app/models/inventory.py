@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,7 +23,7 @@ class SkuStock(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         unique=True,
     )
-    on_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    on_order: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False, default=0)
 
     sku: Mapped["Sku"] = relationship()
 
@@ -41,7 +41,7 @@ class LocationStock(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("locations.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    on_hand: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    on_hand: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False, default=0)
     unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
 
     sku: Mapped["Sku"] = relationship()

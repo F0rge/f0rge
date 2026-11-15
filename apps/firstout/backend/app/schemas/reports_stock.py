@@ -8,20 +8,23 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+from app.schemas.quantity import Quantity, QuantityTotal
+
+
 class StockValuationLine(BaseModel):
     location_id: uuid.UUID
     location_name: str
     sku_id: uuid.UUID
     our_ref: str
     name: str
-    on_hand: int
+    on_hand: Quantity
     unit_cost_zar: Optional[Decimal]
     value_zar: Decimal
 
 
 class StockValuationReport(BaseModel):
     lines: list[StockValuationLine]
-    total_on_hand: int
+    total_on_hand: QuantityTotal
     total_value_zar: Decimal
 
 
@@ -31,7 +34,7 @@ class AgedStockLine(BaseModel):
     name: str
     location_id: uuid.UUID
     location_name: str
-    on_hand: int
+    on_hand: Quantity
     value_zar: Decimal
     days: int
     bucket: str
@@ -40,14 +43,14 @@ class AgedStockLine(BaseModel):
 class AgedStockBucket(BaseModel):
     bucket: str
     label: str
-    qty: int
+    qty: QuantityTotal
     value_zar: Decimal
     lines: list[AgedStockLine]
 
 
 class AgedStockReport(BaseModel):
     buckets: list[AgedStockBucket]
-    total_qty: int
+    total_qty: QuantityTotal
     total_value_zar: Decimal
 
 
