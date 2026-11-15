@@ -695,6 +695,12 @@ pub fn alerts(
     had_prior: bool,
 ) -> Vec<crate::contracts::Alert> {
     use crate::contracts::Alert;
+    let mut by_id = HashMap::with_capacity(raw.len());
+    for row in raw {
+        // Keep the first match, including legacy empty/non-string IDs, exactly
+        // as the previous linear lookup did. Borrow rows; normalize each ID once.
+        by_id.entry(string(row, "id")).or_insert(row);
+    }
     let mut result = Vec::new();
     for item in items {
         let Some(reference) = item.reference_price else {
@@ -703,9 +709,8 @@ pub fn alerts(
         if item.gone_at.is_some() || item.comparables < 5 {
             continue;
         }
-        let known = raw
-            .iter()
-            .find(|r| string(r, "id") == item.id)
+        let known = by_id
+            .get(item.id.as_str())
             .and_then(|r| number(r, "activated_at"))
             .is_some_and(|n| n != 0.);
         let is_new = (item.first_seen == today && had_prior) || (known && item.days_listed <= 1.5);

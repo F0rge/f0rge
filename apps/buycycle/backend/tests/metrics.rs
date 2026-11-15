@@ -301,3 +301,75 @@ fn encoded_history_matches_value_reports_and_preserves_complete_replay_input() {
         );
     }
 }
+
+#[test]
+fn alert_identity_lookup_uses_first_match_and_legacy_empty_id_normalization() {
+    let rows: Vec<_> = [700, 1100, 1200, 1300, 1400, 1500]
+        .into_iter()
+        .enumerate()
+        .map(|(i, price)| {
+            let mut row = disc(row(
+                &format!("candidate-{i}"),
+                "wheels",
+                "Zipp 303",
+                "Zipp",
+                price,
+            ));
+            row["activated_at"] = json!(now().timestamp() - 3600);
+            row
+        })
+        .collect();
+    let input = metrics::CalculationInput {
+        kind: Kind::Wheels,
+        calculated_at: now(),
+        rows,
+        details: vec![],
+        history: vec![],
+        countries: vec![],
+        runs: vec![],
+    };
+    let encoded: metrics::CalculationInput<Box<serde_json::value::RawValue>> =
+        serde_json::from_str(&serde_json::to_string(&input).unwrap()).unwrap();
+    let report = metrics::report(input);
+    assert_eq!(
+        serde_json::to_value(metrics::report_raw(encoded)).unwrap(),
+        serde_json::to_value(&report).unwrap()
+    );
+    assert!(report.alerts.iter().any(|alert| alert.id == "candidate-0"));
+    let mut item = report
+        .items
+        .into_iter()
+        .find(|item| item.id == "candidate-0")
+        .unwrap();
+    for (id, known, unknown) in [
+        (
+            "candidate-0",
+            json!({"id":"candidate-0","activated_at":1}),
+            json!({"id":"candidate-0","activated_at":0}),
+        ),
+        (
+            "",
+            json!({"id":null,"activated_at":1}),
+            json!({"id":"","activated_at":0}),
+        ),
+        (
+            "",
+            json!({"activated_at":1}),
+            json!({"id":123,"activated_at":0}),
+        ),
+    ] {
+        item.id = id.into();
+        let alerts = |raw: &[Value]| {
+            metrics::alerts(
+                std::slice::from_ref(&item),
+                &[],
+                raw,
+                &Kind::Wheels,
+                "2026-10-17",
+                false,
+            )
+        };
+        assert_eq!(alerts(&[known.clone(), unknown.clone()]).len(), 1);
+        assert!(alerts(&[unknown, known]).is_empty());
+    }
+}
