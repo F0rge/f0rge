@@ -487,17 +487,13 @@ def safe_before(name: str, state: dict[str, Any]) -> dict[str, Any]:
         "Bootstrap a verified pinned rollback image before CD activation",
     )
     require(not state["source"].get("repo"), "Mutable Git source enabled")
-    require(
-        len(previous["instances"]) == 1
-        and previous["instances"][0]["status"] == "RUNNING",
-        "Previous replica unhealthy",
-    )
+    instances = legacy.running_instance_ids(previous)
     # Deliberately never persist runtime variables, registry credentials or full config.
     return {
         "deployment_id": previous["id"],
         "digest": previous["image_digest"],
         "image": source_image,
-        "instances": [item["id"] for item in previous["instances"]],
+        "instances": instances,
     }
 
 
@@ -589,10 +585,7 @@ def observed(
         and item["image_digest"] == image.split("@")[1],
         "Wrong running image",
     )
-    require(
-        len(item["instances"]) == 1 and item["instances"][0]["status"] == "RUNNING",
-        "Replica not running",
-    )
+    instances = legacy.running_instance_ids(item)
     require(http_json(HEALTH[name]).get("status") == "ok", "Health failed")
     if ready_commit:
         ready = http_json(READY)
@@ -632,7 +625,7 @@ def observed(
     return {
         "deployment_id": item["id"],
         "digest": item["image_digest"],
-        "instances": [inst["id"] for inst in item["instances"]],
+        "instances": instances,
     }
 
 

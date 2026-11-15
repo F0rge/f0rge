@@ -136,6 +136,20 @@ class ArtifactIdentityTests(unittest.TestCase):
 
 
 class ServingEvidenceTests(unittest.TestCase):
+    def test_removed_instance_history_is_excluded_from_serving_evidence(self):
+        for profile in (release.FRONTEND, release.API):
+            with self.subTest(profile=profile.component):
+                current = state(profile)
+                current["active_deployments"][0]["instances"].insert(
+                    0, {"id": "old-job", "status": "REMOVED"}
+                )
+                self.assertEqual(
+                    release.stable_deployment(
+                        current, "sha256:" + "c" * 64, "deployment", profile
+                    ),
+                    ["replica"],
+                )
+
     def test_exact_provider_image_and_running_instance(self):
         current = state()
         self.assertEqual(
@@ -152,10 +166,18 @@ class ServingEvidenceTests(unittest.TestCase):
     def test_rejects_overlap_missing_or_unhealthy_replica(self):
         for instances in [
             [],
+            [{"id": "old-job", "status": "REMOVED"}],
             [{"id": "replica", "status": "STARTING"}],
             [
                 {"id": "replica", "status": "RUNNING"},
                 {"id": "other", "status": "RUNNING"},
+            ],
+            *[
+                [
+                    {"id": "replica", "status": "RUNNING"},
+                    {"id": "other", "status": status},
+                ]
+                for status in ("CRASHED", "PENDING", "STARTING", "REMOVING", "UNKNOWN")
             ],
         ]:
             with self.subTest(instances=instances):

@@ -94,6 +94,7 @@ class World:
         self.monitor_health_calls = 0
         self.main_reads = 0
         self.superseded = False
+        self.additional_instances = []
 
     def github(self, path, method="GET", body=None):
         self.calls.append(("github", path, method))
@@ -264,7 +265,8 @@ class World:
                     "id": f"00000000-0000-4000-8000-{int(image[-1]) + (30 if name == 'backend' else 40):012d}",
                     "status": "RUNNING",
                 }
-            ],
+            ]
+            + copy.deepcopy(self.additional_instances),
         }
         config = {
             "source": {"image": image, "autoUpdates": {"type": "disabled"}},
@@ -360,6 +362,45 @@ class CDTests(unittest.TestCase):
         self.assertEqual([call[1] for call in submissions], ["backend", "frontend"])
         self.assertEqual(submissions[0][2]["deploy"]["preDeployCommand"], [cd.MIGRATE])
         self.assertEqual(json.loads(self.path.read_text())["state"], "succeeded")
+
+    def test_removed_instance_history_does_not_block_release_or_recovery(self):
+        self.world.additional_instances = [{"id": "old-job", "status": "REMOVED"}]
+        result = cd.deploy(manifest(), self.path)
+        self.assertEqual(result["state"], "succeeded")
+        self.assertEqual(self.world.images, NEW)
+        self.assertNotIn("old-job", json.dumps(result))
+        journal = cd.read_journal(self.world.issues[0])
+        self.world.issues[0]["state"] = "open"
+        cd.recover(journal, self.path)
+        self.assertEqual(self.world.images, OLD)
+        self.assertEqual(cd.read_journal(self.world.issues[0])["state"], "rolled_back")
+
+    def test_candidate_observation_ignores_removed_instance_history(self):
+        self.world.images = copy.deepcopy(NEW)
+        self.world.database_head = "090"
+        self.world.additional_instances = [{"id": "old-job", "status": "REMOVED"}]
+        result = cd.observed(
+            "backend", NEW["backend"], ready_commit=SHA, database=manifest()["database"]
+        )
+        self.assertEqual(len(result["instances"]), 1)
+        self.assertNotIn("old-job", result["instances"])
+
+    def test_unsettled_or_unknown_instances_still_block_observation_and_baseline(self):
+        for status in (
+            "CRASHED",
+            "PENDING",
+            "STARTING",
+            "REMOVING",
+            "UNKNOWN",
+            "RUNNING",
+        ):
+            with self.subTest(status=status):
+                self.world.additional_instances = [{"id": "extra", "status": status}]
+                current = cd.provider_state("frontend")
+                with self.assertRaises(cd.ReleaseError):
+                    cd.safe_before("frontend", current)
+                with self.assertRaises(cd.ReleaseError):
+                    cd.observed("frontend", OLD["frontend"])
 
     def test_profiles_reuse_canonical_manual_release_targets(self):
         self.assertIs(cd.PROFILES["backend"], cd.legacy.API)
