@@ -24,7 +24,8 @@ def test_migration_graph_has_one_merge_head_with_both_existing_parents():
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "migrations"))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == [HEAD]
+    assert len(scripts.get_heads()) == 1
+    assert HEAD in {revision.revision for revision in scripts.walk_revisions()}
     assert scripts.get_revision(HEAD).down_revision == (
         "088_archive_sales_precision",
         "085_record_workspaces",
@@ -57,7 +58,7 @@ async def test_existing_branches_merge_without_data_or_isolation_loss(
                     sa.text("UPDATE location_stock SET on_hand=0.1250 WHERE id=:id"),
                     {"id": stock},
                 )
-        migrate(second_postgres_url, "head")
+        migrate(second_postgres_url, HEAD)
         async with engine.connect() as conn:
             assert list(await conn.scalars(sa.text("SELECT version_num FROM alembic_version"))) == [
                 HEAD
@@ -113,6 +114,6 @@ async def test_existing_branches_merge_without_data_or_isolation_loss(
             # needs host(inet) for both IPv4 and IPv6; strict IP parsing remains.
             address = await conn.scalar(sa.text("SELECT host(inet_server_addr())"))
             assert ipaddress.ip_address(address)
-        migrate(second_postgres_url, "head")
+        migrate(second_postgres_url, HEAD)
     finally:
         await engine.dispose()

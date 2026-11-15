@@ -77,13 +77,17 @@ successful deployment.
    workspace-signing and storage configuration on the existing services.
 5. Establish a verified pinned rollback image for both API and frontend before
    activation. The API baseline must expose database-backed `/api/v1/ready` and
-   have its completed source/schema migration receipt. Converting the existing
-   Git-source API to this CD-aware pinned baseline is a one-time controlled
+   have its completed source/schema migration receipt. Converting any
+   Git-source or non-CD-aware API to this pinned baseline is a one-time controlled
    packaging, migration and promotion operation; setting a variable alone does
    not perform it. Configure `FIRSTOUT_BOOTSTRAP_BACKEND_IMAGE` for the initial
    compatibility test only; its digest must match the actually serving backend.
    Subsequent releases derive that baseline from successful release history.
    Mutable Git source and unverified prior images are rejected.
+   The first CD-aware baseline therefore includes migration 090 and this
+   readiness/receipt implementation. Merely pinning an older 089 image is
+   insufficient. The old-089-image compatibility test proves data compatibility,
+   not readiness to act as the production CD rollback baseline.
 6. Verify Firstout's database migration login/runtime grants and a recent usable
    provider backup. The backup gate checks provider snapshot identity, age and
    expiry; it does not prove restoration works. Retain an independent restore
@@ -134,21 +138,25 @@ checks and any unavailable provider rehearsal are recorded in the PR.
 
 ## Local verification record
 
-Verified on 15 November 2026 from refreshed main `a161b3aa`:
+Verified on 15 November 2026 after starting from refreshed main `a161b3aa`
+and integrating the concurrent main changes through `6b758a29`:
 
-- Full Firstout backend regression rerun: **867 passed**. The initial embedded
-  Alembic logger regression was corrected and the complete rerun passed.
-- Release/workflow suite: **96 passed**, including **26** controller recovery
+- Full Firstout backend regression rerun: **950 passed**. The embedded Alembic logger regression and the merge-specific 089
+  test assumption were corrected; the complete integrated rerun passed.
+- Release/workflow suite: **112 passed**, including **27** controller recovery
   cases; pinned Python 3.11, actionlint and Ruff checks passed.
-- Frontend lint/typecheck and **167 tests** passed. Both Linux/AMD64 production
+- Frontend lint/typecheck and **181 tests** passed. Both Linux/AMD64 production
   images built; frontend offline health/host/asset checks passed.
 - Final candidate image authenticated HTTP/PostgreSQL journey, anonymous
   readiness/no-store/version checks and migration replay passed. A separately
-  built actual pre-CD backend from `a161b3aa` read the expanded schema and
+  built actual pre-CD backend from `6b758a29` read the expanded 090 schema and
   candidate-written customer data. These images use synthetic local fixture
-  configuration, not a published production release.
+  configuration, not a published production release. The retained manual API image probe also
+  passed on PostgreSQL 18 with normal startup and nonowner RLS checks.
 - Independent data verification: **18** PostgreSQL cases, plus **3** final
-  restricted-runtime/readiness/header cases passed. The runtime can read schema
+  restricted-runtime/readiness/header cases passed. After main integration,
+  policy/upgrade/graph checks (3 cases) and the full 089 merge suite (4 cases)
+  passed independently. The runtime can read schema
   metadata but cannot update it.
 - Actual local Uvicorn walkthrough: readiness 200 with its receipt; stopping the
   task-owned database yielded readiness 503 while liveness stayed 200; restoring
