@@ -41,6 +41,7 @@ from app.models.inventory import LocationStock
 from app.models.location import Location, LocationType
 from app.models.location_bin import new_floor_bin
 from app.models.membership import Membership
+from app.models.record_workspace import RecordWorkspaceBatch
 from app.models.role import Role
 from app.models.sku import Sku
 from app.models.team import Team
@@ -282,7 +283,7 @@ async def replacement_database(second_postgres_url, monkeypatch):
     from app.commands.tenant_cutover import activate_rls
 
     monkeypatch.setattr(settings, "frontend_proxy_secret", "synthetic-replacement-proxy")
-    migrate(second_postgres_url, "088_archive_sales_precision")
+    migrate(second_postgres_url, "089_merge_record_workspaces")
     admin = create_async_engine(second_postgres_url)
     role = "prepared_runtime_" + uuid.uuid4().hex[:12]
     password = "synthetic-" + uuid.uuid4().hex
@@ -393,6 +394,22 @@ async def replacement_database(second_postgres_url, monkeypatch):
         db.add_all([retained, excluded, sentinel])
         await db.flush()
         db.add(Customer(team_id=target.id, name="Old customer"))
+        # These are immutable operation receipts, including record references
+        # inside JSON. Replacement retains them even when old domain rows go.
+        workspace_receipts = [
+            RecordWorkspaceBatch(
+                team_id=team_id,
+                actor_user_id=owner.id,
+                request_id=uuid.uuid4(),
+                resource="customers",
+                action="archive",
+                payload_hash="a" * 64,
+                selection=[{"id": str(uuid.uuid4()), "revision": "retained-revision"}],
+                result={"completed": True},
+            )
+            for team_id in (target.id, other.id)
+        ]
+        db.add_all(workspace_receipts)
         db.add(
             LocationStock(
                 team_id=target.id,
@@ -407,6 +424,7 @@ async def replacement_database(second_postgres_url, monkeypatch):
             "locations": [a.id, b.id],
             "bins": [row.id for row in bins],
             "retained": retained.id,
+            "workspace_receipts": [row.id for row in workspace_receipts],
             "sentinel": sentinel.id,
             "other": other.id,
             "database": make_url(second_postgres_url).database,
@@ -594,6 +612,15 @@ async def test_replacement_dry_run_rollback_commit_and_sentinel_isolation(
         )
         sentinel = await db.get(Sku, info["sentinel"])
         assert sentinel.name == "Other tenant unchanged"
+        receipts = list(
+            await db.scalars(
+                sa.select(RecordWorkspaceBatch).where(
+                    RecordWorkspaceBatch.id.in_(info["workspace_receipts"])
+                )
+            )
+        )
+        assert len(receipts) == 2 and all(row.result == {"completed": True} for row in receipts)
+        assert all(row.selection[0]["revision"] == "retained-revision" for row in receipts)
         assert await db.scalar(
             sa.select(sa.func.sum(LocationStock.on_hand)).where(
                 LocationStock.team_id == PRIMAVERA_TEAM_ID
@@ -781,6 +808,7 @@ async def test_uncommitted_cross_tenant_fault_is_detected_before_commit(
         "active_job",
         "foreign_company",
         "identity",
+        "multiple_heads",
     ],
 )
 async def test_replacement_refusal_gates_leave_business_data_intact(
@@ -796,9 +824,16 @@ async def test_replacement_refusal_gates_leave_business_data_intact(
         "active_job",
         "foreign_company",
         "identity",
+        "multiple_heads",
     }:
         async with AsyncSession(admin) as db:
-            if gate == "portal":
+            if gate == "multiple_heads":
+                await db.execute(
+                    sa.text(
+                        "INSERT INTO alembic_version(version_num) VALUES ('085_record_workspaces')"
+                    )
+                )
+            elif gate == "portal":
                 customer = await db.scalar(
                     sa.select(Customer).where(Customer.team_id == PRIMAVERA_TEAM_ID)
                 )
@@ -857,7 +892,10 @@ async def test_replacement_refusal_gates_leave_business_data_intact(
             await db.commit()
     async with organisation_session(maker, PRIMAVERA_TEAM_ID) as db:
         before = await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN)
-        with pytest.raises(ValidationError):
+        with pytest.raises(
+            ValidationError,
+            match="exact reviewed schema revision089" if gate == "multiple_heads" else None,
+        ):
             await replace_in_transaction(
                 db,
                 package,
