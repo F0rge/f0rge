@@ -7,4 +7,5 @@ pub mod import;
 pub mod metrics;
 pub mod persistence;
 mod redaction;
+mod replay_archive;
 pub mod services;

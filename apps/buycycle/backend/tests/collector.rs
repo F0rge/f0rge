@@ -207,6 +207,176 @@ async fn retained_original_replay_is_read_only_reproducible_and_rejects_tamperin
     drop(db);
     support::drop_database(&base, &name).await;
 }
+
+#[tokio::test]
+async fn replay_envelope_preserves_signed_zero_and_legacy_integrity_without_digest_repair() {
+    use diesel::{
+        sql_query,
+        sql_types::{Jsonb, Text, Uuid as SqlUuid},
+    };
+    use diesel_async::RunQueryDsl;
+    use serde_json::Value;
+
+    #[derive(diesel::QueryableByName)]
+    struct Saved {
+        #[diesel(sql_type=SqlUuid)]
+        id: uuid::Uuid,
+        #[diesel(sql_type=SqlUuid)]
+        run_id: uuid::Uuid,
+        #[diesel(sql_type=Jsonb)]
+        payload: Value,
+        #[diesel(sql_type=Text)]
+        sha256: String,
+    }
+    async fn set_fixture(
+        db: &buycycle_backend::persistence::Db,
+        id: uuid::Uuid,
+        payload: Value,
+        sha: &str,
+    ) {
+        let mut connection = db.connection().await.unwrap();
+        sql_query("UPDATE source_snapshots SET payload=$1,sha256=$2 WHERE id=$3")
+            .bind::<Jsonb, _>(payload)
+            .bind::<Text, _>(sha)
+            .bind::<SqlUuid, _>(id)
+            .execute(&mut connection)
+            .await
+            .unwrap();
+    }
+    let (db, base, name) = support::database().await;
+    let source = FakeSource::new(vec![SourceResponse {
+        status: 200,
+        body: json!({"response":{"results":[],"total_num_results":0}}).to_string(),
+    }]);
+    drop(Gate::acquire(&db, source.now()).await.unwrap());
+    let rows:Vec<_>=[1000,500,500,500,500,3001].into_iter().enumerate().map(|(i,price)|json!({
+        "id":format!("signed-zero-{i}"),"kind":"wheels","slug":format!("synthetic-{i}"),"name":"Zipp 303","brand":"Zipp",
+        "price":price,"fetch_price":price,"first_seen":"2026-10-01","last_seen":"2026-10-01","gone_at":null,
+        "n_media":4,"desc_len":100,"unknown_future_column":"café 🚲","units":"retained"
+    })).collect();
+    db.upsert_rows("listing", &rows).await.unwrap();
+    collect(&db, &source, "synthetic-archive-key", vec![Kind::Wheels])
+        .await
+        .unwrap();
+    let mut connection = db.connection().await.unwrap();
+    let saved = sql_query(
+        "SELECT id,run_id,payload,sha256 FROM source_snapshots WHERE source_kind='replay' LIMIT 1",
+    )
+    .get_result::<Saved>(&mut connection)
+    .await
+    .unwrap();
+    drop(connection);
+    assert_eq!(saved.payload.as_object().unwrap().len(), 2);
+    assert_eq!(
+        saved.payload["encoding"],
+        "f0rge.buycycle.replay.canonical-json.v1"
+    );
+    let text = saved.payload["document"].as_str().unwrap();
+    assert!(text.contains("-0.0"));
+    let original: Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        saved.sha256,
+        buycycle_backend::import::canonical_sha256(&original).unwrap()
+    );
+    let attempts = *source.attempts.lock().unwrap();
+    let verified = buycycle_backend::collector::verified_replay(&db, saved.run_id, false)
+        .await
+        .unwrap();
+    assert!(
+        verified
+            .result
+            .items
+            .iter()
+            .find(|row| row.id == "signed-zero-0")
+            .unwrap()
+            .z_score
+            .unwrap()
+            .is_sign_negative()
+    );
+    assert_eq!(*source.attempts.lock().unwrap(), attempts);
+    assert_eq!(db.rows("listing").await.unwrap(), rows);
+
+    // Create a separate synthetic LEGACY representation with stable positive
+    // zero, computing its original hash BEFORE PostgreSQL stores it. This is
+    // fixture creation, never repair of an already-normalized invalid archive.
+    let mut legacy = original.clone();
+    for item in legacy["expected"]["items"].as_array_mut().unwrap() {
+        if item["z_score"].as_f64() == Some(0.0) {
+            item["z_score"] = json!(0.0);
+        }
+    }
+    legacy["unknown_outer_metadata"] =
+        json!({"unicode":"café 🚲","nullable":null,"units":"retained","exponent":1e-6});
+    let legacy_hash = buycycle_backend::import::canonical_sha256(&legacy).unwrap();
+    set_fixture(&db, saved.id, legacy.clone(), &legacy_hash).await;
+    buycycle_backend::collector::verified_replay(&db, saved.run_id, false)
+        .await
+        .unwrap();
+    let mut changed = legacy.clone();
+    changed["unknown_outer_metadata"]["units"] = json!("tampered");
+    set_fixture(&db, saved.id, changed, &legacy_hash).await;
+    assert!(
+        buycycle_backend::collector::verified_replay(&db, saved.run_id, false)
+            .await
+            .is_err()
+    );
+
+    // The old direct JSONB encoding loses -0.0. Preserve its ORIGINAL hash:
+    // neither original replay nor labelled recalculation may repair integrity.
+    set_fixture(&db, saved.id, original.clone(), &saved.sha256).await;
+    assert!(
+        buycycle_backend::collector::verified_replay(&db, saved.run_id, false)
+            .await
+            .is_err()
+    );
+    assert!(
+        buycycle_backend::collector::verified_replay(&db, saved.run_id, true)
+            .await
+            .is_err()
+    );
+
+    for payload in [
+        json!({"encoding":"unsupported-v2","document":text}),
+        json!({"encoding":"f0rge.buycycle.replay.canonical-json.v1","document":text,"extra":"unapproved"}),
+        json!({"encoding":"f0rge.buycycle.replay.canonical-json.v1","document":null}),
+        json!({"encoding":"f0rge.buycycle.replay.canonical-json.v1","document":"{malformed"}),
+        json!({"encoding":"f0rge.buycycle.replay.canonical-json.v1","document":format!(" {text}")}),
+    ] {
+        set_fixture(&db, saved.id, payload, &saved.sha256).await;
+        assert!(
+            buycycle_backend::collector::verified_replay(&db, saved.run_id, false)
+                .await
+                .is_err()
+        );
+    }
+    let mut changed = original.clone();
+    changed["processing_digest"] = json!("different-processing-version");
+    let text = serde_json::to_string(&changed).unwrap();
+    let changed_hash = buycycle_backend::import::canonical_sha256(&changed).unwrap();
+    set_fixture(
+        &db,
+        saved.id,
+        json!({"encoding":"f0rge.buycycle.replay.canonical-json.v1","document":text}),
+        &changed_hash,
+    )
+    .await;
+    assert!(
+        buycycle_backend::collector::verified_replay(&db, saved.run_id, false)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        buycycle_backend::collector::verified_replay(&db, saved.run_id, true)
+            .await
+            .unwrap()
+            .mode,
+        "new_recalculation"
+    );
+    assert_eq!(*source.attempts.lock().unwrap(), attempts);
+    assert_eq!(db.rows("listing").await.unwrap(), rows);
+    drop(db);
+    support::drop_database(&base, &name).await;
+}
 #[tokio::test]
 async fn related_observation_publication_rolls_back_all_tables_on_a_real_database_failure() {
     use diesel::sql_query;

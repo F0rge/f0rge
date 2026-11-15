@@ -54,7 +54,7 @@ impl LegacyRow for Box<RawValue> {
     }
 }
 
-struct CanonicalRows<'a, R>(&'a [R]);
+pub(crate) struct CanonicalRows<'a, R>(pub(crate) &'a [R]);
 impl<R: LegacyRow> Serialize for CanonicalRows<'_, R> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
@@ -147,7 +147,7 @@ pub fn canonical_sha256(value: &impl Serialize) -> Result<String, DataError> {
     stream_ordered_sha256(&canonical)
 }
 
-fn stream_ordered_sha256(value: &impl Serialize) -> Result<String, DataError> {
+pub(crate) fn stream_ordered_sha256(value: &impl Serialize) -> Result<String, DataError> {
     let mut hash = HashWriter::default();
     serde_json::to_writer(&mut hash, value).map_err(|_| DataError::InvalidInput)?;
     Ok(hash.finish())

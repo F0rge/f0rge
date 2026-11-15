@@ -104,6 +104,41 @@ revision. Runtime grants preserve those archives as append-only.
 
 ## Restore and rollback
 
+### Replay archive compatibility
+
+The Rust collector stores new replay archives in the existing
+`source_snapshots.payload` JSONB column as a closed envelope with exactly
+`encoding: "f0rge.buycycle.replay.canonical-json.v1"` and `document`, a canonical
+JSON text string. The document retains the complete input, calculated output,
+unknown source fields, nulls, units and processing digest. The existing `sha256`
+column authenticates those exact canonical document bytes. PostgreSQL must not
+reinterpret report numbers: direct JSONB changes `-0.0` to `0.0` and can break
+the original hash. No table or column changes or old-record rewrites are needed.
+
+The bounded reader accepts both the new envelope and legacy direct-object
+archives. It verifies archive integrity before calculating or publishing output;
+unknown outer document metadata remains covered by the hash. Malformed,
+unsupported, changed or over-bound documents fail closed. A legacy archive whose
+original hash no longer matches after JSONB normalization remains unavailable;
+the reader does not repair its digest. Signed-zero equivalence applies only to
+the historical expected/result comparison, preserving old `Value` equality; it
+never changes archived bytes or their integrity check.
+
+Use the replay CLI's verified, streamed output for full-size archives. It writes
+a mode-0600 temporary file only after verification and publishes a new output
+atomically without replacing an existing file. The older in-memory `replay()`
+library wrapper remains for small callers. Capture and replay have explicit
+document, nesting and collection bounds; exceeding one is an error, never a
+reason to truncate or delete history. Actual ARM64 writer/replay memory and
+PostgreSQL round-trip evidence remain release gates.
+
+After a wrapped archive exists, a rollback image must include the reader for both
+encodings. Older binaries cannot replay the new envelope. Do not downgrade the
+archive reader/writer without a reviewed recovery plan; preserve authoritative
+PostgreSQL and all existing archives.
+
+### PostgreSQL restoration
+
 A PostgreSQL backup must include all nine application/schema tables, the original
 import bundles, browser sources/revisions, collection safety state and retained
 source snapshots. Restore it into a separate candidate database. Verify all table

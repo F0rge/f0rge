@@ -1,4 +1,5 @@
 //! Single-writer, crash-conservative collection. Reservations commit before outbound requests.
+pub use crate::replay_archive::VerifiedReplay;
 use crate::{
     contracts::Kind,
     metrics,
@@ -482,6 +483,7 @@ pub async fn collect<S: Source>(
                 break;
             }
         }
+        let observed = seen.len();
         let mut all: Vec<Value> = seen.values().cloned().collect();
         let mut gone = 0;
         let new = seen.keys().filter(|id| !old.contains_key(*id)).count();
@@ -499,6 +501,10 @@ pub async fn collect<S: Source>(
                     gone += 1;
                 }
             }
+        } else {
+            // Even a small or incomplete pass must release the retained prior
+            // listings before loading calculation and replay snapshots.
+            drop(old);
         }
         let history: Vec<Value> = seen
             .values()
@@ -511,6 +517,7 @@ pub async fn collect<S: Source>(
             ("runs", vec![initial_run]),
         ])
         .await?;
+        drop(seen);
         let mut fetched = 0;
         let mut detail_complete = true;
         let mut kind_blocked = false;
@@ -518,10 +525,10 @@ pub async fn collect<S: Source>(
             let input = crate::services::calculation_input(db, kind.clone(), source.now())
                 .await
                 .map_err(|_| CollectionError::Storage)?;
-            let rows = input.rows.clone();
-            let derived = metrics::build_raw(
+            let rows = input.rows;
+            let derived = metrics::build_raw_borrowed(
                 kind.clone(),
-                input.rows,
+                &rows,
                 input.details,
                 input.history,
                 input.countries,
@@ -597,7 +604,7 @@ pub async fn collect<S: Source>(
                 row["fetch_price"] = row["price"].clone();
                 row["last_fetch"] = json!(today);
                 fetched += 1;
-                let detail_run = json!({"day":today,"kind":kind.as_str(),"complete":i32::from(complete),"collection_complete":0,"n":seen.len(),"new":new,"gone":gone,"fetched":fetched,"note":""});
+                let detail_run = json!({"day":today,"kind":kind.as_str(),"complete":i32::from(complete),"collection_complete":0,"n":observed,"new":new,"gone":gone,"fetched":fetched,"note":""});
                 let mut tables = vec![
                     ("detail", vec![detail.clone()]),
                     ("listing", vec![row]),
@@ -616,7 +623,7 @@ pub async fn collect<S: Source>(
             }
         }
         let overall_complete = complete && detail_complete && !kind_blocked;
-        db.upsert_rows("runs",&[json!({"day":today,"kind":kind.as_str(),"complete":i32::from(complete),"collection_complete":i32::from(overall_complete),"n":seen.len(),"new":new,"gone":gone,"fetched":fetched,"note":if !complete{"feed incomplete"}else if !detail_complete{"detail collection incomplete"}else{""}})]).await?;
+        db.upsert_rows("runs",&[json!({"day":today,"kind":kind.as_str(),"complete":i32::from(complete),"collection_complete":i32::from(overall_complete),"n":observed,"new":new,"gone":gone,"fetched":fetched,"note":if !complete{"feed incomplete"}else if !detail_complete{"detail collection incomplete"}else{""}})]).await?;
         sql_query("UPDATE collector_runs SET complete=$2 WHERE id=$1")
             .bind::<SqlUuid, _>(run)
             .bind::<Bool, _>(overall_complete)
@@ -625,13 +632,14 @@ pub async fn collect<S: Source>(
         let input = crate::services::calculation_input(db, kind.clone(), source.now())
             .await
             .map_err(|_| CollectionError::Storage)?;
-        let expected = metrics::report_raw(input.clone());
-        snapshot(
+        let expected = metrics::report_raw_borrowed(&input);
+        crate::replay_archive::capture(
             &mut gate.connection,
             run,
             &kind,
-            "replay",
-            json!({"processing_digest":processing_digest(),"input":input,"expected":expected}),
+            input,
+            expected,
+            &processing_digest(),
         )
         .await?;
         if kind_blocked {
@@ -705,6 +713,7 @@ pub fn processing_digest() -> String {
         include_str!("contracts.rs"),
         include_str!("services.rs"),
         include_str!("collector.rs"),
+        include_str!("replay_archive.rs"),
         include_str!("redaction.rs"),
         include_str!("../Cargo.lock"),
     ] {
@@ -712,55 +721,19 @@ pub fn processing_digest() -> String {
     }
     format!("{:x}", hash.finalize())
 }
-#[derive(diesel::QueryableByName)]
-struct SnapshotRow {
-    #[diesel(sql_type=Jsonb)]
-    payload: Value,
-    #[diesel(sql_type=Text)]
-    sha256: String,
-}
 /// Read-only replay cannot construct an HTTP transport or reset collection accounting.
+/// Compatibility for small in-memory callers; the CLI streams VerifiedReplay.
 pub async fn replay(db: &Db, run: Uuid, recalculate: bool) -> Result<Value, CollectionError> {
-    let mut connection = db.connection().await?;
-    let records=sql_query("SELECT payload,sha256 FROM source_snapshots WHERE run_id=$1 AND source_kind='replay' ORDER BY recorded_at DESC LIMIT 1").bind::<SqlUuid,_>(run).load::<SnapshotRow>(&mut connection).await?;
-    let saved = records
-        .into_iter()
-        .next()
-        .ok_or(CollectionError::Incomplete)?;
-    let hash = format!(
-        "{:x}",
-        Sha256::digest(
-            serde_json::to_vec(&saved.payload).map_err(|_| CollectionError::Incomplete)?
-        )
-    );
-    if hash != saved.sha256 {
-        return Err(CollectionError::Incomplete);
-    }
-    if !recalculate
-        && saved
-            .payload
-            .get("processing_digest")
-            .and_then(Value::as_str)
-            != Some(processing_digest().as_str())
-    {
-        return Err(CollectionError::Incomplete);
-    }
-    let input: metrics::CalculationInput = serde_json::from_value(
-        saved
-            .payload
-            .get("input")
-            .cloned()
-            .ok_or(CollectionError::Incomplete)?,
-    )
-    .map_err(|_| CollectionError::Incomplete)?;
-    let result =
-        serde_json::to_value(metrics::report(input)).map_err(|_| CollectionError::Incomplete)?;
-    if !recalculate && saved.payload.get("expected") != Some(&result) {
-        return Err(CollectionError::Incomplete);
-    }
-    Ok(
-        json!({"mode":if recalculate{"new_recalculation"}else{"original_replay"},"source_run_id":run,"processing_digest":processing_digest(),"result":result}),
-    )
+    serde_json::to_value(verified_replay(db, run, recalculate).await?)
+        .map_err(|_| CollectionError::Incomplete)
+}
+
+pub async fn verified_replay(
+    db: &Db,
+    run: Uuid,
+    recalculate: bool,
+) -> Result<VerifiedReplay, CollectionError> {
+    crate::replay_archive::verify(db, run, recalculate, processing_digest()).await
 }
 
 pub async fn has_incomplete_run_today(db: &Db) -> Result<bool, DataError> {

@@ -180,12 +180,12 @@ impl HistoryIndex {
         }
         index.finish()
     }
-    fn raw(rows: Vec<Box<serde_json::value::RawValue>>) -> Self {
+    fn raw<R: AsRef<serde_json::value::RawValue>>(rows: impl IntoIterator<Item = R>) -> Self {
         let mut index = Self(HashMap::new());
         for row in rows {
             // RawValue is validated JSON from PostgreSQL or serde. Materialize
             // exactly one row, then release it instead of building a full tree.
-            let row = serde_json::from_str(row.get()).expect("validated history JSON");
+            let row = serde_json::from_str(row.as_ref().get()).expect("validated history JSON");
             index.push(&row);
         }
         index.finish()
@@ -214,8 +214,21 @@ pub fn build_raw(
     countries: Vec<Value>,
     now: DateTime<Utc>,
 ) -> Vec<Listing> {
+    build_raw_borrowed(kind, &raw_rows, details, history, countries, now)
+}
+
+/// Collector candidates retain their source rows for later detail publication.
+/// Borrow those rows instead of duplicating the complete listing snapshot.
+pub fn build_raw_borrowed(
+    kind: Kind,
+    raw_rows: &[Value],
+    details: Vec<Value>,
+    history: Vec<Box<serde_json::value::RawValue>>,
+    countries: Vec<Value>,
+    now: DateTime<Utc>,
+) -> Vec<Listing> {
     let indexed = HistoryIndex::raw(history);
-    build_indexed(kind, &raw_rows, &details, &indexed, &countries, now)
+    build_indexed(kind, raw_rows, &details, &indexed, &countries, now)
 }
 
 fn build_indexed(
@@ -784,11 +797,11 @@ pub fn report(input: CalculationInput) -> crate::contracts::ListingsResponse {
     report_indexed(
         input.kind,
         input.calculated_at,
-        input.rows,
-        input.details,
+        &input.rows,
+        &input.details,
         indexed,
-        input.countries,
-        input.runs,
+        &input.countries,
+        &input.runs,
     )
 }
 
@@ -798,22 +811,37 @@ pub fn report_raw(
     report_indexed(
         input.kind,
         input.calculated_at,
-        input.rows,
-        input.details,
+        &input.rows,
+        &input.details,
         HistoryIndex::raw(input.history),
-        input.countries,
-        input.runs,
+        &input.countries,
+        &input.runs,
+    )
+}
+
+/// Replay capture keeps the complete input; calculation only borrows it.
+pub fn report_raw_borrowed(
+    input: &CalculationInput<Box<serde_json::value::RawValue>>,
+) -> crate::contracts::ListingsResponse {
+    report_indexed(
+        input.kind.clone(),
+        input.calculated_at,
+        &input.rows,
+        &input.details,
+        HistoryIndex::raw(&input.history),
+        &input.countries,
+        &input.runs,
     )
 }
 
 fn report_indexed(
     kind: Kind,
     now: DateTime<Utc>,
-    rows: Vec<Value>,
-    details: Vec<Value>,
+    rows: &[Value],
+    details: &[Value],
     history: HistoryIndex,
-    countries: Vec<Value>,
-    runs: Vec<Value>,
+    countries: &[Value],
+    runs: &[Value],
 ) -> crate::contracts::ListingsResponse {
     let quarantined = rows
         .iter()
@@ -826,7 +854,7 @@ fn report_indexed(
         })
         .collect();
     let today = now.with_timezone(&Luxembourg).date_naive().to_string();
-    let items = build_indexed(kind.clone(), &rows, &details, &history, &countries, now);
+    let items = build_indexed(kind.clone(), rows, details, &history, countries, now);
     let models = model_market_indexed(
         &items,
         &history,
@@ -839,7 +867,7 @@ fn report_indexed(
                 .is_some_and(|d| d < today.as_str())
             && r.get("complete").and_then(Value::as_i64) == Some(1)
     });
-    let alerts = alerts(&items, &models, &rows, &kind, &today, had_prior);
+    let alerts = alerts(&items, &models, rows, &kind, &today, had_prior);
     let active = items.iter().filter(|x| x.gone_at.is_none()).count();
     let gone = items.len() - active;
     crate::contracts::ListingsResponse {

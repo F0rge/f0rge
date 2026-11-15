@@ -294,9 +294,35 @@ fn encoded_history_matches_value_reports_and_preserves_complete_replay_input() {
         let original = serde_json::to_value(&input).unwrap();
         let encoded: metrics::CalculationInput<Box<serde_json::value::RawValue>> =
             serde_json::from_str(&serde_json::to_string(&input).unwrap()).unwrap();
-        assert_eq!(serde_json::to_value(&encoded).unwrap(), original);
+        let borrowed = metrics::report_raw_borrowed(&encoded);
+        let borrowed_build = metrics::build_raw_borrowed(
+            encoded.kind.clone(),
+            &encoded.rows,
+            encoded.details.clone(),
+            encoded.history.clone(),
+            encoded.countries.clone(),
+            encoded.calculated_at,
+        );
+        let owned_build = metrics::build_raw(
+            encoded.kind.clone(),
+            encoded.rows.clone(),
+            encoded.details.clone(),
+            encoded.history.clone(),
+            encoded.countries.clone(),
+            encoded.calculated_at,
+        );
         assert_eq!(
-            serde_json::to_value(metrics::report_raw(encoded)).unwrap(),
+            serde_json::to_value(borrowed_build).unwrap(),
+            serde_json::to_value(owned_build).unwrap()
+        );
+        assert_eq!(serde_json::to_value(&encoded).unwrap(), original);
+        let owned = metrics::report_raw(encoded);
+        assert_eq!(
+            serde_json::to_value(borrowed).unwrap(),
+            serde_json::to_value(&owned).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(owned).unwrap(),
             serde_json::to_value(metrics::report(input)).unwrap()
         );
     }
