@@ -9,6 +9,7 @@ use buycycle_backend::{
 use diesel::{sql_query, sql_types::BigInt};
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl, SimpleAsyncConnection};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 fn bundle() -> LegacyBundle {
     let tables:BTreeMap<String,Vec<Value>>=[
@@ -68,6 +69,63 @@ fn validation_rejects_duplicates_unknown_tables_hash_changes_and_bad_ledger() {
     assert_eq!(validate_bundle(&bad).unwrap_err(), DataError::InvalidInput);
 }
 
+#[test]
+fn streamed_hashes_match_python_and_the_original_canonical_json_format() {
+    #[derive(serde::Serialize)]
+    struct Unordered {
+        z: i64,
+        a: i64,
+    }
+    assert_eq!(
+        canonical_sha256(&Unordered { z: 2, a: 1 }).unwrap(),
+        canonical_sha256(&json!({"a":1,"z":2})).unwrap()
+    );
+    let original = bundle();
+    // Independently generated with Python json.dumps(sort_keys=True,
+    // separators=(",", ":"), ensure_ascii=False), including Unicode and nulls.
+    let python = "ec52600c14ff236f4478f406f9064a6284a97883067d1cd5a3556a5e818b2486";
+    assert_eq!(canonical_sha256(&original).unwrap(), python);
+    let original_algorithm =
+        |value: Value| format!("{:x}", Sha256::digest(serde_json::to_vec(&value).unwrap()));
+    assert_eq!(
+        validate_bundle(&original).unwrap().bundle_sha256,
+        original_algorithm(serde_json::to_value(&original).unwrap())
+    );
+    for (table, rows) in &original.tables {
+        assert_eq!(
+            original.table_sha256[table],
+            original_algorithm(serde_json::to_value(canonical_rows(table, rows).unwrap()).unwrap())
+        );
+    }
+    let round_trip: LegacyBundle =
+        serde_json::from_reader(std::io::Cursor::new(serde_json::to_vec(&original).unwrap()))
+            .unwrap();
+    assert_eq!(canonical_sha256(&round_trip).unwrap(), python);
+    let pretty = serde_json::to_vec_pretty(&original).unwrap();
+    let raw: LegacyBundle<Box<serde_json::value::RawValue>> =
+        serde_json::from_reader(std::io::Cursor::new(pretty)).unwrap();
+    assert_eq!(
+        validate_bundle(&raw).unwrap(),
+        validate_bundle(&original).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&raw).unwrap(),
+        serde_json::to_value(&original).unwrap()
+    );
+
+    // Raw rows retain the original parser's normalization: map order/spacing,
+    // escapes and duplicate map keys use serde_json's same last-key-wins rule.
+    let reordered = r#"{ "price":1234, "id":"ignored", "name":"Synthetic caf\u00e9 bicycle", "unknown_future_column":null, "kind":"bikes", "gone_at":null, "first_seen":"2026-01-01", "id":"bike-1" }"#;
+    let mut raw = raw;
+    raw.tables.get_mut("listing").unwrap()[0] = serde_json::from_str(reordered).unwrap();
+    assert_eq!(validate_bundle(&raw).unwrap().bundle_sha256, python);
+    for invalid_price in ["-0", "1e3", "1234.0", "9223372036854775808", "true"] {
+        raw.tables.get_mut("listing").unwrap()[0] =
+            serde_json::from_str(&format!(r#"{{"id":"bike-1","price":{invalid_price}}}"#)).unwrap();
+        assert_eq!(validate_bundle(&raw).unwrap_err(), DataError::InvalidInput);
+    }
+}
+
 #[derive(diesel::QueryableByName)]
 struct Count {
     #[diesel(sql_type=BigInt)]
@@ -109,9 +167,75 @@ async fn actual_postgres_import_reconciles_repeats_rolls_back_and_preserves_edit
     db.migrate().await.unwrap();
     db.health().await.unwrap();
     let original = bundle();
-    let report = import_bundle(&db, &original).await.unwrap();
+    let raw: LegacyBundle<Box<serde_json::value::RawValue>> =
+        serde_json::from_slice(&serde_json::to_vec_pretty(&original).unwrap()).unwrap();
+    let report = import_bundle(&db, &raw).await.unwrap();
     assert!(!report.already_imported);
     assert_eq!(report.table_counts["listing"], 2);
+    assert_eq!(
+        reconcile(&db, &raw).await.unwrap().table_sha256,
+        report.table_sha256
+    );
+    assert_eq!(
+        reconcile(&db, &original).await.unwrap().table_sha256,
+        report.table_sha256
+    );
+
+    // The complete source bundle/report remains in provenance, not just hashes.
+    #[derive(diesel::QueryableByName)]
+    struct Archive {
+        #[diesel(sql_type=diesel::sql_types::Jsonb)]
+        payload: Value,
+    }
+    let mut check = db.connection().await.unwrap();
+    let archive = sql_query("SELECT manifest AS payload FROM import_manifest")
+        .get_result::<Archive>(&mut check)
+        .await
+        .unwrap();
+    assert_eq!(
+        archive.payload["bundle"],
+        serde_json::to_value(&original).unwrap()
+    );
+    assert_eq!(
+        archive.payload["report"],
+        serde_json::to_value(&report).unwrap()
+    );
+
+    // Streaming order is byte-wise even under a locale-aware database. A stored
+    // key that disagrees with its payload must not produce a successful digest.
+    sql_query("UPDATE legacy_record SET row_key='[\"wrong-key\"]' WHERE table_name='country_map'")
+        .execute(&mut check)
+        .await
+        .unwrap();
+    assert_eq!(
+        reconcile(&db, &original).await.unwrap_err(),
+        DataError::Reconciliation
+    );
+    sql_query("UPDATE legacy_record SET row_key='[150]' WHERE table_name='country_map'")
+        .execute(&mut check)
+        .await
+        .unwrap();
+
+    // An error in the final table must roll back earlier inserted rows, too.
+    let mut late_conflict = original.clone();
+    late_conflict
+        .tables
+        .get_mut("listing")
+        .unwrap()
+        .push(json!({"id":"new-uncommitted","kind":"bikes","price":1}));
+    late_conflict.tables.get_mut("country_map").unwrap()[0]["country"] =
+        json!("Conflicting country");
+    for table in ["listing", "country_map"] {
+        late_conflict.table_sha256.insert(
+            table.to_owned(),
+            canonical_sha256(&canonical_rows(table, &late_conflict.tables[table]).unwrap())
+                .unwrap(),
+        );
+    }
+    assert_eq!(
+        import_bundle(&db, &late_conflict).await.unwrap_err(),
+        DataError::Conflict
+    );
     assert_eq!(
         reconcile(&db, &original).await.unwrap().table_sha256,
         report.table_sha256

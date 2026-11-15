@@ -15,8 +15,9 @@ async fn main() -> std::process::ExitCode {
         if !metadata.is_file() || metadata.len() > 512 * 1024 * 1024 {
             return Err(());
         }
-        let bytes = std::fs::read(&args[1]).map_err(|_| ())?;
-        let bundle: LegacyBundle = serde_json::from_slice(&bytes).map_err(|_| ())?;
+        let file = std::fs::File::open(&args[1]).map_err(|_| ())?;
+        let bundle: LegacyBundle<Box<serde_json::value::RawValue>> =
+            serde_json::from_reader(std::io::BufReader::new(file)).map_err(|_| ())?;
         let report = if args[0] == "--preview" {
             validate_bundle(&bundle).map_err(|_| ())?
         } else {

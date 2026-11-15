@@ -318,6 +318,7 @@ dependencies = [
  "diesel-async",
  "f0rge-api-errors",
  "f0rge-identity",
+ "futures-util",
  "jsonwebtoken",
  "regex",
  "reqwest",

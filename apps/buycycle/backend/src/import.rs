@@ -1,29 +1,109 @@
 //! Lossless legacy import: validate before opening a write transaction, reconcile
 //! every table before commit, and never overwrite an existing conflicting row.
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    io::{self, Write},
+};
 
 use chrono::{NaiveDate, Utc};
 use diesel::{
     sql_query,
     sql_types::{Bool, Date, Integer, Jsonb, Text},
 };
-use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl, SimpleAsyncConnection};
+use futures_util::TryStreamExt;
+use serde::{
+    Deserialize, Serialize,
+    ser::{Error as _, SerializeMap, SerializeSeq},
+};
+use serde_json::{Value, json, value::RawValue};
 use sha2::{Digest, Sha256};
 
 use crate::persistence::{DataError, Db, LEGACY_TABLES, row_key};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct LegacyBundle {
+pub struct LegacyBundle<R = Value> {
     pub version: u32,
     pub exported_at: String,
     pub processing_version: String,
-    pub tables: BTreeMap<String, Vec<Value>>,
+    pub tables: BTreeMap<String, Vec<R>>,
     pub table_sha256: BTreeMap<String, String>,
     pub source_schema: BTreeMap<String, Value>,
     pub safety_ledger: Option<Value>,
+}
+
+/// The CLI retains compact row JSON and decodes only the row being processed;
+/// small seed/test callers can continue to borrow their existing Value rows.
+pub trait LegacyRow: Serialize + Send + Sync {
+    fn value(&self) -> Result<Cow<'_, Value>, DataError>;
+}
+
+impl LegacyRow for Value {
+    fn value(&self) -> Result<Cow<'_, Value>, DataError> {
+        Ok(Cow::Borrowed(self))
+    }
+}
+
+impl LegacyRow for Box<RawValue> {
+    fn value(&self) -> Result<Cow<'_, Value>, DataError> {
+        serde_json::from_str(self.get())
+            .map(Cow::Owned)
+            .map_err(|_| DataError::InvalidInput)
+    }
+}
+
+struct CanonicalRows<'a, R>(&'a [R]);
+impl<R: LegacyRow> Serialize for CanonicalRows<'_, R> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for row in self.0 {
+            let value = row
+                .value()
+                .map_err(|_| S::Error::custom("Invalid legacy row"))?;
+            sequence.serialize_element(value.as_ref())?;
+        }
+        sequence.end()
+    }
+}
+
+struct CanonicalTables<'a, R>(&'a BTreeMap<String, Vec<R>>);
+impl<R: LegacyRow> Serialize for CanonicalTables<'_, R> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (name, rows) in self.0 {
+            map.serialize_entry(name, &CanonicalRows(rows))?;
+        }
+        map.end()
+    }
+}
+
+// The exported Python bundle is recursively key-sorted. Spell out its struct
+// order while normalizing each raw row through the same Value parser as before.
+impl<R: LegacyRow> Serialize for LegacyBundle<R> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct CanonicalBundle<'a, R: LegacyRow> {
+            exported_at: &'a str,
+            processing_version: &'a str,
+            safety_ledger: &'a Option<Value>,
+            source_schema: &'a BTreeMap<String, Value>,
+            table_sha256: &'a BTreeMap<String, String>,
+            tables: CanonicalTables<'a, R>,
+            version: u32,
+        }
+        CanonicalBundle {
+            exported_at: &self.exported_at,
+            processing_version: &self.processing_version,
+            safety_ledger: &self.safety_ledger,
+            source_schema: &self.source_schema,
+            table_sha256: &self.table_sha256,
+            tables: CanonicalTables(&self.tables),
+            version: self.version,
+        }
+        .serialize(serializer)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -36,41 +116,81 @@ pub struct ImportReport {
 
 #[derive(diesel::QueryableByName)]
 struct JsonRow {
+    #[diesel(sql_type=Text)]
+    row_key: String,
     #[diesel(sql_type=Jsonb)]
     payload: Value,
 }
 
-pub fn canonical_sha256(value: &impl Serialize) -> Result<String, DataError> {
-    // serde_json's default Map is ordered; every record is key-sorted recursively.
-    let canonical: Value = serde_json::to_value(value).map_err(|_| DataError::InvalidInput)?;
-    Ok(format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&canonical).map_err(|_| DataError::InvalidInput)?)
-    ))
-}
-
-pub fn canonical_rows(table: &str, rows: &[Value]) -> Result<Vec<Value>, DataError> {
-    let mut keyed = BTreeMap::new();
-    for row in rows {
-        let key = row_key(table, row)?;
-        if keyed.insert(key, row.clone()).is_some() {
-            return Err(DataError::InvalidInput);
-        }
-        // Legacy SQLite/Turso scalar columns are integer/text/null. Retain unknown
-        // columns, but reject nested/boolean/non-integral values, never coerce them.
-        if row
-            .as_object()
-            .ok_or(DataError::InvalidInput)?
-            .values()
-            .any(|v| !(v.is_null() || v.is_string() || v.as_i64().is_some()))
-        {
-            return Err(DataError::InvalidInput);
-        }
+#[derive(Default)]
+struct HashWriter(Sha256);
+impl Write for HashWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
     }
-    Ok(keyed.into_values().collect())
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+impl HashWriter {
+    fn finish(self) -> String {
+        format!("{:x}", self.0.finalize())
+    }
 }
 
-pub fn validate_bundle(bundle: &LegacyBundle) -> Result<ImportReport, DataError> {
+/// General convenience for small fixtures, including arbitrary Serialize structs.
+/// Keep its original recursive sorting contract; the production bundle uses the
+/// explicitly ordered serializer directly, without this Value conversion.
+pub fn canonical_sha256(value: &impl Serialize) -> Result<String, DataError> {
+    let canonical = serde_json::to_value(value).map_err(|_| DataError::InvalidInput)?;
+    stream_ordered_sha256(&canonical)
+}
+
+fn stream_ordered_sha256(value: &impl Serialize) -> Result<String, DataError> {
+    let mut hash = HashWriter::default();
+    serde_json::to_writer(&mut hash, value).map_err(|_| DataError::InvalidInput)?;
+    Ok(hash.finish())
+}
+
+fn validate_row(table: &str, row: &Value) -> Result<String, DataError> {
+    let key = row_key(table, row)?;
+    // Preserve unknown integer/text/null columns; never coerce or drop values.
+    if row
+        .as_object()
+        .ok_or(DataError::InvalidInput)?
+        .values()
+        .any(|v| !(v.is_null() || v.is_string() || v.as_i64().is_some()))
+    {
+        return Err(DataError::InvalidInput);
+    }
+    Ok(key)
+}
+
+fn ordered_rows<'a, R: LegacyRow>(
+    table: &str,
+    rows: &'a [R],
+) -> Result<Vec<(String, &'a R)>, DataError> {
+    let mut keyed = rows
+        .iter()
+        .map(|row| Ok((validate_row(table, row.value()?.as_ref())?, row)))
+        .collect::<Result<Vec<_>, DataError>>()?;
+    keyed.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+    if keyed.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err(DataError::InvalidInput);
+    }
+    Ok(keyed)
+}
+
+/// Owned convenience for the small seed/test fixtures. Production borrows rows.
+pub fn canonical_rows(table: &str, rows: &[Value]) -> Result<Vec<Value>, DataError> {
+    Ok(ordered_rows(table, rows)?
+        .into_iter()
+        .map(|(_, row)| row.clone())
+        .collect())
+}
+
+pub fn validate_bundle<R: LegacyRow>(bundle: &LegacyBundle<R>) -> Result<ImportReport, DataError> {
     let expected: BTreeSet<_> = LEGACY_TABLES.into_iter().map(str::to_owned).collect();
     if bundle.version != 1
         || bundle.processing_version.is_empty()
@@ -92,8 +212,8 @@ pub fn validate_bundle(bundle: &LegacyBundle) -> Result<ImportReport, DataError>
     let mut table_counts = BTreeMap::new();
     let mut table_sha256 = BTreeMap::new();
     for table in LEGACY_TABLES {
-        let rows = canonical_rows(table, &bundle.tables[table])?;
-        let digest = canonical_sha256(&rows)?;
+        let rows = ordered_rows(table, &bundle.tables[table])?;
+        let digest = hash_rows(rows.iter().map(|(_, row)| *row))?;
         if bundle.table_sha256[table] != digest || !bundle.source_schema[table].is_array() {
             return Err(DataError::Reconciliation);
         }
@@ -101,11 +221,27 @@ pub fn validate_bundle(bundle: &LegacyBundle) -> Result<ImportReport, DataError>
         table_sha256.insert(table.to_owned(), digest);
     }
     Ok(ImportReport {
-        bundle_sha256: canonical_sha256(bundle)?,
+        bundle_sha256: stream_ordered_sha256(bundle)?,
         table_counts,
         table_sha256,
         already_imported: false,
     })
+}
+
+fn hash_rows<'a, R: LegacyRow + 'a>(
+    rows: impl Iterator<Item = &'a R>,
+) -> Result<String, DataError> {
+    let mut hash = HashWriter::default();
+    hash.0.update(b"[");
+    for (index, row) in rows.enumerate() {
+        if index != 0 {
+            hash.0.update(b",");
+        }
+        serde_json::to_writer(&mut hash, row.value()?.as_ref())
+            .map_err(|_| DataError::InvalidInput)?;
+    }
+    hash.0.update(b"]");
+    Ok(hash.finish())
 }
 
 fn validate_ledger(ledger: &Value) -> Result<(), DataError> {
@@ -145,50 +281,96 @@ fn validate_ledger(ledger: &Value) -> Result<(), DataError> {
     Ok(())
 }
 
-pub async fn reconcile(db: &Db, bundle: &LegacyBundle) -> Result<ImportReport, DataError> {
+pub async fn reconcile<R: LegacyRow>(
+    db: &Db,
+    bundle: &LegacyBundle<R>,
+) -> Result<ImportReport, DataError> {
     let report = validate_bundle(bundle)?;
-    for table in LEGACY_TABLES {
-        let actual = canonical_rows(table, &db.rows(table).await?)?;
-        if report.table_sha256[table] != canonical_sha256(&actual)?
-            || report.table_counts[table] != actual.len()
+    let mut connection = db.connection().await?;
+    AsyncPgConnection::transaction::<_, DataError, _>(&mut connection, async move |connection| {
+        connection
+            .batch_execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .await?;
+        for table in LEGACY_TABLES {
+            reconcile_table(connection, table, &report).await?;
+        }
+        Ok(report)
+    })
+    .await
+}
+
+async fn reconcile_table(
+    connection: &mut AsyncPgConnection,
+    table: &str,
+    report: &ImportReport,
+) -> Result<(), DataError> {
+    let mut rows = sql_query("SELECT row_key,payload FROM legacy_record WHERE table_name=$1 ORDER BY row_key COLLATE \"C\"")
+        .bind::<Text, _>(table)
+        .load_stream::<JsonRow>(connection)
+        .await?;
+    let mut hash = HashWriter::default();
+    hash.0.update(b"[");
+    let mut count = 0;
+    let mut previous: Option<String> = None;
+    while let Some(row) = rows.try_next().await? {
+        if validate_row(table, &row.payload)? != row.row_key
+            || previous.as_ref().is_some_and(|key| key >= &row.row_key)
         {
             return Err(DataError::Reconciliation);
         }
+        if count != 0 {
+            hash.0.update(b",");
+        }
+        serde_json::to_writer(&mut hash, &row.payload).map_err(|_| DataError::InvalidInput)?;
+        previous = Some(row.row_key);
+        count += 1;
     }
-    Ok(report)
+    hash.0.update(b"]");
+    if count != report.table_counts[table] || hash.finish() != report.table_sha256[table] {
+        return Err(DataError::Reconciliation);
+    }
+    Ok(())
 }
 
-pub async fn import_bundle(db: &Db, bundle: &LegacyBundle) -> Result<ImportReport, DataError> {
+pub async fn import_bundle<R: LegacyRow>(
+    db: &Db,
+    bundle: &LegacyBundle<R>,
+) -> Result<ImportReport, DataError> {
     let report = validate_bundle(bundle)?;
-    let bundle = bundle.clone();
     let mut connection = db.connection().await?;
     AsyncPgConnection::transaction::<_, DataError, _>(&mut connection, async move |connection| {
         sql_query("SELECT pg_advisory_xact_lock(731957311)")
             .execute(&mut *connection)
             .await?;
-        let present =
-            sql_query("SELECT manifest AS payload FROM import_manifest WHERE bundle_sha256=$1")
-                .bind::<Text, _>(&report.bundle_sha256)
-                .load::<JsonRow>(&mut *connection)
-                .await?;
-        if !present.is_empty() {
+        #[derive(diesel::QueryableByName)]
+        struct Present {
+            #[diesel(sql_type=Bool)]
+            present: bool,
+        }
+        let present = sql_query(
+            "SELECT EXISTS(SELECT 1 FROM import_manifest WHERE bundle_sha256=$1) AS present",
+        )
+        .bind::<Text, _>(&report.bundle_sha256)
+        .get_result::<Present>(&mut *connection)
+        .await?;
+        if present.present {
             return Ok(ImportReport {
                 already_imported: true,
                 ..report
             });
         }
         for table in LEGACY_TABLES {
-            for row in canonical_rows(table, &bundle.tables[table])? {
-                let key = row_key(table, &row)?;
+            for (key, row) in ordered_rows(table, &bundle.tables[table])? {
+                let row = row.value()?;
                 let existing = sql_query(
-                    "SELECT payload FROM legacy_record WHERE table_name=$1 AND row_key=$2",
+                    "SELECT row_key,payload FROM legacy_record WHERE table_name=$1 AND row_key=$2",
                 )
                 .bind::<Text, _>(table)
                 .bind::<Text, _>(&key)
                 .load::<JsonRow>(&mut *connection)
                 .await?;
                 if let Some(existing) = existing.first() {
-                    if existing.payload != row {
+                    if &existing.payload != row.as_ref() {
                         return Err(DataError::Conflict);
                     }
                 } else {
@@ -197,25 +379,27 @@ pub async fn import_bundle(db: &Db, bundle: &LegacyBundle) -> Result<ImportRepor
                     )
                     .bind::<Text, _>(table)
                     .bind::<Text, _>(key)
-                    .bind::<Jsonb, _>(row)
+                    .bind::<Jsonb, _>(row.as_ref())
                     .execute(&mut *connection)
                     .await?;
                 }
             }
-            let actual =
-                sql_query("SELECT payload FROM legacy_record WHERE table_name=$1 ORDER BY row_key")
-                    .bind::<Text, _>(table)
-                    .load::<JsonRow>(&mut *connection)
-                    .await?;
-            let rows: Vec<_> = actual.into_iter().map(|row| row.payload).collect();
-            if canonical_sha256(&canonical_rows(table, &rows)?)? != report.table_sha256[table] {
-                return Err(DataError::Reconciliation);
-            }
+            reconcile_table(connection, table, &report).await?;
         }
         import_safety(connection, bundle.safety_ledger.as_ref()).await?;
-        sql_query("INSERT INTO import_manifest(bundle_sha256,manifest) VALUES($1,$2)")
+        #[derive(Serialize)]
+        struct Manifest<'a, R: LegacyRow> {
+            bundle: &'a LegacyBundle<R>,
+            report: &'a ImportReport,
+        }
+        let provenance = serde_json::to_string(&Manifest {
+            bundle,
+            report: &report,
+        })
+        .map_err(|_| DataError::InvalidInput)?;
+        sql_query("INSERT INTO import_manifest(bundle_sha256,manifest) VALUES($1,$2::jsonb)")
             .bind::<Text, _>(&report.bundle_sha256)
-            .bind::<Jsonb, _>(json!({"bundle":bundle,"report":report}))
+            .bind::<Text, _>(&provenance)
             .execute(&mut *connection)
             .await?;
         Ok(report)
