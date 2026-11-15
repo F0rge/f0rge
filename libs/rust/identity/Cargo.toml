@@ -1,0 +1,18 @@
+[package]
+name = "f0rge-identity"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+actix-web = { version = "4.19.0", default-features = false, features = ["macros"] }
+f0rge-api-errors = { path = "../api-errors" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+jsonwebtoken = { version = "10.4.0", features = ["rust_crypto"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["sync"] }
+
+[dev-dependencies]
+actix-rt = "2"

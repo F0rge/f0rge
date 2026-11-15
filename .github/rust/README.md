@@ -1,10 +1,10 @@
 # Rust projects in Nx
 
-This is shared build/test groundwork for the accepted Rust stack. It adds no
-application, Cargo workspace, database, runtime or deployment. Buycycle remains
-on its existing private Pi runtime. The holiday-explorer pilot in P-010 still
-needs evidence before broader platform adoption; temporary test crates do not
-satisfy that prerequisite.
+This is shared build/test groundwork for the accepted Rust stack. Buycycle now
+has a registered Actix/Diesel backend and shared verified-identity/error crates.
+Its existing Pi service remains unchanged until an approved cutover. P-010
+sequences the authorized Buycycle migration first and the holiday-explorer pilot
+later; temporary crates or green checks do not prove an app migration complete.
 
 ## Run the checks
 
@@ -121,7 +121,7 @@ It does not prove Actix/Diesel adoption, database isolation, generated API
 contracts, Primer UI, ARM64 runtime correctness or release compliance. Gate changes still require independent review. No production artifact is
 published or promoted, and no provider credential is used.
 
-Before any app adoption, complete its approved brief and pilot prerequisites.
+Before app adoption, complete its approved brief and the current P-010 sequencing.
 Every PR uses [the PR process](../../docs/agents/pr-process.md), including the
-full named ADR assessment with actual gaps. Leo's separate production-release
-approval remains required; keep auto-merge disabled.
+full named ADR assessment with actual gaps. Release authorization follows P-006;
+review and automatic squash merging follow P-005.

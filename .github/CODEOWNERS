@@ -1,54 +1,6 @@
-# Firstout production inputs require one independent owner's approval. GitHub's
-# main ruleset must require code-owner reviews; this file alone is not a gate.
-# Either named owner can review, but the PR author cannot approve their own PR.
-
-# Any workflow can request the Firstout environment secret. Review shared CI
-# entry points and their helpers as well as the dedicated deployment controller.
-/.github/CODEOWNERS @leothesouthafrican @luisfilipe269
-/.github/workflows/ @leothesouthafrican @luisfilipe269
-/.github/actions/ @leothesouthafrican @luisfilipe269
-/.github/scripts/ @leothesouthafrican @luisfilipe269
-/.github/deploy/ @leothesouthafrican @luisfilipe269
-/.github/ruff-version @leothesouthafrican @luisfilipe269
-
-# A later reviewed release can contain earlier main changes. Protect every
-# Firstout source and its shared Python dependencies, including their tests.
-/apps/firstout/ @leothesouthafrican @luisfilipe269
-/libs/backend/core/ @leothesouthafrican @luisfilipe269
-/libs/backend/db/ @leothesouthafrican @luisfilipe269
-/libs/backend/storage/ @leothesouthafrican @luisfilipe269
-/libs/backend/testing/ @leothesouthafrican @luisfilipe269
-
-# npm ci and the Firstout image consume these shared build inputs. Other apps'
-# source stays outside this scope; their workspace manifests are image inputs.
-/package*.json @leothesouthafrican @luisfilipe269
-/nx.json @leothesouthafrican @luisfilipe269
-/tsconfig*.json @leothesouthafrican @luisfilipe269
-/pyrightconfig.json @leothesouthafrican @luisfilipe269
-/pyproject.toml @leothesouthafrican @luisfilipe269
-/uv.toml @leothesouthafrican @luisfilipe269
-/uv.lock @leothesouthafrican @luisfilipe269
-/.npmrc @leothesouthafrican @luisfilipe269
-/.dockerignore @leothesouthafrican @luisfilipe269
-/.gitattributes @leothesouthafrican @luisfilipe269
-/eslint.config.* @leothesouthafrican @luisfilipe269
-/eslint/ @leothesouthafrican @luisfilipe269
-/scripts/ @leothesouthafrican @luisfilipe269
-/vendor/braces/ @leothesouthafrican @luisfilipe269
-/apps/marrow/frontend/package.json @leothesouthafrican @luisfilipe269
-/apps/dk/tag-printer/frontend/package.json @leothesouthafrican @luisfilipe269
-/apps/storefront/commerce/package.json @leothesouthafrican @luisfilipe269
-/apps/storefront/web/package.json @leothesouthafrican @luisfilipe269
-/libs/ui/package.json @leothesouthafrican @luisfilipe269
-
-# Nx infers the whole workspace graph before selecting affected tasks. These
-# plugin configurations can execute in that process, including in other apps.
-# Add future repo-local config or install-lifecycle helpers to this ownership
-# boundary when introducing their import or script reference.
-**/project.json @leothesouthafrican @luisfilipe269
-**/next.config.* @leothesouthafrican @luisfilipe269
-**/vite.config.* @leothesouthafrican @luisfilipe269
-**/vitest.config.* @leothesouthafrican @luisfilipe269
-**/playwright.config.* @leothesouthafrican @luisfilipe269
-**/eslint.config.* @leothesouthafrican @luisfilipe269
-**/.eslintrc* @leothesouthafrican @luisfilipe269
+# Leo is the required human code owner for every PR into main, including
+# this file, CI, deployment inputs and agent instructions. The main ruleset
+# requires code-owner review and dismisses approvals after a code push.
+# Publish agent-prepared PRs through the App so Leo can review independently
+# of PR authorship. CI and resolved review threads remain required.
+* @leothesouthafrican

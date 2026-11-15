@@ -7,7 +7,9 @@
     "apps/firstout/frontend",
     "apps/storefront/commerce",
     "apps/storefront/web",
-    "libs/ui"
+    "libs/ui",
+    "apps/buycycle/frontend",
+    "libs/primer"
   ],
   "overrides": {
     "axios": "1.20.0",

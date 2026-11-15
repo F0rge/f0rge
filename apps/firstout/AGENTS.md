@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Firstout continuous deployment follows [P-006](../../docs/adr/governance.md#p-006) and the [CD runbook](../../.github/deploy/firstout-cd.md). Keep auto-merge disabled; manual provider operations require explicit task authorization.
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../docs/adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
 
 # Firstout — Agent Instructions
 
