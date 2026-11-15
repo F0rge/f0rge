@@ -224,11 +224,21 @@ browser journals have no automatic purge.
 Copy [the example policy](release-agent-policy.example.json) privately, replacing
 every placeholder with observed values. It combines agent and preflight fields;
 production tokens/private identities never belong in the repository. Configure
-scoped **read** access for Access applications/policies, identity providers, tunnel
+scoped **read** access for Access applications/policies/organization, identity providers, tunnel
 configuration, DNS, and the selected Coolify app/schedules. No write token is
 needed. The Coolify API must return the documented auto/preview-deploy settings;
 an incomplete response fails closed. See [Cloudflare's app API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/get/)
 and [Coolify's application schema](https://coolify.io/docs/api/endpoints/applications/get-application-by-uuid).
+
+Access must return exactly the pinned OTP provider in its nonempty `allowed_idps`.
+The auxiliary `use_all_idps` field is optional; if returned it must be exactly
+false. An explicit application `allow_authenticate_via_warp: false` overrides
+the organization setting. When the application omits that field, the preflight
+requires an observed organization value of exactly false. Missing, null, unknown
+or enabled effective WARP authentication fails closed; omission never means
+disabled. These rules follow the [application override](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/get/)
+and [organization inheritance](https://developers.cloudflare.com/api/resources/zero_trust/subresources/organizations/)
+contracts while retaining the separate preflight-bypass and owner-policy checks.
 
 Run on the Pi from the installed, protected checkout, writing a new protected
 receipt filename (the command never replaces an existing receipt):

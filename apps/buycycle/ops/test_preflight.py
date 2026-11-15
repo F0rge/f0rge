@@ -67,10 +67,9 @@ class ProviderFixture:
             "domain": preflight.DOMAIN,
             "aud": self.config["access_audience"],
             "allowed_idps": [self.config["otp_provider_id"]],
-            "use_all_idps": False,
             "options_preflight_bypass": False,
-            "allow_authenticate_via_warp": False,
         }
+        self.organization = {"auth_domain": "fixture.cloudflareaccess.com", "allow_authenticate_via_warp": False}
         self.policies = [{"id": self.config["access_policy_id"], "decision": "allow", "include": [{"email": {"email": self.config["owner_email"]}}], "exclude": [], "require": []}]
         self.identity = {"id": self.config["otp_provider_id"], "type": "onetimepin"}
         self.tunnel = {"id": self.config["tunnel_id"], "status": "healthy"}
@@ -139,7 +138,7 @@ class ProviderFixture:
         if "/applications/" in url:
             return self.tasks if url.endswith("/scheduled-tasks") else self.legacy
         if url.endswith("/organizations"):
-            return self.response({"auth_domain": "fixture.cloudflareaccess.com"})
+            return self.response(self.organization)
         if "/policies?" in url:
             return self.response(self.policies)
         if "/identity_providers/" in url:
@@ -179,7 +178,7 @@ class ProviderFixture:
         return preflight.observe(self.config, fetch=self.fetch, read=self.read, files=self.files, directories=Path)
 
     def access(self):
-        preflight.validate_access(self.config, self.application, self.policies, self.identity, self.tunnel, self.routes, self.dns)
+        preflight.validate_access(self.config, self.application, self.policies, self.identity, self.tunnel, self.routes, self.dns, organization=self.organization)
 
 
 class PreflightTests(unittest.TestCase):
@@ -204,14 +203,75 @@ class PreflightTests(unittest.TestCase):
             ("use_all_idps", True, "access_otp_only"),
         ]:
             with self.subTest(field=field):
-                previous = self.fixture.application[field]
+                previous = copy.deepcopy(self.fixture.application)
                 self.fixture.application[field] = value
                 with self.assertRaisesRegex(preflight.Refused, reason):
                     self.fixture.access()
-                self.fixture.application[field] = previous
+                self.fixture.application = previous
         self.fixture.policies[0]["include"] = [{"everyone": {}}]
         with self.assertRaisesRegex(preflight.Refused, "access_owner"):
             self.fixture.access()
+
+    def test_exact_nonempty_otp_selection_is_required_without_ui_only_flag(self):
+        self.fixture.access()
+        missing = object()
+        for value in (
+            missing,
+            None,
+            [],
+            [self.fixture.config["otp_provider_id"], "other-idp"],
+            [self.fixture.config["otp_provider_id"]] * 2,
+            ["other-idp"],
+            self.fixture.config["otp_provider_id"],
+            {},
+        ):
+            with self.subTest(value=value):
+                if value is missing:
+                    self.fixture.application.pop("allowed_idps", None)
+                else:
+                    self.fixture.application["allowed_idps"] = value
+                with self.assertRaisesRegex(preflight.Refused, "access_otp_only"):
+                    self.fixture.access()
+        self.fixture.application["allowed_idps"] = [self.fixture.config["otp_provider_id"]]
+        for value in (False, True, None, 0, "false", {}):
+            self.fixture.application["use_all_idps"] = value
+            with self.subTest(use_all_idps=value):
+                if value is False:
+                    self.fixture.access()
+                else:
+                    with self.assertRaisesRegex(preflight.Refused, "access_otp_only"):
+                        self.fixture.access()
+        self.fixture.application.pop("use_all_idps")
+        self.fixture.config["otp_provider_id"] = ""
+        self.fixture.application["allowed_idps"] = [""]
+        with self.assertRaisesRegex(preflight.Refused, "access_otp_only"):
+            self.fixture.access()
+
+    def test_app_warp_override_and_organization_inheritance_matrix(self):
+        missing = object()
+        values = (missing, False, True, None, 0, "false", {})
+        for app_value in values:
+            for organization_value in values:
+                with self.subTest(app=app_value, organization=organization_value):
+                    self.fixture.application.pop("allow_authenticate_via_warp", None)
+                    self.fixture.organization.pop("allow_authenticate_via_warp", None)
+                    if app_value is not missing:
+                        self.fixture.application["allow_authenticate_via_warp"] = app_value
+                    if organization_value is not missing:
+                        self.fixture.organization["allow_authenticate_via_warp"] = organization_value
+                    if app_value is False or (app_value is missing and organization_value is False):
+                        self.fixture.access()
+                    else:
+                        with self.assertRaisesRegex(preflight.Refused, "access_bypass"):
+                            self.fixture.access()
+
+    def test_full_observation_uses_parent_warp_setting_when_app_omits_it(self):
+        self.fixture.observe()
+        self.fixture.organization["allow_authenticate_via_warp"] = True
+        with self.assertRaisesRegex(preflight.Refused, "access_bypass"):
+            self.fixture.observe()
+        self.fixture.application["allow_authenticate_via_warp"] = False
+        self.fixture.observe()
 
     def test_extra_or_bypass_policy_is_denied(self):
         self.fixture.policies.append({"decision": "bypass"})

@@ -100,17 +100,27 @@ def cf_result(value: object, *, collection: bool = False):
     return value["result"]
 
 
-def validate_access(config: dict, application: dict, policies: list, identity: dict, tunnel: dict, tunnel_config: dict, dns: list) -> None:
+def validate_access(config: dict, application: dict, policies: list, identity: dict, tunnel: dict, tunnel_config: dict, dns: list, *, organization: dict) -> None:
     require(application.get("id") == config["cf_application_id"] and application.get("type") == "self_hosted", "access_app")
     require(application.get("domain") == DOMAIN and application.get("aud") == config["access_audience"], "access_destination_audience")
-    require(application.get("allowed_idps") == [config["otp_provider_id"]] and application.get("use_all_idps") is False, "access_otp_only")
+    # allowed_idps is the documented provider selection. The auxiliary all-IDPs
+    # flag is not returned by every API response; a returned contradiction still
+    # refuses the observation rather than widening the exact OTP allowlist.
+    require(isinstance(config["otp_provider_id"], str) and bool(config["otp_provider_id"]) and application.get("allowed_idps") == [config["otp_provider_id"]], "access_otp_only")
+    require("use_all_idps" not in application or application["use_all_idps"] is False, "access_otp_only")
     require(identity.get("id") == config["otp_provider_id"] and identity.get("type") == "onetimepin", "access_otp_provider")
     require(len(policies) == 1, "access_policy_count")
     policy = policies[0]
     require(policy.get("decision") == "allow" and policy.get("id") == config["access_policy_id"], "access_policy_action")
     require(policy.get("include") == [{"email": {"email": config["owner_email"]}}], "access_owner")
     require(policy.get("exclude", []) == [] and policy.get("require", []) == [], "access_policy_shape")
-    require(application.get("options_preflight_bypass") is False and application.get("allow_authenticate_via_warp") is False, "access_bypass")
+    require(application.get("options_preflight_bypass") is False, "access_bypass")
+    # An explicit application boolean overrides the organization setting. When
+    # omitted it inherits; missing/null values never imply a disabled bypass.
+    warp_disabled = (
+        application["allow_authenticate_via_warp"] is False if "allow_authenticate_via_warp" in application else organization.get("allow_authenticate_via_warp") is False
+    )
+    require(warp_disabled, "access_bypass")
     require(tunnel.get("id") == config["tunnel_id"] and tunnel.get("status") == "healthy", "tunnel_identity_health")
     ingress = tunnel_config.get("config", {}).get("ingress")
     require(isinstance(ingress, list) and len(ingress) == 2, "tunnel_routes")
@@ -349,7 +359,7 @@ def observe(config: dict, *, fetch=get_json, read=docker, files=managed_file, di
     routes = cf_result(fetch(tunnel_base + "/configurations", token))
     dns_url = "https://api.cloudflare.com/client/v4/zones/" + config["cf_zone_id"] + "/dns_records?type=CNAME&name=" + DOMAIN + "&per_page=100"
     dns = cf_result(fetch(dns_url, token), collection=True)
-    validate_access(config, application, policies, identity, tunnel, routes, dns)
+    validate_access(config, application, policies, identity, tunnel, routes, dns, organization=organization)
     base = config["coolify_base_url"].rstrip("/")
     require(urllib.parse.urlsplit(base).scheme == "https", "coolify_https")
     legacy = fetch(base + "/applications/" + APP, config["coolify_token_file"])
