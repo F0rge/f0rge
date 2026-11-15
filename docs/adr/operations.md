@@ -9,11 +9,11 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Policy status:** Accepted
 - **Temporary ID:** P-051
 - **Category:** Operations
-- **Decision:** Health checks and operational visibility are mandatory on Pi and Railway.
-- **Proposed enforcement (not installed):** App health/readiness contract and platform monitor configuration checks; dependency-failure fixtures test unhealthy signals and release health verification.
-- **Gate and limit:** Integration + runtime: health evidence tied to deployed version. Passing HTTP liveness alone does not prove business workflow health.
+- **Decision:** Health checks and operational visibility are mandatory on Pi and Railway. Firstout continuous deployment automatically verifies the exact backend/frontend image digests, running replicas, database-backed readiness and migration receipt, and served frontend assets before declaring success. Release verification failures trigger application recovery and pause subsequent releases.
+- **Enforcement:** Firstout's controller checks fixed provider targets, settles each rollout, binds backend readiness to the candidate source/schema/policy receipt and verifies frontend JavaScript/CSS against tested hashes. A bounded post-deploy observation window repeats these checks. Other apps retain their existing release holds; this is not a claim of a platform-wide monitor.
+- **Gate and limit:** Integration + runtime: health evidence is tied to the actual serving version. Checks use read-only endpoints and static assets, with no real charges, emails or customer writes. The controller's current six observations at ten-second intervals are implementation bounds, not approved platform SLOs. Full authenticated Clerk business journeys and continuous monitoring beyond that release window remain separate coverage.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** Railway healthcheck configuration and a post-deploy HTTP smoke for components with health URLs. The smoke does not compare a deployed digest.
-- **Implementation:** Partial static evidence only. This record does not claim the decision is built.
+- **Implementation:** Firstout controller, workflow and boundary tests are implemented in `.github/deploy/firstout_cd.py` and `.github/workflows/cd-firstout.yml`; production credentials, baseline bootstrap and live activation are not performed by this PR. Other-app operational coverage remains partial.
 - **Assessment label:** partial (read-only assessment, not a gate).
 - **Risk noted in that assessment:** medium.
 - **Approved exception:** None.
@@ -51,11 +51,11 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Policy status:** Accepted
 - **Temporary ID:** P-054
 - **Category:** Operations
-- **Decision:** Backups, tested restoration and recovery procedures on both hosts.
-- **Proposed enforcement (not installed):** Backup-policy checks plus isolated restore drills with recorded recovery evidence; include app DB/files and Airflow metadata/logs/versioned code/dependencies and recovery keys as applicable.
-- **Gate and limit:** Runtime + human: successful restore record and runbook, not just a scheduled-backup checkbox. Recovery targets/cadence need assessment.
+- **Decision:** Backups, tested restoration and recovery procedures are required on both hosts. Firstout may automatically recover an application release by restoring its captured previous immutable backend/frontend images in reverse deployment order, verifying recovery and pausing further releases. Application recovery never automatically downgrades PostgreSQL or restores a database snapshot; new business transactions must be preserved.
+- **Enforcement:** Firstout preflight reads a recent, unexpired provider backup record belonging to its fixed PostgreSQL volume before any release mutation. The current 24-hour age bound is an implementation limit, not a repo-wide recovery target. Compatible schema changes and a tested previous backend image are required so old binaries can operate on the expanded database. Each mutation is journaled durably before submission; an ambiguous provider outcome is reconciled before another mutation. Recovery leaves a durable open incident and blocks later releases until an authorized operator reconciles it.
+- **Gate and limit:** Boundary tests cover release failure, response loss, rollback, failed recovery and durable pause. Provider backup identity/age checks do not prove a restore drill or transaction-consistent recovery. Database restoration, destructive schema recovery and lost-data decisions require a separately approved incident plan. Restore drills, retention/cadence and recovery objectives remain explicit activation prerequisites; no backup is automatically restored as part of CD.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** Two shell scripts. They are not invoked by CI. No restore test.
-- **Implementation:** Partial static evidence only. This record does not claim the decision is built.
+- **Implementation:** Firstout automatic image recovery and durable incident pause are implemented and tested at external boundaries. Live provider rehearsal, backup restoration evidence and activation are not established by this code change; other-app backup/recovery gaps remain.
 - **Assessment label:** partial (read-only assessment, not a gate).
 - **Risk noted in that assessment:** high.
 - **Approved exception:** None.

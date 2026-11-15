@@ -75,6 +75,6 @@ Keep platform enforcement gaps distinct from whether this PR follows a rule.
 Check that all five sections reflect the final diff; the diagram matches the
 solution; every ADR appears with its short title, status, baseline and reason;
 the rows follow the sort order; and approval claims have real references.
-Report missing checks, reviews or evidence explicitly. P-006 still requires
-Leo's separate production-release approval; a completed description grants
-neither merge nor deployment permission.
+Report missing checks, reviews or evidence explicitly. Apply P-006's Firstout CD
+scope and other apps' per-release approval requirements. A completed description
+does not authorize merging or manual provider operations.

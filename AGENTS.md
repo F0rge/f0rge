@@ -10,7 +10,7 @@ Accepted and conditional decisions in [`docs/adr/README.md`](docs/adr/README.md)
 
 New apps use the accepted stack in that index: Rust, Actix Web, Diesel, PostgreSQL, standalone React, strict TypeScript, Vite, actual Primer, and TanStack Query, Router, and Form. `C-001` and `C-002` stay conditional. Apps already in this repo are legacy migration inventory, not approved exceptions, and these records do not migrate them.
 
-Leo approves every production release. Do not enable auto-merge. Do not merge or deploy unless that approval is in the task. Historical automatic deploy paths and retained provider configuration are inventory, not permission and not an approved exception.
+Release authorization follows [P-006](docs/adr/governance.md#p-006): Firstout uses its dedicated continuous-deployment pipeline after reviewed main merges and passing checks; other apps require Leo’s explicit per-release approval. Keep auto-merge disabled. Manual provider operations require their own task authorization. Historical automatic deploy paths and retained provider configuration are inventory, not permission and not an approved exception.
 
 ## Stack
 
@@ -71,20 +71,20 @@ DasKasas public storefront and Medusa commerce service. Nx projects: `daskasas-w
 
 ## Git flow (trunk-based, main only)
 
-Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. Leo approves every production release. A merge to `main` is not that approval. Do not enable auto-merge.
+Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. Release authorization follows P-006: Firstout has a dedicated CD path; other apps require Leo’s per-release approval. Do not enable auto-merge.
 
 - **Trunk-based development.** Everyone integrates into `main` continuously.
 - **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Codex-created branches use `codex/<short-kebab-description>`. Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
 - **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
 - **Squash merge** with a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
-- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check. A merge to `main` is not by itself a production release approval.
+- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check. Firstout releases only through its dedicated P-006 CD path; a merge does not authorize other production operations.
 - **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
 - **Hotfixes are just PRs into `main`** (`hotfix/<desc>` or `fix/<desc>`), same CI and squash merge.
 - Never force-push `main`. Force-pushing your own feature branch is fine when needed.
 - Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names in committed files. They do not authorize a `develop` branch workflow. Committed files do not describe a deploy workflow for those names. That is not a live host check.
 
 - PRs into `main` run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build + prod-shaped frontend build) and `e2e-smoke.yml`.
-- The existing **Deploy** workflow is disabled. This proposed change makes `deploy.yml` manual preparation only and `deploy-reusable.yml` an inert, failing release hold; neither deploys nor smokes production. The GitHub `production` environment is configured, but it does not protect direct Railway/Coolify operations. Before any release work, read [the hold and remaining requirements](.github/deploy/README.md): tested immutable artifact promotion, secret migration, independent approval identity and provider-state verification remain future work.
+- The existing **Deploy** workflow is disabled. This proposed change makes `deploy.yml` manual preparation only and `deploy-reusable.yml` an inert, failing release hold; neither deploys nor smokes production. The GitHub `production` environment is configured, but it does not protect direct Railway/Coolify operations. For Firstout CD, read [the runbook](.github/deploy/firstout-cd.md). For other release work, read [the hold and remaining requirements](.github/deploy/README.md): tested immutable artifact promotion, secret migration, independent approval identity and provider-state verification remain future work.
 
 ## Running locally
 
@@ -169,7 +169,7 @@ Use [issue-writing guidance](docs/agents/issue-writing.md) for self-contained im
 
 ## Shipping features
 
-Use a short-lived branch and a pull request into `main`. Review and green CI are not a production release. Leo approves every production release. Do not enable auto-merge.
+Use a short-lived branch and a pull request into `main`. Review and green CI are not a production release. Follow P-006’s Firstout CD scope and the per-release approval requirement for other apps. Do not enable auto-merge.
 
 Before creating, updating or reviewing a PR description, follow [the PR process](docs/agents/pr-process.md) and [PR template](.github/PULL_REQUEST_TEMPLATE.md): explain what changed, why and the solution design, then assess every ADR with evidence and visible gaps.
 

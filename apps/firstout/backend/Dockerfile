@@ -1,6 +1,7 @@
 FROM python:3.11-slim
 
 ARG SOURCE_COMMIT
+ENV SOURCE_COMMIT=$SOURCE_COMMIT
 LABEL org.opencontainers.image.source="https://github.com/F0rge/f0rge" \
       org.opencontainers.image.revision=$SOURCE_COMMIT \
       org.opencontainers.image.title="Firstout API"

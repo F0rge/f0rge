@@ -1,28 +1,26 @@
 # Release paths and retained holds
 
-The Firstout frontend and API have narrowly scoped, operator-driven release
-paths in [firstout-release.md](firstout-release.md). A selected closed component
-profile binds the tested immutable image artifact to its fixed Firstout service.
-The manual artifact workflow builds, tests and publishes; the promotion helper
-verifies the evidence and target, promotes that same image, and checks Railway's
-serving deployment and instance mapping. API promotion additionally requires the
-separately controlled migration head and removes only the reviewed legacy start
-and predeploy command overrides.
+Firstout has a dedicated [continuous-deployment pipeline](firstout-cd.md) for
+reviewed main commits, coordinated backend/frontend images, controlled compatible
+migrations and automatic application recovery under P-006. Activation requires
+the documented credential, backup and rollback-baseline setup; this PR does not
+claim those live prerequisites have been configured.
 
-Explicit approval for the selected production release is still required.
-Publication, merge, successful CI or permission to replace organisation data does
-not grant that approval. There is no fallback through a legacy source rebuild,
-`railway up` or a hotpatch if artifact verification fails.
+The [frontend and API operator release paths](firstout-release.md) remain
+available for explicitly authorized manual operations. Their closed component
+profiles bind tested immutable images to fixed services, verify serving
+identities and require a separately controlled API migration head. Publication,
+merge and successful CI do not authorize arbitrary operator deployment or data
+replacement. There is no fallback through source rebuilds or hotpatches when
+artifact verification fails.
 
-These paths do not enable automatic releases, migrate other apps, move
-production credentials into GitHub, or make the GitHub environment protect
-operator CLI access. The generic entry points and other apps remain under the
-holds below. Existing legacy credentials and alternate historical paths remain
-separate operational risks, not protections established by these paths.
+Those manual paths do not activate CD or extend its standing authorization to
+other apps. Generic entry points and other apps remain under the holds below;
+GitHub environments do not protect direct operator CLI access.
 
 ## Generic release hold and historical deploy manifest
 
-The repository release entry points in this change are **inert**. The manual
+The generic repository release entry points are **inert**; Firstout uses only its dedicated CD path. The manual
 `deploy.yml` and callable `deploy-reusable.yml` target the fixed GitHub
 `production` environment without calling a provider, reading deployment
 credentials or running a smoke against production. Both jobs set
@@ -88,8 +86,7 @@ running digest and health. Test reruns, mismatches and recovery in an isolated
 environment. Audit and control Railway, Coolify, manual, historical rerun and
 other alternate provider paths; their current live state is not established by
 this change. Do not put deployment credentials into repository-level secrets or
-activate a provider trigger merely to make this hold pass. Every production
-release still needs Leo's explicit approval.
+activate a provider trigger merely to make this hold pass. P-006 permits Firstout releases only through its dedicated CD path; other apps still need Leo's explicit per-release approval.
 
 ## Historical configuration — not an active release path
 

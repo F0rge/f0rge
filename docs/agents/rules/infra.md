@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Release authorization follows P-006: Firstout uses its dedicated CD path; other apps require Leo’s explicit per-release approval. Keep auto-merge disabled; manual production operations require task authorization.
 
 # f0rge Infrastructure
 
@@ -17,7 +17,7 @@ Use the [shared protocol](../protocol.md) and resolve each path with `node scrip
 
 The existing **Deploy** workflow is disabled. This proposed change makes [`deploy.yml`](../../../.github/workflows/deploy.yml) manual preparation only and [`deploy-reusable.yml`](../../../.github/workflows/deploy-reusable.yml) an inert, failing release hold. Neither calls providers, uses deployment credentials or runs production smoke. Both reference the configured GitHub `production` environment with `deployment: false`; that protection has not been exercised with these workflows and does not protect direct Railway/Coolify operations.
 
-Runtime provider state has not been checked for this change. Before any authorized release work, read [the release hold requirements](../../../.github/deploy/README.md): tested immutable artifact promotion, deployment-secret migration, an independent automation/approval identity and control of alternate provider paths remain future work. Leo's explicit release approval is required.
+Runtime provider state has not been checked for this change. Before any authorized release work, read [the release hold requirements](../../../.github/deploy/README.md): tested immutable artifact promotion, deployment-secret migration, an independent automation/approval identity and control of alternate provider paths remain future work. P-006 defines the Firstout CD scope; other apps still require Leo's explicit release approval.
 
 Historical source-based path: [the manifest](../../../.github/deploy/manifest.yml) plus Nx affected selected Railway smoke or Coolify webhook POSTs. Retained [`railway-smoke-reusable.yml`](../../../.github/workflows/railway-smoke-reusable.yml) and webhook names are investigation inventory, not an active release path. The former Coolify secrets were `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DASKASAS_BACKEND`, `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`, `COOLIFY_WEBHOOK_BUYCYCLE`, `COOLIFY_WEBHOOK_ENVMON_BACKEND` and `COOLIFY_WEBHOOK_ENVMON_FRONTEND`; their current storage, consumers and permissions require a separate audit.
 

@@ -44,3 +44,4 @@
 **/tests
 **/exports
 **/prepared-data
+**/.pytest_cache

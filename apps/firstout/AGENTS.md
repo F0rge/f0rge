@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Leo approves every production release. Do not enable auto-merge, and do not merge or deploy without that approval.
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). New apps follow that index. Commands and safety rules below stay in force for the legacy area they name. They are not an approved exception and they do not migrate the app. Firstout continuous deployment follows [P-006](../../docs/adr/governance.md#p-006) and the [CD runbook](../../.github/deploy/firstout-cd.md). Keep auto-merge disabled; manual provider operations require explicit task authorization.
 
 # Firstout — Agent Instructions
 
@@ -618,7 +618,7 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 
 ## Railway
 
-> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Railway inspection on 8 November 2026 identified the `production` environment below; recheck live service bindings before infrastructure changes. A merge to `main` is not Leo's production release approval. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Railway inspection on 8 November 2026 identified the `production` environment below; recheck live service bindings before infrastructure changes. Reviewed main commits release only through the dedicated P-006 CD pipeline; manual provider operations require task authorization. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Keep Firstout services and credentials within its own project.
 
