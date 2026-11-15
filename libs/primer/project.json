@@ -1,0 +1,30 @@
+{
+  "name": "f0rge-primer",
+  "projectType": "library",
+  "sourceRoot": "libs/primer/src",
+  "tags": ["platform:ts", "scope:shared"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": { "command": "npm run typecheck -w @f0rge/primer" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": { "command": "npm run lint -w @f0rge/primer" }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "npm run test -w @f0rge/primer" }
+    },
+    "storybook-build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist/storybook"],
+      "options": { "command": "npm run storybook-build -w @f0rge/primer" }
+    },
+    "storybook": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "npm run storybook -w @f0rge/primer" }
+    }
+  }
+}
