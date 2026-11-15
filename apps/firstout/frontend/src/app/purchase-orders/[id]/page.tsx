@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   FileUploaderDropContainer,
@@ -517,7 +518,7 @@ export default function PurchaseOrderDetailPage() {
   }
 
   if (loading) {
-    return <p className="cds--type-body-01">Loading purchase order…</p>;
+    return <PageLoading kind="form" label="Loading purchase order…" />;
   }
 
   if (!order) {

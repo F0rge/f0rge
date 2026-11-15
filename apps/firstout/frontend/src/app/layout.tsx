@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@carbon/styles/css/styles.css";
 import "./globals.css";
+import "./workspace.scss";
 
 import { AppShell } from "@/components/app-shell";
 import { StaffProvider } from "@/components/staff-provider";

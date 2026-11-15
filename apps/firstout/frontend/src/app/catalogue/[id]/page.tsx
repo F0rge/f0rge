@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import { StaffImage } from "@/components/staff-image";
 
 import {
@@ -292,7 +293,7 @@ export default function SkuDetailPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading SKU…</p>
+        <PageLoading kind="form" label="Loading SKU…" />
       ) : sku ? (
         <Tabs>
           <TabList aria-label="SKU detail">

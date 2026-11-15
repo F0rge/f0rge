@@ -1,6 +1,8 @@
 "use client";
 
-import { Button, InlineNotification, Loading, NumberInput, Stack } from "@carbon/react";
+import { PageLoading } from "@/components/page-loading";
+
+import { Button, InlineNotification, NumberInput, Stack } from "@carbon/react";
 import { useEffect, useState } from "react";
 import {
   ApiError, formatZarAmount, getPortalMe, listPortalCatalogue, placePortalOrder,
@@ -43,7 +45,7 @@ export function TradeCatalogue({ access }: { access: PortalAccess }) {
     <h2 className="cds--type-productive-heading-03">{access.organisation_name} — {access.customer_name}</h2>
     {error ? <InlineNotification kind="error" title="Trade catalogue" subtitle={error} hideCloseButton /> : null}
     {success ? <InlineNotification kind="success" title="Order placed" subtitle={success} hideCloseButton /> : null}
-    {loading ? <Loading withOverlay={false} description="Loading catalogue…" /> : me ? <>
+    {loading ? <PageLoading kind="form" label="Loading catalogue…" /> : me ? <>
       {!items.length ? <p>No SKUs available.</p> : items.map((item) => <div key={item.id} className="firstout-trade-item">
         <div><strong>{item.our_ref}</strong> {item.name}<div>{formatZarAmount(item.unit_ex_vat)} excl. VAT</div></div>
         <NumberInput id={`qty-${item.id}`} label="Qty" min={1} value={qty[item.id] ?? 1} disabled={busy !== null}

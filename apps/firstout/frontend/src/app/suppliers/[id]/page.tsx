@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import { Button, InlineNotification, Stack, Tag, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -42,7 +43,7 @@ export default function SupplierDetailPage() {
   }, [user, loadSupplier]);
 
   if (loading || (supplier !== null && supplier.id !== params.id)) {
-    return <p className="cds--type-body-01">Loading…</p>;
+    return <PageLoading kind="form" label="Loading…" />;
   }
 
   if (error || !supplier) {

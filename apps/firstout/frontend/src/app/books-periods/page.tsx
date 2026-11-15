@@ -1,6 +1,7 @@
 // Superdesign skipped — implemented Carbon from /vat201 lock/reopen pattern (CLI available).
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
@@ -235,7 +236,7 @@ export default function BooksPeriodsPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading periods…</p>
+        <PageLoading label="Loading periods…" />
       ) : periods.length === 0 ? (
         <InlineNotification
           kind="info"

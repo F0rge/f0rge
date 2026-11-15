@@ -684,10 +684,6 @@ body {
   color: var(--cds-text-secondary, #525252);
 }
 
-.firstout-sale-summary__row--discount dd {
-  color: var(--cds-support-error, #da1e28);
-}
-
 .firstout-sale-summary__row--total {
   padding-top: 0.75rem;
   border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
@@ -924,9 +920,10 @@ body {
 .cds--modal {
   z-index: 9000;
 }
+/* Elevate popup content, never the Tooltip trigger container: background
+   pagination controls must remain below an active modal. */
 .cds--overflow-menu-options,
 .cds--popover,
-.cds--tooltip,
 .cds--menu {
   z-index: 9100;
 }

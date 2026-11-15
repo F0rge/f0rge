@@ -10,17 +10,6 @@
   line-height: 18px;
   color: var(--cds-text-secondary);
 }
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--cds-text-secondary);
-  font-size: 12px;
-  line-height: 16px;
-}
-.breadcrumb span:last-child {
-  color: var(--cds-text-primary);
-}
 .header {
   display: flex;
   align-items: center;

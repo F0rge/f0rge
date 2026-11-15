@@ -1,6 +1,6 @@
-/** Compact layout breakpoint (portrait phones). 42rem = 672px at 16px root. */
-export const NARROW_VIEWPORT_MQ = "(max-width: 42rem)";
-export const NARROW_VIEWPORT_PX = 672;
+/** Carbon switches from a navigation drawer to persistent navigation at lg (66rem). */
+export const NARROW_VIEWPORT_MQ = "(max-width: 65.99rem)";
+export const NARROW_VIEWPORT_PX = 1055;
 
 /**
  * WMS floor console + Warehouse nav: phones including landscape.
@@ -51,7 +51,9 @@ function getViewportSnapshot(mq: string): boolean {
   return matchesMedia(mq);
 }
 
-export function subscribeNarrowViewport(listener: ViewportListener): () => void {
+export function subscribeNarrowViewport(
+  listener: ViewportListener,
+): () => void {
   return subscribeViewport(NARROW_VIEWPORT_MQ, listener);
 }
 
@@ -59,10 +61,14 @@ export function getNarrowViewportSnapshot(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  return matchesMedia(NARROW_VIEWPORT_MQ) || currentCssWidth() <= NARROW_VIEWPORT_PX;
+  return (
+    matchesMedia(NARROW_VIEWPORT_MQ) || currentCssWidth() <= NARROW_VIEWPORT_PX
+  );
 }
 
-export function subscribeWmsMobileViewport(listener: ViewportListener): () => void {
+export function subscribeWmsMobileViewport(
+  listener: ViewportListener,
+): () => void {
   return subscribeViewport(WMS_MOBILE_VIEWPORT_MQ, listener);
 }
 

@@ -1,0 +1,57 @@
+.workspace {
+  min-width: 0;
+}
+.intro {
+  background: var(--firstout-tone-soft);
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.5rem;
+}
+.intro > div {
+  flex: 1;
+}
+.intro h2 {
+  margin-block-end: 0.5rem;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16rem;
+  gap: 2rem;
+  align-items: start;
+}
+.tabs {
+  min-width: 0;
+  overflow-x: auto;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 1250px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .aside {
+    display: none;
+  }
+}
+@media (max-width: 800px) {
+  .formGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .intro {
+    align-items: flex-start;
+    padding: 1rem;
+    flex-wrap: wrap;
+  }
+}
+
+.saveActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}

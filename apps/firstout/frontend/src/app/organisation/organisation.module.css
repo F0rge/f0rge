@@ -1,0 +1,83 @@
+.workspace {
+  min-width: 0;
+}
+.intro {
+  background: var(--firstout-tone-soft);
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.5rem;
+}
+.intro > div {
+  flex: 1;
+}
+.profileGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(17rem, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+.profileGrid > * {
+  min-width: 0;
+}
+.businessGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.branding {
+  background: var(--firstout-tone-soft);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+.logo {
+  object-fit: contain;
+  max-width: 100%;
+  max-height: 6rem;
+}
+.headingRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.tableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.entry {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.5rem;
+  flex-wrap: wrap;
+}
+.entry > div {
+  flex: 1;
+  min-width: 12rem;
+}
+@media (max-width: 1000px) {
+  .profileGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 800px) {
+  .businessGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .intro {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 1rem;
+  }
+}

@@ -1,5 +1,7 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
+
 import {
   ClerkProvider,
   OrganizationSwitcher,
@@ -10,7 +12,7 @@ import {
 } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { InlineNotification, Loading } from "@carbon/react";
+import { InlineNotification } from "@carbon/react";
 import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { AuthProvider } from "@/lib/auth";
 import { organisationDestination } from "@/lib/organisations";
@@ -51,7 +53,7 @@ function ClerkSession({ children }: { children: ReactNode }) {
     return () => setStaffTokenGetter(null);
   }, [isLoaded, getToken]);
   if (!ready || !isLoaded)
-    return <div className="firstout-shell-loading"><Loading withOverlay={false} description="Loading sign-in…" /></div>;
+    return <div className="firstout-session-loading"><PageLoading kind="form" label="Loading sign-in…" /></div>;
   // Drop all mounted tenant UI state whenever the signed active organisation changes.
   return (
     <StaffSessionContext.Provider value={{ signedIn: Boolean(isSignedIn) }}>

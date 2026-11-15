@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   ContentSwitcher,
@@ -260,7 +261,7 @@ function WmsMobileConsole() {
           ) : null}
 
           {loading ? (
-            <p className="cds--type-body-01">Loading…</p>
+            <PageLoading label="Loading…" />
           ) : tab === "receive" ? (
             <ReceiveTab
               canMutate={canRecv}

@@ -6,7 +6,6 @@ import {
   HeaderGlobalBar,
   HeaderMenuButton,
   HeaderName,
-  Loading,
   SideNav,
   SideNavItems,
   SideNavLink,
@@ -80,6 +79,8 @@ import {
   isStockPath,
   isWarehousePath,
 } from "@/lib/nav";
+import { AppBreadcrumb } from "@/components/app-breadcrumb";
+import { PageLoading } from "@/components/page-loading";
 import { HeaderSearch } from "@/components/header-search";
 import {
   getNarrowViewportServerSnapshot,
@@ -192,19 +193,7 @@ export function AppShell({ children }: AppShellProps) {
     return <>{children}</>;
   }
 
-  if (loading) {
-    return (
-      <Theme theme="g10">
-        <div className="firstout-shell-loading">
-          <Loading withOverlay={false} description="Loading session…" />
-        </div>
-      </Theme>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
+  if (!loading && !user) return null;
 
   const adminItems = ADMIN_NAV_ITEMS.filter(
     (item) => (item.href !== "/organisation" || clerkEnabled) &&
@@ -305,20 +294,20 @@ export function AppShell({ children }: AppShellProps) {
             <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
           </HeaderName>
           <div className="firstout-header-organisation">
-            <StaffOrganizationSwitcher />
+            {!loading && <StaffOrganizationSwitcher />}
           </div>
           <HeaderGlobalBar>
-            <HeaderSearch />
-            <span className="firstout-header-user" title={user.email}>
-              {user.display_name || user.email}
+            {!loading && <HeaderSearch />}
+            <span className="firstout-header-user" title={user?.email}>
+              {user?.display_name || user?.email}
             </span>
-            <HeaderGlobalAction
+            {!loading && <HeaderGlobalAction
               aria-label="Log out"
               tooltipAlignment="end"
               onClick={() => void handleLogout()}
             >
               <Logout size={20} />
-            </HeaderGlobalAction>
+            </HeaderGlobalAction>}
           </HeaderGlobalBar>
         </Header>
         <SideNav
@@ -355,7 +344,8 @@ export function AppShell({ children }: AppShellProps) {
       </Theme>
       <Theme theme="g10">
         <main id="main-content" className="firstout-main">
-          {children}
+          <AppBreadcrumb />
+          {loading ? <PageLoading label="Loading your workspace…" /> : children}
         </main>
       </Theme>
     </div>

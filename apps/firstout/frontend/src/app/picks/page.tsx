@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   ComboBox,
@@ -210,7 +211,7 @@ function PicksPageContent() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading picks…</p>
+        <PageLoading label="Loading picks…" />
       ) : picks.length === 0 ? (
         <InlineNotification
           kind="info"
@@ -326,7 +327,7 @@ function PicksPageContent() {
 
 export default function PicksPage() {
   return (
-    <Suspense fallback={<p className="cds--type-body-01">Loading picks…</p>}>
+    <Suspense fallback={<PageLoading label="Loading picks…" />}>
       <PicksPageContent />
     </Suspense>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   Checkbox,
@@ -374,7 +375,7 @@ export default function Vat201Page() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading periods…</p>
+        <PageLoading label="Loading periods…" />
       ) : periods.length === 0 ? (
         <InlineNotification
           kind="info"

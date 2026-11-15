@@ -1,16 +1,21 @@
 "use client";
 
+import { Suspense, useDeferredValue, useEffect, useState } from "react";
+import {
+  Add,
+  CheckmarkFilled,
+  Delivery,
+  Document,
+  Purchase,
+} from "@carbon/icons-react";
 import {
   Button,
-  Checkbox,
-  DataTable,
+  ClickableTile,
   InlineNotification,
-  Modal,
-  NumberInput,
   Pagination,
   Select,
   SelectItem,
-  Stack,
+  SkeletonText,
   Table,
   TableBody,
   TableCell,
@@ -18,81 +23,35 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TextArea,
-  TextInput,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  Tile,
 } from "@carbon/react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { PageLoading } from "@/components/page-loading";
+import { PurchaseOrderComposer } from "@/components/purchase-orders/composer";
 import {
-  ApiError,
-  PO_STATUS_LABELS,
+  SelectedOrder,
+  orderDate,
+  statusPresentation,
+} from "@/components/purchase-orders/selected-order";
+import styles from "@/components/purchase-orders/purchase-orders.module.css";
+import {
   canRaisePo,
-  createPurchaseOrder,
-  listProformas,
   listPurchaseOrders,
-  listSkus,
-  listSuppliers,
-  type CreatePoLinePayload,
-  type Proforma,
+  PO_STATUS_LABELS,
+  type PurchaseOrder,
   type PurchaseOrderListItem,
   type PurchaseOrderStatus,
-  type Sku,
-  type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import {
-  displayFabric,
-  changeSupplierCodeSku,
-  editSupplierCode,
-  prefillSupplierCode,
-  type SupplierCodeLine,
-} from "@/lib/po-supplier-code";
-
-const TABLE_HEADERS = [
-  { key: "po_number", header: "PO number" },
-  { key: "supplier_name", header: "Supplier" },
-  { key: "status", header: "Status" },
-  { key: "needs_skus", header: "Needs SKUs" },
-  { key: "line_count", header: "Lines" },
-  { key: "created_at", header: "Created" },
-  { key: "actions", header: "" },
-] as const;
-
-type PoRow = {
-  id: string;
-  po_number: string;
-  supplier_name: string;
-  status: string;
-  needs_skus: string;
-  line_count: string;
-  created_at: string;
-  actions: string;
-};
-
-type PoLineForm = SupplierCodeLine & {
-  description: string;
-  qty: number | "";
-  factory_unit_amount: string;
-};
-
-const emptyLine = (): PoLineForm => ({
-  key: crypto.randomUUID(),
-  sku_id: "",
-  supplier_code: "",
-  supplierCodeTouched: false,
-  description: "",
-  qty: "",
-  factory_unit_amount: "",
-});
-
-function formatDate(iso: string): string {
-  return iso.slice(0, 10);
-}
+import { workspaceIdentity } from "@/lib/record-workspace";
 
 type StatusFilter = "all" | PurchaseOrderStatus;
-
-const PO_STATUS_FILTER_ORDER: PurchaseOrderStatus[] = [
+const statuses: PurchaseOrderStatus[] = [
   "pending_approval",
   "rejected",
   "open",
@@ -100,493 +59,513 @@ const PO_STATUS_FILTER_ORDER: PurchaseOrderStatus[] = [
   "landed",
   "received",
 ];
+const activeStatuses: PurchaseOrderStatus[] = [
+  "pending_approval",
+  "open",
+  "on_water",
+  "landed",
+];
+
+type Counts = Record<
+  "pending_approval" | "open" | "on_water" | "landed",
+  number
+>;
+function OrderOverview({
+  refresh,
+  onFilter,
+}: {
+  refresh: number;
+  onFilter: (status: StatusFilter) => void;
+}) {
+  const [counts, setCounts] = useState<Counts | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setError(null);
+      try {
+        const pages = await Promise.all(
+          activeStatuses.map((status) =>
+            listPurchaseOrders({ status, limit: 1 }),
+          ),
+        );
+        if (active)
+          setCounts({
+            pending_approval: pages[0].total,
+            open: pages[1].total,
+            on_water: pages[2].total,
+            landed: pages[3].total,
+          });
+      } catch (reason) {
+        if (active)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not load order totals.",
+          );
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [refresh, retry]);
+  const cards: {
+    label: string;
+    value: number | undefined;
+    detail: string;
+    status: PurchaseOrderStatus;
+    icon: typeof Purchase;
+  }[] = [
+    {
+      label: "Open orders",
+      value: counts?.open,
+      detail: "Open supplier orders",
+      status: "open",
+      icon: Purchase,
+    },
+    {
+      label: "Pending approval",
+      value: counts?.pending_approval,
+      detail: "Orders with pending status",
+      status: "pending_approval",
+      icon: Document,
+    },
+    {
+      label: "On water",
+      value: counts?.on_water,
+      detail: "Shipping stage",
+      status: "on_water",
+      icon: Delivery,
+    },
+    {
+      label: "Landed",
+      value: counts?.landed,
+      detail: "Arrival stage",
+      status: "landed",
+      icon: CheckmarkFilled,
+    },
+  ];
+  return (
+    <div
+      className={`firstout-loading-motion ${styles.stack}`}
+      aria-busy={!counts && !error}
+    >
+      {!counts && !error && (
+        <span className="firstout-sr-only" role="status">
+          Loading purchase order status totals…
+        </span>
+      )}
+      {error && (
+        <div className={styles.between}>
+          <InlineNotification
+            kind="warning"
+            lowContrast
+            title="Order totals unavailable"
+            subtitle={error}
+            hideCloseButton
+          />
+          <Button
+            kind="ghost"
+            size="sm"
+            onClick={() => setRetry((value) => value + 1)}
+          >
+            Retry totals
+          </Button>
+        </div>
+      )}
+      <div className={styles.metrics}>
+        {cards.map((card) => {
+          const content = (
+            <div className={styles.smallStack}>
+              <div className={styles.between}>
+                <p className="cds--type-body-01">{card.label}</p>
+                <span className="firstout-content-icon">
+                  <card.icon size={20} />
+                </span>
+              </div>
+              {error ? (
+                <p className="cds--type-heading-05">—</p>
+              ) : card.value == null ? (
+                <SkeletonText heading width="40%" />
+              ) : (
+                <p className="cds--type-heading-05">
+                  {card.value.toLocaleString("en-ZA")}
+                </p>
+              )}
+              <p className="cds--type-label-01">{card.detail}</p>
+            </div>
+          );
+          return (
+            <div
+              key={card.label}
+              className={`firstout-section-accent firstout-tone-${statusPresentation(card.status).tone} ${styles.metric}`}
+            >
+              <ClickableTile
+                role="button"
+                aria-label={`Show ${PO_STATUS_LABELS[card.status].toLowerCase()} purchase orders`}
+                onClick={() => onFilter(card.status)}
+              >
+                {content}
+              </ClickableTile>
+            </div>
+          );
+        })}
+      </div>
+      <p className="cds--type-helper-text-01">
+        Status totals include imported history. Imported orders remain
+        read-only.
+      </p>
+    </div>
+  );
+}
 
 export default function PurchaseOrdersPage() {
+  const { user, loading } = useAuth();
+  if (loading)
+    return (
+      <PageLoading kind="purchase-orders" label="Loading purchase orders…" />
+    );
+  if (!user) return null;
+  return (
+    <Suspense
+      fallback={
+        <PageLoading kind="purchase-orders" label="Loading purchase orders…" />
+      }
+    >
+      <PurchaseOrdersWorkspace
+        key={workspaceIdentity(user)}
+        canRaise={canRaisePo(user)}
+      />
+    </Suspense>
+  );
+}
+function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
   const router = useRouter();
-  const { user } = useAuth();
-  const canRaise = canRaisePo(user);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const createRequested = searchParams.get("new") === "1";
   const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [needsSkus, setNeedsSkus] = useState<"all" | "yes">("all");
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [proformas, setProformas] = useState<Proforma[]>([]);
-  const [skus, setSkus] = useState<Sku[]>([]);
-  const [supplierId, setSupplierId] = useState("");
-  const [proformaId, setProformaId] = useState("");
-  const [supplierRef, setSupplierRef] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitForApproval, setSubmitForApproval] = useState(false);
-  const [lines, setLines] = useState<PoLineForm[]>(() => [emptyLine(), emptyLine()]);
-
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listPurchaseOrders({
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-        status: statusFilter === "all" ? undefined : statusFilter,
-        needs_skus: needsSkus === "yes",
-      });
-      setOrders(data.items);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load purchase orders.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, statusFilter, needsSkus]);
-
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [needsSkus, setNeedsSkus] = useState(false);
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    if (user) {
-      void loadOrders();
-    }
-  }, [user, loadOrders]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter, needsSkus]);
-
-  const loadCreateData = useCallback(async () => {
-    try {
-      const [supplierData, proformaData, skuData] = await Promise.all([
-        listSuppliers(),
-        listProformas(),
-        listSkus(),
-      ]);
-      setSuppliers(supplierData);
-      setProformas(proformaData);
-      setSkus(skuData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load form data.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (createOpen && canRaise) {
-      void loadCreateData();
-    }
-  }, [createOpen, canRaise, loadCreateData]);
-
-  const filteredProformas = proformas.filter((entry) => entry.supplier_id === supplierId);
-
-  function resetCreateForm() {
-    setSupplierId("");
-    setProformaId("");
-    setSupplierRef("");
-    setNotes("");
-    setSubmitForApproval(false);
-    setLines([emptyLine(), emptyLine()]);
-  }
-
-  function openCreate() {
-    resetCreateForm();
-    setSuccess(null);
-    setCreateOpen(true);
-  }
-
-  function updateLine(key: string, patch: Partial<PoLineForm>) {
-    setLines((current) => current.map((line) => line.key === key ? { ...line, ...patch } : line));
-  }
-
-  function onSkuPicked(key: string, skuId: string) {
-    setLines((current) => current.map((line) => line.key === key ? changeSupplierCodeSku(line, skuId) : line));
-    const sku = skus.find((item) => item.id === skuId);
-    if (sku) void prefillSupplierCode(setLines, key, supplierId, sku);
-  }
-
-  function refreshSupplierCodes(nextSupplier: string) {
-    for (const line of lines) {
-      const sku = skus.find((item) => item.id === line.sku_id);
-      if (sku && !line.supplierCodeTouched) void prefillSupplierCode(setLines, line.key, nextSupplier, sku);
-    }
-  }
-
-  function retrySupplierCode(line: PoLineForm) {
-    const sku = skus.find((item) => item.id === line.sku_id);
-    if (sku) void prefillSupplierCode(setLines, line.key, supplierId, sku);
-  }
-
-  function addLine() {
-    setLines((current) => [...current, emptyLine()]);
-  }
-
-  function removeLine(key: string) {
-    setLines((current) => (current.length > 1 ? current.filter((line) => line.key !== key) : current));
-  }
-
-  const linesValid = lines.every(
-    (line) =>
-      (line.sku_id || line.description.trim()) &&
-      typeof line.qty === "number" &&
-      line.qty > 0 &&
-      line.factory_unit_amount.trim() !== "" &&
-      !line.supplierCodeLookup,
-  );
-  const formValid = supplierId && lines.length >= 1 && linesValid;
-
-  async function handleCreate() {
-    if (!formValid) {
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const payload = {
-        supplier_id: supplierId,
-        proforma_id: proformaId || undefined,
-        supplier_ref: supplierRef.trim() || null,
-        notes: notes.trim() || null,
-        submit_for_approval: submitForApproval,
-        lines: lines.map(
-          (line): CreatePoLinePayload => ({
-            sku_id: line.sku_id || null,
-            supplier_code: line.supplier_code.trim() || null,
-            description: line.description.trim() || null,
-            qty: line.qty as number,
-            factory_unit_amount: line.factory_unit_amount.trim(),
-          }),
-        ),
-      };
-      const created = await createPurchaseOrder(payload);
-      setCreateOpen(false);
-      resetCreateForm();
-      setSuccess(
-        created.status === "pending_approval"
-          ? `Purchase order ${created.po_number} is waiting for owner approval.`
-          : `Purchase order ${created.po_number} created.`,
-      );
-      await loadOrders();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to create purchase order.");
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await listPurchaseOrders({
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
+          status: status === "all" ? undefined : status,
+          needs_skus: needsSkus,
+          q: deferredQuery,
+        });
+        if (!active) return;
+        setOrders(response.items);
+        setTotal(response.total);
+        setSelectedId((current) =>
+          response.items.some((order) => order.id === current)
+            ? current
+            : response.items[0]?.id || null,
+        );
+      } catch (reason) {
+        if (active) {
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not load purchase orders.",
+          );
+          setOrders([]);
+          setTotal(0);
+          setSelectedId(null);
+        }
+      } finally {
+        if (active) setLoading(false);
       }
-    } finally {
-      setSaving(false);
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [page, pageSize, status, needsSkus, deferredQuery, refresh]);
+  function filter(next: StatusFilter) {
+    setStatus(next);
+    setQuery("");
+    setNeedsSkus(false);
+    setPage(1);
+  }
+  function closeComposer() {
+    setCreateOpen(false);
+    if (createRequested) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("new");
+      router.replace(`${pathname}${params.size ? `?${params}` : ""}`, {
+        scroll: false,
+      });
     }
   }
-
-  const rows: PoRow[] = orders.map((entry) => ({
-    id: entry.id,
-    po_number: entry.po_number,
-    supplier_name: entry.supplier_name,
-    status: entry.is_archive ? `${PO_STATUS_LABELS[entry.status]} · Imported history` : PO_STATUS_LABELS[entry.status],
-    needs_skus: !entry.is_archive && entry.needs_sku_count > 0 ? `${entry.needs_sku_count} to fill` : "",
-    line_count: String(entry.line_count),
-    created_at: formatDate(entry.created_at),
-    actions: entry.id,
-  }));
-
+  function created(order: PurchaseOrder) {
+    setSuccess(
+      order.status === "pending_approval"
+        ? `Purchase order ${order.po_number} is waiting for owner approval.`
+        : `Purchase order ${order.po_number} created.`,
+    );
+    setStatus("all");
+    setQuery("");
+    setNeedsSkus(false);
+    setPage(1);
+    setSelectedId(order.id);
+    setRefresh((value) => value + 1);
+  }
   return (
-    <Stack gap={6}>
+    <div className={styles.stack}>
       <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Purchase orders</h1>
+        <div className={styles.smallStack}>
+          <h1 className="cds--type-heading-05">Purchase orders</h1>
           <p className="cds--type-body-01">
-            Raise POs, mark on water, land costs, and receive stock.
+            Track supplier orders from approval to stock receipt.
           </p>
         </div>
-        {canRaise ? <Button onClick={openCreate}>Raise PO</Button> : null}
+        {canRaise && (
+          <Button
+            renderIcon={Add}
+            onClick={() => {
+              setSuccess(null);
+              setCreateOpen(true);
+            }}
+          >
+            New purchase order
+          </Button>
+        )}
       </div>
-
-      {success ? (
+      {createRequested && !canRaise && (
+        <InlineNotification
+          kind="error"
+          lowContrast
+          title="Permission required"
+          subtitle="You do not have permission to raise purchase orders."
+          onCloseButtonClick={closeComposer}
+        />
+      )}
+      {success && (
         <InlineNotification
           kind="success"
+          lowContrast
           title="Created"
           subtitle={success}
           onCloseButtonClick={() => setSuccess(null)}
-          lowContrast
         />
-      ) : null}
-
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
-
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-        <Select
-          id="po-status-filter"
-          labelText="Status"
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-          style={{ maxWidth: "16rem" }}
-        >
-          <SelectItem value="all" text="All" />
-          {PO_STATUS_FILTER_ORDER.map((status) => (
-            <SelectItem key={status} value={status} text={PO_STATUS_LABELS[status]} />
-          ))}
-        </Select>
-        <Select
-          id="po-needs-skus-filter"
-          labelText="Needs SKUs"
-          value={needsSkus}
-          onChange={(event) => setNeedsSkus(event.target.value as "all" | "yes")}
-          style={{ maxWidth: "16rem" }}
-        >
-          <SelectItem value="all" text="All" />
-          <SelectItem value="yes" text="Needs SKUs" />
-        </Select>
-      </div>
-
-      {loading ? (
-        <p className="cds--type-body-01">Loading purchase orders…</p>
-      ) : total === 0 ? (
-        <InlineNotification
-          kind="info"
-          title="No purchase orders"
-          subtitle={
-            needsSkus === "yes"
-              ? "No purchase orders are waiting for a SKU."
-              : statusFilter === "all"
-                ? "No purchase orders have been raised yet."
-                : `No purchase orders with status "${PO_STATUS_LABELS[statusFilter]}".`
-          }
-          hideCloseButton
-          lowContrast
-        />
-      ) : (
-        <>
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Purchase orders" description="All Firstout purchase orders">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => (
-                    <TableRow
-                      {...getRowProps({ row })}
-                      key={row.id}
-                      onClick={() => router.push(`/purchase-orders/${row.id}`)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      {row.cells.map((cell) => {
-                        if (cell.info.header === "actions") {
-                          return (
-                            <TableCell key={cell.id}>
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  router.push(`/purchase-orders/${row.id}`);
-                                }}
-                              >
-                                Open
-                              </Button>
-                            </TableCell>
-                          );
-                        }
-                        return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                      })}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <Pagination
-          page={page}
-          pageSize={pageSize}
-          pageSizes={[10, 25, 50]}
-          totalItems={total}
-          onChange={({ page: nextPage, pageSize: nextSize }) => {
-            setPage(nextPage);
-            setPageSize(nextSize);
-          }}
-        />
-        </>
       )}
-
-      <Modal
-        open={createOpen}
-        modalHeading="Raise PO"
-        primaryButtonText={saving ? "Creating…" : "Create"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !formValid}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
-        size="lg"
-      >
-        <Stack gap={5}>
-          <Select
-            id="po-supplier"
-            labelText="Supplier"
-            value={supplierId}
-            onChange={(event) => {
-              const nextSupplier = event.target.value;
-              setSupplierId(nextSupplier);
-              setProformaId("");
-              void refreshSupplierCodes(nextSupplier);
-            }}
+      <OrderOverview refresh={refresh} onFilter={filter} />
+      {error && (
+        <div className={styles.stack}>
+          <InlineNotification
+            kind="error"
+            lowContrast
+            title="Purchase orders unavailable"
+            subtitle={error}
+            hideCloseButton
+          />
+          <Button
+            kind="tertiary"
+            onClick={() => setRefresh((value) => value + 1)}
           >
-            <SelectItem value="" text="Select a supplier" />
-            {suppliers.map((supplier) => (
-              <SelectItem key={supplier.id} value={supplier.id} text={supplier.name} />
-            ))}
-          </Select>
-          <Select
-            id="po-proforma"
-            labelText="Proforma (optional)"
-            value={proformaId}
-            disabled={!supplierId}
-            onChange={(event) => setProformaId(event.target.value)}
+            Try again
+          </Button>
+        </div>
+      )}
+      <div className={styles.layout}>
+        <section className="firstout-section-accent firstout-tone-info">
+          <TableContainer
+            title="Purchase orders"
+            description="Searchable orders and imported history"
           >
-            <SelectItem value="" text="None" />
-            {filteredProformas.map((proforma) => (
-              <SelectItem
-                key={proforma.id}
-                value={proforma.id}
-                text={`${proforma.invoice_number} (${proforma.invoice_date})`}
-              />
-            ))}
-          </Select>
-          <TextInput
-            id="po-supplier-ref"
-            labelText="Supplier reference"
-            helperText="Supplier invoice or proforma number"
-            value={supplierRef}
-            onChange={(event) => setSupplierRef(event.target.value)}
-          />
-          <TextArea
-            id="po-notes"
-            labelText="Notes"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-          />
-          <Checkbox
-            id="po-submit-for-approval"
-            labelText="Submit for approval"
-            helperText="The order waits for approval, including when an owner raises it."
-            checked={submitForApproval}
-            onChange={(_, { checked }) => setSubmitForApproval(checked)}
-          />
-          <div>
-            <p className="cds--label">Lines</p>
-            <p className="cds--helper-text">
-              A line can wait without a SKU when it has a description. That order stays pending until the SKU is filled in and the order is approved.
-            </p>
-            <Stack gap={4}>
-              {lines.map((line, index) => {
-                const fabric = displayFabric(skus.find((sku) => sku.id === line.sku_id)?.fabric);
-                return (
-                <div key={line.key}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1.1fr 1fr 1.1fr 0.5fr 0.7fr auto",
-                    gap: "0.5rem",
-                    alignItems: "end",
+            <TableToolbar>
+              <TableToolbarContent>
+                <TableToolbarSearch
+                  expanded
+                  persistent
+                  labelText="Search purchase orders"
+                  placeholder="Search PO number, supplier or reference"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(
+                      typeof event === "string" ? event : event.target.value,
+                    );
+                    setPage(1);
+                  }}
+                  onClear={() => {
+                    setQuery("");
+                    setPage(1);
+                  }}
+                />
+              </TableToolbarContent>
+            </TableToolbar>
+            <div className={styles.filters}>
+              <div className={styles.filter}>
+                <Select
+                  id="po-status-filter"
+                  labelText="Status"
+                  value={status}
+                  onChange={(event) => {
+                    setStatus(
+                      statuses.find((item) => item === event.target.value) ||
+                        "all",
+                    );
+                    setPage(1);
                   }}
                 >
-                  <Select
-                    id={`po-line-sku-${index}`}
-                    labelText={index === 0 ? "SKU" : ""}
-                    hideLabel={index > 0}
-                    value={line.sku_id}
-                    onChange={(event) => onSkuPicked(line.key, event.target.value)}
-                  >
-                    <SelectItem value="" text="No SKU yet" />
-                    {skus.map((sku) => (
-                      <SelectItem
-                        key={sku.id}
-                        value={sku.id}
-                        text={`${sku.our_ref} — ${sku.name}`}
-                      />
+                  <SelectItem value="all" text="All orders" />
+                  {statuses.map((item) => (
+                    <SelectItem
+                      key={item}
+                      value={item}
+                      text={PO_STATUS_LABELS[item]}
+                    />
+                  ))}
+                </Select>
+              </div>
+              <div className={styles.filter}>
+                <Select
+                  id="po-needs-skus-filter"
+                  labelText="Needs SKUs"
+                  value={needsSkus ? "yes" : "all"}
+                  onChange={(event) => {
+                    setNeedsSkus(event.target.value === "yes");
+                    setPage(1);
+                  }}
+                >
+                  <SelectItem value="all" text="All" />
+                  <SelectItem value="yes" text="Needs SKUs" />
+                </Select>
+              </div>
+            </div>
+            {loading ? (
+              <PageLoading kind="table" label="Loading purchase order list…" />
+            ) : orders.length ? (
+              <div className={styles.tableScroll}>
+                <Table aria-label="Purchase orders" size="lg">
+                  <TableHead>
+                    <TableRow>
+                      <TableHeader>Purchase order</TableHeader>
+                      <TableHeader>Supplier</TableHeader>
+                      <TableHeader>Status</TableHeader>
+                      <TableHeader className={styles.numeric}>
+                        Lines
+                      </TableHeader>
+                      <TableHeader>Ordered / created</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {orders.map((order) => (
+                      <TableRow
+                        key={order.id}
+                        isSelected={selectedId === order.id}
+                        onClick={() => setSelectedId(order.id)}
+                      >
+                        <TableCell>
+                          <Button
+                            kind="ghost"
+                            size="sm"
+                            aria-label={`Select purchase order ${order.po_number}`}
+                            aria-pressed={selectedId === order.id}
+                            onClick={() => setSelectedId(order.id)}
+                          >
+                            {order.po_number}
+                          </Button>
+                          {order.supplier_ref && (
+                            <p className="cds--type-label-01">
+                              {order.supplier_ref}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>{order.supplier_name}</TableCell>
+                        <TableCell>
+                          <Tag type={statusPresentation(order.status).tag}>
+                            {PO_STATUS_LABELS[order.status]}
+                          </Tag>
+                          {order.is_archive ? (
+                            <Tag type="gray">Imported history</Tag>
+                          ) : order.needs_sku_count > 0 ? (
+                            <Tag type="warm-gray">
+                              {order.needs_sku_count} need SKUs
+                            </Tag>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className={styles.numeric}>
+                          {order.line_count}
+                        </TableCell>
+                        <TableCell>
+                          {orderDate(order.ordered_at || order.created_at)}
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </Select>
-                  <TextInput
-                    id={`po-line-supplier-code-${index}`}
-                    labelText={index === 0 ? "Supplier code" : ""}
-                    hideLabel={index > 0}
-                    value={line.supplier_code}
-                    helperText={line.supplierCodeLookup?.status === "loading" ? "Checking supplier code…" : undefined}
-                    invalid={line.supplierCodeLookup?.status === "error"}
-                    invalidText={line.supplierCodeLookup?.error}
-                    onChange={(event) => setLines((current) => current.map((row) =>
-                      row.key === line.key ? editSupplierCode(row, event.target.value) : row))}
-                  />
-                  <TextInput
-                    id={`po-line-description-${index}`}
-                    labelText={index === 0 ? "Description" : ""}
-                    hideLabel={index > 0}
-                    value={line.description}
-                    onChange={(event) => updateLine(line.key, { description: event.target.value })}
-                  />
-                  <NumberInput
-                    id={`po-line-qty-${index}`}
-                    label={index === 0 ? "Qty" : ""}
-                    hideLabel={index > 0}
-                    min={1}
-                    value={line.qty}
-                    onChange={(_, { value }) =>
-                      updateLine(line.key, { qty: value === "" ? "" : Number(value) })
-                    }
-                  />
-                  <TextInput
-                    id={`po-line-factory-${index}`}
-                    labelText={index === 0 ? "Factory unit" : ""}
-                    hideLabel={index > 0}
-                    value={line.factory_unit_amount}
-                    onChange={(event) =>
-                      updateLine(line.key, { factory_unit_amount: event.target.value })
-                    }
-                  />
-                  {lines.length > 1 ? (
-                    <Button
-                      kind="ghost"
-                      size="sm"
-                      onClick={() => removeLine(line.key)}
-                      style={{ marginBottom: "0.25rem" }}
-                    >
-                      Remove
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              !error && (
+                <div className={`${styles.empty} ${styles.stack}`}>
+                  <h2 className="cds--type-heading-03">
+                    No matching purchase orders
+                  </h2>
+                  <p className="cds--type-body-01">
+                    {query || status !== "all" || needsSkus
+                      ? "Try another search or clear the filters."
+                      : "Create a purchase order to start ordering from a supplier."}
+                  </p>
+                  {(query || status !== "all" || needsSkus) && (
+                    <Button kind="ghost" onClick={() => filter("all")}>
+                      Clear filters
                     </Button>
-                  ) : (
-                    <span />
                   )}
                 </div>
-                {line.supplierCodeLookup?.status === "error" ? (
-                  <Button kind="ghost" size="sm" onClick={() => retrySupplierCode(line)}>Retry supplier code</Button>
-                ) : null}
-                {fabric ? (
-                  <p id={`po-line-fabric-${index}`} className="cds--helper-text">
-                    Fabric / finish: {fabric}
-                  </p>
-                ) : null}
-                </div>
-                );
-              })}
-            </Stack>
-            <Button kind="ghost" size="sm" onClick={addLine} style={{ marginTop: "0.5rem" }}>
-              Add line
-            </Button>
-          </div>
-        </Stack>
-      </Modal>
-    </Stack>
+              )
+            )}
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              pageSizes={[10, 25, 50]}
+              totalItems={total}
+              onChange={({ page: nextPage, pageSize: nextSize }) => {
+                setPage(nextSize === pageSize ? nextPage : 1);
+                setPageSize(nextSize);
+              }}
+              backwardText="Previous page"
+              forwardText="Next page"
+              itemsPerPageText="Orders per page:"
+            />
+          </TableContainer>
+        </section>
+        {selectedId ? (
+          <SelectedOrder key={`${selectedId}:${refresh}`} id={selectedId} />
+        ) : (
+          <Tile>
+            <p className="cds--type-body-01">
+              Select a purchase order to review its progress and available
+              actions.
+            </p>
+          </Tile>
+        )}
+      </div>
+      <PurchaseOrderComposer
+        open={canRaise && (createOpen || createRequested)}
+        onClose={closeComposer}
+        onCreated={created}
+      />
+    </div>
   );
 }

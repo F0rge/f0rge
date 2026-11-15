@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import { Button, InlineNotification, Stack, Tag, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -156,7 +157,7 @@ export default function CustomerDetailPage() {
   }
 
   if (loading || (customer !== null && customer.id !== params.id)) {
-    return <p className="cds--type-body-01">Loading customer…</p>;
+    return <PageLoading kind="form" label="Loading customer…" />;
   }
 
   return (
@@ -223,7 +224,7 @@ export default function CustomerDetailPage() {
       {customer?.is_archived ? <InlineNotification kind="info" title="This customer is archived" subtitle="Contacts, terms and available history are preserved. Restore the account before using it in new transactions." hideCloseButton lowContrast /> : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading customer…</p>
+        <PageLoading kind="form" label="Loading customer…" />
       ) : customer ? (
         <>
           <Tile>

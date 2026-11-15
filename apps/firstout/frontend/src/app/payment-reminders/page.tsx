@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
@@ -208,7 +209,7 @@ export default function PaymentRemindersPage() {
             : "Automatic reminders are off. You can still send or skip a step from this list."}
         </p>
       </div>
-      {loading ? <p>Loading…</p> : null}
+      {loading ? <PageLoading label="Loading…" /> : null}
       {error ? (
         <InlineNotification kind="error" title="Error" subtitle={error} lowContrast hideCloseButton />
       ) : null}

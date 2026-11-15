@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   FileUploaderDropContainer,
@@ -177,7 +178,7 @@ export default function BillDetailPage() {
   }
 
   if (loading) {
-    return <p className="cds--type-body-01">Loading bill…</p>;
+    return <PageLoading kind="form" label="Loading bill…" />;
   }
 
   if (!bill) {

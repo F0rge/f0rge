@@ -6,22 +6,22 @@ import {
   Button,
   FileUploaderDropContainer,
   InlineNotification,
-  Loading,
   NumberInput,
   Select,
   SelectItem,
   Stack,
   Tab,
-  TabList,
+  TabListVertical,
   TabPanel,
   TabPanels,
-  Tabs,
+  TabsVertical,
   TextArea,
   TextInput,
   Tile,
   Toggle,
+  Tag,
 } from "@carbon/react";
-import { ChevronDown, ChevronUp, Close } from "@carbon/icons-react";
+import { ChevronDown, ChevronUp, Close, Settings } from "@carbon/icons-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -42,6 +42,9 @@ import { LabelSettings } from "@/app/settings/label-settings";
 import { CommunicationsSettings } from "@/app/settings/communications-settings";
 import { PaymentRemindersSettings } from "@/app/settings/payment-reminders-settings";
 import { useAuth } from "@/lib/auth";
+import Link from "next/link";
+import { PageLoading } from "@/components/page-loading";
+import styles from "./settings.module.css";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   invoice: "Invoice",
@@ -65,10 +68,14 @@ function SettingsSaveButton({
   canMutate,
   saving,
   onSave,
+  onDiscard,
+  dirty,
 }: {
   canMutate: boolean;
   saving: boolean;
   onSave: () => void;
+  onDiscard: () => void;
+  dirty: boolean;
 }) {
   if (!canMutate) {
     return (
@@ -81,9 +88,15 @@ function SettingsSaveButton({
     );
   }
   return (
-    <Button kind="primary" disabled={saving} onClick={onSave}>
-      {saving ? "Saving…" : "Save settings"}
-    </Button>
+    <div className={styles.saveActions}>
+      <Button kind="primary" disabled={saving || !dirty} onClick={onSave}>
+        {saving ? "Saving…" : "Save settings"}
+      </Button>
+      <Button kind="ghost" disabled={saving || !dirty} onClick={onDiscard}>
+        Discard changes
+      </Button>
+      {dirty ? <Tag type="warm-gray">Unsaved changes</Tag> : null}
+    </div>
   );
 }
 
@@ -92,6 +105,7 @@ export default function SettingsPage() {
   const canMutate = canMutateSettings(user);
   const canConfigureReminders = canManageUsers(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [savedRootDraft, setSavedRootDraft] = useState("");
   const [vatPercent, setVatPercent] = useState("15");
   const [currency, setCurrency] = useState("ZAR");
   const [legalName, setLegalName] = useState("");
@@ -110,13 +124,17 @@ export default function SettingsPage() {
   const [logoVersion, setLogoVersion] = useState(0);
   const [defaultReceiveLocationId, setDefaultReceiveLocationId] = useState("");
   const [defaultTillLocationId, setDefaultTillLocationId] = useState("");
-  const [documentSequences, setDocumentSequences] = useState<DocumentSequence[]>([]);
+  const [documentSequences, setDocumentSequences] = useState<
+    DocumentSequence[]
+  >([]);
   const [preferWarehouse, setPreferWarehouse] = useState(true);
-  const [autoProcessExactInvoices, setAutoProcessExactInvoices] = useState(false);
+  const [autoProcessExactInvoices, setAutoProcessExactInvoices] =
+    useState(false);
   const [pickPriority, setPickPriority] = useState<string[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [addLocationId, setAddLocationId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -132,6 +150,33 @@ export default function SettingsPage() {
 
   function applySettings(data: AppSettings) {
     setSettings(data);
+    setSavedRootDraft(
+      JSON.stringify([
+        data.vat_percent,
+        data.home_currency,
+        data.legal_name,
+        data.trading_name ?? "",
+        data.address,
+        data.vat_number,
+        data.cipc_number ?? "",
+        data.bank_name ?? "",
+        data.bank_account ?? "",
+        data.bank_branch_code ?? "",
+        data.payment_terms_days,
+        data.max_till_discount_percent ?? "",
+        data.po_approval_threshold_zar ?? "",
+        data.default_receive_location_id ?? "",
+        data.default_till_location_id ?? "",
+        data.document_sequences.map(({ doc_type, prefix, padding }) => ({
+          doc_type,
+          prefix,
+          padding,
+        })),
+        data.always_prefer_warehouse,
+        data.auto_process_exact_supplier_invoices,
+        data.pick_priority,
+      ]),
+    );
     setVatPercent(data.vat_percent);
     setCurrency(data.home_currency);
     setLegalName(data.legal_name);
@@ -165,7 +210,9 @@ export default function SettingsPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Failed to load settings");
+          setError(
+            err instanceof ApiError ? err.message : "Failed to load settings",
+          );
         }
       })
       .finally(() => {
@@ -176,9 +223,10 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   async function handleSave() {
+    if (saving || logoUploading) return;
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -216,7 +264,9 @@ export default function SettingsPage() {
       applySettings(updated);
       setNotice(updated.warning ?? "Settings saved.");
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Failed to save settings");
+      setError(
+        err instanceof ApiError ? err.message : "Failed to save settings",
+      );
     } finally {
       setSaving(false);
     }
@@ -228,7 +278,8 @@ export default function SettingsPage() {
     setNotice(null);
     try {
       const updated = await uploadCompanyLogo(file);
-      applySettings(updated);
+      setSettings(updated);
+      setHasLogo(updated.has_logo);
       setLogoVersion((version) => version + 1);
       setNotice("Company logo uploaded.");
     } catch (err: unknown) {
@@ -238,9 +289,14 @@ export default function SettingsPage() {
     }
   }
 
-  function updateSequence(docType: string, patch: Partial<Pick<DocumentSequence, "prefix" | "padding">>) {
+  function updateSequence(
+    docType: string,
+    patch: Partial<Pick<DocumentSequence, "prefix" | "padding">>,
+  ) {
     setDocumentSequences((current) =>
-      current.map((row) => (row.doc_type === docType ? { ...row, ...patch } : row)),
+      current.map((row) =>
+        row.doc_type === docType ? { ...row, ...patch } : row,
+      ),
     );
   }
 
@@ -248,7 +304,8 @@ export default function SettingsPage() {
     <Stack gap={3}>
       <p className="cds--label">Pick priority</p>
       <p className="firstout-muted-text">
-        Ordered location list for kit picks. Empty derives order by location type.
+        Ordered location list for kit picks. Empty derives order by location
+        type.
       </p>
       {pickPriority.length === 0 ? (
         <p className="cds--type-body-01">No priority set — derive by type.</p>
@@ -284,7 +341,9 @@ export default function SettingsPage() {
                   hasIconOnly
                   renderIcon={ChevronDown}
                   iconDescription="Move down"
-                  disabled={!canMutate || saving || index === pickPriority.length - 1}
+                  disabled={
+                    !canMutate || saving || index === pickPriority.length - 1
+                  }
                   onClick={() =>
                     setPickPriority((current) => {
                       const next = [...current];
@@ -303,7 +362,9 @@ export default function SettingsPage() {
                   iconDescription="Remove"
                   disabled={!canMutate || saving}
                   onClick={() =>
-                    setPickPriority((current) => current.filter((id) => id !== locationId))
+                    setPickPriority((current) =>
+                      current.filter((id) => id !== locationId),
+                    )
                   }
                 />
               </div>
@@ -331,28 +392,79 @@ export default function SettingsPage() {
         {locations
           .filter((location) => !pickPriority.includes(location.id))
           .map((location) => (
-            <SelectItem key={location.id} value={location.id} text={location.name} />
+            <SelectItem
+              key={location.id}
+              value={location.id}
+              text={location.name}
+            />
           ))}
       </Select>
     </Stack>
   );
 
+  const dirty =
+    !!settings &&
+    JSON.stringify([
+      vatPercent,
+      currency,
+      legalName,
+      tradingName,
+      address,
+      vatNumber,
+      cipcNumber,
+      bankName,
+      bankAccount,
+      bankBranchCode,
+      paymentTermsDays,
+      maxTillDiscountPercent,
+      poApprovalThresholdZar,
+      defaultReceiveLocationId,
+      defaultTillLocationId,
+      documentSequences.map(({ doc_type, prefix, padding }) => ({
+        doc_type,
+        prefix,
+        padding,
+      })),
+      preferWarehouse,
+      autoProcessExactInvoices,
+      pickPriority,
+    ]) !== savedRootDraft;
+  function discardChanges() {
+    if (!settings || saving || logoUploading) return;
+    applySettings(settings);
+    setAddLocationId("");
+    setError(null);
+    setNotice(null);
+  }
+
   return (
-    <Stack gap={6}>
+    <Stack gap={6} className={styles.workspace}>
       <div>
-        <h1 className="cds--type-productive-heading-04">Settings</h1>
+        <h1 className="cds--type-heading-05">Settings</h1>
         <p className="cds--type-body-01">
-          Company profile, document numbering, and operations defaults. Changes are not filed with
-          SARS.
+          Company profile, document numbering, and operations defaults. Changes
+          are not filed with SARS.
         </p>
       </div>
 
-      {loading ? <Loading withOverlay={false} description="Loading settings…" /> : null}
+      {loading ? (
+        <PageLoading kind="settings" label="Loading settings…" />
+      ) : null}
       {error ? (
-        <InlineNotification kind="error" title="Settings" subtitle={error} hideCloseButton />
+        <InlineNotification
+          kind="error"
+          title="Settings"
+          subtitle={error}
+          hideCloseButton
+        />
       ) : null}
       {notice ? (
-        <InlineNotification kind="info" title="Settings" subtitle={notice} hideCloseButton />
+        <InlineNotification
+          kind={settings?.warning ? "warning" : "success"}
+          title="Settings"
+          subtitle={notice}
+          hideCloseButton
+        />
       ) : null}
       {settings?.warning && !notice ? (
         <InlineNotification
@@ -363,342 +475,460 @@ export default function SettingsPage() {
         />
       ) : null}
 
+      {!loading && !settings && error ? (
+        <Button
+          kind="secondary"
+          onClick={() => {
+            setError(null);
+            setLoading(true);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          Try again
+        </Button>
+      ) : null}
       {settings ? (
-        <Tabs>
-          <TabList aria-label="Settings sections">
-            <Tab>Company</Tab>
-            <Tab>Documents</Tab>
-            <Tab>Locations</Tab>
-            <Tab>Operations</Tab>
-            <Tab>Labels</Tab>
-            <Tab>Communications</Tab>
-            {canConfigureReminders ? <Tab>Payment reminders</Tab> : null}
-          </TabList>
-          <TabPanels>
-            <TabPanel>
-              <Tile>
-                <Stack gap={5}>
-                  <TextInput
-                    id="legal-name"
-                    labelText="Legal name"
-                    value={legalName}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setLegalName(event.target.value)}
-                  />
-                  <TextInput
-                    id="trading-name"
-                    labelText="Trading name"
-                    helperText="Optional — shown on documents when set."
-                    value={tradingName}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setTradingName(event.target.value)}
-                  />
-                  <TextArea
-                    id="company-address"
-                    labelText="Address"
-                    value={address}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setAddress(event.target.value)}
-                  />
-                  <TextInput
-                    id="company-vat-number"
-                    labelText="VAT number"
-                    value={vatNumber}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setVatNumber(event.target.value)}
-                  />
-                  <TextInput
-                    id="cipc-number"
-                    labelText="CIPC number"
-                    helperText="Optional company registration number."
-                    value={cipcNumber}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setCipcNumber(event.target.value)}
-                  />
-                  <TextInput
-                    id="bank-name"
-                    labelText="Bank name"
-                    value={bankName}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setBankName(event.target.value)}
-                  />
-                  <TextInput
-                    id="bank-account"
-                    labelText="Bank account"
-                    value={bankAccount}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setBankAccount(event.target.value)}
-                  />
-                  <TextInput
-                    id="bank-branch-code"
-                    labelText="Branch code"
-                    value={bankBranchCode}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setBankBranchCode(event.target.value)}
-                  />
-                  <div>
-                    <p className="cds--type-label-01">Company logo</p>
-                    <p className="firstout-muted-text cds--type-helper-text-01">
-                      JPEG or PNG. Shown on tax invoices and till receipts. Upload replaces any
-                      existing logo.
-                    </p>
-                    {hasLogo ? (
-                      <StaffImage
-                        className="firstout-company-logo"
-                        src={`${settingsLogoUrl()}?v=${logoVersion}`}
-                        alt="Company logo"
+        <div
+          className={`${styles.intro} firstout-tone-info firstout-section-accent`}
+        >
+          <Settings size={32} aria-hidden="true" />
+          <div>
+            <h2 className="cds--type-heading-03">
+              A workspace that works your way.
+            </h2>
+            <p className="cds--type-body-01">
+              Set the defaults once. Give your team a consistent starting point.
+            </p>
+          </div>
+          <Tag type="gray">
+            {canMutate ? "Workspace settings" : "Read only"}
+          </Tag>
+        </div>
+      ) : null}
+      {settings ? (
+        <div className={styles.layout}>
+          <div className={styles.tabs}>
+            <TabsVertical>
+              <TabListVertical aria-label="Settings sections">
+                <Tab>Company</Tab>
+                <Tab>Documents</Tab>
+                <Tab>Locations</Tab>
+                <Tab>Operations</Tab>
+                <Tab>Labels</Tab>
+                <Tab>Communications</Tab>
+                {canConfigureReminders ? <Tab>Payment reminders</Tab> : null}
+              </TabListVertical>
+              <TabPanels>
+                <TabPanel>
+                  <Tile>
+                    <Stack gap={5}>
+                      <h2 className="cds--type-heading-03">Company</h2>
+                      <div className={styles.formGrid}>
+                        <TextInput
+                          id="legal-name"
+                          labelText="Legal name"
+                          value={legalName}
+                          disabled={!canMutate || saving}
+                          onChange={(event) => setLegalName(event.target.value)}
+                        />
+                        <TextInput
+                          id="trading-name"
+                          labelText="Trading name"
+                          helperText="Optional — shown on documents when set."
+                          value={tradingName}
+                          disabled={!canMutate || saving}
+                          onChange={(event) =>
+                            setTradingName(event.target.value)
+                          }
+                        />
+                      </div>
+                      <TextArea
+                        id="company-address"
+                        labelText="Address"
+                        value={address}
+                        disabled={!canMutate || saving}
+                        onChange={(event) => setAddress(event.target.value)}
                       />
-                    ) : null}
-                    {canMutate ? (
-                      <FileUploaderDropContainer
-                        accept={["image/jpeg", "image/png"]}
-                        labelText={
-                          logoUploading
-                            ? "Uploading logo…"
-                            : "Drag and drop a logo here or click to upload"
-                        }
-                        multiple={false}
-                        disabled={logoUploading}
-                        onAddFiles={(_event, { addedFiles }) => {
-                          const file = addedFiles[0];
-                          if (file) {
-                            void handleLogoUpload(file);
+                      <div className={styles.formGrid}>
+                        <TextInput
+                          id="company-vat-number"
+                          labelText="VAT number"
+                          value={vatNumber}
+                          disabled={!canMutate || saving}
+                          onChange={(event) => setVatNumber(event.target.value)}
+                        />
+                        <TextInput
+                          id="cipc-number"
+                          labelText="CIPC number"
+                          helperText="Optional company registration number."
+                          value={cipcNumber}
+                          disabled={!canMutate || saving}
+                          onChange={(event) =>
+                            setCipcNumber(event.target.value)
+                          }
+                        />
+                        <TextInput
+                          id="bank-name"
+                          labelText="Bank name"
+                          value={bankName}
+                          disabled={!canMutate || saving}
+                          onChange={(event) => setBankName(event.target.value)}
+                        />
+                        <TextInput
+                          id="bank-account"
+                          labelText="Bank account"
+                          value={bankAccount}
+                          disabled={!canMutate || saving}
+                          onChange={(event) =>
+                            setBankAccount(event.target.value)
+                          }
+                        />
+                        <TextInput
+                          id="bank-branch-code"
+                          labelText="Branch code"
+                          value={bankBranchCode}
+                          disabled={!canMutate || saving}
+                          onChange={(event) =>
+                            setBankBranchCode(event.target.value)
+                          }
+                        />
+                      </div>
+                      <div>
+                        <p className="cds--type-label-01">Company logo</p>
+                        <p className="firstout-muted-text cds--type-helper-text-01">
+                          JPEG or PNG. Shown on tax invoices and till receipts.
+                          Upload replaces any existing logo.
+                        </p>
+                        {hasLogo ? (
+                          <StaffImage
+                            className="firstout-company-logo"
+                            src={`${settingsLogoUrl()}?v=${logoVersion}`}
+                            alt="Company logo"
+                          />
+                        ) : null}
+                        {canMutate ? (
+                          <FileUploaderDropContainer
+                            accept={["image/jpeg", "image/png"]}
+                            labelText={
+                              logoUploading
+                                ? "Uploading logo…"
+                                : "Drag and drop a logo here or click to upload"
+                            }
+                            multiple={false}
+                            disabled={logoUploading}
+                            onAddFiles={(_event, { addedFiles }) => {
+                              const file = addedFiles[0];
+                              if (file) {
+                                void handleLogoUpload(file);
+                              }
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                      <NumberInput
+                        id="vat-percent"
+                        label="VAT rate (%)"
+                        helperText="Locked default is 15%. Owner may adjust for what-if only."
+                        value={vatPercent}
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        disabled={!canMutate || saving}
+                        onChange={(_, { value }) => {
+                          if (
+                            typeof value === "number" ||
+                            typeof value === "string"
+                          ) {
+                            setVatPercent(String(value));
                           }
                         }}
                       />
-                    ) : null}
-                  </div>
-                  <NumberInput
-                    id="vat-percent"
-                    label="VAT rate (%)"
-                    helperText="Locked default is 15%. Owner may adjust for what-if only."
-                    value={vatPercent}
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    disabled={!canMutate || saving}
-                    onChange={(_, { value }) => {
-                      if (typeof value === "number" || typeof value === "string") {
-                        setVatPercent(String(value));
-                      }
-                    }}
-                  />
-                  <TextInput
-                    id="home-currency"
-                    labelText="Home currency"
-                    helperText="Locked default is ZAR."
-                    value={currency}
-                    maxLength={3}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setCurrency(event.target.value.toUpperCase())}
-                  />
-                  <SettingsSaveButton
-                    canMutate={canMutate}
-                    saving={saving}
-                    onSave={() => void handleSave()}
-                  />
-                </Stack>
-              </Tile>
-            </TabPanel>
+                      <TextInput
+                        id="home-currency"
+                        labelText="Home currency"
+                        helperText="Locked default is ZAR."
+                        value={currency}
+                        maxLength={3}
+                        disabled={!canMutate || saving}
+                        onChange={(event) =>
+                          setCurrency(event.target.value.toUpperCase())
+                        }
+                      />
+                      <SettingsSaveButton
+                        canMutate={canMutate}
+                        saving={saving || logoUploading}
+                        dirty={dirty}
+                        onDiscard={discardChanges}
+                        onSave={() => void handleSave()}
+                      />
+                    </Stack>
+                  </Tile>
+                </TabPanel>
 
-            <TabPanel>
-              <Tile>
-                <Stack gap={5}>
-                  <p className="cds--type-body-01 firstout-muted-text">
-                    Prefix and padding apply to new documents. Cancelled documents keep their
-                    numbers — next value only advances on allocation.
-                  </p>
-                  <div className="firstout-settings-sequences">
-                    <div className="firstout-settings-sequences__header cds--type-label-01">
-                      <span>Document type</span>
-                      <span>Prefix</span>
-                      <span>Padding</span>
-                      <span>Next value</span>
-                    </div>
-                    {documentSequences.map((row) => (
-                      <div key={row.doc_type} className="firstout-settings-sequences__row">
-                        <span className="cds--type-body-01">{docTypeLabel(row.doc_type)}</span>
-                        <TextInput
-                          id={`seq-prefix-${row.doc_type}`}
-                          labelText=""
-                          hideLabel
-                          value={row.prefix}
-                          maxLength={8}
-                          disabled={!canMutate || saving}
-                          onChange={(event) =>
-                            updateSequence(row.doc_type, { prefix: event.target.value })
-                          }
-                        />
-                        <NumberInput
-                          id={`seq-padding-${row.doc_type}`}
-                          label=""
-                          hideLabel
-                          min={1}
-                          max={12}
-                          step={1}
-                          value={row.padding}
-                          disabled={!canMutate || saving}
-                          onChange={(_, { value }) => {
-                            if (typeof value === "number") {
-                              updateSequence(row.doc_type, { padding: value });
-                            }
-                          }}
-                        />
-                        <TextInput
-                          id={`seq-next-${row.doc_type}`}
-                          labelText=""
-                          hideLabel
-                          value={String(row.next_value)}
-                          readOnly
-                          disabled
-                        />
+                <TabPanel>
+                  <Tile>
+                    <Stack gap={5}>
+                      <h2 className="cds--type-heading-03">Documents</h2>
+                      <p className="cds--type-body-01 firstout-muted-text">
+                        Prefix and padding apply to new documents. Cancelled
+                        documents keep their numbers — next value only advances
+                        on allocation.
+                      </p>
+                      <div className="firstout-settings-sequences">
+                        <div className="firstout-settings-sequences__header cds--type-label-01">
+                          <span>Document type</span>
+                          <span>Prefix</span>
+                          <span>Padding</span>
+                          <span>Next value</span>
+                        </div>
+                        {documentSequences.map((row) => (
+                          <div
+                            key={row.doc_type}
+                            className="firstout-settings-sequences__row"
+                          >
+                            <span className="cds--type-body-01">
+                              {docTypeLabel(row.doc_type)}
+                            </span>
+                            <TextInput
+                              id={`seq-prefix-${row.doc_type}`}
+                              labelText=""
+                              hideLabel
+                              value={row.prefix}
+                              maxLength={8}
+                              disabled={!canMutate || saving}
+                              onChange={(event) =>
+                                updateSequence(row.doc_type, {
+                                  prefix: event.target.value,
+                                })
+                              }
+                            />
+                            <NumberInput
+                              id={`seq-padding-${row.doc_type}`}
+                              label=""
+                              hideLabel
+                              min={1}
+                              max={12}
+                              step={1}
+                              value={row.padding}
+                              disabled={!canMutate || saving}
+                              onChange={(_, { value }) => {
+                                if (typeof value === "number") {
+                                  updateSequence(row.doc_type, {
+                                    padding: value,
+                                  });
+                                }
+                              }}
+                            />
+                            <TextInput
+                              id={`seq-next-${row.doc_type}`}
+                              labelText=""
+                              hideLabel
+                              value={String(row.next_value)}
+                              readOnly
+                              disabled
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <SettingsSaveButton
-                    canMutate={canMutate}
-                    saving={saving}
-                    onSave={() => void handleSave()}
-                  />
-                </Stack>
-              </Tile>
-            </TabPanel>
+                      <SettingsSaveButton
+                        canMutate={canMutate}
+                        saving={saving || logoUploading}
+                        dirty={dirty}
+                        onDiscard={discardChanges}
+                        onSave={() => void handleSave()}
+                      />
+                    </Stack>
+                  </Tile>
+                </TabPanel>
 
-            <TabPanel>
-              <Tile>
-                <Stack gap={5}>
-                  <Select
-                    id="default-receive-location"
-                    labelText="Default receive location"
-                    helperText="Warehouse locations only."
-                    value={defaultReceiveLocationId}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setDefaultReceiveLocationId(event.target.value)}
-                  >
-                    <SelectItem value="" text="None" />
-                    {warehouses.map((location) => (
-                      <SelectItem key={location.id} value={location.id} text={location.name} />
-                    ))}
-                  </Select>
-                  <Select
-                    id="default-till-location"
-                    labelText="Default till location"
-                    helperText="Showroom locations only."
-                    value={defaultTillLocationId}
-                    disabled={!canMutate || saving}
-                    onChange={(event) => setDefaultTillLocationId(event.target.value)}
-                  >
-                    <SelectItem value="" text="None" />
-                    {showrooms.map((location) => (
-                      <SelectItem key={location.id} value={location.id} text={location.name} />
-                    ))}
-                  </Select>
-                  <Toggle
-                    id="always-prefer-warehouse"
-                    labelText="Always prefer warehouse"
-                    labelA="Off"
-                    labelB="On"
-                    toggled={preferWarehouse}
-                    onToggle={(checked) => setPreferWarehouse(checked)}
-                    disabled={!canMutate || saving}
-                  />
-                  <Toggle
-                    id="auto-process-exact-invoices"
-                    labelText="Auto-process exact supplier invoices"
-                    labelA="Off"
-                    labelB="On"
-                    toggled={autoProcessExactInvoices}
-                    onToggle={(checked) => setAutoProcessExactInvoices(checked)}
-                    disabled={!canMutate || saving}
-                  />
-                  <p className="cds--type-helper-text-01">
-                    Off by default. When on, an invoice that matches its purchase order exactly is
-                    posted like a typed-in bill, without a second click. Anything that differs still
-                    waits for you. A posted bill is reversed with a journal.
-                  </p>
-                  {pickPrioritySection}
-                  <SettingsSaveButton
-                    canMutate={canMutate}
-                    saving={saving}
-                    onSave={() => void handleSave()}
-                  />
-                </Stack>
-              </Tile>
-            </TabPanel>
+                <TabPanel>
+                  <Tile>
+                    <Stack gap={5}>
+                      <h2 className="cds--type-heading-03">Locations</h2>
+                      <Select
+                        id="default-receive-location"
+                        labelText="Default receive location"
+                        helperText="Warehouse locations only."
+                        value={defaultReceiveLocationId}
+                        disabled={!canMutate || saving}
+                        onChange={(event) =>
+                          setDefaultReceiveLocationId(event.target.value)
+                        }
+                      >
+                        <SelectItem value="" text="None" />
+                        {warehouses.map((location) => (
+                          <SelectItem
+                            key={location.id}
+                            value={location.id}
+                            text={location.name}
+                          />
+                        ))}
+                      </Select>
+                      <Select
+                        id="default-till-location"
+                        labelText="Default till location"
+                        helperText="Showroom locations only."
+                        value={defaultTillLocationId}
+                        disabled={!canMutate || saving}
+                        onChange={(event) =>
+                          setDefaultTillLocationId(event.target.value)
+                        }
+                      >
+                        <SelectItem value="" text="None" />
+                        {showrooms.map((location) => (
+                          <SelectItem
+                            key={location.id}
+                            value={location.id}
+                            text={location.name}
+                          />
+                        ))}
+                      </Select>
+                      <Toggle
+                        id="always-prefer-warehouse"
+                        labelText="Always prefer warehouse"
+                        labelA="Off"
+                        labelB="On"
+                        toggled={preferWarehouse}
+                        onToggle={(checked) => setPreferWarehouse(checked)}
+                        disabled={!canMutate || saving}
+                      />
+                      <Toggle
+                        id="auto-process-exact-invoices"
+                        labelText="Auto-process exact supplier invoices"
+                        labelA="Off"
+                        labelB="On"
+                        toggled={autoProcessExactInvoices}
+                        onToggle={(checked) =>
+                          setAutoProcessExactInvoices(checked)
+                        }
+                        disabled={!canMutate || saving}
+                      />
+                      <p className="cds--type-helper-text-01">
+                        Off by default. When on, an invoice that matches its
+                        purchase order exactly is posted like a typed-in bill,
+                        without a second click. Anything that differs still
+                        waits for you. A posted bill is reversed with a journal.
+                      </p>
+                      {pickPrioritySection}
+                      <SettingsSaveButton
+                        canMutate={canMutate}
+                        saving={saving || logoUploading}
+                        dirty={dirty}
+                        onDiscard={discardChanges}
+                        onSave={() => void handleSave()}
+                      />
+                    </Stack>
+                  </Tile>
+                </TabPanel>
 
-            <TabPanel>
-              <Tile>
-                <Stack gap={5}>
-                  <NumberInput
-                    id="payment-terms-days"
-                    label="Default payment terms (days)"
-                    helperText="Used for new invoices when a customer has no override."
-                    value={paymentTermsDays}
-                    min={0}
-                    max={365}
-                    step={1}
-                    disabled={!canMutate || saving}
-                    onChange={(_, { value }) => {
-                      if (typeof value === "number") {
-                        setPaymentTermsDays(value);
-                      }
-                    }}
-                  />
-                  <NumberInput
-                    id="max-till-discount-percent"
-                    label="Max till discount (%)"
-                    helperText="Empty = no cap. 0 is a valid cap."
-                    value={maxTillDiscountPercent}
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    disabled={!canMutate || saving}
-                    onChange={(_, { value }) => {
-                      if (typeof value === "number" || typeof value === "string") {
-                        setMaxTillDiscountPercent(String(value));
-                      }
-                    }}
-                  />
-                  <NumberInput
-                    id="po-approval-threshold-zar"
-                    label="PO approval threshold (ZAR)"
-                    helperText="Empty = no cap. POs above this need users.manage to create."
-                    value={poApprovalThresholdZar}
-                    min={0}
-                    step={0.01}
-                    disabled={!canMutate || saving}
-                    onChange={(_, { value }) => {
-                      if (typeof value === "number" || typeof value === "string") {
-                        setPoApprovalThresholdZar(String(value));
-                      }
-                    }}
-                  />
-                  <p className="cds--type-body-01">Clerk manages sign-in session duration and security.</p>
-                  <SettingsSaveButton
-                    canMutate={canMutate}
-                    saving={saving}
-                    onSave={() => void handleSave()}
-                  />
-                </Stack>
-              </Tile>
-            </TabPanel>
+                <TabPanel>
+                  <Tile>
+                    <Stack gap={5}>
+                      <h2 className="cds--type-heading-03">Operations</h2>
+                      <NumberInput
+                        id="payment-terms-days"
+                        label="Default payment terms (days)"
+                        helperText="Used for new invoices when a customer has no override."
+                        value={paymentTermsDays}
+                        min={0}
+                        max={365}
+                        step={1}
+                        disabled={!canMutate || saving}
+                        onChange={(_, { value }) => {
+                          if (typeof value === "number") {
+                            setPaymentTermsDays(value);
+                          }
+                        }}
+                      />
+                      <NumberInput
+                        id="max-till-discount-percent"
+                        label="Max till discount (%)"
+                        helperText="Empty = no cap. 0 is a valid cap."
+                        value={maxTillDiscountPercent}
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        disabled={!canMutate || saving}
+                        onChange={(_, { value }) => {
+                          if (
+                            typeof value === "number" ||
+                            typeof value === "string"
+                          ) {
+                            setMaxTillDiscountPercent(String(value));
+                          }
+                        }}
+                      />
+                      <NumberInput
+                        id="po-approval-threshold-zar"
+                        label="PO approval threshold (ZAR)"
+                        helperText="Empty = no cap. POs above this need users.manage to create."
+                        value={poApprovalThresholdZar}
+                        min={0}
+                        step={0.01}
+                        disabled={!canMutate || saving}
+                        onChange={(_, { value }) => {
+                          if (
+                            typeof value === "number" ||
+                            typeof value === "string"
+                          ) {
+                            setPoApprovalThresholdZar(String(value));
+                          }
+                        }}
+                      />
+                      <p className="cds--type-body-01">
+                        Clerk manages sign-in session duration and security.
+                      </p>
+                      <SettingsSaveButton
+                        canMutate={canMutate}
+                        saving={saving || logoUploading}
+                        dirty={dirty}
+                        onDiscard={discardChanges}
+                        onSave={() => void handleSave()}
+                      />
+                    </Stack>
+                  </Tile>
+                </TabPanel>
 
-            <TabPanel><Tile><LabelSettings settings={settings} canMutate={canMutate} /></Tile></TabPanel>
-            <TabPanel>
-              <Tile>
-                <CommunicationsSettings />
-              </Tile>
-            </TabPanel>
+                <TabPanel>
+                  <Tile>
+                    <h2 className="cds--type-heading-03">Labels</h2>
+                    <LabelSettings settings={settings} canMutate={canMutate} />
+                  </Tile>
+                </TabPanel>
+                <TabPanel>
+                  <Tile>
+                    <CommunicationsSettings />
+                  </Tile>
+                </TabPanel>
 
-            {canConfigureReminders ? (
-              <TabPanel>
-                <Tile>
-                  <PaymentRemindersSettings />
-                </Tile>
-              </TabPanel>
-            ) : null}
-          </TabPanels>
-        </Tabs>
+                {canConfigureReminders ? (
+                  <TabPanel>
+                    <Tile>
+                      <PaymentRemindersSettings />
+                    </Tile>
+                  </TabPanel>
+                ) : null}
+              </TabPanels>
+            </TabsVertical>
+          </div>
+          <aside className={styles.aside}>
+            <Tile>
+              <Stack gap={5}>
+                <h2 className="cds--type-heading-compact-01">
+                  Before you save
+                </h2>
+                <p className="cds--type-body-01">
+                  Changes apply to this organisation. Review operational
+                  defaults with your team before saving.
+                </p>
+                <Tag type="gray">{settings.home_currency}</Tag>
+                <Link href="/organisation" className="cds--link">
+                  Organisation and staff access
+                </Link>
+              </Stack>
+            </Tile>
+          </aside>
+        </div>
       ) : null}
     </Stack>
   );

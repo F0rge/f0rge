@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   ComboBox,
@@ -537,7 +538,7 @@ export default function TransfersPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading…</p>
+        <PageLoading label="Loading…" />
       ) : visibleTransfers.length === 0 ? (
         <InlineNotification
           kind="info"

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
@@ -112,7 +113,7 @@ export default function TransitPage() {
 
       <div>
       {loading ? (
-        <p className="cds--type-body-01">Loading transit…</p>
+        <PageLoading label="Loading transit…" />
       ) : orders.length === 0 ? (
         <InlineNotification
           kind="info"

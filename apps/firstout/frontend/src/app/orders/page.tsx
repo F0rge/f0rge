@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   Checkbox,
@@ -390,7 +391,7 @@ export default function OrdersPage() {
           </Stack>
         </section>
       ) : null}
-      {loading ? <p className="cds--type-body-01">Loading orders…</p> : null}
+      {loading ? <PageLoading label="Loading orders…" /> : null}
       {canMutate ? <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
         {({ rows: tableRows, headers, getHeaderProps, getRowProps, getTableProps }) => (
           <TableContainer>

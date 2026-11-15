@@ -6,7 +6,6 @@ import {
   ArrowDown,
   ArrowUp,
   Catalog,
-  ChevronRight,
   Close,
   DocumentExport,
   Edit,
@@ -20,6 +19,7 @@ import {
 } from "@carbon/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
+import { PageLoading } from "@/components/page-loading";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -48,7 +48,7 @@ export function RecordWorkspace<T extends { id: string }>(
       }),
   );
   const { user, loading } = useAuth();
-  if (loading) return <p role="status">Loading your workspace…</p>;
+  if (loading) return <PageLoading label="Loading your workspace…" />;
   if (!user)
     return (
       <InlineNotification
@@ -60,7 +60,7 @@ export function RecordWorkspace<T extends { id: string }>(
     );
   return (
     <QueryClientProvider client={client}>
-      <Suspense fallback={<p role="status">Loading workspace…</p>}>
+      <Suspense fallback={<PageLoading label="Loading workspace…" />}>
         <WorkspaceContent
           key={`${workspaceIdentity(user)}:${props.adapter.resource}`}
           {...props}
@@ -125,11 +125,6 @@ function WorkspaceContent<T extends { id: string }>({
   const error = result.error;
   return (
     <div className={styles.page}>
-      <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
-        <span>{adapter.breadcrumb}</span>
-        <ChevronRight size={14} aria-hidden="true" />
-        <span aria-current="page">{adapter.title}</span>
-      </nav>
       <header className={styles.header}>
         <div>
           <h1>{adapter.title}</h1>
@@ -318,7 +313,7 @@ function WorkspaceContent<T extends { id: string }>({
             </>
           )}
           <div className={styles.tableScroll}>
-            {items.length ? (
+            {result.isPending ? <PageLoading label={`Loading ${plural}…`} /> : items.length ? (
               <table className={styles.table}>
                 <thead>
                   <tr>

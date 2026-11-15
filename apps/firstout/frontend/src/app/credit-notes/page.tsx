@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   ComboBox,
@@ -277,7 +278,7 @@ export default function CreditNotesPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading credit notes…</p>
+        <PageLoading label="Loading credit notes…" />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"

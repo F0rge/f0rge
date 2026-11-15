@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import { Printer } from "@carbon/icons-react";
 import {
   Button,
@@ -338,7 +339,7 @@ function QuotesPageInner() {
           <Button onClick={() => setOpen(true)}>New quote</Button>
         ) : null}
       </div>
-      {loading ? <p className="cds--type-body-01">Loading quotes…</p> : null}
+      {loading ? <PageLoading label="Loading quotes…" /> : null}
       <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
         {({ rows: tableRows, headers, getHeaderProps, getRowProps, getTableProps }) => (
           <TableContainer>
