@@ -66,6 +66,14 @@ def local_database(config: dict, *, uid: int = 0) -> tuple[list[str], dict[str, 
     prefix = f"127.0.0.1:{port}:buycycle:buycycle_backup:"
     if len(lines) != 1 or not lines[0].startswith(prefix) or not lines[0][len(prefix) :]:
         raise OpsError("The password file must contain one exact scoped endpoint without wildcards")
+    if "database_proxy_policy" in config or uid == 0:
+        # Production entry points require root and use the default uid. Non-root
+        # fixture callers pass their actual uid; no JSON flag disables this gate.
+        from db_proxy_guard import verify_proxy
+
+        if port != 5547 or "database_proxy_policy" not in config:
+            raise OpsError("The managed backup requires its verified loopback database proxy")
+        verify_proxy(Path(config["database_proxy_policy"]), uid=uid)
     args = ["--host=127.0.0.1", f"--port={port}", "--username=buycycle_backup", "--dbname=buycycle", "--no-password"]
     env = safe_environment()
     env.update(PGPASSFILE=str(password_file), PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=1800000", PGCONNECT_TIMEOUT="10")

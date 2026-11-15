@@ -1,0 +1,14 @@
+[Unit]
+Description=Buycycle backup loopback PostgreSQL socket
+
+[Socket]
+ListenStream=127.0.0.1:5547
+Accept=no
+Service=buycycle-db-proxy.service
+NoDelay=true
+Backlog=4
+
+[Install]
+WantedBy=sockets.target
+
+# Install only after the selected cluster, private target and unit hashes are verified.

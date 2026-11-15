@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "docker_engine_id": "REPLACE_WITH_VERIFIED_ENGINE_ID",
+  "container_id": "REPLACE_WITH_FULL_SELECTED_CONTAINER_ID",
+  "image": "REPLACE_WITH_VERIFIED_POSTGRES_IMAGE_REFERENCE",
+  "image_id": "sha256:REPLACE_WITH_VERIFIED_LOCAL_IMAGE_ID",
+  "compose_project": "REPLACE_WITH_VERIFIED_COMPOSE_PROJECT",
+  "compose_service": "REPLACE_WITH_VERIFIED_COMPOSE_SERVICE",
+  "network_name": "REPLACE_WITH_VERIFIED_DOCKER_BRIDGE_NAME",
+  "network_id": "REPLACE_WITH_FULL_VERIFIED_NETWORK_ID",
+  "target_ipv4": "REPLACE_WITH_VERIFIED_PRIVATE_IPV4",
+  "docker": "/usr/bin/docker",
+  "systemctl": "/usr/bin/systemctl",
+  "ss": "/usr/bin/ss",
+  "socket_file": "/etc/systemd/system/buycycle-db-proxy.socket",
+  "socket_sha256": "REPLACE_WITH_REVIEWED_INSTALLED_SOCKET_FILE_HASH",
+  "service_file": "/etc/systemd/system/buycycle-db-proxy.service",
+  "service_sha256": "REPLACE_WITH_REVIEWED_INSTALLED_SERVICE_FILE_HASH",
+  "proxy_executable": "/usr/lib/systemd/systemd-socket-proxyd",
+  "proxy_sha256": "REPLACE_WITH_VERIFIED_INSTALLED_EXECUTABLE_HASH"
+}

@@ -120,6 +120,50 @@ runtime cannot create schema or delete retained records; the migrator owns DDL.
 `migrate --grant-runtime` applies the canonical grant file after migration and
 fails if its role prerequisites are missing. API startup performs no migration.
 
+### Backup connection to an existing Docker-only cluster
+
+The host backup/monitor clients remain restricted to `127.0.0.1:5547`, database
+`buycycle` and the read-only `buycycle_backup` role. When the selected existing
+cluster has no host port, use the supplied `buycycle-db-proxy.socket` and
+`buycycle-db-proxy.service` templates. Substitute only its independently verified
+private bridge IPv4 address in the service's destination and `/32` allow rule.
+This adds a loopback socket; it does not publish or restart the database or change
+another app's service. The proxy has a dynamic unprivileged account, four-connection
+limit, no capabilities, no secrets or Docker access, and network access only to
+loopback and the selected target address.
+
+Privately copy `database-proxy.example.json` to root-owned mode-0600
+`/etc/buycycle/database-proxy.json`, with observed full container/image/network
+identities and hashes of the reviewed installed units and proxy executable.
+Install the rendered units under `/etc/systemd/system/`, reload systemd and enable
+the socket only during the authorized bootstrap. Include
+`"database_proxy_policy": "/etc/buycycle/database-proxy.json"` in **both** backup
+and monitor configuration. Root production calls cannot omit this policy.
+
+Before a backup/monitor database connection, the read-only guard verifies the
+fixed local Docker engine, running selected container, image and Compose labels,
+bridge ownership of the target IP, exact installed unit hashes, loaded command
+and hardening, and sole loopback listener. It accepts a verified waiting socket
+or the exact running proxy process. Changed/replaced containers, IP reuse,
+unreviewed drop-ins, stale loaded units, public listeners and unknown unit states
+fail closed. It never starts a service or automatically retargets a replacement.
+An approved database lifecycle change needs a fresh identity review and policy.
+Non-root synthetic tests use the existing explicit UID fixture seam; no production
+JSON flag disables the guard.
+
+```sh
+python3 /opt/f0rge/apps/buycycle/ops/db_proxy_guard.py \
+  --config /etc/buycycle/database-proxy.json
+```
+
+Provision PostgreSQL **client-only** tools for the selected major through the
+official signed distribution/PGDG packages and age through the signed Debian
+repository; review the simulated package transaction first. Do not install a
+PostgreSQL server/meta-package, upgrade another app's cluster, or weaken the
+localhost restriction to make a backup run. Unit definitions and synthetic
+boundary tests do not prove a live proxy, encrypted restore or off-host custody;
+those remain required bootstrap evidence.
+
 The configured 768 MiB/1 CPU app/database limits and connector limits are local
 test starting points. They are not approved availability, capacity or latency
 targets. Logs rotate at 10 MiB × 3; persistent raw observations, imports and
