@@ -30,6 +30,7 @@ from typing import Any
 from firstout_release import ReleaseError, github, require, verified_source_checks
 
 REPOSITORY = "F0rge/f0rge"
+REPOSITORY_ID = 1194719185
 IMAGE = "ghcr.io/f0rge/buycycle"
 WORKFLOW = ".github/workflows/release-buycycle.yml"
 APP = "xi0qwpbyl2d8gf8u3xl13jkv"
@@ -56,6 +57,315 @@ TESTS = frozenset(
     }
 )
 RECEIPTS = ("migration", "restore", "provider")
+REQUEST_PERMISSIONS = {
+    "pull_requests": "write",
+    "contents": "read",
+    "actions": "read",
+    "metadata": "read",
+}
+
+
+def strict_json(text: str, *, maximum: int = 4096) -> dict[str, Any]:
+    require(
+        isinstance(text, str) and 0 < len(text.encode()) <= maximum,
+        "Request size rejected",
+    )
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            require(key not in result, "Duplicate JSON key")
+            result[key] = value
+        return result
+
+    def constant(_value):
+        raise ReleaseError("Nonstandard JSON constant")
+
+    value = json.loads(text, object_pairs_hook=pairs, parse_constant=constant)
+    require(isinstance(value, dict), "Request must be a JSON object")
+    return value
+
+
+def validate_request_body(text: str) -> dict[str, Any]:
+    value = strict_json(text)
+    require(
+        set(value)
+        == {
+            "version",
+            "source_commit",
+            "ci_run_id",
+            "release_tag",
+            "receipt_hashes",
+            "request_id",
+            "postgres_major",
+        },
+        "Unexpected release request fields",
+    )
+    require(
+        type(value["version"]) is int and value["version"] == 1,
+        "Unknown request version",
+    )
+    require(
+        isinstance(value["source_commit"], str)
+        and SHA.fullmatch(value["source_commit"]),
+        "Invalid request source commit",
+    )
+    require(
+        type(value["ci_run_id"]) is int and value["ci_run_id"] > 0,
+        "Invalid request CI run",
+    )
+    require(
+        isinstance(value["release_tag"], str) and TAG.fullmatch(value["release_tag"]),
+        "Invalid request tag",
+    )
+    require(
+        type(value["postgres_major"]) is int and value["postgres_major"] in {15, 17},
+        "Invalid request PostgreSQL major",
+    )
+    require(
+        isinstance(value["request_id"], str)
+        and str(uuid.UUID(value["request_id"])) == value["request_id"],
+        "Invalid request nonce",
+    )
+    hashes = value["receipt_hashes"]
+    require(
+        isinstance(hashes, dict)
+        and set(hashes) == set(RECEIPTS)
+        and all(
+            isinstance(item, str) and HASH.fullmatch(item) for item in hashes.values()
+        ),
+        "Invalid request receipt hashes",
+    )
+    return value
+
+
+def requester_identity(policy: dict[str, Any]) -> dict[str, Any]:
+    require(
+        isinstance(policy.get("requester_app_slug"), str)
+        and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", policy["requester_app_slug"]),
+        "Invalid requester slug",
+    )
+    for key in ("requester_app_id", "requester_bot_id", "request_pr_number"):
+        require(
+            type(policy.get(key)) is int and policy[key] > 0,
+            "Missing requester identity or release PR",
+        )
+    app = json.loads(command(["gh", "api", "apps/" + policy["requester_app_slug"]]))
+    require(
+        app.get("id") == policy["requester_app_id"]
+        and app.get("slug") == policy["requester_app_slug"],
+        "Unverified automation App",
+    )
+    permissions = dict(app.get("permissions", {}))
+    permissions.setdefault("metadata", "read")
+    require(
+        permissions == REQUEST_PERMISSIONS,
+        "Requester permissions differ from the exact comment-request scope",
+    )
+    bot = json.loads(
+        command(["gh", "api", "users/" + policy["requester_app_slug"] + "%5Bbot%5D"])
+    )
+    require(
+        bot.get("id") == policy["requester_bot_id"]
+        and bot.get("login") == policy["requester_app_slug"] + "[bot]"
+        and bot.get("type") == "Bot",
+        "Unverified requester bot",
+    )
+    return app
+
+
+def verified_request_comment(
+    comment_id: int, policy: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    require(type(comment_id) is int and comment_id > 0, "Invalid request comment ID")
+    app = requester_identity(policy)
+    repository = github("")
+    require(
+        repository.get("id") == REPOSITORY_ID
+        and repository.get("full_name") == REPOSITORY,
+        "Wrong requester repository",
+    )
+    number = policy["request_pr_number"]
+    pull = github(f"pulls/{number}")
+    require(
+        pull.get("number") == number
+        and pull.get("merged") is True
+        and pull.get("base", {}).get("ref") == "main"
+        and pull.get("base", {}).get("repo", {}).get("id") == REPOSITORY_ID,
+        "Release request PR must be the configured reviewed, merged main PR",
+    )
+    comment = github(f"issues/comments/{comment_id}")
+    actor = comment.get("user", {})
+    via = comment.get("performed_via_github_app") or {}
+    require(
+        comment.get("id") == comment_id
+        and comment.get("issue_url")
+        == f"https://api.github.com/repos/{REPOSITORY}/issues/{number}",
+        "Request comment moved to a different PR",
+    )
+    require(
+        actor.get("id") == policy["requester_bot_id"]
+        and actor.get("login") == app["slug"] + "[bot]"
+        and actor.get("type") == "Bot",
+        "Wrong comment author",
+    )
+    require(
+        via.get("id") == app["id"] and via.get("slug") == app["slug"],
+        "Authoritative comment App identity is missing or changed",
+    )
+    require(
+        comment.get("created_at") == comment.get("updated_at")
+        and 0
+        <= age(comment.get("created_at", ""))
+        <= policy.get("max_age_seconds", 3600),
+        "Request comment edited, stale or future-dated",
+    )
+    request = validate_request_body(comment.get("body"))
+    # Duplicate nonces on the fixed release PR are rejected, including old
+    # requests. No write token, comment mutation or workflow-dispatch grant.
+    seen_current = 0
+    for page in range(1, 11):
+        comments = github(f"issues/{number}/comments?per_page=100&page={page}")
+        require(
+            isinstance(comments, list) and len(comments) <= 100,
+            "Unexpected request-comment pagination",
+        )
+        for item in comments:
+            if item.get("id") == comment_id:
+                seen_current += 1
+                require(
+                    item.get("body") == comment["body"]
+                    and item.get("updated_at") == comment["updated_at"],
+                    "Request changed during verification",
+                )
+            elif item.get("user", {}).get("id") == policy["requester_bot_id"]:
+                try:
+                    other = validate_request_body(item.get("body"))
+                except (ReleaseError, ValueError, TypeError):
+                    continue
+                require(
+                    other["request_id"] != request["request_id"],
+                    "Duplicate release request nonce",
+                )
+        if len(comments) < 100:
+            break
+    else:
+        raise ReleaseError("Request-comment inventory exceeds the verified bound")
+    require(seen_current == 1, "Request comment is missing or duplicated")
+    binding = {
+        "comment_id": comment_id,
+        "body_sha256": hashlib.sha256(comment["body"].encode()).hexdigest(),
+        "request_id": request["request_id"],
+        "pull_request": number,
+        "repository_id": REPOSITORY_ID,
+        "requester_app_id": app["id"],
+        "requester_bot_id": actor["id"],
+        "created_at": comment["created_at"],
+    }
+    return request, binding
+
+
+def verify_request_binding(
+    manifest: dict[str, Any], policy: dict[str, Any]
+) -> dict[str, Any]:
+    binding = manifest.get("release_request")
+    require(
+        isinstance(binding, dict), "Publication-only runs cannot authorize a release"
+    )
+    request, actual = verified_request_comment(binding.get("comment_id"), policy)
+    require(binding == actual, "Approved request comment identity/body changed")
+    require(
+        request["source_commit"] == manifest["commit"]
+        and request["ci_run_id"] == manifest["source_ci_run"]
+        and request["release_tag"] == manifest["release_tag"]
+        and request["receipt_hashes"] == manifest["receipt_hashes"]
+        and request["postgres_major"] == manifest["postgres_major"],
+        "Publication differs from the exact request",
+    )
+    return request
+
+
+def workflow_request(
+    event: dict[str, Any], context: dict[str, str], policy: dict[str, Any]
+) -> dict[str, Any]:
+    require(
+        context.get("GITHUB_REPOSITORY") == REPOSITORY
+        and context.get("GITHUB_REPOSITORY_ID") == str(REPOSITORY_ID)
+        and context.get("GITHUB_REF") == "refs/heads/main"
+        and context.get("GITHUB_RUN_ATTEMPT") == "1",
+        "Request workflow must be a new trusted main run",
+    )
+    if context.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+        values = event.get("inputs", {})
+        require(
+            set(values)
+            <= {"source_commit", "ci_run_id", "release_tag", "postgres_major"},
+            "Dispatch cannot request release approval",
+        )
+        request = {
+            "version": 1,
+            "source_commit": values.get("source_commit"),
+            "ci_run_id": int(values.get("ci_run_id", "")),
+            "release_tag": values.get("release_tag"),
+            "postgres_major": int(values.get("postgres_major", "")),
+            "request_id": str(uuid.uuid4()),
+            "receipt_hashes": dict.fromkeys(RECEIPTS, "0" * 64),
+        }
+        validate_request_body(json.dumps(request))
+        return dict(request, release_request=None, receipt_hashes={})
+    require(
+        context.get("GITHUB_EVENT_NAME") == "issue_comment"
+        and event.get("action") == "created",
+        "Only new App comments may request approval",
+    )
+    require(
+        event.get("repository", {}).get("id") == REPOSITORY_ID
+        and event.get("repository", {}).get("full_name") == REPOSITORY,
+        "Wrong comment event repository",
+    )
+    require(
+        event.get("issue", {}).get("number") == policy.get("request_pr_number")
+        and isinstance(event.get("issue", {}).get("pull_request"), dict),
+        "Wrong release request PR",
+    )
+    actor = event.get("sender", {})
+    require(
+        actor.get("type") == "Bot"
+        and actor.get("id") == policy.get("requester_bot_id")
+        and actor.get("login") == policy.get("requester_app_slug", "") + "[bot]"
+        and context.get("GITHUB_ACTOR") == actor.get("login")
+        and context.get("GITHUB_TRIGGERING_ACTOR") == actor.get("login"),
+        "Independent App event actor required",
+    )
+    request, binding = verified_request_comment(
+        event.get("comment", {}).get("id"), policy
+    )
+    event_app = event.get("comment", {}).get("performed_via_github_app")
+    if event_app is not None:
+        require(
+            isinstance(event_app, dict)
+            and event_app.get("id") == binding["requester_app_id"]
+            and event_app.get("slug") == policy["requester_app_slug"],
+            "Event App identity differs from authoritative comment",
+        )
+    require(
+        event.get("comment", {}).get("body") is not None
+        and hashlib.sha256(event["comment"]["body"].encode()).hexdigest()
+        == binding["body_sha256"]
+        and event["comment"].get("user", {}).get("id") == actor["id"],
+        "Event comment differs from authoritative GitHub comment",
+    )
+    return dict(request, release_request=binding)
+
+
+def workflow_policy() -> dict[str, Any]:
+    return {
+        "requester_app_slug": os.environ.get("REQUESTER_APP_SLUG"),
+        "requester_app_id": int(os.environ.get("REQUESTER_APP_ID", "")),
+        "requester_bot_id": int(os.environ.get("REQUESTER_BOT_ID", "")),
+        "request_pr_number": int(os.environ.get("REQUEST_PR_NUMBER", "")),
+        "max_age_seconds": 3600,
+    }
 
 
 def file_sha256(path: Path) -> str:
@@ -384,14 +694,36 @@ def validate_publication(manifest: dict[str, Any], run: dict[str, Any]) -> None:
         manifest.get("target") == {"host": "pi", "app": APP}, "Wrong release target"
     )
     validate_image_evidence(manifest.get("image_evidence", {}), manifest["commit"])
+    major = manifest.get("postgres_major")
+    retest = manifest["image_evidence"]
+    require(
+        type(major) is int
+        and major in {15, 17}
+        and retest.get("postgres_major") == major
+        and type(retest.get("postgres_server_version_num")) is int
+        and retest["postgres_server_version_num"] // 10000 == major,
+        "Publication lacks an exact-image retest against the selected PostgreSQL major",
+    )
     require(
         run.get("repository", {}).get("full_name") == REPOSITORY
         and run.get("path") == WORKFLOW
-        and run.get("event") == "workflow_dispatch"
+        and run.get("repository", {}).get("id") == REPOSITORY_ID
+        and run.get("event") in {"workflow_dispatch", "issue_comment"}
         and run.get("head_branch") == "main"
         and run.get("status") == "completed"
         and run.get("conclusion") == "success",
         "Invalid publication workflow",
+    )
+    require(
+        (
+            run["event"] == "issue_comment"
+            and isinstance(manifest.get("release_request"), dict)
+        )
+        or (
+            run["event"] == "workflow_dispatch"
+            and manifest.get("release_request") is None
+        ),
+        "Publication trigger/request mismatch",
     )
     require(
         manifest.get("workflow_run_id") == run.get("id")
@@ -399,31 +731,30 @@ def validate_publication(manifest: dict[str, Any], run: dict[str, Any]) -> None:
         and manifest.get("workflow_attempt") == run.get("run_attempt") == 1,
         "Publication run/attempt mismatch; start a new run instead of rerunning",
     )
+    require(
+        retest.get("harness_commit") == run.get("head_sha"),
+        "Image retest did not use the trusted workflow commit",
+    )
 
 
 def verify_approval(run: dict[str, Any], policy: dict[str, Any]) -> None:
+    require(
+        run.get("event") == "issue_comment" and run.get("run_attempt") == 1,
+        "Manual publication and reruns cannot authorize releases",
+    )
     require(
         0 <= age(run.get("created_at", "")) <= policy.get("max_age_seconds", 3600),
         "Release authorization expired or future-dated",
     )
     actor, triggering = run.get("actor", {}), run.get("triggering_actor", {})
-    require(
-        re.fullmatch(r"[a-z0-9-]{1,100}", policy["requester_app_slug"]),
-        "Invalid requester slug",
-    )
-    app = json.loads(command(["gh", "api", "apps/" + policy["requester_app_slug"]]))
-    require(app.get("id") == policy["requester_app_id"], "Unverified automation app")
-    permissions = app.get("permissions", {})
-    allowed = {"actions": "write", "metadata": "read", "contents": "read"}
-    require(
-        permissions.get("actions") == "write"
-        and all(allowed.get(name) == access for name, access in permissions.items()),
-        "Requester app permissions exceed the reviewed release-request scope",
-    )
+    app = requester_identity(policy)
     require(
         actor.get("type") == "Bot"
+        and actor.get("id") == policy["requester_bot_id"]
         and actor.get("login") == app.get("slug") + "[bot]"
         and triggering.get("id") == actor.get("id")
+        and triggering.get("login") == actor.get("login")
+        and triggering.get("type") == "Bot"
         and actor.get("login") != OWNER,
         "Independent automation requester is required",
     )
@@ -521,11 +852,19 @@ def verified_release(run_id: int, policy: dict[str, Any]) -> dict[str, Any]:
             "version": 1,
             "run_id": run_id,
             "run_attempt": 1,
+            "release_request": manifest["release_request"],
+            "postgres_major": manifest["postgres_major"],
             "publication_sha256": hashlib.sha256(
                 json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
             ).hexdigest(),
         },
         "Protected approval did not bind the exact publication",
+    )
+    verify_request_binding(manifest, policy)
+    require(
+        type(policy.get("postgres_major")) is int
+        and manifest["postgres_major"] == policy["postgres_major"],
+        "Release PostgreSQL major differs from managed target policy",
     )
     return manifest
 
@@ -568,6 +907,15 @@ def verify_receipts(manifest: dict[str, Any], policy: dict[str, Any]) -> None:
             f"{kind} receipt is stale or invalid",
         )
         if kind == "provider":
+            require(
+                receipt.get("postgres_major")
+                == policy.get("postgres_major")
+                == manifest.get("postgres_major")
+                and type(receipt.get("postgres_server_version_num")) is int
+                and receipt["postgres_server_version_num"] // 10000
+                == policy["postgres_major"],
+                "Provider PostgreSQL observation differs from the approved release target",
+            )
             require(
                 all(
                     receipt.get(key) is True
@@ -693,8 +1041,22 @@ def _apply_locked(
         "docker_engine_id": engine_id,
         "compose_sha256": policy["compose_sha256"],
         "managed_env_sha256": policy["managed_env_sha256"],
+        "release_request": dict(manifest["release_request"]),
+        "postgres_major": manifest["postgres_major"],
     }
-    write_journal(journal, receipt, exclusive=True)
+    request = manifest["release_request"]
+    reservations = [
+        journal,
+        journal_dir / f"comment-{request['comment_id']}.json",
+        journal_dir / f"request-{request['request_id']}.json",
+    ]
+    for path in reservations:
+        if path.exists() or path.is_symlink():
+            raise FileExistsError(
+                "Release run, comment or request nonce already reserved"
+            )
+    for path in reservations:
+        write_journal(path, receipt, exclusive=True)
     command_base = [
         "compose",
         "--project-name",
@@ -851,6 +1213,12 @@ def main() -> int:
     registry_parser = sub.add_parser("verify-registry")
     registry_parser.add_argument("--image", required=True)
     registry_parser.add_argument("--config-digest", required=True)
+    request_parser = sub.add_parser("validate-request-event")
+    request_parser.add_argument("--event", type=Path, required=True)
+    request_parser.add_argument("--output", type=Path, required=True)
+    request_parser.add_argument("--expected", type=Path)
+    binding_parser = sub.add_parser("revalidate-request")
+    binding_parser.add_argument("--manifest", type=Path, required=True)
     apply_parser = sub.add_parser("agent-apply")
     apply_parser.add_argument("--release-run-id", type=int, required=True)
     apply_parser.add_argument("--request-id", required=True)
@@ -863,7 +1231,45 @@ def main() -> int:
     promote_parser.add_argument("--policy", required=True)
     args = parser.parse_args()
     try:
-        if args.command == "prepare":
+        if args.command == "validate-request-event":
+            event = strict_json(args.event.read_text(), maximum=2_000_000)
+            policy = (
+                workflow_policy()
+                if os.environ.get("GITHUB_EVENT_NAME") == "issue_comment"
+                else {}
+            )
+            result = workflow_request(event, dict(os.environ), policy)
+            if args.expected is not None:
+                require(
+                    result == strict_json(args.expected.read_text()),
+                    "Validated request changed before publication",
+                )
+            args.output.write_text(json.dumps(result, sort_keys=True) + "\n")
+            if os.environ.get("GITHUB_OUTPUT"):
+                with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+                    stream.writelines(
+                        key + "=" + str(result[key]) + "\n"
+                        for key in (
+                            "source_commit",
+                            "ci_run_id",
+                            "release_tag",
+                            "postgres_major",
+                        )
+                    )
+                    stream.write(
+                        "request_json="
+                        + json.dumps(result, separators=(",", ":"), sort_keys=True)
+                        + "\n"
+                    )
+                    stream.write(
+                        "request_approval="
+                        + ("true" if result["release_request"] is not None else "false")
+                        + "\n"
+                    )
+        elif args.command == "revalidate-request":
+            manifest = strict_json(args.manifest.read_text(), maximum=65536)
+            result = verify_request_binding(manifest, workflow_policy())
+        elif args.command == "prepare":
             result = prepare(args.ci_run_id, args.commit, args.tag, args.output)
         elif args.command == "verify-registry":
             digest = registry_config_digest(args.image)

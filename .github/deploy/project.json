@@ -10,7 +10,7 @@
       "cache": false,
       "options": {
         "cwd": ".github/deploy",
-        "command": "uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_cd_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py test_release_evidence.py test_firstout_release.py test_firstout_cd.py test_buycycle_release.py && uv run --no-project --python 3.11 --with keyring==25.6.0 python ../scripts/test_f0rge_pr_publisher.py"
+        "command": "uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python ../scripts/test_firstout_cd_pipeline.py && uv run --no-project --python 3.11 --with pyyaml==6.0.2 python -m unittest test_coolify_payload.py test_plan_deploy.py test_release_evidence.py test_firstout_release.py test_firstout_cd.py test_buycycle_release.py && uv run --no-project --python 3.11 --with keyring==25.6.0 python -m unittest discover -s ../scripts -p 'test_f0rge_*.py'"
       }
     }
   }

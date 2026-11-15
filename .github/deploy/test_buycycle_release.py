@@ -48,6 +48,9 @@ def image_evidence() -> dict:
         "dirty": False,
         "tests": dict.fromkeys(release.TESTS, True),
         "created_at": dt.datetime.now(dt.UTC).isoformat(),
+        "postgres_major": 15,
+        "postgres_server_version_num": 150019,
+        "harness_commit": "a" * 40,
     }
 
 
@@ -57,11 +60,11 @@ def publication() -> tuple[dict, dict]:
         "run_attempt": 1,
         "head_sha": "a" * 40,
         "head_branch": "main",
-        "event": "workflow_dispatch",
+        "event": "issue_comment",
         "path": release.WORKFLOW,
         "status": "completed",
         "conclusion": "success",
-        "repository": {"full_name": release.REPOSITORY},
+        "repository": {"full_name": release.REPOSITORY, "id": release.REPOSITORY_ID},
         "created_at": dt.datetime.now(dt.UTC).isoformat(),
         "actor": {"id": 123, "login": "release-bot[bot]", "type": "Bot"},
         "triggering_actor": {"id": 123, "login": "release-bot[bot]", "type": "Bot"},
@@ -78,11 +81,53 @@ def publication() -> tuple[dict, dict]:
         "workflow_run_id": 77,
         "workflow_attempt": 1,
         "workflow_commit": "a" * 40,
+        "postgres_major": 15,
+        "release_request": {"comment_id": 31},
     }
     return manifest, run
 
 
 class ContractTests(unittest.TestCase):
+    def test_closed_request_json_rejects_extra_duplicate_ambiguous_and_malformed_values(
+        self,
+    ):
+        request = {
+            "version": 1,
+            "source_commit": "b" * 40,
+            "ci_run_id": 44,
+            "release_tag": "release/buycycle/pi/20261115T090000Z",
+            "receipt_hashes": dict.fromkeys(release.RECEIPTS, "c" * 64),
+            "request_id": str(uuid.uuid4()),
+            "postgres_major": 15,
+        }
+        release.validate_request_body(json.dumps(request))
+        for changes in (
+            {"extra": "command"},
+            {"ci_run_id": True},
+            {"postgres_major": True},
+            {"postgres_major": 16},
+            {"source_commit": "b" * 39},
+            {"receipt_hashes": {"provider": "c" * 64}},
+            {"request_id": "not-a-uuid"},
+            {"release_tag": "release/other/pi/20261115T090000Z"},
+        ):
+            with (
+                self.subTest(changes=changes),
+                self.assertRaises((release.ReleaseError, ValueError)),
+            ):
+                release.validate_request_body(json.dumps({**request, **changes}))
+        for text in (
+            json.dumps(request)[:-1] + ',"ci_run_id":44}',
+            "[]",
+            "{",
+            " " * 4097,
+        ):
+            with (
+                self.subTest(text=text[:20]),
+                self.assertRaises((release.ReleaseError, ValueError)),
+            ):
+                release.validate_request_body(text)
+
     def test_archive_config_digest_hashes_bytes_not_docker_index_identity(self):
         content = json.dumps(
             {
@@ -180,6 +225,10 @@ class ContractTests(unittest.TestCase):
             lambda m, r: r.update(run_attempt=2),
             lambda m, r: m.update(workflow_attempt=2),
             lambda m, r: m.update(workflow_commit="f" * 40),
+            lambda m, r: m.pop("postgres_major"),
+            lambda m, r: m.update(postgres_major=True),
+            lambda m, r: m["image_evidence"].update(postgres_major=17),
+            lambda m, r: m["image_evidence"].update(harness_commit="b" * 40),
             lambda m, r: m["image_evidence"].update(
                 created_at=(dt.datetime.now(dt.UTC) - dt.timedelta(days=8)).isoformat()
             ),
@@ -239,6 +288,9 @@ class LoopbackReleaseTests(unittest.TestCase):
             "project_name": "buycycle",
             "requester_app_slug": "release-bot",
             "requester_app_id": 9,
+            "requester_bot_id": 123,
+            "request_pr_number": 900,
+            "postgres_major": 15,
             "max_age_seconds": 3600,
             "compose_path": str(self.root / "compose.yml"),
             "managed_env_file": str(self.root / "managed.env"),
@@ -269,6 +321,8 @@ class LoopbackReleaseTests(unittest.TestCase):
                     docker_engine_id=self.policy["expected_docker_engine_id"],
                     compose_sha256=self.policy["compose_sha256"],
                     managed_env_sha256=self.policy["managed_env_sha256"],
+                    postgres_major=15,
+                    postgres_server_version_num=150019,
                 )
                 data.update(
                     dict.fromkeys(
@@ -315,6 +369,22 @@ class LoopbackReleaseTests(unittest.TestCase):
             }
         ]
         self.api = {
+            "": {"id": release.REPOSITORY_ID, "full_name": release.REPOSITORY},
+            "public/apps/release-bot": {
+                "id": 9,
+                "slug": "release-bot",
+                "permissions": dict(release.REQUEST_PERMISSIONS),
+            },
+            "public/users/release-bot%5Bbot%5D": {
+                "id": 123,
+                "type": "Bot",
+                "login": "release-bot[bot]",
+            },
+            "pulls/900": {
+                "number": 900,
+                "merged": True,
+                "base": {"ref": "main", "repo": {"id": release.REPOSITORY_ID}},
+            },
             "rulesets?includes_parents=true&per_page=100": [
                 {"id": 10, "target": "tag", "enforcement": "active"}
             ],
@@ -344,6 +414,37 @@ class LoopbackReleaseTests(unittest.TestCase):
             source_ci_attempt=1,
             source_artifact={"id": 999, "digest": "sha256:" + "f" * 64},
         )
+        self.request = {
+            "version": 1,
+            "source_commit": self.manifest["commit"],
+            "ci_run_id": 44,
+            "release_tag": self.manifest["release_tag"],
+            "receipt_hashes": self.manifest["receipt_hashes"],
+            "request_id": str(uuid.uuid4()),
+            "postgres_major": 15,
+        }
+        timestamp = dt.datetime.now(dt.UTC).isoformat()
+        self.comment = {
+            "id": 31,
+            "issue_url": "https://api.github.com/repos/F0rge/f0rge/issues/900",
+            "user": dict(self.run["actor"]),
+            "performed_via_github_app": {"id": 9, "slug": "release-bot"},
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            "body": json.dumps(self.request),
+        }
+        self.api["issues/comments/31"] = self.comment
+        self.api["issues/900/comments?per_page=100&page=1"] = [self.comment]
+        self.manifest["release_request"] = {
+            "comment_id": 31,
+            "body_sha256": hashlib.sha256(self.comment["body"].encode()).hexdigest(),
+            "request_id": self.request["request_id"],
+            "pull_request": 900,
+            "repository_id": release.REPOSITORY_ID,
+            "requester_app_id": 9,
+            "requester_bot_id": 123,
+            "created_at": timestamp,
+        }
         self.api["actions/runs/44"] = {
             "id": 44,
             "run_attempt": 1,
@@ -420,8 +521,11 @@ class LoopbackReleaseTests(unittest.TestCase):
         endpoint = f"http://127.0.0.1:{server.server_port}/"
 
         def api(path, **_kwargs):
-            with urllib.request.urlopen(endpoint + path, timeout=2) as response:
-                return json.load(response)
+            try:
+                with urllib.request.urlopen(endpoint + path, timeout=2) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as exc:
+                raise release.ReleaseError("GitHub read rejected") from exc
 
         self.github_patch = patch.object(release, "github", api)
         self.addCleanup(self.github_patch.stop)
@@ -459,18 +563,12 @@ class LoopbackReleaseTests(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     args, 0, self.engine_id.encode(), b""
                 )
-            if args[:3] == ["gh", "api", "apps/release-bot"]:
+            if args[:2] == ["gh", "api"] and args[2] in {
+                "apps/release-bot",
+                "users/release-bot%5Bbot%5D",
+            }:
                 return subprocess.CompletedProcess(
-                    args,
-                    0,
-                    json.dumps(
-                        {
-                            "id": 9,
-                            "slug": "release-bot",
-                            "permissions": {"actions": "write", "metadata": "read"},
-                        }
-                    ).encode(),
-                    b"",
+                    args, 0, json.dumps(api("public/" + args[2])).encode(), b""
                 )
             if args[:2] == ["gh", "api"] and args[2].endswith("/zip"):
                 parts = args[2].split("/")
@@ -522,6 +620,8 @@ class LoopbackReleaseTests(unittest.TestCase):
             "version": 1,
             "run_id": 77,
             "run_attempt": 1,
+            "release_request": self.manifest["release_request"],
+            "postgres_major": self.manifest["postgres_major"],
             "publication_sha256": hashlib.sha256(
                 json.dumps(
                     self.manifest, sort_keys=True, separators=(",", ":")
@@ -774,22 +874,155 @@ class LoopbackReleaseTests(unittest.TestCase):
         finally:
             os.close(fd)
 
-    def test_wrong_running_digest_or_public_origin_never_claims_success(self):
-        baseline = copy.deepcopy(self.running)
-        for key, bad in [
-            ("Image", "sha256:" + "0" * 64),
-            ("HostConfig", {"PortBindings": {"8080/tcp": [{"HostPort": "8095"}]}}),
-        ]:
-            self.running[key] = bad
-            with self.assertRaises(release.ReleaseError):
+    def assert_failed_running_verification(self):
+        with self.assertRaises(release.ReleaseError):
+            release.agent_apply(77, str(uuid.uuid4()), self.policy)
+        self.assertEqual(
+            json.loads((self.root / "77-1.json").read_text())["state"],
+            "submission_outcome_unknown",
+        )
+        self.assertFalse((self.root / "active.json").exists())
+
+    def test_wrong_running_digest_never_claims_success(self):
+        self.running["Image"] = "sha256:" + "0" * 64
+        self.assert_failed_running_verification()
+
+    def test_public_origin_never_claims_success(self):
+        self.running["HostConfig"] = {
+            "PortBindings": {"8080/tcp": [{"HostPort": "8095"}]}
+        }
+        self.assert_failed_running_verification()
+
+    def test_authoritative_comment_identity_edits_deletion_duplicates_and_scope_fail_closed(
+        self,
+    ):
+        mutations = [
+            lambda: self.api["issues/comments/31"].pop("performed_via_github_app"),
+            lambda: self.api["issues/comments/31"]["performed_via_github_app"].update(
+                id=10
+            ),
+            lambda: self.api["issues/comments/31"]["user"].update(id=456),
+            lambda: self.api["issues/comments/31"].update(
+                updated_at="2026-01-01T00:00:00Z"
+            ),
+            lambda: self.api["issues/comments/31"].update(
+                body=self.comment["body"] + " "
+            ),
+            lambda: self.api.pop("issues/comments/31"),
+            lambda: self.api["issues/comments/31"].update(
+                issue_url="https://api.github.com/repos/F0rge/f0rge/issues/901"
+            ),
+            lambda: self.api["issues/900/comments?per_page=100&page=1"].append(
+                dict(self.comment, id=32)
+            ),
+            lambda: self.api["pulls/900"].update(merged=False),
+            lambda: self.api[""].update(id=1234),
+            lambda: self.api["public/apps/release-bot"]["permissions"].update(
+                actions="write"
+            ),
+            lambda: self.api["public/apps/release-bot"]["permissions"].update(
+                contents="write"
+            ),
+            lambda: self.api["public/users/release-bot%5Bbot%5D"].update(id=456),
+        ]
+        for mutation in mutations:
+            baseline = copy.deepcopy(self.api)
+            mutation()
+            with (
+                self.subTest(mutation=mutation),
+                self.assertRaises(release.ReleaseError),
+            ):
                 release.agent_apply(77, str(uuid.uuid4()), self.policy)
-            self.assertEqual(
-                json.loads((self.root / "77-1.json").read_text())["state"],
-                "submission_outcome_unknown",
-            )
-            self.assertFalse((self.root / "active.json").exists())
-            self.running = copy.deepcopy(baseline)
-            (self.root / "77-1.json").unlink()
+            self.assertEqual(self.mutations, [])
+            self.api.clear()
+            self.api.update(baseline)
+
+    def test_comment_and_nonce_reservations_block_a_second_run_without_effects(self):
+        binding = self.manifest["release_request"]
+        for name in (
+            f"comment-{binding['comment_id']}.json",
+            f"request-{binding['request_id']}.json",
+        ):
+            path = self.root / name
+            path.write_text('{"state":"previously_reserved"}')
+            with self.subTest(journal=name), self.assertRaises(FileExistsError):
+                release.agent_apply(77, str(uuid.uuid4()), self.policy)
+            self.assertEqual(self.mutations, [])
+            self.assertFalse((self.root / "77-1.json").exists())
+            path.unlink()  # Separate synthetic pre-existing reservation scenarios.
+
+    def test_target_major_must_match_policy_provider_and_actual_image_retest(self):
+        for major in (None, True, 17):
+            self.policy["postgres_major"] = major
+            with self.subTest(policy=major), self.assertRaises(release.ReleaseError):
+                release.agent_apply(77, str(uuid.uuid4()), self.policy)
+            self.assertEqual(self.mutations, [])
+        self.policy["postgres_major"] = 15
+        self.manifest["image_evidence"]["postgres_major"] = 17
+        self.refresh_archives()
+        with self.assertRaises(release.ReleaseError):
+            release.agent_apply(77, str(uuid.uuid4()), self.policy)
+        self.assertEqual(self.mutations, [])
+        self.manifest["image_evidence"]["postgres_major"] = 15
+        path = Path(self.policy["provider_receipt"])
+        receipt = json.loads(path.read_text())
+        receipt["postgres_major"] = 17
+        path.write_text(json.dumps(receipt))
+        self.manifest["receipt_hashes"]["provider"] = hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        with self.assertRaisesRegex(release.ReleaseError, "Provider PostgreSQL"):
+            release.verify_receipts(self.manifest, self.policy)
+        self.assertEqual(self.mutations, [])
+
+    def test_comment_event_uses_rest_identity_fallback_and_rejects_untrusted_event_context(
+        self,
+    ):
+        event = {
+            "action": "created",
+            "repository": {
+                "id": release.REPOSITORY_ID,
+                "full_name": release.REPOSITORY,
+            },
+            "issue": {"number": 900, "pull_request": {}},
+            "sender": dict(self.run["actor"]),
+            "comment": dict(self.comment),
+        }
+        event["comment"].pop("performed_via_github_app")
+        context = {
+            "GITHUB_REPOSITORY": release.REPOSITORY,
+            "GITHUB_REPOSITORY_ID": str(release.REPOSITORY_ID),
+            "GITHUB_REF": "refs/heads/main",
+            "GITHUB_RUN_ATTEMPT": "1",
+            "GITHUB_EVENT_NAME": "issue_comment",
+            "GITHUB_ACTOR": "release-bot[bot]",
+            "GITHUB_TRIGGERING_ACTOR": "release-bot[bot]",
+        }
+        result = release.workflow_request(event, context, self.policy)
+        self.assertEqual(result["release_request"], self.manifest["release_request"])
+        for key, value in (
+            ("GITHUB_RUN_ATTEMPT", "2"),
+            ("GITHUB_REF", "refs/pull/1/merge"),
+            ("GITHUB_TRIGGERING_ACTOR", release.OWNER),
+        ):
+            with self.subTest(context=key), self.assertRaises(release.ReleaseError):
+                release.workflow_request(event, {**context, key: value}, self.policy)
+        event["action"] = "edited"
+        with self.assertRaises(release.ReleaseError):
+            release.workflow_request(event, context, self.policy)
+        event["action"] = "created"
+        event["comment"]["performed_via_github_app"] = {"id": 10, "slug": "wrong-app"}
+        with self.assertRaisesRegex(release.ReleaseError, "Event App identity"):
+            release.workflow_request(event, context, self.policy)
+
+    def test_human_dispatch_is_publication_only_even_with_fake_approval_artifact(self):
+        self.run.update(event="workflow_dispatch")
+        self.manifest["release_request"] = None
+        self.refresh_archives()
+        release.validate_publication(self.manifest, self.run)
+        with self.assertRaises(release.ReleaseError):
+            release.agent_apply(77, str(uuid.uuid4()), self.policy)
+        self.assertEqual(self.mutations, [])
 
 
 class WorkflowTests(unittest.TestCase):
@@ -798,9 +1031,24 @@ class WorkflowTests(unittest.TestCase):
         self.workflow = yaml.safe_load((directory / "release-buycycle.yml").read_text())
         self.ci = yaml.safe_load((directory / "ci.yml").read_text())
 
-    def test_publication_is_manual_only_and_has_no_build_or_provider_mutation(self):
+    def test_only_trusted_main_comment_or_publication_dispatch_has_no_provider_mutation(
+        self,
+    ):
         trigger = self.workflow.get("on", self.workflow.get(True))
-        self.assertEqual(set(trigger), {"workflow_dispatch"})
+        self.assertEqual(set(trigger), {"workflow_dispatch", "issue_comment"})
+        self.assertEqual(trigger["issue_comment"], {"types": ["created"]})
+        self.assertNotIn("request_approval", trigger["workflow_dispatch"]["inputs"])
+        request = self.workflow["jobs"]["request"]
+        self.assertEqual(
+            request["permissions"],
+            {"contents": "read", "actions": "read", "pull-requests": "read"},
+        )
+        self.assertIn("github.ref == 'refs/heads/main'", request["if"])
+        for job in self.workflow["jobs"].values():
+            for step in job["steps"]:
+                if step.get("uses", "").startswith("actions/checkout@"):
+                    self.assertEqual(step["with"]["ref"], "${{ github.sha }}")
+                    self.assertIs(step["with"]["persist-credentials"], False)
         publish = self.workflow["jobs"]["publish"]
         self.assertEqual(publish["runs-on"], "ubuntu-24.04-arm")
         self.assertIn("github.ref == 'refs/heads/main'", publish["if"])
@@ -821,6 +1069,8 @@ class WorkflowTests(unittest.TestCase):
             self.assertNotIn(forbidden, commands)
         self.assertIn("buycycle_release.py prepare", commands)
         self.assertIn("image_rehearsal.py --image", commands)
+        self.assertIn('--postgres-major "$POSTGRES_MAJOR"', commands)
+        self.assertNotIn("${{ github.event.comment.body", commands)
         self.assertIn("docker pull --platform linux/arm64", commands)
         self.assertIn(
             'verify-registry --image "$PINNED_IMAGE" --config-digest "$CONFIG_DIGEST"',
@@ -833,13 +1083,18 @@ class WorkflowTests(unittest.TestCase):
 
     def test_protected_approval_cannot_be_confused_with_publication(self):
         approve = self.workflow["jobs"]["approve"]
-        self.assertEqual(approve["if"], "inputs.request_approval")
+        self.assertIn("github.event_name == 'issue_comment'", approve["if"])
+        self.assertIn("needs.request.outputs.request_approval == 'true'", approve["if"])
         self.assertEqual(
             approve["environment"], {"name": "production", "deployment": False}
         )
-        self.assertEqual(approve["permissions"], {"actions": "read"})
+        self.assertEqual(
+            approve["permissions"],
+            {"contents": "read", "actions": "read", "pull-requests": "read"},
+        )
         commands = "\n".join(step.get("run", "") for step in approve["steps"])
-        self.assertIn('test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_ACTOR"', commands)
+        self.assertIn("revalidate-request", commands)
+        self.assertIn("release_request", commands)
         self.assertIn("publication_sha256", commands)
         self.assertIn('test "$GITHUB_RUN_ATTEMPT" = 1', commands)
 

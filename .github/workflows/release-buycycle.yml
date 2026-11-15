@@ -1,11 +1,13 @@
 name: Buycycle tested image publication
 
-# Downloads and republishes a tested main-CI image. Never builds or deploys.
+# Trusted default-branch code; manual dispatch publishes only, never approves.
 on:
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       source_commit:
-        description: Exact successful main-push CI commit (40 lowercase hex)
+        description: Exact successful main-push CI commit
         required: true
         type: string
       ci_run_id:
@@ -16,85 +18,107 @@ on:
         description: release/buycycle/pi/YYYYMMDDTHHMMSSZ
         required: true
         type: string
-      request_approval:
-        description: Request Leo approval through the configured independent GitHub App
-        default: false
-        type: boolean
-      migration_receipt_sha256:
-        description: Local controlled migration/import receipt hash (required for approval)
-        default: ''
-        type: string
-      restore_receipt_sha256:
-        description: Local current backup/restore receipt hash (required for approval)
-        default: ''
-        type: string
-      provider_receipt_sha256:
-        description: Local private-origin/provider fence receipt hash (required for approval)
-        default: ''
-        type: string
+      postgres_major:
+        description: Explicit database compatibility target (publication only)
+        required: true
+        default: '17'
+        type: choice
+        options: ['15', '17']
 
 permissions:
   contents: read
 
 concurrency:
-  group: buycycle-publication-${{ inputs.release_tag }}
+  group: buycycle-publication-${{ github.event.comment.id || inputs.release_tag || github.run_id }}
   cancel-in-progress: false
 
+env:
+  REQUESTER_APP_SLUG: ${{ vars.BUYCYCLE_RELEASE_REQUESTER_APP_SLUG }}
+  REQUESTER_APP_ID: ${{ vars.BUYCYCLE_RELEASE_REQUESTER_APP_ID }}
+  REQUESTER_BOT_ID: ${{ vars.BUYCYCLE_RELEASE_REQUESTER_BOT_ID }}
+  REQUEST_PR_NUMBER: ${{ vars.BUYCYCLE_RELEASE_REQUEST_PR_NUMBER }}
+
 jobs:
+  request:
+    if: >-
+      github.repository == 'F0rge/f0rge' && github.repository_id == '1194719185' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      source_commit: ${{ steps.request.outputs.source_commit }}
+      ci_run_id: ${{ steps.request.outputs.ci_run_id }}
+      release_tag: ${{ steps.request.outputs.release_tag }}
+      postgres_major: ${{ steps.request.outputs.postgres_major }}
+      request_json: ${{ steps.request.outputs.request_json }}
+      request_approval: ${{ steps.request.outputs.request_approval }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate exact App comment using authoritative read-only GitHub facts
+        id: request
+        run: |
+          python3 .github/deploy/buycycle_release.py validate-request-event \
+            --event "$GITHUB_EVENT_PATH" --output "$RUNNER_TEMP/validated-request.json"
+
   publish:
+    needs: request
     if: github.repository == 'F0rge/f0rge' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     permissions:
       contents: read
       actions: read
+      pull-requests: read
       packages: write
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_COMMIT: ${{ inputs.source_commit }}
-      SOURCE_CI_RUN: ${{ inputs.ci_run_id }}
-      RELEASE_TAG: ${{ inputs.release_tag }}
-      REQUEST_APPROVAL: ${{ inputs.request_approval }}
-      MIGRATION_HASH: ${{ inputs.migration_receipt_sha256 }}
-      RESTORE_HASH: ${{ inputs.restore_receipt_sha256 }}
-      PROVIDER_HASH: ${{ inputs.provider_receipt_sha256 }}
+      SOURCE_COMMIT: ${{ needs.request.outputs.source_commit }}
+      SOURCE_CI_RUN: ${{ needs.request.outputs.ci_run_id }}
+      RELEASE_TAG: ${{ needs.request.outputs.release_tag }}
+      POSTGRES_MAJOR: ${{ needs.request.outputs.postgres_major }}
+      REQUEST_JSON: ${{ needs.request.outputs.request_json }}
+      REQUEST_APPROVAL: ${{ needs.request.outputs.request_approval }}
     outputs:
       digest: ${{ steps.publish.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate closed release inputs
+      - name: Freeze validated request and download exact tested main archive
         run: |
-          set -euo pipefail
-          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$SOURCE_CI_RUN" =~ ^[1-9][0-9]*$ ]]
-          [[ "$RELEASE_TAG" =~ ^release/buycycle/pi/[0-9]{8}T[0-9]{6}Z$ ]]
-          if [ "$REQUEST_APPROVAL" = true ]; then
-            [[ "$MIGRATION_HASH" =~ ^[0-9a-f]{64}$ ]]
-            [[ "$RESTORE_HASH" =~ ^[0-9a-f]{64}$ ]]
-            [[ "$PROVIDER_HASH" =~ ^[0-9a-f]{64}$ ]]
-            test "$GITHUB_RUN_ATTEMPT" = 1
-          fi
-          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$SOURCE_COMMIT"
-          git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.source_commit }}
-          persist-credentials: false
-      - name: Download and validate the exact tested main archive
-        run: |
+          python3 - <<'PY'
+          import json,os,pathlib
+          path=pathlib.Path(os.environ['RUNNER_TEMP'])/'validated-request.json'
+          path.write_text(json.dumps(json.loads(os.environ['REQUEST_JSON']),sort_keys=True)+'\n')
+          PY
           python3 .github/deploy/buycycle_release.py prepare \
             --ci-run-id "$SOURCE_CI_RUN" --commit "$SOURCE_COMMIT" \
             --tag "$RELEASE_TAG" --output "$RUNNER_TEMP/buycycle-source" > "$RUNNER_TEMP/candidate-result.json"
-      - name: Retest loaded image without rebuilding
+      - name: Retest loaded image on the selected PostgreSQL version without rebuilding
         run: |
           set -euo pipefail
           IMAGE_ID=$(jq -er '.loaded_image_id' "$RUNNER_TEMP/buycycle-source/candidate.json")
-          python3 apps/buycycle/ops/image_rehearsal.py --image "$IMAGE_ID" --output "$RUNNER_TEMP/buycycle-retest"
+          python3 apps/buycycle/ops/image_rehearsal.py --image "$IMAGE_ID" \
+            --expected-commit "$SOURCE_COMMIT" --postgres-major "$POSTGRES_MAJOR" --output "$RUNNER_TEMP/buycycle-retest"
           test "$(jq -er '.image_id' "$RUNNER_TEMP/buycycle-retest/evidence.json")" = "$IMAGE_ID"
           test "$(jq -er '.config_digest' "$RUNNER_TEMP/buycycle-retest/evidence.json")" = "$(jq -er '.image_evidence.config_digest' "$RUNNER_TEMP/buycycle-source/candidate.json")"
+      - name: Revalidate the unchanged App request before publication
+        if: env.REQUEST_APPROVAL == 'true'
+        run: |
+          python3 .github/deploy/buycycle_release.py validate-request-event \
+            --event "$GITHUB_EVENT_PATH" --expected "$RUNNER_TEMP/validated-request.json" \
+            --output "$RUNNER_TEMP/revalidated-request.json"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -114,67 +138,73 @@ jobs:
           python3 .github/deploy/buycycle_release.py verify-registry --image "$PINNED_IMAGE" --config-digest "$CONFIG_DIGEST"
           export PINNED_IMAGE
           python3 - <<'PY'
-          import hashlib, json, os, pathlib
+          import json, os, pathlib
           root = pathlib.Path(os.environ['RUNNER_TEMP'])
           candidate = json.loads((root/'buycycle-source/candidate.json').read_text())
           evidence = json.loads((root/'buycycle-retest/evidence.json').read_text())
+          request = json.loads(os.environ['REQUEST_JSON'])
           assert evidence['image_id'] == candidate['loaded_image_id'] and evidence['dirty'] is False
           assert evidence['config_digest'] == candidate['image_evidence']['config_digest']
+          assert evidence['harness_commit'] == os.environ['GITHUB_SHA']
+          assert evidence['postgres_major'] == request['postgres_major']
           manifest = dict(candidate, version=1, repository='F0rge/f0rge', commit=os.environ['SOURCE_COMMIT'],
                           image=os.environ['PINNED_IMAGE'], digest=os.environ['PINNED_IMAGE'].split('@')[1],
                           target={'host':'pi','app':'xi0qwpbyl2d8gf8u3xl13jkv'},
                           workflow_run_id=int(os.environ['GITHUB_RUN_ID']), workflow_attempt=int(os.environ['GITHUB_RUN_ATTEMPT']),
-                          workflow_commit=os.environ['GITHUB_SHA'], image_evidence=evidence,
-                          receipt_hashes={'migration':os.environ['MIGRATION_HASH'],'restore':os.environ['RESTORE_HASH'],'provider':os.environ['PROVIDER_HASH']})
-          pathlib.Path('buycycle-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
+                          workflow_commit=os.environ['GITHUB_SHA'], source_image_evidence=candidate['image_evidence'], image_evidence=evidence,
+                          receipt_hashes=request['receipt_hashes'], postgres_major=request['postgres_major'], release_request=request['release_request'])
+          (root/'buycycle-release.json').write_text(json.dumps(manifest,indent=2)+'\n')
           with open(os.environ['GITHUB_OUTPUT'],'a') as stream: stream.write('digest='+manifest['digest']+'\n')
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as stream:
-              stream.write('## Buycycle candidate\n\nCommit: `'+manifest['commit']+'`\n\nImage: `'+manifest['image']+'`\n\nTag: `'+manifest['release_tag']+'`\n\nReceipt hashes: `'+json.dumps(manifest['receipt_hashes'],sort_keys=True)+'`\n\nPublication is not deployment.\n')
+              stream.write('## Buycycle candidate\n\nCommit: `'+manifest['commit']+'`\n\nImage: `'+manifest['image']+'`\n\nTag: `'+manifest['release_tag']+'`\n\nPostgreSQL: `'+str(manifest['postgres_major'])+'`\n\nRequest: `'+json.dumps(manifest['release_request'],sort_keys=True)+'`\n\nReceipt hashes: `'+json.dumps(manifest['receipt_hashes'],sort_keys=True)+'`\n\nPublication is not deployment.\n')
           PY
       - uses: actions/upload-artifact@v4
         with:
           name: buycycle-release-publication
-          path: buycycle-release.json
+          path: ${{ runner.temp }}/buycycle-release.json
           if-no-files-found: error
 
   approve:
     name: Approve Buycycle ${{ needs.publish.outputs.digest }}
-    if: inputs.request_approval
-    needs: publish
+    if: github.event_name == 'issue_comment' && needs.request.outputs.request_approval == 'true'
+    needs: [request, publish]
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       actions: read
+      pull-requests: read
     environment:
       name: production
       deployment: false
     env:
       GH_TOKEN: ${{ github.token }}
-      REQUESTER_APP_SLUG: ${{ vars.BUYCYCLE_RELEASE_REQUESTER_APP_SLUG }}
-      REQUESTER_APP_ID: ${{ vars.BUYCYCLE_RELEASE_REQUESTER_APP_ID }}
     steps:
-      - name: Require the configured independent automation identity
-        run: |
-          set -euo pipefail
-          test "$GITHUB_RUN_ATTEMPT" = 1
-          [[ "$REQUESTER_APP_SLUG" =~ ^[a-z0-9-]{1,100}$ ]]
-          [[ "$REQUESTER_APP_ID" =~ ^[1-9][0-9]*$ ]]
-          test "$GITHUB_ACTOR" = "$REQUESTER_APP_SLUG[bot]"
-          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_ACTOR"
-          test "$(gh api "apps/$REQUESTER_APP_SLUG" --jq .id)" = "$REQUESTER_APP_ID"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: buycycle-release-publication
-      - name: Bind this protected job to the exact publication
+          path: ${{ runner.temp }}/publication
+      - name: Revalidate the exact unchanged comment after Leo's protected approval
+        run: |
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          python3 .github/deploy/buycycle_release.py revalidate-request \
+            --manifest "$RUNNER_TEMP/publication/buycycle-release.json"
+      - name: Bind protected approval to exact publication, comment and nonce
         run: |
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          manifest=json.loads(pathlib.Path('buycycle-release.json').read_text())
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          manifest=json.loads((root/'publication/buycycle-release.json').read_text())
           value={'version':1,'run_id':int(os.environ['GITHUB_RUN_ID']),'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+                 'release_request':manifest['release_request'],'postgres_major':manifest['postgres_major'],
                  'publication_sha256':hashlib.sha256(json.dumps(manifest,sort_keys=True,separators=(',',':')).encode()).hexdigest()}
-          pathlib.Path('approval.json').write_text(json.dumps(value,indent=2)+'\n')
+          (root/'approval.json').write_text(json.dumps(value,indent=2)+'\n')
           PY
       - uses: actions/upload-artifact@v4
         with:
           name: buycycle-release-approval
-          path: approval.json
+          path: ${{ runner.temp }}/approval.json
           if-no-files-found: error

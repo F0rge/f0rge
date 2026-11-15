@@ -16,31 +16,105 @@ until Leo approves the exact cutover and recovery scope.
    commit. An active repository tag ruleset must prevent update and deletion of
    `refs/tags/release/buycycle/pi/*`, with no bypass actors. Only this fixed tag
    grammar selects Buycycle on the Pi; no app config can select another host.
-3. Manually run `release-buycycle.yml` on `main` with that commit/tag and its
-   successful **main-push** CI run ID. `prepare` retrieves current GitHub facts,
+3. A separate requester App posts the closed JSON below on the configured,
+   already reviewed and merged main PR. `issue_comment.created` runs only trusted
+   default-branch code. Its read-only validator retrieves the authoritative
+   comment, App, bot, repository and PR identities before publication. `prepare`
+   retrieves current GitHub facts for the successful **main-push** CI run,
    verifies both required source checks and the exact artifact ID/digest/attempt,
    validates the archive hash, and loads the original image. PR synthetic-merge
    archives and manual CI archives cannot become releases.
-4. The workflow tests the loaded image again without rebuilding it, publishes
+4. The workflow tests the loaded image again against the requested PostgreSQL
+   major (15 or 17), without rebuilding it, publishes
    it to GHCR, and pulls the resulting immutable registry digest. The registry's
    Linux ARM64 config digest must equal `config_digest`, independently hashed
    from the archive's actual config bytes. Publication is not deployment.
-5. To request release approval, a separately configured GitHub App starts a new
-   workflow run with `request_approval=true` and the three exact private receipt
-   hashes: controlled migration/import, backup/restore, and provider/origin fence.
+5. The App comment includes the three exact private receipt hashes: controlled
+   migration/import, backup/restore, and provider/origin fence. The publication
+   freezes its comment ID, exact body hash, request UUID and selected major.
    The protected `production` job shows the selected digest and waits for Leo.
-   Its approval artifact binds the exact publication document. Human-triggered
-   or rerun requests cannot authorize a release. Start a new request when needed.
+   Its approval artifact binds the exact publication document and comment/nonce.
+   The unchanged comment is re-fetched before publication, after protected approval
+   and independently by the agent. Human-triggered dispatch publishes only;
+   it cannot produce release approval. Reruns, edits, deletion and nonce reuse
+   fail closed. Start a new comment with a new UUID when needed.
 6. The operator's mutually authenticated client submits only a release run ID and
    UUID to the managed Pi agent. The agent independently retrieves the trusted
    GitHub publication/approval and rechecks tag/checks, automation identity,
    environment protection, Leo's approval and the local receipt hashes/freshness.
    It accepts no requester-supplied image, shell command, file path or credential.
-7. The agent reserves a durable exclusive journal, pulls the approved digest and
+7. The agent reserves durable journals for the run, comment and request UUID,
+   pulls the approved digest and
    updates only the fixed `buycycle` Compose `app` service with `--no-build`.
    Success requires actual Docker container/image ID, matching registry/config digests,
    source label, healthy readiness and no host-port bindings. A queued provider
    response or a configured image field is never running-image proof.
+
+## Separate comment requester
+
+The App is separate from the PR publisher and has exactly repository
+`Pull requests: write`, `Contents: read`, `Actions: read` and implicit
+`Metadata: read`, installed only on `F0rge/f0rge` (repository ID `1194719185`).
+It receives no Actions write permission. The prepared operator helper exposes
+only identity inspection and posting a strict comment to its configured merged
+release PR; it cannot dispatch, edit/delete comments, push, approve, merge,
+publish images or deploy. The existing publisher retains its original scope.
+
+The operator helper reuses the explicit macOS Keychain, anonymous-FD RSA JWT,
+fixed GitHub HTTPS/no-redirect transport, single-repository token downscoping
+and token revocation from the publisher. The keys occupy separate App-slug
+accounts in Keychain service `org.f0rge.codex-pr-publisher`. No key/token is
+accepted through argv, environment, `gh auth` or the private JSON config.
+
+Use a user-owned mode-0600 config with exactly `app_id`, `slug`,
+`installation_id`, `repo_id` and `request_pr_number`. Configure the matching
+GitHub repository variables `BUYCYCLE_RELEASE_REQUESTER_APP_SLUG`,
+`BUYCYCLE_RELEASE_REQUESTER_APP_ID`, `BUYCYCLE_RELEASE_REQUESTER_BOT_ID` and
+`BUYCYCLE_RELEASE_REQUEST_PR_NUMBER` from observed App/bot facts. The managed
+Pi policy independently pins these identities and the selected PostgreSQL major.
+The fixed PR must already be merged into main. Changing this channel requires a
+reviewed configuration update; comments elsewhere cannot request release.
+
+The entire comment is JSON with exactly these fields (placeholders below must
+be replaced with real validated values; no Markdown wrapper or extra fields):
+
+```json
+{
+  "version": 1,
+  "source_commit": "<40 lowercase hex>",
+  "ci_run_id": 123456,
+  "release_tag": "release/buycycle/pi/20261115T090000Z",
+  "postgres_major": 15,
+  "request_id": "<new canonical UUID>",
+  "receipt_hashes": {
+    "migration": "<64 lowercase hex>",
+    "restore": "<64 lowercase hex>",
+    "provider": "<64 lowercase hex>"
+  }
+}
+```
+
+```sh
+uv run .github/scripts/f0rge_buycycle_requester.py inspect --config /private/requester.json
+uv run .github/scripts/f0rge_buycycle_requester.py post-request \
+  --config /private/requester.json --request-file /private/release-request.json
+```
+
+The helper checks the fixed merged PR and successful main CI before its single
+comment write. An ambiguous response is not retried or auto-edited: inspect the
+actual comment/run first. The workflow requires authoritative REST
+`performed_via_github_app` matching the registered App even when the event payload
+omits it. Missing API evidence blocks activation. Duplicate JSON keys, extra
+fields, booleans used as IDs, malformed values and duplicate request UUIDs on
+the fixed PR are rejected. Comment inventories are bounded at 1,000 entries;
+exceeding that bound fails closed rather than omitting old nonces.
+
+For a PG15 target, the approved comment, publication's exact-image retest,
+managed policy and observed provider receipt must all say 15. A source CI image
+tested initially with PG17 may be loaded and tested against PG15 without a
+rebuild; its canonical config digest must remain identical. PG17-only evidence
+cannot authorize that PG15 target. Trusted main code executes the helper and
+harness; neither a PR checkout nor code from a selected older source is run.
 
 ## Agent seam
 
@@ -74,6 +148,9 @@ Required policy fields (all paths are fixed on the Pi):
   "active_release_receipt":"/var/lib/buycycle-release/journal/active.json",
   "requester_app_slug":"<verified-dedicated-app-slug>",
   "requester_app_id":123456,
+  "requester_bot_id":123457,
+  "request_pr_number":1234,
+  "postgres_major":15,
   "max_age_seconds":3600,
   "migration_receipt":"/var/lib/buycycle-release/receipts/migration.json",
   "restore_receipt":"/var/lib/buycycle-release/receipts/restore.json",
@@ -131,7 +208,9 @@ seam for the managed server, not a routine agent SSH path.
 
 A process lock serializes all Buycycle releases, including different run IDs.
 Before the first Docker effect, an exclusive `<run-id>-1.json` journal is flushed
-with file and directory fsync. Replaying that run is rejected even after restart.
+alongside `comment-<id>.json` and `request-<UUID>.json`, with file and directory
+fsync. Replaying any one of those identities is rejected even after restart or
+through a different run ID. A partial reservation stays consumed on failure.
 Failed or lost deployment responses record `submission_outcome_unknown`; inspect
 the journal and actual container before issuing a new approval. Never delete a
 journal to retry a deployment blindly. Release workflow reruns are rejected so
@@ -157,7 +236,7 @@ under their own reviewed configuration before the app service is promoted.
 These source checks and loopback tests do not prove live provider configuration.
 Before enabling the requester App, contain historical workflow reruns and all
 alternate production credential paths described in the [release hold](README.md).
-The App may have only Actions write and optional Contents/Metadata read. Verify
+The App must have exactly PR write plus Actions/Contents/Metadata read. Verify
 the real App identity, protection API payload, tag ruleset, independently approved
 nonproduction run, managed mTLS agent/certificate custody, private origin, source
 build/collector fence, migration/import reconciliation and restore receipts.
@@ -165,5 +244,7 @@ Missing or unverifiable facts keep the release closed. Existing services and the
 other apps' release holds are not changed by this preparation.
 
 Primary references: [GitHub ARM runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
+[default-branch issue-comment events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#issue_comment),
+[issue-comment API permissions](https://docs.github.com/en/rest/issues/comments#create-an-issue-comment),
 [environment required reviewers without deployments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments#using-environments-without-deployments),
 [Coolify immutable Docker images](https://coolify.io/docs/applications/deployments/docker-image).

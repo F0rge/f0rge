@@ -8,6 +8,8 @@
   "expected_docker_engine_id": "REPLACE_WITH_OBSERVED_PI_DOCKER_ENGINE_ID",
   "requester_app_slug": "REPLACE_WITH_INSTALLED_RELEASE_REQUESTER_APP_SLUG",
   "requester_app_id": 0,
+  "requester_bot_id": 0,
+  "request_pr_number": 0,
   "max_age_seconds": 3600,
   "migration_receipt": "/var/lib/buycycle-release/receipts/migration.json",
   "restore_receipt": "/var/lib/buycycle-release/receipts/restore.json",

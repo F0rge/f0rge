@@ -78,7 +78,7 @@ class Config:
         )
 
 
-def read_config(path: Path) -> Config:
+def _read_private_config(path: Path) -> dict:
     require(
         path.is_absolute() and path == path.resolve(),
         "Use a canonical private config path",
@@ -100,9 +100,14 @@ def read_config(path: Path) -> Config:
         )
     require(info.st_size <= 4096, "Config is too large")
     value = json.loads(path.read_text())
+    require(isinstance(value, dict), "Unexpected config shape")
+    return value
+
+
+def read_config(path: Path) -> Config:
+    value = _read_private_config(path)
     require(
-        isinstance(value, dict)
-        and set(value) == {"app_id", "slug", "installation_id", "repo_id"},
+        set(value) == {"app_id", "slug", "installation_id", "repo_id"},
         "Unexpected config fields",
     )
     return Config(**value)
@@ -259,6 +264,12 @@ class GitHub:
             and path == "/installation/token"
         )
         require(allowed, "API operation is outside the publisher scope")
+        return self._request(method, path, token, body)
+
+    def _request(
+        self, method: str, path: str, token: str, body: dict | None = None
+    ) -> dict | list:
+        """Shared fixed-host transport; each public capability has its own allowlist."""
         require(
             isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9_.-]{20,4096}", token),
             "Invalid authentication material",
@@ -294,13 +305,17 @@ class GitHub:
             ) from None
 
 
-def _permissions(value: object) -> None:
+def _check_permissions(value: object, expected: dict[str, str]) -> None:
     require(isinstance(value, dict), "Missing effective permissions")
     effective = dict(value)
     effective.setdefault("metadata", "read")
     require(
-        effective == PERMISSIONS, "Permissions differ from the exact publisher scope"
+        effective == expected, "Permissions differ from the exact App capability scope"
     )
+
+
+def _permissions(value: object) -> None:
+    _check_permissions(value, PERMISSIONS)
 
 
 def _repository(value: object) -> None:
@@ -314,14 +329,20 @@ def _repository(value: object) -> None:
 
 @contextlib.contextmanager
 def verified_session(config: Config):
-    api = GitHub()
+    with _verified_session(config, GitHub(), PERMISSIONS) as session:
+        yield session
+
+
+@contextlib.contextmanager
+def _verified_session(config: Config, api: GitHub, permissions: dict[str, str]):
+    """Shared custody/identity/token lifecycle, selected by a fixed code capability."""
     jwt = app_jwt(config)
     app = api.request("GET", "/app", jwt)
     require(
         app.get("id") == config.app_id and app.get("slug") == config.slug,
         "App identity mismatch",
     )
-    _permissions(app.get("permissions"))
+    _check_permissions(app.get("permissions"), permissions)
     installation = api.request(
         "GET", f"/app/installations/{config.installation_id}", jwt
     )
@@ -335,14 +356,18 @@ def verified_session(config: Config):
         and installation.get("suspended_at") is None,
         "Installation identity or selection mismatch",
     )
-    _permissions(installation.get("permissions"))
+    _check_permissions(installation.get("permissions"), permissions)
     minted = api.request(
         "POST",
         f"/app/installations/{config.installation_id}/access_tokens",
         jwt,
         {
             "repository_ids": [REPO_ID],
-            "permissions": {"contents": "read", "pull_requests": "write"},
+            "permissions": {
+                name: access
+                for name, access in permissions.items()
+                if name != "metadata"
+            },
         },
     )
     token = minted.get("token")
@@ -351,7 +376,7 @@ def verified_session(config: Config):
         "Invalid installation token",
     )
     try:
-        _permissions(minted.get("permissions"))
+        _check_permissions(minted.get("permissions"), permissions)
         expires = dt.datetime.fromisoformat(minted["expires_at"].replace("Z", "+00:00"))
         require(
             expires.tzinfo is not None
@@ -389,7 +414,7 @@ def verified_session(config: Config):
             "installation_id": config.installation_id,
             "repo_id": REPO_ID,
             "repository": REPOSITORY,
-            "permissions": PERMISSIONS,
+            "permissions": dict(permissions),
             "bot_login": bot["login"],
             "bot_id": bot["id"],
             "token_expires_at": minted["expires_at"],
