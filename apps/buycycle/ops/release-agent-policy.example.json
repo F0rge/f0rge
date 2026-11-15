@@ -53,8 +53,13 @@
     }
   ],
   "cloudflare_token_file": "/etc/buycycle/preflight/cloudflare-read-token",
-  "coolify_base_url": "https://REPLACE_WITH_VERIFIED_COOLIFY_HOST/api/v1",
-  "coolify_token_file": "/etc/buycycle/preflight/coolify-read-token",
+  "coolify_control_plane": {
+    "container_id": "REPLACE_WITH_FULL_VERIFIED_COOLIFY_CONTAINER_ID",
+    "image": "REPLACE_WITH_VERIFIED_COOLIFY_IMAGE_REFERENCE",
+    "image_id": "sha256:REPLACE_WITH_VERIFIED_LOCAL_COOLIFY_IMAGE_ID",
+    "compose_project": "REPLACE_WITH_VERIFIED_COOLIFY_COMPOSE_PROJECT",
+    "compose_service": "REPLACE_WITH_VERIFIED_COOLIFY_COMPOSE_SERVICE"
+  },
   "secret_owners": {
     "/etc/buycycle/secrets/runtime_database_url": 10001,
     "/etc/buycycle/secrets/migrator_database_url": 10001,

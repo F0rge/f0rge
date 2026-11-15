@@ -42,8 +42,13 @@ class ProviderFixture:
             "journal_dir": str(directory / "journal"),
             "database_network": "platform_database",
             "cloudflare_token_file": "/managed/cf-token",
-            "coolify_token_file": "/managed/coolify-token",
-            "coolify_base_url": "https://fixture.invalid/api/v1",
+            "coolify_control_plane": {
+                "container_id": "f" * 64,
+                "image": "ghcr.io/coollabsio/coolify:fixture",
+                "image_id": "sha256:" + "8" * 64,
+                "compose_project": "source",
+                "compose_service": "coolify",
+            },
             "postgres_container": "c" * 64,
             "postgres_major": 17,
             "postgres_admin_role": "postgres",
@@ -76,15 +81,16 @@ class ProviderFixture:
         self.routes = {"config": {"ingress": [{"hostname": preflight.DOMAIN, "service": "http://app:8080"}, {"service": "http_status:404"}]}}
         self.dns = [{"name": preflight.DOMAIN, "type": "CNAME", "proxied": True, "content": self.config["tunnel_id"] + ".cfargotunnel.com"}]
         self.legacy = {
+            "version": 1,
             "uuid": preflight.APP,
             "status": "exited:unhealthy",
-            "settings": {"is_auto_deploy_enabled": False, "is_preview_deployments_enabled": False},
-            "manual_webhook_secret_github": None,
-            "manual_webhook_secret_gitlab": None,
-            "manual_webhook_secret_bitbucket": None,
-            "manual_webhook_secret_gitea": None,
+            "auto_deploy": False,
+            "preview_deploy": False,
+            "webhooks_present": dict.fromkeys(("github", "gitlab", "bitbucket", "gitea"), False),
         }
         self.tasks = []
+        self.legacy["tasks"] = self.tasks
+        self.projection_raw = None
         self.containers = [
             {
                 "id": "c" * 64,
@@ -97,6 +103,19 @@ class ProviderFixture:
                 "image_id": "sha256:" + "1" * 64,
             }
         ]
+        control = self.config["coolify_control_plane"]
+        self.containers.append(
+            {
+                "id": control["container_id"],
+                "name": "/coolify",
+                "labels": {"com.docker.compose.project": control["compose_project"], "com.docker.compose.service": control["compose_service"]},
+                "running": True,
+                "restart": "unless-stopped",
+                "ports": {},
+                "image": control["image"],
+                "image_id": control["image_id"],
+            }
+        )
         base = {"read_only": True, "cap_drop": ["ALL"], "image": "ghcr.io/f0rge/buycycle@sha256:" + "e" * 64}
         self.compose = {
             "services": {
@@ -135,8 +154,8 @@ class ProviderFixture:
 
     def fetch(self, url, token_file):
         self.urls.append((url, token_file))
-        if "/applications/" in url:
-            return self.tasks if url.endswith("/scheduled-tasks") else self.legacy
+        if not url.startswith("https://api.cloudflare.com/client/v4/"):
+            raise AssertionError("No Coolify API/token request is allowed")
         if url.endswith("/organizations"):
             return self.response(self.organization)
         if "/policies?" in url:
@@ -164,6 +183,20 @@ class ProviderFixture:
         if command[0] == "compose":
             return json.dumps(self.compose)
         if command[0] == "exec":
+            if command[1:3] == ["--workdir", "/var/www/html"]:
+                expected = [
+                    "exec",
+                    "--workdir",
+                    "/var/www/html",
+                    self.config["coolify_control_plane"]["container_id"],
+                    "php",
+                    "artisan",
+                    "tinker",
+                    "--execute=" + preflight.COOLIFY_PROJECTION,
+                ]
+                if command != expected:
+                    raise AssertionError("Only the fixed selected-app metadata projection may execute")
+                return self.projection_raw if self.projection_raw is not None else preflight.COOLIFY_PREFIX + json.dumps(self.legacy)
             if command[-2:] == ["postgres", "--version"]:
                 entry = next(entry for entry in self.config["postgres_inventory"] if entry["container_id"] == command[1])
                 return f"postgres (PostgreSQL) {entry['postgres_major']}.6"
@@ -459,9 +492,9 @@ class PreflightTests(unittest.TestCase):
 
     def test_active_legacy_collector_schedule_or_webhook_is_denied(self):
         for mutate, reason in [
-            (lambda: self.fixture.legacy["settings"].update(is_auto_deploy_enabled=True), "legacy_auto_deploy"),
-            (lambda: self.fixture.tasks.append({"enabled": True}), "legacy_schedules"),
-            (lambda: self.fixture.legacy.update(manual_webhook_secret_github="synthetic"), "legacy_webhook"),
+            (lambda: self.fixture.legacy.update(auto_deploy=True), "legacy_auto_deploy"),
+            (lambda: self.fixture.tasks.append({"id": 1, "enabled": True}), "legacy_schedules"),
+            (lambda: self.fixture.legacy["webhooks_present"].update(github=True), "legacy_webhook"),
             (lambda: self.fixture.legacy.update(status="running:healthy"), "legacy_provider_running"),
         ]:
             with self.subTest(reason=reason):
@@ -469,6 +502,109 @@ class PreflightTests(unittest.TestCase):
                 mutate()
                 with self.assertRaisesRegex(preflight.Refused, reason):
                     self.fixture.observe()
+
+    def test_fixed_local_coolify_projection_is_bound_without_api_credentials(self):
+        receipt = self.fixture.observe()
+        binding = receipt["coolify_control_plane"]
+        self.assertEqual(binding["container_id"], self.fixture.config["coolify_control_plane"]["container_id"])
+        self.assertTrue(binding["running"])
+        self.assertEqual(binding["observation"], "fixed_selected_app_metadata")
+        self.assertTrue(all(url.startswith("https://api.cloudflare.com/client/v4/") for url, _ in self.fixture.urls))
+        self.assertFalse(any("coolify-token" in path for path, _ in self.fixture.files_seen))
+        projection = next(command for command in self.fixture.commands if command[:3] == ["exec", "--workdir", "/var/www/html"])
+        self.assertEqual(projection[-1], "--execute=" + preflight.COOLIFY_PROJECTION)
+        self.assertIn("->where('uuid','" + preflight.APP + "')->select(['id','uuid','status'])", projection[-1])
+        self.assertNotIn("->save(", projection[-1])
+        self.assertNotIn("->update(", projection[-1])
+        self.assertNotIn("->delete(", projection[-1])
+
+    def test_changed_or_missing_control_plane_is_rejected_before_php_exec(self):
+        original = copy.deepcopy(self.fixture.containers[-1])
+        for name, value, reason in (
+            ("id", "e" * 64, "coolify_container_running"),
+            ("running", False, "coolify_container_running"),
+            ("image_id", "sha256:" + "9" * 64, "coolify_container_binding"),
+            ("image", "ghcr.io/coollabsio/coolify:changed", "coolify_container_binding"),
+            ("labels", {"com.docker.compose.project": "other", "com.docker.compose.service": "coolify"}, "coolify_container_binding"),
+        ):
+            self.fixture.containers[-1] = {**copy.deepcopy(original), name: value}
+            self.fixture.commands = []
+            with self.subTest(name=name), self.assertRaisesRegex(preflight.Refused, reason):
+                self.fixture.observe()
+            self.assertFalse(any(command[:3] == ["exec", "--workdir", "/var/www/html"] for command in self.fixture.commands))
+        self.fixture.containers[-1] = original
+        self.fixture.config.pop("coolify_control_plane")
+        with self.assertRaisesRegex(preflight.Refused, "coolify_inventory_required"):
+            self.fixture.observe()
+
+    def test_metadata_projection_requires_exact_version_and_typed_booleans(self):
+        baseline = copy.deepcopy(self.fixture.legacy)
+        for name, value, reason in (
+            ("version", True, "legacy_projection_shape"),
+            ("version", 2, "legacy_projection_shape"),
+            ("uuid", "another-app", "legacy_app_identity"),
+            ("auto_deploy", None, "legacy_auto_deploy"),
+            ("auto_deploy", 0, "legacy_auto_deploy"),
+            ("preview_deploy", "false", "legacy_preview_deploy"),
+            ("status", None, "legacy_provider_running"),
+        ):
+            self.fixture.legacy = {**copy.deepcopy(baseline), name: value}
+            with self.subTest(name=name, value=value), self.assertRaisesRegex(preflight.Refused, reason):
+                self.fixture.observe()
+        for webhook in ("github", "gitlab", "bitbucket", "gitea"):
+            for value in (True, None, 0, "false"):
+                self.fixture.legacy = copy.deepcopy(baseline)
+                self.fixture.legacy["webhooks_present"][webhook] = value
+                with self.subTest(webhook=webhook, value=value), self.assertRaisesRegex(preflight.Refused, "legacy_webhook"):
+                    self.fixture.observe()
+        self.fixture.legacy = copy.deepcopy(baseline)
+        self.fixture.legacy["webhooks_present"].pop("github")
+        with self.assertRaisesRegex(preflight.Refused, "legacy_webhook"):
+            self.fixture.observe()
+        self.fixture.legacy = copy.deepcopy(baseline)
+        self.fixture.legacy.pop("auto_deploy")
+        with self.assertRaisesRegex(preflight.Refused, "legacy_projection_shape"):
+            self.fixture.observe()
+
+    def test_unknown_or_truncated_projection_and_schedules_fail_closed(self):
+        for raw in ("", "{}", preflight.COOLIFY_PREFIX + "null", preflight.COOLIFY_PREFIX + "{}", preflight.COOLIFY_PREFIX + "{"):
+            self.fixture.projection_raw = raw
+            with self.subTest(raw=raw), self.assertRaises((preflight.Refused, ValueError)):
+                self.fixture.observe()
+        self.fixture.projection_raw = None
+        for tasks in (
+            None,
+            [{"enabled": False}],
+            [{"id": True, "enabled": False}],
+            [{"id": 1, "enabled": 0}],
+            [{"id": 1, "enabled": False}] * 2,
+            [{"id": index + 1, "enabled": False} for index in range(101)],
+        ):
+            self.fixture.legacy["tasks"] = tasks
+            with self.subTest(tasks=tasks), self.assertRaisesRegex(preflight.Refused, "legacy_schedules"):
+                self.fixture.observe()
+        self.fixture.legacy["tasks"] = [{"id": 1, "enabled": False}]
+        self.fixture.observe()
+
+    def test_stopped_projection_cannot_hide_running_or_restartable_legacy_container(self):
+        legacy = {
+            "id": "7" * 64,
+            "name": "/" + preflight.APP + "-legacy",
+            "labels": {},
+            "image": "synthetic-legacy",
+            "image_id": "sha256:" + "6" * 64,
+            "running": True,
+            "restart": "no",
+            "ports": {},
+        }
+        self.fixture.containers.append(legacy)
+        with self.assertRaisesRegex(preflight.Refused, "legacy_container_running"):
+            self.fixture.observe()
+        legacy.update(running=False, restart="unless-stopped")
+        with self.assertRaisesRegex(preflight.Refused, "legacy_container_running"):
+            self.fixture.observe()
+        legacy["restart"] = "no"
+        self.fixture.observe()
 
     def test_missing_managed_secret_or_wrong_owner_is_denied(self):
         self.fixture.config["secret_owners"].pop("/managed/runtime-url")

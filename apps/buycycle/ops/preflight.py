@@ -30,6 +30,25 @@ from buycycle_release import managed_docker_environment
 APP = "xi0qwpbyl2d8gf8u3xl13jkv"
 DOMAIN = "buycycle.leo-figueiredo.com"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
+COOLIFY_PREFIX = "BUYCYCLE_PROVIDER_STATE:"
+# Fixed selected-app metadata only. SQL returns presence bits, never stored
+# webhook values. Do not replace these explicit SELECT lists with whole models.
+COOLIFY_PROJECTION = r"""$app=App\Models\Application::query()
+->where('uuid','xi0qwpbyl2d8gf8u3xl13jkv')->select(['id','uuid','status'])
+->selectRaw("CASE WHEN manual_webhook_secret_github IS NOT NULL AND manual_webhook_secret_github <> '' THEN 1 ELSE 0 END AS github_present,
+CASE WHEN manual_webhook_secret_gitlab IS NOT NULL AND manual_webhook_secret_gitlab <> '' THEN 1 ELSE 0 END AS gitlab_present,
+CASE WHEN manual_webhook_secret_bitbucket IS NOT NULL AND manual_webhook_secret_bitbucket <> '' THEN 1 ELSE 0 END AS bitbucket_present,
+CASE WHEN manual_webhook_secret_gitea IS NOT NULL AND manual_webhook_secret_gitea <> '' THEN 1 ELSE 0 END AS gitea_present")->firstOrFail();
+$settings=$app->settings()->first(['is_auto_deploy_enabled','is_preview_deployments_enabled']);
+if(!$settings){throw new RuntimeException('Missing selected settings');}
+$flag=function($value){if(!is_bool($value)){throw new RuntimeException('Unknown selected boolean');}return $value;};
+$tasks=$app->scheduled_tasks()->limit(101)->get(['id','enabled'])
+->map(fn($task)=>['id'=>$task->id,'enabled'=>$flag($task->enabled)])->values();
+echo 'BUYCYCLE_PROVIDER_STATE:'.json_encode(['version'=>1,'uuid'=>$app->uuid,'status'=>$app->status,
+'auto_deploy'=>$flag($settings->is_auto_deploy_enabled),'preview_deploy'=>$flag($settings->is_preview_deployments_enabled),
+'webhooks_present'=>['github'=>(int)$app->github_present===1,'gitlab'=>(int)$app->gitlab_present===1,
+'bitbucket'=>(int)$app->bitbucket_present===1,'gitea'=>(int)$app->gitea_present===1],
+'tasks'=>$tasks],JSON_THROW_ON_ERROR);"""
 
 
 class Refused(ValueError):
@@ -130,23 +149,56 @@ def validate_access(config: dict, application: dict, policies: list, identity: d
     require(dns[0].get("content") == config["tunnel_id"] + ".cfargotunnel.com", "dns_tunnel")
 
 
-def validate_legacy(application: dict, tasks: list, containers: list[dict]) -> None:
-    require(application.get("uuid") == APP, "legacy_app_identity")
-    require(application.get("settings", {}).get("is_auto_deploy_enabled") is False, "legacy_auto_deploy")
-    require(application.get("settings", {}).get("is_preview_deployments_enabled") is False, "legacy_preview_deploy")
+def validate_legacy(application: dict, containers: list[dict]) -> None:
     require(
-        all(
-            key in application and application[key] in (None, "")
-            for key in ("manual_webhook_secret_github", "manual_webhook_secret_gitlab", "manual_webhook_secret_bitbucket", "manual_webhook_secret_gitea")
-        ),
+        isinstance(application, dict)
+        and set(application) == {"version", "uuid", "status", "auto_deploy", "preview_deploy", "webhooks_present", "tasks"}
+        and type(application["version"]) is int
+        and application["version"] == 1,
+        "legacy_projection_shape",
+    )
+    require(application.get("uuid") == APP, "legacy_app_identity")
+    require(application["auto_deploy"] is False, "legacy_auto_deploy")
+    require(application["preview_deploy"] is False, "legacy_preview_deploy")
+    webhooks = application["webhooks_present"]
+    require(
+        isinstance(webhooks, dict) and set(webhooks) == {"github", "gitlab", "bitbucket", "gitea"} and all(value is False for value in webhooks.values()),
         "legacy_webhook",
     )
-    require(isinstance(tasks, list) and all(task.get("enabled") is False for task in tasks), "legacy_schedules")
-    require(str(application.get("status", "")).split(":", 1)[0] in {"exited", "stopped"}, "legacy_provider_running")
+    tasks = application["tasks"]
+    require(isinstance(tasks, list) and len(tasks) <= 100, "legacy_schedules")
+    identifiers = set()
+    for task in tasks:
+        require(isinstance(task, dict) and set(task) == {"id", "enabled"}, "legacy_schedules")
+        require(type(task["id"]) is int and task["id"] > 0 and task["id"] not in identifiers and task["enabled"] is False, "legacy_schedules")
+        identifiers.add(task["id"])
+    require(isinstance(application["status"], str) and application["status"].split(":", 1)[0] in {"exited", "stopped"}, "legacy_provider_running")
     for container in containers:
         labels = container.get("labels") or {}
         if APP in container.get("name", "") or APP in labels.values():
             require(container.get("running") is False and container.get("restart") in {"no", ""}, "legacy_container_running")
+
+
+def observe_coolify(config: dict, containers: list[dict], read) -> dict:
+    binding = config.get("coolify_control_plane")
+    require(isinstance(binding, dict) and set(binding) == {"container_id", "image", "image_id", "compose_project", "compose_service"}, "coolify_inventory_required")
+    require(re.fullmatch(r"[0-9a-f]{64}", str(binding["container_id"])) and re.fullmatch(r"sha256:[0-9a-f]{64}", str(binding["image_id"])), "coolify_inventory_identity")
+    require(all(isinstance(binding[key], str) and binding[key] for key in ("image", "compose_project", "compose_service")), "coolify_inventory_identity")
+    selected = [container for container in containers if container.get("id") == binding["container_id"]]
+    require(len(selected) == 1 and selected[0].get("running") is True, "coolify_container_running")
+    container = selected[0]
+    labels = container.get("labels") or {}
+    require(
+        container.get("image_id") == binding["image_id"]
+        and container.get("image") == binding["image"]
+        and labels.get("com.docker.compose.project") == binding["compose_project"]
+        and labels.get("com.docker.compose.service") == binding["compose_service"],
+        "coolify_container_binding",
+    )
+    raw = read(["exec", "--workdir", "/var/www/html", binding["container_id"], "php", "artisan", "tinker", "--execute=" + COOLIFY_PROJECTION]).strip()
+    require(len(raw) <= 65536 and raw.startswith(COOLIFY_PREFIX), "legacy_projection_response")
+    validate_legacy(json.loads(raw[len(COOLIFY_PREFIX) :]), containers)
+    return dict(binding, running=True, observation="fixed_selected_app_metadata")
 
 
 def validate_compose(config: dict, compose: dict, containers: list[dict]) -> None:
@@ -360,11 +412,7 @@ def observe(config: dict, *, fetch=get_json, read=docker, files=managed_file, di
     dns_url = "https://api.cloudflare.com/client/v4/zones/" + config["cf_zone_id"] + "/dns_records?type=CNAME&name=" + DOMAIN + "&per_page=100"
     dns = cf_result(fetch(dns_url, token), collection=True)
     validate_access(config, application, policies, identity, tunnel, routes, dns, organization=organization)
-    base = config["coolify_base_url"].rstrip("/")
-    require(urllib.parse.urlsplit(base).scheme == "https", "coolify_https")
-    legacy = fetch(base + "/applications/" + APP, config["coolify_token_file"])
-    tasks = fetch(base + "/applications/" + APP + "/scheduled-tasks", config["coolify_token_file"])
-    validate_legacy(legacy, tasks, containers)
+    coolify = observe_coolify(config, containers, read)
     pg = config["postgres_container"]
     selected_pg = [container for container in containers if container.get("id") == pg or container.get("name", "").lstrip("/") == pg]
     require(len(selected_pg) == 1 and selected_pg[0].get("running") is True, "postgres_container_inventory")
@@ -397,6 +445,7 @@ def observe(config: dict, *, fetch=get_json, read=docker, files=managed_file, di
         "access_policy_verified": True,
         "database_grants_verified": True,
         "managed_secrets_verified": True,
+        "coolify_control_plane": coolify,
         "postgres_major": major,
         "postgres_server_version_num": grants["server_version_num"],
         "postgres_inventory": inventory,

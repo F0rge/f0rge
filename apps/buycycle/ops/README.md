@@ -224,11 +224,32 @@ browser journals have no automatic purge.
 Copy [the example policy](release-agent-policy.example.json) privately, replacing
 every placeholder with observed values. It combines agent and preflight fields;
 production tokens/private identities never belong in the repository. Configure
-scoped **read** access for Access applications/policies/organization, identity providers, tunnel
-configuration, DNS, and the selected Coolify app/schedules. No write token is
-needed. The Coolify API must return the documented auto/preview-deploy settings;
-an incomplete response fails closed. See [Cloudflare's app API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/get/)
-and [Coolify's application schema](https://coolify.io/docs/api/endpoints/applications/get-application-by-uuid).
+scoped **read** access for Cloudflare Access applications/policies/organization,
+identity providers, tunnel configuration and DNS. No Coolify API token or sensitive
+read grant is used. Pin its actual local control-plane full container ID, image
+reference/local image ID and Compose project/service in `coolify_control_plane`.
+The root-managed preflight verifies that running container against the fixed local
+Docker inventory, then executes one constant, selected-Buycycle metadata query at
+`/var/www/html`. It returns only auto/preview booleans, four webhook-presence bits,
+bounded scheduled-task IDs/enabled booleans and provider status. SQL computes
+webhook presence without returning plaintext or encrypted webhook values.
+
+The projection's version, exact fields and boolean types must match. Missing
+fields, changed control-plane identity, active webhooks/schedules or contradictory
+provider/container stop state fail closed. It never fabricates empty secrets from
+redacted API fields. The observation is a privileged local read, not a new remote
+administration or deployment endpoint; retain its independent source review and
+live metadata-probe evidence. See [Cloudflare's app API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/get/)
+and [Coolify's sensitive-response permissions](https://coolify.io/docs/api/permissions).
+
+Legacy automation credentials remain a separate containment gate. Repository-level
+Coolify secret names still existed in the 15 November 2026 read-only inventory;
+current retired deployment workflows were inert and no active/queued/waiting runs
+were observed. That does not establish provider-token retirement or prove an
+exploit. Disabling builds/webhooks does not revoke an API token with deployment
+authority. Retiring a shared repository credential or changing other apps' provider
+tokens needs its reviewed scope and authorization; this source change reads no
+token values and revokes nothing.
 
 Access must return exactly the pinned OTP provider in its nonempty `allowed_idps`.
 The auxiliary `use_all_idps` field is optional; if returned it must be exactly
@@ -249,7 +270,7 @@ python3 /opt/f0rge/apps/buycycle/ops/preflight.py \
   --output /var/lib/buycycle-release/receipts/provider.json
 ```
 
-It issues only HTTPS GET requests and fixed local Docker inspection/SELECT
+It issues only Cloudflare HTTPS GET requests and fixed local Docker inspection/SELECT
 commands. It never stops services, changes policies, provisions a database or
 reads application rows. Its receipt records the exact commit, Pi engine ID,
 Compose/env hashes and observed safety gates, without credentials or owner email.
