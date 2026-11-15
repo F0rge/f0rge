@@ -324,6 +324,15 @@
     },
     {
       "patterns": [
+        "libs/rust/api-errors/src/**",
+        "libs/rust/api-errors/tests/**",
+        "libs/rust/api-errors/examples/**"
+      ],
+      "owner": "f0rge-backend",
+      "reason": "Shared Rust API error types and Actix mapping; app business rules stay app-local."
+    },
+    {
+      "patterns": [
         "libs/backend/core/**",
         "libs/backend/db/**",
         "libs/backend/storage/**",
@@ -353,6 +362,17 @@
       ],
       "reviewers": [
         "f0rge-quality-testing"
+      ]
+    },
+    {
+      "patterns": [
+        "libs/rust/api-errors/**"
+      ],
+      "reviewers": [
+        "f0rge-backend",
+        "f0rge-frontend",
+        "f0rge-security",
+        "f0rge-delivery"
       ]
     },
     {
