@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
@@ -89,7 +90,7 @@ function todayIso(): string {
 
 export default function InvoicesPage() {
   return (
-    <Suspense fallback={<p className="cds--type-body-01">Loading invoices…</p>}>
+    <Suspense fallback={<PageLoading label="Loading invoices…" />}>
       <InvoicesPageContent />
     </Suspense>
   );
@@ -320,7 +321,7 @@ function InvoicesPageContent() {
         </div>
 
       {loading ? (
-        <p className="cds--type-body-01">Loading invoices…</p>
+        <PageLoading label="Loading invoices…" />
       ) : total === 0 ? (
         <>
         <InlineNotification

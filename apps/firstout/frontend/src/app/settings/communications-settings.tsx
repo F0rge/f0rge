@@ -1,5 +1,7 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
+
 import {
   Button,
   InlineNotification,
@@ -171,7 +173,7 @@ export function CommunicationsSettings() {
   }
 
   if (loading) {
-    return <p className="cds--type-body-01">Loading communications…</p>;
+    return <PageLoading kind="form" label="Loading communications…" />;
   }
 
   return (

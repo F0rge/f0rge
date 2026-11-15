@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import { StaffImage } from "@/components/staff-image";
 
 import {
@@ -272,7 +273,7 @@ export default function InvoiceDetailPage() {
   }
 
   if (loading) {
-    return <p className="cds--type-body-01">Loading invoice…</p>;
+    return <PageLoading kind="form" label="Loading invoice…" />;
   }
 
   if (!invoice) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   Checkbox,
@@ -307,8 +308,8 @@ export default function PickDetailPage() {
         />
       ) : null}
 
-      {loading || !pick ? (
-        <p className="cds--type-body-01">{loading ? "Loading pick…" : "Pick not found."}</p>
+      {loading ? <PageLoading kind="form" label="Loading pick…" /> : !pick ? (
+        <p className="cds--type-body-01">Pick not found.</p>
       ) : (
         <Stack gap={6}>
           <PickMatrix

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   InlineNotification,
@@ -153,7 +154,7 @@ export default function StocktakesPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading stocktakes…</p>
+        <PageLoading label="Loading stocktakes…" />
       ) : active ? (
         <StocktakeSession
           key={active.id}

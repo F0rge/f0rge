@@ -6,10 +6,14 @@ import {
   Button,
   ButtonSet,
   Checkbox,
+  ClickableTile,
   ComboBox,
   InlineNotification,
   Modal,
   NumberInput,
+  Pagination,
+  RadioButton,
+  RadioButtonGroup,
   Select,
   SelectItem,
   Stack,
@@ -37,10 +41,25 @@ import {
   UserFollow,
 } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { CustomerPicker } from "@/components/customer-picker";
 import { TillScanner } from "@/components/till-scanner";
+import { PageLoading } from "@/components/page-loading";
+import {
+  getMobileScanServerSnapshot,
+  getMobileScanSnapshot,
+  subscribeMobileScan,
+} from "@/lib/mobile-scan";
+import { formatQuantity } from "@/lib/quantity";
+import styles from "./page.module.css";
 
 import {
   ApiError,
@@ -82,7 +101,11 @@ import {
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { canResumeArchivedTillPick, isPendingTillPick, restoreTillCartSkus } from "@/lib/till-archive";
+import {
+  canResumeArchivedTillPick,
+  isPendingTillPick,
+  restoreTillCartSkus,
+} from "@/lib/till-archive";
 import {
   displayUnitAmount,
   pricesIncludeVat,
@@ -119,13 +142,20 @@ function resolveTillLocationId(
   if (userDefaultId && showrooms.some((loc) => loc.id === userDefaultId)) {
     return userDefaultId;
   }
-  if (teamTillDefaultId && showrooms.some((loc) => loc.id === teamTillDefaultId)) {
+  if (
+    teamTillDefaultId &&
+    showrooms.some((loc) => loc.id === teamTillDefaultId)
+  ) {
     return teamTillDefaultId;
   }
   return showrooms[0]?.id ?? "";
 }
 
-const TENDER_OPTIONS: { value: TillTender; label: string; icon: typeof Purchase }[] = [
+const TENDER_OPTIONS: {
+  value: TillTender;
+  label: string;
+  icon: typeof Purchase;
+}[] = [
   { value: "card", label: "Card", icon: Purchase },
   { value: "cash", label: "Cash", icon: Money },
   { value: "eft", label: "EFT", icon: Building },
@@ -139,11 +169,19 @@ type CartLine = {
   discountPercent: number;
 };
 
-function unitExVat(sku: Sku, customer: CustomerCrm | null, priceLists: PriceList[]): number {
+function unitExVat(
+  sku: Sku,
+  customer: CustomerCrm | null,
+  priceLists: PriceList[],
+): number {
   return quoteSkuUnitExVat(sku, customer, priceLists).unitExVat ?? 0;
 }
 
-function unitIncVat(sku: Sku, customer: CustomerCrm | null, priceLists: PriceList[]): number {
+function unitIncVat(
+  sku: Sku,
+  customer: CustomerCrm | null,
+  priceLists: PriceList[],
+): number {
   const ex = unitExVat(sku, customer, priceLists);
   return ex > 0 ? exVatToIncVat(ex) : 0;
 }
@@ -154,7 +192,10 @@ function lineDiscountedEx(
   priceLists: PriceList[],
 ): number {
   const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(unitExVat(line.sku, customer, priceLists) * factor * line.qty, 2);
+  return roundHalfUp(
+    unitExVat(line.sku, customer, priceLists) * factor * line.qty,
+    2,
+  );
 }
 
 function lineIncTotal(
@@ -163,7 +204,10 @@ function lineIncTotal(
   priceLists: PriceList[],
 ): number {
   const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(unitIncVat(line.sku, customer, priceLists) * factor * line.qty, 2);
+  return roundHalfUp(
+    unitIncVat(line.sku, customer, priceLists) * factor * line.qty,
+    2,
+  );
 }
 
 function cartSummary(
@@ -172,14 +216,18 @@ function cartSummary(
   priceLists: PriceList[],
 ) {
   const subtotalIncBeforeDiscount = lines.reduce(
-    (sum, line) => sum + roundHalfUp(unitIncVat(line.sku, customer, priceLists) * line.qty, 2),
+    (sum, line) =>
+      sum +
+      roundHalfUp(unitIncVat(line.sku, customer, priceLists) * line.qty, 2),
     0,
   );
   const lineDiscounts = lines.reduce(
     (sum, line) =>
       sum +
       roundHalfUp(
-        unitIncVat(line.sku, customer, priceLists) * line.qty * (line.discountPercent / 100),
+        unitIncVat(line.sku, customer, priceLists) *
+          line.qty *
+          (line.discountPercent / 100),
         2,
       ),
     0,
@@ -189,14 +237,18 @@ function cartSummary(
     0,
   );
   const subtotalExBeforeDiscount = lines.reduce(
-    (sum, line) => sum + roundHalfUp(unitExVat(line.sku, customer, priceLists) * line.qty, 2),
+    (sum, line) =>
+      sum +
+      roundHalfUp(unitExVat(line.sku, customer, priceLists) * line.qty, 2),
     0,
   );
   const lineDiscountsEx = lines.reduce(
     (sum, line) =>
       sum +
       roundHalfUp(
-        unitExVat(line.sku, customer, priceLists) * line.qty * (line.discountPercent / 100),
+        unitExVat(line.sku, customer, priceLists) *
+          line.qty *
+          (line.discountPercent / 100),
         2,
       ),
     0,
@@ -244,7 +296,11 @@ function filterSkuItem({
   );
 }
 
-function mergeCartBySku(current: CartLine[], sku: Sku, addQty: number): CartLine[] {
+function mergeCartBySku(
+  current: CartLine[],
+  sku: Sku,
+  addQty: number,
+): CartLine[] {
   if (sku.is_archived) return current;
   const existing = current.find((line) => line.sku.id === sku.id);
   if (existing) {
@@ -258,7 +314,10 @@ function mergeCartBySku(current: CartLine[], sku: Sku, addQty: number): CartLine
 function SkuThumb({ sku }: { sku: Sku }) {
   if (!sku.photo_storage_key) {
     return (
-      <div className="firstout-till-thumb firstout-till-thumb--placeholder" aria-hidden>
+      <div
+        className="firstout-till-thumb firstout-till-thumb--placeholder"
+        aria-hidden
+      >
         <ImageIcon size={20} />
       </div>
     );
@@ -276,13 +335,23 @@ function SkuThumb({ sku }: { sku: Sku }) {
 
 export default function TillPage() {
   const router = useRouter();
+  const mobileScan = useSyncExternalStore(
+    subscribeMobileScan,
+    getMobileScanSnapshot,
+    getMobileScanServerSnapshot,
+  );
+  const [productQuery, setProductQuery] = useState("");
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(12);
   const { user } = useAuth();
   const canSell = canUseTill(user);
   const canDiscount = can(user, "till.discount");
   const canViewCost = canViewCostAudit(user);
   const canOverrideCredit = canManageCustomerCredit(user);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [companySettings, setCompanySettings] = useState<AppSettings | null>(null);
+  const [companySettings, setCompanySettings] = useState<AppSettings | null>(
+    null,
+  );
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
@@ -305,12 +374,15 @@ export default function TillPage() {
   const [creditOverrideReason, setCreditOverrideReason] = useState("");
   const [creditBlock, setCreditBlock] = useState<string | null>(null);
   const [pickId, setPickId] = useState("");
-  const [linkedPickIds, setLinkedPickIds] = useState<Record<string, string>>({});
+  const [linkedPickIds, setLinkedPickIds] = useState<Record<string, string>>(
+    {},
+  );
   const [confirmedPicks, setConfirmedPicks] = useState<PickDocument[]>([]);
   const [tillPicks, setTillPicks] = useState<PickDocument[]>([]);
   const [resumePickId, setResumePickId] = useState("");
   const [resumingPick, setResumingPick] = useState(false);
-  const [commitmentCustomer, setCommitmentCustomer] = useState<CustomerCrm | null>(null);
+  const [commitmentCustomer, setCommitmentCustomer] =
+    useState<CustomerCrm | null>(null);
   const [kitBlocks, setKitBlocks] = useState<TillKitBlock[]>([]);
   const [pickDraft, setPickDraft] = useState<{
     kit: TillKitBlock;
@@ -327,16 +399,23 @@ export default function TillPage() {
     setLoading(true);
     setError(null);
     try {
-      const [locationData, skuData, inventoryData, customerData, settingsData, priceListData, pickData] =
-        await Promise.all([
-          listLocations(),
-          listSkus(),
-          listInventory(),
-          listCustomers(),
-          getSettings(),
-          listPriceLists(),
-          listPicks("till"),
-        ]);
+      const [
+        locationData,
+        skuData,
+        inventoryData,
+        customerData,
+        settingsData,
+        priceListData,
+        pickData,
+      ] = await Promise.all([
+        listLocations(),
+        listSkus(),
+        listInventory(),
+        listCustomers(),
+        getSettings(),
+        listPriceLists(),
+        listPicks("till"),
+      ]);
       const showrooms = locationData.filter(
         (loc) => isActiveLocation(loc) && loc.type === "showroom",
       );
@@ -358,7 +437,9 @@ export default function TillPage() {
         );
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load till data.");
+      setError(
+        err instanceof Error ? err.message : "Failed to load till data.",
+      );
     } finally {
       setLoading(false);
     }
@@ -379,10 +460,16 @@ export default function TillPage() {
   const selectedSku = skus.find((sku) => sku.id === skuId);
   const selectedInventory = skuId ? inventoryBySku.get(skuId) : undefined;
   const floorOnHand =
-    selectedInventory?.locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0;
+    selectedInventory?.locations.find((loc) => loc.location_id === locationId)
+      ?.on_hand ?? 0;
 
   const skuOptions = skus.filter((sku) => {
-    if (sku.is_archived || !sku.is_sellable || !locationId || !sku.retail_ex_vat) {
+    if (
+      sku.is_archived ||
+      !sku.is_sellable ||
+      !locationId ||
+      !sku.retail_ex_vat
+    ) {
       return false;
     }
     if (sku.is_kit) {
@@ -392,13 +479,30 @@ export default function TillPage() {
     if (!row) {
       return false;
     }
-    const atLocation = row.locations.find((loc) => loc.location_id === locationId);
+    const atLocation = row.locations.find(
+      (loc) => loc.location_id === locationId,
+    );
     return (atLocation?.on_hand ?? 0) > 0;
   });
 
+  const browserProducts = skuOptions.filter(
+    (sku) =>
+      filterSkuItem({ item: sku, inputValue: productQuery }) ||
+      skuItemToString(sku).toLowerCase().includes(productQuery.toLowerCase()),
+  );
+  const browserPage = Math.min(
+    productPage,
+    Math.max(1, Math.ceil(browserProducts.length / productPageSize)),
+  );
+  const visibleProducts = browserProducts.slice(
+    (browserPage - 1) * productPageSize,
+    browserPage * productPageSize,
+  );
+
   const selectedSkuOption = skuOptions.find((sku) => sku.id === skuId) ?? null;
-  const selectedCustomer = customers.find((customer) => customer.id === customerId)
-    ?? (commitmentCustomer?.id === customerId ? commitmentCustomer : null);
+  const selectedCustomer =
+    customers.find((customer) => customer.id === customerId) ??
+    (commitmentCustomer?.id === customerId ? commitmentCustomer : null);
   const pendingTillPicks = tillPicks.filter(isPendingTillPick);
 
   useEffect(() => {
@@ -417,7 +521,10 @@ export default function TillPage() {
     return totals;
   }, [cart]);
 
-  const cartKits = useMemo(() => cart.filter((line) => line.sku.is_kit), [cart]);
+  const cartKits = useMemo(
+    () => cart.filter((line) => line.sku.is_kit),
+    [cart],
+  );
   const cartKitKey = cartKits
     .map((line) => line.sku.id)
     .sort()
@@ -434,7 +541,11 @@ export default function TillPage() {
       .then((picks) => {
         if (!cancelled) {
           setTillPicks(picks);
-          setConfirmedPicks(picks.filter((entry) => isPendingTillPick(entry) && kitIds.has(entry.sku_id)));
+          setConfirmedPicks(
+            picks.filter(
+              (entry) => isPendingTillPick(entry) && kitIds.has(entry.sku_id),
+            ),
+          );
         }
       })
       .catch(() => {
@@ -450,17 +561,32 @@ export default function TillPage() {
   useEffect(() => {
     if (loading || cartReady) return;
     const snapshot = loadTillCart();
-    if (!snapshot) { setCartReady(true); return; }
+    if (!snapshot) {
+      setCartReady(true);
+      return;
+    }
     let cancelled = false;
     void (async () => {
       const byId = await restoreTillCartSkus(snapshot, skus, tillPicks, getSku);
       const lines = snapshot.lines.flatMap((line) => {
         const sku = byId.get(line.skuId);
-        return sku ? [{ key: sku.id, sku, qty: line.qty, discountPercent: line.discountPercent }] : [];
+        return sku
+          ? [
+              {
+                key: sku.id,
+                sku,
+                qty: line.qty,
+                discountPercent: line.discountPercent,
+              },
+            ]
+          : [];
       });
-      const retainedCustomer = snapshot.customerId && !customers.some((item) => item.id === snapshot.customerId)
-        && lines.some((line) => line.sku.is_archived)
-        ? await getCustomer(snapshot.customerId) : null;
+      const retainedCustomer =
+        snapshot.customerId &&
+        !customers.some((item) => item.id === snapshot.customerId) &&
+        lines.some((line) => line.sku.is_archived)
+          ? await getCustomer(snapshot.customerId)
+          : null;
       if (cancelled) return;
       setCart(lines);
       setCommitmentCustomer(retainedCustomer);
@@ -468,12 +594,20 @@ export default function TillPage() {
       if (snapshot.customerId) setCustomerId(snapshot.customerId);
       setPickId(snapshot.pickId);
       setLinkedPickIds(snapshot.linkedPickIds);
-      if (lines.length !== snapshot.lines.length) setError("Some saved items are no longer available for sale and have not been restored. Archived kits require their original, unconsumed till pick at its exact quantity.");
+      if (lines.length !== snapshot.lines.length)
+        setError(
+          "Some saved items are no longer available for sale and have not been restored. Archived kits require their original, unconsumed till pick at its exact quantity.",
+        );
       setCartReady(true);
     })().catch(() => {
-      if (!cancelled) setError("The saved cart could not be restored. Reload the till to retry; the saved cart has not been changed.");
+      if (!cancelled)
+        setError(
+          "The saved cart could not be restored. Reload the till to retry; the saved cart has not been changed.",
+        );
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [cartReady, customers, loading, skus, tillPicks]);
 
   useEffect(() => {
@@ -518,8 +652,9 @@ export default function TillPage() {
 
   const floorOnHandFor = useCallback(
     (id: string) =>
-      inventoryBySku.get(id)?.locations.find((loc) => loc.location_id === locationId)?.on_hand ??
-      0,
+      inventoryBySku
+        .get(id)
+        ?.locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0,
     [inventoryBySku, locationId],
   );
 
@@ -568,7 +703,8 @@ export default function TillPage() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const target = event.target instanceof Element ? event.target : document.activeElement;
+      const target =
+        event.target instanceof Element ? event.target : document.activeElement;
       if (isQtyOrDiscountField(target)) {
         return;
       }
@@ -605,8 +741,14 @@ export default function TillPage() {
       if (!line.sku.is_sellable) return false;
       if (line.sku.is_archived) {
         const linked = linkedPickIds[line.sku.id] || pickId;
-        return canResumeArchivedTillPick(line.sku, tillPicks.find((item) => item.id === linked), line.qty, customerId)
-          && cart.filter((item) => item.sku.id === line.sku.id).length === 1;
+        return (
+          canResumeArchivedTillPick(
+            line.sku,
+            tillPicks.find((item) => item.id === linked),
+            line.qty,
+            customerId,
+          ) && cart.filter((item) => item.sku.id === line.sku.id).length === 1
+        );
       }
       if (line.sku.is_kit) {
         return line.qty > 0;
@@ -614,34 +756,68 @@ export default function TillPage() {
       const onHand =
         inventoryBySku
           .get(line.sku.id)
-          ?.locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0;
+          ?.locations.find((loc) => loc.location_id === locationId)?.on_hand ??
+        0;
       return line.qty > 0 && (cartQtyBySku.get(line.sku.id) ?? 0) <= onHand;
     });
 
+  function addKnownProduct(sku: Sku, quantity: number): boolean {
+    if (
+      !cartReady ||
+      !canSell ||
+      !locationId ||
+      sku.is_archived ||
+      !sku.is_sellable ||
+      !sku.retail_ex_vat ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      unitExVat(sku, selectedCustomer, priceLists) <= 0
+    )
+      return false;
+    if (
+      !sku.is_kit &&
+      quantity > floorOnHandFor(sku.id) - (cartQtyBySku.get(sku.id) ?? 0)
+    ) {
+      setError(tillScanErrorMessage("over_floor"));
+      return false;
+    }
+    setError(null);
+    setCart((current) => {
+      const reserved = current
+        .filter((line) => line.sku.id === sku.id)
+        .reduce((sum, line) => sum + line.qty, 0);
+      if (!sku.is_kit && quantity > floorOnHandFor(sku.id) - reserved)
+        return current;
+      return mergeCartBySku(current, sku, quantity);
+    });
+    if (!sku.is_kit) focusScanField();
+    return true;
+  }
+
   function handleAddToCart() {
-    if (!addValid || !selectedSku) {
-      return;
-    }
-    if (selectedSku.is_kit) {
-      setError(null);
-      setCart((current) => mergeCartBySku(current, selectedSku, numericQty));
-      setSkuId("");
-      setQty(1);
-      return;
-    }
-    if (applyScan(selectedSku.our_barcode, false, numericQty)) {
+    if (!addValid || !selectedSku) return;
+    if (addKnownProduct(selectedSku, numericQty)) {
       setSkuId("");
       setQty(1);
     }
   }
 
-  function updateCartLine(key: string, patch: Partial<Pick<CartLine, "qty" | "discountPercent">>) {
+  function addProductFromBrowser(sku: Sku) {
+    addKnownProduct(sku, 1);
+  }
+
+  function updateCartLine(
+    key: string,
+    patch: Partial<Pick<CartLine, "qty" | "discountPercent">>,
+  ) {
     setCart((current) =>
       current.map((line) => {
         if (line.key !== key) {
           return line;
         }
-        const nextQty = line.sku.is_archived ? line.qty : (patch.qty ?? line.qty);
+        const nextQty = line.sku.is_archived
+          ? line.qty
+          : (patch.qty ?? line.qty);
         const nextDiscount =
           patch.discountPercent !== undefined
             ? clampDiscount(patch.discountPercent)
@@ -663,18 +839,48 @@ export default function TillPage() {
     try {
       const sku = await getSku(pick.kit_sku_id);
       const nextCustomerId = pick.customer_id || customerId;
-      if (cart.some((line) => line.sku.id === sku.id)) throw new Error("This kit is already in the cart. Remove its current line before resuming this pick; quantities cannot be combined.");
-      if (cart.length > 0 && nextCustomerId !== customerId) throw new Error("This pick belongs to another customer. Empty the cart or select that customer before resuming it.");
-      if (!sku.is_sellable || !sku.is_kit || (sku.is_archived && !canResumeArchivedTillPick(sku, pick, pick.kit_qty ?? 0, nextCustomerId))) throw new Error("This pick cannot be resumed. The kit must be sellable and its original, unconsumed till pick must predate archiving.");
-      const customer = nextCustomerId && !customers.some((item) => item.id === nextCustomerId) ? await getCustomer(nextCustomerId) : null;
+      if (cart.some((line) => line.sku.id === sku.id))
+        throw new Error(
+          "This kit is already in the cart. Remove its current line before resuming this pick; quantities cannot be combined.",
+        );
+      if (cart.length > 0 && nextCustomerId !== customerId)
+        throw new Error(
+          "This pick belongs to another customer. Empty the cart or select that customer before resuming it.",
+        );
+      if (
+        !sku.is_sellable ||
+        !sku.is_kit ||
+        (sku.is_archived &&
+          !canResumeArchivedTillPick(
+            sku,
+            pick,
+            pick.kit_qty ?? 0,
+            nextCustomerId,
+          ))
+      )
+        throw new Error(
+          "This pick cannot be resumed. The kit must be sellable and its original, unconsumed till pick must predate archiving.",
+        );
+      const customer =
+        nextCustomerId && !customers.some((item) => item.id === nextCustomerId)
+          ? await getCustomer(nextCustomerId)
+          : null;
       setCommitmentCustomer(customer);
       setCustomerId(nextCustomerId);
-      setCart((current) => [...current, { key: sku.id, sku, qty: pick.kit_qty ?? 0, discountPercent: 0 }]);
+      setCart((current) => [
+        ...current,
+        { key: sku.id, sku, qty: pick.kit_qty ?? 0, discountPercent: 0 },
+      ]);
       setLinkedPickIds((current) => ({ ...current, [sku.id]: pick.id }));
       setPickId(pick.id);
       setResumePickId("");
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not resume this pick."); }
-    finally { setResumingPick(false); }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not resume this pick.",
+      );
+    } finally {
+      setResumingPick(false);
+    }
   }
 
   async function handleCompleteSale() {
@@ -695,7 +901,11 @@ export default function TillPage() {
       const result = await createTillSale({
         location_id: locationId,
         lines: cart.map((line) => {
-          const payload: { sku_id: string; qty: number; discount_percent?: number } = {
+          const payload: {
+            sku_id: string;
+            qty: number;
+            discount_percent?: number;
+          } = {
             sku_id: line.sku.id,
             qty: line.qty,
           };
@@ -734,7 +944,11 @@ export default function TillPage() {
             ? err.message
             : "Sale failed.";
       setError(message);
-      if (err instanceof ApiError && err.status === 409 && isCreditBlockMessage(err.message)) {
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        isCreditBlockMessage(err.message)
+      ) {
         setCreditBlock(err.message);
       }
       if (err instanceof ApiError && err.status === 409) {
@@ -757,7 +971,10 @@ export default function TillPage() {
     setPickId(next.pickId);
     setLinkedPickIds(next.linkedPickIds);
     setKitBlocks(next.blocks);
-    setTillPicks((current) => [confirmed, ...current.filter((entry) => entry.id !== confirmed.id)]);
+    setTillPicks((current) => [
+      confirmed,
+      ...current.filter((entry) => entry.id !== confirmed.id),
+    ]);
     setConfirmedPicks((current) => [
       confirmed,
       ...current.filter((entry) => entry.id !== confirmed.id),
@@ -787,7 +1004,8 @@ export default function TillPage() {
           : current,
       );
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Could not create the pick.";
+      const message =
+        err instanceof ApiError ? err.message : "Could not create the pick.";
       setPickDraft((current) =>
         current && current.kit.sku_id === kit.sku_id
           ? { ...current, creating: false, error: message }
@@ -802,7 +1020,10 @@ export default function TillPage() {
     }
     const requireAck = pickDraft.pick.needs_confirm;
     if (requireAck && !pickDraft.ack) {
-      setPickDraft({ ...pickDraft, error: "Acknowledge the split before confirming." });
+      setPickDraft({
+        ...pickDraft,
+        error: "Acknowledge the split before confirming.",
+      });
       return;
     }
     if (pickDraft.pick.qty_short) {
@@ -814,11 +1035,17 @@ export default function TillPage() {
     }
     setPickDraft({ ...pickDraft, confirming: true, error: null });
     try {
-      const confirmed = await confirmPick(pickDraft.pick.id, requireAck ? true : undefined);
+      const confirmed = await confirmPick(
+        pickDraft.pick.id,
+        requireAck ? true : undefined,
+      );
       rememberConfirmedPick(pickDraft.kit, confirmed);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Could not confirm the pick.";
-      setPickDraft((current) => (current ? { ...current, confirming: false, error: message } : current));
+      const message =
+        err instanceof ApiError ? err.message : "Could not confirm the pick.";
+      setPickDraft((current) =>
+        current ? { ...current, confirming: false, error: message } : current,
+      );
     }
   }
 
@@ -852,7 +1079,7 @@ export default function TillPage() {
   if (!canSell) {
     return (
       <Stack gap={5}>
-        <h1 className="cds--type-productive-heading-04">Till</h1>
+        <h1 className="cds--type-heading-05">Till</h1>
         <InlineNotification
           kind="error"
           title="Access denied"
@@ -865,26 +1092,53 @@ export default function TillPage() {
   }
 
   return (
-    <Stack gap={6} className="firstout-till">
+    <Stack gap={6} className={styles.page}>
       <div className="firstout-page-header">
         <div>
-          <h1 className="cds--type-productive-heading-04">Till</h1>
-          <p className="cds--type-body-01">Process sales, returns, and payments.</p>
+          <h1 className="cds--type-heading-05">Till</h1>
+          <p className="cds--type-body-01">
+            Process sales, returns, and payments.
+          </p>
         </div>
         <div className="firstout-catalogue-actions">
+          {can(user, "sales.returns") && (
+            <Button
+              kind="secondary"
+              renderIcon={Undo}
+              onClick={() => router.push("/returns")}
+            >
+              Process Return
+            </Button>
+          )}
+          {can(user, "sales.laybys") && (
+            <Button
+              kind="secondary"
+              renderIcon={Currency}
+              onClick={() => router.push("/laybys?new=1")}
+            >
+              Layby Payment
+            </Button>
+          )}
           <Button
-            kind="secondary"
-            renderIcon={Undo}
-            onClick={() => router.push("/returns")}
+            kind="tertiary"
+            renderIcon={Bookmark}
+            disabled={!cartReady || loading || submitting}
+            onClick={() => {
+              saveTillCart({
+                locationId,
+                customerId,
+                pickId,
+                linkedPickIds,
+                lines: cart.map((line) => ({
+                  skuId: line.sku.id,
+                  qty: line.qty,
+                  discountPercent: line.discountPercent,
+                })),
+              });
+              router.push("/");
+            }}
           >
-            Process Return
-          </Button>
-          <Button
-            kind="secondary"
-            renderIcon={Currency}
-            onClick={() => router.push("/laybys?new=1")}
-          >
-            Layby Payment
+            Hold sale
           </Button>
         </div>
       </div>
@@ -920,14 +1174,22 @@ export default function TillPage() {
       ))}
 
       {loading ? (
-        <p>Loading…</p>
+        <PageLoading kind="till" label="Loading your till" />
       ) : (
-        <div className="firstout-till-layout">
-          <div className="firstout-till-layout__main">
+        <div className={styles.layout}>
+          <div
+            className={`firstout-section-accent firstout-tone-info ${styles.productBrowser}`}
+          >
             <Stack gap={5}>
               <Tile>
                 <Stack gap={5}>
-                  <h2>Add product</h2>
+                  <div className={styles.sectionHeading}>
+                    <div>
+                      <p className="cds--type-label-01">SHOWROOM PRODUCTS</p>
+                      <h2 className="cds--type-heading-03">Find a product</h2>
+                    </div>
+                    <Tag type="blue">{vatBasisLabel(showInclusive)}</Tag>
+                  </div>
                   <Select
                     id="till-location"
                     labelText="Showroom"
@@ -947,7 +1209,7 @@ export default function TillPage() {
                   <div className="firstout-till-scan-row">
                     <TextInput
                       id="till-scan"
-                      labelText="Scan barcode"
+                      labelText="Scan or type a barcode"
                       placeholder="Scan or type our barcode"
                       value={scanValue}
                       onChange={(event) => setScanValue(event.target.value)}
@@ -959,29 +1221,40 @@ export default function TillPage() {
                       }}
                       disabled={!locationId}
                     />
-                    <Button
-                      kind="secondary"
-                      renderIcon={Scan}
-                      disabled={!locationId}
-                      onClick={() => setScannerOpen(true)}
-                    >
-                      Scan
-                    </Button>
+                    {mobileScan && (
+                      <Button
+                        kind="secondary"
+                        renderIcon={Scan}
+                        disabled={!locationId}
+                        onClick={() => setScannerOpen(true)}
+                      >
+                        Scan
+                      </Button>
+                    )}
                   </div>
 
                   <div className="firstout-till-picker-row">
                     <ComboBox
                       id="till-sku"
-                      titleText="SKU"
+                      titleText="Find by product, SKU or barcode"
                       placeholder="Search by SKU, barcode, or name..."
                       items={skuOptions}
                       itemToString={skuItemToString}
                       selectedItem={selectedSkuOption}
                       shouldFilterItem={filterSkuItem}
-                      onChange={({ selectedItem }) => setSkuId(selectedItem?.id ?? "")}
+                      onChange={({ selectedItem }) =>
+                        setSkuId(selectedItem?.id ?? "")
+                      }
                       disabled={!locationId}
+                      onInputChange={(value) => {
+                        setProductQuery(value);
+                        setProductPage(1);
+                      }}
                     />
-                    <Button kind="secondary" onClick={() => router.push("/catalogue")}>
+                    <Button
+                      kind="tertiary"
+                      onClick={() => router.push("/catalogue")}
+                    >
                       Browse Catalogue
                     </Button>
                   </div>
@@ -990,13 +1263,20 @@ export default function TillPage() {
                     id="till-qty"
                     label="Quantity"
                     min={1}
-                    max={Math.max(floorOnHand - (cartQtyBySku.get(skuId) ?? 0), 0) || undefined}
+                    max={
+                      Math.max(
+                        floorOnHand - (cartQtyBySku.get(skuId) ?? 0),
+                        0,
+                      ) || undefined
+                    }
                     value={qty}
                     onChange={(_, { value }) => {
                       if (value === "") {
                         setQty("");
                       } else {
-                        setQty(typeof value === "number" ? value : Number(value));
+                        setQty(
+                          typeof value === "number" ? value : Number(value),
+                        );
                       }
                     }}
                     helperText={
@@ -1007,214 +1287,176 @@ export default function TillPage() {
                     disabled={!skuId}
                   />
 
-                  <Button kind="secondary" disabled={!addValid} onClick={handleAddToCart}>
+                  <Button
+                    kind="secondary"
+                    disabled={!addValid}
+                    onClick={handleAddToCart}
+                  >
                     Add to cart
                   </Button>
-                  {pendingTillPicks.length > 0 && <Stack gap={3}>
-                    <Select id="till-resume-pick" labelText="Resume an existing till pick" value={resumePickId} disabled={!cartReady || resumingPick || submitting} onChange={(event) => setResumePickId(event.target.value)}>
-                      <SelectItem value="" text="Select an existing pick" />
-                      {pendingTillPicks.map((pick) => <SelectItem key={pick.id} value={pick.id} text={`${pick.pick_number || pick.id} · ${pick.sku_our_ref} × ${pick.kit_qty}`} />)}
-                    </Select>
-                    <p className="cds--type-helper-text-01">An archived kit can finish its original pick at the exact quantity. It stays unavailable for a new sale; resuming does not restore the SKU.</p>
-                    <Button kind="tertiary" disabled={!resumePickId || !cartReady || resumingPick || submitting || !canSell} onClick={() => void resumeExistingPick()}>{resumingPick ? "Resuming…" : "Resume existing pick"}</Button>
-                  </Stack>}
-
-                </Stack>
-              </Tile>
-
-              <Tile className="firstout-till-cart">
-                {cart.length === 0 ? (
-                  <p>No items in cart.</p>
-                ) : (
-                  <TableContainer title="Cart">
-                    <Table size="sm">
-                      <TableHead>
-                        <TableRow>
-                          <TableHeader className="firstout-till-thumb-cell">
-                            <span className="cds--visually-hidden">Photo</span>
-                          </TableHeader>
-                          <TableHeader>Item</TableHeader>
-                          <TableHeader>Qty</TableHeader>
-                          <TableHeader>
-                            Unit price ({vatBasisLabel(showInclusive)})
-                          </TableHeader>
-                          {canDiscount ? <TableHeader>Discount %</TableHeader> : null}
-                          <TableHeader>Total (ZAR)</TableHeader>
-                          <TableHeader />
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {cart.map((line) => {
-                          const priced = quoteSkuUnitExVat(line.sku, selectedCustomer, priceLists);
-                          const suspect = quoteLineSuspectWarning(
-                            priced.unitExVat === null ? "" : formatPriceAmount(priced.unitExVat),
-                            line.sku,
-                            priced,
-                            canViewCost,
-                            showInclusive,
-                          );
-                          const columnCount = canDiscount ? 7 : 6;
-                          return (
-                          <Fragment key={line.key}>
-                          <TableRow>
-                            <TableCell className="firstout-till-thumb-cell">
-                              <SkuThumb sku={line.sku} />
-                            </TableCell>
-                            <TableCell>
-                              <strong>{line.sku.name}</strong>
-                              <div className="firstout-muted-text">SKU: {line.sku.our_ref}</div>
-                              {line.sku.is_archived && <><Tag type="gray" size="sm">Archived · existing pick only</Tag><p className="cds--type-helper-text-01">Quantity is fixed to the original pick. The bound customer must match. Remove this line to cancel this checkout.</p></>}
-                              {!line.sku.is_sellable ? (
-                                <div className="cds--type-helper-text-01" style={{ color: "var(--cds-text-error)" }}>
-                                  Not for sale. Remove this item to complete the sale.
-                                </div>
-                              ) : null}
-                              {priced.warning ? (
-                                <div className="firstout-muted-text">{priced.warning}</div>
-                              ) : null}
-                            </TableCell>
-                            <TableCell>
-                              <NumberInput
-                                id={`cart-qty-${line.key}`}
-                                disabled={line.sku.is_archived}
-                                hideLabel
-                                label="Quantity"
-                                size="sm"
-                                min={1}
-                                value={line.qty}
-                                onChange={(_, { value }) => {
-                                  const next =
-                                    value === ""
-                                      ? 1
-                                      : typeof value === "number"
-                                        ? value
-                                        : Number(value);
-                                  updateCartLine(line.key, { qty: Math.max(1, next) });
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              {formatZarAmount(
-                                formatPriceAmount(
-                                  displayUnitAmount(
-                                    unitExVat(line.sku, selectedCustomer, priceLists),
-                                    showInclusive,
-                                  ),
-                                ),
+                  <div className={styles.productGrid}>
+                    {visibleProducts.map((sku) => {
+                      const remaining = Math.max(
+                        0,
+                        floorOnHandFor(sku.id) -
+                          (cartQtyBySku.get(sku.id) ?? 0),
+                      );
+                      const priced = quoteSkuUnitExVat(
+                        sku,
+                        selectedCustomer,
+                        priceLists,
+                      );
+                      return (
+                        <ClickableTile
+                          role="button"
+                          key={sku.id}
+                          aria-label={`Add ${sku.name} to sale`}
+                          onClick={() => addProductFromBrowser(sku)}
+                          disabled={
+                            !cartReady ||
+                            !canSell ||
+                            !locationId ||
+                            priced.unitExVat === null ||
+                            priced.unitExVat <= 0 ||
+                            (!sku.is_kit && remaining <= 0)
+                          }
+                        >
+                          <div className={styles.productCard}>
+                            <div className={styles.productPhoto}>
+                              {sku.photo_storage_key ? (
+                                <StaffImage
+                                  src={skuPhotoUrl(sku.id)}
+                                  alt=""
+                                  className={styles.productImage}
+                                />
+                              ) : (
+                                <ImageIcon size={32} aria-hidden />
                               )}
-                            </TableCell>
-                            {canDiscount ? (
-                              <TableCell>
-                                <NumberInput
-                                  id={`cart-discount-${line.key}`}
-                                  hideLabel
-                                  label="Discount percent"
-                                  size="sm"
-                                  min={0}
-                                  max={100}
-                                  value={line.discountPercent}
-                                  onChange={(_, { value }) => {
-                                    const next =
-                                      value === ""
-                                        ? 0
-                                        : typeof value === "number"
-                                          ? value
-                                          : Number(value);
-                                    updateCartLine(line.key, { discountPercent: clampDiscount(next) });
-                                  }}
-                                />
-                              </TableCell>
-                            ) : null}
-                            <TableCell>
-                              <strong>
-                                {formatZarAmount(
-                                  formatPriceAmount(lineIncTotal(line, selectedCustomer, priceLists)),
-                                )}
-                              </strong>
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                hasIconOnly
-                                renderIcon={TrashCan}
-                                iconDescription="Remove line"
-                                onClick={() => removeCartLine(line.key)}
-                              />
-                            </TableCell>
-                          </TableRow>
-                          {suspect ? (
-                            <TableRow>
-                              <TableCell colSpan={columnCount}>
-                                <InlineNotification
-                                  className="firstout-till-price-warning"
-                                  kind="warning"
-                                  lowContrast
-                                  hideCloseButton
-                                  title="Check this price"
-                                  subtitle={suspect}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                          </Fragment>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
+                            </div>
+                            <h3 className="cds--type-heading-compact-01">
+                              {sku.name}
+                            </h3>
+                            <p className="cds--type-label-01">{sku.our_ref}</p>
+                            <div className={styles.priceRow}>
+                              <p className="cds--type-body-01">
+                                {priced.unitExVat === null
+                                  ? "Price unavailable"
+                                  : formatZarAmount(
+                                      formatPriceAmount(
+                                        displayUnitAmount(
+                                          priced.unitExVat,
+                                          showInclusive,
+                                        ),
+                                      ),
+                                    )}
+                              </p>
+                              <Purchase size={20} aria-hidden />
+                            </div>
+                            <p className="cds--type-label-01">
+                              {sku.is_kit
+                                ? "Kit · parts checked at checkout"
+                                : `${formatQuantity(remaining)} available at showroom`}
+                            </p>
+                            {priced.warning && (
+                              <p className="cds--type-label-01">
+                                {priced.warning}
+                              </p>
+                            )}
+                          </div>
+                        </ClickableTile>
+                      );
+                    })}
+                  </div>
+                  {!browserProducts.length && (
+                    <div className={styles.empty}>
+                      <h3 className="cds--type-heading-03">
+                        No matching products
+                      </h3>
+                      <p className="cds--type-body-01">
+                        Try another product name or SKU, or choose a showroom
+                        with available stock.
+                      </p>
+                    </div>
+                  )}
+                  <Pagination
+                    page={browserPage}
+                    pageSize={productPageSize}
+                    pageSizes={[12, 24, 48]}
+                    totalItems={browserProducts.length}
+                    itemsPerPageText="Products per page:"
+                    backwardText="Previous page"
+                    forwardText="Next page"
+                    onChange={({ page, pageSize }) => {
+                      setProductPage(page);
+                      setProductPageSize(pageSize);
+                    }}
+                  />
+                  {pendingTillPicks.length > 0 && (
+                    <Stack gap={3}>
+                      <Select
+                        id="till-resume-pick"
+                        labelText="Resume an existing till pick"
+                        value={resumePickId}
+                        disabled={!cartReady || resumingPick || submitting}
+                        onChange={(event) =>
+                          setResumePickId(event.target.value)
+                        }
+                      >
+                        <SelectItem value="" text="Select an existing pick" />
+                        {pendingTillPicks.map((pick) => (
+                          <SelectItem
+                            key={pick.id}
+                            value={pick.id}
+                            text={`${pick.pick_number || pick.id} · ${pick.sku_our_ref} × ${pick.kit_qty}`}
+                          />
+                        ))}
+                      </Select>
+                      <p className="cds--type-helper-text-01">
+                        An archived kit can finish its original pick at the
+                        exact quantity. It stays unavailable for a new sale;
+                        resuming does not restore the SKU.
+                      </p>
+                      <Button
+                        kind="tertiary"
+                        disabled={
+                          !resumePickId ||
+                          !cartReady ||
+                          resumingPick ||
+                          submitting ||
+                          !canSell
+                        }
+                        onClick={() => void resumeExistingPick()}
+                      >
+                        {resumingPick ? "Resuming…" : "Resume existing pick"}
+                      </Button>
+                    </Stack>
+                  )}
+                </Stack>
               </Tile>
             </Stack>
           </div>
 
-          <div className="firstout-till-layout__summary">
+          <div
+            className={`firstout-section-accent firstout-tone-info ${styles.sale}`}
+          >
             <Tile>
               <Stack gap={5}>
-                <h2>Sale summary</h2>
-
-                <dl className="firstout-sale-summary">
-                  <div className="firstout-sale-summary__row">
-                    <dt>
-                      {showInclusive ? "Subtotal (before discount, incl. VAT)" : "Subtotal excl. VAT"}
-                    </dt>
-                    <dd>
-                      {formatZarAmount(
-                        formatPriceAmount(
-                          showInclusive
-                            ? summary.subtotalIncBeforeDiscount
-                            : summary.subtotalExBeforeDiscount,
-                        ),
-                      )}
-                    </dd>
-                  </div>
-                  <div className="firstout-sale-summary__row firstout-sale-summary__row--discount">
-                    <dt>{showInclusive ? "Line discounts" : "Line discounts excl. VAT"}</dt>
-                    <dd>
-                      {(showInclusive ? summary.lineDiscounts : summary.lineDiscountsEx) > 0
-                        ? `- ${formatZarAmount(
-                            formatPriceAmount(
-                              showInclusive ? summary.lineDiscounts : summary.lineDiscountsEx,
-                            ),
-                          )}`
-                        : formatZarAmount(formatPriceAmount(0))}
-                    </dd>
-                  </div>
-                  <div className="firstout-sale-summary__row">
-                    <dt>{showInclusive ? `VAT (${vatRateLabel}) included` : `VAT (${vatRateLabel})`}</dt>
-                    <dd>{formatZarAmount(formatPriceAmount(summary.vatIncluded))}</dd>
-                  </div>
-                  <div className="firstout-sale-summary__row firstout-sale-summary__row--total">
-                    <dt>{showInclusive ? "Total (incl. VAT)" : "Total incl. VAT"}</dt>
-                    <dd>{formatZarAmount(formatPriceAmount(summary.totalIncVat))}</dd>
-                  </div>
-                </dl>
-
+                <div className={styles.sectionHeading}>
+                  <h2 className="cds--type-heading-03">Current sale</h2>
+                  <Tag type="gray">
+                    {cart.length} product {cart.length === 1 ? "line" : "lines"}
+                  </Tag>
+                </div>
                 <div className="firstout-till-picker-row">
                   <CustomerPicker
                     id="till-customer"
                     titleText="Customer (optional)"
-                    customers={commitmentCustomer?.id === customerId && !customers.some((item) => item.id === customerId) ? [...customers, commitmentCustomer] : customers}
+                    customers={
+                      commitmentCustomer?.id === customerId &&
+                      !customers.some((item) => item.id === customerId)
+                        ? [...customers, commitmentCustomer]
+                        : customers
+                    }
                     selectedId={customerId}
                     onChange={setCustomerId}
                   />
@@ -1240,6 +1482,226 @@ export default function TillPage() {
                   />
                 ) : null}
 
+                <section
+                  aria-label="Products in current sale"
+                  className={styles.cart}
+                >
+                  {cart.length === 0 ? (
+                    <div className={styles.empty}>
+                      <h3 className="cds--type-heading-compact-01">
+                        Start a new sale
+                      </h3>
+                      <p className="cds--type-body-01">
+                        Choose a product to add it here.
+                      </p>
+                    </div>
+                  ) : (
+                    cart.map((line) => {
+                      const priced = quoteSkuUnitExVat(
+                        line.sku,
+                        selectedCustomer,
+                        priceLists,
+                      );
+                      const suspect = quoteLineSuspectWarning(
+                        priced.unitExVat === null
+                          ? ""
+                          : formatPriceAmount(priced.unitExVat),
+                        line.sku,
+                        priced,
+                        canViewCost,
+                        showInclusive,
+                      );
+                      return (
+                        <div className={styles.cartLine} key={line.key}>
+                          <div className={styles.cartProduct}>
+                            <SkuThumb sku={line.sku} />
+                            <div>
+                              <h3 className="cds--type-heading-compact-01">
+                                {line.sku.name}
+                              </h3>
+                              <p className="cds--type-label-01">
+                                {line.sku.our_ref}
+                              </p>
+                            </div>
+                            <Button
+                              kind="ghost"
+                              size="sm"
+                              hasIconOnly
+                              renderIcon={TrashCan}
+                              iconDescription={`Remove ${line.sku.name}`}
+                              onClick={() => removeCartLine(line.key)}
+                            />
+                          </div>
+                          {line.sku.is_archived && (
+                            <p className="cds--type-label-01">
+                              Archived kit: locked to its original pick
+                              quantity. Remove the line to cancel this checkout.
+                            </p>
+                          )}
+                          {!line.sku.is_sellable && (
+                            <InlineNotification
+                              kind="warning"
+                              title="Not for sale"
+                              subtitle="Remove this item to complete the sale."
+                              lowContrast
+                              hideCloseButton
+                            />
+                          )}
+                          {priced.warning && (
+                            <p className="cds--type-label-01">
+                              {priced.warning}
+                            </p>
+                          )}
+                          <div className={styles.cartControls}>
+                            <NumberInput
+                              id={`cart-qty-${line.key}`}
+                              disabled={line.sku.is_archived}
+                              label="Quantity"
+                              size="sm"
+                              min={1}
+                              value={line.qty}
+                              onChange={(_, { value }) => {
+                                const next =
+                                  value === ""
+                                    ? 1
+                                    : typeof value === "number"
+                                      ? value
+                                      : Number(value);
+                                updateCartLine(line.key, {
+                                  qty: Math.max(1, next),
+                                });
+                              }}
+                            />
+                            {canDiscount && (
+                              <NumberInput
+                                id={`cart-discount-${line.key}`}
+                                label="Discount (%)"
+                                size="sm"
+                                min={0}
+                                max={100}
+                                value={line.discountPercent}
+                                onChange={(_, { value }) => {
+                                  const next =
+                                    value === ""
+                                      ? 0
+                                      : typeof value === "number"
+                                        ? value
+                                        : Number(value);
+                                  updateCartLine(line.key, {
+                                    discountPercent: clampDiscount(next),
+                                  });
+                                }}
+                              />
+                            )}
+                          </div>
+                          <div className={styles.priceRow}>
+                            <p className="cds--type-label-01">
+                              Unit ({vatBasisLabel(showInclusive)})
+                            </p>
+                            <p className="cds--type-body-01">
+                              {formatZarAmount(
+                                formatPriceAmount(
+                                  displayUnitAmount(
+                                    unitExVat(
+                                      line.sku,
+                                      selectedCustomer,
+                                      priceLists,
+                                    ),
+                                    showInclusive,
+                                  ),
+                                ),
+                              )}
+                            </p>
+                          </div>
+                          <div className={styles.priceRow}>
+                            <p className="cds--type-label-01">
+                              Line total incl. VAT
+                            </p>
+                            <p className="cds--type-heading-compact-01">
+                              {formatZarAmount(
+                                formatPriceAmount(
+                                  lineIncTotal(
+                                    line,
+                                    selectedCustomer,
+                                    priceLists,
+                                  ),
+                                ),
+                              )}
+                            </p>
+                          </div>
+                          {suspect && (
+                            <InlineNotification
+                              kind="warning"
+                              lowContrast
+                              hideCloseButton
+                              title="Check this price"
+                              subtitle={suspect}
+                            />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </section>
+                <h3 className="cds--type-heading-compact-01">Sale summary</h3>
+
+                <dl className="firstout-sale-summary">
+                  <div className="firstout-sale-summary__row">
+                    <dt>
+                      {showInclusive
+                        ? "Subtotal (before discount, incl. VAT)"
+                        : "Subtotal excl. VAT"}
+                    </dt>
+                    <dd>
+                      {formatZarAmount(
+                        formatPriceAmount(
+                          showInclusive
+                            ? summary.subtotalIncBeforeDiscount
+                            : summary.subtotalExBeforeDiscount,
+                        ),
+                      )}
+                    </dd>
+                  </div>
+                  <div className="firstout-sale-summary__row firstout-sale-summary__row--discount">
+                    <dt>
+                      {showInclusive
+                        ? "Line discounts"
+                        : "Line discounts excl. VAT"}
+                    </dt>
+                    <dd>
+                      {(showInclusive
+                        ? summary.lineDiscounts
+                        : summary.lineDiscountsEx) > 0
+                        ? `- ${formatZarAmount(
+                            formatPriceAmount(
+                              showInclusive
+                                ? summary.lineDiscounts
+                                : summary.lineDiscountsEx,
+                            ),
+                          )}`
+                        : formatZarAmount(formatPriceAmount(0))}
+                    </dd>
+                  </div>
+                  <div className="firstout-sale-summary__row">
+                    <dt>
+                      {showInclusive
+                        ? `VAT (${vatRateLabel}) included`
+                        : `VAT (${vatRateLabel})`}
+                    </dt>
+                    <dd>
+                      {formatZarAmount(formatPriceAmount(summary.vatIncluded))}
+                    </dd>
+                  </div>
+                  <div className="firstout-sale-summary__row firstout-sale-summary__row--total">
+                    <dt>
+                      {showInclusive ? "Total (incl. VAT)" : "Total incl. VAT"}
+                    </dt>
+                    <dd>
+                      {formatZarAmount(formatPriceAmount(summary.totalIncVat))}
+                    </dd>
+                  </div>
+                </dl>
+
                 {confirmedPicks.length > 0 ? (
                   <Select
                     id="till-pick"
@@ -1258,7 +1720,8 @@ export default function TillPage() {
                   </Select>
                 ) : null}
 
-                {canOverrideCredit && (selectedCustomer?.on_hold || creditBlock) ? (
+                {canOverrideCredit &&
+                (selectedCustomer?.on_hold || creditBlock) ? (
                   <>
                     <Checkbox
                       id="till-credit-override"
@@ -1271,37 +1734,30 @@ export default function TillPage() {
                         id="till-credit-override-reason"
                         labelText="Override reason"
                         value={creditOverrideReason}
-                        onChange={(event) => setCreditOverrideReason(event.target.value)}
+                        onChange={(event) =>
+                          setCreditOverrideReason(event.target.value)
+                        }
                       />
                     ) : null}
                   </>
                 ) : null}
 
-                <div>
-                  <h3>Tender</h3>
-                  <div className="firstout-tender-grid">
-                    {TENDER_OPTIONS.map((option) => {
-                      const Icon = option.icon;
-                      const isSelected = tender === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={
-                            isSelected
-                              ? "firstout-tender-tile firstout-tender-tile--selected"
-                              : "firstout-tender-tile"
-                          }
-                          aria-pressed={isSelected}
-                          onClick={() => setTender(option.value)}
-                        >
-                          <Icon size={20} aria-hidden />
-                          <span>{option.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <RadioButtonGroup
+                  legendText="Payment method"
+                  name="till-tender"
+                  valueSelected={tender}
+                  onChange={(value) => setTender(value as TillTender)}
+                  orientation="horizontal"
+                >
+                  {TENDER_OPTIONS.map((option) => (
+                    <RadioButton
+                      key={option.value}
+                      id={`till-tender-${option.value}`}
+                      value={option.value}
+                      labelText={option.label}
+                    />
+                  ))}
+                </RadioButtonGroup>
 
                 <TextInput
                   id="till-amount-tendered"
@@ -1321,7 +1777,9 @@ export default function TillPage() {
                   disabled={
                     !saleValid ||
                     submitting ||
-                    (creditOverride && canOverrideCredit && !creditOverrideReason.trim())
+                    (creditOverride &&
+                      canOverrideCredit &&
+                      !creditOverrideReason.trim())
                   }
                   onClick={() => void handleCompleteSale()}
                 >
@@ -1333,7 +1791,7 @@ export default function TillPage() {
         </div>
       )}
 
-      {scannerOpen ? (
+      {scannerOpen && mobileScan ? (
         <TillScanner
           onClose={() => setScannerOpen(false)}
           onDetect={(code) => applyScan(code, false)}
@@ -1383,7 +1841,9 @@ export default function TillPage() {
                     <TableHeader>Description</TableHeader>
                     <TableHeader>Qty</TableHeader>
                     <TableHeader>
-                      {lastSale.prices_include_vat ? "Unit incl. VAT" : "Unit excl. VAT"}
+                      {lastSale.prices_include_vat
+                        ? "Unit incl. VAT"
+                        : "Unit excl. VAT"}
                     </TableHeader>
                     <TableHeader>Ex VAT</TableHeader>
                     <TableHeader>VAT</TableHeader>
@@ -1396,17 +1856,23 @@ export default function TillPage() {
                       <TableCell>
                         {line.description}
                         {line.price_warning ? (
-                          <div className="firstout-muted-text">{line.price_warning}</div>
+                          <div className="firstout-muted-text">
+                            {line.price_warning}
+                          </div>
                         ) : null}
                         {line.suspect_price_warning ? (
-                          <div className="firstout-price-warning">{line.suspect_price_warning}</div>
+                          <div className="firstout-price-warning">
+                            {line.suspect_price_warning}
+                          </div>
                         ) : null}
                       </TableCell>
                       <TableCell>{line.qty}</TableCell>
                       <TableCell>
                         {formatZarAmount(
                           lastSale.prices_include_vat
-                            ? formatPriceAmount(exVatToIncVat(Number(line.unit_ex_vat)))
+                            ? formatPriceAmount(
+                                exVatToIncVat(Number(line.unit_ex_vat)),
+                              )
                             : line.unit_ex_vat,
                         )}
                       </TableCell>
@@ -1420,10 +1886,16 @@ export default function TillPage() {
             </TableContainer>
 
             <div>
-              <p>Subtotal ex VAT: {formatZarAmount(lastSale.subtotal_ex_vat)}</p>
-              <p>VAT ({vatRateLabel}): {formatZarAmount(lastSale.vat_amount)}</p>
               <p>
-                <strong>Total inc VAT: {formatZarAmount(lastSale.total_inc_vat)}</strong>
+                Subtotal ex VAT: {formatZarAmount(lastSale.subtotal_ex_vat)}
+              </p>
+              <p>
+                VAT ({vatRateLabel}): {formatZarAmount(lastSale.vat_amount)}
+              </p>
+              <p>
+                <strong>
+                  Total inc VAT: {formatZarAmount(lastSale.total_inc_vat)}
+                </strong>
               </p>
               <p>
                 Floor stock remaining at {lastSale.location.location_name}:{" "}
@@ -1434,14 +1906,21 @@ export default function TillPage() {
             <ButtonSet>
               <Button
                 kind="tertiary"
-                onClick={() => void downloadInvoicePdf(lastSale.invoice_id, lastSale.invoice_number)}
+                onClick={() =>
+                  void downloadInvoicePdf(
+                    lastSale.invoice_id,
+                    lastSale.invoice_number,
+                  )
+                }
               >
                 Download PDF
               </Button>
               <Button
                 kind="secondary"
                 renderIcon={Undo}
-                onClick={() => router.push(`/returns?invoice=${lastSale.invoice_id}`)}
+                onClick={() =>
+                  router.push(`/returns?invoice=${lastSale.invoice_id}`)
+                }
               >
                 Process Return
               </Button>
@@ -1458,7 +1937,11 @@ export default function TillPage() {
             : "Create pick for this kit"
         }
         primaryButtonText={
-          pickDraft?.confirming ? "Confirming…" : pickDraft?.creating ? "Creating…" : "Confirm pick"
+          pickDraft?.confirming
+            ? "Confirming…"
+            : pickDraft?.creating
+              ? "Creating…"
+              : "Confirm pick"
         }
         secondaryButtonText="Cancel"
         primaryButtonDisabled={
@@ -1474,10 +1957,13 @@ export default function TillPage() {
         {pickDraft ? (
           <Stack gap={4}>
             <p className="cds--type-body-01">
-              {pickDraft.kit.sku_name} ({pickDraft.kit.sku_code}) × {pickDraft.kit.qty}. A pick
-              tells the warehouse which storeroom each part comes from. The cart stays on the till.
+              {pickDraft.kit.sku_name} ({pickDraft.kit.sku_code}) ×{" "}
+              {pickDraft.kit.qty}. A pick tells the warehouse which storeroom
+              each part comes from. The cart stays on the till.
             </p>
-            {pickDraft.creating ? <p className="cds--type-body-01">Creating the pick…</p> : null}
+            {pickDraft.creating ? (
+              <p className="cds--type-body-01">Creating the pick…</p>
+            ) : null}
             {pickDraft.pick
               ? pickDraft.pick.lines.map((line) => (
                   <p key={line.sku_id} className="cds--type-body-01">
@@ -1499,7 +1985,9 @@ export default function TillPage() {
                   labelText="I acknowledge this split pick"
                   checked={pickDraft.ack}
                   onChange={() =>
-                    setPickDraft((current) => (current ? { ...current, ack: !current.ack } : current))
+                    setPickDraft((current) =>
+                      current ? { ...current, ack: !current.ack } : current,
+                    )
                   }
                 />
               </>

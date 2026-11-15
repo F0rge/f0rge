@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import { Printer } from "@carbon/icons-react";
 import {
   Button,
@@ -242,7 +243,7 @@ function sumLinesExVat(lines: LineForm[], skusById: Map<string, Sku>): number {
 
 export default function LaybysPage() {
   return (
-    <Suspense fallback={<p className="cds--type-body-01">Loading laybys…</p>}>
+    <Suspense fallback={<PageLoading label="Loading laybys…" />}>
       <LaybysPageContent />
     </Suspense>
   );
@@ -664,7 +665,7 @@ function LaybysPageContent() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading laybys…</p>
+        <PageLoading label="Loading laybys…" />
       ) : (
         <div className="firstout-catalogue-panel">
           <div className="firstout-catalogue-toolbar">

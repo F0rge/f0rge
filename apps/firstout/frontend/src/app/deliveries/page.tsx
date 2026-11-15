@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   ComboBox,
@@ -552,7 +553,7 @@ function DeliveriesPageContent() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading deliveries…</p>
+        <PageLoading label="Loading deliveries…" />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"
@@ -857,7 +858,7 @@ function DeliveriesPageContent() {
 
 export default function DeliveriesPage() {
   return (
-    <Suspense fallback={<p className="cds--type-body-01">Loading deliveries…</p>}>
+    <Suspense fallback={<PageLoading label="Loading deliveries…" />}>
       <DeliveriesPageContent />
     </Suspense>
   );

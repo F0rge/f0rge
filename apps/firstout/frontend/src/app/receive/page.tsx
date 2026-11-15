@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   InlineNotification,
@@ -219,7 +220,7 @@ function ReceivePageContent() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading…</p>
+        <PageLoading label="Loading…" />
       ) : (
         <Stack gap={5}>
           <Select
@@ -330,7 +331,7 @@ function ReceivePageContent() {
 
 export default function ReceivePage() {
   return (
-    <Suspense fallback={<p className="cds--type-body-01">Loading…</p>}>
+    <Suspense fallback={<PageLoading label="Loading…" />}>
       <ReceivePageContent />
     </Suspense>
   );

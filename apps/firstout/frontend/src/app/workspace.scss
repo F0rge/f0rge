@@ -1,0 +1,150 @@
+@use "@carbon/styles/scss/type";
+@use "@carbon/colors";
+
+// Carbon's prebuilt component stylesheet does not include its type utilities.
+@include type.type-classes();
+
+:root {
+  --firstout-info: #{colors.$blue-60};
+  --firstout-info-soft: #{colors.$blue-10};
+  --firstout-attention: #{colors.$yellow-30};
+  --firstout-attention-soft: #{colors.$yellow-10};
+  --firstout-pending: #{colors.$purple-60};
+  --firstout-pending-soft: #{colors.$purple-10};
+  --firstout-ready: #{colors.$green-60};
+  --firstout-ready-soft: #{colors.$green-10};
+}
+
+// These tones belong to application content. Native Carbon controls retain
+// their own tokens, including focus, disabled, hover and notification colours.
+.firstout-tone-info {
+  --firstout-tone: var(--firstout-info);
+  --firstout-tone-soft: var(--firstout-info-soft);
+}
+.firstout-tone-attention {
+  --firstout-tone: var(--firstout-attention);
+  --firstout-tone-soft: var(--firstout-attention-soft);
+}
+.firstout-tone-pending {
+  --firstout-tone: var(--firstout-pending);
+  --firstout-tone-soft: var(--firstout-pending-soft);
+}
+.firstout-tone-ready {
+  --firstout-tone: var(--firstout-ready);
+  --firstout-tone-soft: var(--firstout-ready-soft);
+}
+.firstout-tone-neutral {
+  --firstout-tone: #{colors.$gray-60};
+  --firstout-tone-soft: #{colors.$gray-10};
+}
+.firstout-tone-error {
+  --firstout-tone: var(--cds-support-error);
+  --firstout-tone-soft: #{colors.$red-10};
+}
+.firstout-section-accent {
+  border-block-start: 3px solid var(--firstout-tone, var(--firstout-info));
+}
+.firstout-content-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  flex-shrink: 0;
+  background: var(--firstout-tone-soft, var(--firstout-info-soft));
+  color: var(--firstout-tone, var(--firstout-info));
+}
+.firstout-tone-attention .firstout-content-icon {
+  color: #{colors.$yellow-60};
+}
+.firstout-page-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 1rem;
+}
+.firstout-breadcrumb {
+  margin-block-end: 1.5rem;
+}
+.firstout-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.firstout-page-loading {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.firstout-page-loading > div {
+  display: grid;
+  gap: 1rem;
+}
+.firstout-loading-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+.firstout-loading-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.firstout-loading-columns > * {
+  min-inline-size: 0;
+  overflow: hidden;
+}
+.firstout-loading-columns .cds--tile {
+  display: grid;
+  gap: 1.5rem;
+}
+.firstout-loading-products {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.firstout-loading-product {
+  inline-size: 100%;
+  block-size: 8rem;
+}
+.firstout-loading-brand {
+  inline-size: 6rem;
+  block-size: 5rem;
+}
+.firstout-session-loading {
+  margin-block-start: 3rem;
+  padding: 2rem;
+}
+@media (max-width: 66rem) {
+  .firstout-loading-products {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .firstout-loading-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 42rem) {
+  .firstout-loading-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .firstout-session-loading {
+    padding: 1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .firstout-page-loading *,
+  .firstout-page-loading *::before,
+  .firstout-page-loading *::after,
+  .firstout-loading-motion *,
+  .firstout-loading-motion *::before,
+  .firstout-loading-motion *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

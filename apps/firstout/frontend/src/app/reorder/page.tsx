@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   Checkbox,
@@ -240,7 +241,7 @@ export default function ReorderPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading reorder list…</p>
+        <PageLoading label="Loading reorder list…" />
       ) : rows.length === 0 ? (
         <InlineNotification
           kind="info"

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import { ArrowRight, Catalog, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
 import { Button, InlineNotification, Link, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tag } from "@carbon/react";
 import JsBarcode from "jsbarcode";
@@ -159,5 +160,5 @@ function CatalogueScreen() {
 }
 export default function CataloguePage() {
   const { user } = useAuth();
-  return <Suspense fallback={<p>Loading catalogue…</p>}><CatalogueScreen key={workspaceIdentity(user)} /></Suspense>;
+  return <Suspense fallback={<PageLoading label="Loading catalogue…" />}><CatalogueScreen key={workspaceIdentity(user)} /></Suspense>;
 }

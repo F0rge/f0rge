@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
@@ -431,7 +432,7 @@ export default function JournalsPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading journals…</p>
+        <PageLoading label="Loading journals…" />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"

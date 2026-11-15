@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
@@ -130,7 +131,7 @@ export default function PaymentsPage() {
 
       <div>
       {loading ? (
-        <p className="cds--type-body-01">Loading payments…</p>
+        <PageLoading label="Loading payments…" />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"

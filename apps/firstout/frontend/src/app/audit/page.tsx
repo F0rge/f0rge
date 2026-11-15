@@ -1,6 +1,7 @@
 // Superdesign skipped — implemented Carbon DataTable from /invoices pagination pattern (CLI available).
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   DataTable,
   InlineNotification,
@@ -135,7 +136,7 @@ export default function AuditPage() {
 
       <div>
       {loading ? (
-        <p className="cds--type-body-01">Loading audit events…</p>
+        <PageLoading label="Loading audit events…" />
       ) : total === 0 && !error ? (
         <InlineNotification
           kind="info"

@@ -1,6 +1,8 @@
 "use client";
 
-import { Button, InlineNotification, Loading, Stack } from "@carbon/react";
+import { PageLoading } from "@/components/page-loading";
+
+import { Button, InlineNotification, Stack } from "@carbon/react";
 import { useAuth as useClerkAuth, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -52,7 +54,7 @@ export default function AcceptTradeInvitationPage() {
     } finally { setSaving(false); }
   }
 
-  if (!ready || !isLoaded) return <Loading withOverlay={false} description="Loading invitation…" />;
+  if (!ready || !isLoaded) return <PageLoading kind="form" label="Loading invitation…" />;
   return <main className="firstout-onboarding-page"><section className="firstout-onboarding-content"><Stack gap={5}>
     <h1 className="cds--type-productive-heading-04">Accept trade invitation</h1>
     {error ? <InlineNotification kind="error" title="Invitation" subtitle={error} hideCloseButton /> : null}

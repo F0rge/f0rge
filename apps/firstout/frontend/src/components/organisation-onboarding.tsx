@@ -1,8 +1,10 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
+
 import { useAuth as useClerkAuth, useClerk } from "@clerk/nextjs";
 import { ArrowRight, Enterprise } from "@carbon/icons-react";
-import { Button, InlineNotification, Loading, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tile } from "@carbon/react";
+import { Button, InlineNotification, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tile } from "@carbon/react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { OrganisationForm } from "./organisation-form";
@@ -60,13 +62,13 @@ export function OrganisationOnboarding() {
     }
   }
 
-  if (!isLoaded) return <Loading withOverlay={false} description="Loading sign-in…" />;
+  if (!isLoaded) return <PageLoading kind="form" label="Loading sign-in…" />;
   if (!isSignedIn) return <Stack gap={5}>
     <p>Sign in and finish any required verification before opening or creating a business.</p>
     <Link className="cds--btn cds--btn--primary" href="/clerk-login">Continue sign-in</Link>
     <Link className="cds--link" href="/sign-up">New here? Create your account</Link>
   </Stack>;
-  if (loading) return <Loading withOverlay={false} description="Loading your organisations…" />;
+  if (loading) return <PageLoading kind="form" label="Loading your organisations…" />;
 
   return <Stack gap={7}>
     <div className="firstout-onboarding-account">

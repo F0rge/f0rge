@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   InlineNotification,
@@ -183,7 +184,7 @@ export default function AdjustmentsPage() {
       />
 
       {loading ? (
-        <p className="cds--type-body-01">Loading adjustments…</p>
+        <PageLoading label="Loading adjustments…" />
       ) : active ? (
         <AdjustmentDraft
           key={active.id}

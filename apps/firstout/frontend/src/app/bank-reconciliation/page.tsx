@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
@@ -762,7 +763,7 @@ export default function BankReconciliationPage() {
       ) : null}
 
       {loading ? (
-        <p className="cds--type-body-01">Loading…</p>
+        <PageLoading label="Loading…" />
       ) : (
         <Stack gap={4}>
           {canMutate ? (

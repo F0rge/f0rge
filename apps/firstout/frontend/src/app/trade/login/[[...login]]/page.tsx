@@ -1,6 +1,7 @@
+import { PageLoading } from "@/components/page-loading";
 import { Suspense } from "react";
 import { TradeAuthentication } from "@/components/trade-authentication";
 
 export default function TradeLoginPage() {
-  return <Suspense fallback={<p>Loading sign-in…</p>}><TradeAuthentication mode="login" /></Suspense>;
+  return <Suspense fallback={<PageLoading label="Loading sign-in…" />}><TradeAuthentication mode="login" /></Suspense>;
 }
