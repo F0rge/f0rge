@@ -323,48 +323,69 @@ async fn parsed_country_id_or_feed_fallback_updates_country_mapping_atomically()
 }
 #[tokio::test]
 async fn calculation_reads_one_repeatable_snapshot_during_concurrent_atomic_publication() {
-    let (db, base, name) = support::database().await;
-    db.upsert_tables(&[
-        (
-            "listing",
-            vec![json!({"id":"same","kind":"bikes","version":0})],
-        ),
-        ("detail", vec![json!({"id":"same","version":0})]),
-    ])
-    .await
-    .unwrap();
-    let writer = async {
-        for version in 1..=160 {
-            db.upsert_tables(&[
-                (
-                    "listing",
-                    vec![json!({"id":"same","kind":"bikes","version":version})],
-                ),
-                ("detail", vec![json!({"id":"same","version":version})]),
-            ])
+    use buycycle_backend::persistence::Db;
+    use tokio::sync::Barrier;
+
+    async fn publish(db: &Db, version: i64) {
+        db.upsert_tables(&[
+            (
+                "listing",
+                vec![json!({"id":"same","kind":"bikes","version":version})],
+            ),
+            ("detail", vec![json!({"id":"same","version":version})]),
+        ])
+        .await
+        .unwrap();
+    }
+
+    async fn snapshot_version(db: &Db) -> i64 {
+        let snapshot = db
+            .read_tables_snapshot(&["listing", "detail"])
             .await
             .unwrap();
-        }
-    };
-    let reader = async {
-        let mut observed = std::collections::HashSet::new();
-        for _ in 0..100 {
-            let snapshot = db
-                .read_tables_snapshot(&["listing", "detail"])
-                .await
-                .unwrap();
-            let a = snapshot["listing"][0]["version"].as_i64().unwrap();
-            let b = snapshot["detail"][0]["version"].as_i64().unwrap();
-            assert_eq!(a, b, "Reader straddled two atomically published versions");
-            observed.insert(a);
-        }
-        observed
-    };
-    let (_, observed) = tokio::join!(writer, reader);
-    assert!(
-        observed.len() > 1,
-        "Exercise overlapping publications rather than a static dataset"
-    );
+        let listing = snapshot["listing"][0]["version"].as_i64().unwrap();
+        let detail = snapshot["detail"][0]["version"].as_i64().unwrap();
+        assert_eq!(
+            listing, detail,
+            "Reader straddled two atomically published versions"
+        );
+        listing
+    }
+
+    let (db, base, name) = support::database().await;
+    publish(&db, 0).await;
+    assert_eq!(snapshot_version(&db).await, 0);
+    for round in 0..20 {
+        let first = round * 8 + 1;
+        let last = first + 7;
+        let phase = Barrier::new(2);
+        let writer = async {
+            publish(&db, first).await;
+            phase.wait().await; // Announce a committed epoch.
+            phase.wait().await; // Keep it stable until the reader has observed it.
+            for version in first + 1..=last {
+                publish(&db, version).await;
+            }
+        };
+        let reader = async {
+            phase.wait().await;
+            assert_eq!(snapshot_version(&db).await, first);
+            phase.wait().await;
+            let mut previous = first;
+            for _ in 0..5 {
+                let observed = snapshot_version(&db).await;
+                assert!(
+                    (previous..=last).contains(&observed),
+                    "Sequential snapshots must stay monotonic within this publication round"
+                );
+                previous = observed;
+            }
+        };
+        // Reads still race the remaining atomic publications. Progress is checked at
+        // explicit synchronization points, independent of the executor's scheduling.
+        tokio::join!(writer, reader);
+        assert_eq!(snapshot_version(&db).await, last);
+    }
     drop(db);
     support::drop_database(&base, &name).await;
 }
