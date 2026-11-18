@@ -1,6 +1,6 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { PaymentRemindersLoading } from "./loading-layout";
 
 import { Button, InlineNotification, Stack, TextArea, TextInput, Toggle } from "@carbon/react";
 import { useCallback, useEffect, useState } from "react";
@@ -70,7 +70,7 @@ export function PaymentRemindersSettings() {
     return <p className="cds--type-body-01">Only an owner can change payment reminders.</p>;
   }
 
-  if (loading) return <PageLoading kind="form" label="Loading payment reminders…" />;
+  if (loading) return <PaymentRemindersLoading />;
 
   return (
     <Stack gap={5}>

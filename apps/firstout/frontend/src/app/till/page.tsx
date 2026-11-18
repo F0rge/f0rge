@@ -52,7 +52,6 @@ import {
 
 import { CustomerPicker } from "@/components/customer-picker";
 import { TillScanner } from "@/components/till-scanner";
-import { PageLoading } from "@/components/page-loading";
 import {
   getMobileScanServerSnapshot,
   getMobileScanSnapshot,
@@ -60,6 +59,7 @@ import {
 } from "@/lib/mobile-scan";
 import { formatQuantity } from "@/lib/quantity";
 import styles from "./page.module.css";
+import { TillLoading } from "./loading-layout";
 
 import {
   ApiError,
@@ -1174,7 +1174,7 @@ export default function TillPage() {
       ))}
 
       {loading ? (
-        <PageLoading kind="till" label="Loading your till" />
+        <TillLoading mobileScan={mobileScan} paymentOptions={TENDER_OPTIONS} tender={tender} />
       ) : (
         <div className={styles.layout}>
           <div

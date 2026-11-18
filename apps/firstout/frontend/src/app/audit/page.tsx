@@ -136,7 +136,12 @@ export default function AuditPage() {
 
       <div>
       {loading ? (
-        <PageLoading label="Loading audit events…" />
+        <PageLoading
+          label="Loading audit events…"
+          title="Audit events"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+          pagination
+        />
       ) : total === 0 && !error ? (
         <InlineNotification
           kind="info"

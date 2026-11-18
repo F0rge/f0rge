@@ -538,7 +538,11 @@ export default function TransfersPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading…" />
+        <PageLoading
+          label="Loading transfers…"
+          title={tab === "draft" ? "Drafts" : tab === "in_transit" ? "In transit" : "Received"}
+          columns={["Number", "From", "To", "Lines", "Status", tab === "received" ? "Received" : "Updated", "Actions"]}
+        />
       ) : visibleTransfers.length === 0 ? (
         <InlineNotification
           kind="info"

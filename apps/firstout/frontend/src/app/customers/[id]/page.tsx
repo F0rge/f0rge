@@ -1,14 +1,14 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
-import { Button, InlineNotification, Stack, Tag, Tile } from "@carbon/react";
+import { LoadingRegion } from "@/components/page-loading";
+import { Button, InlineNotification, SkeletonText, Stack, Tag, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CustomerPortalAccessPanel } from "@/components/customer-portal-access";
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
-import { SalesHistoryTable } from "@/components/records/history-tables";
-import { PartyRecords } from "@/components/records/party-records";
+import { PartyHistoryLoading, SalesHistoryTable } from "@/components/records/history-tables";
+import { PartyRecords, PartyRecordsLoading } from "@/components/records/party-records";
 import { PartyArchiveAction } from "@/components/party-archive-actions";
 import {
   CustomerFormFields,
@@ -157,7 +157,37 @@ export default function CustomerDetailPage() {
   }
 
   if (loading || (customer !== null && customer.id !== params.id)) {
-    return <PageLoading kind="form" label="Loading customer…" />;
+    return (
+      <Stack gap={6} className="firstout-loading-motion">
+        <div>
+          <Button kind="ghost" size="sm" onClick={() => router.push("/customers")}>Back to customers</Button>
+          <SkeletonText heading width="min(22rem, 85%)" />
+        </div>
+        <LoadingRegion label="Loading customer…">
+          <Stack gap={6}>
+            <Tile>
+              <Stack gap={5}>
+                <h2 className="cds--type-productive-heading-03">Account</h2>
+                <div className="firstout-detail-grid">
+                  {[
+                    "Classification", "Open invoices", "Overdue", "Active laybys", "Last purchase",
+                    "Price list", "Phone", "Email", "VAT number", "Billing address",
+                    ...(canEditCredit ? ["Credit limit"] : []),
+                  ].map((label) => (
+                    <div key={label}>
+                      <div className="cds--label">{label}</div>
+                      <SkeletonText width="65%" />
+                    </div>
+                  ))}
+                </div>
+              </Stack>
+            </Tile>
+            <PartyRecordsLoading announce={false} />
+            <PartyHistoryLoading type="sales" />
+          </Stack>
+        </LoadingRegion>
+      </Stack>
+    );
   }
 
   return (
@@ -223,9 +253,7 @@ export default function CustomerDetailPage() {
 
       {customer?.is_archived ? <InlineNotification kind="info" title="This customer is archived" subtitle="Contacts, terms and available history are preserved. Restore the account before using it in new transactions." hideCloseButton lowContrast /> : null}
 
-      {loading ? (
-        <PageLoading kind="form" label="Loading customer…" />
-      ) : customer ? (
+      {customer ? (
         <>
           <Tile>
             <Stack gap={5}>

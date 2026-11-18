@@ -417,6 +417,10 @@
   line-height: 18px;
   color: var(--cds-text-secondary);
 }
+.loadingIdentity {
+  flex: 1;
+  min-width: 0;
+}
 .detailBody {
   padding: 0 20px 20px;
   min-width: 0;

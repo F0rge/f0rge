@@ -1,12 +1,13 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingField, LoadingRegion, LoadingTableRows } from "@/components/page-loading";
 import { StaffImage } from "@/components/staff-image";
 
 import {
   Button,
   InlineNotification,
   Modal,
+  SkeletonText,
   Stack,
   Tag,
   Table,
@@ -273,7 +274,50 @@ export default function InvoiceDetailPage() {
   }
 
   if (loading) {
-    return <PageLoading kind="form" label="Loading invoice…" />;
+    return (
+      <Stack gap={6}>
+        <div style={{ alignSelf: "flex-start" }}>
+          <Button kind="ghost" size="sm" onClick={() => router.push("/invoices")}>← Back to invoices</Button>
+        </div>
+        <LoadingRegion label="Loading invoice…">
+          <Stack gap={6}>
+            <div aria-hidden="true">
+              <SkeletonText heading width="14rem" />
+              <SkeletonText width="min(24rem, 85%)" />
+              <SkeletonText width="5rem" />
+            </div>
+            <Stack gap={4} orientation="horizontal" aria-hidden="true">
+              <LoadingField width="9rem" height="3rem" />
+              <LoadingField width="8rem" height="3rem" />
+              {canMutate && <LoadingField width="10rem" height="3rem" />}
+            </Stack>
+            <section className="firstout-tax-invoice">
+              <div className="firstout-tax-invoice__header" aria-hidden="true">
+                <SkeletonText heading width="10rem" />
+                <SkeletonText paragraph lineCount={2} width="9rem" />
+              </div>
+              <div className="firstout-tax-invoice__parties">
+                {["Seller", "Buyer"].map((party) => (
+                  <div key={party}>
+                    <p className="cds--type-label-01">{party}</p>
+                    <SkeletonText paragraph lineCount={3} width="75%" />
+                  </div>
+                ))}
+              </div>
+              <TableContainer title="Line items">
+                <LoadingTableRows columns={["Description", "Qty", "Unit", "Ex VAT", "VAT", "Inc VAT"]} />
+              </TableContainer>
+              <div className="firstout-tax-invoice__totals" aria-hidden="true">
+                <SkeletonText paragraph lineCount={3} width="10rem" />
+              </div>
+            </section>
+            <TableContainer title="Payments" description="Money received against this invoice">
+              <LoadingTableRows columns={["Number", "Paid on", "Amount", "Reconciled"]} rows={2} />
+            </TableContainer>
+          </Stack>
+        </LoadingRegion>
+      </Stack>
+    );
   }
 
   if (!invoice) {

@@ -375,7 +375,12 @@ export default function Vat201Page() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading periods…" />
+        <PageLoading
+          label="Loading periods…"
+          title="Periods"
+          description="Select a period to view its VAT201 draft"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+        />
       ) : periods.length === 0 ? (
         <InlineNotification
           kind="info"

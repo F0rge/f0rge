@@ -187,6 +187,10 @@ function SuppliersScreen() {
         refreshKey={refreshKey}
         onCreate={allowed ? () => start() : undefined}
         onEdit={allowed ? (item) => start(item) : undefined}
+        loadingDetails={{
+          tabs: ["Overview", "Records", "History"],
+          fields: ["Default currency", "Observed lead time", "VAT number", "Address", "Status"],
+        }}
         renderDetails={(item) => (
           <Tabs>
             <TabList aria-label="Supplier information">

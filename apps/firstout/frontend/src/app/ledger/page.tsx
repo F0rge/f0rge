@@ -1,5 +1,7 @@
 "use client";
 
+import { PageLoading } from "@/components/page-loading";
+
 import {
   Button,
   Checkbox,
@@ -325,7 +327,15 @@ function ChartOfAccountsContent() {
 
       <Modal open={categoryOpen} modalHeading="Category posting" passiveModal size="lg" onRequestClose={() => setCategoryOpen(false)}>
         {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
-        {loading ? <p role="status">Loading category posting…</p> : null}
+        {loading ? (
+          <PageLoading
+            label="Loading category posting…"
+            title="Category maps"
+            description="SKU category → ledger codes"
+            columns={MAP_HEADERS.map(({ header }) => header)}
+            toolbar
+          />
+        ) : null}
       {!loading ? (
         <Stack gap={4}>
           <div className="firstout-page-header">

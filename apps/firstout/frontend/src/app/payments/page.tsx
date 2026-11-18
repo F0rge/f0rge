@@ -131,7 +131,13 @@ export default function PaymentsPage() {
 
       <div>
       {loading ? (
-        <PageLoading label="Loading payments…" />
+        <PageLoading
+          label="Loading payments…"
+          title="Payments"
+          description="All recorded payments"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+          pagination
+        />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"

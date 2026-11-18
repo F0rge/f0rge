@@ -6,6 +6,7 @@ import {
   DatePicker,
   DatePickerInput,
   InlineNotification,
+  SkeletonText,
   Stack,
   Tab,
   TabList,
@@ -24,6 +25,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CriticalityReport } from "@/components/criticality-report";
+import { LoadingRegion, LoadingTableRows } from "@/components/page-loading";
 import { LeadTimesReport } from "@/components/lead-times-report";
 import {
   downloadAgedStockCsv,
@@ -136,6 +138,25 @@ const CASH_SUMMARY_HEADERS = [
   { key: "net_zar", header: "Net" },
 ] as const;
 
+function ReportLoading({ title, columns, sections = [title] }: {
+  title: string;
+  columns: readonly string[] | number;
+  sections?: readonly string[];
+}) {
+  return (
+    <LoadingRegion label={`Loading ${title.toLowerCase()}…`}>
+      <Stack gap={4}>
+        <div aria-hidden="true"><SkeletonText width="min(24rem, 85%)" /></div>
+        {sections.map((section) => (
+          <TableContainer key={section} title={section}>
+            <LoadingTableRows columns={columns} />
+          </TableContainer>
+        ))}
+      </Stack>
+    </LoadingRegion>
+  );
+}
+
 export default function ReportsPage() {
   const { user } = useAuth();
   const [asOf, setAsOf] = useState(todayIso());
@@ -160,7 +181,7 @@ export default function ReportsPage() {
   const [skuCriticality, setSkuCriticality] = useState<SkuCriticalityReport | null>(null);
   const [leadTimesError, setLeadTimesError] = useState<string | null>(null);
   const [criticalityError, setCriticalityError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadReports = useCallback(async () => {
@@ -443,6 +464,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Aged accounts receivable" columns={AGED_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -478,6 +501,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Aged accounts payable" columns={AGED_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -547,6 +572,8 @@ export default function ReportsPage() {
                   </Table>
                 </TableContainer>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Profit and loss" columns={["Code", "Account", "Amount"]} sections={["Income", "Expenses"]} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -612,6 +639,8 @@ export default function ReportsPage() {
                   </Table>
                 </TableContainer>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Balance sheet" columns={["Code", "Account", "Balance"]} sections={["Assets", "Liabilities"]} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -656,6 +685,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Trial balance" columns={TRIAL_BALANCE_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -715,6 +746,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Journals" columns={JOURNAL_REPORT_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -763,6 +796,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Cash summary" columns={CASH_SUMMARY_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -809,6 +844,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Stock valuation" columns={STOCK_VALUATION_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -870,6 +907,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Aged stock detail" columns={AGED_STOCK_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -917,6 +956,8 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Sales by SKU" columns={SALES_BY_SKU_HEADERS.map(({ header }) => header)} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -927,6 +968,8 @@ export default function ReportsPage() {
                 error={leadTimesError}
                 onCsvError={setError}
               />
+            ) : loading && !leadTimesError ? (
+              <ReportLoading title="Supplier lead times" columns={["Supplier", "n", "Median PO→receive", "Last 3", "Water median", "P90"]} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -946,6 +989,8 @@ export default function ReportsPage() {
                 hideCloseButton
                 lowContrast
               />
+            ) : loading && !criticalityError ? (
+              <ReportLoading title="SKU criticality" columns={["Our ref", "Name", "Category", "Qty", "Value", "Share %", "Cumulative %", "ABC", "50% band"]} />
             ) : null}
           </TabPanel>
           <TabPanel>
@@ -991,6 +1036,8 @@ export default function ReportsPage() {
                   </Table>
                 </TableContainer>
               </Stack>
+            ) : loading && !error ? (
+              <ReportLoading title="Sales VAT summary" columns={2} />
             ) : null}
           </TabPanel>
         </TabPanels>

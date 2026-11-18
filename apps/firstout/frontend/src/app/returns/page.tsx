@@ -426,7 +426,7 @@ function ReturnsPageContent() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading returns…" />
+        <ReturnsLoading />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"
@@ -645,9 +645,30 @@ function ReturnsPageContent() {
   );
 }
 
+function ReturnsLoading({ route = false }: { route?: boolean }) {
+  const table = (
+    <PageLoading
+      label="Loading returns…"
+      title="Returns"
+      description="Customer returns and RMA requests"
+      columns={TABLE_HEADERS.map(({ header }) => header)}
+      pagination
+    />
+  );
+  return route ? (
+    <Stack gap={6}>
+      <div>
+        <h1 className="cds--type-productive-heading-04">Returns &amp; RMA</h1>
+        <p className="cds--type-body-01">Process customer returns from till sales or invoices.</p>
+      </div>
+      {table}
+    </Stack>
+  ) : table;
+}
+
 export default function ReturnsPage() {
   return (
-    <Suspense fallback={<PageLoading label="Loading returns…" />}>
+    <Suspense fallback={<ReturnsLoading route />}>
       <ReturnsPageContent />
     </Suspense>
   );

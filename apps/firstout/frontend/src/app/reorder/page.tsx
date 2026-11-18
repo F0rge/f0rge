@@ -241,7 +241,13 @@ export default function ReorderPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading reorder list…" />
+        <PageLoading
+          label="Loading reorder list…"
+          title="Reorder list"
+          description="SKUs below minimum stock with suggested order quantities"
+          columns={tableHeaders.map(({ header }) => header)}
+          pagination
+        />
       ) : rows.length === 0 ? (
         <InlineNotification
           kind="info"

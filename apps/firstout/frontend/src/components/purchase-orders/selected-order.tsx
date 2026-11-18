@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ArrowRight, Document } from "@carbon/icons-react";
 import {
   Button,
   InlineNotification,
   ProgressIndicator,
   ProgressStep,
+  SkeletonPlaceholder,
+  SkeletonText,
   Tag,
   Tile,
 } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { PageLoading } from "@/components/page-loading";
+import { LoadingRegion } from "@/components/page-loading";
 import {
   downloadPackingSheet,
   getPurchaseOrder,
@@ -52,6 +54,40 @@ export function orderDate(value: string | null): string {
         year: "numeric",
       });
 }
+
+export function SelectedOrderLoading({ announce = true }: { announce?: boolean }) {
+  return (
+    <LoadingRegion label="Loading selected purchase order…" announce={announce}>
+      <Tile>
+        <div className={styles.stack}>
+          <div className={styles.between}>
+            <div className={styles.smallStack}>
+              <p className="cds--type-label-01">SELECTED PURCHASE ORDER</p>
+              <SkeletonText heading width="9rem" aria-hidden="true" />
+            </div>
+            <SkeletonPlaceholder aria-hidden="true" style={{ width: "4.5rem", height: "1.5rem" }} />
+          </div>
+          <div className={styles.smallStack} aria-hidden="true">
+            <SkeletonText heading width="65%" />
+            <SkeletonText width="55%" />
+          </div>
+          <dl className={styles.detailValues}>
+            {["Ordered / created", "Order quantity", "Factory total"].map((label) => (
+              <Fragment key={label}>
+                <dt className="cds--type-label-01">{label}</dt>
+                <dd aria-hidden="true"><SkeletonText width="65%" /></dd>
+              </Fragment>
+            ))}
+          </dl>
+          <div aria-hidden="true">
+            <SkeletonText paragraph lineCount={4} width="45%" />
+          </div>
+        </div>
+      </Tile>
+    </LoadingRegion>
+  );
+}
+
 /** The caller keys this panel by order ID; each request also rejects stale completions. */
 export function SelectedOrder({ id }: { id: string }) {
   const router = useRouter();
@@ -120,7 +156,7 @@ export function SelectedOrder({ id }: { id: string }) {
     }
   }
   if (loading)
-    return <PageLoading kind="form" label="Loading selected purchase order…" />;
+    return <SelectedOrderLoading />;
   if (!order)
     return (
       <div className={styles.stack}>

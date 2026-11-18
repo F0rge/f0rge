@@ -1,6 +1,10 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import {
+  landingBillColumns,
+  purchaseOrderLineColumns,
+  PurchaseOrderDetailLoading,
+} from "./loading-layout";
 import {
   Button,
   FileUploaderDropContainer,
@@ -518,18 +522,30 @@ export default function PurchaseOrderDetailPage() {
   }
 
   if (loading) {
-    return <PageLoading kind="form" label="Loading purchase order…" />;
+    return <PurchaseOrderDetailLoading />;
   }
 
   if (!order) {
     return (
-      <InlineNotification
-        kind="error"
-        title="Not found"
-        subtitle="Purchase order could not be loaded."
-        hideCloseButton
-        lowContrast
-      />
+      <Stack gap={6}>
+        <div>
+          <Button kind="ghost" size="sm" onClick={() => router.push("/purchase-orders")}>
+            ← Back to purchase orders
+          </Button>
+        </div>
+        <InlineNotification
+          kind="error"
+          title="Purchase order unavailable"
+          subtitle="Purchase order could not be loaded."
+          hideCloseButton
+          lowContrast
+        />
+        <div>
+          <Button kind="tertiary" size="sm" onClick={() => void loadOrder()}>
+            Retry
+          </Button>
+        </div>
+      </Stack>
     );
   }
 
@@ -815,14 +831,7 @@ export default function PurchaseOrderDetailPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableHeader>Our ref</TableHeader>
-              <TableHeader>Supplier code</TableHeader>
-              <TableHeader>Description</TableHeader>
-              <TableHeader>Name</TableHeader>
-              <TableHeader>Fabric / finish</TableHeader>
-              <TableHeader>Qty</TableHeader>
-              <TableHeader>Factory unit</TableHeader>
-              <TableHeader>Unit cost ZAR</TableHeader>
+              {purchaseOrderLineColumns.map((label) => <TableHeader key={label}>{label}</TableHeader>)}
               {order.is_archive ? (
                 <>
                   <TableHeader>
@@ -869,10 +878,7 @@ export default function PurchaseOrderDetailPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableHeader>Kind</TableHeader>
-                <TableHeader>Invoice number</TableHeader>
-                <TableHeader>Amount</TableHeader>
-                <TableHeader>Currency</TableHeader>
+                {landingBillColumns.map((label) => <TableHeader key={label}>{label}</TableHeader>)}
               </TableRow>
             </TableHead>
             <TableBody>

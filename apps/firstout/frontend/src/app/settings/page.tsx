@@ -9,6 +9,7 @@ import {
   NumberInput,
   Select,
   SelectItem,
+  SkeletonText,
   Stack,
   Tab,
   TabListVertical,
@@ -43,7 +44,11 @@ import { CommunicationsSettings } from "@/app/settings/communications-settings";
 import { PaymentRemindersSettings } from "@/app/settings/payment-reminders-settings";
 import { useAuth } from "@/lib/auth";
 import Link from "next/link";
-import { PageLoading } from "@/components/page-loading";
+import {
+  CommunicationsLoading,
+  PaymentRemindersLoading,
+  SettingsPanelLoading,
+} from "./loading-layout";
 import styles from "./settings.module.css";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -447,9 +452,6 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {loading ? (
-        <PageLoading kind="settings" label="Loading settings…" />
-      ) : null}
       {error ? (
         <InlineNotification
           kind="error"
@@ -487,7 +489,7 @@ export default function SettingsPage() {
           Try again
         </Button>
       ) : null}
-      {settings ? (
+      {loading || settings ? (
         <div
           className={`${styles.intro} firstout-tone-info firstout-section-accent`}
         >
@@ -505,7 +507,7 @@ export default function SettingsPage() {
           </Tag>
         </div>
       ) : null}
-      {settings ? (
+      {loading || settings ? (
         <div className={styles.layout}>
           <div className={styles.tabs}>
             <TabsVertical>
@@ -521,7 +523,7 @@ export default function SettingsPage() {
               <TabPanels>
                 <TabPanel>
                   <Tile>
-                    <Stack gap={5}>
+                    {loading ? <SettingsPanelLoading panel="Company" /> : <Stack gap={5}>
                       <h2 className="cds--type-heading-03">Company</h2>
                       <div className={styles.formGrid}>
                         <TextInput
@@ -661,13 +663,13 @@ export default function SettingsPage() {
                         onDiscard={discardChanges}
                         onSave={() => void handleSave()}
                       />
-                    </Stack>
+                    </Stack>}
                   </Tile>
                 </TabPanel>
 
                 <TabPanel>
                   <Tile>
-                    <Stack gap={5}>
+                    {loading ? <SettingsPanelLoading panel="Documents" /> : <Stack gap={5}>
                       <h2 className="cds--type-heading-03">Documents</h2>
                       <p className="cds--type-body-01 firstout-muted-text">
                         Prefix and padding apply to new documents. Cancelled
@@ -737,13 +739,13 @@ export default function SettingsPage() {
                         onDiscard={discardChanges}
                         onSave={() => void handleSave()}
                       />
-                    </Stack>
+                    </Stack>}
                   </Tile>
                 </TabPanel>
 
                 <TabPanel>
                   <Tile>
-                    <Stack gap={5}>
+                    {loading ? <SettingsPanelLoading panel="Locations" /> : <Stack gap={5}>
                       <h2 className="cds--type-heading-03">Locations</h2>
                       <Select
                         id="default-receive-location"
@@ -817,13 +819,13 @@ export default function SettingsPage() {
                         onDiscard={discardChanges}
                         onSave={() => void handleSave()}
                       />
-                    </Stack>
+                    </Stack>}
                   </Tile>
                 </TabPanel>
 
                 <TabPanel>
                   <Tile>
-                    <Stack gap={5}>
+                    {loading ? <SettingsPanelLoading panel="Operations" /> : <Stack gap={5}>
                       <h2 className="cds--type-heading-03">Operations</h2>
                       <NumberInput
                         id="payment-terms-days"
@@ -885,26 +887,30 @@ export default function SettingsPage() {
                         onDiscard={discardChanges}
                         onSave={() => void handleSave()}
                       />
-                    </Stack>
+                    </Stack>}
                   </Tile>
                 </TabPanel>
 
                 <TabPanel>
                   <Tile>
-                    <h2 className="cds--type-heading-03">Labels</h2>
-                    <LabelSettings settings={settings} canMutate={canMutate} />
+                    {loading ? <SettingsPanelLoading panel="Labels" /> : settings && (
+                      <>
+                        <h2 className="cds--type-heading-03">Labels</h2>
+                        <LabelSettings settings={settings} canMutate={canMutate} />
+                      </>
+                    )}
                   </Tile>
                 </TabPanel>
                 <TabPanel>
                   <Tile>
-                    <CommunicationsSettings />
+                    {loading ? <CommunicationsLoading /> : <CommunicationsSettings />}
                   </Tile>
                 </TabPanel>
 
                 {canConfigureReminders ? (
                   <TabPanel>
                     <Tile>
-                      <PaymentRemindersSettings />
+                      {loading ? <PaymentRemindersLoading /> : <PaymentRemindersSettings />}
                     </Tile>
                   </TabPanel>
                 ) : null}
@@ -921,7 +927,9 @@ export default function SettingsPage() {
                   Changes apply to this organisation. Review operational
                   defaults with your team before saving.
                 </p>
-                <Tag type="gray">{settings.home_currency}</Tag>
+                {loading ? (
+                  <div className="firstout-loading-motion" aria-hidden="true"><SkeletonText width="3rem" /></div>
+                ) : <Tag type="gray">{settings?.home_currency}</Tag>}
                 <Link href="/organisation" className="cds--link">
                   Organisation and staff access
                 </Link>

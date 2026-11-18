@@ -278,7 +278,13 @@ export default function CreditNotesPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading credit notes…" />
+        <PageLoading
+          label="Loading credit notes…"
+          title="Credit notes"
+          description="All Firstout credit notes"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+          pagination
+        />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"

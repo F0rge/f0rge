@@ -1,6 +1,8 @@
 "use client";
 
 import { PageLoading } from "@/components/page-loading";
+import { AuthPageLoading, ClerkSignInLoading, ClerkWidgetLoading } from "@/components/auth-loading";
+import loadingStyles from "@/components/auth-loading.module.css";
 
 import {
   ClerkProvider,
@@ -53,7 +55,13 @@ function ClerkSession({ children }: { children: ReactNode }) {
     return () => setStaffTokenGetter(null);
   }, [isLoaded, getToken]);
   if (!ready || !isLoaded)
-    return <div className="firstout-session-loading"><PageLoading kind="form" label="Loading sign-in…" /></div>;
+    return (
+      <AuthPageLoading pathname={pathname} fallback={
+        <main className={loadingStyles.session}>
+          <PageLoading kind="status" label="Checking your session…" />
+        </main>
+      } />
+    );
   // Drop all mounted tenant UI state whenever the signed active organisation changes.
   return (
     <StaffSessionContext.Provider value={{ signedIn: Boolean(isSignedIn) }}>
@@ -112,7 +120,17 @@ export function StaffOrganizationSwitcher() {
 function ClerkSignInOrOrganisation() {
   // Clerk must finish pending MFA/password-reset/organisation tasks before continuing.
   const { isSignedIn } = useClerkAuth();
-  return isSignedIn ? <ContinueToOnboarding /> : <SignIn routing="path" path="/clerk-login" appearance={appearance} forceRedirectUrl="/onboarding" signUpUrl="/sign-up" />;
+  const pathname = usePathname();
+  return isSignedIn ? <ContinueToOnboarding /> : (
+    <SignIn
+      routing="path"
+      path="/clerk-login"
+      appearance={appearance}
+      forceRedirectUrl="/onboarding"
+      signUpUrl="/sign-up"
+      fallback={<ClerkSignInLoading pathname={pathname} />}
+    />
+  );
 }
 
 function ContinueToOnboarding() {
@@ -132,7 +150,16 @@ export function ClerkStaffSignIn() {
 
 function ClerkSignUpOrOrganisation() {
   const { isSignedIn } = useClerkAuth();
-  return isSignedIn ? <ContinueToOnboarding /> : <SignUp routing="path" path="/sign-up" appearance={appearance} forceRedirectUrl="/onboarding" signInUrl="/clerk-login" />;
+  return isSignedIn ? <ContinueToOnboarding /> : (
+    <SignUp
+      routing="path"
+      path="/sign-up"
+      appearance={appearance}
+      forceRedirectUrl="/onboarding"
+      signInUrl="/clerk-login"
+      fallback={<ClerkWidgetLoading mode="sign-up" />}
+    />
+  );
 }
 
 export function ClerkStaffSignUp() {

@@ -15,11 +15,18 @@ import {
   Checkbox,
   InlineNotification,
   Pagination,
+  SkeletonPlaceholder,
+  SkeletonText,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   Tag,
 } from "@carbon/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
-import { PageLoading } from "@/components/page-loading";
+import { LoadingRegion, PageLoading } from "@/components/page-loading";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -48,7 +55,7 @@ export function RecordWorkspace<T extends { id: string }>(
       }),
   );
   const { user, loading } = useAuth();
-  if (loading) return <PageLoading label="Loading your workspace…" />;
+  if (loading) return <PageLoading label="Loading your workspace…" kind="status" />;
   if (!user)
     return (
       <InlineNotification
@@ -76,6 +83,7 @@ function WorkspaceContent<T extends { id: string }>({
   createLabel,
   onEdit,
   renderDetails,
+  loadingDetails,
   headerActions,
   renderSelectionActions,
   onExport,
@@ -86,6 +94,11 @@ function WorkspaceContent<T extends { id: string }>({
   const [operation, setOperation] = useState<WorkspaceOperation | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [previousTotal, setPreviousTotal] = useState<number | null>(null);
+  const currentTotal = result.data?.total;
+  if (currentTotal !== undefined && currentTotal !== previousTotal) {
+    setPreviousTotal(currentTotal);
+  }
   const archived = query.lifecycle === "archived";
   const plural = adapter.plural ?? adapter.title.toLowerCase();
   const bulkAvailable = result.data?.bulk_available === true;
@@ -202,9 +215,12 @@ function WorkspaceContent<T extends { id: string }>({
           Bulk actions unavailable. Contact your administrator.
         </p>
       )}
+      {result.isPending && (
+        <span className="firstout-sr-only" role="status">Loading {plural}…</span>
+      )}
       <div className={styles.layout}>
         <section
-          className={styles.list}
+          className={`${styles.list}${result.isPending ? " firstout-loading-motion" : ""}`}
           aria-label={`${adapter.title} list`}
           aria-busy={result.isFetching}
         >
@@ -216,11 +232,13 @@ function WorkspaceContent<T extends { id: string }>({
                   : "All"}{" "}
                 {plural}
               </h2>
-              <p role="status" aria-live="polite">
-                {result.isPending
-                  ? "Loading records…"
-                  : `${result.data?.total ?? 0} ${plural}${query.q || query.filters.length ? " match your filters" : ""}`}
-              </p>
+              {result.isPending ? (
+                <SkeletonText width="6rem" aria-hidden="true" />
+              ) : (
+                <p role="status" aria-live="polite">
+                  {result.error ? "Records unavailable" : `${result.data?.total ?? 0} ${plural}${query.q || query.filters.length ? " match your filters" : ""}`}
+                </p>
+              )}
             </div>
           </div>
           {adapter.lifecycle && (
@@ -242,11 +260,15 @@ function WorkspaceContent<T extends { id: string }>({
                   {inactive
                     ? adapter.lifecycle?.archivedLabel
                     : adapter.lifecycle?.activeLabel}
-                  <span>
-                    {inactive
-                      ? (result.data?.counts.archived ?? 0)
-                      : (result.data?.counts.active ?? 0)}
-                  </span>
+                  {result.isPending ? (
+                    <SkeletonPlaceholder aria-hidden="true" style={{ width: "1.5rem", height: "1.375rem" }} />
+                  ) : (
+                    <span>
+                      {inactive
+                        ? (result.data?.counts.archived ?? 0)
+                        : (result.data?.counts.active ?? 0)}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -313,7 +335,7 @@ function WorkspaceContent<T extends { id: string }>({
             </>
           )}
           <div className={styles.tableScroll}>
-            {result.isPending ? <PageLoading label={`Loading ${plural}…`} /> : items.length ? (
+            {result.isPending || items.length ? (
               <table className={styles.table}>
                 <thead>
                   <tr>
@@ -375,7 +397,30 @@ function WorkspaceContent<T extends { id: string }>({
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
+                  {result.isPending ? Array.from({ length: 3 }, (_, index) => (
+                    <tr aria-hidden="true" key={index}>
+                      {selectable && (
+                        <td className={styles.check}>
+                          <SkeletonPlaceholder style={{ width: "1rem", height: "1rem" }} />
+                        </td>
+                      )}
+                      {adapter.columns.map((column, columnIndex) => (
+                        <td key={column.key} className={column.numeric ? styles.numeric : undefined}>
+                          {columnIndex === 0 ? (
+                            <div className={styles.record}>
+                              <SkeletonPlaceholder style={{ width: "2rem", height: "2rem", flex: "0 0 auto" }} />
+                              <div className={styles.loadingIdentity}>
+                                <SkeletonText width="65%" />
+                                {adapter.getSubtitle && <SkeletonText width="45%" />}
+                              </div>
+                            </div>
+                          ) : (
+                            <SkeletonText width="65%" />
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  )) : items.map((item) => (
                     <tr
                       key={item.id}
                       className={
@@ -472,11 +517,16 @@ function WorkspaceContent<T extends { id: string }>({
               </div>
             )}
           </div>
-          <Pagination
+          {result.isPending && previousTotal === null ? (
+            <div className="firstout-loading-pagination" aria-hidden="true">
+              <SkeletonText width="6rem" />
+              <SkeletonText width="5rem" />
+            </div>
+          ) : <Pagination
             page={Math.floor(query.offset / query.limit) + 1}
             pageSize={query.limit}
             pageSizes={WORKSPACE_PAGE_SIZES}
-            totalItems={result.data?.total ?? 0}
+            totalItems={currentTotal ?? (result.isPending ? previousTotal ?? 0 : 0)}
             onChange={({ page, pageSize }) =>
               workspace.update(
                 {
@@ -486,13 +536,56 @@ function WorkspaceContent<T extends { id: string }>({
                 true,
               )
             }
-          />
+          />}
         </section>
         <aside
           className={styles.inspector}
           aria-label="Selected record details"
         >
-          {active ? (
+          {result.isPending ? (
+            <LoadingRegion label={`Loading ${adapter.singular} details…`} announce={false}>
+              <div className={styles.inspectorLabel}>
+                {adapter.singular} details
+                <SkeletonPlaceholder aria-hidden="true" style={{ width: "3.5rem", height: "1.5rem" }} />
+              </div>
+              <div className={styles.identity} aria-hidden="true">
+                <SkeletonPlaceholder style={{ width: "4rem", height: "4rem", flex: "0 0 auto" }} />
+                <div className={styles.loadingIdentity}>
+                  <SkeletonText heading width="75%" />
+                  {adapter.getSubtitle && <SkeletonText width="55%" />}
+                </div>
+              </div>
+              <div className={styles.detailBody}>
+                {loadingDetails ? (
+                  <>
+                    <Tabs>
+                      <TabList aria-label={`${adapter.singular} detail sections`}>
+                        {loadingDetails.tabs.map((tab) => <Tab disabled key={tab}>{tab}</Tab>)}
+                      </TabList>
+                      <TabPanels>
+                        <TabPanel>
+                          <dl className={styles.details}>
+                            {loadingDetails.fields.map((field) => (
+                              <div key={field}>
+                                <dt>{field}</dt>
+                                <dd aria-hidden="true"><SkeletonText width="55%" /></dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </TabPanel>
+                        {loadingDetails.tabs.slice(1).map((tab) => <TabPanel key={tab} />)}
+                      </TabPanels>
+                    </Tabs>
+                  </>
+                ) : <SkeletonText paragraph lineCount={3} aria-hidden="true" />}
+              </div>
+              {actions.length > 0 && (
+                <div className={styles.inspectorActions} aria-hidden="true">
+                  <SkeletonPlaceholder style={{ width: "7.5rem", height: "2.75rem" }} />
+                </div>
+              )}
+            </LoadingRegion>
+          ) : active ? (
             <>
               <div className={styles.inspectorLabel}>
                 {adapter.singular} details

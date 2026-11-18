@@ -339,10 +339,12 @@ function QuotesPageInner() {
           <Button onClick={() => setOpen(true)}>New quote</Button>
         ) : null}
       </div>
-      {loading ? <PageLoading label="Loading quotes…" /> : null}
+      {loading && quotes.length === 0 ? (
+        <PageLoading label="Loading quotes…" columns={TABLE_HEADERS.map(({ header }) => header)} pagination />
+      ) : <>
       <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
         {({ rows: tableRows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-          <TableContainer>
+          <TableContainer aria-busy={loading}>
             <Table {...getTableProps()}>
               <TableHead>
                 <TableRow>
@@ -412,6 +414,7 @@ function QuotesPageInner() {
           setPageSize(nextSize);
         }}
       />
+      </>}
       <Modal
         open={open}
         modalHeading="New quote"

@@ -35,6 +35,7 @@ import { PageLoading } from "@/components/page-loading";
 import { PurchaseOrderComposer } from "@/components/purchase-orders/composer";
 import {
   SelectedOrder,
+  SelectedOrderLoading,
   orderDate,
   statusPresentation,
 } from "@/components/purchase-orders/selected-order";
@@ -64,6 +65,13 @@ const activeStatuses: PurchaseOrderStatus[] = [
   "open",
   "on_water",
   "landed",
+];
+const purchaseOrderColumns = [
+  "Purchase order",
+  "Supplier",
+  "Status",
+  "Lines",
+  "Ordered / created",
 ];
 
 type Counts = Record<
@@ -150,7 +158,6 @@ function OrderOverview({
   return (
     <div
       className={`firstout-loading-motion ${styles.stack}`}
-      aria-busy={!counts && !error}
     >
       {!counts && !error && (
         <span className="firstout-sr-only" role="status">
@@ -175,7 +182,7 @@ function OrderOverview({
           </Button>
         </div>
       )}
-      <div className={styles.metrics}>
+      <div className={styles.metrics} aria-busy={!counts && !error}>
         {cards.map((card) => {
           const content = (
             <div className={styles.smallStack}>
@@ -225,13 +232,13 @@ export default function PurchaseOrdersPage() {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <PageLoading kind="purchase-orders" label="Loading purchase orders…" />
+      <PageLoading kind="status" label="Loading purchase orders…" />
     );
   if (!user) return null;
   return (
     <Suspense
       fallback={
-        <PageLoading kind="purchase-orders" label="Loading purchase orders…" />
+        <PageLoading kind="status" label="Loading purchase orders…" />
       }
     >
       <PurchaseOrdersWorkspace
@@ -253,7 +260,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
+  const [total, setTotal] = useState<number | null>(null);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [needsSkus, setNeedsSkus] = useState(false);
   const [query, setQuery] = useState("");
@@ -454,19 +461,19 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
               </div>
             </div>
             {loading ? (
-              <PageLoading kind="table" label="Loading purchase order list…" />
+              <div className={styles.tableScroll}>
+                <PageLoading label="Loading purchase order list…" columns={purchaseOrderColumns} size="lg" />
+              </div>
             ) : orders.length ? (
               <div className={styles.tableScroll}>
                 <Table aria-label="Purchase orders" size="lg">
                   <TableHead>
                     <TableRow>
-                      <TableHeader>Purchase order</TableHeader>
-                      <TableHeader>Supplier</TableHeader>
-                      <TableHeader>Status</TableHeader>
-                      <TableHeader className={styles.numeric}>
-                        Lines
-                      </TableHeader>
-                      <TableHeader>Ordered / created</TableHeader>
+                      {purchaseOrderColumns.map((label) => (
+                        <TableHeader key={label} className={label === "Lines" ? styles.numeric : undefined}>
+                          {label}
+                        </TableHeader>
+                      ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -535,11 +542,16 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
                 </div>
               )
             )}
-            <Pagination
+            {loading && total === null ? (
+              <div className="firstout-loading-pagination firstout-loading-motion" aria-hidden="true">
+                <SkeletonText width="6rem" />
+                <SkeletonText width="5rem" />
+              </div>
+            ) : <Pagination
               page={page}
               pageSize={pageSize}
               pageSizes={[10, 25, 50]}
-              totalItems={total}
+              totalItems={total ?? 0}
               onChange={({ page: nextPage, pageSize: nextSize }) => {
                 setPage(nextSize === pageSize ? nextPage : 1);
                 setPageSize(nextSize);
@@ -547,11 +559,13 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
               backwardText="Previous page"
               forwardText="Next page"
               itemsPerPageText="Orders per page:"
-            />
+            />}
           </TableContainer>
         </section>
         {selectedId ? (
           <SelectedOrder key={`${selectedId}:${refresh}`} id={selectedId} />
+        ) : loading ? (
+          <SelectedOrderLoading announce={false} />
         ) : (
           <Tile>
             <p className="cds--type-body-01">

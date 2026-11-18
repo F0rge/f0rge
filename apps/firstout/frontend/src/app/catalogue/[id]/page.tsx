@@ -1,6 +1,6 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingField, LoadingRegion } from "@/components/page-loading";
 import { StaffImage } from "@/components/staff-image";
 
 import {
@@ -9,6 +9,8 @@ import {
   FileUploaderItem,
   InlineNotification,
   NumberInput,
+  SkeletonPlaceholder,
+  SkeletonText,
   Stack,
   Tab,
   TabList,
@@ -212,6 +214,45 @@ export default function SkuDetailPage() {
 
   const unitCostZar = inventoryRow?.unit_cost_zar ?? null;
 
+  if (loading || (sku !== null && sku.id !== params.id)) {
+    return (
+      <Stack gap={6} className="firstout-loading-motion">
+        <div>
+          <Button kind="ghost" size="sm" onClick={() => router.push("/catalogue")}>Back to catalogue</Button>
+          <SkeletonText heading width="min(28rem, 85%)" />
+        </div>
+        <LoadingRegion label="Loading SKU…">
+          <Tabs selectedIndex={0}>
+            <TabList aria-label="SKU detail">
+              <Tab>Identity</Tab>
+              <Tab disabled>Prices</Tab>
+              <Tab disabled>Stock</Tab>
+              {canViewCost ? <Tab disabled>Cost</Tab> : null}
+              <Tab disabled>Kit</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel>
+                <Tile>
+                  <Stack gap={5}>
+                    <h2 className="cds--type-productive-heading-03">Identity</h2>
+                    <div aria-hidden="true"><SkeletonPlaceholder style={{ inlineSize: "10rem", blockSize: "10rem" }} /></div>
+                    {["Our ref *", "Our barcode *", "Name *", "Design *", "Fabric *", "Category", "Cartons"].map((field) => (
+                      <LoadingField key={field} label={field} />
+                    ))}
+                  </Stack>
+                </Tile>
+              </TabPanel>
+              <TabPanel />
+              <TabPanel />
+              {canViewCost ? <TabPanel /> : null}
+              <TabPanel />
+            </TabPanels>
+          </Tabs>
+        </LoadingRegion>
+      </Stack>
+    );
+  }
+
   return (
     <Stack gap={6}>
       <div className="firstout-page-header">
@@ -292,9 +333,7 @@ export default function SkuDetailPage() {
         />
       ) : null}
 
-      {loading ? (
-        <PageLoading kind="form" label="Loading SKU…" />
-      ) : sku ? (
+      {sku ? (
         <Tabs>
           <TabList aria-label="SKU detail">
             <Tab>Identity</Tab>

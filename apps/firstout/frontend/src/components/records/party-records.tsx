@@ -14,6 +14,7 @@ import {
 } from "@carbon/react";
 import { useEffect, useState } from "react";
 
+import { LoadingRegion, LoadingTableRows } from "@/components/page-loading";
 import {
   ApiError,
   listPartyAddresses,
@@ -29,12 +30,28 @@ function addressText(row: PartyAddress): string {
     .join(", ");
 }
 
+export function PartyRecordsLoading({ announce = true }: { announce?: boolean }) {
+  return (
+    <LoadingRegion label="Loading addresses and contacts…" announce={announce}>
+      <Stack gap={5}>
+        <TableContainer title="Addresses">
+          <LoadingTableRows columns={["Type", "Address"]} rows={2} size="sm" />
+        </TableContainer>
+        <TableContainer title="Contacts">
+          <LoadingTableRows columns={["Name", "Job title", "Phone", "Mobile", "Email"]} rows={2} size="sm" />
+        </TableContainer>
+      </Stack>
+    </LoadingRegion>
+  );
+}
+
 /** Every address and contact stored for a customer or supplier (imported from Cin7). */
 export function PartyRecords({ kind, id }: { kind: PartyKind; id: string }) {
   const [addresses, setAddresses] = useState<PartyAddress[]>([]);
   const [contacts, setContacts] = useState<PartyContact[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +72,8 @@ export function PartyRecords({ kind, id }: { kind: PartyKind; id: string }) {
           return;
         }
         setError(err instanceof Error ? err.message : "Failed to load addresses and contacts.");
-      });
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => {
       cancelled = true;
     };
@@ -64,6 +82,7 @@ export function PartyRecords({ kind, id }: { kind: PartyKind; id: string }) {
   if (unavailable) {
     return null;
   }
+  if (loading) return <PartyRecordsLoading />;
 
   return (
     <Stack gap={5}>

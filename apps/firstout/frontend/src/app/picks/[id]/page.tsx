@@ -308,7 +308,13 @@ export default function PickDetailPage() {
         />
       ) : null}
 
-      {loading ? <PageLoading kind="form" label="Loading pick…" /> : !pick ? (
+      {loading ? (
+        <PageLoading
+          label="Loading pick allocations…"
+          columns={["Component", "Needed", ...activeLocations.map((location) => location.name), "Picked"]}
+          size="sm"
+        />
+      ) : !pick ? (
         <p className="cds--type-body-01">Pick not found.</p>
       ) : (
         <Stack gap={6}>

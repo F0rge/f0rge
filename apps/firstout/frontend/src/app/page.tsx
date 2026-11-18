@@ -4,6 +4,8 @@ import {
   Button,
   ClickableTile,
   InlineNotification,
+  SkeletonText,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -32,7 +34,7 @@ import {
   type MouseEvent,
 } from "react";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingRegion, PageLoading } from "@/components/page-loading";
 import {
   ApiError,
   can,
@@ -78,6 +80,67 @@ const attentionActions: Record<
   layby: { label: "Review laybys" },
   bank: { label: "Reconcile", permission: "books.mutate" },
 };
+
+function HomeLoading({ canViewCost }: { canViewCost: boolean }) {
+  return (
+    <>
+      <div className={styles.metrics}>
+        {[
+          { label: "Stock on hand", icon: InventoryManagement },
+          { label: "On order", icon: Delivery },
+          { label: "Low-stock products", icon: Catalog },
+          { label: "Open laybys", icon: Receipt },
+        ].map(({ label, icon: Icon }) => (
+          <div className="firstout-section-accent firstout-tone-info" key={label}>
+            <Tile>
+              <div className={styles.stackSmall}>
+                <div className={styles.row}>
+                  <p className="cds--type-body-01">{label}</p>
+                  <span className="firstout-content-icon firstout-tone-info">
+                    <Icon size={20} aria-hidden="true" />
+                  </span>
+                </div>
+                <div aria-hidden="true">
+                  <SkeletonText heading width="45%" />
+                  <SkeletonText width="75%" />
+                </div>
+              </div>
+            </Tile>
+          </div>
+        ))}
+      </div>
+      <div className={styles.tables}>
+        <section id="home-needs-attention" className={styles.tableSection}>
+          <TableContainer title="Needs attention" description="A short list to keep your day moving.">
+            <div className={styles.tableScroll}>
+              <PageLoading label="Loading tasks…" columns={["Task", "Status", "Action"]} toolbar={false} />
+            </div>
+          </TableContainer>
+        </section>
+        <section className={styles.tableSection}>
+          <TableContainer title="Recent movements" description="Latest recorded stock activity.">
+            <div className={styles.tableScroll}>
+              <PageLoading label="Loading movements…" columns={["Movement", "Reference", "When"]} toolbar={false} />
+            </div>
+          </TableContainer>
+        </section>
+      </div>
+      <div className={styles.followUp}>
+        {(canViewCost ? ["Aged stock value", "Open returns"] : ["Open returns"]).map((label) => (
+          <Tile key={label}>
+            <div className={styles.stackSmall}>
+              <h2 className="cds--type-heading-compact-01">{label}</h2>
+              <div aria-hidden="true"><SkeletonText heading width="45%" /></div>
+              <p className="cds--type-label-01">
+                {label === "Aged stock value" ? "Stock held for more than 180 days" : "Awaiting processing"}
+              </p>
+            </div>
+          </Tile>
+        ))}
+      </div>
+    </>
+  );
+}
 
 function AttentionStatus({ item }: { item: HomeAttentionItem }) {
   return (
@@ -217,9 +280,6 @@ export default function HomePage() {
         )}
       </header>
 
-      {loading ? (
-        <PageLoading kind="home" label="Loading your overview" />
-      ) : null}
       {error ? (
         <div className={styles.stackSmall}>
           <InlineNotification
@@ -241,8 +301,7 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      {summary && !loading && (
-        <>
+      {(loading || summary) && (
           <div className={styles.intro}>
             <section
               className={`firstout-page-intro firstout-tone-info ${styles.welcome}`}
@@ -251,15 +310,26 @@ export default function HomePage() {
                 <Home size={24} />
               </span>
               <p className="cds--type-label-01">TODAY’S BRIEFING</p>
-              <h2 className="cds--type-heading-05">
-                Hello{firstName ? `, ${firstName}` : ""}.
-              </h2>
-              <p className="cds--type-body-01">
-                {summary.low_stock_count.toLocaleString("en-ZA")} low-stock
-                products and {summary.open_laybys_count.toLocaleString("en-ZA")}{" "}
-                open laybys. Review your stock and customer commitments in one
-                place.
-              </p>
+              {loading ? (
+                <LoadingRegion label="Loading your overview" className={styles.overviewLoading}>
+                  <Stack gap={3} aria-hidden="true">
+                    <SkeletonText heading width="45%" />
+                    <SkeletonText paragraph lineCount={3} />
+                  </Stack>
+                </LoadingRegion>
+              ) : summary && (
+                <>
+                  <h2 className="cds--type-heading-05">
+                    Hello{firstName ? `, ${firstName}` : ""}.
+                  </h2>
+                  <p className="cds--type-body-01">
+                    {summary.low_stock_count.toLocaleString("en-ZA")} low-stock
+                    products and {summary.open_laybys_count.toLocaleString("en-ZA")}{" "}
+                    open laybys. Review your stock and customer commitments in one
+                    place.
+                  </p>
+                </>
+              )}
               <Button
                 kind="ghost"
                 renderIcon={ArrowRight}
@@ -310,7 +380,10 @@ export default function HomePage() {
               </section>
             )}
           </div>
-
+      )}
+      {loading && <div className={`firstout-loading-motion ${styles.page}`}><HomeLoading canViewCost={canViewCost} /></div>}
+      {summary && !loading && (
+        <>
           <div className={styles.metrics}>
             {metrics.map((metric) => (
               <div

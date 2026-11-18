@@ -1,6 +1,6 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingField, LoadingRegion } from "@/components/page-loading";
 import {
   Button,
   ContentSwitcher,
@@ -146,6 +146,15 @@ export default function WmsPage() {
   return <WmsMobileConsole />;
 }
 
+const loadingFieldsByTab: Record<WmsTab, readonly string[]> = {
+  receive: ["Scan piece", "Landed purchase order"],
+  count: ["Scan SKU", "Counted qty"],
+  transfer: ["Scan piece", "Quantity", "From location", "To location"],
+  pick: ["Scan SKU"],
+  pack: ["Scan into delivery", "Carton count (optional)"],
+  deliver: ["Tracking number", "Carrier"],
+};
+
 function WmsMobileConsole() {
   const { user } = useAuth();
   const canRecv = canReceive(user);
@@ -261,7 +270,12 @@ function WmsMobileConsole() {
           ) : null}
 
           {loading ? (
-            <PageLoading label="Loading…" />
+            <LoadingRegion label={`Loading warehouse ${tab}…`}>
+              <Stack gap={5}>
+                {loadingFieldsByTab[tab].map((field) => <LoadingField key={field} label={field} />)}
+                <LoadingField width="8rem" height="3rem" />
+              </Stack>
+            </LoadingRegion>
           ) : tab === "receive" ? (
             <ReceiveTab
               canMutate={canRecv}
