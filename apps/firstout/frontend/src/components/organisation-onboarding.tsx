@@ -1,10 +1,10 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingField, LoadingRegion, PageLoading } from "@/components/page-loading";
 
 import { useAuth as useClerkAuth, useClerk } from "@clerk/nextjs";
 import { ArrowRight, Enterprise } from "@carbon/icons-react";
-import { Button, InlineNotification, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tile } from "@carbon/react";
+import { Button, InlineNotification, SkeletonText, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tile } from "@carbon/react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { OrganisationForm } from "./organisation-form";
@@ -62,13 +62,53 @@ export function OrganisationOnboarding() {
     }
   }
 
-  if (!isLoaded) return <PageLoading kind="form" label="Loading sign-in…" />;
+  if (!isLoaded) return <PageLoading kind="status" label="Loading sign-in…" />;
   if (!isSignedIn) return <Stack gap={5}>
     <p>Sign in and finish any required verification before opening or creating a business.</p>
     <Link className="cds--btn cds--btn--primary" href="/clerk-login">Continue sign-in</Link>
     <Link className="cds--link" href="/sign-up">New here? Create your account</Link>
   </Stack>;
-  if (loading) return <PageLoading kind="form" label="Loading your organisations…" />;
+  if (loading) return (
+    <LoadingRegion label="Loading your organisations…">
+      <Stack gap={7}>
+        <div className="firstout-onboarding-account">
+          <Stack gap={2} orientation="horizontal">
+            <span className="firstout-onboarding-account-label">Signed in as</span>
+            <SkeletonText width="9rem" />
+          </Stack>
+          <LoadingField width="5rem" height="2rem" />
+        </div>
+        <Tabs selectedIndex={0}>
+          <TabList aria-label="Business workspaces" className="firstout-onboarding-tabs">
+            <Tab>Your businesses</Tab>
+            <Tab disabled>Create business</Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel className="firstout-onboarding-panel">
+              <Stack gap={5}>
+                <p className="cds--type-body-01 firstout-onboarding-description">Choose a business to open its workspace.</p>
+                <div className="firstout-organisation-workspaces" aria-hidden="true">
+                  {["first", "second"].map((slot) => (
+                    <Tile className="firstout-business-card" key={slot}>
+                      <article>
+                        <div className="firstout-business-card-heading">
+                          <Enterprise size={24} />
+                          <SkeletonText heading width="9rem" />
+                        </div>
+                        {tenantSubdomainsEnabled && <SkeletonText width="12rem" />}
+                        <LoadingField width="10rem" height="3rem" />
+                      </article>
+                    </Tile>
+                  ))}
+                </div>
+              </Stack>
+            </TabPanel>
+            <TabPanel />
+          </TabPanels>
+        </Tabs>
+      </Stack>
+    </LoadingRegion>
+  );
 
   return <Stack gap={7}>
     <div className="firstout-onboarding-account">

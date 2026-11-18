@@ -553,7 +553,7 @@ function DeliveriesPageContent() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading deliveries…" />
+        <DeliveriesLoading />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"
@@ -856,9 +856,30 @@ function DeliveriesPageContent() {
   );
 }
 
+function DeliveriesLoading({ route = false }: { route?: boolean }) {
+  const table = (
+    <PageLoading
+      label="Loading deliveries…"
+      title="Deliveries"
+      description="Outbound packing and dispatch"
+      columns={TABLE_HEADERS.map(({ header }) => header)}
+      pagination
+    />
+  );
+  return route ? (
+    <Stack gap={6}>
+      <div>
+        <h1 className="cds--type-productive-heading-04">Deliveries</h1>
+        <p className="cds--type-body-01">Pack and dispatch outbound deliveries from paid invoices, laybys, or sales orders.</p>
+      </div>
+      {table}
+    </Stack>
+  ) : table;
+}
+
 export default function DeliveriesPage() {
   return (
-    <Suspense fallback={<PageLoading label="Loading deliveries…" />}>
+    <Suspense fallback={<DeliveriesLoading route />}>
       <DeliveriesPageContent />
     </Suspense>
   );

@@ -263,7 +263,13 @@ export default function BillsPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading bills…" />
+        <PageLoading
+          label="Loading bills…"
+          title="Bills"
+          description="All Firstout supplier bills"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+          pagination
+        />
       ) : total === 0 ? (
         <>
         <InlineNotification

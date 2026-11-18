@@ -1,15 +1,16 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
-import { Button, InlineNotification, Stack, Tag, Tile } from "@carbon/react";
+import { LoadingRegion } from "@/components/page-loading";
+import { Button, InlineNotification, SkeletonText, Stack, Tag, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  PartyHistoryLoading,
   PurchaseHistoryTable,
   SupplierPricesTable,
 } from "@/components/records/history-tables";
-import { PartyRecords } from "@/components/records/party-records";
+import { PartyRecords, PartyRecordsLoading } from "@/components/records/party-records";
 import { PartyArchiveAction } from "@/components/party-archive-actions";
 import { canMutateCatalogue, getSupplier, setSupplierArchived, type Supplier } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -43,7 +44,28 @@ export default function SupplierDetailPage() {
   }, [user, loadSupplier]);
 
   if (loading || (supplier !== null && supplier.id !== params.id)) {
-    return <PageLoading kind="form" label="Loading…" />;
+    return (
+      <Stack gap={6} className="firstout-loading-motion">
+        <div>
+          <Button kind="ghost" size="sm" onClick={() => router.push("/suppliers")}>Back to suppliers</Button>
+          <SkeletonText heading width="min(22rem, 85%)" />
+        </div>
+        <LoadingRegion label="Loading supplier…">
+          <Stack gap={6}>
+            <Tile>
+              <h2 className="cds--type-productive-heading-03">Account</h2>
+              <Stack gap={2} orientation="horizontal">
+                <span className="cds--type-body-01">Default currency</span>
+                <SkeletonText width="3rem" />
+              </Stack>
+            </Tile>
+            <PartyRecordsLoading announce={false} />
+            <PartyHistoryLoading type="prices" />
+            <PartyHistoryLoading type="purchases" />
+          </Stack>
+        </LoadingRegion>
+      </Stack>
+    );
   }
 
   if (error || !supplier) {

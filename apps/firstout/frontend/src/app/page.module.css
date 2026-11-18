@@ -40,6 +40,9 @@
   align-items: flex-start;
   gap: var(--cds-spacing-05, 1rem);
 }
+.overviewLoading {
+  align-self: stretch;
+}
 .shortcuts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

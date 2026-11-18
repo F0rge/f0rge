@@ -241,9 +241,30 @@ function sumLinesExVat(lines: LineForm[], skusById: Map<string, Sku>): number {
   }, 0);
 }
 
+function LaybysLoading({ route = false }: { route?: boolean }) {
+  const table = (
+    <PageLoading
+      label="Loading laybys…"
+      title="Laybys"
+      description="Open laybys and payment progress"
+      columns={TABLE_HEADERS.map(({ header }) => header)}
+      pagination
+    />
+  );
+  return route ? (
+    <Stack gap={6}>
+      <div>
+        <h1 className="cds--type-productive-heading-04">Laybys</h1>
+        <p className="cds--type-body-01">Manage open laybys, process deposits, and track layby inventory.</p>
+      </div>
+      {table}
+    </Stack>
+  ) : table;
+}
+
 export default function LaybysPage() {
   return (
-    <Suspense fallback={<PageLoading label="Loading laybys…" />}>
+    <Suspense fallback={<LaybysLoading route />}>
       <LaybysPageContent />
     </Suspense>
   );
@@ -664,10 +685,7 @@ function LaybysPageContent() {
         </div>
       ) : null}
 
-      {loading ? (
-        <PageLoading label="Loading laybys…" />
-      ) : (
-        <div className="firstout-catalogue-panel">
+      <div className="firstout-catalogue-panel">
           <div className="firstout-catalogue-toolbar">
             <div className="firstout-catalogue-toolbar__left">
               <TextInput
@@ -696,7 +714,9 @@ function LaybysPageContent() {
             </div>
           </div>
 
-          {total === 0 ? (
+          {loading ? (
+            <LaybysLoading />
+          ) : total === 0 ? (
             <InlineNotification
               kind="info"
               title="No laybys"
@@ -793,8 +813,7 @@ function LaybysPageContent() {
             />
             </>
           )}
-        </div>
-      )}
+      </div>
 
       <Modal
         open={createOpen && !duplicateOpen}

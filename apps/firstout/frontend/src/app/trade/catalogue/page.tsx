@@ -1,6 +1,6 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingField, LoadingRegion } from "@/components/page-loading";
 
 import { Button, InlineNotification, Select, SelectItem, Stack } from "@carbon/react";
 import { useAuth as useClerkAuth } from "@clerk/nextjs";
@@ -11,6 +11,17 @@ import { useAuth } from "@/lib/auth";
 import { portalAccessUrl, tradeAuthUrl } from "@/lib/trade-auth";
 import { ClerkAccountButton } from "@/components/clerk-account-button";
 import { TradeCatalogue } from "@/components/trade-catalogue";
+
+function TradePortalLoading() {
+  return (
+    <main className="firstout-trade-page">
+      <Stack gap={6}>
+        <h1 className="cds--type-productive-heading-04">Trade portal</h1>
+        <LoadingRegion label="Loading trade portal…"><LoadingField /></LoadingRegion>
+      </Stack>
+    </main>
+  );
+}
 
 function TradePortal() {
   const { isLoaded, isSignedIn } = useClerkAuth();
@@ -32,7 +43,7 @@ function TradePortal() {
     return () => { cancelled = true; };
   }, [isLoaded, isSignedIn]);
 
-  if (!isLoaded) return <PageLoading kind="form" label="Loading sign-in…" />;
+  if (!isLoaded) return <TradePortalLoading />;
   if (!isSignedIn) return <main className="firstout-onboarding-page"><Stack gap={5}>
     <h1 className="cds--type-productive-heading-04">Trade portal</h1>
     <p>Sign in with your Clerk account to open your approved trade accounts.</p>
@@ -48,7 +59,7 @@ function TradePortal() {
       </div>
     </div>
     {error ? <InlineNotification kind="error" title="Trade accounts" subtitle={error} hideCloseButton /> : null}
-    {loading ? <PageLoading kind="form" label="Loading trade accounts…" /> : <>
+    {loading ? <LoadingRegion label="Loading trade accounts…"><LoadingField label="Business and customer account" /></LoadingRegion> : <>
       {access.length ? <Select id="trade-account" labelText="Business and customer account" value={selected?.id ?? ""} onChange={(event) => router.push(event.target.value ? portalAccessUrl(event.target.value) : "/trade/catalogue")}>
         <SelectItem value="" text="Choose an approved account" />
         {access.map((entry) => <SelectItem key={entry.id} value={entry.id} text={`${entry.organisation_name} — ${entry.customer_name}`} />)}
@@ -60,5 +71,5 @@ function TradePortal() {
 }
 
 export default function TradeCataloguePage() {
-  return <Suspense fallback={<PageLoading label="Loading trade portal…" />}><TradePortal /></Suspense>;
+  return <Suspense fallback={<TradePortalLoading />}><TradePortal /></Suspense>;
 }

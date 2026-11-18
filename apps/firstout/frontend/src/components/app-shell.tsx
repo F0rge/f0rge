@@ -12,6 +12,8 @@ import {
   SideNavMenu,
   SideNavMenuItem,
   SkipToContent,
+  SkeletonPlaceholder,
+  SkeletonText,
   Theme,
 } from "@carbon/react";
 import {
@@ -81,6 +83,7 @@ import {
 } from "@/lib/nav";
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { PageLoading } from "@/components/page-loading";
+import loadingStyles from "@/components/auth-loading.module.css";
 import { HeaderSearch } from "@/components/header-search";
 import {
   getNarrowViewportServerSnapshot,
@@ -273,13 +276,14 @@ export function AppShell({ children }: AppShellProps) {
       data-compact={narrow ? "true" : "false"}
     >
       <Theme theme="g100">
-        <Header aria-label="Firstout">
+        <Header aria-label="Firstout" className={loading ? "firstout-loading-motion" : undefined}>
           <SkipToContent />
           {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
           <HeaderMenuButton
             aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
             isActive={expanded}
             isCollapsible
+            disabled={loading}
             onClick={toggleSideNavExpanded}
           />
           <HeaderName
@@ -294,31 +298,57 @@ export function AppShell({ children }: AppShellProps) {
             <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
           </HeaderName>
           <div className="firstout-header-organisation">
-            {!loading && <StaffOrganizationSwitcher />}
+            {loading
+              ? <SkeletonPlaceholder className={loadingStyles.headerOrganisation} aria-hidden="true" />
+              : <StaffOrganizationSwitcher />}
           </div>
           <HeaderGlobalBar>
-            {!loading && <HeaderSearch />}
-            <span className="firstout-header-user" title={user?.email}>
-              {user?.display_name || user?.email}
-            </span>
-            {!loading && <HeaderGlobalAction
-              aria-label="Log out"
-              tooltipAlignment="end"
-              onClick={() => void handleLogout()}
-            >
-              <Logout size={20} />
-            </HeaderGlobalAction>}
+            {loading ? (
+              <>
+                <div className="firstout-header-search" aria-hidden="true">
+                  <SkeletonPlaceholder className={loadingStyles.headerSearch} />
+                </div>
+                <div className="firstout-header-user" aria-hidden="true">
+                  <SkeletonText className={loadingStyles.headerUser} width="5rem" />
+                </div>
+                <div className={loadingStyles.headerAction} aria-hidden="true"><SkeletonPlaceholder /></div>
+              </>
+            ) : (
+              <>
+                <HeaderSearch />
+                <span className="firstout-header-user" title={user?.email}>
+                  {user?.display_name || user?.email}
+                </span>
+                <HeaderGlobalAction
+                  aria-label="Log out"
+                  tooltipAlignment="end"
+                  onClick={() => void handleLogout()}
+                >
+                  <Logout size={20} />
+                </HeaderGlobalAction>
+              </>
+            )}
           </HeaderGlobalBar>
         </Header>
         <SideNav
           aria-label="Firstout sections"
-          className="firstout-side-nav"
-          expanded={expanded}
+          aria-hidden={loading || undefined}
+          className={loading ? "firstout-side-nav firstout-loading-motion" : "firstout-side-nav"}
+          expanded={expanded && !(narrow && loading)}
           isRail={!narrow}
           isPersistent={!narrow}
           onOverlayClick={() => setSideNavExpanded(false)}
         >
-          <SideNavItems>
+          {loading ? (
+            <div className={loadingStyles.navigation} aria-hidden="true">
+              {Array.from({ length: 8 }, (_, index) => (
+                <div className={loadingStyles.navItem} key={index}>
+                  <SkeletonPlaceholder />
+                  {expanded && <SkeletonText width="5rem" />}
+                </div>
+              ))}
+            </div>
+          ) : <SideNavItems>
             {renderNavLink(HOME_NAV_ITEM.href, HOME_NAV_ITEM.label)}
             {renderNavMenu(
               "Catalogue",
@@ -339,13 +369,13 @@ export function AppShell({ children }: AppShellProps) {
             {salesNavItems.length ? renderNavMenu("Sales", Store, isSalesPath(pathname), salesNavItems, "sales") : null}
             {renderNavMenu("Books", Finance, isBooksPath(pathname), BOOKS_NAV_ITEMS, "books")}
             {renderNavMenu("Admin", Settings, isAdminPath(pathname), adminItems, "admin")}
-          </SideNavItems>
+          </SideNavItems>}
         </SideNav>
       </Theme>
       <Theme theme="g10">
         <main id="main-content" className="firstout-main">
           <AppBreadcrumb />
-          {loading ? <PageLoading label="Loading your workspace…" /> : children}
+          {loading ? <PageLoading kind="status" label="Loading your workspace…" /> : children}
         </main>
       </Theme>
     </div>

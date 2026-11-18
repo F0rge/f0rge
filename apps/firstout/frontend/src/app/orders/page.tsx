@@ -1,6 +1,6 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingRegion, PageLoading } from "@/components/page-loading";
 import {
   Button,
   Checkbox,
@@ -10,6 +10,7 @@ import {
   Pagination,
   Select,
   SelectItem,
+  SkeletonText,
   Stack,
   Table,
   TableBody,
@@ -308,7 +309,11 @@ export default function OrdersPage() {
         <section aria-labelledby="storefront-handoffs-heading">
           <Stack gap={3}>
             <h2 id="storefront-handoffs-heading">Storefront handoffs</h2>
-            {handoffs.length === 0 ? <p>No Storefront handoffs recorded.</p> : null}
+            {handoffs.length === 0 && (loading ? (
+              <LoadingRegion label="Loading Storefront handoffs…">
+                <SkeletonText paragraph lineCount={3} width="65%" />
+              </LoadingRegion>
+            ) : <p>No Storefront handoffs recorded.</p>)}
             {handoffs.map((handoff) => (
               <Stack
                 key={handoff.id}
@@ -391,10 +396,12 @@ export default function OrdersPage() {
           </Stack>
         </section>
       ) : null}
-      {loading ? <PageLoading label="Loading orders…" /> : null}
-      {canMutate ? <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+      {canMutate && loading && orders.length === 0 ? (
+        <PageLoading label="Loading orders…" columns={TABLE_HEADERS.map(({ header }) => header)} pagination />
+      ) : canMutate ? <>
+      <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
         {({ rows: tableRows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-          <TableContainer>
+          <TableContainer aria-busy={loading}>
             <Table {...getTableProps()}>
               <TableHead>
                 <TableRow>
@@ -498,8 +505,7 @@ export default function OrdersPage() {
           </TableContainer>
         )}
       </DataTable>
-      : null}
-      {canMutate ? <Pagination
+      <Pagination
         page={page}
         pageSize={pageSize}
         pageSizes={[10, 25, 50]}
@@ -508,7 +514,8 @@ export default function OrdersPage() {
           setPage(nextPage);
           setPageSize(nextSize);
         }}
-      /> : null}
+      />
+      </> : null}
       <Modal
         open={Boolean(confirmRow)}
         modalHeading="Confirm sales order"

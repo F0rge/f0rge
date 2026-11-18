@@ -154,7 +154,23 @@ export default function StocktakesPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading stocktakes…" />
+        <Stack gap={6}>
+          <div>
+            <h1 className="cds--type-productive-heading-04">Stocktakes</h1>
+            <p className="cds--type-body-01">
+              Count on-hand stock for one location. Choose a category to count only those SKUs.
+            </p>
+          </div>
+          {canMutate ? (
+            <PageLoading kind="form" label="Loading count options…" fields={["Location", "Category"]} />
+          ) : null}
+          <PageLoading
+            label="Loading stocktakes…"
+            title="History"
+            description="Completed and cancelled stocktakes"
+            columns={["Location", "Category", "Status", "Started", "Completed"]}
+          />
+        </Stack>
       ) : active ? (
         <StocktakeSession
           key={active.id}

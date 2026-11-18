@@ -15,6 +15,7 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { PageLoading } from "@/components/page-loading";
 import { ApiError, PAGE_SIZES, type ListParams, type Page } from "@/lib/api";
 
 export type RecordsColumn<T> = {
@@ -106,7 +107,17 @@ export function RecordsTable<T>({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
-      <TableContainer title={title} description={description}>
+      {loading && rows.length === 0 ? (
+        <PageLoading
+          label={`Loading ${title.toLowerCase()}…`}
+          title={title}
+          description={description}
+          columns={columns.map(({ header }) => header)}
+          pagination
+          size="sm"
+        />
+      ) : <>
+      <TableContainer title={title} description={description} aria-busy={loading}>
         <Table size="sm">
           <TableHead>
             <TableRow>
@@ -118,7 +129,7 @@ export function RecordsTable<T>({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length}>{loading ? "Loading…" : emptyText}</TableCell>
+                <TableCell colSpan={columns.length}>{emptyText}</TableCell>
               </TableRow>
             ) : (
               rows.map((row, index) => (
@@ -142,6 +153,7 @@ export function RecordsTable<T>({
           setPageSize(nextSize);
         }}
       />
+      </>}
     </Stack>
   );
 }

@@ -138,6 +138,10 @@ function CatalogueScreen() {
     <RecordWorkspace adapter={adapter} refreshKey={refreshKey}
       onCreate={allowed ? () => router.push("/catalogue/new") : undefined} createLabel="New SKU"
       onEdit={allowed ? (item) => setEditing(item) : undefined}
+      loadingDetails={{
+        tabs: ["Overview", "Pricing"],
+        fields: ["Retail price (incl. VAT)", "Sales setting", ...(canViewCost ? ["Unit cost"] : []), "Preferred supplier", "Supplier ref", "Planned lead time", "Observed lead time", "Cartons", "Reorder minimum"],
+      }}
       onExport={exportCatalogue}
       headerActions={allowed ? <Button kind="tertiary" renderIcon={DocumentImport} onClick={() => router.push("/import")}>Import</Button> : undefined}
       renderSelectionActions={({ ids, query }) => <><Button kind="ghost" size="sm" renderIcon={Printer} disabled={batchBusy} onClick={() => void batchAction(query, ids, "print")}>Print labels</Button><Button kind="ghost" size="sm" renderIcon={DocumentExport} disabled={batchBusy} onClick={() => void batchAction(query, ids, "export")}>Export selected</Button></>}

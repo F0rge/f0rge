@@ -1,8 +1,9 @@
 "use client";
 
-import { Tag } from "@carbon/react";
+import { Stack, TableContainer, Tag } from "@carbon/react";
 import Link from "next/link";
 import { useCallback } from "react";
+import { LoadingField, LoadingTableRows } from "@/components/page-loading";
 
 import {
   listPurchaseHistory,
@@ -101,6 +102,34 @@ const PRICE_COLUMNS: RecordsColumn<SupplierPriceRow>[] = [
   { key: "latest_price", header: "Latest", render: (row) => money(row.currency, row.latest_price) },
   { key: "fixed_price", header: "Fixed", render: (row) => money(row.currency, row.fixed_price) },
 ];
+
+export function PartyHistoryLoading({ type }: { type: "sales" | "purchases" | "prices" }) {
+  const table = {
+    sales: {
+      title: "Sales history",
+      description: "Imported Cin7 invoices and credit notes. Archive only: no journals, no stock.",
+      columns: SALES_COLUMNS,
+    },
+    purchases: {
+      title: "Purchase history",
+      description: "Imported Cin7 supplier invoices in their original currency. Amounts need cost access.",
+      columns: PURCHASE_COLUMNS,
+    },
+    prices: {
+      title: "Supplier prices",
+      description: "Cin7 price by supplier. Prices need cost access.",
+      columns: PRICE_COLUMNS,
+    },
+  }[type];
+  return (
+    <Stack gap={4}>
+      <LoadingField />
+      <TableContainer title={table.title} description={table.description}>
+        <LoadingTableRows columns={table.columns.map(({ header }) => header)} size="sm" pagination />
+      </TableContainer>
+    </Stack>
+  );
+}
 
 export function SalesHistoryTable({ customerId }: { customerId?: string }) {
   const load = useCallback(

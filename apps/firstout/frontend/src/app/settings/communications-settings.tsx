@@ -1,6 +1,6 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { CommunicationsLoading } from "./loading-layout";
 
 import {
   Button,
@@ -173,7 +173,7 @@ export function CommunicationsSettings() {
   }
 
   if (loading) {
-    return <PageLoading kind="form" label="Loading communications…" />;
+    return <CommunicationsLoading />;
   }
 
   return (

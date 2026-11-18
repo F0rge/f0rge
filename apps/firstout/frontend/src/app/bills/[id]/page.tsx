@@ -1,12 +1,13 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingField, LoadingRegion, LoadingTableRows } from "@/components/page-loading";
 import {
   Button,
   FileUploaderDropContainer,
   FileUploaderItem,
   InlineNotification,
   Modal,
+  SkeletonText,
   Stack,
   Tag,
   Table,
@@ -178,7 +179,40 @@ export default function BillDetailPage() {
   }
 
   if (loading) {
-    return <PageLoading kind="form" label="Loading bill…" />;
+    return (
+      <Stack gap={6}>
+        <div style={{ alignSelf: "flex-start" }}>
+          <Button kind="ghost" size="sm" onClick={() => router.push("/bills")}>← Back to bills</Button>
+        </div>
+        <LoadingRegion label="Loading bill…">
+          <Stack gap={6}>
+            <div aria-hidden="true">
+              <SkeletonText heading width="14rem" />
+              <SkeletonText width="min(24rem, 85%)" />
+              <SkeletonText width="5rem" />
+            </div>
+            <Stack gap={4} orientation="horizontal" aria-hidden="true">
+              <LoadingField width="10rem" height="3rem" />
+              {canMutate && <LoadingField width="10rem" height="3rem" />}
+            </Stack>
+            <div className="firstout-bill-summary">
+              {["Total", "FX to ZAR", "Total ZAR", "Paid", "Paid ZAR", "Balance owing", "Balance ZAR"].map((label) => (
+                <Stack key={label} gap={2} orientation="horizontal">
+                  <span className="cds--type-body-01">{label}:</span>
+                  <SkeletonText width="5rem" />
+                </Stack>
+              ))}
+            </div>
+            <TableContainer title="Payments" description="Money paid against this bill">
+              <LoadingTableRows columns={["Number", "Paid on", "Amount", "ZAR"]} rows={2} />
+            </TableContainer>
+            <TableContainer title="Lines" description="Bill line items">
+              <LoadingTableRows columns={["Description", "Qty", "Unit", "Amount"]} />
+            </TableContainer>
+          </Stack>
+        </LoadingRegion>
+      </Stack>
+    );
   }
 
   if (!bill) {

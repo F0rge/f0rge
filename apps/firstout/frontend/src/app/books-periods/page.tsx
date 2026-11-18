@@ -236,7 +236,11 @@ export default function BooksPeriodsPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading periods…" />
+        <PageLoading
+          label="Loading periods…"
+          title="Periods"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+        />
       ) : periods.length === 0 ? (
         <InlineNotification
           kind="info"

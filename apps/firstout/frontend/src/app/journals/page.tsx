@@ -432,7 +432,13 @@ export default function JournalsPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading journals…" />
+        <PageLoading
+          label="Loading journals…"
+          title="Journals"
+          description="General ledger journal entries"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+          pagination
+        />
       ) : total === 0 ? (
         <InlineNotification
           kind="info"

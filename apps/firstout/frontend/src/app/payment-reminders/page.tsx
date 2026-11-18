@@ -1,10 +1,11 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingRegion, PageLoading } from "@/components/page-loading";
 import {
   Button,
   DataTable,
   InlineNotification,
+  SkeletonText,
   Stack,
   Table,
   TableBody,
@@ -204,12 +205,23 @@ export default function PaymentRemindersPage() {
       <div>
         <h1 className="cds--type-productive-heading-04">Payment reminders</h1>
         <p className="cds--type-body-01">
-          {board?.enabled
+          {loading && !board
+            ? "Review due, upcoming, and held invoice reminders."
+            : board?.enabled
             ? "Automatic reminders are on. The daily job sends at most one email per invoice."
             : "Automatic reminders are off. You can still send or skip a step from this list."}
         </p>
       </div>
-      {loading ? <PageLoading label="Loading…" /> : null}
+      {loading && !board ? (
+        <Stack gap={5}>
+          <PageLoading label="Loading due reminders…" title="Due" columns={HEADERS.map(({ header }) => header)} rows={2} />
+          <PageLoading label="Loading upcoming reminders…" title="Upcoming" columns={HEADERS.map(({ header }) => header)} rows={2} />
+          <Stack gap={3}>
+            <h2 className="cds--type-productive-heading-03">Paused or opted out</h2>
+            <LoadingRegion label="Loading held reminders…"><SkeletonText width="60%" /></LoadingRegion>
+          </Stack>
+        </Stack>
+      ) : null}
       {error ? (
         <InlineNotification kind="error" title="Error" subtitle={error} lowContrast hideCloseButton />
       ) : null}

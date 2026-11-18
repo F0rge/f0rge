@@ -1,8 +1,7 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
-
-import { Button, InlineNotification, Stack } from "@carbon/react";
+import { LoadingField, LoadingRegion } from "@/components/page-loading";
+import { Button, InlineNotification, SkeletonText, Stack } from "@carbon/react";
 import { useAuth as useClerkAuth, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -54,9 +53,16 @@ export default function AcceptTradeInvitationPage() {
     } finally { setSaving(false); }
   }
 
-  if (!ready || !isLoaded) return <PageLoading kind="form" label="Loading invitation…" />;
   return <main className="firstout-onboarding-page"><section className="firstout-onboarding-content"><Stack gap={5}>
     <h1 className="cds--type-productive-heading-04">Accept trade invitation</h1>
+    {!ready || !isLoaded ? (
+      <LoadingRegion label="Loading invitation…">
+        <Stack gap={5}>
+          <div aria-hidden="true"><SkeletonText paragraph lineCount={2} width="75%" /></div>
+          <LoadingField width="10rem" height="3rem" />
+        </Stack>
+      </LoadingRegion>
+    ) : <>
     {error ? <InlineNotification kind="error" title="Invitation" subtitle={error} hideCloseButton /> : null}
     {!token ? <p>Open the original invitation link, or ask the business for a new one. Invitation links expire and can be used once.</p> : !isSignedIn ? <>
       <p>Sign in or create your Clerk account with the invited email, then return here to accept access.</p>
@@ -69,5 +75,6 @@ export default function AcceptTradeInvitationPage() {
       <Button kind="ghost" disabled={saving} onClick={() => void logout(tradeAuthUrl("login", "/trade/accept-invitation")).then(() => router.replace(tradeAuthUrl("login", "/trade/accept-invitation")))}>Use another account</Button>
     </>}
     <Button kind="ghost" href="/trade/catalogue">Your trade accounts</Button>
+    </>}
   </Stack></section></main>;
 }

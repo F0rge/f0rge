@@ -763,7 +763,16 @@ export default function BankReconciliationPage() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading…" />
+        <Stack gap={4}>
+          <PageLoading
+            label="Loading unmatched bank lines…"
+            title="Unmatched queue"
+            description="Lines for the selected recon account that are not yet matched."
+            columns={UNMATCHED_HEADERS.map(({ header }) => header)}
+          />
+          <PageLoading kind="form" label="Loading imports…" fields={["Import"]} />
+          <PageLoading label="Loading import lines…" title="Import lines" columns={LINE_HEADERS.map(({ header }) => header)} />
+        </Stack>
       ) : (
         <Stack gap={4}>
           {canMutate ? (

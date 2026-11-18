@@ -35,7 +35,7 @@ import {
 } from "@/lib/organisations";
 import { OrganisationDetails } from "@/components/organisation-details";
 import { OrganisationInvitations } from "@/components/organisation-invitations";
-import { PageLoading } from "@/components/page-loading";
+import { OrganisationLoading } from "./loading-layout";
 import styles from "./organisation.module.css";
 
 type PageData = {
@@ -111,10 +111,6 @@ export default function OrganisationPage() {
   const allocated = (data?.organisation.member_count ?? 0) + pending;
   const activeLocations = locations.filter(isActiveLocation);
 
-  if (loading)
-    return (
-      <PageLoading kind="organisation" label="Loading organisation settings…" />
-    );
   return (
     <Stack gap={7} className={styles.workspace}>
       <header className="firstout-page-header">
@@ -128,7 +124,7 @@ export default function OrganisationPage() {
           Create another organisation
         </Link>
       </header>
-      {error ? (
+      {!loading && error ? (
         <>
           <InlineNotification
             kind="error"
@@ -148,7 +144,7 @@ export default function OrganisationPage() {
           </Button>
         </>
       ) : null}
-      {data ? (
+      {loading ? <OrganisationLoading /> : data ? (
         <>
           <div
             className={`${styles.intro} firstout-tone-info firstout-section-accent`}

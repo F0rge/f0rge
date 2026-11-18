@@ -211,7 +211,7 @@ function PicksPageContent() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading picks…" />
+        <PicksLoading />
       ) : picks.length === 0 ? (
         <InlineNotification
           kind="info"
@@ -325,9 +325,29 @@ function PicksPageContent() {
   );
 }
 
+function PicksLoading({ route = false }: { route?: boolean }) {
+  const table = (
+    <PageLoading
+      label="Loading picks…"
+      title="Picks"
+      description="Kit component allocations"
+      columns={TABLE_HEADERS.map(({ header }) => header)}
+    />
+  );
+  return route ? (
+    <Stack gap={6}>
+      <div>
+        <h1 className="cds--type-productive-heading-04">Picks</h1>
+        <p className="cds--type-body-01">Allocate kit components or reserved sales-order lines across locations.</p>
+      </div>
+      {table}
+    </Stack>
+  ) : table;
+}
+
 export default function PicksPage() {
   return (
-    <Suspense fallback={<PageLoading label="Loading picks…" />}>
+    <Suspense fallback={<PicksLoading route />}>
       <PicksPageContent />
     </Suspense>
   );

@@ -113,7 +113,12 @@ export default function TransitPage() {
 
       <div>
       {loading ? (
-        <PageLoading label="Loading transit…" />
+        <PageLoading
+          label="Loading transit…"
+          title="In transit"
+          description="POs on water or landed"
+          columns={TABLE_HEADERS.map(({ header }) => header)}
+        />
       ) : orders.length === 0 ? (
         <InlineNotification
           kind="info"
@@ -167,7 +172,14 @@ export default function TransitPage() {
 
       <div>
         <h2 className="cds--type-productive-heading-03">On-order inventory</h2>
-        {loading ? null : onOrderSkus.length === 0 ? (
+        {loading ? (
+          <PageLoading
+            label="Loading on-order stock…"
+            title="On order"
+            description="Stock in transit — not sellable until received"
+            columns={["Our ref", "Name", "On order", "On hand", "Sellable"]}
+          />
+        ) : onOrderSkus.length === 0 ? (
           <p className="cds--type-body-01">No SKUs currently on order.</p>
         ) : (
           <TableContainer title="On order" description="Stock in transit — not sellable until received">

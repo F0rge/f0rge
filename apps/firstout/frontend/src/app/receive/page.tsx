@@ -220,7 +220,7 @@ function ReceivePageContent() {
       ) : null}
 
       {loading ? (
-        <PageLoading label="Loading…" />
+        <PageLoading kind="form" label="Loading receiving options…" fields={["Purchase order", "Location"]} />
       ) : (
         <Stack gap={5}>
           <Select
@@ -284,7 +284,14 @@ function ReceivePageContent() {
 
       <div>
         <h2 className="cds--type-productive-heading-03">Current inventory</h2>
-        {loading ? null : inventory.length === 0 ? (
+        {loading ? (
+          <PageLoading
+            label="Loading inventory…"
+            title="Inventory"
+            description="On-hand after receive"
+            columns={["Our ref", "Name", "On order", "On hand", "Sellable", "Unit cost ZAR"]}
+          />
+        ) : inventory.length === 0 ? (
           <p className="cds--type-body-01">No inventory records yet.</p>
         ) : (
           <TableContainer title="Inventory" description="On-hand after receive">
@@ -329,9 +336,28 @@ function ReceivePageContent() {
   );
 }
 
+function ReceiveRouteLoading() {
+  return (
+    <Stack gap={6}>
+      <div>
+        <h1 className="cds--type-productive-heading-04">Receive</h1>
+        <p className="cds--type-body-01">
+          Receive a landed purchase order into an active location. PO must be landed before receive succeeds.
+        </p>
+      </div>
+      <PageLoading kind="form" label="Loading receiving options…" fields={["Purchase order", "Location"]} />
+      <div>
+        <h2 className="cds--type-productive-heading-03">Current inventory</h2>
+        <PageLoading label="Loading inventory…" title="Inventory" description="On-hand after receive"
+          columns={["Our ref", "Name", "On order", "On hand", "Sellable", "Unit cost ZAR"]} />
+      </div>
+    </Stack>
+  );
+}
+
 export default function ReceivePage() {
   return (
-    <Suspense fallback={<PageLoading label="Loading…" />}>
+    <Suspense fallback={<ReceiveRouteLoading />}>
       <ReceivePageContent />
     </Suspense>
   );

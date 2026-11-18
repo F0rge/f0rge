@@ -59,6 +59,7 @@ export interface RecordWorkspaceProps<T extends { id: string }> {
   createLabel?: string;
   onEdit?: (item: T) => void;
   renderDetails: (item: T, context: RecordWorkspaceContext) => ReactNode;
+  loadingDetails?: { tabs: readonly string[]; fields: readonly string[] };
   headerActions?: ReactNode;
   renderSelectionActions?: (selection: { ids: string[]; query: WorkspaceQuery }) => ReactNode;
   onExport?: (query: WorkspaceQuery) => void | Promise<void>;

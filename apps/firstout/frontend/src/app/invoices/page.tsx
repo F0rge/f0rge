@@ -88,9 +88,30 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function InvoicesLoading({ route = false }: { route?: boolean }) {
+  const table = (
+    <PageLoading
+      label="Loading invoices…"
+      title="Invoices"
+      description="All Firstout tax invoices"
+      columns={TABLE_HEADERS.map(({ header }) => header)}
+      pagination
+    />
+  );
+  return route ? (
+    <Stack gap={6}>
+      <div>
+        <h1 className="cds--type-productive-heading-04">Invoices</h1>
+        <p className="cds--type-body-01">Tax invoices with 15% VAT.</p>
+      </div>
+      {table}
+    </Stack>
+  ) : table;
+}
+
 export default function InvoicesPage() {
   return (
-    <Suspense fallback={<PageLoading label="Loading invoices…" />}>
+    <Suspense fallback={<InvoicesLoading route />}>
       <InvoicesPageContent />
     </Suspense>
   );
@@ -321,7 +342,7 @@ function InvoicesPageContent() {
         </div>
 
       {loading ? (
-        <PageLoading label="Loading invoices…" />
+        <InvoicesLoading />
       ) : total === 0 ? (
         <>
         <InlineNotification

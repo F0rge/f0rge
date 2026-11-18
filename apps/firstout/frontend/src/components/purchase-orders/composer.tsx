@@ -26,7 +26,7 @@ import {
   Tile,
 } from "@carbon/react";
 
-import { PageLoading } from "@/components/page-loading";
+import { LoadingField, LoadingRegion } from "@/components/page-loading";
 import {
   createPurchaseOrder,
   listProformas,
@@ -388,7 +388,21 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
             />
           )}
           {loading ? (
-            <PageLoading kind="form" label="Loading order form…" />
+            <LoadingRegion label="Loading supplier choices…">
+              <div className={styles.stack}>
+                <p className="cds--type-body-01">
+                  Choose who you are ordering from. The supplier determines the factory currency.
+                </p>
+                <div className={styles.twoColumns}>
+                  <LoadingField label="Supplier (required)" />
+                  <LoadingField label="Factory currency" helperText="From the supplier’s default currency." />
+                  <LoadingField label="Supplier reference (optional)" helperText="The supplier’s reference. Your PO number is assigned on creation." />
+                  <LoadingField label="Linked proforma (optional)" helperText="Only this supplier’s active proformas are available." />
+                </div>
+                <TextArea id="loading-po-notes" labelText="Order notes (optional)" rows={3} disabled />
+                <Checkbox id="loading-po-approval" labelText="Submit for owner approval" disabled />
+              </div>
+            </LoadingRegion>
           ) : (
             choices &&
             !loadError && (

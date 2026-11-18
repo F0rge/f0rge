@@ -184,7 +184,23 @@ export default function AdjustmentsPage() {
       />
 
       {loading ? (
-        <PageLoading label="Loading adjustments…" />
+        <Stack gap={6}>
+          <div>
+            <h1 className="cds--type-productive-heading-04">Stock Adjustment</h1>
+            <p className="cds--type-body-01">
+              Create an adjustment to correct on-hand inventory levels or write off damaged stock.
+            </p>
+          </div>
+          {canMutate ? (
+            <PageLoading kind="form" label="Loading adjustment options…" fields={["Location", "Reason", "Notes"]} />
+          ) : null}
+          <PageLoading
+            label="Loading adjustments…"
+            title="History"
+            description="Completed and cancelled adjustments"
+            columns={["Location", "Reason", "Status", "Date"]}
+          />
+        </Stack>
       ) : active ? (
         <AdjustmentDraft
           key={active.id}
