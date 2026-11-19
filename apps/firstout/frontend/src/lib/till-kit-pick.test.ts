@@ -125,6 +125,10 @@ describe("till cart snapshot", () => {
     };
     saveTillCart(snapshot, store);
     expect(loadTillCart(store)).toEqual(snapshot);
+    expect(saveTillCart({ ...snapshot, held: true }, store)).toBe(true);
+    expect(loadTillCart(store)).toEqual({ ...snapshot, held: true });
+    expect(loadTillCart(memoryStore())).toBeNull();
+    expect(saveTillCart(snapshot, { ...store, setItem: () => { throw new Error("Storage unavailable"); } })).toBe(false);
     clearTillCart(store);
     expect(loadTillCart(store)).toBeNull();
   });

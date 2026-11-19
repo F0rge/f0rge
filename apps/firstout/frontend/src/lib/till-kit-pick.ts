@@ -18,6 +18,7 @@ export type TillCartSnapshot = {
   customerId: string;
   pickId: string;
   linkedPickIds: Record<string, string>;
+  held?: boolean;
   lines: { skuId: string; qty: number; discountPercent: number }[];
 };
 
@@ -37,10 +38,11 @@ type KeyValueStore = {
 const TILL_CART_KEY = "firstout.till.cart";
 
 function browserSession(): KeyValueStore | null {
-  if (typeof sessionStorage === "undefined") {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
     return null;
   }
-  return sessionStorage;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -139,12 +141,15 @@ export function nextTillStateAfterKitConfirm<TCart>(
   };
 }
 
-export function saveTillCart(snapshot: TillCartSnapshot, store?: KeyValueStore): void {
+export function saveTillCart(snapshot: TillCartSnapshot, store?: KeyValueStore): boolean {
   const target = store ?? browserSession();
-  if (!target) {
-    return;
+  if (!target) return false;
+  try {
+    target.setItem(TILL_CART_KEY, JSON.stringify(snapshot));
+    return true;
+  } catch {
+    return false;
   }
-  target.setItem(TILL_CART_KEY, JSON.stringify(snapshot));
 }
 
 export function loadTillCart(store?: KeyValueStore): TillCartSnapshot | null {
@@ -152,11 +157,9 @@ export function loadTillCart(store?: KeyValueStore): TillCartSnapshot | null {
   if (!target) {
     return null;
   }
-  const raw = target.getItem(TILL_CART_KEY);
-  if (!raw) {
-    return null;
-  }
   try {
+    const raw = target.getItem(TILL_CART_KEY);
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     const row = asRecord(parsed);
     if (!row || !Array.isArray(row.lines)) {
@@ -185,6 +188,7 @@ export function loadTillCart(store?: KeyValueStore): TillCartSnapshot | null {
       customerId: typeof row.customerId === "string" ? row.customerId : "",
       pickId: typeof row.pickId === "string" ? row.pickId : "",
       linkedPickIds,
+      ...(row.held === true ? { held: true } : {}),
       lines,
     };
   } catch {

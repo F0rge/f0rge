@@ -274,6 +274,8 @@ export default function TillPage() {
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [locationId, setLocationId] = useState("");
+  const [pendingShowroom, setPendingShowroom] = useState<string | null>(null);
+  const [resumedSale, setResumedSale] = useState(false);
   const [skuId, setSkuId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
@@ -288,6 +290,7 @@ export default function TillPage() {
   const [tender, setTender] = useState<TillTender>("cash");
   const [amountTendered, setAmountTendered] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadSucceeded, setLoadSucceeded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<TillSaleResult | null>(null);
@@ -321,6 +324,7 @@ export default function TillPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadSucceeded(false);
     setError(null);
     try {
       const [
@@ -360,6 +364,7 @@ export default function TillPage() {
           settingsData.default_till_location_id,
         );
       });
+      setLoadSucceeded(true);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load till data.",
@@ -481,7 +486,7 @@ export default function TillPage() {
   }, [cartKitKey]);
 
   useEffect(() => {
-    if (loading || cartReady) return;
+    if (!loadSucceeded || cartReady) return;
     const snapshot = loadTillCart();
     if (!snapshot) {
       setCartReady(true);
@@ -516,6 +521,7 @@ export default function TillPage() {
       if (snapshot.customerId) setCustomerId(snapshot.customerId);
       setPickId(snapshot.pickId);
       setLinkedPickIds(snapshot.linkedPickIds);
+      setResumedSale(snapshot.held === true && lines.length > 0);
       if (lines.length !== snapshot.lines.length)
         setError(
           "Some saved items are no longer available for sale and have not been restored. Archived kits require their original, unconsumed till pick at its exact quantity.",
@@ -530,7 +536,7 @@ export default function TillPage() {
     return () => {
       cancelled = true;
     };
-  }, [cartReady, customers, loading, skus, tillPicks]);
+  }, [cartReady, customers, loadSucceeded, skus, tillPicks]);
 
   useEffect(() => {
     if (!cartReady) {
@@ -641,7 +647,7 @@ export default function TillPage() {
 
   const applyScan = useCallback(
     (code: string, allowOurRef: boolean, addQty = 1): boolean => {
-      if (!canSell || !locationId) {
+      if (!cartReady || !canSell || !locationId) {
         return false;
       }
       const trimmed = code.trim();
@@ -667,7 +673,7 @@ export default function TillPage() {
       focusScanField();
       return true;
     },
-    [canSell, cartQtyBySku, floorOnHandFor, focusScanField, locationId, priceLists, selectedCustomer, skus],
+    [canSell, cartQtyBySku, cartReady, floorOnHandFor, focusScanField, locationId, priceLists, selectedCustomer, skus],
   );
 
   useEffect(() => {
@@ -855,6 +861,18 @@ export default function TillPage() {
     }
   }
 
+  function changeShowroom(next: string) {
+    setPendingShowroom(null);
+    setLocationId(next);
+    setSkuId("");
+    setCart([]);
+    setResumedSale(false);
+    setPickId("");
+    setLinkedPickIds({});
+    setKitBlocks([]);
+    setCreditBlock(null);
+  }
+
   async function handleCompleteSale() {
     if (!saleValid || !pricePreview) {
       return;
@@ -887,6 +905,7 @@ export default function TillPage() {
       setLastBuyerName(selectedCustomer?.name ?? WALK_IN_CUSTOMER_NAME);
       setLastSale(result);
       setCart([]);
+      setResumedSale(false);
       setSkuId("");
       setCustomerId("");
       setPickId("");
@@ -1088,9 +1107,10 @@ export default function TillPage() {
           <Button
             kind="tertiary"
             renderIcon={Bookmark}
-            disabled={!cartReady || loading || submitting}
+            disabled={!cartReady || loading || submitting || cart.length === 0}
             onClick={() => {
-              saveTillCart({
+              const saved = saveTillCart({
+                held: true,
                 locationId,
                 customerId,
                 pickId,
@@ -1101,7 +1121,11 @@ export default function TillPage() {
                   discountPercent: line.discountPercent,
                 })),
               });
-              router.push("/");
+              if (saved) {
+                router.push("/");
+              } else {
+                setError("This browser could not save the cart. Keep the till open until the sale is complete.");
+              }
             }}
           >
             Hold sale
@@ -1118,6 +1142,32 @@ export default function TillPage() {
           lowContrast
         />
       ) : null}
+
+      {cart.length > 0 && (
+        <InlineNotification
+          kind={resumedSale ? "success" : "info"}
+          title={resumedSale ? "Held sale resumed" : "Holding a sale"}
+          subtitle={resumedSale
+            ? "Check the payment method and amount before completing the sale."
+            : "Keep this tab open and return to Till in this tab to resume."}
+          lowContrast
+          hideCloseButton
+        />
+      )}
+
+      <Modal
+        open={pendingShowroom !== null}
+        modalHeading="Change showroom?"
+        primaryButtonText="Change showroom"
+        secondaryButtonText="Keep current sale"
+        danger
+        onRequestClose={() => setPendingShowroom(null)}
+        onRequestSubmit={() => {
+          if (pendingShowroom !== null) changeShowroom(pendingShowroom);
+        }}
+      >
+        <p>Changing the showroom will clear the current cart.</p>
+      </Modal>
 
       {kitBlocks.map((kit) => (
         <Stack key={`${kit.sku_id}-${kit.qty}`} gap={3}>
@@ -1161,9 +1211,13 @@ export default function TillPage() {
                     labelText="Showroom"
                     value={locationId}
                     onChange={(event) => {
-                      setLocationId(event.target.value);
-                      setSkuId("");
-                      setCart([]);
+                      const next = event.target.value;
+                      if (next === locationId) return;
+                      if (cart.length) {
+                        setPendingShowroom(next);
+                      } else {
+                        changeShowroom(next);
+                      }
                     }}
                   >
                     <SelectItem value="" text="Select showroom" />
