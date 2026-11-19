@@ -41,10 +41,22 @@ class McpTokenActivityResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    action: Literal["generated", "rotated", "revoked", "catalogue_searched"]
+    action: Literal[
+        "generated",
+        "rotated",
+        "revoked",
+        "catalogue_searched",
+        "actions_found",
+        "action_read",
+        "write_requested",
+        "write_replayed",
+        "write_confirmed",
+    ]
+    action_name: Optional[str]
+    operation_id: Optional[uuid.UUID]
     source: Literal["firstout", "mcp"]
     token_name: str
-    result: Literal["success", "denied"]
+    result: Literal["success", "denied", "failed"]
     occurred_at: datetime
 
 

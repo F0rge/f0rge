@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.account import Account
 from app.models.journal import JournalEntry, JournalLine, JournalStatus
 from f0rge_db.crud import BaseCRUD
+from f0rge_db.organisation import tenant_id_ctx
 
 
 class AccountCRUD(BaseCRUD):
@@ -18,7 +19,11 @@ class AccountCRUD(BaseCRUD):
 
     async def get_by_id(self, account_id: uuid.UUID) -> Optional[Account]:
         return (
-            await self.db.execute(select(Account).where(Account.id == account_id))
+            await self.db.execute(
+                select(Account).where(
+                    Account.id == account_id, Account.team_id == tenant_id_ctx.get()
+                )
+            )
         ).scalar_one_or_none()
 
     async def get_by_code(self, code: str) -> Optional[Account]:

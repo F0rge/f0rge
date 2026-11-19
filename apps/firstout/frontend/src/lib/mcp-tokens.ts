@@ -16,10 +16,12 @@ export type McpToken = {
 
 export type McpTokenActivity = {
   id: string;
-  action: "generated" | "rotated" | "revoked" | "catalogue_searched";
+  action: "generated" | "rotated" | "revoked" | "catalogue_searched" | "actions_found" | "action_read" | "write_requested" | "write_replayed" | "write_confirmed";
+  action_name: string | null;
+  operation_id: string | null;
   source: "firstout" | "mcp";
   token_name: string;
-  result: "success" | "denied";
+  result: "success" | "denied" | "failed";
   occurred_at: string;
 };
 

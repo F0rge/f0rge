@@ -12,6 +12,7 @@ from app.models.inventory import LocationStock, SkuStock
 from app.models.purchase_order import PoLine, PurchaseOrder, PurchaseOrderStatus
 from app.models.sku import Sku
 from f0rge_db.crud import BaseCRUD
+from f0rge_db.organisation import current_tenant_id
 
 
 @dataclass(frozen=True)
@@ -30,12 +31,20 @@ class ReorderCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
-    async def list_below_min(self, sku_ids: Optional[list[uuid.UUID]] = None) -> list[ReorderRow]:
+    async def list_below_min(
+        self,
+        sku_ids: Optional[list[uuid.UUID]] = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[ReorderRow]:
+        team_id = current_tenant_id()
         on_hand_subq = (
             select(
                 LocationStock.sku_id.label("sku_id"),
                 func.coalesce(func.sum(LocationStock.on_hand), 0).label("on_hand"),
             )
+            .where(LocationStock.team_id == team_id)
             .group_by(LocationStock.sku_id)
             .subquery()
         )
@@ -46,7 +55,11 @@ class ReorderCRUD(BaseCRUD):
                 func.coalesce(func.sum(PoLine.qty), 0).label("open_po_qty"),
             )
             .join(PurchaseOrder, PurchaseOrder.id == PoLine.po_id)
-            .where(PurchaseOrder.status == PurchaseOrderStatus.OPEN)
+            .where(
+                PurchaseOrder.team_id == team_id,
+                PoLine.team_id == team_id,
+                PurchaseOrder.status == PurchaseOrderStatus.OPEN,
+            )
             .where(PurchaseOrder.is_archive.is_(False))
             .where(PoLine.sku_id.isnot(None))
             .group_by(PoLine.sku_id)
@@ -71,15 +84,18 @@ class ReorderCRUD(BaseCRUD):
                 (Sku.reorder_min - on_hand_col - on_order_col).label("suggested_qty"),
             )
             .outerjoin(on_hand_subq, on_hand_subq.c.sku_id == Sku.id)
-            .outerjoin(SkuStock, SkuStock.sku_id == Sku.id)
+            .outerjoin(SkuStock, (SkuStock.sku_id == Sku.id) & (SkuStock.team_id == team_id))
             .outerjoin(open_po_subq, open_po_subq.c.sku_id == Sku.id)
-            .where(Sku.reorder_min.isnot(None))
+            .where(Sku.team_id == team_id, Sku.reorder_min.isnot(None))
             .where(Sku.is_archived.is_(False))
             .where(total_col < Sku.reorder_min)
             .order_by(Sku.our_ref)
         )
         if sku_ids is not None:
             stmt = stmt.where(Sku.id.in_(sku_ids))
+
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
 
         result = await self.db.execute(stmt)
         rows: list[ReorderRow] = []

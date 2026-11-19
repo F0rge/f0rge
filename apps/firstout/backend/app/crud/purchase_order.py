@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -191,6 +191,22 @@ class LocationStockCRUD(BaseCRUD):
                 )
             )
         ).scalar_one_or_none()
+
+    async def lock_for_movement(
+        self, sku_id: uuid.UUID, location_id: uuid.UUID
+    ) -> Optional[LocationStock]:
+        # A first receipt has no balance row to lock. Serialize both insertion and
+        # updates for this pair, including the bin totals and weighted cost.
+        await self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"firstout:stock:{location_id}:{sku_id}"},
+        )
+        return await self.db.scalar(
+            select(LocationStock)
+            .where(LocationStock.sku_id == sku_id, LocationStock.location_id == location_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
 
     async def list_by_location_id(self, location_id: uuid.UUID) -> list[LocationStock]:
         result = await self.db.execute(

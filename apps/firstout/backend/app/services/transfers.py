@@ -8,7 +8,6 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
-from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.transfer import TransferCRUD
 from app.crud.user import UserCRUD
@@ -46,7 +45,6 @@ class TransferService:
         self.location_crud = LocationCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.user_crud = UserCRUD(db)
-        self.location_stock_crud = LocationStockCRUD(db)
         self.stock_movements = StockMovementService(db)
         self.bins = LocationBinService(db)
         self.stocktakes = StocktakeService(db)
@@ -63,6 +61,11 @@ class TransferService:
         return self._to_response(await self._get_or_404(transfer_id))
 
     async def create(self, data: TransferCreate, user_id: uuid.UUID) -> TransferResponse:
+        async with unit_of_work(self.db):
+            return await self.stage_draft(data, user_id)
+
+    async def stage_draft(self, data: TransferCreate, user_id: uuid.UUID) -> TransferResponse:
+        """Save a draft in the caller's transaction."""
         if data.from_location_id == data.to_location_id:
             raise ValidationError("Source and destination locations must differ")
 
@@ -115,14 +118,17 @@ class TransferService:
             pick_id=pick_id,
             lines=lines,
         )
-        async with unit_of_work(self.db):
-            transfer.transfer_number = await self.crud.get_next_transfer_number()
-            await self.crud.add_and_flush(transfer)
+        transfer.transfer_number = await self.crud.get_next_transfer_number()
+        await self.crud.add_and_flush(transfer)
         return self._to_response(await self._get_or_404(transfer.id))
 
     async def dispatch(self, transfer_id: uuid.UUID, user_id: uuid.UUID) -> TransferResponse:
+        async with unit_of_work(self.db):
+            return await self.stage_dispatch(transfer_id, user_id)
+
+    async def stage_dispatch(self, transfer_id: uuid.UUID, user_id: uuid.UUID) -> TransferResponse:
         await assert_date_postable(self.db, datetime.date.today())
-        transfer = await self._get_or_404(transfer_id)
+        transfer = await self._get_or_404(transfer_id, for_update=True)
         if transfer.status != TransferStatus.DRAFT:
             raise ConflictError("Transfer is not a draft")
 
@@ -132,28 +138,23 @@ class TransferService:
         await self._active_location(transfer.to_location_id, "Destination")
 
         now = datetime.datetime.utcnow()
-        async with unit_of_work(self.db):
-            for line in transfer.lines:
-                source_stock = await self.location_stock_crud.get_by_sku_and_location(
-                    line.sku_id,
-                    from_location.id,
-                )
-                if source_stock is None or source_stock.unit_cost_zar is None:
-                    raise ConflictError("Source location has no unit cost for this SKU")
-                line.unit_cost_zar = source_stock.unit_cost_zar
-                await self.stock_movements.apply_outgoing_qty(
-                    sku_id=line.sku_id,
-                    location_id=from_location.id,
-                    qty=line.qty_dispatched,
-                    user_id=user_id,
-                    source=UnitCostAuditSource.RECEIVE,
-                    note="Transfer out",
-                    bin_id=line.from_bin_id,
-                    record_audit=False,
-                )
-            transfer.status = TransferStatus.IN_TRANSIT
-            transfer.dispatched_at = now
-            transfer.dispatched_by_user_id = user_id
+        for line in sorted(transfer.lines, key=lambda line: (line.sku_id, line.id)):
+            stock = await self.stock_movements.apply_outgoing_qty(
+                sku_id=line.sku_id,
+                location_id=from_location.id,
+                qty=line.qty_dispatched,
+                user_id=user_id,
+                source=UnitCostAuditSource.RECEIVE,
+                note="Transfer out",
+                bin_id=line.from_bin_id,
+                record_audit=False,
+            )
+            if stock.unit_cost_zar is None:
+                raise ConflictError("Source location has no unit cost for this SKU")
+            line.unit_cost_zar = stock.unit_cost_zar
+        transfer.status = TransferStatus.IN_TRANSIT
+        transfer.dispatched_at = now
+        transfer.dispatched_by_user_id = user_id
 
         return self._to_response(await self._get_or_404(transfer_id))
 
@@ -163,8 +164,20 @@ class TransferService:
         data: TransferReceive,
         user_id: uuid.UUID,
     ) -> TransferResponse:
+        async with unit_of_work(self.db):
+            result = await self.stage_receipt(transfer_id, data, user_id)
+
+        if result.pick_id is not None:
+            from app.services.picks import PickService
+
+            await PickService(self.db).stage_after_transfer_received(result.pick_id, user_id)
+        return result
+
+    async def stage_receipt(
+        self, transfer_id: uuid.UUID, data: TransferReceive, user_id: uuid.UUID
+    ) -> TransferResponse:
         await assert_date_postable(self.db, datetime.date.today())
-        transfer = await self._get_or_404(transfer_id)
+        transfer = await self._get_or_404(transfer_id, for_update=True)
         if transfer.status != TransferStatus.IN_TRANSIT:
             raise ConflictError("Transfer is not in transit")
 
@@ -183,39 +196,33 @@ class TransferService:
             raise NotFoundError("User not found")
 
         now = datetime.datetime.utcnow()
-        async with unit_of_work(self.db):
-            for line in transfer.lines:
-                qty_received = payload[line.id]
-                if qty_received != line.qty_dispatched:
-                    raise ValidationError("qty_received must equal qty_dispatched")
-                if line.unit_cost_zar is None:
-                    raise ConflictError("Source location has no unit cost for this SKU")
-                await self.stock_movements.apply_incoming_qty(
-                    sku_id=line.sku_id,
-                    location_id=to_location.id,
-                    qty=qty_received,
-                    unit_cost_zar=line.unit_cost_zar,
-                    user_id=user_id,
-                    source=UnitCostAuditSource.RECEIVE,
-                    note="Transfer in",
-                    bin_id=line.to_bin_id,
-                    record_audit=False,
-                )
-                line.qty_received = qty_received
-            transfer.status = TransferStatus.RECEIVED
-            transfer.received_at = now
-            transfer.received_by_user_id = user_id
-            transfer.received_display_name = _display_name(user)
-
-        if transfer.pick_id is not None:
-            from app.services.picks import PickService
-
-            await PickService(self.db).stage_after_transfer_received(transfer.pick_id, user_id)
+        for line in sorted(transfer.lines, key=lambda line: (line.sku_id, line.id)):
+            qty_received = payload[line.id]
+            if qty_received != line.qty_dispatched:
+                raise ValidationError("qty_received must equal qty_dispatched")
+            if line.unit_cost_zar is None:
+                raise ConflictError("Source location has no unit cost for this SKU")
+            await self.stock_movements.apply_incoming_qty(
+                sku_id=line.sku_id,
+                location_id=to_location.id,
+                qty=qty_received,
+                unit_cost_zar=line.unit_cost_zar,
+                user_id=user_id,
+                source=UnitCostAuditSource.RECEIVE,
+                note="Transfer in",
+                bin_id=line.to_bin_id,
+                record_audit=False,
+            )
+            line.qty_received = qty_received
+        transfer.status = TransferStatus.RECEIVED
+        transfer.received_at = now
+        transfer.received_by_user_id = user_id
+        transfer.received_display_name = _display_name(user)
 
         return self._to_response(await self._get_or_404(transfer_id))
 
     async def cancel(self, transfer_id: uuid.UUID, user_id: uuid.UUID) -> TransferResponse:
-        transfer = await self._get_or_404(transfer_id)
+        transfer = await self._get_or_404(transfer_id, for_update=True)
         if transfer.status == TransferStatus.RECEIVED:
             raise ConflictError("Cannot cancel a received transfer")
         if transfer.status == TransferStatus.CANCELLED:
@@ -227,7 +234,7 @@ class TransferService:
             await self.stocktakes.assert_location_unlocked(transfer.from_location_id)
             from_location = await self._active_location(transfer.from_location_id, "Source")
             async with unit_of_work(self.db):
-                for line in transfer.lines:
+                for line in sorted(transfer.lines, key=lambda line: (line.sku_id, line.id)):
                     if line.unit_cost_zar is None:
                         raise ConflictError("Source location has no unit cost for this SKU")
                     await self.stock_movements.apply_incoming_qty(
@@ -274,8 +281,8 @@ class TransferService:
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 
-    async def _get_or_404(self, transfer_id: uuid.UUID) -> Transfer:
-        transfer = await self.crud.get_by_id(transfer_id)
+    async def _get_or_404(self, transfer_id: uuid.UUID, *, for_update: bool = False) -> Transfer:
+        transfer = await self.crud.get_by_id(transfer_id, for_update=for_update)
         if transfer is None:
             raise NotFoundError("Transfer not found")
         return transfer

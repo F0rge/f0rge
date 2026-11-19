@@ -18,6 +18,11 @@ import { McpTokenDialog, type TokenAction } from "./token-dialog";
 import styles from "./mcp-tokens.module.css";
 
 const activityLabels: Record<McpTokenActivity["action"], string> = {
+  actions_found: "Looked up available actions",
+  action_read: "Read a record",
+  write_requested: "Requested a change",
+  write_replayed: "Retrieved an earlier request",
+  write_confirmed: "Confirmed a change",
   generated: "Generated token",
   rotated: "Replaced token",
   revoked: "Turned off token",
@@ -129,8 +134,9 @@ function TokenDirectory({ organisation }: { organisation: string }) {
                 <ul className={styles.activity}>
                   {directory.data.activity.map((item) => (
                     <li key={item.id}>
-                      <strong>{activityLabels[item.action]}</strong>
+                      <strong>{activityLabels[item.action]}{item.action_name && " · " + item.action_name.replaceAll("_", " ")}</strong>
                       <span>{item.token_name} · {item.source === "mcp" ? "MCP" : "Firstout"} · <TokenDate value={item.occurred_at} showTime /></span>
+                      {item.result === "failed" && <Tag size="sm" type="red">Failed</Tag>}
                       {item.result === "denied" && <Tag size="sm" type="red">Denied</Tag>}
                     </li>
                   ))}

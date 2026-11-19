@@ -3519,14 +3519,17 @@ export function reopenBooksPeriod(id: string, reason: string): Promise<BooksPeri
   });
 }
 
-export type AuditSource = "books" | "cost";
+export type AuditSource = "books" | "cost" | "mcp";
 
 export type AuditEvent = {
   at: string;
   source: AuditSource;
+  origin?: "firstout" | "mcp" | null;
+  token_id?: string | null;
+  operation_id?: string | null;
   actor: string;
   summary: string;
-  href: string;
+  href: string | null;
 };
 
 export function listAuditEvents(params?: {

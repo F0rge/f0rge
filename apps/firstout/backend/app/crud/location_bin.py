@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload
 
 from app.models.location_bin import BinStock, LocationBin
 from f0rge_db.crud import BaseCRUD
+from f0rge_db.organisation import tenant_id_ctx
 
 
 class LocationBinCRUD(BaseCRUD):
@@ -18,7 +19,11 @@ class LocationBinCRUD(BaseCRUD):
 
     async def get_by_id(self, bin_id: uuid.UUID) -> Optional[LocationBin]:
         return (
-            await self.db.execute(select(LocationBin).where(LocationBin.id == bin_id))
+            await self.db.execute(
+                select(LocationBin).where(
+                    LocationBin.id == bin_id, LocationBin.team_id == tenant_id_ctx.get()
+                )
+            )
         ).scalar_one_or_none()
 
     async def list_by_location(self, location_id: uuid.UUID) -> list[LocationBin]:
@@ -99,7 +104,9 @@ class BinStockCRUD(BaseCRUD):
     ) -> Optional[BinStock]:
         return (
             await self.db.execute(
-                select(BinStock).where(
+                select(BinStock)
+                .execution_options(populate_existing=True)
+                .where(
                     BinStock.sku_id == sku_id,
                     BinStock.bin_id == bin_id,
                 )

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3003"]
     jwt_secret: str = ""
     record_workspace_signing_key: str = ""
+    mcp_writes_enabled: bool = True
     mcp_token_signing_key: str = ""
     mcp_public_url: str = "https://api.firstout.co.za/mcp"
     clerk_enabled: bool = False

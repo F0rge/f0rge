@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.mcp_token import McpTokenCRUD
 from app.exceptions import ForbiddenError, McpTokensUnconfiguredError
-from app.models.mcp_token import McpToken, McpTokenActivity
+from app.models.mcp_token import McpActionActivity, McpToken, McpTokenActivity
 from app.schemas.mcp_token import (
     McpAccessResponse,
     McpTokenActivityResponse,
@@ -117,19 +117,32 @@ class McpTokenService:
         token.last_used_at = datetime.now(UTC)
         return token
 
-    def record(self, token: McpToken, action: str, source: str, result: str = "success") -> None:
-        self.crud.add(
-            McpTokenActivity(
-                team_id=self.team_id,
-                user_id=token.user_id,
-                token_id=token.id,
-                token_name=token.name,
-                action=action,
-                source=source,
-                result=result,
-                occurred_at=datetime.now(UTC),
-            )
+    def record(
+        self,
+        token: McpToken,
+        action: str,
+        source: str,
+        result: str = "success",
+        *,
+        action_name: Optional[str] = None,
+        operation_id: Optional[uuid.UUID] = None,
+    ) -> None:
+        fields = dict(
+            team_id=self.team_id,
+            user_id=token.user_id,
+            token_id=token.id,
+            token_name=token.name,
+            action=action,
+            source=source,
+            result=result,
+            occurred_at=datetime.now(UTC),
         )
+        if action in {"generated", "rotated", "revoked", "catalogue_searched"}:
+            self.crud.add(McpTokenActivity(**fields))
+        else:
+            self.crud.add(
+                McpActionActivity(**fields, action_name=action_name, operation_id=operation_id)
+            )
 
     async def _lock_owned(self, user_id: uuid.UUID, token_id: uuid.UUID) -> McpToken:
         token = await self.crud.lock_owned(user_id, token_id)

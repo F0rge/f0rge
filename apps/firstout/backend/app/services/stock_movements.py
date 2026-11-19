@@ -36,6 +36,17 @@ class StockMovementService:
         if qty_delta == 0:
             return await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
 
+        loc_stock = await self.location_stock_crud.lock_for_movement(sku_id, location_id)
+        return await self._apply_bin_qty_delta(sku_id, location_id, qty_delta, bin_id, loc_stock)
+
+    async def _apply_bin_qty_delta(
+        self,
+        sku_id: uuid.UUID,
+        location_id: uuid.UUID,
+        qty_delta: Decimal,
+        bin_id: Optional[uuid.UUID],
+        loc_stock: Optional[LocationStock],
+    ) -> LocationStock:
         incoming = qty_delta > 0
         loc_bin = await self.bins.resolve_for_movement(
             location_id,
@@ -43,7 +54,6 @@ class StockMovementService:
             incoming=incoming,
         )
 
-        loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
         if loc_stock is None:
             if not incoming:
                 raise ConflictError("Insufficient on-hand quantity")
@@ -88,17 +98,17 @@ class StockMovementService:
         qty = exact_quantity(qty)
         if qty <= 0:
             raise ValidationError("Incoming quantity must be positive")
-        loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+        loc_stock = await self.location_stock_crud.lock_for_movement(sku_id, location_id)
         old_on_hand = loc_stock.on_hand if loc_stock is not None else 0
         old_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
 
-        updated = await self.apply_bin_qty_delta(
+        updated = await self._apply_bin_qty_delta(
             sku_id,
             location_id,
             qty,
-            bin_id=bin_id,
+            bin_id,
+            loc_stock,
         )
-        assert updated is not None
 
         new_on_hand = updated.on_hand
         if old_on_hand == 0:
@@ -138,17 +148,17 @@ class StockMovementService:
         qty = exact_quantity(qty)
         if qty <= 0:
             raise ValidationError("Outgoing quantity must be positive")
-        loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+        loc_stock = await self.location_stock_crud.lock_for_movement(sku_id, location_id)
         if loc_stock is None or loc_stock.on_hand < qty:
             raise ConflictError("Insufficient on-hand quantity")
         old_cost = loc_stock.unit_cost_zar
-        updated = await self.apply_bin_qty_delta(
+        updated = await self._apply_bin_qty_delta(
             sku_id,
             location_id,
             -qty,
-            bin_id=bin_id,
+            bin_id,
+            loc_stock,
         )
-        assert updated is not None
         if record_audit and old_cost is not None:
             await self.cost_audit.record(
                 sku_id=sku_id,
@@ -175,7 +185,7 @@ class StockMovementService:
         if delta == 0:
             return await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
         if delta > 0:
-            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+            loc_stock = await self.location_stock_crud.lock_for_movement(
                 sku_id,
                 location_id,
             )
@@ -216,7 +226,7 @@ class StockMovementService:
         qty = exact_quantity(qty)
         if qty < 0:
             raise ValidationError("On-hand quantity must be nonnegative")
-        loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+        loc_stock = await self.location_stock_crud.lock_for_movement(sku_id, location_id)
         current = loc_stock.on_hand if loc_stock is not None else 0
         delta = qty - current
         if delta == 0:

@@ -66,7 +66,7 @@ class CostAuditService:
         if data.unit_cost_zar <= 0:
             raise ValidationError("unit_cost_zar must be positive")
 
-        loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+        loc_stock = await self.location_stock_crud.lock_for_movement(
             sku_id,
             data.location_id,
         )

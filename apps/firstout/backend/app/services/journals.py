@@ -54,10 +54,25 @@ class JournalService:
     async def create(
         self, data: JournalCreate, user_id: Optional[uuid.UUID] = None
     ) -> JournalResponse:
+        amounts = await self.validate_create(data)
+        async with unit_of_work(self.db):
+            entry = await self.stage_create(data, user_id, amounts)
+        return self._to_response(await self._get_or_404(entry.id))
+
+    async def validate_create(
+        self, data: JournalCreate
+    ) -> list[tuple[JournalLineCreate, Decimal, Decimal]]:
         if data.status == JournalStatus.VOIDED:
             raise ValidationError("Cannot create a voided journal")
         await assert_date_postable(self.db, data.entry_date)
-        amounts = self._validated_line_amounts(data.lines)
+        return self._validated_line_amounts(data.lines)
+
+    async def stage_create(
+        self,
+        data: JournalCreate,
+        user_id: Optional[uuid.UUID],
+        amounts: list[tuple[JournalLineCreate, Decimal, Decimal]],
+    ) -> JournalEntry:
         entry_id = uuid.uuid4()
         entry = JournalEntry(
             id=entry_id,
@@ -69,34 +84,33 @@ class JournalService:
             source=data.source,
             journal_number=None,
         )
-        async with unit_of_work(self.db):
-            entry.journal_number = await self.crud.get_next_journal_number()
-            await self.crud.add_and_flush(entry)
-            for line, debit, credit in amounts:
-                account = await self.account_crud.get_by_id(line.account_id)
-                if account is None:
-                    raise NotFoundError("Account not found")
-                await self.crud.add_line(
-                    JournalLine(
-                        entry_id=entry.id,
-                        account_id=account.id,
-                        debit_zar=debit,
-                        credit_zar=credit,
-                    )
+        entry.journal_number = await self.crud.get_next_journal_number()
+        await self.crud.add_and_flush(entry)
+        for line, debit, credit in amounts:
+            account = await self.account_crud.get_by_id(line.account_id)
+            if account is None:
+                raise NotFoundError("Account not found")
+            await self.crud.add_line(
+                JournalLine(
+                    entry_id=entry.id,
+                    account_id=account.id,
+                    debit_zar=debit,
+                    credit_zar=credit,
                 )
-            action = (
-                BooksEventAction.POSTED
-                if data.status == JournalStatus.POSTED
-                else BooksEventAction.CREATED
             )
-            await self.events.record(
-                BooksDocumentType.JOURNAL,
-                entry.id,
-                action,
-                actor_user_id=user_id,
-            )
+        action = (
+            BooksEventAction.POSTED
+            if data.status == JournalStatus.POSTED
+            else BooksEventAction.CREATED
+        )
+        await self.events.record(
+            BooksDocumentType.JOURNAL,
+            entry.id,
+            action,
+            actor_user_id=user_id,
+        )
 
-        return self._to_response(await self._get_or_404(entry.id))
+        return entry
 
     async def post(
         self, journal_id: uuid.UUID, user_id: Optional[uuid.UUID] = None

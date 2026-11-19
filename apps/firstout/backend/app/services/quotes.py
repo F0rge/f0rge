@@ -74,6 +74,12 @@ class QuotesService:
         return await self._to_response(await self._get_or_404(quote_id), viewer_user_id)
 
     async def create(self, data: QuoteCreate, user_id: uuid.UUID) -> QuoteResponse:
+        quote = await self.prepare_draft(data, user_id)
+        async with unit_of_work(self.db):
+            await self.stage_draft(quote)
+        return await self._to_response(await self._get_or_404(quote.id), user_id)
+
+    async def prepare_draft(self, data: QuoteCreate, user_id: uuid.UUID) -> Quote:
         customer = await self._require_customer(data.customer_id)
         assert_customer_active(customer)
         role = await self._actor_role(user_id)
@@ -83,7 +89,7 @@ class QuotesService:
             allow_price_override=role == UserRole.OWNER.value,
             allow_discount=role in _DISCOUNT_ROLES,
         )
-        quote = Quote(
+        return Quote(
             quote_number="",
             customer_id=customer.id,
             status=QuoteStatus.DRAFT,
@@ -95,10 +101,10 @@ class QuotesService:
             created_by_user_id=user_id,
             lines=line_models,
         )
-        async with unit_of_work(self.db):
-            quote.quote_number = await self.crud.get_next_quote_number()
-            await self.crud.add_and_flush(quote)
-        return await self._to_response(await self._get_or_404(quote.id), user_id)
+
+    async def stage_draft(self, quote: Quote) -> None:
+        quote.quote_number = await self.crud.get_next_quote_number()
+        await self.crud.add_and_flush(quote)
 
     async def create_from_snapshots(
         self,
