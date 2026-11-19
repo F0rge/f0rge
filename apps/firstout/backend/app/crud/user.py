@@ -136,13 +136,13 @@ class ScopedDirectoryCRUD(BaseCRUD):
 
 
 class TeamCRUD(ScopedDirectoryCRUD):
-    async def lock_current(self) -> None:
+    async def lock_current(self, *, shared: bool = False) -> None:
         # Serialize staff updates without blocking foreign-key checks when
         # a concurrent invitation acceptance creates a user or membership.
         await self.db.execute(
             select(Team.id)
             .where(Team.id == require_directory_tenant())
-            .with_for_update(key_share=True)
+            .with_for_update(read=shared, key_share=not shared)
         )
 
     async def get_by_id(self, team_id: uuid.UUID) -> Optional[Team]:

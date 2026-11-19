@@ -210,7 +210,10 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
         # default business-table ACLs are missing for these particular tables.
         async with admin.begin() as conn:
             await conn.execute(
-                sa.text(f'REVOKE ALL ON TABLE held_sales, held_sale_operations FROM "{name}"')
+                sa.text(
+                    "REVOKE ALL ON TABLE held_sales, held_sale_operations, "
+                    f'mcp_operations, mcp_action_activity FROM "{name}"'
+                )
             )
         assert (await migrate(url, runtime_url, COMMIT))["replayed"] is True
         monkeypatch.setenv("SOURCE_COMMIT", COMMIT)
@@ -241,7 +244,12 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
                 )
                 is True
             )
-            for table in ("held_sales", "held_sale_operations"):
+            for table in (
+                "held_sales",
+                "held_sale_operations",
+                "mcp_operations",
+                "mcp_action_activity",
+            ):
                 for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                     assert await conn.scalar(
                         sa.text("SELECT has_table_privilege(current_user, :table, :privilege)"),

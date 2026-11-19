@@ -32,6 +32,7 @@ from app.schemas.records import (
 from app.services.permissions import PermissionService
 from app.services.archive_documents import bill_display_number
 from f0rge_core.exceptions import NotFoundError
+from f0rge_db.organisation import current_tenant_id
 
 
 def _like(value: str) -> str:
@@ -140,6 +141,7 @@ class RecordsService:
         date_from: Optional[datetime.date] = None,
         date_to: Optional[datetime.date] = None,
     ) -> Page[SalesHistoryRow]:
+        team_id = current_tenant_id()
         invoices = (
             select(
                 literal("invoice").label("kind"),
@@ -155,26 +157,38 @@ class RecordsService:
                 InvoiceLine.inc_vat.label("inc_vat"),
             )
             .join(InvoiceLine, InvoiceLine.invoice_id == TaxInvoice.id)
-            .where(TaxInvoice.is_archive.is_(True))
+            .where(
+                TaxInvoice.team_id == team_id,
+                InvoiceLine.team_id == team_id,
+                TaxInvoice.is_archive.is_(True),
+            )
         )
-        credits = select(
-            literal("credit_note").label("kind"),
-            ArchiveCreditNote.id,
-            ArchiveCreditNote.document_number,
-            ArchiveCreditNote.issue_date,
-            ArchiveCreditNote.customer_id,
-            ArchiveCreditNoteLine.sku_id,
-            ArchiveCreditNoteLine.description,
-            ArchiveCreditNoteLine.qty,
-            ArchiveCreditNoteLine.ex_vat,
-            ArchiveCreditNoteLine.vat_amount,
-            ArchiveCreditNoteLine.inc_vat,
-        ).join(ArchiveCreditNoteLine, ArchiveCreditNoteLine.credit_note_id == ArchiveCreditNote.id)
+        credits = (
+            select(
+                literal("credit_note").label("kind"),
+                ArchiveCreditNote.id,
+                ArchiveCreditNote.document_number,
+                ArchiveCreditNote.issue_date,
+                ArchiveCreditNote.customer_id,
+                ArchiveCreditNoteLine.sku_id,
+                ArchiveCreditNoteLine.description,
+                ArchiveCreditNoteLine.qty,
+                ArchiveCreditNoteLine.ex_vat,
+                ArchiveCreditNoteLine.vat_amount,
+                ArchiveCreditNoteLine.inc_vat,
+            )
+            .join(
+                ArchiveCreditNoteLine, ArchiveCreditNoteLine.credit_note_id == ArchiveCreditNote.id
+            )
+            .where(ArchiveCreditNote.team_id == team_id, ArchiveCreditNoteLine.team_id == team_id)
+        )
         lines = union_all(invoices, credits).subquery("lines")
         stmt = (
             select(lines, Customer.name.label("customer_name"), Sku.our_ref.label("our_ref"))
-            .outerjoin(Customer, Customer.id == lines.c.customer_id)
-            .outerjoin(Sku, Sku.id == lines.c.sku_id)
+            .outerjoin(
+                Customer, (Customer.id == lines.c.customer_id) & (Customer.team_id == team_id)
+            )
+            .outerjoin(Sku, (Sku.id == lines.c.sku_id) & (Sku.team_id == team_id))
             .order_by(lines.c.issue_date.desc(), lines.c.document_number.desc())
         )
         if customer_id is not None:
@@ -257,7 +271,10 @@ class RecordsService:
         self,
         params: PageParams,
         location_id: Optional[uuid.UUID] = None,
+        *,
+        sku_id: Optional[uuid.UUID] = None,
     ) -> Page[StockByBinRow]:
+        team_id = current_tenant_id()
         stmt = (
             select(
                 Location.id.label("location_id"),
@@ -273,11 +290,19 @@ class RecordsService:
             .join(LocationBin, LocationBin.id == BinStock.bin_id)
             .join(Location, Location.id == LocationBin.location_id)
             .join(Sku, Sku.id == BinStock.sku_id)
-            .where(BinStock.on_hand != 0)
+            .where(
+                BinStock.on_hand != 0,
+                BinStock.team_id == team_id,
+                LocationBin.team_id == team_id,
+                Location.team_id == team_id,
+                Sku.team_id == team_id,
+            )
             .order_by(Location.name, LocationBin.code, Sku.our_ref)
         )
         if location_id is not None:
             stmt = stmt.where(Location.id == location_id)
+        if sku_id is not None:
+            stmt = stmt.where(Sku.id == sku_id)
         if params.q:
             pattern = _like(params.q)
             stmt = stmt.where(or_(Sku.our_ref.ilike(pattern), Sku.name.ilike(pattern)))

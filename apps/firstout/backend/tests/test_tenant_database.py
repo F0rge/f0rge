@@ -905,10 +905,10 @@ async def test_rollback_refuses_additional_tenants_without_disabling_rls(
             sa.text(
                 "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity "
                 "AND oid IN ('public.tenant_invitations'::regclass, 'public.mcp_tokens'::regclass, "
-                "'public.mcp_token_activity'::regclass)"
+                "'public.mcp_token_activity'::regclass, 'public.mcp_operations'::regclass, 'public.mcp_action_activity'::regclass)"
             )
         )
-        assert protected_tables == 3
+        assert protected_tables == 5
         with pytest.raises(RuntimeError, match="additional tenants"):
             await deactivate_rls(owner)
         await owner.rollback()

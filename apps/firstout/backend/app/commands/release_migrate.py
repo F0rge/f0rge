@@ -286,7 +286,8 @@ async def migrate(
                         sa.text(
                             "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "
                             "record_workspace_batches, mcp_tokens, mcp_token_activity, "
-                            f"held_sales, held_sale_operations TO {quoted_role}"
+                            "held_sales, held_sale_operations, "
+                            f"mcp_operations, mcp_action_activity TO {quoted_role}"
                         )
                     )
                 return {

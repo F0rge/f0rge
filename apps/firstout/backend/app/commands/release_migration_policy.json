@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "095_till_held_sales",
+  "target_revision": "096_mcp_operations",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -385,6 +385,10 @@
     },
     "095_till_held_sales": {
       "sha256": "bd942c7e253d37791cb8e9ba31d7bc1cdb142ab4092121e86e80c03bc892e60a",
+      "automatic": true
+    },
+    "096_mcp_operations": {
+      "sha256": "0f7417edfea2c96207f381459ef325f3bbb1f49b9f86f1b2c54c8f74a25a46c0",
       "automatic": true
     }
   }

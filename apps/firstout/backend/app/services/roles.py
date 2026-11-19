@@ -50,6 +50,7 @@ class RoleService:
         return self._to_response(reloaded)
 
     async def update(self, role_id: uuid.UUID, data: RoleUpdate) -> RoleResponse:
+        await TeamCRUD(self.db).lock_current()
         role = await self.crud.get_by_id(role_id)
         if role is None:
             raise NotFoundError("Role not found")

@@ -34,10 +34,22 @@ class PermissionService:
 
     async def require_staff_manager_role(self, user_id: uuid.UUID) -> str:
         """Recheck current staff authority under the caller's Team row lock."""
+        slug = await self._current_member_role(user_id)
+        if slug is None or USERS_MANAGE not in await self._role_keys(slug, refresh=True):
+            raise ForbiddenError("Staff management permission is required")
+        return slug
+
+    async def current_member_has_any(self, user_id: uuid.UUID, keys: tuple[str, ...]) -> bool:
+        slug = await self._current_member_role(user_id)
+        if slug is None:
+            return False
+        return not keys or not (await self._role_keys(slug, refresh=True)).isdisjoint(keys)
+
+    async def _current_member_role(self, user_id: uuid.UUID) -> str | None:
         team_id = require_directory_tenant()
         # Project fresh column values because the request dependencies already loaded
         # the ORM identity and membership, potentially before a concurrent demotion.
-        slug = await self.db.scalar(
+        return await self.db.scalar(
             select(case((Membership.is_legacy_home, User.role), else_=Membership.role))
             .select_from(Membership)
             .join(User, User.id == Membership.user_id)
@@ -51,9 +63,6 @@ class PermissionService:
                 Team.status == "active",
             )
         )
-        if slug is None or USERS_MANAGE not in await self._role_keys(slug, refresh=True):
-            raise ForbiddenError("Staff management permission is required")
-        return slug
 
     async def _key_set(self, user_id: uuid.UUID) -> frozenset[str]:
         user = await self.user_crud.get_by_id(user_id)

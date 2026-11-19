@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.location import Location, LocationType
 from f0rge_db.crud import BaseCRUD
+from f0rge_db.organisation import tenant_id_ctx
 
 
 class LocationCRUD(BaseCRUD):
@@ -16,8 +17,23 @@ class LocationCRUD(BaseCRUD):
 
     async def get_by_id(self, location_id: uuid.UUID) -> Optional[Location]:
         return (
-            await self.db.execute(select(Location).where(Location.id == location_id))
+            await self.db.execute(
+                select(Location)
+                .where(Location.id == location_id, Location.team_id == tenant_id_ctx.get())
+                .execution_options(populate_existing=True)
+            )
         ).scalar_one_or_none()
+
+    async def lock_for_stocktake(self, location_id: uuid.UUID, *, starting: bool) -> bool:
+        # Multiple stock movements can proceed together. Beginning a count must
+        # wait until their balances are final before taking the opening snapshot.
+        stmt = select(Location.id).where(
+            Location.id == location_id, Location.team_id == tenant_id_ctx.get()
+        )
+        locked_id = await self.db.scalar(
+            stmt.with_for_update(key_share=True) if starting else stmt.with_for_update(read=True)
+        )
+        return locked_id is not None
 
     async def list_all(self) -> list[Location]:
         result = await self.db.execute(select(Location).order_by(Location.name))

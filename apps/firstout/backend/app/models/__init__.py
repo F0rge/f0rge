@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from app.models.membership import Membership
-from app.models.mcp_token import McpToken, McpTokenActivity
+from app.models.mcp_operation import McpOperation
+from app.models.mcp_token import McpActionActivity, McpToken, McpTokenActivity
 from app.models.account import Account, AccountType, TaxTreatment
 from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.books_period import BooksPeriod, BooksPeriodStatus
@@ -94,8 +95,10 @@ from app.models.vat201_period import (
 
 __all__ = [
     "Membership",
+    "McpOperation",
     "McpToken",
     "McpTokenActivity",
+    "McpActionActivity",
     "Account",
     "AccountType",
     "BankImport",

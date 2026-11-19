@@ -35,7 +35,11 @@ class StocktakeService:
         self.location_stock_crud = LocationStockCRUD(db)
         self.stock_movements = StockMovementService(db)
 
-    async def assert_location_unlocked(self, location_id: uuid.UUID) -> None:
+    async def assert_location_unlocked(
+        self, location_id: uuid.UUID, *, starting: bool = False
+    ) -> None:
+        if not await self.location_crud.lock_for_stocktake(location_id, starting=starting):
+            raise NotFoundError("Location not found")
         existing = await self.crud.get_in_progress_for_location(location_id)
         if existing is not None:
             raise ConflictError("Location is locked for stocktake")
@@ -47,12 +51,12 @@ class StocktakeService:
         return self._to_response(await self._get_or_404(stocktake_id))
 
     async def start(self, data: StocktakeCreate, user_id: uuid.UUID) -> StocktakeResponse:
+        await self.assert_location_unlocked(data.location_id, starting=True)
         location = await self.location_crud.get_by_id(data.location_id)
         if location is None:
             raise NotFoundError("Location not found")
         if location.is_archived:
             raise ConflictError("Cannot stocktake archived location")
-        await self.assert_location_unlocked(data.location_id)
 
         category = (data.category or "").strip() or None
         skus = await self.sku_crud.list_all(category=category, lifecycle="all")

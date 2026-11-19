@@ -86,7 +86,7 @@ export default function AuditPage() {
     <Stack gap={5}>
       <AdminPageHeader
         title="Audit log"
-        description="Trace financial document and stock cost changes. Select an event to see its record."
+        description="Look up who changed a record or used an MCP token."
       />
       <TableContainer title="Activity register">
         <div className={styles.controls}>
@@ -107,6 +107,7 @@ export default function AuditPage() {
             }}
           >
             <SelectItem value="" text="All sources" />
+            <SelectItem value="mcp" text="MCP tokens" />
             <SelectItem value="books" text="Books" />
             {canViewCostAudit(user) && <SelectItem value="cost" text="Cost" />}
           </Select>
@@ -141,7 +142,7 @@ export default function AuditPage() {
                 </TableHead>
                 <TableBody>
                   {events.map((event, index) => (
-                    <TableRow key={event.href + event.at + index}>
+                    <TableRow key={(event.href ?? "") + event.at + index}>
                       <TableCell>
                         {timestamp.format(new Date(event.at))}
                       </TableCell>
@@ -158,7 +159,7 @@ export default function AuditPage() {
                       </TableCell>
                       <TableCell>
                         <Tag type={event.source === "cost" ? "purple" : "gray"}>
-                          {event.source === "cost" ? "Cost" : "Books"}
+                          {event.source === "mcp" ? (event.origin === "firstout" ? "Firstout" : "MCP") : event.source === "cost" ? "Cost" : "Books"}
                         </Tag>
                       </TableCell>
                       <TableCell>{event.actor}</TableCell>
@@ -193,9 +194,11 @@ export default function AuditPage() {
             <p>
               {selected.actor} · {timestamp.format(new Date(selected.at))} SAST
             </p>
-            <Link className="cds--link" href={selected.href}>
+            {selected.record_id && <p>Record ID · {selected.record_id}</p>}
+            {selected.operation_id && <p>Operation ID · {selected.operation_id}</p>}
+            {selected.href && <Link className="cds--link" href={selected.href}>
               Open related record
-            </Link>
+            </Link>}
           </Stack>
         </section>
       )}

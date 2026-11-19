@@ -4,14 +4,41 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import UUID, String, cast, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.mcp_token import McpToken, McpTokenActivity
+from app.models.mcp_token import McpActionActivity, McpToken, McpTokenActivity
 from app.models.membership import Membership
 from app.models.team import Team
 from app.models.user import User
 from f0rge_db.crud import BaseCRUD
+
+
+def activity_stream(team_id: uuid.UUID, user_id: Optional[uuid.UUID] = None):
+    """Read both generations. Older releases only see the original activity vocabulary."""
+
+    def events(model, name, operation):
+        statement = select(
+            model.id,
+            model.team_id,
+            model.user_id,
+            model.token_id,
+            model.token_name,
+            model.action,
+            model.source,
+            model.result,
+            model.occurred_at,
+            name.label("action_name"),
+            operation.label("operation_id"),
+        ).where(model.team_id == team_id)
+        if user_id is not None:
+            statement = statement.where(model.user_id == user_id)
+        return statement
+
+    return union_all(
+        events(McpTokenActivity, cast(literal(None), String), cast(literal(None), UUID)),
+        events(McpActionActivity, McpActionActivity.action_name, McpActionActivity.operation_id),
+    ).subquery()
 
 
 class McpTokenCRUD(BaseCRUD):
@@ -31,17 +58,12 @@ class McpTokenCRUD(BaseCRUD):
             )
         )
 
-    async def recent_activity(self, user_id: uuid.UUID, limit: int) -> list[McpTokenActivity]:
-        return list(
-            await self.db.scalars(
-                select(McpTokenActivity)
-                .where(
-                    McpTokenActivity.team_id == self.team_id, McpTokenActivity.user_id == user_id
-                )
-                .order_by(McpTokenActivity.occurred_at.desc(), McpTokenActivity.id.desc())
-                .limit(limit)
-            )
+    async def recent_activity(self, user_id: uuid.UUID, limit: int):
+        stream = activity_stream(self.team_id, user_id)
+        rows = await self.db.execute(
+            select(stream).order_by(stream.c.occurred_at.desc(), stream.c.id.desc()).limit(limit)
         )
+        return rows.mappings().all()
 
     async def lock_owned(self, user_id: uuid.UUID, token_id: uuid.UUID) -> Optional[McpToken]:
         return await self.db.scalar(

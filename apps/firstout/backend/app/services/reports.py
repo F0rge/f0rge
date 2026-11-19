@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from f0rge_core.exceptions import NotFoundError
+
 import datetime
 import uuid
 from decimal import Decimal
@@ -728,13 +730,21 @@ class ReportsService:
         self,
         from_date: datetime.date,
         to_date: datetime.date,
+        *,
+        account_id: uuid.UUID | None = None,
     ) -> CashSummaryReport:
         if from_date > to_date:
             raise ValueError("from_date must be on or before to_date")
 
-        bank_accounts = [
-            a for a in await self.account_crud.list_all() if a.is_bank and not a.is_archived
-        ]
+        if account_id is None:
+            bank_accounts = [
+                a for a in await self.account_crud.list_all() if a.is_bank and not a.is_archived
+            ]
+        else:
+            account = await self.account_crud.get_by_id(account_id)
+            if account is None or not account.is_bank or account.is_archived:
+                raise NotFoundError("Active bank account not found")
+            bank_accounts = [account]
         accounts: list[CashSummaryAccount] = []
         total_in = Decimal(0)
         total_out = Decimal(0)

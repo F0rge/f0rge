@@ -230,7 +230,12 @@ async def test_token_lifecycle_secret_isolation_mcp_audit_and_current_permission
     assert discovery.status_code == 200
     assert protocol in discovery.json()["result"]["supportedVersions"]
     tools = await _rpc(client, secret, "tools/list")
-    assert [tool["name"] for tool in tools.json()["result"]["tools"]] == ["catalogue_search"]
+    assert {tool["name"] for tool in tools.json()["result"]["tools"]} == {
+        "catalogue_search",
+        "find_actions",
+        "run_read",
+        "request_write",
+    }
     args = {
         "name": "catalogue_search",
         "arguments": {"query": "Catalogue Fixture", "include_unit_cost": True},
@@ -347,3 +352,64 @@ async def test_token_issuance_requires_clerk_server_key(mcp_fixture, monkeypatch
     result = await _issue(client, _clerk(users[0], teams[0]))
     assert result.status_code == 503
     assert "secret" not in result.json()
+
+
+async def test_discovery_paging_and_runners_follow_current_membership(mcp_fixture, monkeypatch):
+    client, teams, users, _ = mcp_fixture
+    team = teams[0]
+    issued = await _issue(client, _clerk(users[0], team))
+    secret = issued.json()["secret"]
+
+    async def call(tool, **args):
+        response = await _rpc(client, secret, "tools/call", {"name": tool, "arguments": args})
+        return response.json()["result"]
+
+    domains = (await call("find_actions"))["structuredContent"]["domains"]
+    assert set(domains) == {
+        "Home",
+        "Catalogue",
+        "Stock",
+        "Warehouse",
+        "Sales",
+        "Books",
+        "Admin",
+    }
+    first = (await call("find_actions", tab="Warehouse"))["structuredContent"]
+    assert len(first["actions"]) == 3 and first["next_offset"] == 3
+    second = (await call("find_actions", tab="Warehouse", offset=3))["structuredContent"]
+    assert {a["name"] for a in first["actions"]}.isdisjoint(a["name"] for a in second["actions"])
+
+    async def discover():
+        return (await call("find_actions", query="draft quote", tab="Sales"))["structuredContent"][
+            "actions"
+        ]
+
+    name = "quotes_create_draft"
+    assert name not in {action["name"] for action in await discover()}
+    request = dict(action=name, request_id=str(uuid.uuid4()), arguments={})
+    assert (await call("request_write", **request))["isError"]
+    async with tenant_session(team.id) as db, unit_of_work(db):
+        role_id = await db.scalar(
+            select(Role.id).where(Role.team_id == team.id, Role.slug == "reader")
+        )
+        db.add(RolePermission(role_id=role_id, key="sales.quotes"))
+    assert name in {action["name"] for action in await discover()}
+    wrong_runner = await call("run_read", action=name, arguments={})
+    assert wrong_runner["isError"] and "runner" in wrong_runner["content"][0]["text"]
+    invalid = await call("request_write", **request)
+    assert invalid["isError"] and "Invalid arguments" in invalid["content"][0]["text"]
+
+    monkeypatch.setattr(settings, "mcp_writes_enabled", False)
+    assert name not in {action["name"] for action in await discover()}
+    paused = await call("request_write", **request)
+    assert paused["isError"] and "paused" in paused["content"][0]["text"]
+    assert not (await call("run_read", action="catalogue_search", arguments={"query": "Fixture"}))[
+        "isError"
+    ]
+    monkeypatch.setattr(settings, "mcp_writes_enabled", True)
+    async with tenant_session(team.id) as db, unit_of_work(db):
+        await db.execute(delete(RolePermission).where(RolePermission.team_id == team.id))
+    denied = await call("request_write", **request)
+    assert denied["isError"] and "unavailable" in denied["content"][0]["text"]
+    history = (await client.get(_TOKENS, headers=_clerk(users[0], team))).json()["activity"]
+    assert history[0]["action_name"] == name and history[0]["result"] == "denied"

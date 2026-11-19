@@ -45,7 +45,17 @@ class McpToken(TenantOwnedMixin, UUIDPkMixin, Base):
         return "expired" if self.expires_at <= datetime.now(UTC) else "active"
 
 
-class McpTokenActivity(TenantOwnedMixin, UUIDPkMixin, Base):
+class _ActivityFields:
+    user_id: Mapped[uuid.UUID]
+    token_id: Mapped[uuid.UUID]
+    token_name: Mapped[str] = mapped_column(String(80))
+    action: Mapped[str] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(12))
+    result: Mapped[str] = mapped_column(String(12))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class McpTokenActivity(_ActivityFields, TenantOwnedMixin, UUIDPkMixin, Base):
     __tablename__ = "mcp_token_activity"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -57,10 +67,18 @@ class McpTokenActivity(TenantOwnedMixin, UUIDPkMixin, Base):
         Index("ix_mcp_token_activity_owner_time", "team_id", "user_id", "occurred_at"),
     )
 
-    user_id: Mapped[uuid.UUID]
-    token_id: Mapped[uuid.UUID]
-    token_name: Mapped[str] = mapped_column(String(80))
-    action: Mapped[str] = mapped_column(String(32))
-    source: Mapped[str] = mapped_column(String(12))
-    result: Mapped[str] = mapped_column(String(12))
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+class McpActionActivity(_ActivityFields, TenantOwnedMixin, UUIDPkMixin, Base):
+    __tablename__ = "mcp_action_activity"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "user_id", "token_id"],
+            ["mcp_tokens.team_id", "mcp_tokens.user_id", "mcp_tokens.id"],
+            name="fk_mcp_action_activity_owner",
+            ondelete="CASCADE",
+        ),
+        Index("ix_mcp_action_activity_owner_time", "team_id", "user_id", "occurred_at"),
+    )
+
+    operation_id: Mapped[Optional[uuid.UUID]]
+    action_name: Mapped[Optional[str]] = mapped_column(String(80))
