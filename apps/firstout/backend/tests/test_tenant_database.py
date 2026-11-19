@@ -289,88 +289,18 @@ async def test_migration_roundtrip_preserves_staff_and_grants(rls_database_url):
     await admin.dispose()
 
 
-async def test_cin7_detached_lock_settings_and_runtime_gate(tenant_database, monkeypatch):
-    from app.models.cin7_import_run import Cin7ImportRun
-    from app.models.team_settings import TeamSettings
+async def test_runtime_role_rejects_the_database_owner(tenant_database):
     from app.runtime_database import verify_runtime_role
-    from app.services.cin7_import_jobs import Cin7ImportJobService, _run_detached
-    from app.services.payment_reminders import PaymentReminderService
 
-    admin, runtime, maker, a, b = tenant_database
+    admin, _, maker, team_id, _ = tenant_database
     async with async_sessionmaker(admin)() as session:
         with pytest.raises(RuntimeError, match="non-owner"):
             await verify_runtime_role(session)
-    users, runs = {}, {}
-    async with admin.begin() as conn:
-        for team in (a, b):
-            users[team] = uuid.uuid4()
-            await conn.execute(
-                sa.text(
-                    "INSERT INTO users(id,team_id,email,password_hash,role,is_disabled,token_version,created_at,updated_at) VALUES (:id,:team,:email,'synthetic','owner',false,0,now(),now())"
-                ),
-                {"id": users[team], "team": team, "email": f"proof-{users[team]}@example.com"},
-            )
-    for team in (a, b):
-        async with organisation_session(maker, team) as session:
-            await verify_runtime_role(session)
-            row = Cin7ImportRun(
-                user_id=users[team],
-                user_email="synthetic@example.com",
-                file_sha256="a" * 64,
-                file_name="synthetic.zip",
-                mode="dry_run",
-                status="queued",
-                active_lock=True,
-            )
-            session.add(row)
-            session.add(
-                TeamSettings(
-                    team_id=team,
-                    label_width_mm=80 if team == a else 100,
-                    payment_reminders_enabled=team == a,
-                )
-            )
-            await session.commit()
-            runs[team] = row.id
-    async with organisation_session(maker, a) as session:
-        session.add(
-            Cin7ImportRun(
-                user_id=users[a],
-                user_email="synthetic@example.com",
-                file_sha256="b" * 64,
-                file_name="other.zip",
-                mode="dry_run",
-                status="queued",
-                active_lock=True,
-            )
-        )
-        with pytest.raises(IntegrityError):
-            await session.commit()
-    observed = []
-
-    async def fake_execute(self, job_id):
-        observed.append(
-            (tenant_id_ctx.get(), await self.db.scalar(sa.select(Cin7ImportRun.id)), job_id)
-        )
-
-    monkeypatch.setattr("app.database.async_session_maker", maker)
-    monkeypatch.setattr(Cin7ImportJobService, "execute", fake_execute)
-    # Deliberately inherited wrong context: detached job must use explicit stored team.
-    token = tenant_id_ctx.set(b)
-    try:
-        await _run_detached(runs[a], a)
-    finally:
-        tenant_id_ctx.reset(token)
-    assert observed == [(a, runs[a], runs[a])]
-    for team in (a, b):
-        async with organisation_session(maker, team) as session:
-            labels = await session.scalar(sa.select(TeamSettings.label_width_mm))
-            assert labels == (80 if team == a else 100)
-            reminders = await PaymentReminderService(session).get_settings()
-            assert reminders.enabled == (team == a)
+    async with organisation_session(maker, team_id) as session:
+        await verify_runtime_role(session)
 
 
-def test_tenant_storage_branding_and_import_paths(monkeypatch):
+def test_tenant_storage_branding_and_document_paths(monkeypatch):
     from app.services import object_storage
     from app.config import settings
 
@@ -379,7 +309,7 @@ def test_tenant_storage_branding_and_import_paths(monkeypatch):
     token = tenant_id_ctx.set(a)
     try:
         ref = object_storage.save_bytes("branding/logo.png", b"synthetic-logo")
-        archive = object_storage.save_bytes("cin7-imports/synthetic.zip", b"synthetic-import")
+        archive = object_storage.save_bytes("documents/synthetic.pdf", b"synthetic-import")
         assert f"tenants/{a}/" in ref
         assert f"tenants/{a}/" in archive
         assert object_storage.read_bytes(ref) == b"synthetic-logo"
@@ -971,13 +901,14 @@ async def test_rollback_refuses_additional_tenants_without_disabling_rls(
             "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity"
         )
         before = await owner.scalar(protected)
-        assert before == 83
-        assert await owner.scalar(
+        protected_tables = await owner.scalar(
             sa.text(
-                "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class "
-                "WHERE oid='public.tenant_invitations'::regclass"
+                "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity "
+                "AND oid IN ('public.tenant_invitations'::regclass, 'public.mcp_tokens'::regclass, "
+                "'public.mcp_token_activity'::regclass)"
             )
         )
+        assert protected_tables == 3
         with pytest.raises(RuntimeError, match="additional tenants"):
             await deactivate_rls(owner)
         await owner.rollback()

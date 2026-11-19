@@ -19,6 +19,7 @@ from app.models.price_list import PriceList
 from app.models.proforma import Proforma
 from app.models.record_workspace import RecordWorkspaceBatch
 from app.models.team import Team
+from app.models.tenant_onboarding import TenantInvitation
 from app.models.user import User
 from app.models.supplier import Supplier
 from app.schemas.customer_crm import CustomerCrmCreate
@@ -329,6 +330,41 @@ async def test_role_delete_preflight_protects_presets_and_assigned_roles(owner_c
     outcome = await execute(owner_client, prepared, "roles")
     assert outcome["succeeded"] == [unused["id"]]
     assert assigned["id"] in {row["id"] for row in (await owner_client.get("/api/v1/roles")).json()}
+
+
+async def test_pending_invite_blocks_direct_and_stale_bulk_delete(owner_client, async_db):
+    actor = (await owner_client.get("/api/v1/auth/me")).json()
+    role = (
+        await owner_client.post("/api/v1/roles", json={"name": "Invited staff", "permissions": []})
+    ).json()
+    prepared = await prepare(owner_client, "roles", ids=[role["id"]], action="delete")
+    assert prepared["eligible_count"] == 1
+
+    invite = TenantInvitation(
+        email="pending-staff@example.com",
+        role=role["slug"],
+        invited_by_user_id=uuid.UUID(actor["id"]),
+        status="pending",
+    )
+    async_db.add(invite)
+    async with unit_of_work(async_db):
+        pass
+
+    direct = await owner_client.delete(f"/api/v1/roles/{role['id']}")
+    assert direct.status_code == 409
+    assert "pending staff invitation" in direct.json()["detail"]
+    blocked = await prepare(owner_client, "roles", ids=[role["id"]], action="delete")
+    assert blocked["eligible_count"] == 0
+    assert "pending staff invitation" in blocked["blocked"][0]["reason"]
+    outcome = await execute(owner_client, prepared, "roles")
+    assert outcome["succeeded"] == []
+    assert "pending staff invitation" in outcome["failed"][0]["reason"]
+
+    await async_db.refresh(invite)
+    invite.status = "revoked"
+    async with unit_of_work(async_db):
+        pass
+    assert (await owner_client.delete(f"/api/v1/roles/{role['id']}")).status_code == 204
 
 
 async def test_token_actor_binding_and_mutation_permissions(owner_client):

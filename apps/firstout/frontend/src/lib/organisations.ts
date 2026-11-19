@@ -46,6 +46,7 @@ export type OrganisationInvitation = {
   email: string;
   role: string;
   status: string;
+  delivery_confirmed?: boolean;
 };
 
 export const getSignupStatus = () => apiFetch<SignupStatus>("/tenant-signup/status");

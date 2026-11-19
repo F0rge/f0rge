@@ -17,7 +17,7 @@ export function ImportDocs() {
               <strong>Name</strong> — product name (required)
             </li>
             <li>
-              <strong>Category</strong> — required (Cin7-compatible inventory list)
+              <strong>Category</strong> — required
             </li>
             <li>
               <strong>Retail Price</strong> — ZAR including VAT (required)

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-from contextlib import asynccontextmanager, suppress
-from typing import AsyncIterator, Optional, cast
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, cast
 
+import httpx
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.routing import Route
 from starlette.types import ExceptionHandler
 from f0rge_core.exceptions import ConflictError
 from f0rge_core.handlers import register_exception_handlers
@@ -18,16 +19,15 @@ from app.config import settings
 from app.database import async_session_maker, tenant_session  # noqa: F401 — fixture compatibility
 from app.models.team import Team
 from app.exceptions import (
-    CommsEncryptionUnconfiguredError,
-    CommsSmtpFailedError,
-    CommsSmtpUnconfiguredError,
     DocumentLlmUnconfiguredError,
     RecordWorkspaceUnconfiguredError,
+    McpTokensUnconfiguredError,
     ForbiddenError,
     KitRequiresPickError,
     TillPriceConflictError,
     RateLimitedError,
 )
+from app.mcp_server import MCP_PATH, McpEndpoint, create_mcp_app
 from app.middleware.auth import AuthContextMiddleware
 from app.middleware.slow_request import SlowRequestMiddleware
 from app.routers import (
@@ -45,9 +45,7 @@ from app.routers import (
     books_events,
     books_periods,
     catalogue_imports,
-    cin7_imports,
     category_maps,
-    comms,
     customer_portal,
     cost_audit,
     credit_notes,
@@ -61,7 +59,6 @@ from app.routers import (
     journals,
     locations,
     payments,
-    payment_reminders,
     picks,
     price_lists,
     proformas,
@@ -70,6 +67,7 @@ from app.routers import (
     repeating_invoices,
     returns,
     laybys,
+    mcp_tokens,
     quotes,
     sales_orders,
     ops_commerce,
@@ -85,23 +83,20 @@ from app.routers import (
     transfers,
     users,
     vat201_periods,
-    whatsapp_webhook,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
-from app.services.cin7_import_jobs import Cin7ImportJobService
+from app.services.clerk_api import ClerkAPI
 from app.services.locations import LocationSeedService
+from app.services.mcp_tokens import mcp_signing_key
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
 from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
 from app.services.storefront_system_actor import StorefrontSystemActorService
-from app.services.payment_reminders import PaymentReminderService
 from app.services.record_workspace_tokens import signing_key
 from app.services.users import BootstrapService
 
 logger = logging.getLogger(__name__)
-
-TICK_INTERVAL_SECONDS = 60
 
 
 async def seed_boot_fixtures(session: AsyncSession) -> None:
@@ -117,31 +112,14 @@ async def seed_boot_fixtures(session: AsyncSession) -> None:
     await TillSeedService(session).seed_if_empty()
 
 
-async def _payment_reminder_loop(stop: asyncio.Event) -> None:
-    """Daily overdue-invoice emails. Standalone: Nia and its schedule loop are gone."""
-    while not stop.is_set():
-        try:
-            async with tenant_session() as directory:
-                team_ids = list(
-                    await directory.scalars(select(Team.id).where(Team.status == "active"))
-                )
-            for team_id in team_ids:
-                async with tenant_session(team_id) as session:
-                    await PaymentReminderService(session).tick()
-        except Exception:
-            logger.exception("payment reminder tick failed")
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=TICK_INTERVAL_SECONDS)
-        except asyncio.TimeoutError:
-            continue
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if signing_key() is None:
         logger.warning(
             "Record workspace bulk actions disabled: configure RECORD_WORKSPACE_SIGNING_KEY"
         )
+    if mcp_signing_key() is None or not settings.clerk_secret_key:
+        logger.warning("Personal MCP access requires a signing key and CLERK_SECRET_KEY")
     # Identity bootstrap precedes domain seeding; all business work runs with an
     # explicit organisation, including recovery after process restarts.
     async with tenant_session() as directory:
@@ -167,19 +145,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await coa.ensure_bank_accounts()
             if slug == "firstout":
                 await PlaygroundSeedService(session).seed_if_enabled()
-            await Cin7ImportJobService(session).recover_on_startup()
-    stop = asyncio.Event()
-    ticker: Optional[asyncio.Task] = None
-    if settings.payment_reminder_ticker:
-        ticker = asyncio.create_task(_payment_reminder_loop(stop))
-    try:
-        yield
-    finally:
-        stop.set()
-        if ticker is not None:
-            ticker.cancel()
-            with suppress(asyncio.CancelledError):
-                await ticker
+    async with httpx.AsyncClient() as client:
+        mcp_app = create_mcp_app(ClerkAPI(client, settings.clerk_secret_key))
+        app.state.firstout_mcp = mcp_app
+        async with mcp_app.router.lifespan_context(mcp_app):
+            yield
 
 
 app = FastAPI(
@@ -210,26 +180,10 @@ async def _forbidden_handler(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
-async def _workspace_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, RecordWorkspaceUnconfiguredError)
+async def _signing_key_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, (RecordWorkspaceUnconfiguredError, McpTokensUnconfiguredError))
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": exc.detail}
-    )
-
-
-async def _comms_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, (CommsEncryptionUnconfiguredError, CommsSmtpUnconfiguredError))
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"detail": {"code": exc.detail}},
-    )
-
-
-async def _comms_smtp_failed_handler(_: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, CommsSmtpFailedError)
-    return JSONResponse(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        content={"detail": {"code": exc.detail, "message": exc.message}},
     )
 
 
@@ -267,24 +221,15 @@ app.add_exception_handler(ConflictError, cast(ExceptionHandler, _conflict_handle
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
 app.add_exception_handler(
     RecordWorkspaceUnconfiguredError,
-    cast(ExceptionHandler, _workspace_unconfigured_handler),
+    cast(ExceptionHandler, _signing_key_unconfigured_handler),
+)
+app.add_exception_handler(
+    McpTokensUnconfiguredError, cast(ExceptionHandler, _signing_key_unconfigured_handler)
 )
 app.add_exception_handler(RateLimitedError, cast(ExceptionHandler, _rate_limited_handler))
 app.add_exception_handler(
     DocumentLlmUnconfiguredError,
     cast(ExceptionHandler, _document_llm_unconfigured_handler),
-)
-app.add_exception_handler(
-    CommsEncryptionUnconfiguredError,
-    cast(ExceptionHandler, _comms_unconfigured_handler),
-)
-app.add_exception_handler(
-    CommsSmtpUnconfiguredError,
-    cast(ExceptionHandler, _comms_unconfigured_handler),
-)
-app.add_exception_handler(
-    CommsSmtpFailedError,
-    cast(ExceptionHandler, _comms_smtp_failed_handler),
 )
 
 app.add_middleware(
@@ -301,6 +246,7 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router)
 app.include_router(users.users_router)
 app.include_router(users.profile_router)
+app.include_router(mcp_tokens.router)
 app.include_router(roles.roles_router)
 app.include_router(record_workspace.record_workspace_router)
 app.include_router(locations.locations_router)
@@ -312,7 +258,6 @@ app.include_router(skus.skus_router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
-app.include_router(cin7_imports.cin7_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
@@ -338,7 +283,6 @@ app.include_router(journal_imports.journal_imports_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
-app.include_router(payment_reminders.payment_reminders_router)
 app.include_router(books_events.books_events_router)
 app.include_router(books_periods.books_periods_router)
 app.include_router(audit.audit_router)
@@ -349,8 +293,6 @@ app.include_router(vat201_periods.vat201_periods_router)
 app.include_router(search.search_router)
 app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)
-app.include_router(comms.comms_router)
-app.include_router(whatsapp_webhook.whatsapp_webhook_router)
 app.include_router(cost_audit.cost_audit_router)
 app.include_router(records.records_router)
 
@@ -358,3 +300,4 @@ app.include_router(records.records_router)
 app.include_router(clerk_webhooks.router)
 app.include_router(tenant_signup.router)
 app.include_router(tenant_signup.organisations_router)
+app.router.routes.append(Route(MCP_PATH, endpoint=McpEndpoint()))

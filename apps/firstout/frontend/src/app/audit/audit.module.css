@@ -1,0 +1,24 @@
+.controls {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 14rem);
+  align-items: end;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--cds-layer-01);
+}
+.overflow { overflow-x: auto; }
+.padding, .panel { padding: 1rem; background: var(--cds-layer-01); }
+.link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cds-link-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+.link:hover { text-decoration: underline; }
+.link:focus-visible { outline: 2px solid var(--cds-focus); outline-offset: 2px; }
+@media (max-width: 42rem) {
+  .controls { grid-template-columns: 1fr; }
+}

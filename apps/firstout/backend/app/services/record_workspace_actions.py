@@ -87,10 +87,7 @@ async def blocked_reason(
         ):
             return "Names must be changed individually to preserve unique record identities"
     if resource == "roles":
-        if row.is_system:
-            return "System presets are protected"
-        if await RoleCRUD(db).count_users_with_slug(row.slug):
-            return "This role is still assigned to staff"
+        return await RoleService(db).deletion_block_reason(row)
     if resource == "users" and action == "disable":
         owner_slugs = await RoleCRUD(db).list_owner_slugs()
         if row.role == SLUG_OWNER or row.role in owner_slugs:

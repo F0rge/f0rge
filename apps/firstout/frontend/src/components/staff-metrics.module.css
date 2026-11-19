@@ -1,0 +1,64 @@
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  border: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+}
+
+.metric {
+  padding: 0.875rem 1.25rem;
+  min-width: 0;
+}
+
+.metric + .metric {
+  border-inline-start: 1px solid var(--cds-border-subtle-01);
+}
+
+.metric dt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+}
+
+.metric dd {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 2rem;
+  line-height: 1.3;
+  margin: 0.25rem 0 0;
+}
+
+.metric .capacityNote {
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.metric small {
+  color: var(--cds-text-secondary);
+  font-size: 0.875rem;
+}
+
+.metric :global(.cds--progress-bar) {
+  width: min(42%, 12rem);
+}
+
+@media (max-width: 40rem) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric {
+    padding-inline: 0.75rem;
+  }
+
+  .metric:last-child {
+    grid-column: 1 / -1;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--cds-border-subtle-01);
+  }
+}

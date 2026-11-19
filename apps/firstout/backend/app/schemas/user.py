@@ -39,5 +39,6 @@ class UserResponse(BaseModel):
     team_id: uuid.UUID
     team: TeamBrief
     default_location_id: Optional[uuid.UUID] = None
+    can_edit_display_name: bool = False
 
     model_config = ConfigDict(from_attributes=True)

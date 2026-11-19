@@ -84,7 +84,6 @@ DEFINITIONS = {
                 "price_tier",
                 "payment_terms_days",
                 "price_list_id",
-                "payment_reminders_opt_out",
                 "credit_limit",
                 "on_hold",
                 "on_hold_reason",

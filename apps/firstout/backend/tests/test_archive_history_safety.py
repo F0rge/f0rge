@@ -9,15 +9,14 @@ from decimal import Decimal
 from sqlalchemy import func, select
 
 from app.models.bill import Bill, BillLine
-from app.models.comms_message import CommsMessage
 from app.models.journal import JournalEntry
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.services.object_storage import save_bytes
 from tests.pdf_fixture import MINIMAL_PDF
 
 
-async def test_archive_api_history_readable_but_live_debt_pdf_and_comms_are_blocked(
-    owner_client, async_db, monkeypatch
+async def test_archive_api_history_readable_but_live_debt_and_reconstructed_pdf_are_blocked(
+    owner_client, async_db
 ):
     customer = (
         await owner_client.post(
@@ -158,28 +157,6 @@ async def test_archive_api_history_readable_but_live_debt_pdf_and_comms_are_bloc
     assert {r["document_number"] for r in ar["lines"]} == {live_invoice.json()["invoice_number"]}
     assert {r["document_number"] for r in ap["lines"]} == {live_bill.json()["bill_number"]}
 
-    async def unexpected_delivery(*_args, **_kwargs):
-        raise AssertionError("Archived document reached a communications provider")
-
-    monkeypatch.setattr("app.services.comms.send.send_message", unexpected_delivery)
-    monkeypatch.setattr("app.services.comms.send.send_cloud_document", unexpected_delivery)
-    assert (await owner_client.get(f"/api/v1/invoices/{invoice.id}/pdf")).status_code == 409
-    for channel in ("email", "whatsapp"):
-        assert (
-            await owner_client.post(
-                f"/api/v1/invoices/{invoice.id}/send", json={"channel": channel}
-            )
-        ).status_code == 409
-    assert (
-        await owner_client.post(
-            "/api/v1/payment-reminders/send-now",
-            json={"invoice_id": str(invoice.id), "offset_days": 0},
-        )
-    ).status_code == 409
-    assert (
-        await owner_client.post(f"/api/v1/payment-reminders/invoices/{invoice.id}/pause")
-    ).status_code == 409
-    assert await async_db.scalar(select(func.count()).select_from(CommsMessage)) == 0
     assert (
         await owner_client.post(
             f"/api/v1/bills/{bills[0].id}/attachment",

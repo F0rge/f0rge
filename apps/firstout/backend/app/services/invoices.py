@@ -286,7 +286,6 @@ class InvoiceService:
             amount_paid=invoice.amount_paid,
             balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
-            reminders_paused=invoice.reminders_paused,
             prices_include_vat=invoice.prices_include_vat,
             lines=[
                 InvoiceLineResponse(

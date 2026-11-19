@@ -16,11 +16,11 @@ dependencies = [
     "email-validator>=2.0",
     "cryptography>=43.0",
     "httpx>=0.27",
+    "mcp>=2.1.1,<3",
     "f0rge-core",
     "f0rge-db",
     "f0rge-storage",
     "reportlab>=5.0.1",
-    "openpyxl>=3.1",
     "pypdf>=6.16.2",
 ]
 

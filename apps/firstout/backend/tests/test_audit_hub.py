@@ -116,3 +116,17 @@ async def test_till_user_does_not_see_cost_rows(
     sources = {row["source"] for row in owner_view.json()["items"]}
     assert "books" in sources
     assert "cost" in sources
+
+    matched = await owner_client.get(
+        "/api/v1/audit/events",
+        params={"source": "books", "q": invoice.json()["id"], "limit": 1},
+    )
+    assert matched.status_code == 200
+    assert matched.json()["total"] >= 1
+    assert matched.json()["items"][0]["href"] == f"/invoices/{invoice.json()['id']}"
+    costs = await owner_client.get(
+        "/api/v1/audit/events", params={"source": "cost", "q": "correction"}
+    )
+    assert costs.status_code == 200
+    assert costs.json()["total"] >= 1
+    assert all(row["source"] == "cost" for row in costs.json()["items"])

@@ -58,6 +58,8 @@ export interface RecordWorkspaceProps<T extends { id: string }> {
   onCreate?: () => void;
   createLabel?: string;
   onEdit?: (item: T) => void;
+  modalDetails?: boolean;
+  listTitle?: string;
   renderDetails: (item: T, context: RecordWorkspaceContext) => ReactNode;
   loadingDetails?: { tabs: readonly string[]; fields: readonly string[] };
   headerActions?: ReactNode;

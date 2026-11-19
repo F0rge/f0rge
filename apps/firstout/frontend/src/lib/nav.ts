@@ -2,7 +2,6 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/ledger", label: "Chart of accounts" },
   { href: "/journals", label: "Journals" },
   { href: "/invoices", label: "Invoices" },
-  { href: "/payment-reminders", label: "Payment reminders" },
   { href: "/repeating-invoices", label: "Repeating invoices" },
   { href: "/credit-notes", label: "Credit notes" },
   { href: "/bills", label: "Bills" },
@@ -57,12 +56,13 @@ export const SALES_NAV_ITEMS = [
 
 export const ADMIN_NAV_ITEMS = [
   { href: "/organisation", label: "Organisation", permission: "users.manage" as const },
-  { href: "/users", label: "Users", permission: "users.manage" as const },
-  { href: "/roles", label: "Roles", permission: "users.manage" as const },
-  { href: "/audit", label: "Audit" },
-  { href: "/profile", label: "Profile" },
-  { href: "/cin7-import", label: "Cin7 import", permission: "users.manage" as const },
-  { href: "/settings", label: "Settings" },
+  { href: "/users", label: "Team members", permission: "users.manage" as const },
+  { href: "/roles", label: "Roles & permissions", permission: "users.manage" as const },
+  { href: "/audit", label: "Audit log" },
+  { href: "/profile", label: "My profile" },
+  { href: "/settings", label: "Settings directory" },
+  { href: "/settings/integrations", label: "Integrations" },
+  { href: "/settings/integrations/mcp-tokens", label: "MCP tokens" },
 ] as const;
 
 /** @deprecated Prefer ADMIN_NAV_ITEMS — kept for any stray imports during transition. */
@@ -86,7 +86,6 @@ export function isBooksPath(pathname: string): boolean {
     BOOKS_HREFS.has(pathname) ||
     pathname.startsWith("/journals/") ||
     pathname.startsWith("/invoices/") ||
-    pathname.startsWith("/payment-reminders") ||
     pathname.startsWith("/repeating-invoices/") ||
     pathname.startsWith("/credit-notes/") ||
     pathname.startsWith("/bills/") ||
@@ -159,9 +158,6 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/invoices" && pathname.startsWith("/invoices/")) {
-    return true;
-  }
-  if (href === "/payment-reminders" && pathname.startsWith("/payment-reminders")) {
     return true;
   }
   if (href === "/repeating-invoices" && pathname.startsWith("/repeating-invoices/")) {

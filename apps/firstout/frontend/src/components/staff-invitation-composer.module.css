@@ -1,0 +1,62 @@
+.composer {
+  border-block-start: 2px solid var(--cds-border-interactive);
+  padding: 1.25rem 1.5rem;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-block-end: 1rem;
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.heading svg {
+  color: var(--cds-link-primary);
+  flex: none;
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.fields :global(.cds--select-input),
+.fields :global(.cds--select-input__wrapper) {
+  width: 100%;
+}
+
+.permissions {
+  padding: 0.75rem 1rem;
+  background: var(--cds-layer);
+  font-size: 0.875rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.message,
+.composer :global(.cds--inline-notification) {
+  margin-block-end: 1rem;
+}
+
+@media (max-width: 40rem) {
+  .composer {
+    padding-inline: 1rem;
+  }
+
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

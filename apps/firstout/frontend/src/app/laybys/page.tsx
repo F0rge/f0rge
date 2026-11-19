@@ -36,7 +36,6 @@ import {
   addLaybyPayment,
   cancelLayby,
   canMutateLaybys,
-  canSendComms,
   completeLayby,
   computeInvoicePreview,
   createCustomer,
@@ -45,7 +44,6 @@ import {
   downloadLaybyPdf,
   formatPriceAmount,
   formatZarAmount,
-  getCommsSettings,
   getCustomer,
   getLayby,
   isActiveLocation,
@@ -53,9 +51,7 @@ import {
   listLaybys,
   listLocations,
   listSkus,
-  openCommsSend,
   roundHalfUp,
-  sendDocument,
   type CustomerCrm,
   type CustomerDuplicateMatch,
   type Layby,
@@ -276,14 +272,12 @@ function LaybysPageContent() {
   const searchParams = useSearchParams();
   const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const canMutate = canMutateLaybys(user);
-  const canSend = canSendComms(user);
   const [laybys, setLaybys] = useState<LaybyListItem[]>([]);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [selectedLayby, setSelectedLayby] = useState<Layby | null>(null);
@@ -417,14 +411,6 @@ function LaybysPageContent() {
     }
   }, [user, loadLaybys]);
 
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-    void getCommsSettings()
-      .then((comms) => setSmtpConfigured(comms.smtp_configured))
-      .catch(() => setSmtpConfigured(false));
-  }, [user]);
 
   useEffect(() => {
     if (createOpen && canMutate) {
@@ -1037,47 +1023,6 @@ function LaybysPageContent() {
               >
                 Download PDF
               </Button>
-              {canSend ? (
-                <Button
-                  kind="ghost"
-                  size="sm"
-                  disabled={
-                    actionBusy ||
-                    selectedLayby.status === "cancelled" ||
-                    !selectedLayby.customer_email ||
-                    !smtpConfigured
-                  }
-                  onClick={() => {
-                    void sendDocument("laybys", selectedLayby.id, "email").catch((err) => {
-                      setError(err instanceof Error ? err.message : "Failed to email layby.");
-                    });
-                  }}
-                >
-                  Email
-                </Button>
-              ) : null}
-              {canSend ? (
-                <Button
-                  kind="ghost"
-                  size="sm"
-                  disabled={
-                    actionBusy ||
-                    selectedLayby.status === "cancelled" ||
-                    !selectedLayby.customer_whatsapp_e164
-                  }
-                  onClick={() => {
-                    void sendDocument("laybys", selectedLayby.id, "whatsapp")
-                      .then((result) => {
-                        openCommsSend(result);
-                      })
-                      .catch((err) => {
-                        setError(err instanceof Error ? err.message : "Failed to open WhatsApp.");
-                      });
-                  }}
-                >
-                  WhatsApp
-                </Button>
-              ) : null}
             </Stack>
 
             <TableContainer title="Payment history">

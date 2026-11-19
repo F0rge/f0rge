@@ -69,11 +69,7 @@ Staff sign in at `/clerk-login`; `/login`, `/forgot-password`, and `/reset-passw
 
 Local password login and reset endpoints remain compatibility routes that return a Clerk-directed error. Logout clears historical `firstout_session` cookies, while the frontend signs out of Clerk. Preserve existing password hashes, token rows, user IDs, grants, and migrations for import verification and recovery; seed passwords do not provide a local sign-in path. The stored `session_ttl_hours` setting is retained as legacy data and does not control Clerk sessions.
 
-For local authentication, copy `apps/firstout/backend/.env.example` to `.env` and configure the Clerk test instance and frontend key. `CLERK_ENABLED=true`, an HTTPS `CLERK_ISSUER`, approved `CLERK_AUTHORIZED_PARTIES`, and an operator-activated `TENANT_ISOLATION_MODE=enforced` are required; disabled or incomplete configuration denies authentication. For activation or recovery, read [the multitenancy runbook](docs/multitenancy-deploy-runbook.md) and [Clerk-only cutover checks](docs/clerk-only-cutover.md); preserve the shared `FRONTEND_PROXY_SECRET`. Provider setup or an operator activation requires its own scoped approval. Generate `SETTINGS_ENCRYPTION_KEY` with Fernet (`cryptography.fernet.Fernet.generate_key()`) before saving an SMTP password in Settings → Communications.
-
-### Communications (outbound SMTP)
-
-Settings tab **Communications** (after Operations). Owner (`settings.mutate`) saves one shop mailbox: host, port, STARTTLS/SSL/plain, username, password (Fernet-encrypted; GET never returns it), From, From name, Reply-To. `GET /api/v1/settings/comms` is any authenticated user (`smtp_configured`, `has_smtp_password`). `PATCH` and `POST /settings/comms/test-email` require `settings.mutate`. Test send uses stdlib `smtplib` in a worker thread. Missing mailbox → 503 `comms_smtp_unconfigured`. SMTP reject → 502 `comms_smtp_failed`. Missing/invalid `SETTINGS_ENCRYPTION_KEY` → 503 `comms_encryption_unconfigured`. Set the same Fernet key on Railway `firstout-api`.
+For local authentication, copy `apps/firstout/backend/.env.example` to `.env` and configure the Clerk test instance and frontend key. `CLERK_ENABLED=true`, an HTTPS `CLERK_ISSUER`, approved `CLERK_AUTHORIZED_PARTIES`, and an operator-activated `TENANT_ISOLATION_MODE=enforced` are required; disabled or incomplete configuration denies authentication. For activation or recovery, read [the multitenancy runbook](docs/multitenancy-deploy-runbook.md) and [Clerk-only cutover checks](docs/clerk-only-cutover.md); preserve the shared `FRONTEND_PROXY_SECRET`. Provider setup or an operator activation requires its own scoped approval.
 
 ### Permissions (F5)
 
@@ -360,7 +356,7 @@ Complete restock while a stocktake is `in_progress` at that location → 409 `"L
 
 Endpoints (all under `/api/v1`, authenticated staff):
 
-- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `GET /laybys/{id}/pdf`, `POST /laybys/{id}/send`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`. Send uses `require_comms_send` (not only `sales.laybys`). Cancelled layby send is 409. Print HTML receipt remains.
+- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `GET /laybys/{id}/pdf`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`. The HTML receipt is available to print.
 
 Customer layaway with optional stock hold at a showroom. Numbering: `LB-0001`. Status: `open` | `ready` | `completed` | `cancelled` (overdue is derived from `due_date`, not stored).
 
@@ -437,8 +433,6 @@ PO numbers are sequential `PO-0001` (our ref, not supplier). Optional `proforma_
 Factory bills default to `supplier.default_currency` (else USD). Freight/clearance store currency per bill. Home currency ZAR. Inventory unit cost lives on received units / location stock. `sellable` is true only when `on_hand > 0` (on-order is never sellable).
 
 On receive, blend unit cost at a location by quantity-weighted average: when adding stock to an existing `LocationStock` row, `new_cost = (old_on_hand × old_cost + incoming_qty × incoming_cost) / (old_on_hand + incoming_qty)`; if `old_on_hand` is 0 or `old_cost` is null, use the incoming cost.
-
-Staff send customer documents through the comms outbox, not from PO receive. POs themselves are not emailed.
 
 ## F7 actual lead times
 
@@ -531,9 +525,9 @@ Endpoints (all under `/api/v1`, authenticated staff):
 - **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on posted journal lines), `tax_treatment` (`none` | `vat15`), and `is_bank`. Extra bank codes 1110–1140 are seeded by `ensure_bank_accounts()`.
 - **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: `books.mutate`.
 - **Customers (books):** invoice, repeating invoice, and layby customer pickers use `GET/POST /customers`. Suppliers stay on `GET/POST /suppliers`. There is no `/contacts` merge view.
-- **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf`, `POST /invoices/{id}/send` `{channel: email|whatsapp}` — `require_comms_send` (till.sell or books.mutate). Email attaches the tax-invoice PDF. Warehouse 403. Missing customer email 409. SMTP unconfigured 503. Do not write `books_events` on send.
+- **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf`.
 - **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
-- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf`, `POST /credit-notes/{id}/send` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note. Send attaches that PDF (`require_comms_send`).
+- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note.
 - **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR). Attachment GET streams bytes via `serve_stored_pdf` (same-origin; no S3 302).
 - **Payments:** `GET/POST /payments`, `GET /payments/{id}/pdf` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
 - **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.
@@ -601,18 +595,7 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 | List imports, reports, VAT201 draft | any authenticated |
 | Upload CSV, match lines | `books.mutate` |
 
-## Cin7 Core import and records
-
-`uv run --project apps/firstout/backend python -m app.commands.import_cin7 --export-dir <dir> [--commit]` loads a Cin7 Core full export. Dry-run is the default. It upserts on natural keys (SKU, customer/supplier name, document number), so a second run of the same export changes nothing. A non-local `DATABASE_URL` needs `FIRSTOUT_CIN7_IMPORT_TARGET=firstout` (Firstout is main-only). Never commit the export: it holds customer PII. Tests use fake fixtures.
-
-Admins can run the same loader in the app. `POST /api/v1/cin7-imports` (multipart `file` zip, or `files` for the export folder) starts a dry run and returns the job. `GET /api/v1/cin7-imports/{id}` is the status poll. Commit is `POST /api/v1/cin7-imports/{id}/commit` with `{ "file_sha256" }` and is allowed only for a completed dry run of that hash with zero errors, when nothing has been imported since. One job at a time. The audit table is migration `077_cin7_import_runs`. Auth is `users.manage` (`require_owner`: the owner preset, or a custom role with that key). Anonymous is 401; any other signed-in role is 403. The summary includes `generated_barcodes`, `generated_barcodes_blank`, and `generated_barcodes_shared`. `GET /cin7-imports/{id}/barcodes.csv` lists each affected SKU with reason `blank` or `shared`. Barcode assignment is unchanged: blank and shared barcodes still become `CIN7-{ProductCode}`, and the lowest product code keeps a shared barcode. UI: `/cin7-import` (Admin nav). Uploads stay in private object storage (`cin7-imports/{id}.zip`) and are deleted after a successful commit, when the run fails, or after 7 days. API startup marks queued or running jobs failed (`interrupted by restart`) and purges those uploads, so a restart does not leave the one-job lock held. A second upload while a job holds the lock returns 409 without waiting. No new environment variables.
-
-- Workbook names may use spaces or underscores (`Sale Documents_ALLTIME.xlsx`). Only the `All` sheet is read.
-- Customers and suppliers that appear only on documents are created as stubs before contacts, SKUs, and documents.
-- Every address and contact row goes to `customer_addresses`, `customer_contacts`, `supplier_addresses`, and `supplier_contacts`, keyed by a content hash (`natural_key`). The default contact and billing address are also copied onto the customer row.
-- `sku_bom_lines.qty` is `Numeric(14,4)`, so fractional components are allowed. Pick and till call `whole_component_qty`. If a kit needs fractional component units, they return a 400 instead of rounding.
-- Cin7 `CR-*` documents go to `archive_credit_notes` and `archive_credit_note_lines`. They are never `credit_notes`: no invoice link, no journal, no stock, no VAT201.
-- Archive bills keep `currency` and `amount_foreign`. If there is no ZAR rate, `fx_rate_known=false` and the ZAR fields are 0 placeholders. APIs return ZAR as null.
+## Archived records
 
 Read APIs (any authenticated user; cost fields are null without `stock.cost.view`): `GET /customers/{id}/addresses|contacts`, `GET /suppliers/{id}/addresses|contacts`, `GET /supplier-prices`, `GET /history/sales` (archive invoices and archive credit notes), `GET /history/purchases` (archive bills), and `GET /stock/by-bin`. UI: `/history` (Sales nav), `/stock-by-bin` (Stock nav), `/suppliers/[id]`, plus addresses, contacts, and sales history on `/customers/[id]`. Migration: `065_cin7_followup`.
 
@@ -638,11 +621,6 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 - **`watchPatterns`:** `apps/firstout/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `firstout-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [main]`. Smoke targets `health_url.main` (the live hosts). The live environment is `production`.
 - **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). `SEED_BOOT_FIXTURES` defaults false; set true only to also seed `till@` / `books@` / `warehouse@` / `buyer@example.com`, the storefront system user, and the Walk-in customer. Leave it false on the live API. These records require verified Clerk links and memberships before staff can sign in.
-- **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `firstout-api` — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
-- **WhatsApp click-to-chat:** `POST .../send {channel:whatsapp}` with Cloud API off writes outbox `whatsapp_click` / `opened` and returns a `https://wa.me/{e164}?text=...` URL. Click-to-chat cannot attach a PDF.
-- **WhatsApp Cloud API:** paste phone-number id + access token in Settings → Communications (`whatsapp_mode=cloud` when both present). Token and app secret are Fernet-encrypted; GET never returns them. Keep the existing WhatsApp Business app on the number — paste-token coexistence, no Embedded Signup. Unofficial WhatsApp libraries are banned.
-- **WhatsApp webhook:** public `GET/POST https://api.firstout.co.za/api/v1/webhooks/whatsapp` (no cookie). Meta verify token is env `WA_VERIFY_TOKEN`, not the access token. Local challenge: `curl -G 'http://localhost:8003/api/v1/webhooks/whatsapp' --data-urlencode 'hub.mode=subscribe' --data-urlencode "hub.verify_token=$WA_VERIFY_TOKEN" --data-urlencode 'hub.challenge=ok'`. HMAC `X-Hub-Signature-256` is required when an app secret is saved. Delivery statuses update `comms_messages`; inbound chat is not stored as a conversation.
-- **WhatsApp Cloud send:** when `whatsapp_mode=cloud`, `POST .../send {channel:whatsapp}` sends a pre-approved utility template then uploads the PDF (`type=document`). Template body parameters are (1) document number (2) amount inc VAT — laybys use remaining balance as the amount. First contact must use the template named in Settings (`wa_invoice_template_name`, default language `en`). 24h window / template failures return 409 with Meta's message and outbox `failed`. If Cloud is off, the same button stays click-to-chat. Graph timeout 20s; never log the Bearer token.
 - **Playground dataset:** use `SEED_PLAYGROUND=true` only with a disposable local database for catalogue / PO / till / books demos. Keep it off in production. See [Playground seed](#playground-seed-disposable-local-demos).
 - **Object storage:** committed notes name the dedicated `firstout-dev` bucket in this project. Verify its current provider binding before any rename; never reuse Marrow `photos` / `photos-dev` or Marrow project buckets. On `firstout-api`: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{firstout-dev.*}}`; `AWS_ENDPOINT_URL_S3` uses the bucket provider’s configured S3 endpoint; `AWS_REGION=auto`. Keep `DATABASE_URL`, the Clerk configuration, and `COOKIE_SECURE` for historical-cookie cleanup. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Verify the live bucket binding before changing storage configuration.
 
@@ -692,7 +670,6 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
-| `/cin7-import` | `/cin7-imports` |
 | `/returns` | `/returns` |
 | `/laybys` | `/laybys` |
 | `/customers` | `/customers` |
@@ -701,7 +678,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 ## Non-goals
 
-Staff may send tax invoices, credit notes, and laybys via the comms outbox (`comms_messages`) using SMTP / WhatsApp adapters. Do not auto-email repeating invoices. The app does not originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Preserve the Clerk identity verification and local access controls.
+Staff can download tax invoices, credit notes and laybys from their document screens.
 
 **In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, journals, repeating invoices, bank import (multi-account + rules), reports (incl. trial balance / journal / cash), VAT201 periods, books history, transfers, till, search, home, settings.
 

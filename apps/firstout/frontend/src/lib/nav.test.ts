@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { searchAdminDestinations } from "./admin-navigation";
 
 import {
   BOOKS_NAV_ITEMS,
@@ -40,7 +41,10 @@ describe("nav path helpers", () => {
 
   it("groups admin and books paths", () => {
     expect(isAdminPath("/settings")).toBe(true);
-    expect(isAdminPath("/cin7-import")).toBe(true);
+    expect(isAdminPath("/settings/integrations")).toBe(true);
+    expect(isAdminPath("/settings/integrations/mcp-tokens")).toBe(true);
+    expect(isAdminPath("/cin7-import")).toBe(false);
+    expect(isBooksPath("/payment-reminders")).toBe(false);
     expect(isAdminPath("/users")).toBe(true);
     expect(isAdminPath("/audit")).toBe(true);
     expect(isBooksPath("/invoices/abc")).toBe(true);
@@ -68,5 +72,27 @@ describe("nav path helpers", () => {
     expect(isCatalogueMenuPath("/proformas/read")).toBe(true);
     expect(isNavLinkActive("/proformas/read", "/proformas")).toBe(true);
     expect(labelForNavPath("/proformas/read")).toBe("Proformas");
+  });
+});
+
+
+describe("Administration directory search", () => {
+  const owner = { role: "owner", permissions: ["users.manage"] };
+  const manager = { role: "manager", permissions: ["users.manage"] };
+  const staff = { role: "till", permissions: ["till.sell"] };
+
+  it("matches page names or descriptions and puts direct name matches first", () => {
+    expect(searchAdminDestinations("  DoCuMeNt numbering  ", owner)[0]?.href).toBe("/settings?tab=documents");
+    expect(searchAdminDestinations("MCP tokens", owner)[0]?.href).toBe("/settings/integrations/mcp-tokens");
+  });
+
+  it("omits destinations outside the staff member's permissions", () => {
+    expect(searchAdminDestinations("Team members", staff)).toEqual([]);
+    expect(searchAdminDestinations("Roles & permissions", staff)).toEqual([]);
+    expect(searchAdminDestinations("Organisation", manager).every(({ href }) => href !== "/organisation")).toBe(true);
+    expect(searchAdminDestinations("Team members", manager)[0]?.href).toBe("/users");
+    expect(searchAdminDestinations("MCP tokens", staff)[0]?.href).toBe("/settings/integrations/mcp-tokens");
+    expect(searchAdminDestinations("MCP tokens", null)).toEqual([]);
+    expect(searchAdminDestinations("   ", owner)).toEqual([]);
   });
 });

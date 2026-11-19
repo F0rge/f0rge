@@ -56,10 +56,16 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [historyPayment, setHistoryPayment] = useState<Payment | null>(null);
+  const [historyPayment, setHistoryPayment] = useState<{ id: string; payment_number?: string } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const record = new URLSearchParams(window.location.search).get("record");
+    if (record) setHistoryPayment({ id: record });
+  }, [user]);
 
   const loadPayments = useCallback(async () => {
     setLoading(true);
@@ -219,7 +225,7 @@ export default function PaymentsPage() {
       <Modal
         open={historyPayment !== null}
         modalHeading={
-          historyPayment ? `Payment ${historyPayment.payment_number}` : "History"
+          historyPayment?.payment_number ? `Payment ${historyPayment.payment_number}` : "Payment history"
         }
         passiveModal
         onRequestClose={() => setHistoryPayment(null)}

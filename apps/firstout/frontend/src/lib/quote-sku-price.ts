@@ -184,7 +184,7 @@ const CIN7_NAMED_PRICE_LISTS = new Set([
   "Cin7 Retail",
 ]);
 
-/** Cin7 import lists. They must not replace the customer's classification price. */
+/** Historical Cin7 price lists. They must not replace the customer's classification price. */
 export function isCin7GeneratedPriceList(name: string | null | undefined): boolean {
   const text = name?.trim() ?? "";
   return CIN7_NAMED_PRICE_LISTS.has(text) || /^Cin7 Tier [1-9]\d*$/.test(text);

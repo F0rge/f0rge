@@ -14,7 +14,7 @@ from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User
 from app.services.password_reset import hash_reset_token
 from tests.conftest import OWNER_EMAIL
-from tests.test_comms_smtp import _FakeSMTP
+from unittest.mock import Mock
 
 
 @pytest.mark.parametrize("known_email", [False, True])
@@ -24,9 +24,9 @@ async def test_retired_reset_request_never_issues_mail_or_tokens(
     monkeypatch: pytest.MonkeyPatch,
     known_email: bool,
 ) -> None:
-    _FakeSMTP.instances = []
-    monkeypatch.setattr(smtplib, "SMTP", _FakeSMTP)
-    monkeypatch.setattr(smtplib, "SMTP_SSL", _FakeSMTP)
+    smtp = Mock()
+    monkeypatch.setattr(smtplib, "SMTP", smtp)
+    monkeypatch.setattr(smtplib, "SMTP_SSL", smtp)
     user = await async_db.scalar(select(User).where(User.email == OWNER_EMAIL))
     before = (user.password_hash, user.token_version)
     tokens_before = list((await async_db.scalars(select(PasswordResetToken))).all())
@@ -38,7 +38,7 @@ async def test_retired_reset_request_never_issues_mail_or_tokens(
     await async_db.refresh(user)
     assert (user.password_hash, user.token_version) == before
     assert list((await async_db.scalars(select(PasswordResetToken))).all()) == tokens_before
-    assert _FakeSMTP.instances == []
+    smtp.assert_not_called()
 
 
 @pytest.mark.parametrize("valid_token", [False, True])

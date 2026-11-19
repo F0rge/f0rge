@@ -11,6 +11,9 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud.role import RoleCRUD
+from app.crud.user import TeamCRUD
+from app.exceptions import ForbiddenError
 from app.models.customer import Customer
 from app.models.location import Location, LocationType
 from app.models.location_bin import new_floor_bin
@@ -20,11 +23,12 @@ from app.models.team import Team
 from app.models.team_settings import TeamSettings
 from app.models.tenant_onboarding import TenantInvitation, TenantProvisioningAttempt
 from app.models.user import User
-from app.permissions import ROLE_PRESETS, ROLE_PRESET_NAMES
-from app.schemas.tenant_signup import OrganisationInvitationCreate, SignupIntent
+from app.permissions import ROLE_PRESETS, ROLE_PRESET_NAMES, USERS_MANAGE
+from app.schemas.tenant_signup import OrganisationInvitationCreate, SignupIntent, StaffCapacity
 from app.services.clerk import ClerkSession
 from app.services.clerk_api import ClerkAPI, MAX_MEMBERS, verified_primary_email
 from app.services.document_numbering import DocumentNumberingService
+from app.services.permissions import PermissionService
 from app.services.staff_identity import staff_identity_ctx
 from f0rge_core.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -325,6 +329,7 @@ class TenantSignupService:
                 continue
             async with tenant_session(team.id) as scoped:
                 async with unit_of_work(scoped):
+                    await TeamCRUD(scoped).lock_current()
                     invite = await scoped.scalar(
                         select(TenantInvitation)
                         .where(
@@ -415,6 +420,39 @@ class OrganisationService:
             "max_members": await self._member_limit(team),
         }
 
+    async def staff_capacity(self) -> StaffCapacity:
+        identity = self._identity()
+        await self._require_manage(identity.user_id)
+        team = await self.db.get(Team, identity.team_id)
+        return await self._staff_capacity(team)
+
+    async def _staff_capacity(self, team: Team) -> StaffCapacity:
+        active = await self.db.scalar(
+            select(func.count())
+            .select_from(Membership)
+            .join(User, User.id == Membership.user_id)
+            .where(
+                Membership.team_id == team.id,
+                Membership.is_disabled.is_(False),
+                User.is_disabled.is_(False),
+                User.role != "system",
+            )
+        )
+        pending = await self.db.scalar(
+            select(func.count())
+            .select_from(TenantInvitation)
+            .where(TenantInvitation.team_id == team.id, TenantInvitation.status == "pending")
+        )
+        provider_members = (
+            await self.provider.members(team.clerk_org_id) if team.clerk_org_id else []
+        )
+        return StaffCapacity(
+            active_count=active or 0,
+            member_count=max(active or 0, len(provider_members)),
+            pending_count=pending or 0,
+            max_members=await self._member_limit(team),
+        )
+
     async def _member_limit(self, team: Team) -> int:
         if team.clerk_org_id and settings.clerk_secret_key:
             remote = await self.provider.organisation(team.clerk_org_id)
@@ -435,23 +473,25 @@ class OrganisationService:
         return [invitation_response(row) for row in rows]
 
     async def invite(self, data: OrganisationInvitationCreate) -> dict:
-        require_signup()
         identity = self._identity()
-        await self._require_manage(identity.user_id)
-        team = await self.db.get(Team, identity.team_id)
-        user = await self.db.get(User, identity.user_id)
-        if not team.clerk_org_id or not user.clerk_user_id:
-            raise ValidationError(
-                "Link this organisation and your account to Clerk before inviting staff"
-            )
         email = str(data.email).lower()
         async with unit_of_work(self.db):
-            await self.db.execute(select(Team.id).where(Team.id == team.id).with_for_update())
+            await TeamCRUD(self.db).lock_current()
+            actor_role = await PermissionService(self.db).require_staff_manager_role(
+                identity.user_id
+            )
+            team = await self.db.get(Team, identity.team_id)
+            user = await self.db.get(User, identity.user_id)
+            if not team.clerk_org_id or not user.clerk_user_id:
+                raise ValidationError(
+                    "Link this organisation and your account to Clerk before inviting staff"
+                )
             role = await self.db.scalar(
                 select(Role).where(Role.team_id == team.id, Role.slug == data.role)
             )
             if role is None:
                 raise ValidationError("Select an existing Firstout role")
+            await self._require_invitation_role(actor_role, role.slug)
             if await self.db.scalar(
                 select(User.id)
                 .join(Membership, Membership.user_id == User.id)
@@ -470,23 +510,10 @@ class OrganisationService:
             if invite is not None and invite.role != data.role:
                 raise ConflictError("An invitation for this email already has a different role")
             if invite is None:
-                active = await self.db.scalar(
-                    select(func.count())
-                    .select_from(Membership)
-                    .where(Membership.team_id == team.id, Membership.is_disabled.is_(False))
-                )
-                pending = await self.db.scalar(
-                    select(func.count())
-                    .select_from(TenantInvitation)
-                    .where(
-                        TenantInvitation.team_id == team.id, TenantInvitation.status == "pending"
-                    )
-                )
-                provider_members = await self.provider.members(team.clerk_org_id)
-                limit = await self._member_limit(team)
-                if max(active, len(provider_members)) + pending >= limit:
+                capacity = await self._staff_capacity(team)
+                if capacity.member_count + capacity.pending_count >= capacity.max_members:
                     raise ValidationError(
-                        f"This organisation supports {limit} staff, including its owner"
+                        f"This organisation supports {capacity.max_members} staff, including its owner"
                     )
                 invite = TenantInvitation(
                     team_id=team.id,
@@ -500,8 +527,13 @@ class OrganisationService:
         # The local approval survives an upstream success followed by a lost response.
         async with unit_of_work(self.db):
             invite = await self.db.scalar(
-                select(TenantInvitation).where(TenantInvitation.id == invite.id).with_for_update()
+                select(TenantInvitation)
+                .where(TenantInvitation.id == invite.id, TenantInvitation.team_id == team.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
+            if invite is None or invite.status != "pending":
+                raise ConflictError("This invitation is no longer pending")
             if not invite.clerk_invitation_id:
                 remote = await self.provider.invite(
                     team.clerk_org_id,
@@ -513,15 +545,21 @@ class OrganisationService:
         return invitation_response(invite)
 
     async def _require_manage(self, user_id: uuid.UUID) -> None:
-        from app.services.permissions import PermissionService
+        if not await PermissionService(self.db).has_permission(user_id, USERS_MANAGE):
+            raise ForbiddenError("Staff management permission is required")
 
-        if "users.manage" not in await PermissionService(self.db).keys_for_user(user_id):
-            raise UnauthorizedError("Staff management permission is required")
+    async def _require_invitation_role(self, actor_role: str, invite_role: str) -> None:
+        owner_slugs = await RoleCRUD(self.db).list_owner_slugs()
+        if invite_role in owner_slugs and actor_role not in owner_slugs:
+            raise ForbiddenError("Only an owner can manage another owner's invitation")
 
     async def revoke(self, invitation_id: uuid.UUID) -> None:
         identity = self._identity()
-        await self._require_manage(identity.user_id)
         async with unit_of_work(self.db):
+            await TeamCRUD(self.db).lock_current()
+            actor_role = await PermissionService(self.db).require_staff_manager_role(
+                identity.user_id
+            )
             invite = await self.db.scalar(
                 select(TenantInvitation)
                 .where(
@@ -529,9 +567,11 @@ class OrganisationService:
                     TenantInvitation.team_id == identity.team_id,
                 )
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
             if invite is None:
                 raise NotFoundError("Invitation not found")
+            await self._require_invitation_role(actor_role, invite.role)
             if invite.status == "accepted":
                 raise ConflictError("This invitation has already been accepted")
             if invite.status == "revoked":
@@ -555,4 +595,10 @@ class OrganisationService:
 
 
 def invitation_response(invite: TenantInvitation) -> dict:
-    return {"id": invite.id, "email": invite.email, "role": invite.role, "status": invite.status}
+    return {
+        "id": invite.id,
+        "email": invite.email,
+        "role": invite.role,
+        "status": invite.status,
+        "delivery_confirmed": bool(invite.clerk_invitation_id) or invite.status == "accepted",
+    }

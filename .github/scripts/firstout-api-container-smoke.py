@@ -65,7 +65,7 @@ import asyncio, json, os, time, urllib.error, urllib.request
 import asyncpg
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-import app.commands.replace_primavera
+from app.mcp_server import MCP_PATH
 
 def get(path):
     return urllib.request.urlopen(urllib.request.Request(
@@ -96,6 +96,14 @@ with get('/openapi.json') as response:
     assert '/api/v1/customers/{customer_id}/archive' in schema['paths']
     assert '/api/v1/stocktakes/{stocktake_id}/lines/{line_id}' in schema['paths']
     assert 'is_sellable' in schema['components']['schemas']['SkuResponse']['properties']
+
+try:
+    get(MCP_PATH)
+except urllib.error.HTTPError as error:
+    assert error.code == 401
+    assert error.headers.get('WWW-Authenticate', '').lower().startswith('bearer')
+else:
+    raise AssertionError('MCP accepted an unauthenticated client')
 
 scripts = ScriptDirectory.from_config(Config('alembic.ini'))
 heads = scripts.get_heads()
@@ -144,11 +152,11 @@ def smoke(image: str, source_commit: str) -> dict[str, object]:
         "-e",
         "DIRECT_DATABASE_URL=",
         "-e",
+        "MCP_PUBLIC_URL=http://localhost:8003/mcp",
+        "-e",
         "SEED_BOOT_FIXTURES=false",
         "-e",
         "SEED_PLAYGROUND=false",
-        "-e",
-        "PAYMENT_REMINDER_TICKER=false",
         "-e",
         "JWT_SECRET=synthetic-release-image-smoke-only",
     ]

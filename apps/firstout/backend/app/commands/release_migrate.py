@@ -281,11 +281,10 @@ async def migrate(
                         runtime_role,
                         allow_test_runtime_owner=allow_test_runtime_owner,
                     )
-                    # 085 adds this tenant-owned table; keep its existing RLS
-                    # stage and grant only the app's normal DML capabilities.
+                    # Keep the reviewed tenant tables under their existing RLS stage.
                     await connection.execute(
                         sa.text(
-                            f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE record_workspace_batches TO {quoted_role}"
+                            f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE record_workspace_batches, mcp_tokens, mcp_token_activity TO {quoted_role}"
                         )
                     )
                 return {

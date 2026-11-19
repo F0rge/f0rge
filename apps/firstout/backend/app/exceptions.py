@@ -17,25 +17,16 @@ class RecordWorkspaceUnconfiguredError(DomainError):
         )
 
 
+class McpTokensUnconfiguredError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("Personal MCP tokens are temporarily unavailable")
+
+
 class DocumentLlmUnconfiguredError(DomainError):
     """OpenRouter key missing for supplier-document reading. HTTP 503."""
 
     def __init__(self) -> None:
         super().__init__("document_llm_unconfigured")
-
-
-class CommsEncryptionUnconfiguredError(DomainError):
-    """SETTINGS_ENCRYPTION_KEY missing or invalid. Mapped to HTTP 503."""
-
-    def __init__(self) -> None:
-        super().__init__("comms_encryption_unconfigured")
-
-
-class CommsSmtpUnconfiguredError(DomainError):
-    """SMTP mailbox not saved. Mapped to HTTP 503."""
-
-    def __init__(self) -> None:
-        super().__init__("comms_smtp_unconfigured")
 
 
 class TillPriceConflictError(ConflictError):
@@ -65,11 +56,3 @@ class RateLimitedError(DomainError):
 
     def __init__(self, detail: str = "Too many attempts. Try again later.") -> None:
         super().__init__(detail)
-
-
-class CommsSmtpFailedError(DomainError):
-    """SMTP provider rejected the send. Mapped to HTTP 502."""
-
-    def __init__(self, message: str) -> None:
-        super().__init__("comms_smtp_failed")
-        self.message = message

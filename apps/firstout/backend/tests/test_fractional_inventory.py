@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import datetime
 import uuid
 from decimal import Decimal
@@ -426,38 +425,6 @@ async def test_fractional_purchase_history_responses_reload_without_truncation(
         next(row for row in history.json()["items"] if row["bill_id"] == bill.json()["id"])["qty"]
         == -3.125
     )
-
-
-async def test_existing_cin7_stock_loader_keeps_fraction_exact(owner_client, async_db, tmp_path):
-    from app.services.cin7_import.load import run_import
-
-    with (tmp_path / "InventoryList.csv").open("w", newline="") as h:
-        writer = csv.writer(h)
-        writer.writerow(["ProductCode", "Name", "Barcode"])
-        writer.writerow(["FRACTION-IMPORT", "Fraction import", "FRACTION-IMPORT"])
-    with (tmp_path / "LocationsWithBins.csv").open("w", newline="") as h:
-        writer = csv.writer(h)
-        writer.writerow(["Name", "Default"])
-        writer.writerow(["Fraction location", "yes"])
-    with (tmp_path / "StockOnHand.csv").open("w", newline="") as h:
-        writer = csv.writer(h)
-        writer.writerow(["ProductCode", "Quantity", "AverageCost", "Location", "Bin"])
-        writer.writerow(["FRACTION-IMPORT", "0.25", "100", "Fraction location", ""])
-    first = await run_import(async_db, tmp_path)
-    assert first.entity("location_stock").created == 1
-    second = await run_import(async_db, tmp_path)
-    assert second.entity("location_stock").unchanged == 1
-    row = next(
-        row
-        for row in (await owner_client.get("/api/v1/inventory")).json()
-        if row["our_ref"] == "FRACTION-IMPORT"
-    )
-    assert row["on_hand"] == 0.25 and row["locations"][0]["bins"][0]["on_hand"] == 0.25
-    (tmp_path / "StockOnHand.csv").write_text(
-        "ProductCode,Quantity,AverageCost,Location,Bin\nFRACTION-IMPORT,0.12345,100,Fraction location,\n"
-    )
-    with pytest.raises(ValidationError, match="4 decimal places"):
-        await run_import(async_db, tmp_path)
 
 
 @pytest.mark.no_db

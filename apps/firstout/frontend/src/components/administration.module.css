@@ -1,0 +1,126 @@
+.layout {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 13.5rem minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: calc(100dvh - 3rem);
+  margin-top: 3rem;
+}
+
+:global(.firstout-shell[data-compact="false"][data-nav-expanded="false"]) .layout { margin-inline-start: 3rem; }
+:global(.firstout-shell[data-compact="false"][data-nav-expanded="true"]) .layout { margin-inline-start: 16rem; }
+
+:global(.firstout-shell) .layout .main {
+  margin: 0;
+  height: auto;
+  padding: 2rem clamp(1rem, 2.7vw, 3rem) 3rem;
+  background: var(--cds-background);
+}
+
+.content { max-inline-size: 92rem; margin-inline: auto; }
+.desktopNav, .mobileNav {
+  background: var(--cds-layer-01);
+  color: var(--cds-text-primary);
+}
+.desktopNav {
+  overflow-y: auto;
+  border-inline-end: 1px solid var(--cds-border-subtle-01);
+  padding-block: .25rem 1rem;
+}
+.mobileNav { display: none; }
+.navTitle { padding: 1rem 1rem .75rem; font-weight: 600; }
+.navGroup ul { list-style: none; margin: 0; padding: 0; }
+.navLabel {
+  padding: .75rem 1rem .25rem;
+  font-size: .75rem;
+  color: var(--cds-text-secondary);
+}
+.navLink {
+  display: flex;
+  gap: .625rem;
+  align-items: center;
+  min-block-size: 2rem;
+  padding: .375rem 1rem;
+  font-size: .875rem;
+  text-decoration: none;
+  color: var(--cds-text-secondary);
+}
+.navLink svg { flex-shrink: 0; }
+.navLink:hover { background: var(--cds-layer-hover-01); }
+.navLink:focus-visible { outline: 2px solid var(--cds-focus); outline-offset: -2px; }
+.navLink[aria-current="page"] {
+  background: var(--cds-layer-selected-01);
+  color: var(--cds-text-primary);
+  font-weight: 600;
+  box-shadow: inset 3px 0 var(--cds-border-interactive);
+}
+.breadcrumb :global(ol.cds--breadcrumb) { display: flex; flex-wrap: wrap; }
+.content h1 { overflow-wrap: anywhere; }
+.pageHeader { align-items: center; }
+.pageHeader p { color: var(--cds-text-secondary); margin-block-start: .375rem; }
+.directory {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--cds-border-subtle-01);
+  background: var(--cds-border-subtle-01);
+}
+.directory > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+.directoryLink:global(.cds--tile--clickable) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: .875rem;
+  padding: 1rem;
+  min-block-size: 4.5rem;
+  text-decoration: none;
+}
+.directoryLink svg { color: var(--cds-icon-interactive); }
+.directoryLink svg:last-child { align-self: center; }
+.directoryLink strong { display: block; font-size: 1rem; color: var(--cds-text-primary); margin-block-end: .25rem; }
+.directoryLink span span { display: block; font-size: .875rem; line-height: 1.4; color: var(--cds-text-secondary); }
+
+.saveActions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--cds-border-subtle-01);
+}
+.saveActions > span {
+  margin-inline-end: auto;
+  color: var(--cds-text-secondary);
+  font-size: .875rem;
+}
+@media (max-width: 75rem) {
+  .layout { grid-template-columns: 11.5rem minmax(0, 1fr); }
+}
+
+@media (max-width: 47.5rem) {
+  .layout { display: block; }
+  :global(.firstout-shell) .layout .main { height: 100%; padding-block-start: 1rem; }
+  .desktopNav { display: none; }
+  .mobileNav { display: block; margin-block-end: 1rem; }
+  .mobileNav summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-block-size: 2.5rem;
+    cursor: pointer;
+    padding-inline: .75rem;
+    font-size: .875rem;
+    font-weight: 600;
+  }
+  .mobileNav summary::-webkit-details-marker { display: none; }
+  .mobileNav summary:focus-visible { outline: 2px solid var(--cds-focus); outline-offset: -2px; }
+  .mobileNav[open] summary svg { transform: rotate(180deg); }
+  .mobileNav nav { border-block-start: 1px solid var(--cds-border-subtle-01); padding-block-end: .5rem; }
+  .directory { grid-template-columns: minmax(0, 1fr); }
+  .pageHeader h1 { font-size: 2rem; }
+}
+
+@media (max-width: 48rem) {
+  .saveActions > span:empty { display: none; }
+  .saveActions > span:not(:empty) { flex-basis: 100%; }
+}

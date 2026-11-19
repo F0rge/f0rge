@@ -22,6 +22,34 @@ export const PERMISSION_CATALOG = [
 
 export type PermissionKey = (typeof PERMISSION_CATALOG)[number];
 
+export const PERMISSION_LABELS = {
+  "users.manage": "Manage staff and roles",
+  "settings.mutate": "Change workspace settings",
+  "catalogue.mutate": "Edit the catalogue",
+  "po.raise": "Raise purchase orders",
+  "stock.receive": "Receive stock",
+  "stock.transfer": "Transfer stock",
+  "stock.adjust": "Adjust stock",
+  "stock.cost.view": "View stock costs",
+  "till.sell": "Sell at the till",
+  "till.discount": "Apply till discounts",
+  "sales.returns": "Process returns",
+  "sales.laybys": "Manage laybys",
+  "sales.quotes": "Manage quotes",
+  "sales.orders": "Manage orders",
+  "sales.refunds": "Manage refunds",
+  "sales.deliveries": "Manage deliveries",
+  "sales.customers": "Manage customers",
+  "books.mutate": "Manage accounting records",
+  "books.journals": "Manage journals",
+} satisfies Record<PermissionKey, string>;
+
+export function permissionLabel(key: string): string {
+  return Object.hasOwn(PERMISSION_LABELS, key)
+    ? PERMISSION_LABELS[key as PermissionKey]
+    : key.split(/[._]/).join(" ");
+}
+
 export type PermissionHolder = {
   permissions?: readonly string[];
 } | null | undefined;
@@ -69,9 +97,6 @@ export function canMutateBooks(user: PermissionHolder): boolean {
   return can(user, "books.mutate");
 }
 
-export function canSendComms(user: PermissionHolder): boolean {
-  return can(user, "till.sell") || can(user, "books.mutate");
-}
 
 export function canViewCostAudit(user: PermissionHolder): boolean {
   return can(user, "stock.cost.view");

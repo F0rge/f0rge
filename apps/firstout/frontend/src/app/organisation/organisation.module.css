@@ -1,83 +1,27 @@
-.workspace {
-  min-width: 0;
+.summary, .row, .placeList li { display: flex; align-items: center; gap: 1rem; }
+.summary {
+  border-block-start: 2px solid var(--cds-border-interactive);
+  padding: 1.25rem;
+  flex-wrap: wrap;
 }
-.intro {
-  background: var(--firstout-tone-soft);
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  padding: 1.5rem;
-}
-.intro > div {
-  flex: 1;
-}
-.profileGrid {
+.summary p, .places p { color: var(--cds-text-secondary); font-size: .875rem; }
+.symbol {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(17rem, 1fr);
-  gap: 2rem;
-  align-items: start;
+  place-items: center;
+  inline-size: 3rem;
+  block-size: 3rem;
+  background: var(--cds-highlight);
+  color: var(--cds-icon-interactive);
 }
-.profileGrid > * {
-  min-width: 0;
-}
-.businessGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  align-items: start;
-}
-.branding {
-  background: var(--firstout-tone-soft);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.5rem;
-}
-.logo {
-  object-fit: contain;
-  max-width: 100%;
-  max-height: 6rem;
-}
-.headingRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.tableScroll {
-  max-width: 100%;
-  overflow-x: auto;
-}
-.actions {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.entry {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  padding: 1.5rem;
-  flex-wrap: wrap;
-}
-.entry > div {
-  flex: 1;
-  min-width: 12rem;
-}
-@media (max-width: 1000px) {
-  .profileGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-@media (max-width: 800px) {
-  .businessGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .intro {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    padding: 1rem;
-  }
+.trailing { margin-inline-start: auto; }
+.row { justify-content: space-between; flex-wrap: wrap; }
+.summary a, .row a, .places a { display: inline-flex; align-items: center; gap: .375rem; }
+.places { padding: 1.25rem; }
+.placeList { display: flex; flex-wrap: wrap; column-gap: 1.5rem; row-gap: 1rem; padding: 0; margin: 0; }
+.placeList svg { color: var(--cds-icon-interactive); flex-shrink: 0; }
+.placeList strong { display: block; font-size: .875rem; }
+.placeList span { display: block; color: var(--cds-text-secondary); font-size: .75rem; }
+@media (max-width: 32rem) {
+  .summary, .places { padding: 1rem; }
+  .trailing { margin-inline-start: 0; }
 }

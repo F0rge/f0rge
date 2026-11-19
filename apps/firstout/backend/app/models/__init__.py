@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.models.membership import Membership
+from app.models.mcp_token import McpToken, McpTokenActivity
 from app.models.account import Account, AccountType, TaxTreatment
 from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.books_period import BooksPeriod, BooksPeriodStatus
@@ -8,13 +9,6 @@ from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEvent, BooksEventAction
 from app.models.category_account_map import CategoryAccountMap
-from app.models.comms_message import (
-    CommsChannel,
-    CommsDocumentType,
-    CommsMessage,
-    CommsProvider,
-    CommsStatus,
-)
 from app.models.credit_note import CreditNote
 from app.models.customer_portal_user import CustomerPortalUser
 from app.models.delivery import (
@@ -38,7 +32,6 @@ from app.models.price_list import PriceList, PriceListItem
 from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.password_reset_token import PasswordResetToken
 from app.models.payment import Payment, PaymentDirection
-from app.models.payment_reminder import PaymentReminderSend
 from app.models.payment_term import PaymentTerm
 from app.models.proforma import Proforma
 from app.models.quote import Quote, QuoteLine, QuoteStatus
@@ -80,7 +73,6 @@ from app.models.tax_rule import TaxRule
 from app.models.team_settings import TeamSettings
 from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
-from app.models.cin7_import_run import Cin7ImportRun
 from app.models.team import Team
 from app.models.archive_credit_note import ArchiveCreditNote, ArchiveCreditNoteLine
 from app.models.cin7_party import (
@@ -100,6 +92,8 @@ from app.models.vat201_period import (
 
 __all__ = [
     "Membership",
+    "McpToken",
+    "McpTokenActivity",
     "Account",
     "AccountType",
     "BankImport",
@@ -114,11 +108,6 @@ __all__ = [
     "BooksEvent",
     "BooksEventAction",
     "CategoryAccountMap",
-    "CommsChannel",
-    "CommsDocumentType",
-    "CommsMessage",
-    "CommsProvider",
-    "CommsStatus",
     "CreditNote",
     "Customer",
     "CustomerPortalUser",
@@ -151,9 +140,7 @@ __all__ = [
     "PasswordResetToken",
     "Payment",
     "PaymentDirection",
-    "PaymentReminderSend",
     "PaymentTerm",
-    "Cin7ImportRun",
     "ArchiveCreditNote",
     "ArchiveCreditNoteLine",
     "CustomerAddress",

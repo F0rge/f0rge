@@ -1,0 +1,8 @@
+.permissionGroups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 1.5rem; }
+.permissionGroups fieldset { min-inline-size: 0; }
+.permissionGroups h3, .permissionGroups legend { font-size: .875rem; font-weight: 600; margin-block-end: .5rem; }
+.permissionGroups ul { list-style: disc; padding-inline-start: 1rem; font-size: .875rem; line-height: 1.5; }
+.permissionGroups :global(.cds--checkbox-wrapper) { margin-block-end: .5rem; }
+.identifier { display: grid; gap: .25rem; }
+.identifier dt { color: var(--cds-text-secondary); }
+.identifier dd { font-size: .875rem; overflow-wrap: anywhere; }

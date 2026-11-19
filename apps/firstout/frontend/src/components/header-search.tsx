@@ -1,171 +1,151 @@
 "use client";
 
 import { Search, Theme } from "@carbon/react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
-import { searchAll, type SearchResponse } from "@/lib/api";
+import { searchAdminDestinations } from "@/lib/admin-navigation";
+import { searchAll, type AuthUser, type SearchResponse } from "@/lib/api";
 
 type HeaderSearchProps = {
   className?: string;
+  administrationUser?: AuthUser | null;
 };
 
-export function HeaderSearch({ className }: HeaderSearchProps) {
-  const router = useRouter();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+type RecordSearch = {
+  term: string;
+  results?: SearchResponse;
+  error?: string;
+};
 
-  const runSearch = useCallback(async (term: string) => {
-    const trimmed = term.trim();
-    if (!trimmed) {
-      setResults(null);
+export function HeaderSearch({ className, administrationUser }: HeaderSearchProps) {
+  const input = useRef<HTMLInputElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  const [query, setQuery] = useState("");
+  const [recordSearch, setRecordSearch] = useState<RecordSearch>();
+  const [open, setOpen] = useState(false);
+  const term = query.trim();
+  const currentSearch = recordSearch?.term === term ? recordSearch : undefined;
+  const results = currentSearch?.results;
+  const panelOpen = open && !!term;
+
+  useEffect(() => {
+    if (!term) return;
+
+    const request = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const results = await searchAll(term, request.signal);
+        if (!request.signal.aborted) setRecordSearch({ term, results });
+      } catch (reason) {
+        if (!request.signal.aborted) {
+          setRecordSearch({ term, error: reason instanceof Error ? reason.message : "Search failed." });
+        }
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      request.abort();
+    };
+  }, [term]);
+
+  const groups = [
+    { label: "Administration", hits: searchAdminDestinations(term, administrationUser) },
+    { label: "SKUs", hits: results?.skus.map((sku) => ({
+      href: "/catalogue/" + sku.id, label: sku.our_barcode + " — " + sku.name + " (" + sku.our_ref + ")",
+    })) ?? [] },
+    { label: "Purchase orders", hits: results?.purchase_orders.map((order) => ({
+      href: "/purchase-orders/" + order.id, label: order.po_number + " — " + order.supplier_name + " (" + order.status + ")",
+    })) ?? [] },
+    { label: "Invoices", hits: results?.invoices.map((invoice) => ({
+      href: "/invoices/" + invoice.id, label: invoice.invoice_number + " — " + invoice.customer_name,
+    })) ?? [] },
+  ].filter(({ hits }) => hits.length > 0);
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape" && panelOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      input.current?.focus();
       setOpen(false);
       return;
     }
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await searchAll(trimmed);
-      setResults(response);
+
+    if (!term || (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Enter")) return;
+    const fromSearch = event.target === input.current;
+    if (event.key === "Enter" && !fromSearch) return;
+
+    event.preventDefault();
+    if (!panelOpen) {
       setOpen(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed");
-      setResults(null);
-      setOpen(true);
-    } finally {
-      setLoading(false);
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      void runSearch(query);
-    }, 250);
-    return () => window.clearTimeout(handle);
-  }, [query, runSearch]);
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
+    const links = Array.from(panel.current?.querySelectorAll<HTMLAnchorElement>("a[href]") ?? []);
+    if (event.key === "Enter") {
+      links[0]?.click();
+      return;
     }
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
+    const selected = links.findIndex((link) => link === event.target);
+    if (event.key === "ArrowDown") {
+      links[selected + 1]?.focus();
+    } else if (selected === 0) {
+      input.current?.focus();
+    } else {
+      links[selected < 0 ? links.length - 1 : selected - 1]?.focus();
     }
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, []);
-
-  const hasHits =
-    results &&
-    (results.skus.length > 0 ||
-      results.purchase_orders.length > 0 ||
-      results.invoices.length > 0);
-
-  function goTo(href: string) {
-    setOpen(false);
-    router.push(href);
   }
 
   return (
-    <div ref={rootRef} className={className ?? "firstout-header-search"}>
+    <div
+      role="search"
+      aria-label="Firstout"
+      className={className ?? "firstout-header-search"}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+      onKeyDown={handleKeyDown}
+    >
       <Search
+        ref={input}
         size="sm"
-        labelText="Search SKUs, POs, invoices"
-        placeholder="Search..."
+        labelText={administrationUser ? "Search Administration and records" : "Search SKUs, POs, invoices"}
+        placeholder="Search…"
         closeButtonLabelText="Clear search"
         value={query}
+        aria-controls={panelOpen ? panelId : undefined}
         autoComplete="off"
-        onChange={(event) => setQuery(event.target.value)}
-        onClear={() => {
-          setQuery("");
-          setResults(null);
-          setOpen(false);
-        }}
-        onFocus={() => {
-          if (query.trim()) {
-            setOpen(true);
-          }
-        }}
+        onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+        onClear={() => { setQuery(""); setOpen(false); }}
+        onFocus={() => setOpen(true)}
       />
-      {open && query.trim() ? (
-        <Theme theme="g10" className="firstout-header-search__panel">
-          {loading ? <div className="firstout-header-search__empty">Searching…</div> : null}
-          {error ? <div className="firstout-header-search__empty">{error}</div> : null}
-          {!loading && !error && results && !hasHits ? (
-            <div className="firstout-header-search__empty">No matches for “{results.q}”.</div>
-          ) : null}
-          {!loading && !error && results && hasHits ? (
-            <>
-              {results.skus.length > 0 ? (
-                <section>
-                  <p className="firstout-header-search__group">SKUs</p>
-                  <ul className="firstout-header-search__hits">
-                    {results.skus.map((sku) => (
-                      <li key={sku.id}>
-                        <button
-                          type="button"
-                          className="firstout-header-search__hit"
-                          onClick={() => goTo(`/catalogue/${sku.id}`)}
-                        >
-                          {sku.our_barcode} — {sku.name} ({sku.our_ref})
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              {results.purchase_orders.length > 0 ? (
-                <section>
-                  <p className="firstout-header-search__group">Purchase orders</p>
-                  <ul className="firstout-header-search__hits">
-                    {results.purchase_orders.map((po) => (
-                      <li key={po.id}>
-                        <button
-                          type="button"
-                          className="firstout-header-search__hit"
-                          onClick={() => goTo(`/purchase-orders/${po.id}`)}
-                        >
-                          {po.po_number} — {po.supplier_name} ({po.status})
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              {results.invoices.length > 0 ? (
-                <section>
-                  <p className="firstout-header-search__group">Invoices</p>
-                  <ul className="firstout-header-search__hits">
-                    {results.invoices.map((invoice) => (
-                      <li key={invoice.id}>
-                        <button
-                          type="button"
-                          className="firstout-header-search__hit"
-                          onClick={() => goTo(`/invoices/${invoice.id}`)}
-                        >
-                          {invoice.invoice_number} — {invoice.customer_name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-            </>
-          ) : null}
+      {panelOpen && (
+        <Theme theme="g10">
+          <div className="firstout-header-search__panel" id={panelId} ref={panel}>
+            {groups.map(({ label, hits }) => (
+              <section aria-label={label} key={label}>
+                <p className="firstout-header-search__group">{label}</p>
+                <ul className="firstout-header-search__hits">
+                  {hits.map((hit) => (
+                    <li key={hit.href}>
+                      <Link href={hit.href} className="firstout-header-search__hit" onNavigate={() => {
+                        setOpen(false);
+                        setQuery("");
+                      }}>{hit.label}</Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            <div role="status">
+              {!currentSearch && !groups.length && <p className="firstout-header-search__empty">Searching…</p>}
+              {currentSearch?.error && <p className="firstout-header-search__empty">{currentSearch.error}</p>}
+              {results && !groups.length && <p className="firstout-header-search__empty">No matches for “{term}”.</p>}
+            </div>
+          </div>
         </Theme>
-      ) : null}
+      )}
     </div>
   );
 }

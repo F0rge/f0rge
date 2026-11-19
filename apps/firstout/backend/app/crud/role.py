@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.membership import Membership
 from app.models.role import Role
+from app.models.tenant_onboarding import TenantInvitation
 from f0rge_db.organisation import tenant_id_ctx
 from app.models.user import User, UserRole
 from f0rge_db.crud import BaseCRUD
@@ -27,12 +28,13 @@ class RoleCRUD(BaseCRUD):
             )
         ).scalar_one_or_none()
 
-    async def get_by_slug(self, slug: str) -> Optional[Role]:
+    async def get_by_slug(self, slug: str, *, refresh: bool = False) -> Optional[Role]:
         return (
             await self.db.execute(
                 select(Role)
                 .options(selectinload(Role.permissions))
                 .where(Role.slug == slug, Role.team_id == tenant_id_ctx.get())
+                .execution_options(populate_existing=refresh)
             )
         ).scalar_one_or_none()
 
@@ -78,3 +80,11 @@ class RoleCRUD(BaseCRUD):
 
     async def count_users_with_slug(self, slug: str) -> int:
         return await self.count_users_with_slugs([slug], active_only=False)
+
+    async def has_pending_invitation(self, slug: str) -> bool:
+        invitations = select(TenantInvitation.id).where(
+            TenantInvitation.team_id == tenant_id_ctx.get(),
+            TenantInvitation.role == slug,
+            TenantInvitation.status == "pending",
+        )
+        return bool(await self.db.scalar(select(invitations.exists())))

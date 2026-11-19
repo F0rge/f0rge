@@ -136,6 +136,15 @@ class ScopedDirectoryCRUD(BaseCRUD):
 
 
 class TeamCRUD(ScopedDirectoryCRUD):
+    async def lock_current(self) -> None:
+        # Serialize staff updates without blocking foreign-key checks when
+        # a concurrent invitation acceptance creates a user or membership.
+        await self.db.execute(
+            select(Team.id)
+            .where(Team.id == require_directory_tenant())
+            .with_for_update(key_share=True)
+        )
+
     async def get_by_id(self, team_id: uuid.UUID) -> Optional[Team]:
         tenant_id = require_directory_tenant()
         return await self.db.scalar(select(Team).where(Team.id == team_id, Team.id == tenant_id))
@@ -160,8 +169,10 @@ class UserCRUD(ScopedDirectoryCRUD):
             .where(Membership.team_id == require_directory_tenant())
         )
 
-    async def get_by_id(self, user_id: uuid.UUID) -> Optional[User]:
-        return await self.db.scalar(self._query().where(User.id == user_id))
+    async def get_by_id(self, user_id: uuid.UUID, *, refresh: bool = False) -> Optional[User]:
+        return await self.db.scalar(
+            self._query().where(User.id == user_id).execution_options(populate_existing=refresh)
+        )
 
     async def get_by_email(self, email: str) -> Optional[User]:
         return await self.db.scalar(self._query().where(User.email == email))

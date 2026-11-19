@@ -7,12 +7,8 @@ import datetime
 
 from decimal import Decimal
 
-from sqlalchemy import select
 
 from app.models.sku import Sku
-from app.models.sku_bom_line import SkuBomLine
-from app.services.cin7_import.load import run_import
-from tests.test_cin7_import import _fixture_dir, _write_csv
 from tests.test_laybys import _layby_payload
 from tests.test_purchase_orders import _create_supplier, _location_id_by_name
 from tests.test_quotes import _named_customer
@@ -141,29 +137,6 @@ async def test_archived_stock_remains_visible_and_countable(owner_client, async_
     completed = await client.post(f"/api/v1/stocktakes/{started.json()['id']}/complete")
     assert completed.status_code == 200, completed.text
     assert (await client.get(f"/api/v1/skus/{stocked['id']}")).json()["is_archived"] is True
-
-
-async def test_cin7_import_preserves_archive_and_archived_kit_recipe(async_db, tmp_path):
-    directory = _fixture_dir(tmp_path / "archive-import")
-    await run_import(async_db, directory)
-    await async_db.commit()
-    recipe = await async_db.scalar(select(SkuBomLine).limit(1))
-    assert recipe is not None
-    parent = await async_db.get(Sku, recipe.parent_sku_id)
-    part = await async_db.get(Sku, recipe.component_sku_id)
-    parent.is_archived = True
-    recipe.qty = Decimal("0.5")
-    await async_db.flush()
-    _write_csv(
-        directory / "AssemblyBOM_fixture.csv",
-        ["ProductSKU", "ComponentSKU", "Quantity"],
-        [[parent.our_ref, part.our_ref, "2"]],
-    )
-    await run_import(async_db, directory)
-    await async_db.flush()
-    await async_db.refresh(parent)
-    await async_db.refresh(recipe)
-    assert parent.is_archived is True and recipe.qty == Decimal("0.5")
 
 
 async def test_csv_import_requires_restore_before_editing_archived_sku(owner_client, async_db):

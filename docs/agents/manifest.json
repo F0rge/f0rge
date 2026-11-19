@@ -313,7 +313,6 @@
         "apps/storefront/commerce/src/**/test*/*migration*",
         "apps/marrow/backend/scripts/**",
         "apps/marrow/backend/data/**",
-        "apps/firstout/backend/app/commands/import_cin7.py",
         "apps/firstout/backend/app/commands/import_clerk_staff.py",
         "apps/firstout/backend/app/commands/tenant_cutover.py",
         "apps/buycycle/tracker/**",

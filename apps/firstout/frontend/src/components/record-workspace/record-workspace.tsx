@@ -14,6 +14,7 @@ import {
   Button,
   Checkbox,
   InlineNotification,
+  Modal,
   Pagination,
   SkeletonPlaceholder,
   SkeletonText,
@@ -81,7 +82,9 @@ function WorkspaceContent<T extends { id: string }>({
   refreshKey = 0,
   onCreate,
   createLabel,
+  listTitle,
   onEdit,
+  modalDetails = false,
   renderDetails,
   loadingDetails,
   headerActions,
@@ -90,7 +93,8 @@ function WorkspaceContent<T extends { id: string }>({
   children,
 }: RecordWorkspaceProps<T>) {
   const workspace = useWorkspace(adapter, refreshKey);
-  const { query, result, items, active } = workspace;
+  const { query, result, items } = workspace;
+  const active = modalDetails ? workspace.requestedRecord : workspace.active;
   const [operation, setOperation] = useState<WorkspaceOperation | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -138,7 +142,7 @@ function WorkspaceContent<T extends { id: string }>({
   const error = result.error;
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
+      <header className={`${styles.header}${modalDetails ? ` ${styles.modalDetailsHeader}` : ""}`}>
         <div>
           <h1>{adapter.title}</h1>
           <p>{adapter.description}</p>
@@ -218,7 +222,7 @@ function WorkspaceContent<T extends { id: string }>({
       {result.isPending && (
         <span className="firstout-sr-only" role="status">Loading {plural}…</span>
       )}
-      <div className={styles.layout}>
+      <div className={modalDetails ? styles.singlePane : styles.layout}>
         <section
           className={`${styles.list}${result.isPending ? " firstout-loading-motion" : ""}`}
           aria-label={`${adapter.title} list`}
@@ -227,10 +231,7 @@ function WorkspaceContent<T extends { id: string }>({
           <div className={styles.listHeading}>
             <div>
               <h2>
-                {archived
-                  ? (adapter.lifecycle?.archivedLabel ?? "Archived")
-                  : "All"}{" "}
-                {plural}
+                {listTitle ?? <>{archived ? (adapter.lifecycle?.archivedLabel ?? "Archived") : "All"} {plural}</>}
               </h2>
               {result.isPending ? (
                 <SkeletonText width="6rem" aria-hidden="true" />
@@ -456,6 +457,7 @@ function WorkspaceContent<T extends { id: string }>({
                               aria-current={
                                 active?.id === item.id ? "true" : undefined
                               }
+                              aria-haspopup={modalDetails ? "dialog" : undefined}
                               onClick={() => workspace.focus(item.id)}
                             >
                               <span
@@ -538,7 +540,7 @@ function WorkspaceContent<T extends { id: string }>({
             }
           />}
         </section>
-        <aside
+        {!modalDetails && <aside
           className={styles.inspector}
           aria-label="Selected record details"
         >
@@ -647,8 +649,33 @@ function WorkspaceContent<T extends { id: string }>({
               <p>Its details will appear here.</p>
             </div>
           )}
-        </aside>
+        </aside>}
       </div>
+      {modalDetails && active && !operation && (
+        <Modal
+          open
+          passiveModal
+          hasScrollingContent
+          modalHeading={adapter.getTitle(active)}
+          modalLabel={adapter.getSubtitle?.(active)}
+          onRequestClose={() => workspace.focus()}
+        >
+          {renderDetails(active, { reload: workspace.reload, archived })}
+          <div className={styles.modalDetailActions}>
+            {actions.filter((action) => action.key !== "edit" && (!adapter.canEdit || adapter.canEdit(active))).map((action) => (
+              <Button key={action.key} size="sm" kind={action.danger ? "danger--tertiary" : "tertiary"}
+                disabled={!bulkAvailable || result.isFetching} onClick={() => start(action, true)}>
+                {action.label}
+              </Button>
+            ))}
+            {onEdit && (adapter.canEdit ? adapter.canEdit(active) : !archived) && (
+              <Button size="sm" renderIcon={Edit} onClick={() => { workspace.focus(); onEdit(active); }}>
+                Edit {adapter.singular}
+              </Button>
+            )}
+          </div>
+        </Modal>
+      )}
       {operation && (
         <WorkspaceBulkDialog
           key={JSON.stringify(operation)}
@@ -658,6 +685,7 @@ function WorkspaceContent<T extends { id: string }>({
           onClose={() => setOperation(null)}
           onComplete={(message) => {
             setNotice(message);
+            if (modalDetails) workspace.focus();
             workspace.reload();
           }}
         />

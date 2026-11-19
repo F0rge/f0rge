@@ -10,7 +10,7 @@ from app.dependencies.tenant_signup import (
     get_tenant_signup_service,
 )
 from app.middleware.auth import get_current_user_id
-from app.schemas.tenant_signup import OrganisationInvitationCreate, SignupIntent
+from app.schemas.tenant_signup import OrganisationInvitationCreate, SignupIntent, StaffCapacity
 from app.services.clerk import ClerkSession
 from app.services.tenant_signup import OrganisationService, TenantSignupService, signup_status
 
@@ -53,6 +53,14 @@ async def current(
     service: OrganisationService = Depends(get_organisation_service),
 ) -> dict:
     return await service.current()
+
+
+@organisations_router.get("/staff-capacity")
+async def staff_capacity(
+    _user: uuid.UUID = Depends(get_current_user_id),
+    service: OrganisationService = Depends(get_organisation_service),
+) -> StaffCapacity:
+    return await service.staff_capacity()
 
 
 @organisations_router.get("/invitations")
