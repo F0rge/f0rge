@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from alembic.script import ScriptDirectory
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 from f0rge_testing import async_url
@@ -30,6 +31,7 @@ from app.services.release_readiness import release_readiness
 
 pytestmark = pytest.mark.no_db
 COMMIT = "a" * 40
+RELEASE_BASELINE = "089_merge_record_workspaces"
 
 
 async def migrate(*args, **kwargs):
@@ -37,7 +39,7 @@ async def migrate(*args, **kwargs):
     return await run_migration(*args, allow_test_runtime_owner=True, **kwargs)
 
 
-def baseline(url: str, revision: str = "089_merge_record_workspaces") -> None:
+def baseline(url: str, revision: str = RELEASE_BASELINE) -> None:
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", revision],
         cwd=BACKEND,
@@ -48,16 +50,30 @@ def baseline(url: str, revision: str = "089_merge_record_workspaces") -> None:
     assert result.returncode == 0, "Synthetic PostgreSQL fixture migration failed"
 
 
-def test_policy_has_one_head_and_no_unreviewed_automatic_history() -> None:
+def migration_history(scripts: ScriptDirectory, head: str = "heads") -> list[str]:
+    return [item.revision for item in reversed(list(scripts.walk_revisions(head=head)))]
+
+
+def expected_release_revisions(scripts: ScriptDirectory) -> list[str]:
+    at_baseline = set(migration_history(scripts, RELEASE_BASELINE))
+    return [revision for revision in migration_history(scripts) if revision not in at_baseline]
+
+
+def test_policy_has_one_head_and_no_unreviewed_automatic_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     policy, digest, scripts = load_policy()
+    assert scripts.get_heads() == [policy["target_revision"]]
     assert len(digest) == 64
-    assert plan_pending(policy, scripts, "089_merge_record_workspaces") == [
-        "090_release_migration_receipts",
-        "091_sku_archive",
-    ]
-    policy["revisions"]["090_release_migration_receipts"]["automatic"] = False
-    with pytest.raises(MigrationRefused, match="not approved"):
-        plan_pending(policy, scripts, "089_merge_record_workspaces")
+    expected = expected_release_revisions(scripts)
+    assert expected[0] == "090_release_migration_receipts"
+    assert plan_pending(policy, scripts, RELEASE_BASELINE) == expected
+    assert plan_pending(policy, scripts, policy["target_revision"]) == []
+    for revision in (expected[0], expected[-1]):
+        with monkeypatch.context() as patch:
+            patch.setitem(policy["revisions"][revision], "automatic", False)
+            with pytest.raises(MigrationRefused, match="not approved"):
+                plan_pending(policy, scripts, RELEASE_BASELINE)
     with pytest.raises(MigrationRefused, match="baseline upgrade"):
         plan_pending(policy, scripts, "082_tenant_onboarding")
     with pytest.raises(MigrationRefused, match="not an ancestor"):
@@ -88,6 +104,8 @@ async def test_release_upgrade_preserves_old_reads_and_receipt_is_repeat_safe(
     second_postgres_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     url = second_postgres_url
+    _, policy_digest, scripts = load_policy()
+    expected_head = scripts.get_current_head()
     baseline(url)
     engine = create_async_engine(url)
     team, customer = uuid.uuid4(), uuid.uuid4()
@@ -107,10 +125,9 @@ async def test_release_upgrade_preserves_old_reads_and_receipt_is_repeat_safe(
             )
         first = await migrate(url, url, COMMIT)
         assert logging.getLogger("app.http").disabled is False
-        assert first["applied_revisions"] == [
-            "090_release_migration_receipts",
-            "091_sku_archive",
-        ]
+        assert first["applied_revisions"] == expected_release_revisions(scripts)
+        assert first["schema_revision"] == expected_head
+        assert first["policy_sha256"] == policy_digest
         assert first["replayed"] is False
         second = await migrate(url, url, COMMIT)
         assert second["replayed"] is True
@@ -137,15 +154,17 @@ async def test_release_upgrade_preserves_old_reads_and_receipt_is_repeat_safe(
         payload = json.loads(response.body)
         assert payload["migration_receipt"] is True
         assert payload["source_commit"] == COMMIT
-        assert payload["schema_revision"] == "091_sku_archive"
+        assert payload["schema_revision"] == expected_head
         # Old retained image readiness may observe a newer, additive schema.
+        future_revision = "future_additive_revision"
         async with engine.begin() as conn:
             await conn.execute(
-                sa.text("UPDATE alembic_version SET version_num='092_future_compatible'")
+                sa.text("UPDATE alembic_version SET version_num=:revision"),
+                {"revision": future_revision},
             )
         response = await release_readiness(engine)
         assert response.status_code == 200
-        assert json.loads(response.body)["schema_revision"] == "092_future_compatible"
+        assert json.loads(response.body)["schema_revision"] == future_revision
         monkeypatch.setenv("SOURCE_COMMIT", "b" * 40)
         assert (await release_readiness(engine)).status_code == 503
     finally:
@@ -413,6 +432,7 @@ async def test_explicit_empty_ci_database_bootstrap_reaches_ready_schema(
     second_postgres_url: str,
 ) -> None:
     parsed = make_url(second_postgres_url)
+    _, _, scripts = load_policy()
     name = "firstout_cd_test_" + uuid.uuid4().hex
     admin = create_async_engine(parsed.set(database="postgres"), isolation_level="AUTOCOMMIT")
     url = parsed.set(database=name).render_as_string(hide_password=False)
@@ -420,8 +440,8 @@ async def test_explicit_empty_ci_database_bootstrap_reaches_ready_schema(
         async with admin.connect() as conn:
             await conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
         receipt = await migrate(url, url, COMMIT, bootstrap_test_database=True)
-        assert receipt["schema_revision"] == "091_sku_archive"
-        assert len(receipt["applied_revisions"]) == 92
+        assert receipt["schema_revision"] == scripts.get_current_head()
+        assert receipt["applied_revisions"] == migration_history(scripts)
         with pytest.raises(MigrationRefused, match="empty firstout_cd_test_"):
             await migrate(url, url, COMMIT, bootstrap_test_database=True)
         assert (await migrate(url, url, COMMIT))["replayed"] is True
