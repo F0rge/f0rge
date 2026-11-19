@@ -19,6 +19,7 @@ export type TillCartSnapshot = {
   pickId: string;
   linkedPickIds: Record<string, string>;
   held?: boolean;
+  note?: string;
   lines: { skuId: string; qty: number; discountPercent: number }[];
 };
 
@@ -198,5 +199,9 @@ export function loadTillCart(store?: KeyValueStore): TillCartSnapshot | null {
 
 export function clearTillCart(store?: KeyValueStore): void {
   const target = store ?? browserSession();
-  target?.removeItem(TILL_CART_KEY);
+  try {
+    target?.removeItem(TILL_CART_KEY);
+  } catch {
+    // Some browsers deny storage access after a session is created.
+  }
 }

@@ -17,6 +17,11 @@ import {
   Select,
   SelectItem,
   Stack,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -60,6 +65,7 @@ import {
 import { formatQuantity } from "@/lib/quantity";
 import styles from "./page.module.css";
 import { TillLoading } from "./loading-layout";
+import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
 
 import {
   ApiError,
@@ -75,6 +81,8 @@ import {
   getSettings,
   getSku,
   getCustomer,
+  holdTillSale,
+  resumeTillHeldSale,
   listPicks,
   exVatToIncVat,
   formatPriceAmount,
@@ -92,6 +100,7 @@ import {
   type AppSettings,
   type CustomerCrm,
   type InventorySku,
+  type HeldSale,
   type Location,
   type PriceList,
   type Sku,
@@ -124,7 +133,7 @@ import {
   openPicksHrefForKit,
   parseKitRequiresPick,
   salePickIds,
-  saveTillCart,
+  type TillCartSnapshot,
   type TillKitBlock,
 } from "@/lib/till-kit-pick";
 import {
@@ -135,6 +144,19 @@ import {
   resolveTillScan,
   tillScanErrorMessage,
 } from "@/lib/barcode-scan";
+
+import { workspaceIdentity } from "@/lib/record-workspace";
+import { resetMainScroll } from "@/lib/reset-main-scroll";
+import {
+  canKeepOriginalBasket,
+  heldSaleRequest,
+  isUncertainHeldResponse,
+  readTillSession,
+  saveTillSession,
+  snapshotHeldSale,
+  tillSessionKey,
+  type PendingHeldOperation,
+} from "@/lib/till-held-sales";
 
 const WALK_IN_CUSTOMER_NAME = "Walk-in customer";
 
@@ -250,7 +272,39 @@ function SkuThumb({ sku }: { sku: Sku }) {
   );
 }
 
+type RestoredCart = { lines: CartLine[]; customer: CustomerCrm | null };
+
+function blankCart(locationId: string): TillCartSnapshot {
+  return { locationId, customerId: "", pickId: "", linkedPickIds: {}, lines: [] };
+}
+
+async function hydrateCart(
+  snapshot: TillCartSnapshot,
+  skus: Sku[],
+  picks: PickDocument[],
+  customers: CustomerCrm[],
+): Promise<RestoredCart> {
+  const byId = await restoreTillCartSkus(snapshot, skus, picks, getSku);
+  const lines = snapshot.lines.map((line) => {
+    const sku = byId.get(line.skuId);
+    if (!sku?.is_sellable) {
+      throw new Error("A saved product is no longer available. Check the product and any linked kit pick before retrying.");
+    }
+    return { key: sku.id, sku, qty: line.qty, discountPercent: line.discountPercent };
+  });
+  const customer = snapshot.customerId
+    ? customers.find((item) => item.id === snapshot.customerId) ?? await getCustomer(snapshot.customerId)
+    : null;
+  if (customer?.is_archived) throw new Error("The saved customer is archived.");
+  return { lines, customer };
+}
+
 export default function TillPage() {
+  const { user } = useAuth();
+  return <TillWorkspace key={workspaceIdentity(user)} />;
+}
+
+function TillWorkspace() {
   const router = useRouter();
   const mobileScan = useSyncExternalStore(
     subscribeMobileScan,
@@ -276,6 +330,21 @@ export default function TillPage() {
   const [locationId, setLocationId] = useState("");
   const [pendingShowroom, setPendingShowroom] = useState<string | null>(null);
   const [resumedSale, setResumedSale] = useState(false);
+  const [view, setView] = useState(0);
+  const [heldNote, setHeldNote] = useState("");
+  const [heldNotice, setHeldNotice] = useState<{ title: string; subtitle?: string } | null>(null);
+  const [heldFocus, setHeldFocus] = useState("");
+  const [resumeDraft, setResumeDraft] = useState<HeldSale | null>(null);
+  const [heldBusy, setHeldBusy] = useState(false);
+  const [heldListBusy, setHeldListBusy] = useState(false);
+  const [pendingHeld, setPendingHeld] = useState<PendingHeldOperation | null>(null);
+  const [restoreBlocked, setRestoreBlocked] = useState(false);
+  const [discardRestored, setDiscardRestored] = useState(false);
+  const [pendingBlocked, setPendingBlocked] = useState(false);
+  const [originalAvailable, setOriginalAvailable] = useState(false);
+  const heldLock = useRef(false);
+  const operationSource = useRef<TillCartSnapshot | null>(null);
+  const restoringLegacy = useRef(false);
   const [skuId, setSkuId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
@@ -321,6 +390,28 @@ export default function TillPage() {
   } | null>(null);
   const scanBufferRef = useRef("");
   const [cartReady, setCartReady] = useState(false);
+  const sessionKey = user ? tillSessionKey(user.team.id, user.id) : "";
+  const heldList = useHeldSales(canSell && cartReady ? locationId : "");
+  const heldLocked = heldBusy || heldListBusy || pendingHeld !== null;
+
+  const currentSnapshot = useMemo<TillCartSnapshot>(() => ({
+    locationId, customerId, pickId, linkedPickIds,
+    ...(heldNote ? { note: heldNote } : {}),
+    lines: cart.map((line) => ({
+      skuId: line.sku.id, qty: line.qty, discountPercent: line.discountPercent,
+    })),
+  }), [locationId, customerId, pickId, linkedPickIds, heldNote, cart]);
+
+  const applySnapshot = useCallback((snapshot: TillCartSnapshot, restored: RestoredCart) => {
+    setCart(restored.lines);
+    setCommitmentCustomer(restored.customer);
+    setCustomerId(snapshot.customerId);
+    if (snapshot.locationId) setLocationId(snapshot.locationId);
+    setPickId(snapshot.pickId);
+    setLinkedPickIds(snapshot.linkedPickIds);
+    setHeldNote(snapshot.note ?? "");
+    setCartReady(true);
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -486,74 +577,64 @@ export default function TillPage() {
   }, [cartKitKey]);
 
   useEffect(() => {
-    if (!loadSucceeded || cartReady) return;
-    const snapshot = loadTillCart();
-    if (!snapshot) {
-      setCartReady(true);
-      return;
-    }
+    if (!canSell || !loadSucceeded || cartReady || restoreBlocked || pendingHeld || heldLock.current) return;
     let cancelled = false;
     void (async () => {
-      const byId = await restoreTillCartSkus(snapshot, skus, tillPicks, getSku);
-      const lines = snapshot.lines.flatMap((line) => {
-        const sku = byId.get(line.skuId);
-        return sku
-          ? [
-              {
-                key: sku.id,
-                sku,
-                qty: line.qty,
-                discountPercent: line.discountPercent,
-              },
-            ]
-          : [];
-      });
-      const retainedCustomer =
-        snapshot.customerId &&
-        !customers.some((item) => item.id === snapshot.customerId) &&
-        lines.some((line) => line.sku.is_archived)
-          ? await getCustomer(snapshot.customerId)
-          : null;
+      let session;
+      try {
+        session = readTillSession(sessionKey);
+      } catch (failure) {
+        if (failure instanceof DOMException && failure.name === "SecurityError") {
+          // Normal till sales can run without a browser cart. Held writes will
+          // require a working recovery cache before posting anything.
+          setCartReady(true);
+          return;
+        }
+        throw failure;
+      }
+      const legacy = session ? null : loadTillCart();
+      const snapshot = session?.cart ?? legacy;
+      if (!snapshot || (!session && !locations.some((location) => location.id === snapshot.locationId))) {
+        setCartReady(true);
+        return;
+      }
+      restoringLegacy.current = Boolean(legacy);
+      if (session?.pending) {
+        operationSource.current = snapshot;
+        setPendingHeld(session.pending);
+        if (snapshot.locationId) setLocationId(snapshot.locationId);
+        return;
+      }
+      if (snapshot.locationId && !locations.some((location) => location.id === snapshot.locationId)) {
+        throw new Error("The showroom for the saved cart is no longer available.");
+      }
+      const restored = await hydrateCart(snapshot, skus, tillPicks, customers);
       if (cancelled) return;
-      setCart(lines);
-      setCommitmentCustomer(retainedCustomer);
-      if (snapshot.locationId) setLocationId(snapshot.locationId);
-      if (snapshot.customerId) setCustomerId(snapshot.customerId);
-      setPickId(snapshot.pickId);
-      setLinkedPickIds(snapshot.linkedPickIds);
-      setResumedSale(snapshot.held === true && lines.length > 0);
-      if (lines.length !== snapshot.lines.length)
-        setError(
-          "Some saved items are no longer available for sale and have not been restored. Archived kits require their original, unconsumed till pick at its exact quantity.",
-        );
-      setCartReady(true);
-    })().catch(() => {
-      if (!cancelled)
-        setError(
-          "The saved cart could not be restored. Reload the till to retry; the saved cart has not been changed.",
-        );
+      if (legacy && saveTillSession(sessionKey, { cart: snapshot })) {
+        clearTillCart();
+        restoringLegacy.current = false;
+      }
+      applySnapshot(snapshot, restored);
+      setResumedSale(snapshot.held === true && restored.lines.length > 0);
+      if (legacy?.held && restored.lines.length) {
+        setHeldNotice({
+          title: "Held sale restored from this tab",
+          subtitle: "Use Hold sale to save it to the showroom’s shared Held sales list.",
+        });
+      }
+    })().catch((failure: unknown) => {
+      if (cancelled) return;
+      setRestoreBlocked(true);
+      setError(failure instanceof Error ? failure.message : "Could not restore the saved cart.");
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [cartReady, customers, loadSucceeded, skus, tillPicks]);
+    return () => { cancelled = true; };
+  }, [applySnapshot, canSell, cartReady, customers, loadSucceeded, locations, pendingHeld, restoreBlocked, sessionKey, skus, tillPicks]);
 
   useEffect(() => {
-    if (!cartReady) {
-      return;
+    if (cartReady && !pendingHeld && !heldLock.current) {
+      saveTillSession(sessionKey, { cart: currentSnapshot });
     }
-    saveTillCart({
-      locationId,
-      customerId,
-      pickId,
-      linkedPickIds,
-      lines: cart.map((line) => ({
-        skuId: line.sku.id,
-        qty: line.qty,
-        discountPercent: line.discountPercent,
-      })),
-    });
-  }, [cart, cartReady, customerId, linkedPickIds, locationId, pickId]);
+  }, [cartReady, currentSnapshot, pendingHeld, sessionKey]);
 
   const priceRequest = useMemo<TillPriceRequest>(() => ({
     ...(customerId ? { customer_id: customerId } : {}),
@@ -640,14 +721,14 @@ export default function TillPage() {
   }, []);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && view === 0 && !heldLocked) {
       focusScanField();
     }
-  }, [loading, focusScanField]);
+  }, [loading, focusScanField, heldLocked, view]);
 
   const applyScan = useCallback(
     (code: string, allowOurRef: boolean, addQty = 1): boolean => {
-      if (!cartReady || !canSell || !locationId) {
+      if (view !== 0 || heldLocked || heldLock.current || !cartReady || !canSell || !locationId) {
         return false;
       }
       const trimmed = code.trim();
@@ -673,7 +754,7 @@ export default function TillPage() {
       focusScanField();
       return true;
     },
-    [canSell, cartQtyBySku, cartReady, floorOnHandFor, focusScanField, locationId, priceLists, selectedCustomer, skus],
+    [canSell, cartQtyBySku, cartReady, floorOnHandFor, focusScanField, heldLocked, locationId, priceLists, selectedCustomer, skus, view],
   );
 
   useEffect(() => {
@@ -707,6 +788,11 @@ export default function TillPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [applyScan]);
+
+  const unavailableStock = resumedSale ? cart.filter((line) =>
+    requiresTillFloorStock(line.sku) &&
+    (cartQtyBySku.get(line.sku.id) ?? 0) > floorOnHandFor(line.sku.id)
+  ) : [];
 
   const saleValid =
     canSell &&
@@ -806,7 +892,16 @@ export default function TillPage() {
   }
 
   function removeCartLine(key: string) {
+    const skuId = cart.find((line) => line.key === key)?.sku.id;
+    if (!skuId) return;
     setCart((current) => current.filter((line) => line.key !== key));
+    setLinkedPickIds((current) => Object.fromEntries(
+      Object.entries(current).filter(([id]) => id !== skuId),
+    ));
+    if (linkedPickIds[skuId] === pickId ||
+        tillPicks.some((pick) => pick.id === pickId && pick.kit_sku_id === skuId)) {
+      setPickId("");
+    }
   }
 
   async function resumeExistingPick() {
@@ -871,10 +966,183 @@ export default function TillPage() {
     setLinkedPickIds({});
     setKitBlocks([]);
     setCreditBlock(null);
+    setHeldNote("");
+    setHeldNotice(null);
+    setHeldFocus("");
+  }
+
+  function showView(next: number) {
+    if (next === 1 && view !== 1) heldList.refresh();
+    setView(next);
+    resetMainScroll();
+  }
+
+  async function restoreHeldDestination(snapshot: TillCartSnapshot) {
+    const [latestSkus, latestPicks, latestInventory] = await Promise.all([
+      listSkus(), listPicks("till"), listInventory(),
+    ]);
+    const restored = await hydrateCart(snapshot, latestSkus, latestPicks, []);
+    return { restored, latestSkus, latestPicks, latestInventory };
+  }
+
+  async function finishHeldOperation(
+    operation: PendingHeldOperation,
+    source: TillCartSnapshot,
+    destination: Awaited<ReturnType<typeof restoreHeldDestination>> | null,
+    retry: boolean,
+  ) {
+    let acknowledged = false;
+    try {
+      if (operation.kind === "hold") {
+        const draft = await holdTillSale(operation.request);
+        acknowledged = true;
+        const empty = blankCart(source.locationId);
+        if (!saveTillSession(sessionKey, { cart: empty })) {
+          throw new Error("The sale is held but this browser could not clear the recovered cart.");
+        }
+        applySnapshot(empty, { lines: [], customer: null });
+        setResumedSale(false);
+        setHeldFocus(draft.id);
+        setHeldNotice({ title: `${draft.reference} is on hold`, subtitle: "Choose Resume sale when you’re ready." });
+        showView(1);
+      } else {
+        const result = await resumeTillHeldSale(operation.id, operation.request);
+        acknowledged = true;
+        if (result.resumed_id !== operation.id ||
+            (result.held_current_id ?? null) !== (operation.request.current?.id ?? null)) {
+          throw new Error("The till could not confirm which basket was resumed.");
+        }
+        const next = destination ?? await restoreHeldDestination(operation.destination);
+        if (!saveTillSession(sessionKey, { cart: operation.destination })) {
+          throw new Error("The till could not store the resumed basket in this browser.");
+        }
+        setSkus(next.latestSkus.filter((sku) => !sku.is_archived));
+        setTillPicks(next.latestPicks);
+        setInventory(next.latestInventory);
+        applySnapshot(operation.destination, next.restored);
+        setResumedSale(true);
+        setTender("cash");
+        setCreditOverride(false);
+        setCreditOverrideReason("");
+        refreshPrices();
+        setHeldNotice({
+          title: `${operation.reference} resumed`,
+          subtitle: result.held_current_id
+            ? "The previous basket is on hold. Review prices and stock before taking payment."
+            : "Review prices and stock before taking payment.",
+        });
+        showView(0);
+      }
+      setLastSale(null);
+      setSkuId("");
+      setQty(1);
+      setKitBlocks([]);
+      setCreditBlock(null);
+      setRestoreBlocked(false);
+      setPendingHeld(null);
+      setPendingBlocked(false);
+      setOriginalAvailable(false);
+      operationSource.current = null;
+      heldList.refresh();
+    } catch (failure: unknown) {
+      if (!acknowledged && !retry && !isUncertainHeldResponse(failure) &&
+          saveTillSession(sessionKey, { cart: source })) {
+        setPendingHeld(null);
+        operationSource.current = null;
+        heldList.refresh();
+      } else if (acknowledged || !isUncertainHeldResponse(failure)) {
+        setPendingBlocked(true);
+        setOriginalAvailable(!acknowledged && retry && canKeepOriginalBasket(failure, operation));
+      }
+      setError(failure instanceof Error ? failure.message : "Could not confirm the held sale operation.");
+    }
+  }
+
+  async function startHeldOperation(draft?: HeldSale) {
+    if (!cartReady || !loadSucceeded || !locationId || heldLocked || heldLock.current || submitting || resumingPick || pickDraft) return;
+    if (draft ? draft.location_id !== locationId : !currentSnapshot.lines.length) return;
+    heldLock.current = true;
+    setHeldBusy(true);
+    setError(null);
+    try {
+      const destination = draft ? snapshotHeldSale(draft) : null;
+      const prepared = destination ? await restoreHeldDestination(destination) : null;
+      const operation: PendingHeldOperation = draft && destination ? {
+        kind: "resume",
+        id: draft.id,
+        reference: draft.reference,
+        startedAt: Date.now(),
+        request: {
+          version: draft.version,
+          location_id: locationId,
+          operation_id: crypto.randomUUID(),
+          ...(currentSnapshot.lines.length ? { current: heldSaleRequest(currentSnapshot, tillPicks) } : {}),
+        },
+        destination,
+      } : { kind: "hold", request: heldSaleRequest(currentSnapshot, tillPicks) };
+      if (!saveTillSession(sessionKey, { cart: currentSnapshot, pending: operation })) {
+        throw new Error("This browser could not save a recovery copy. The sale has not changed.");
+      }
+      operationSource.current = currentSnapshot;
+      setPendingHeld(operation);
+      setPendingBlocked(false);
+      setResumeDraft(null);
+      await finishHeldOperation(operation, currentSnapshot, prepared, false);
+    } catch (failure: unknown) {
+      setError(failure instanceof Error ? failure.message : "Could not prepare the held sale.");
+    } finally {
+      heldLock.current = false;
+      setHeldBusy(false);
+    }
+  }
+
+  async function retryHeldOperation() {
+    if (!pendingHeld || !operationSource.current || heldLock.current) return;
+    heldLock.current = true;
+    setHeldBusy(true);
+    setError(null);
+    setOriginalAvailable(false);
+    try {
+      await finishHeldOperation(pendingHeld, operationSource.current, null, true);
+    } finally {
+      heldLock.current = false;
+      setHeldBusy(false);
+    }
+  }
+
+  async function keepOriginalBasket() {
+    const source = operationSource.current;
+    if (!originalAvailable || !source || heldLock.current) return;
+    heldLock.current = true;
+    setHeldBusy(true);
+    try {
+      const next = await restoreHeldDestination(source);
+      if (!saveTillSession(sessionKey, { cart: source })) {
+        throw new Error("This browser could not save the original basket in this tab.");
+      }
+      setSkus(next.latestSkus.filter((sku) => !sku.is_archived));
+      setTillPicks(next.latestPicks);
+      setInventory(next.latestInventory);
+      applySnapshot(source, next.restored);
+      setPendingHeld(null);
+      setPendingBlocked(false);
+      setOriginalAvailable(false);
+      operationSource.current = null;
+      setError(null);
+      setHeldNotice({ title: "Current basket kept" });
+      showView(0);
+      refreshPrices();
+      heldList.refresh();
+    } catch (failure: unknown) {
+      setError(failure instanceof Error ? failure.message : "Could not restore the original basket.");
+    } finally {
+      heldLock.current = false;
+      setHeldBusy(false);
+    }
   }
 
   async function handleCompleteSale() {
-    if (!saleValid || !pricePreview) {
+    if (!saleValid || !pricePreview || heldLocked || heldLock.current || submitting) {
       return;
     }
     if (creditOverride && canOverrideCredit && !creditOverrideReason.trim()) {
@@ -911,7 +1179,9 @@ export default function TillPage() {
       setPickId("");
       setLinkedPickIds({});
       setKitBlocks([]);
-      clearTillCart();
+      setHeldNote("");
+      setHeldNotice(null);
+      saveTillSession(sessionKey, { cart: blankCart(locationId) });
       setQty(1);
       await loadData();
     } catch (err) {
@@ -1047,17 +1317,10 @@ export default function TillPage() {
   }
 
   function openPicksForKit(kit: TillKitBlock) {
-    saveTillCart({
-      locationId,
-      customerId,
-      pickId,
-      linkedPickIds,
-      lines: cart.map((line) => ({
-        skuId: line.sku.id,
-        qty: line.qty,
-        discountPercent: line.discountPercent,
-      })),
-    });
+    if (!saveTillSession(sessionKey, { cart: currentSnapshot })) {
+      setError("This browser could not save the cart. Keep the till open while you finish the sale.");
+      return;
+    }
     router.push(openPicksHrefForKit(kit));
   }
 
@@ -1107,26 +1370,8 @@ export default function TillPage() {
           <Button
             kind="tertiary"
             renderIcon={Bookmark}
-            disabled={!cartReady || loading || submitting || cart.length === 0}
-            onClick={() => {
-              const saved = saveTillCart({
-                held: true,
-                locationId,
-                customerId,
-                pickId,
-                linkedPickIds,
-                lines: cart.map((line) => ({
-                  skuId: line.sku.id,
-                  qty: line.qty,
-                  discountPercent: line.discountPercent,
-                })),
-              });
-              if (saved) {
-                router.push("/");
-              } else {
-                setError("This browser could not save the cart. Keep the till open until the sale is complete.");
-              }
-            }}
+            disabled={!cartReady || loading || submitting || heldLocked || resumingPick || !!pickDraft || cart.length === 0}
+            onClick={() => void startHeldOperation()}
           >
             Hold sale
           </Button>
@@ -1143,17 +1388,79 @@ export default function TillPage() {
         />
       ) : null}
 
-      {cart.length > 0 && (
-        <InlineNotification
-          kind={resumedSale ? "success" : "info"}
-          title={resumedSale ? "Held sale resumed" : "Holding a sale"}
-          subtitle={resumedSale
-            ? "Check the payment method and amount before completing the sale."
-            : "Keep this tab open and return to Till in this tab to resume."}
-          lowContrast
-          hideCloseButton
-        />
+      {heldNotice && <InlineNotification kind="success" lowContrast title={heldNotice.title}
+        subtitle={heldNotice.subtitle} onCloseButtonClick={() => setHeldNotice(null)} />}
+      {pendingHeld && <div>
+        <InlineNotification kind="warning" lowContrast hideCloseButton title="Held sale operation pending"
+          subtitle="Retry to confirm the result before changing the cart or taking payment." />
+        <Button kind="tertiary" disabled={heldBusy} onClick={() => void retryHeldOperation()}>
+          {heldBusy ? "Confirming…" : "Retry held sale operation"}
+        </Button>
+        {originalAvailable && <Button kind="secondary" disabled={heldBusy}
+          onClick={() => void keepOriginalBasket()}>Keep current basket</Button>}
+        {pendingBlocked && <Button kind="danger--ghost" disabled={heldBusy}
+          onClick={() => setDiscardRestored(true)}>Discard recovery copy</Button>}
+      </div>}
+      {restoreBlocked && !pendingHeld && <div>
+        <InlineNotification kind="warning" lowContrast hideCloseButton title="Saved cart needs attention"
+          subtitle="The saved cart is still in this tab. Reload after correcting the issue, or discard the saved cart to start again." />
+        <Button kind="danger--ghost" onClick={() => setDiscardRestored(true)}>Discard saved cart</Button>
+      </div>}
+      <Modal open={discardRestored} danger
+        modalHeading={pendingHeld ? "Discard the recovery copy?" : "Discard the saved cart?"}
+        primaryButtonText={pendingHeld ? "Discard recovery copy" : "Discard cart"}
+        secondaryButtonText="Keep cart" shouldSubmitOnEnter={false}
+        onRequestClose={() => setDiscardRestored(false)} onRequestSubmit={() => {
+          const empty = blankCart(locationId);
+          if (!saveTillSession(sessionKey, { cart: empty })) {
+            setError("This browser could not update the saved cart.");
+            return;
+          }
+          if (restoringLegacy.current) clearTillCart();
+          restoringLegacy.current = false;
+          setDiscardRestored(false);
+          setRestoreBlocked(false);
+          setPendingHeld(null);
+          setPendingBlocked(false);
+          setOriginalAvailable(false);
+          operationSource.current = null;
+          setResumedSale(false);
+          setHeldNotice(null);
+          applySnapshot(empty, { lines: [], customer: null });
+          setError(null);
+          heldList.refresh();
+        }}>
+        <p>{pendingHeld
+          ? "This clears the unfinished cart from this tab. Check Held sales for any baskets already saved there. A sale already resumed may only be recoverable from this tab."
+          : "This removes the unfinished cart stored in this tab."}</p>
+      </Modal>
+      <Modal open={resumeDraft !== null} modalHeading={`Resume ${resumeDraft?.reference ?? "held sale"}?`}
+        primaryButtonText={heldBusy ? "Resuming…" : "Hold current and resume"} primaryButtonDisabled={heldBusy}
+        secondaryButtonText="Cancel" preventCloseOnClickOutside
+        onRequestClose={() => { if (!heldBusy) setResumeDraft(null); }}
+        onRequestSubmit={() => { if (resumeDraft) void startHeldOperation(resumeDraft); }}>
+        {error && resumeDraft && <InlineNotification kind="error" lowContrast hideCloseButton
+          title="Could not resume the held sale" subtitle={error} />}
+        <p>The current basket will go into Held sales. The selected basket will become the current sale.</p>
+      </Modal>
+
+      <Tabs selectedIndex={view} onChange={({ selectedIndex }) => showView(selectedIndex)}>
+        <TabList aria-label="Till views">
+          <Tab disabled={heldBusy || heldListBusy || submitting || resumingPick}>Current sale</Tab>
+          <Tab disabled={heldBusy || heldListBusy || submitting || resumingPick}>
+            Held sales{heldList.loading || heldList.error ? "" : ` (${heldList.sales.length})`}
+          </Tab>
+        </TabList>
+        <TabPanels>
+          <TabPanel className="held-sales-panel">
+            <div className="held-sales-content" inert={heldLocked} aria-busy={heldBusy || undefined}>
+      {resumedSale && cart.length > 0 && (
+        <InlineNotification kind="info" lowContrast hideCloseButton title="Resumed sale"
+          subtitle="Check the payment method, prices and available stock before completing the sale." />
       )}
+      {unavailableStock.length > 0 && <InlineNotification kind="warning" lowContrast hideCloseButton
+        title="Not enough showroom stock"
+        subtitle={`Review the quantities for ${unavailableStock.map((line) => line.sku.our_ref).join(", ")} before taking payment.`} />}
 
       <Modal
         open={pendingShowroom !== null}
@@ -1766,6 +2073,7 @@ export default function TillPage() {
                   kind="primary"
                   disabled={
                     !saleValid ||
+                    heldLocked ||
                     submitting ||
                     (creditOverride &&
                       canOverrideCredit &&
@@ -1920,6 +2228,30 @@ export default function TillPage() {
           </Stack>
         </Tile>
       ) : null}
+
+            </div>
+          </TabPanel>
+          <TabPanel className="held-sales-panel">
+            <div className="held-sales-content">
+              {view === 1 && <HeldSalesWorkspace
+                key={`${locationId}:${heldFocus}`}
+                locationId={locationId}
+                showroom={locations.find((location) => location.id === locationId)?.name ?? ""}
+                list={heldList}
+                focusId={heldFocus}
+                busy={heldLocked || submitting || !cartReady}
+                onBusy={setHeldListBusy}
+                onNotice={(title, subtitle) => setHeldNotice({ title, subtitle })}
+                onResume={(draft) => {
+                  setError(null);
+                  if (cart.length) setResumeDraft(draft);
+                  else void startHeldOperation(draft);
+                }}
+              />}
+            </div>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
 
       <Modal
         open={pickDraft !== null}
