@@ -20,6 +20,8 @@ from app.models.delivery import (
 )
 from app.models.document_sequence import DocumentSequence
 from app.models.customer import Customer
+from app.models.held_sale import HeldSale
+from app.models.held_sale_operation import HeldSaleOperation
 from app.models.inventory import LocationStock, SkuStock
 from app.models.location_bin import BinStock, LocationBin
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
@@ -133,6 +135,8 @@ __all__ = [
     "BinStock",
     "Location",
     "LocationBin",
+    "HeldSale",
+    "HeldSaleOperation",
     "LocationStock",
     "LocationType",
     "OpsCommerceAcknowledgement",
