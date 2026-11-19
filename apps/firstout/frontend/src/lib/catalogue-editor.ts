@@ -14,6 +14,7 @@ export const CATALOGUE_FIELD_TABS = {
   our_ref: 0,
   our_barcode: 0,
   category: 0,
+  till_no_stock_required: 0,
   stockist_inc_vat: 1,
   wholesale_inc_vat: 1,
   decorator_inc_vat: 1,
@@ -26,7 +27,10 @@ export const CATALOGUE_FIELD_TABS = {
 } as const;
 
 export type CatalogueEditorField = keyof typeof CATALOGUE_FIELD_TABS;
-export type CatalogueEditorForm = Record<CatalogueEditorField, string>;
+export type CatalogueEditorTextField = Exclude<CatalogueEditorField, "till_no_stock_required">;
+export type CatalogueEditorForm = Record<CatalogueEditorTextField, string> & {
+  till_no_stock_required: boolean;
+};
 export type CatalogueEditorErrors = Partial<
   Record<CatalogueEditorField, string>
 >;
@@ -40,6 +44,7 @@ export function catalogueFormFromSku(sku: EditableSku): CatalogueEditorForm {
     our_ref: sku.our_ref,
     our_barcode: sku.our_barcode,
     category: sku.category ?? "",
+    till_no_stock_required: sku.till_no_stock_required ?? false,
     stockist_inc_vat: sku.stockist_inc_vat ?? "",
     wholesale_inc_vat: sku.wholesale_inc_vat ?? "",
     decorator_inc_vat: sku.decorator_inc_vat ?? "",
@@ -112,6 +117,9 @@ export function buildCatalogueUpdate(
   form: CatalogueEditorForm,
 ): UpdateSkuPricePayload {
   const payload: UpdateSkuPricePayload = {};
+  if (form.till_no_stock_required !== (sku.till_no_stock_required ?? false)) {
+    payload.till_no_stock_required = form.till_no_stock_required;
+  }
   for (const field of [
     "name",
     "design",

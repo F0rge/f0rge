@@ -36,6 +36,18 @@ describe("catalogue update payload", () => {
     expect(buildCatalogueUpdate(sku, catalogueFormFromSku(sku))).toEqual({});
   });
 
+  it("omits an untouched till setting and sends explicit changes in either direction", () => {
+    const form = catalogueFormFromSku(sku);
+    expect(form.till_no_stock_required).toBe(false);
+    expect(buildCatalogueUpdate(sku, form)).toEqual({});
+    const enabled = { ...form, till_no_stock_required: true };
+    expect(buildCatalogueUpdate(sku, enabled)).toEqual({ till_no_stock_required: true });
+
+    const service = { ...sku, till_no_stock_required: true };
+    expect(buildCatalogueUpdate(service, catalogueFormFromSku(service))).toEqual({});
+    expect(buildCatalogueUpdate(service, form)).toEqual({ till_no_stock_required: false });
+  });
+
   it("distinguishes clearing a value from leaving it unchanged", () => {
     const existing = {
       ...sku,

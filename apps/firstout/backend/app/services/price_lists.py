@@ -52,7 +52,8 @@ class PriceListService:
         existing = await self.crud.get_by_name(data.name)
         if existing is not None:
             raise ConflictError("A price list with this name already exists")
-        row = PriceList(name=data.name)
+        self._validate_till_policy(data.name, data.till_require_listed_price)
+        row = PriceList(name=data.name, till_require_listed_price=data.till_require_listed_price)
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(row)
             try:
@@ -67,7 +68,14 @@ class PriceListService:
         other = await self.crud.get_by_name(data.name)
         if other is not None and other.id != price_list_id:
             raise ConflictError("A price list with this name already exists")
+        required = (
+            row.till_require_listed_price
+            if data.till_require_listed_price is None
+            else data.till_require_listed_price
+        )
+        self._validate_till_policy(data.name, required)
         row.name = data.name
+        row.till_require_listed_price = required
         async with unit_of_work(self.db):
             try:
                 await self.crud.commit_refresh(row)
@@ -136,10 +144,22 @@ class PriceListService:
             id=row.id,
             name=row.name,
             is_archived=row.is_archived,
+            till_require_listed_price=row.till_require_listed_price,
             items=items,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
+
+    @staticmethod
+    def _validate_till_policy(name: str, required: bool) -> None:
+        # Imported lists have a different pricing contract. The checkout policy
+        # can only be enabled on a reviewed, staff-managed list.
+        from app.services.pricing import is_cin7_generated_price_list
+
+        if required and is_cin7_generated_price_list(name):
+            raise ConflictError(
+                "Use a staff-managed price list to require listed prices at the till"
+            )
 
     @staticmethod
     def _require_active(row: PriceList) -> None:

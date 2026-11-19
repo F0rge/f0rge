@@ -20,10 +20,10 @@ import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.commands import replace_primavera
 from app.commands.replace_primavera import (
     KNOWN,
     EXTERNAL_PRESERVE,
-    SCHEMA_REVISION,
     PRIMAVERA_TEAM_ID,
     _snapshot,
     read_mapping,
@@ -285,11 +285,17 @@ async def replacement_database(second_postgres_url, monkeypatch):
     from app.commands.tenant_cutover import activate_rls
 
     monkeypatch.setattr(settings, "frontend_proxy_secret", "synthetic-replacement-proxy")
-    migrate(second_postgres_url, "091_sku_archive")
+    migrate(second_postgres_url, "head")
     admin = create_async_engine(second_postgres_url)
     role = "prepared_runtime_" + uuid.uuid4().hex[:12]
     password = "synthetic-" + uuid.uuid4().hex
     async with admin.begin() as conn:
+        fixture_revision = (
+            await conn.scalars(sa.text("SELECT version_num FROM alembic_version"))
+        ).one()
+        # These synthetic replacement tests exercise the current ORM. Simulate
+        # review of the fixture revision without changing the command's real pin.
+        monkeypatch.setattr(replace_primavera, "SCHEMA_REVISION", fixture_revision)
         await conn.execute(
             sa.text(f"CREATE ROLE \"{role}\" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{password}'")
         )
@@ -309,7 +315,7 @@ async def replacement_database(second_postgres_url, monkeypatch):
                 "(source_commit,schema_revision,policy_sha256,from_revision,completed_at) "
                 "VALUES (:commit,:revision,:policy,'089_merge_record_workspaces','2026-11-15 12:00:00')"
             ),
-            {"commit": "a" * 40, "revision": SCHEMA_REVISION, "policy": "b" * 64},
+            {"commit": "a" * 40, "revision": fixture_revision, "policy": "b" * 64},
         )
     runtime = create_async_engine(
         make_url(second_postgres_url).set(username=role, password=password)
@@ -441,6 +447,7 @@ async def replacement_database(second_postgres_url, monkeypatch):
             "sentinel": sentinel.id,
             "other": other.id,
             "database": make_url(second_postgres_url).database,
+            "schema_revision": fixture_revision,
             "runtime_url": make_url(second_postgres_url)
             .set(username=role, password=password)
             .render_as_string(hide_password=False),
@@ -907,9 +914,7 @@ async def test_replacement_refusal_gates_leave_business_data_intact(
         before = await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN)
         with pytest.raises(
             ValidationError,
-            match="exact reviewed schema revision091_sku_archive"
-            if gate == "multiple_heads"
-            else None,
+            match="exact reviewed schema revision" if gate == "multiple_heads" else None,
         ):
             await replace_in_transaction(
                 db,
@@ -929,10 +934,7 @@ async def test_real_cli_dry_run_and_commit_evidence_handshake(replacement_databa
     package = write_package(tmp_path / "package")
     map_path = tmp_path / "map.json"
     (_mappings, _changes), map_hash = mapping_file(map_path, info)
-    command = [
-        sys.executable,
-        "-m",
-        "app.commands.replace_primavera",
+    cli_args = [
         "--team-id",
         str(PRIMAVERA_TEAM_ID),
         "--package",
@@ -953,6 +955,27 @@ async def test_real_cli_dry_run_and_commit_evidence_handshake(replacement_databa
         "JWT_SECRET": "synthetic-replacement-cli",
     }
     root = Path(__file__).resolve().parents[1]
+    refused = subprocess.run(
+        [sys.executable, "-m", "app.commands.replace_primavera", *cli_args],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert refused.returncode == 2
+    assert "exact reviewed schema revision091_sku_archive" in refused.stderr
+
+    # Subprocesses do not inherit monkeypatch. Simulate fixture revision
+    # approval only in the isolated child exercising the real CLI handshake.
+    command = [
+        sys.executable,
+        "-c",
+        "import sys; from app.commands import replace_primavera; "
+        "replace_primavera.SCHEMA_REVISION = sys.argv[1]; "
+        "raise SystemExit(replace_primavera.main(sys.argv[2:]))",
+        info["schema_revision"],
+        *cli_args,
+    ]
     missing = subprocess.run(
         [*command, "--commit"], cwd=root, env=env, capture_output=True, text=True
     )
@@ -960,6 +983,7 @@ async def test_real_cli_dry_run_and_commit_evidence_handshake(replacement_databa
     preview = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True)
     assert preview.returncode == 0, preview.stderr
     plan = json.loads(preview.stdout)
+    assert plan["schema_revision"] == info["schema_revision"]
     assert plan["committed"] is False and plan["dry_run_rolled_back"] is True
     plan_path = tmp_path / "reviewed-plan.json"
     plan_path.write_text(preview.stdout)
@@ -1056,7 +1080,7 @@ async def test_replacement_preserves_external_release_receipts_with_select_only_
         ).one()
         assert tuple(receipt) == (
             "a" * 40,
-            SCHEMA_REVISION,
+            info["schema_revision"],
             "b" * 64,
             "089_merge_record_workspaces",
         )
@@ -1133,7 +1157,7 @@ async def test_replacement_refuses_old_schema_before_reading_new_sku_columns(
         )
     async with organisation_session(maker, PRIMAVERA_TEAM_ID) as db:
         before = await _snapshot(db, PRIMAVERA_TEAM_ID, KNOWN)
-        with pytest.raises(ValidationError, match="exact reviewed schema revision091_sku_archive"):
+        with pytest.raises(ValidationError, match="exact reviewed schema revision"):
             await replace_in_transaction(
                 db,
                 package,

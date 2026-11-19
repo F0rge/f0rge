@@ -38,6 +38,14 @@ class CommsSmtpUnconfiguredError(DomainError):
         super().__init__("comms_smtp_unconfigured")
 
 
+class TillPriceConflictError(ConflictError):
+    """The prices on the till need to be reviewed before the sale can continue."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.payload = {"code": "till_price_conflict", "message": detail}
+
+
 class KitRequiresPickError(ConflictError):
     """Till kit is not fully at the showroom and has no matching pick. HTTP 409."""
 

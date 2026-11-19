@@ -25,6 +25,7 @@ from app.exceptions import (
     RecordWorkspaceUnconfiguredError,
     ForbiddenError,
     KitRequiresPickError,
+    TillPriceConflictError,
     RateLimitedError,
 )
 from app.middleware.auth import AuthContextMiddleware
@@ -241,7 +242,7 @@ async def _kit_requires_pick_handler(_: Request, exc: Exception) -> JSONResponse
 
 
 async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
-    if isinstance(exc, KitRequiresPickError):
+    if isinstance(exc, (KitRequiresPickError, TillPriceConflictError)):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={"detail": exc.payload},

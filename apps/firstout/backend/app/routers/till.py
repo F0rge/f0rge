@@ -5,10 +5,19 @@ import uuid
 from fastapi import APIRouter, Depends, status
 
 from app.dependencies.auth import get_till_orchestrator, require_till
-from app.schemas.till import TillSaleCreate, TillSaleResponse
+from app.schemas.till import TillPricePreview, TillPriceRequest, TillSaleCreate, TillSaleResponse
 from app.services.till_orchestrator import TillOrchestrator
 
 till_router = APIRouter(prefix="/api/v1/till", tags=["till"])
+
+
+@till_router.post("/price-preview", response_model=TillPricePreview)
+async def preview_till_prices(
+    body: TillPriceRequest,
+    user_id: uuid.UUID = Depends(require_till),
+    orchestrator: TillOrchestrator = Depends(get_till_orchestrator),
+):
+    return await orchestrator.preview_prices(body, user_id)
 
 
 @till_router.post("/sales", response_model=TillSaleResponse, status_code=status.HTTP_201_CREATED)

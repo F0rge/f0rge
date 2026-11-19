@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ComboBox, InlineNotification, Modal, NumberInput, Stack, TextInput } from "@carbon/react";
+import { Button, Checkbox, ComboBox, InlineNotification, Modal, NumberInput, Stack, TextInput } from "@carbon/react";
 import { useEffect, useState } from "react";
 import { RecordDetail, RecordDetails, RecordWorkspace, type RecordWorkspaceAdapter } from "@/components/record-workspace";
 import {
@@ -8,6 +8,7 @@ import {
   listSkus, updatePriceList, upsertPriceListItem, type PriceList, type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { PriceListItems } from "./price-list-items";
 import styles from "./price-lists.module.css";
@@ -28,8 +29,10 @@ function PriceListsContent() {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
+  const [createRequirePrice, setCreateRequirePrice] = useState(false);
   const [editing, setEditing] = useState<PriceList | null>(null);
   const [detailName, setDetailName] = useState("");
+  const [detailRequirePrice, setDetailRequirePrice] = useState(false);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [skuId, setSkuId] = useState("");
   const [unitExVat, setUnitExVat] = useState<number | "">("");
@@ -60,28 +63,37 @@ function PriceListsContent() {
   };
 
   function openEdit(item: PriceList) {
-    setEditing(item); setDetailName(item.name); setSkuId(""); setUnitExVat(""); setError(null);
+    setEditing(item); setDetailName(item.name); setDetailRequirePrice(item.till_require_listed_price === true); setSkuId(""); setUnitExVat(""); setError(null);
   }
 
   function acceptUpdate(item: PriceList) {
-    setEditing(item); setDetailName(item.name); setRefreshKey((value) => value + 1);
+    setEditing(item); setRefreshKey((value) => value + 1);
   }
 
   async function handleCreate() {
     if (!createName.trim()) return;
     setSaving(true); setError(null);
     try {
-      await createPriceList({ name: createName.trim() });
-      setCreateOpen(false); setCreateName(""); setRefreshKey((value) => value + 1);
+      await createPriceList({ name: createName.trim(), till_require_listed_price: createRequirePrice });
+      setCreateOpen(false); setCreateName(""); setCreateRequirePrice(false); setRefreshKey((value) => value + 1);
     } catch (err) { setError(err instanceof Error ? err.message : "Could not create price list."); }
     finally { setSaving(false); }
   }
 
-  async function handleRename() {
+  async function handleSaveSettings() {
     if (!editing || !detailName.trim()) return;
     setSaving(true); setError(null);
-    try { acceptUpdate(await updatePriceList(editing.id, { name: detailName.trim() })); }
-    catch (err) { setError(err instanceof Error ? err.message : "Could not rename price list."); }
+    try {
+      const updated = await updatePriceList(editing.id, {
+        name: detailName.trim(),
+        ...(detailRequirePrice !== (editing.till_require_listed_price === true)
+          ? { till_require_listed_price: detailRequirePrice }
+          : {}),
+      });
+      acceptUpdate(updated);
+      setDetailName(updated.name);
+      setDetailRequirePrice(updated.till_require_listed_price === true);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not save price list settings."); }
     finally { setSaving(false); }
   }
 
@@ -112,6 +124,7 @@ function PriceListsContent() {
       renderDetails={(item) => <Stack gap={5}>
         <RecordDetails><RecordDetail label="Status">{item.is_archived ? "Archived" : "Active"}</RecordDetail><RecordDetail label="Prices">{item.items.length}</RecordDetail><RecordDetail label="VAT basis">Prices exclude VAT</RecordDetail></RecordDetails>
         <p className="cds--type-body-01">A list you create overrides the customer&apos;s classification. Cin7 lists do not.</p>
+        {item.till_require_listed_price && <p className="cds--type-body-01">At the till, each item must have a price on this list.</p>}
         <PriceListItems list={item} />
       </Stack>}
     />
@@ -121,6 +134,8 @@ function PriceListsContent() {
       onRequestClose={() => { if (!saving) setCreateOpen(false); }} onRequestSubmit={() => void handleCreate()}>
       <Stack gap={5}>{error && <InlineNotification kind="error" title="Could not create price list" subtitle={error} hideCloseButton lowContrast />}
         <TextInput id="create-price-list-name" labelText="Name" value={createName} disabled={saving} onChange={(event) => setCreateName(event.target.value)} required />
+        <Checkbox id="create-price-list-required" labelText="Require a listed price at the till"
+          checked={createRequirePrice} disabled={saving} onChange={(_, { checked }) => setCreateRequirePrice(checked)} />
       </Stack>
     </Modal>
     <Modal open={editing !== null} modalHeading={editing ? `Edit ${editing.name}` : "Edit price list"} passiveModal
@@ -128,7 +143,13 @@ function PriceListsContent() {
       {editing && <Stack gap={6}>
         {error && <InlineNotification kind="error" title="Could not save price list" subtitle={error} hideCloseButton lowContrast />}
         <TextInput id="price-list-rename" labelText="Name" value={detailName} disabled={busy} onChange={(event) => setDetailName(event.target.value)} />
-        <div className={styles.editorActions}><Button kind="secondary" disabled={busy || !detailName.trim() || detailName.trim() === editing.name} onClick={() => void handleRename()}>{saving ? "Saving…" : "Save name"}</Button></div>
+        {!isCin7GeneratedPriceList(editing.name) && (
+          <Checkbox id="price-list-required" labelText="Require a listed price at the till"
+            checked={detailRequirePrice} disabled={busy} onChange={(_, { checked }) => setDetailRequirePrice(checked)} />
+        )}
+        <div className={styles.editorActions}><Button kind="secondary"
+          disabled={busy || !detailName.trim() || (detailName.trim() === editing.name && detailRequirePrice === (editing.till_require_listed_price === true))}
+          onClick={() => void handleSaveSettings()}>{saving ? "Saving…" : "Save settings"}</Button></div>
         <PriceListItems list={editing} busy={busy} onRemove={(id) => void handleDeleteItem(id)} />
         <h3 className="cds--type-heading-compact-01">Add or update price</h3>
         <ComboBox id="price-list-sku" titleText="SKU" placeholder="Type to search…" items={skus} itemToString={skuLabel}

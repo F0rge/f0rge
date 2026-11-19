@@ -54,6 +54,8 @@ class SkuBomService:
             raise NotFoundError("SKU not found")
         if parent.is_archived:
             raise ConflictError("Restore the kit before editing its recipe")
+        if parent.till_no_stock_required and data.lines:
+            raise ConflictError("Turn off non-stock till sales before adding a kit recipe")
         skus, edges, _ = await archive.graph(parent_sku_id)
         existing = {
             edge.component_sku_id: edge.qty for edge in edges if edge.parent_sku_id == parent_sku_id

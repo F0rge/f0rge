@@ -184,6 +184,13 @@ class SkuService:
                 raise ValidationError("is_sellable must not be null")
             sku.is_sellable = data.is_sellable
 
+        if "till_no_stock_required" in fields_set:
+            if data.till_no_stock_required is None:
+                raise ValidationError("till_no_stock_required must not be null")
+            if data.till_no_stock_required and await self.bom_crud.list_by_parent(sku.id):
+                raise ConflictError("Kits require stock at the till")
+            sku.till_no_stock_required = data.till_no_stock_required
+
         if "our_ref" in fields_set:
             assert data.our_ref is not None
             if await self.crud.get_by_our_ref(data.our_ref, exclude_id=sku.id) is not None:
@@ -347,6 +354,7 @@ class SkuService:
 
         sku = Sku(
             is_sellable=data.is_sellable,
+            till_no_stock_required=data.till_no_stock_required,
             our_ref=data.our_ref,
             our_barcode=barcode,
             name=data.name,
@@ -487,6 +495,7 @@ class SkuService:
     ) -> SkuResponse:
         return SkuResponse(
             is_sellable=sku.is_sellable,
+            till_no_stock_required=sku.till_no_stock_required,
             is_archived=sku.is_archived,
             archived_at=sku.archived_at,
             archived_by_id=sku.archived_by_id,

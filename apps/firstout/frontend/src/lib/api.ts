@@ -556,6 +556,7 @@ export type PriceListItem = {
 export type PriceList = {
   id: string;
   is_archived?: boolean;
+  till_require_listed_price?: boolean;
   name: string;
   items: PriceListItem[];
   created_at: string;
@@ -564,10 +565,12 @@ export type PriceList = {
 
 export type CreatePriceListPayload = {
   name: string;
+  till_require_listed_price?: boolean;
 };
 
 export type UpdatePriceListPayload = {
   name: string;
+  till_require_listed_price?: boolean;
 };
 
 export type UpsertPriceListItemPayload = {
@@ -582,14 +585,14 @@ export function listPriceLists(): Promise<PriceList[]> {
 export function createPriceList(payload: CreatePriceListPayload): Promise<PriceList> {
   return apiFetch<PriceList>("/price-lists", {
     method: "POST",
-    body: JSON.stringify({ name: payload.name.trim() }),
+    body: JSON.stringify({ ...payload, name: payload.name.trim() }),
   });
 }
 
 export function updatePriceList(id: string, payload: UpdatePriceListPayload): Promise<PriceList> {
   return apiFetch<PriceList>(`/price-lists/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ name: payload.name.trim() }),
+    body: JSON.stringify({ ...payload, name: payload.name.trim() }),
   });
 }
 
@@ -908,6 +911,7 @@ export type Sku = {
   carton_count: number;
   is_kit: boolean;
   is_sellable: boolean;
+  till_no_stock_required?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -937,6 +941,7 @@ export type UpdateSkuPricePayload = {
   supplier_ref?: string | null;
   carton_count?: number;
   is_sellable?: boolean;
+  till_no_stock_required?: boolean;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -990,6 +995,7 @@ export type CreateSkuPayload = {
   opening_date?: string;
   carton_count?: number;
   is_sellable?: boolean;
+  till_no_stock_required?: boolean;
 };
 
 export type SkuListParams = {
@@ -1378,11 +1384,35 @@ export type TillSaleLinePayload = {
   discount_percent?: number;
 };
 
-export type TillSalePayload = {
-  location_id: string;
+export type TillPriceRequest = {
   lines: TillSaleLinePayload[];
-  tender: TillTender;
   customer_id?: string;
+};
+
+export type TillPricePreview = {
+  classification: PriceClassification;
+  price_list_name: string | null;
+  prices_include_vat: boolean;
+  before_discount_ex_vat: string;
+  before_discount_inc_vat: string;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  lines: {
+    sku_id: string;
+    unit_ex_vat: string;
+    ex_vat: string;
+    inc_vat: string;
+    source: string;
+    price_warning: string | null;
+  }[];
+  price_revision: string;
+};
+
+export type TillSalePayload = TillPriceRequest & {
+  location_id: string;
+  tender: TillTender;
+  price_revision?: string;
   pick_id?: string;
   pick_ids?: string[];
   credit_override?: boolean;
@@ -1407,6 +1437,14 @@ export type TillSaleResult = {
     on_hand: number;
   };
 };
+
+export function previewTillPrices(payload: TillPriceRequest, signal: AbortSignal): Promise<TillPricePreview> {
+  return apiFetch<TillPricePreview>("/till/price-preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
 
 export function createTillSale(payload: TillSalePayload): Promise<TillSaleResult> {
   return apiFetch<TillSaleResult>("/till/sales", {
@@ -2032,6 +2070,7 @@ export type InvoiceLine = {
   sku_id?: string | null;
   price_warning?: string | null;
   suspect_price_warning?: string | null;
+  till_no_stock_required?: boolean;
 };
 
 export type InvoiceListItem = {

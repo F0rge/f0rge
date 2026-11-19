@@ -40,14 +40,14 @@ const sku: Sku = {
   updated_at: "2026-11-14T00:00:00Z",
 };
 
-function scan(item: Sku, code = item.our_barcode) {
+function scan(item: Sku, code = item.our_barcode, onHand = 3, cartQty = 0) {
   return resolveTillScan({
     code,
     skus: [item],
     allowOurRef: true,
     addQty: 1,
-    floorOnHand: () => 3,
-    cartQty: () => 0,
+    floorOnHand: () => onHand,
+    cartQty: () => cartQty,
   });
 }
 
@@ -61,6 +61,46 @@ describe("till sellable stock", () => {
     expect(scan(notForSale)).toEqual({ ok: false, error: "not_sellable" });
     expect(scan(notForSale, notForSale.our_ref)).toEqual({ ok: false, error: "not_sellable" });
     expect(tillScanErrorMessage("not_sellable")).toBe("This SKU is not for sale.");
+  });
+});
+
+describe("till service charges", () => {
+  const service = {
+    ...sku,
+    name: "Delivery charge",
+    till_no_stock_required: true,
+  };
+
+  it("adds a priced service at zero stock by barcode or SKU", () => {
+    expect(scan(service, service.our_barcode, 0, 2)).toEqual({
+      ok: true,
+      sku: service,
+      qty: 1,
+    });
+    expect(scan(service, service.our_ref, 0).ok).toBe(true);
+    expect(scan(sku, sku.our_barcode, 0)).toEqual({ ok: false, error: "not_on_floor" });
+    expect(scan(sku, sku.our_barcode, 1, 1)).toEqual({ ok: false, error: "over_floor" });
+  });
+
+  it("accepts a service priced by the selected customer list without a retail price", () => {
+    const option = { ...service, retail_ex_vat: null };
+    const result = resolveTillScan({
+      code: option.our_barcode,
+      skus: [option],
+      allowOurRef: true,
+      addQty: 1,
+      floorOnHand: () => 0,
+      cartQty: () => 0,
+      hasServicePrice: () => true,
+    });
+    expect(result).toEqual({ ok: true, sku: option, qty: 1 });
+  });
+
+  it("keeps pricing, active and sellable gates for service charges", () => {
+    expect(scan({ ...service, retail_ex_vat: null }).ok).toBe(false);
+    expect(scan({ ...service, retail_ex_vat: "0.00" }).ok).toBe(false);
+    expect(scan({ ...service, is_archived: true }).ok).toBe(false);
+    expect(scan({ ...service, is_sellable: false }).ok).toBe(false);
   });
 });
 

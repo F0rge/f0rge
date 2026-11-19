@@ -2,6 +2,7 @@
 
 import { Catalog, Information } from "@carbon/icons-react";
 import {
+  Checkbox,
   InlineNotification,
   Modal,
   Select,
@@ -27,6 +28,8 @@ import {
   validateCatalogueForm,
   type CatalogueEditorErrors,
   type CatalogueEditorField,
+  type CatalogueEditorForm,
+  type CatalogueEditorTextField,
 } from "@/lib/catalogue-editor";
 
 import styles from "./catalogue-sku-editor.module.css";
@@ -83,7 +86,10 @@ export function CatalogueSkuEditor({
       ? sku.preferred_supplier_name
       : null);
 
-  function update(field: CatalogueEditorField, value: string) {
+  function update<Field extends CatalogueEditorField>(
+    field: Field,
+    value: CatalogueEditorForm[Field],
+  ) {
     setForm((current) => ({ ...current, [field]: value }));
     setServerErrors((current) => ({ ...current, [field]: undefined }));
     setFailure(null);
@@ -140,7 +146,7 @@ export function CatalogueSkuEditor({
   }
 
   function field(
-    name: CatalogueEditorField,
+    name: CatalogueEditorTextField,
     label: string,
     helperText?: string,
     numeric = false,
@@ -288,6 +294,22 @@ export function CatalogueSkuEditor({
                             />
                           ))}
                         </Select>
+                      </div>
+                      <div className={styles.wide}>
+                        <Checkbox
+                          id="catalogue-edit-till_no_stock_required"
+                          labelText="No stock needed"
+                          helperText={sku.is_kit
+                            ? "Kits require their existing stock and pick checks."
+                            : "For delivery or installation charges. Till can sell this SKU without showroom stock."}
+                          checked={form.till_no_stock_required}
+                          disabled={saving || sku.is_kit}
+                          invalid={Boolean(errors.till_no_stock_required)}
+                          invalidText={errors.till_no_stock_required}
+                          onChange={(_event, { checked }) =>
+                            update("till_no_stock_required", checked)
+                          }
+                        />
                       </div>
                     </div>
                   </TabPanel>

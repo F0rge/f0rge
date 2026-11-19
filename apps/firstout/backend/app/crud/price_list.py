@@ -36,6 +36,18 @@ class PriceListCRUD(BaseCRUD):
         result = await self.db.execute(select(PriceList.name).where(PriceList.id == price_list_id))
         return result.scalar_one_or_none()
 
+    async def get_till_policy(self, price_list_id: uuid.UUID) -> tuple[str, bool, bool] | None:
+        row = (
+            await self.db.execute(
+                select(
+                    PriceList.name, PriceList.is_archived, PriceList.till_require_listed_price
+                ).where(PriceList.id == price_list_id)
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        return row.name, row.is_archived, row.till_require_listed_price
+
     async def has_customer_assignments(self, price_list_id: uuid.UUID) -> bool:
         return (
             await self.db.scalar(
