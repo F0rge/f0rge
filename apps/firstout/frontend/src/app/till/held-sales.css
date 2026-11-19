@@ -1,0 +1,174 @@
+.held-code {
+  font-family: "IBM Plex Mono", "IBM Plex Sans", monospace;
+  font-size: .875rem;
+  font-weight: 600;
+  letter-spacing: .015em;
+}
+.held-empty {
+  margin-top: .75rem;
+  padding: 1.25rem .75rem;
+}
+.held-empty h3 {
+  font-size: 1.125rem;
+}
+.held-empty p {
+  margin-top: .5rem;
+  color: var(--cds-text-secondary);
+}
+.held-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(17rem, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.held-workspace-main, .held-detail {
+  min-width: 0;
+  background: var(--cds-layer-01, white);
+  border-top: 2px solid var(--cds-border-interactive, #0f62fe);
+}
+.held-workspace-header {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  padding: 1.25rem 1rem 1rem;
+}
+.held-workspace-header h2, .held-detail h2 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+.held-workspace-header p, .held-detail-meta {
+  margin-top: .25rem;
+  font-size: .875rem;
+  color: var(--cds-text-secondary);
+}
+.held-workspace-header .cds--search {
+  width: min(19rem, 100%);
+}
+.held-workspace table th:last-child, .held-workspace table td:last-child {
+  text-align: end;
+  white-space: nowrap;
+}
+.held-table-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--cds-link-primary, #0f62fe);
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.held-table-link:focus-visible {
+  outline: 2px solid var(--cds-focus, #0f62fe);
+  outline-offset: 3px;
+}
+.held-table-selected > td {
+  background: var(--cds-layer-selected-01, #e0e0e0);
+}
+.held-detail {
+  padding: 1.25rem 1rem 1rem;
+}
+.held-detail-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--cds-text-secondary);
+  margin-bottom: .45rem;
+}
+.held-product-heading {
+  margin-top: 1.5rem;
+  font-size: .875rem;
+  font-weight: 600;
+}
+.held-detail-products {
+  margin-top: .5rem;
+  border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+.held-detail-products > li, .held-detail-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .625rem;
+  padding-block: .75rem;
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  font-size: .875rem;
+}
+.held-detail-products strong, .held-detail-products div span {
+  display: block;
+}
+.held-detail-products div span, .held-detail-note {
+  color: var(--cds-text-secondary);
+  font-size: .75rem;
+  margin-top: .25rem;
+}
+.held-detail-products li > span, .held-detail-total strong {
+  white-space: nowrap;
+}
+.held-detail .cds--btn {
+  margin-top: 1rem;
+  width: 100%;
+  max-width: none;
+}
+@media (max-width: 1050px) {
+  .held-workspace { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .held-workspace table th, .held-workspace table td { padding-inline: .5rem; }
+}
+
+.held-sales-panel.cds--tab-content { padding: 0; }
+
+.held-workspace-header {
+  padding-bottom: .75rem;
+}
+.held-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: .5rem;
+  padding: 0 .75rem .75rem;
+}
+.held-toolbar .cds--search { flex: 1; }
+.held-toolbar > .cds--btn { flex-shrink: 0; }
+.held-table-scroll { overflow: auto; }
+.held-table-time { white-space: nowrap; }
+.held-selection-bar {
+  min-height: 3rem;
+  padding-inline: 1rem .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  flex-wrap: wrap;
+  color: var(--cds-text-on-color, #fff);
+  background: var(--cds-background-brand, #0f62fe);
+}
+.held-selection-bar > div { display: flex; flex-wrap: wrap; }
+.held-selection-bar .cds--btn { color: inherit; }
+.held-selection-bar .cds--btn:hover { background: #ffffff20; }
+.held-selection-bar .cds--btn:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+.held-detail .cds--btn {
+  width: auto;
+  margin-top: 0;
+}
+.held-note {
+  margin: .625rem 0 .875rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: .25rem;
+}
+.held-note > p {
+  flex: 1;
+  font-size: .8125rem;
+  color: var(--cds-text-secondary);
+}
+.held-detail-actions { display: flex; gap: .25rem; flex-wrap: wrap; }
+.held-detail-actions .held-primary { flex: 1; min-width: 8rem; }
+@media (max-width: 540px) {
+  .held-toolbar { flex-wrap: wrap; }
+  .held-toolbar .cds--search { flex-basis: 100%; }
+}
+.held-note > p { overflow-wrap: anywhere; white-space: pre-wrap; }
+.held-sales-content { padding-block-start: 1.5rem; }

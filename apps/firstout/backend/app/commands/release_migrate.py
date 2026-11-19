@@ -284,7 +284,9 @@ async def migrate(
                     # Keep the reviewed tenant tables under their existing RLS stage.
                     await connection.execute(
                         sa.text(
-                            f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE record_workspace_batches, mcp_tokens, mcp_token_activity TO {quoted_role}"
+                            "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "
+                            "record_workspace_batches, mcp_tokens, mcp_token_activity, "
+                            f"held_sales, held_sale_operations TO {quoted_role}"
                         )
                     )
                 return {

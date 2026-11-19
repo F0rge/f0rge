@@ -37,6 +37,14 @@ class TillPriceConflictError(ConflictError):
         self.payload = {"code": "till_price_conflict", "message": detail}
 
 
+class HeldResumeTargetChangedError(ConflictError):
+    """The selected held basket was edited or consumed before this resume."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.payload = {"code": "held_resume_target_changed", "message": detail}
+
+
 class KitRequiresPickError(ConflictError):
     """Till kit is not fully at the showroom and has no matching pick. HTTP 409."""
 

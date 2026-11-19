@@ -1316,6 +1316,80 @@ export type TillSaleLinePayload = {
   discount_percent?: number;
 };
 
+export type HeldSaleCreate = {
+  id: string;
+  location_id: string;
+  customer_id?: string;
+  lines: TillSaleLinePayload[];
+  pick_id?: string;
+  linked_pick_ids?: Record<string, string>;
+  note?: string | null;
+};
+
+export type HeldSale = {
+  id: string;
+  reference: string;
+  location_id: string;
+  customer_id: string | null;
+  customer_name: string;
+  held_by_name: string;
+  held_at: string;
+  version: number;
+  note: string | null;
+  estimated_total_inc_vat: string | null;
+  pick_id: string | null;
+  linked_pick_ids: Record<string, string>;
+  lines: {
+    sku_id: string;
+    sku_code: string;
+    sku_name: string;
+    qty: number;
+    discount_percent: string;
+    estimated_total_inc_vat: string | null;
+  }[];
+};
+
+export type HeldSaleResume = {
+  location_id: string;
+  operation_id: string;
+  version: number;
+  current?: HeldSaleCreate;
+};
+
+export function listHeldSales(locationId: string, signal?: AbortSignal): Promise<HeldSale[]> {
+  return apiFetch(`/till/held-sales?location_id=${encodeURIComponent(locationId)}`, { signal });
+}
+
+export function holdTillSale(payload: HeldSaleCreate): Promise<HeldSale> {
+  return apiFetch("/till/held-sales", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateHeldSaleNote(id: string, locationId: string, version: number, note: string | null): Promise<HeldSale> {
+  return apiFetch(`/till/held-sales/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ location_id: locationId, version, note }),
+  });
+}
+
+export function resumeTillHeldSale(id: string, payload: HeldSaleResume): Promise<{
+  resumed_id: string;
+  held_current_id: string | null;
+}> {
+  return apiFetch(`/till/held-sales/${id}/resume`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTillHeldSales(locationId: string, ids: string[], all: boolean): Promise<{
+  deleted_count: number;
+}> {
+  return apiFetch("/till/held-sales/delete", {
+    method: "POST",
+    body: JSON.stringify({ location_id: locationId, ids, all }),
+  });
+}
+
 export type TillPriceRequest = {
   lines: TillSaleLinePayload[];
   customer_id?: string;
