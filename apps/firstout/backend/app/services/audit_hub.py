@@ -57,6 +57,7 @@ class AuditHubService:
                     BooksEvent.document_id,
                 ).label("href"),
                 *extra_columns,
+                cast(BooksEvent.document_id, String).label("record_id"),
             )
             .outerjoin(User, User.id == BooksEvent.actor_user_id)
             .where(BooksEvent.team_id == team_id)
@@ -74,6 +75,7 @@ class AuditHubService:
                     func.concat(UnitCostAudit.source, " unit cost").label("summary"),
                     func.concat("/catalogue/", UnitCostAudit.sku_id).label("href"),
                     *extra_columns,
+                    cast(UnitCostAudit.sku_id, String).label("record_id"),
                 )
                 .outerjoin(User, User.id == UnitCostAudit.changed_by_user_id)
                 .where(UnitCostAudit.team_id == team_id)
@@ -82,7 +84,10 @@ class AuditHubService:
             manager = await PermissionService(self.db).has_permission(user_id, USERS_MANAGE)
             stream = activity_stream(team_id, None if manager else user_id)
             event = stream.c
-            transfer_id = McpOperation.result["transfer_id"].as_string()
+            transfer_id = func.coalesce(
+                McpOperation.result["transfer_id"].as_string(),
+                McpOperation.preview["transfer_id"].as_string(),
+            )
             document_id = McpOperation.result["id"].as_string()
             record_link = case(
                 (transfer_id.is_not(None), literal("/transfers")),
@@ -109,6 +114,7 @@ class AuditHubService:
                         func.coalesce(
                             McpOperation.result["transfer_number"].as_string(),
                             McpOperation.result["number"].as_string(),
+                            McpOperation.preview["transfer_number"].as_string(),
                         ),
                         event.result,
                     ).label("summary"),
@@ -116,6 +122,7 @@ class AuditHubService:
                     event.source.label("origin"),
                     event.token_id,
                     event.operation_id,
+                    func.coalesce(transfer_id, document_id).label("record_id"),
                 )
                 .select_from(stream)
                 .outerjoin(User, User.id == event.user_id)
@@ -140,6 +147,7 @@ class AuditHubService:
                             events.c.actor,
                             events.c.href,
                             events.c.operation_id,
+                            events.c.record_id,
                         )
                     )
                 )

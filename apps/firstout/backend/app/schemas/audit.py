@@ -18,3 +18,4 @@ class AuditEventItem(BaseModel):
     origin: Literal["firstout", "mcp"] | None = None
     token_id: uuid.UUID | None = None
     operation_id: uuid.UUID | None = None
+    record_id: uuid.UUID | None = None

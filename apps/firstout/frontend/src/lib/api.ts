@@ -3527,6 +3527,7 @@ export type AuditEvent = {
   origin?: "firstout" | "mcp" | null;
   token_id?: string | null;
   operation_id?: string | null;
+  record_id?: string | null;
   actor: string;
   summary: string;
   href: string | null;

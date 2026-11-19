@@ -215,7 +215,9 @@ async def test_personal_token_domain_workflow(second_postgres_url, monkeypatch):
                         == draft
                     )
                 events = await client.get(
-                    "/api/v1/audit/events", headers=staff, params={"source": "mcp"}
+                    "/api/v1/audit/events",
+                    headers=staff,
+                    params={"source": "mcp", "q": transfer_id},
                 )
                 assert events.status_code == 200
                 confirmed = [
@@ -223,6 +225,7 @@ async def test_personal_token_domain_workflow(second_postgres_url, monkeypatch):
                     for row in events.json()["items"]
                     if row["operation_id"] == pending["operation_id"]
                 ]
+                assert {row["record_id"] for row in confirmed} == {transfer_id}
                 assert {row["origin"] for row in confirmed} == {"firstout", "mcp"}
                 assert {row["actor"] for row in confirmed} == {user.email}
                 assert all(row["token_id"] == issued.json()["token"]["id"] for row in confirmed)

@@ -194,6 +194,7 @@ export default function AuditPage() {
             <p>
               {selected.actor} · {timestamp.format(new Date(selected.at))} SAST
             </p>
+            {selected.record_id && <p>Record ID · {selected.record_id}</p>}
             {selected.operation_id && <p>Operation ID · {selected.operation_id}</p>}
             {selected.href && <Link className="cds--link" href={selected.href}>
               Open related record

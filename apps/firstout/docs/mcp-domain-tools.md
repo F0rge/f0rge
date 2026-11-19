@@ -46,7 +46,7 @@ flowchart LR
 | `transfers_dispatch` | `stock.transfer` | On confirmation, deducts stock at the source and marks the transfer in transit. |
 | `transfers_receive` | `stock.transfer` or `till.sell` | On confirmation, records the counted receipt at the destination. |
 
-**Operating the service.** `MCP_WRITES_ENABLED=false` makes MCP read-only, including outstanding confirmations. Previously completed operations can still be looked up with an authorised active token. The personal token activity screen shows the employee's own history. The audit log lets employees review their own MCP activity and staff managers review activity for their business. A receipt carries the business record number. The audit log can be searched by operation ID or record number.
+**Operating the service.** `MCP_WRITES_ENABLED=false` makes MCP read-only, including outstanding confirmations. Previously completed operations can still be looked up with an authorised active token. The personal token activity screen shows the employee's own history. The audit log lets employees review their own MCP activity and staff managers review activity for their business. A receipt carries the business record number. The audit log can be searched by operation ID, business record ID or record number.
 
 **Delivery boundary.** The implemented writes are the five listed above. Pick-linked transfers, payment capture, posting journals, emailing quotes and access changes continue through their existing Firstout workflows. OAuth-only clients would require a separate authorization-server integration. The external client's model context and caching behaviour remain under that client's control.
 
