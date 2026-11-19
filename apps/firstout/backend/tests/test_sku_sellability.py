@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import csv
 import datetime
 import uuid
 
 import pytest
-from sqlalchemy import select
 
 from app.models.sku import Sku
 from app.schemas.sales_order import SalesOrderCreate
@@ -174,34 +172,3 @@ async def test_shop_feed_excludes_nonsale_and_does_not_sum_split_fractions(
     model.is_sellable = False
     await async_db.flush()
     assert model.id not in {row.id for row in await OpsCommerceCRUD(async_db).published_products()}
-
-
-async def test_import_preserves_23_explicit_nonsale_flags_and_missing_prices(
-    owner_client, async_db, tmp_path
-):
-    from app.services.cin7_import.load import run_import
-    from app.services.pricing import resolve_unit_price
-
-    with (tmp_path / "InventoryList.csv").open("w", newline="") as h:
-        writer = csv.writer(h)
-        writer.writerow(["ProductCode", "Name", "Barcode", "Sellable", "PriceTier4"])
-        for index in range(23):
-            writer.writerow(
-                [
-                    f"NONSALE-{index}",
-                    f"Non-sale {index}",
-                    f"NONSALE-{index}",
-                    "No",
-                    "115" if index < 4 else "",
-                ]
-            )
-        writer.writerow(["SALE-NOPRICE", "Sale no price", "SALE-NOPRICE", "Yes", ""])
-    await run_import(async_db, tmp_path)
-    await run_import(async_db, tmp_path)
-    rows = (await async_db.scalars(select(Sku).where(Sku.our_ref.like("NONSALE-%")))).all()
-    assert len(rows) == 23 and all(row.is_sellable is False for row in rows)
-    assert sum(row.retail_ex_vat is not None for row in rows) == 4
-    missing = await async_db.scalar(select(Sku).where(Sku.our_ref == "SALE-NOPRICE"))
-    assert missing.is_sellable is True and missing.retail_ex_vat is None
-    with pytest.raises(ValidationError, match="no retail price"):
-        await resolve_unit_price(async_db, missing, None)

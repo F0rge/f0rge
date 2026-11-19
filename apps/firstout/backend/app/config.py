@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
@@ -12,6 +13,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3003"]
     jwt_secret: str = ""
     record_workspace_signing_key: str = ""
+    mcp_token_signing_key: str = ""
+    mcp_public_url: str = "https://api.firstout.co.za/mcp"
     clerk_enabled: bool = False
     clerk_issuer: str = ""
     clerk_authorized_parties: list[str] = []
@@ -38,7 +41,6 @@ class Settings(BaseSettings):
     seed_boot_fixtures: bool = False
     seed_playground: bool = False
     # Background loop that emails overdue invoices. Tests turn this off.
-    payment_reminder_ticker: bool = True
 
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -51,8 +53,6 @@ class Settings(BaseSettings):
     # and does not send OpenRouter reasoning flags.
     openrouter_reasoning_effort: str = "low"
     openrouter_reasoning_exclude: bool = True
-    settings_encryption_key: str = ""
-    wa_verify_token: str = ""
 
     storage_dir: str = "storage"
     bucket_name: str = ""
@@ -70,6 +70,28 @@ class Settings(BaseSettings):
     def validate_record_workspace_signing_key(cls, value: str) -> str:
         if value and len(value) < 32:
             raise ValueError("RECORD_WORKSPACE_SIGNING_KEY must contain at least 32 characters")
+        return value
+
+    @field_validator("mcp_token_signing_key")
+    @classmethod
+    def validate_mcp_token_signing_key(cls, value: str) -> str:
+        if value and len(value) < 32:
+            raise ValueError("MCP_TOKEN_SIGNING_KEY must contain at least 32 characters")
+        return value
+
+    @field_validator("mcp_public_url")
+    @classmethod
+    def validate_mcp_public_url(cls, value: str) -> str:
+        url = urlsplit(value)
+        secure = url.scheme == "https" or (
+            url.scheme == "http" and url.hostname in {"localhost", "127.0.0.1", "::1"}
+        )
+        if not (secure and url.hostname and url.path == "/mcp") or any(
+            (url.username, url.password, url.query, url.fragment)
+        ):
+            raise ValueError(
+                "MCP_PUBLIC_URL must be the public HTTPS /mcp URL or a loopback HTTP URL"
+            )
         return value
 
     model_config = {"env_file": ".env", "extra": "ignore"}

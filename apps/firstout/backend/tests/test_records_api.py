@@ -5,7 +5,7 @@ from __future__ import annotations
 from tests.conftest import authenticate_as, create_test_staff
 
 from decimal import Decimal
-from pathlib import Path
+from datetime import date
 
 import pytest
 from httpx import AsyncClient
@@ -14,14 +14,87 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
 from app.models.supplier import Supplier
-from app.services.cin7_import.load import run_import
+from app.models.archive_credit_note import ArchiveCreditNote, ArchiveCreditNoteLine
+from app.models.bill import Bill, BillLine
+from app.models.cin7_party import CustomerAddress, CustomerContact, SupplierAddress, SupplierContact
+from app.models.location_bin import BinStock, LocationBin
+from app.models.sku import Sku
+from app.models.sku_supplier_price import SkuSupplierPrice
+from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.services.sku_bom import whole_component_qty
 from f0rge_core.exceptions import ValidationError
-from tests.test_cin7_import import _fixture_dir
 
 
-async def _load(async_db: AsyncSession, tmp_path: Path) -> None:
-    await run_import(async_db, _fixture_dir(tmp_path / "cin7"))
+async def _load(async_db: AsyncSession) -> None:
+    customer = Customer(name="Fixture Buyer", customer_type="trade")
+    supplier = Supplier(name="Fixture Mill")
+    sku = Sku(
+        our_ref="CHAIR-1", our_barcode="CHAIR-1", name="Chair", design="Oak", fabric="Natural"
+    )
+    async_db.add_all([customer, supplier, sku])
+    await async_db.flush()
+    bin_id = await async_db.scalar(select(LocationBin.id).limit(1))
+    amounts = dict(
+        issue_date=date(2025, 1, 1), subtotal_ex_vat=100, vat_amount=15, total_inc_vat=115
+    )
+    async_db.add_all(
+        [
+            CustomerAddress(customer_id=customer.id, natural_key="address", city="Johannesburg"),
+            CustomerContact(customer_id=customer.id, natural_key="contact", name="Buyer"),
+            SupplierAddress(supplier_id=supplier.id, natural_key="address", city="Cape Town"),
+            SupplierContact(supplier_id=supplier.id, natural_key="contact", name="Ada"),
+            SkuSupplierPrice(sku_id=sku.id, supplier_id=supplier.id, latest_price=100),
+            BinStock(sku_id=sku.id, bin_id=bin_id, on_hand=Decimal("2.4")),
+            TaxInvoice(
+                invoice_number="INV-9001",
+                customer_id=customer.id,
+                is_archive=True,
+                lines=[
+                    InvoiceLine(
+                        description="Chair",
+                        sku_id=sku.id,
+                        qty=1,
+                        unit_ex_vat=100,
+                        ex_vat=100,
+                        vat_amount=15,
+                        inc_vat=115,
+                    )
+                ],
+                **amounts,
+            ),
+            ArchiveCreditNote(
+                document_number="CR-9001",
+                lines=[
+                    ArchiveCreditNoteLine(
+                        description="Returned chair",
+                        sku_id=sku.id,
+                        qty=-1,
+                        ex_vat=-100,
+                        vat_amount=-15,
+                        inc_vat=-115,
+                    )
+                ],
+                customer_id=customer.id,
+                issue_date=date(2025, 1, 2),
+                subtotal_ex_vat=-100,
+                vat_amount=-15,
+                total_inc_vat=-115,
+            ),
+            Bill(
+                bill_number="AP-001",
+                lines=[BillLine(description="Chair", qty=1, unit_amount=10, amount_foreign=10)],
+                is_archive=True,
+                supplier_id=supplier.id,
+                supplier_ref="A",
+                issue_date=date(2025, 1, 1),
+                currency="USD",
+                fx_to_zar=1,
+                amount_foreign=10,
+                amount_zar=10,
+                fx_rate_known=False,
+            ),
+        ]
+    )
     await async_db.commit()
 
 
@@ -38,9 +111,9 @@ async def _login_as(owner_client: AsyncClient, role: str) -> AsyncClient:
 
 
 async def test_party_addresses_and_contacts(
-    owner_client: AsyncClient, async_db: AsyncSession, tmp_path: Path
+    owner_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    await _load(async_db, tmp_path)
+    await _load(async_db)
     customer = (
         await async_db.execute(select(Customer).where(Customer.name == "Fixture Buyer"))
     ).scalar_one()
@@ -65,9 +138,9 @@ async def test_party_addresses_and_contacts(
 
 
 async def test_sales_history_includes_archive_credit_notes(
-    owner_client: AsyncClient, async_db: AsyncSession, tmp_path: Path
+    owner_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    await _load(async_db, tmp_path)
+    await _load(async_db)
     resp = await owner_client.get("/api/v1/history/sales")
     assert resp.status_code == 200
     kinds = {(row["kind"], row["document_number"]) for row in resp.json()["items"]}
@@ -79,9 +152,9 @@ async def test_sales_history_includes_archive_credit_notes(
 
 
 async def test_purchase_history_and_supplier_prices_hide_cost(
-    owner_client: AsyncClient, async_db: AsyncSession, tmp_path: Path
+    owner_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    await _load(async_db, tmp_path)
+    await _load(async_db)
     bills = await owner_client.get("/api/v1/history/purchases")
     assert bills.status_code == 200
     row = bills.json()["items"][0]
@@ -101,10 +174,8 @@ async def test_purchase_history_and_supplier_prices_hide_cost(
     assert all(item["latest_price"] is None for item in hidden_prices.json()["items"])
 
 
-async def test_stock_by_bin(
-    owner_client: AsyncClient, async_db: AsyncSession, tmp_path: Path
-) -> None:
-    await _load(async_db, tmp_path)
+async def test_stock_by_bin(owner_client: AsyncClient, async_db: AsyncSession) -> None:
+    await _load(async_db)
     resp = await owner_client.get("/api/v1/stock/by-bin", params={"q": "CHAIR-1"})
     assert resp.status_code == 200
     items = resp.json()["items"]

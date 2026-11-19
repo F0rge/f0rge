@@ -188,12 +188,6 @@ function detailMessage(detail: unknown, fallback: string): string {
     if (code === "document_llm_unconfigured") {
       return "Document reading is not configured. Add the OpenRouter key on the API.";
     }
-    if (code === "comms_encryption_unconfigured") {
-      return "Communications encryption is not configured";
-    }
-    if (code === "comms_smtp_unconfigured") {
-      return "SMTP mailbox is not configured";
-    }
     if (typeof coded.message === "string" && coded.message.trim()) {
       return coded.message;
     }
@@ -334,7 +328,6 @@ export {
   canMutateReturns,
   canMutateSettings,
   canManageUsers,
-  canSendComms,
   canRaisePo,
   canReceive,
   canReceiveTransfer,
@@ -1182,67 +1175,6 @@ export function commitCatalogueImport(formData: FormData): Promise<CatalogueImpo
   return apiUpload<CatalogueImportCommit>("/imports/commit", formData);
 }
 
-export type Cin7EntityCounts = {
-  created: number;
-  updated: number;
-  unchanged: number;
-  skipped: number;
-};
-
-export type Cin7ImportSummary = {
-  entities: Record<string, Cin7EntityCounts>;
-  price_changes: Record<string, number>;
-  generated_barcodes: number;
-  generated_barcodes_blank: number;
-  generated_barcodes_shared: number;
-};
-
-export type Cin7ImportRun = {
-  id: string;
-  created_at: string;
-  finished_at: string | null;
-  user_id: string;
-  user_email: string;
-  file_sha256: string;
-  file_name: string;
-  mode: "dry_run" | "commit";
-  status: "queued" | "running" | "completed" | "failed";
-  dry_run_id: string | null;
-  summary: Cin7ImportSummary;
-  warning_count: number;
-  error_count: number;
-};
-
-export function listCin7Imports(): Promise<Cin7ImportRun[]> {
-  return apiFetch<Cin7ImportRun[]>("/cin7-imports");
-}
-
-export function getCin7Import(id: string): Promise<Cin7ImportRun> {
-  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}`);
-}
-
-export function startCin7Import(formData: FormData): Promise<Cin7ImportRun> {
-  return apiUpload<Cin7ImportRun>("/cin7-imports", formData);
-}
-
-export function commitCin7Import(id: string, fileSha256: string): Promise<Cin7ImportRun> {
-  return apiFetch<Cin7ImportRun>(`/cin7-imports/${id}/commit`, {
-    method: "POST",
-    body: JSON.stringify({ file_sha256: fileSha256 }),
-  });
-}
-
-export function downloadCin7Warnings(id: string): Promise<void> {
-  return downloadApiFile(`/api/v1/cin7-imports/${id}/warnings.csv`, "cin7-import-warnings.csv");
-}
-
-export function downloadCin7Errors(id: string): Promise<void> {
-  return downloadApiFile(`/api/v1/cin7-imports/${id}/errors.csv`, "cin7-import-errors.csv");
-}
-
-export function downloadCin7Barcodes(id: string): Promise<void> {
-  return downloadApiFile(`/api/v1/cin7-imports/${id}/barcodes.csv`, "cin7-import-barcodes.csv");
-}
 
 export type PurchaseOrderStatus =
   | "pending_approval"
@@ -2094,7 +2026,6 @@ export type InvoiceListItem = {
 export type Invoice = InvoiceListItem & {
   prices_include_vat: boolean;
   lines: InvoiceLine[];
-  reminders_paused: boolean;
 };
 
 export type CreateInvoiceLinePayload = {
@@ -2125,102 +2056,6 @@ export function getInvoice(id: string): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`);
 }
 
-export type PaymentReminderStep = {
-  offset_days: number;
-  subject: string;
-  body: string;
-};
-
-export type PaymentReminderSettings = {
-  enabled: boolean;
-  steps: PaymentReminderStep[];
-  last_run_on: string | null;
-  placeholders: string[];
-};
-
-export type ReminderRow = {
-  invoice_id: string;
-  invoice_number: string;
-  customer_id: string;
-  customer_name: string;
-  customer_email: string | null;
-  offset_days: number;
-  trigger_on: string;
-  amount_owing: string;
-  days_overdue: number;
-  status: string;
-  sent_at: string | null;
-  detail: string | null;
-  reminders_paused: boolean;
-  payment_reminders_opt_out: boolean;
-};
-
-export type ReminderAttention = {
-  invoice_id: string;
-  invoice_number: string;
-  customer_id: string;
-  customer_name: string;
-  reason: "no_email" | "no_due_date";
-};
-
-export type ReminderBoard = {
-  enabled: boolean;
-  upcoming: ReminderRow[];
-  due: ReminderRow[];
-  sent: ReminderRow[];
-  held: ReminderRow[];
-  needs_attention: ReminderAttention[];
-};
-
-export function getPaymentReminderSettings(): Promise<PaymentReminderSettings> {
-  return apiFetch<PaymentReminderSettings>("/settings/payment-reminders");
-}
-
-export function updatePaymentReminderSettings(payload: {
-  enabled: boolean;
-  steps: PaymentReminderStep[];
-}): Promise<PaymentReminderSettings> {
-  return apiFetch<PaymentReminderSettings>("/settings/payment-reminders", {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function getReminderBoard(): Promise<ReminderBoard> {
-  return apiFetch<ReminderBoard>("/payment-reminders");
-}
-
-export function sendReminderNow(invoiceId: string, offsetDays: number): Promise<ReminderRow> {
-  return apiFetch<ReminderRow>("/payment-reminders/send-now", {
-    method: "POST",
-    body: JSON.stringify({ invoice_id: invoiceId, offset_days: offsetDays }),
-  });
-}
-
-export function skipReminder(invoiceId: string, offsetDays: number): Promise<ReminderRow> {
-  return apiFetch<ReminderRow>("/payment-reminders/skip", {
-    method: "POST",
-    body: JSON.stringify({ invoice_id: invoiceId, offset_days: offsetDays }),
-  });
-}
-
-export function pauseInvoiceReminders(invoiceId: string): Promise<{ reminders_paused: boolean }> {
-  return apiFetch(`/payment-reminders/invoices/${invoiceId}/pause`, { method: "POST" });
-}
-
-export function resumeInvoiceReminders(invoiceId: string): Promise<{ reminders_paused: boolean }> {
-  return apiFetch(`/payment-reminders/invoices/${invoiceId}/resume`, { method: "POST" });
-}
-
-export function setCustomerReminderOptOut(
-  customerId: string,
-  optOut: boolean,
-): Promise<{ payment_reminders_opt_out: boolean }> {
-  return apiFetch(`/payment-reminders/customers/${customerId}/opt-out`, {
-    method: "POST",
-    body: JSON.stringify({ opt_out: optOut }),
-  });
-}
 
 export type RepeatingInvoiceLine = {
   id: string;
@@ -2285,7 +2120,6 @@ export type CreditNote = {
   invoice_id: string;
   invoice_number: string;
   customer_email?: string | null;
-  customer_whatsapp_e164?: string | null;
   reason: string | null;
   issue_date: string;
   subtotal_ex_vat: string;
@@ -3588,96 +3422,14 @@ export function getHomeSummary(): Promise<HomeSummary> {
   return apiFetch<HomeSummary>("/home");
 }
 
-export function searchAll(q: string): Promise<SearchResponse> {
-  return apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}`);
+export function searchAll(q: string, signal?: AbortSignal): Promise<SearchResponse> {
+  return apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}`, { signal });
 }
 
 export function getSettings(): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings").then(withPickSettings);
 }
 
-export type CommsSettings = {
-  smtp_host: string | null;
-  smtp_port: number | null;
-  smtp_security: string;
-  smtp_username: string | null;
-  smtp_from_address: string | null;
-  smtp_from_name: string | null;
-  smtp_reply_to: string | null;
-  smtp_configured: boolean;
-  has_smtp_password: boolean;
-  wa_phone_number_id?: string | null;
-  wa_business_account_id?: string | null;
-  wa_invoice_template_name?: string | null;
-  wa_template_lang?: string;
-  wa_configured?: boolean;
-  has_wa_token?: boolean;
-  has_wa_app_secret?: boolean;
-  whatsapp_mode?: "off" | "click" | "cloud";
-};
-
-export type CommsSettingsUpdate = {
-  smtp_host?: string | null;
-  smtp_port?: number | null;
-  smtp_security?: string;
-  smtp_username?: string | null;
-  smtp_password?: string;
-  smtp_from_address?: string | null;
-  smtp_from_name?: string | null;
-  smtp_reply_to?: string | null;
-  wa_phone_number_id?: string | null;
-  wa_business_account_id?: string | null;
-  wa_access_token?: string;
-  wa_app_secret?: string;
-  wa_invoice_template_name?: string | null;
-  wa_template_lang?: string;
-};
-
-export function getCommsSettings(): Promise<CommsSettings> {
-  return apiFetch<CommsSettings>("/settings/comms");
-}
-
-export function updateCommsSettings(payload: CommsSettingsUpdate): Promise<CommsSettings> {
-  return apiFetch<CommsSettings>("/settings/comms", {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function testCommsEmail(to: string): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>("/settings/comms/test-email", {
-    method: "POST",
-    body: JSON.stringify({ to }),
-  });
-}
-
-export type CommsSendChannel = "email" | "whatsapp";
-
-export type CommsSendResult = {
-  id: string;
-  status: string;
-  channel: string;
-  provider: string;
-  mode?: string | null;
-  url?: string | null;
-};
-
-export function sendDocument(
-  kind: "invoices" | "credit-notes" | "laybys",
-  id: string,
-  channel: CommsSendChannel,
-): Promise<CommsSendResult> {
-  return apiFetch<CommsSendResult>(`/${kind}/${id}/send`, {
-    method: "POST",
-    body: JSON.stringify({ channel }),
-  });
-}
-
-export function openCommsSend(result: CommsSendResult): void {
-  if (result.mode === "click" && result.url) {
-    window.open(result.url, "_blank", "noopener,noreferrer");
-  }
-}
 
 export function updateSettings(payload: Partial<import("./label-settings").LabelSettings> & {
   vat_rate?: string;
@@ -3780,10 +3532,14 @@ export type AuditEvent = {
 export function listAuditEvents(params?: {
   limit?: number;
   offset?: number;
+  source?: AuditSource;
+  q?: string;
 }): Promise<Page<AuditEvent>> {
   const search = new URLSearchParams();
   search.set("limit", String(params?.limit ?? 50));
   search.set("offset", String(params?.offset ?? 0));
+  if (params?.source) search.set("source", params.source);
+  if (params?.q) search.set("q", params.q);
   return apiFetch<Page<AuditEvent>>(`/audit/events?${search.toString()}`);
 }
 
@@ -3933,7 +3689,6 @@ export type LaybyListItem = {
   customer_id: string;
   customer_name: string;
   customer_email?: string | null;
-  customer_whatsapp_e164?: string | null;
   location_id: string;
   location_name: string;
   invoice_id: string | null;
@@ -4409,7 +4164,6 @@ export type CustomerCrm = {
   is_archived: boolean;
   email: string | null;
   phone: string | null;
-  whatsapp_e164?: string | null;
   vat_number: string | null;
   billing_address: string | null;
   customer_type: CustomerType;
@@ -4429,7 +4183,6 @@ export type CustomerCrm = {
   on_hold_reason: string | null;
   payment_terms_days: number | null;
   price_list_id: string | null;
-  payment_reminders_opt_out: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -4465,7 +4218,6 @@ export type CreateCustomerPayload = {
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
   price_list_id?: string | null;
-  payment_reminders_opt_out?: boolean;
 };
 
 export type UpdateCustomerPayload = {
@@ -4482,7 +4234,6 @@ export type UpdateCustomerPayload = {
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
   price_list_id?: string | null;
-  payment_reminders_opt_out?: boolean;
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {

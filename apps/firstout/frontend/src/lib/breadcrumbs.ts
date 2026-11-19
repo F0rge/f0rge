@@ -31,9 +31,8 @@ export function breadcrumbsForPath(pathname: string): AppCrumb[] {
   const path = pathname.replace(/\/+$/, "") || "/";
   if (path === "/" || path === "/till") return [];
   for (const group of groups) {
-    const item = group.items.find(
-      ({ href }) => path === href || path.startsWith(`${href}/`),
-    );
+    const item = group.items.find(({ href }) => path === href) ??
+      group.items.find(({ href }) => path.startsWith(`${href}/`));
     if (!item) continue;
     const label = item.href === "/catalogue" ? "Products" : item.label;
     if (path === item.href) return [{ label: group.label }, { label }];

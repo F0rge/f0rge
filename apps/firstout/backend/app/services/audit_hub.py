@@ -2,17 +2,15 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Optional
 
+from sqlalchemy import String, case, cast, func, literal, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.books_event import BooksEventCRUD
-from app.crud.unit_cost_audit import UnitCostAuditCRUD
-from app.crud.user import UserCRUD
-from app.models.books_event import BooksDocumentType
+from app.models.books_event import BooksEvent
+from app.models.unit_cost_audit import UnitCostAudit
 from app.models.user import User
 from app.permissions import STOCK_COST_VIEW
-from app.schemas.audit import AuditEventItem
+from app.schemas.audit import AuditEventItem, AuditSource
 from app.schemas.page import Page, PageParams
 from app.services.permissions import PermissionService
 
@@ -24,86 +22,66 @@ def _as_utc(value: datetime.datetime) -> datetime.datetime:
 
 
 class AuditHubService:
-    _BOOKS_HREF: dict[BooksDocumentType, str] = {
-        BooksDocumentType.INVOICE: "/invoices",
-        BooksDocumentType.BILL: "/bills",
-        BooksDocumentType.PAYMENT: "/payments",
-        BooksDocumentType.JOURNAL: "/journals",
-    }
-
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.books_crud = BooksEventCRUD(db)
-        self.cost_crud = UnitCostAuditCRUD(db)
-        self.user_crud = UserCRUD(db)
-        self.permissions = PermissionService(db)
 
-    async def list_events(self, user_id: uuid.UUID, params: PageParams) -> Page[AuditEventItem]:
-        include_cost = await self.permissions.has_permission(user_id, STOCK_COST_VIEW)
-
-        total = await self.books_crud.count_all()
-        if include_cost:
-            total += await self.cost_crud.count_all()
-
-        fetch_limit = params.offset + params.limit
-        merged: list[AuditEventItem] = []
-        merged.extend(await self._books_items(fetch_limit))
-        if include_cost:
-            merged.extend(await self._cost_items(fetch_limit))
-
-        merged.sort(key=lambda item: item.at, reverse=True)
-        page = merged[params.offset : params.offset + params.limit]
-        return Page(items=page, total=total)
-
-    async def _books_items(self, limit: int) -> list[AuditEventItem]:
-        rows = await self.books_crud.list_newest(limit)
-        actor_cache: dict[uuid.UUID, str] = {}
-        items: list[AuditEventItem] = []
-        for row in rows:
-            items.append(
-                AuditEventItem(
-                    at=_as_utc(row.created_at),
-                    source="books",
-                    actor=await self._actor(row.actor_user_id, actor_cache),
-                    summary=f"{row.action.value} {row.document_type.value}",
-                    href=f"{self._BOOKS_HREF[row.document_type]}/{row.document_id}",
+    async def list_events(
+        self, user_id: uuid.UUID, params: PageParams, source: AuditSource | None = None
+    ) -> Page[AuditEventItem]:
+        actor = func.coalesce(func.nullif(User.display_name, ""), User.email, "system").label(
+            "actor"
+        )
+        books = select(
+            BooksEvent.id,
+            BooksEvent.created_at.label("at"),
+            literal("books").label("source"),
+            actor,
+            func.concat(BooksEvent.action, " ", BooksEvent.document_type).label("summary"),
+            func.concat(
+                "/",
+                BooksEvent.document_type,
+                case(
+                    (BooksEvent.document_type.in_(["payment", "journal"]), "s?record="), else_="s/"
+                ),
+                BooksEvent.document_id,
+            ).label("href"),
+        ).outerjoin(User, User.id == BooksEvent.actor_user_id)
+        queries = [books] if source != "cost" else []
+        if source != "books" and await PermissionService(self.db).has_permission(
+            user_id, STOCK_COST_VIEW
+        ):
+            queries.append(
+                select(
+                    UnitCostAudit.id,
+                    UnitCostAudit.created_at.label("at"),
+                    literal("cost").label("source"),
+                    actor,
+                    func.concat(UnitCostAudit.source, " unit cost").label("summary"),
+                    func.concat("/catalogue/", UnitCostAudit.sku_id).label("href"),
+                ).outerjoin(User, User.id == UnitCostAudit.changed_by_user_id)
+            )
+        if not queries:
+            return Page(items=[], total=0)
+        events = union_all(*queries).subquery()
+        query = select(events)
+        if params.q:
+            query = query.where(
+                or_(
+                    *(
+                        cast(column, String).icontains(params.q, autoescape=True)
+                        for column in (events.c.summary, events.c.actor, events.c.href)
+                    )
                 )
             )
-        return items
-
-    async def _cost_items(self, limit: int) -> list[AuditEventItem]:
-        rows = await self.cost_crud.list_newest(limit)
-        items: list[AuditEventItem] = []
-        for row in rows:
-            items.append(
-                AuditEventItem(
-                    at=_as_utc(row.created_at),
-                    source="cost",
-                    actor=self._user_label(row.changed_by),
-                    summary=f"{row.source.value} unit cost",
-                    href=f"/catalogue/{row.sku_id}",
-                )
+        total = await self.db.scalar(select(func.count()).select_from(query.subquery()))
+        rows = (
+            await self.db.execute(
+                query.order_by(events.c.at.desc(), events.c.source, events.c.id)
+                .offset(params.offset)
+                .limit(params.limit)
             )
-        return items
-
-    async def _actor(
-        self,
-        user_id: Optional[uuid.UUID],
-        cache: dict[uuid.UUID, str],
-    ) -> str:
-        if user_id is None:
-            return "system"
-        if user_id in cache:
-            return cache[user_id]
-        user = await self.user_crud.get_by_id(user_id)
-        label = self._user_label(user)
-        cache[user_id] = label
-        return label
-
-    @staticmethod
-    def _user_label(user: Optional[User]) -> str:
-        if user is None:
-            return "system"
-        if user.display_name:
-            return user.display_name
-        return user.email
+        ).mappings()
+        return Page(
+            items=[AuditEventItem(**{**row, "at": _as_utc(row["at"])}) for row in rows],
+            total=total or 0,
+        )

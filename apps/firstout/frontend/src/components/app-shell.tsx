@@ -57,15 +57,14 @@ import {
   DocumentTasks,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
-import { clerkEnabled, StaffOrganizationSwitcher, useStaffSession } from "@/components/staff-provider";
+import { StaffOrganizationSwitcher, useStaffSession } from "@/components/staff-provider";
 import { isPublicAuthPath, missingSessionDestination } from "@/lib/auth-routes";
 import { useAuth } from "@/lib/auth";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import { can } from "@/lib/permissions";
 import {
-  ADMIN_NAV_ITEMS,
   BOOKS_NAV_ITEMS,
   CATALOGUE_NAV_ITEMS,
   HOME_NAV_ITEM,
@@ -82,6 +81,9 @@ import {
   isWarehousePath,
 } from "@/lib/nav";
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
+import { AdminBreadcrumb, AdminNavigation } from "@/components/administration";
+import adminStyles from "@/components/administration.module.css";
+import { administrationHome } from "@/lib/admin-navigation";
 import { PageLoading } from "@/components/page-loading";
 import loadingStyles from "@/components/auth-loading.module.css";
 import { HeaderSearch } from "@/components/header-search";
@@ -156,7 +158,7 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const { signedIn: clerkSignedIn } = useStaffSession();
-  const expanded = useSyncExternalStore(
+  const workspaceNavExpanded = useSyncExternalStore(
     subscribeSideNavExpanded,
     getSideNavExpandedSnapshot,
     getSideNavExpandedServerSnapshot,
@@ -167,6 +169,19 @@ export function AppShell({ children }: AppShellProps) {
     getNarrowViewportServerSnapshot,
   );
   const isPublic = isPublicAuthPath(pathname);
+  const isAdministration = !loading && isAdminPath(pathname);
+  const [adminNavExpanded, setAdminNavExpanded] = useState(false);
+  const expanded = isAdministration ? adminNavExpanded : workspaceNavExpanded;
+
+  function closeNav() {
+    setAdminNavExpanded(false);
+    if (!isAdministration) setSideNavExpanded(false);
+  }
+
+  function toggleNav() {
+    if (isAdministration) setAdminNavExpanded((open) => !open);
+    else toggleSideNavExpanded();
+  }
 
   useEffect(() => {
     if (!loading && !user && !isPublic) {
@@ -198,10 +213,6 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!loading && !user) return null;
 
-  const adminItems = ADMIN_NAV_ITEMS.filter(
-    (item) => (item.href !== "/organisation" || clerkEnabled) &&
-      (!("permission" in item) || can(user, item.permission)),
-  );
   const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
     ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders")
     : SALES_NAV_ITEMS;
@@ -231,7 +242,7 @@ export function AppShell({ children }: AppShellProps) {
               event.preventDefault();
               router.push(item.href);
               if (narrow) {
-                setSideNavExpanded(false);
+                closeNav();
               }
             }}
           >
@@ -242,20 +253,19 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  function renderNavLink(href: string, label: string, className?: string) {
-    const Icon = navIcon(href);
+  function renderNavLink(href: string, label: string, className?: string, active = isNavLinkActive(pathname, href), Icon = navIcon(href)) {
     return (
       <SideNavLink
         key={href}
         href={href}
         renderIcon={Icon}
         className={className}
-        isActive={isNavLinkActive(pathname, href)}
+        isActive={active}
         onClick={(event) => {
           event.preventDefault();
           router.push(href);
-          if (narrow) {
-            setSideNavExpanded(false);
+          if (narrow || isAdministration) {
+            closeNav();
           }
         }}
       >
@@ -284,7 +294,7 @@ export function AppShell({ children }: AppShellProps) {
             isActive={expanded}
             isCollapsible
             disabled={loading}
-            onClick={toggleSideNavExpanded}
+            onClick={toggleNav}
           />
           <HeaderName
             href="/"
@@ -315,7 +325,10 @@ export function AppShell({ children }: AppShellProps) {
               </>
             ) : (
               <>
-                <HeaderSearch />
+                <HeaderSearch
+                  key={user ? user.team.id + ":" + user.id : undefined}
+                  administrationUser={isAdministration ? user : undefined}
+                />
                 <span className="firstout-header-user" title={user?.email}>
                   {user?.display_name || user?.email}
                 </span>
@@ -337,7 +350,7 @@ export function AppShell({ children }: AppShellProps) {
           expanded={expanded && !(narrow && loading)}
           isRail={!narrow}
           isPersistent={!narrow}
-          onOverlayClick={() => setSideNavExpanded(false)}
+          onOverlayClick={closeNav}
         >
           {loading ? (
             <div className={loadingStyles.navigation} aria-hidden="true">
@@ -368,15 +381,32 @@ export function AppShell({ children }: AppShellProps) {
             {renderNavLink(TILL_NAV_ITEM.href, TILL_NAV_ITEM.label)}
             {salesNavItems.length ? renderNavMenu("Sales", Store, isSalesPath(pathname), salesNavItems, "sales") : null}
             {renderNavMenu("Books", Finance, isBooksPath(pathname), BOOKS_NAV_ITEMS, "books")}
-            {renderNavMenu("Admin", Settings, isAdminPath(pathname), adminItems, "admin")}
+            {renderNavLink(administrationHome(user), "Admin", undefined, isAdministration, Settings)}
           </SideNavItems>}
         </SideNav>
       </Theme>
       <Theme theme="g10">
-        <main id="main-content" className="firstout-main">
-          <AppBreadcrumb />
-          {loading ? <PageLoading kind="status" label="Loading your workspace…" /> : children}
-        </main>
+        {isAdministration ? (
+          <div className={adminStyles.layout}>
+            <Suspense>
+              <AdminNavigation />
+            </Suspense>
+            <main id="main-content" className={`firstout-main ${adminStyles.main}`}>
+              <div className={adminStyles.content}>
+                <Suspense>
+                  <AdminBreadcrumb />
+                  <AdminNavigation mobile />
+                </Suspense>
+                {children}
+              </div>
+            </main>
+          </div>
+        ) : (
+          <main id="main-content" className="firstout-main">
+            <AppBreadcrumb />
+            {loading ? <PageLoading kind="status" label="Loading your workspace…" /> : children}
+          </main>
+        )}
       </Theme>
     </div>
   );

@@ -3,12 +3,10 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.crud.role import RoleCRUD
+from app.crud.user import TeamCRUD
 from app.models.role import Role, RolePermission
-from app.models.team import Team
-from f0rge_db.organisation import tenant_id_ctx
 from app.permissions import (
     PERMISSION_CATALOG,
     ROLE_PRESET_NAMES,
@@ -76,19 +74,24 @@ class RoleService:
         return self._to_response(reloaded)
 
     async def delete(self, role_id: uuid.UUID) -> None:
-        # Assignment changes take the same tenant lock in UserService.update.
-        await self.db.execute(
-            select(Team.id).where(Team.id == tenant_id_ctx.get()).with_for_update()
-        )
+        # Staff assignments and invitation changes take the same team lock.
+        await TeamCRUD(self.db).lock_current()
         role = await self.crud.get_by_id(role_id)
         if role is None:
             raise NotFoundError("Role not found")
-        if role.is_system:
-            raise ConflictError("Cannot delete a system role")
-        assigned = await self.crud.count_users_with_slug(role.slug)
-        if assigned > 0:
-            raise ConflictError("Cannot delete a role that is still assigned")
+        reason = await self.deletion_block_reason(role)
+        if reason is not None:
+            raise ConflictError(reason)
         await self.crud.delete_and_commit(role)
+
+    async def deletion_block_reason(self, role: Role) -> str | None:
+        if role.is_system:
+            return "Cannot delete a system role"
+        if await self.crud.count_users_with_slug(role.slug):
+            return "Cannot delete a role that is still assigned to staff"
+        if await self.crud.has_pending_invitation(role.slug):
+            return "Cannot delete a role used by a pending staff invitation"
+        return None
 
     async def _unique_slug(self, name: str) -> str:
         base = slugify_role_name(name)

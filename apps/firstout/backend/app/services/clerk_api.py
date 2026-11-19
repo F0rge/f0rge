@@ -68,6 +68,35 @@ class ClerkAPI:
     async def user(self, subject: str) -> dict:
         return await self.request("GET", "/users/" + quote(subject, safe=""))
 
+    async def staff_access_active(self, subject: str, organisation: str) -> bool:
+        profile = await self.request("GET", "/users/" + quote(subject, safe=""), missing=True)
+        if profile is None:
+            return False
+        if not isinstance(profile, dict) or profile.get("id") != subject:
+            raise ExternalServiceError("Clerk returned an invalid user")
+        status = (profile.get("banned"), profile.get("locked"), profile.get("deprovisioned", False))
+        if any(not isinstance(flag, bool) for flag in status):
+            raise ExternalServiceError("Clerk returned an invalid user status")
+        if any(status):
+            return False
+
+        result = await self.request(
+            "GET",
+            f"/organizations/{quote(organisation, safe='')}/memberships",
+            params={"user_id": [subject], "limit": 1},
+            missing=True,
+        )
+        if result is None:
+            return False
+        members = result.get("data") if isinstance(result, dict) else result
+        if not isinstance(members, list):
+            raise ExternalServiceError("Clerk returned an invalid membership list")
+        for member in members:
+            public_user = member.get("public_user_data") if isinstance(member, dict) else None
+            if isinstance(public_user, dict) and public_user.get("user_id") == subject:
+                return True
+        return False
+
     async def organisation(self, org_id: str) -> Optional[dict]:
         return await self.request("GET", "/organizations/" + quote(org_id, safe=""), missing=True)
 

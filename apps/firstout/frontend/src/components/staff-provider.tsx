@@ -17,6 +17,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { InlineNotification } from "@carbon/react";
 import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { AuthProvider } from "@/lib/auth";
+import { SettingsDraftsProvider } from "@/components/settings-drafts";
 import { organisationDestination } from "@/lib/organisations";
 import {
   setStaffTokenGetter,
@@ -70,7 +71,7 @@ function ClerkSession({ children }: { children: ReactNode }) {
         loadIdentity={!trade}
         onSignOut={(redirectUrl) => signOut({ redirectUrl: redirectUrl ?? (trade ? "/trade/login" : "/clerk-login") })}
       >
-        {children}
+        <SettingsDraftsProvider>{children}</SettingsDraftsProvider>
       </AuthProvider>
     </StaffSessionContext.Provider>
   );

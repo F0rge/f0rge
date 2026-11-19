@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.role import RoleCRUD
 from app.crud.user import TeamCRUD, UserCRUD
+from app.exceptions import ForbiddenError
 from app.models.team import Team
 from app.models.membership import Membership
 from f0rge_db.organisation import tenant_id_ctx
@@ -19,6 +20,8 @@ from app.permissions import SLUG_OWNER, role_slug
 from app.schemas.user import ProfileUpdate, UserCreate, UserUpdate, UserResponse
 from app.schemas.team import TeamBrief
 from app.services.auth import hash_password
+from app.services.permissions import PermissionService
+from app.services.staff_identity import staff_identity_ctx
 from app.services.user_default_location import (
     resolve_writable_default_location_id,
 )
@@ -38,11 +41,11 @@ class UserService:
 
     async def list(self) -> list[UserResponse]:
         users = await self.crud.list_all()
-        return [await self._response(user) for user in users]
+        return [await self._response(user) for user in users if user.role != "system"]
 
     async def get(self, user_id: uuid.UUID) -> UserResponse:
         user = await self.crud.get_by_id(user_id)
-        if user is None:
+        if user is None or user.role == "system":
             raise NotFoundError("User not found")
         return await self._response(user)
 
@@ -55,7 +58,10 @@ class UserService:
         record = UserResponse.model_validate(user)
         if member is not None:
             record = record.model_copy(
-                update={"is_disabled": user.is_disabled or member.is_disabled}
+                update={
+                    "is_disabled": user.is_disabled or member.is_disabled,
+                    "can_edit_display_name": member.is_legacy_home or self._is_actor(user.id),
+                }
             )
         if member is not None and not member.is_legacy_home:
             record = record.model_copy(
@@ -69,26 +75,32 @@ class UserService:
         return record
 
     async def update(self, user_id: uuid.UUID, data: UserUpdate) -> UserResponse:
-        # Serialize tenant role/disabled edits before counting remaining owners.
-        await self.db.execute(
-            select(Team.id).where(Team.id == tenant_id_ctx.get()).with_for_update()
+        # Serialize role and access changes, then recheck the actor's current authority.
+        await self.team_crud.lock_current()
+        actor = staff_identity_ctx.get()
+        actor_role = (
+            await PermissionService(self.db).require_staff_manager_role(actor.user_id)
+            if actor is not None
+            else None
         )
-        user = await self.crud.get_by_id(user_id)
-        if user is None:
+        user = await self.crud.get_by_id(user_id, refresh=True)
+        if user is None or user.role == "system":
             raise NotFoundError("User not found")
 
         member = await self.db.scalar(
-            select(Membership).where(
-                Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get()
-            )
+            select(Membership)
+            .where(Membership.user_id == user.id, Membership.team_id == tenant_id_ctx.get())
+            .execution_options(populate_existing=True)
         )
         if member is None:
             raise NotFoundError("User not found")
+        current_role = role_slug(user.role) if member.is_legacy_home else member.role
+        await self._check_access_edit(user_id, current_role, data, actor_role)
         if not member.is_legacy_home:
-            if any(key in data.model_fields_set for key in ("display_name",)):
-                raise ValidationError(
-                    "Global identity changes require the legacy home administrator"
-                )
+            if "display_name" in data.model_fields_set and not self._is_actor(user.id):
+                raise ValidationError("This display name is managed by the staff member")
+            if data.display_name is not None:
+                user.display_name = data.display_name
             if data.role is not None:
                 await self._require_known_role(data.role)
                 if await self._is_owner_user(member.role) and not await self._is_owner_user(
@@ -137,6 +149,27 @@ class UserService:
         reloaded = await self.crud.get_by_id(user.id)
         assert reloaded is not None
         return next(record for record in await self.list() if record.id == user.id)
+
+    def _is_actor(self, user_id: uuid.UUID) -> bool:
+        actor = staff_identity_ctx.get()
+        return actor is not None and actor.user_id == user_id
+
+    async def _check_access_edit(
+        self, user_id: uuid.UUID, role: str, data: UserUpdate, actor_role: Optional[str]
+    ) -> None:
+        if actor_role is None:
+            return
+        if self._is_actor(user_id) and (
+            data.is_disabled is True or (data.role is not None and role_slug(data.role) != role)
+        ):
+            raise ConflictError("You cannot change your own role or disable your own access")
+        if not await self._is_owner_user(actor_role) and (
+            await self._is_owner_user(role)
+            or (data.role is not None and await self._is_owner_user(role_slug(data.role)))
+        ):
+            raise ForbiddenError(
+                "Only an owner can change another owner's access or grant ownership"
+            )
 
     async def _require_known_role(self, slug: str) -> None:
         role = await self.role_crud.get_by_slug(role_slug(slug))

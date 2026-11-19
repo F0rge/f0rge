@@ -2,7 +2,6 @@
 
 import { SkeletonPlaceholder, SkeletonText, Stack } from "@carbon/react";
 import { LoadingField, LoadingRegion } from "@/components/page-loading";
-import { REMINDER_PLACEHOLDER_HELP } from "@/lib/payment-reminders";
 import styles from "./settings.module.css";
 
 function Fields({ labels }: { labels: readonly string[] }) {
@@ -13,7 +12,6 @@ export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents"
   return (
     <LoadingRegion label={`Loading ${panel.toLowerCase()} settings…`}>
       <Stack gap={5}>
-        <h2 className="cds--type-heading-03">{panel}</h2>
         {panel === "Company" ? (
           <>
             <div className={styles.formGrid}>
@@ -38,21 +36,9 @@ export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents"
           </>
         ) : panel === "Documents" ? (
           <>
-            <p className="cds--type-body-01 firstout-muted-text">
-              Prefix and padding apply to new documents. Cancelled documents keep their numbers — next value only advances on allocation.
-            </p>
-            <div className="firstout-settings-sequences">
-              <div className="firstout-settings-sequences__header cds--type-label-01">
-                <span>Document type</span><span>Prefix</span><span>Padding</span><span>Next value</span>
-              </div>
-              {Array.from({ length: 4 }, (_, index) => (
-                <div key={index} className="firstout-settings-sequences__row" aria-hidden="true">
-                  <SkeletonText width="70%" />
-                  <LoadingSkeleton />
-                  <LoadingSkeleton />
-                  <LoadingSkeleton />
-                </div>
-              ))}
+            <LoadingField label="Document type" />
+            <div className={styles.formGrid}>
+              <Fields labels={["Prefix", "Padding", "Next value"]} />
             </div>
           </>
         ) : panel === "Locations" ? (
@@ -83,10 +69,6 @@ export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents"
   );
 }
 
-function LoadingSkeleton() {
-  return <SkeletonPlaceholder style={{ width: "100%", height: "2.5rem" }} />;
-}
-
 function ToggleLoading({ label }: { label: string }) {
   return (
     <div>
@@ -108,51 +90,5 @@ function LabelSettingsLoading() {
         </Stack>
       ))}
     </>
-  );
-}
-
-export function CommunicationsLoading() {
-  return (
-    <LoadingRegion label="Loading communications…">
-      <Stack gap={5}>
-        <div>
-          <h2 className="cds--type-productive-heading-03">Communications</h2>
-          <p className="cds--type-body-01 firstout-muted-text">
-            Use the mailbox your ISP or Microsoft 365 gave you (SMTP). This is not Gmail API.
-          </p>
-        </div>
-        <Fields labels={["SMTP host", "Port", "Security", "Username", "Password", "From address", "From name", "Reply-To", "Test send to"]} />
-        <div>
-          <h3 className="cds--type-productive-heading-02">WhatsApp Cloud API</h3>
-          <p className="cds--type-body-01 firstout-muted-text">
-            Keep the WhatsApp Business app on this number. Paste the Cloud API token here; we do not replace the Business app. Unofficial WhatsApp libraries are not used.
-          </p>
-          <SkeletonText width="70%" aria-hidden="true" />
-        </div>
-        <Fields labels={["Phone number ID", "Business account ID", "Access token", "App secret", "Utility template name", "Template language"]} />
-      </Stack>
-    </LoadingRegion>
-  );
-}
-
-export function PaymentRemindersLoading() {
-  return (
-    <LoadingRegion label="Loading payment reminders…">
-      <Stack gap={5}>
-        <div>
-          <h2 className="cds--type-productive-heading-03">Payment reminders</h2>
-          <p className="cds--type-body-01 firstout-muted-text">
-            Off until you turn them on. Firstout emails one reminder per invoice each day the job runs, using the outstanding balance, and stops when the invoice is paid.
-          </p>
-        </div>
-        <ToggleLoading label="Send payment reminders" />
-        <p className="cds--type-helper-text-01">{REMINDER_PLACEHOLDER_HELP}</p>
-        <Stack gap={3}>
-          <LoadingField label="Step 1 — day offset" />
-          <LoadingField label="Subject" />
-          <LoadingField label="Email" height="9rem" />
-        </Stack>
-      </Stack>
-    </LoadingRegion>
   );
 }

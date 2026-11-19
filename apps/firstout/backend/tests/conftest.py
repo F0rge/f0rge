@@ -238,11 +238,6 @@ def tenant_test_context(request):
 
 
 @pytest.fixture(autouse=True)
-def disable_payment_reminder_ticker(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "payment_reminder_ticker", False)
-
-
-@pytest.fixture(autouse=True)
 def patch_storage_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     storage_path = tmp_path / "storage"
     storage_path.mkdir()

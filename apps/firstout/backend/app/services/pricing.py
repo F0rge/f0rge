@@ -15,7 +15,7 @@ from f0rge_core.exceptions import ValidationError
 
 PRICE_CLASSIFICATIONS = ("Stockist", "Wholesale", "Decorator", "Retail")
 RETAIL_CLASSIFICATION = "Retail"
-# Names the Cin7 import writes. These lists must not override classification.
+# Historical Cin7 price lists must not override the customer classification.
 CIN7_NAMED_PRICE_LISTS = frozenset(
     {
         "Cin7 Stockist",
@@ -46,16 +46,6 @@ def customer_type_for_classification(classification: str) -> str:
     if classification == RETAIL_CLASSIFICATION:
         return "retail"
     return "trade"
-
-
-def classification_from_cin7_tier(tier: Optional[str]) -> str:
-    key = (tier or "").strip().lower()
-    return {
-        "stockist": "Stockist",
-        "wholesale": "Wholesale",
-        "decorator": "Decorator",
-        "retail": "Retail",
-    }.get(key, RETAIL_CLASSIFICATION)
 
 
 def classification_of(customer: Optional[Customer]) -> str:

@@ -34,7 +34,6 @@ from app.services.customer_match import (
     name_duplicate_clause,
     national_phone_digits,
 )
-from app.services.comms.phone import to_whatsapp_e164
 from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
 from app.services.permissions import PermissionService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -54,7 +53,6 @@ PROFILE_PATCH_FIELDS = frozenset(
         "price_tier",
         "payment_terms_days",
         "price_list_id",
-        "payment_reminders_opt_out",
     }
 )
 
@@ -174,7 +172,6 @@ class CustomersCrmService:
             price_tier=data.price_tier,
             payment_terms_days=data.payment_terms_days,
             price_list_id=data.price_list_id,
-            payment_reminders_opt_out=data.payment_reminders_opt_out,
         )
         async with unit_of_work(self.db):
             try:
@@ -228,10 +225,6 @@ class CustomersCrmService:
             customer.price_tier = data.price_tier
         if "payment_terms_days" in fields_set:
             customer.payment_terms_days = data.payment_terms_days
-        if "payment_reminders_opt_out" in fields_set:
-            if data.payment_reminders_opt_out is None:
-                raise ValidationError("payment_reminders_opt_out cannot be null")
-            customer.payment_reminders_opt_out = data.payment_reminders_opt_out
         if "price_list_id" in fields_set:
             if data.price_list_id != customer.price_list_id:
                 await self._assert_price_list_id(data.price_list_id)
@@ -306,7 +299,6 @@ class CustomersCrmService:
             on_hold_reason=customer.on_hold_reason,
             payment_terms_days=customer.payment_terms_days,
             price_list_id=customer.price_list_id,
-            payment_reminders_opt_out=customer.payment_reminders_opt_out,
             open_invoices_count=invoice_agg.open_count,
             open_invoices_zar=invoice_agg.open_zar.quantize(Decimal("0.01")),
             overdue_invoices_count=invoice_agg.overdue_count,
@@ -314,7 +306,6 @@ class CustomersCrmService:
             last_purchase_date=invoice_agg.last_purchase_date,
             active_laybys_count=layby_agg.active_count,
             active_laybys_zar=layby_agg.active_zar.quantize(Decimal("0.01")),
-            whatsapp_e164=to_whatsapp_e164(customer.phone),
             created_at=customer.created_at,
             updated_at=customer.updated_at,
         )

@@ -359,6 +359,12 @@ export default function JournalsPage() {
     }
   }
 
+  useEffect(() => {
+    if (!user) return;
+    const record = new URLSearchParams(window.location.search).get("record");
+    if (record) void openViewJournal(record);
+  }, [user]);
+
   async function openViewJournal(journalId: string) {
     setError(null);
     try {

@@ -27,7 +27,7 @@ const containers = [];
 const ownerPassword = randomBytes(24).toString("hex"), runtimePassword = randomBytes(24).toString("hex");
 const dbUrl = `postgresql+asyncpg://firstout_app:${runtimePassword}@${pg}:5432/firstout_cd_test_fixture`;
 const migrationUrl = `postgresql+asyncpg://firstout:${ownerPassword}@${pg}:5432/firstout_cd_test_fixture`;
-const env = ["--env", `DATABASE_URL=${dbUrl}`, "--env", "DIRECT_DATABASE_URL=", "--env", "PAYMENT_REMINDER_TICKER=false", "--env", "SEED_BOOT_FIXTURES=false", "--env", "SEED_PLAYGROUND=false", "--env", "TENANT_ISOLATION_MODE=enforced", "--env", "FRONTEND_PROXY_SECRET=synthetic-cd-proxy-only", "--env", "CLERK_ENABLED=true", "--env", "CLERK_ISSUER=https://synthetic.clerk.accounts.dev", "--env", 'CLERK_AUTHORIZED_PARTIES=["http://test"]', "--env", "RECORD_WORKSPACE_SIGNING_KEY=isolated-cd-fixture-signing-key-32-characters"];
+const env = ["--env", `DATABASE_URL=${dbUrl}`, "--env", "DIRECT_DATABASE_URL=", "--env", "SEED_BOOT_FIXTURES=false", "--env", "SEED_PLAYGROUND=false", "--env", "TENANT_ISOLATION_MODE=enforced", "--env", "FRONTEND_PROXY_SECRET=synthetic-cd-proxy-only", "--env", "CLERK_ENABLED=true", "--env", "CLERK_ISSUER=https://synthetic.clerk.accounts.dev", "--env", 'CLERK_AUTHORIZED_PARTIES=["http://test"]', "--env", "RECORD_WORKSPACE_SIGNING_KEY=isolated-cd-fixture-signing-key-32-characters"];
 // The HTTP application never receives the administrative database credential.
 const migrationEnv = [...env, "--env", `MIGRATION_DATABASE_URL=${migrationUrl}`];
 const fixture = String.raw`

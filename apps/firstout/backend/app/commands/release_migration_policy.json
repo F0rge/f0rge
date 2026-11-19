@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "093_till_price_list_policy",
+  "target_revision": "094_personal_mcp_tokens",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -377,6 +377,10 @@
     },
     "093_till_price_list_policy": {
       "sha256": "36a2f4f9aaec2cf622ffdc78be519af05e2ce84eb9e58641b6fd82ea8dba08a5",
+      "automatic": true
+    },
+    "094_personal_mcp_tokens": {
+      "sha256": "c404d2f7b0e34fc1f938e0b0ee153c47b4417ef57df73558df0bed5df1aa80a7",
       "automatic": true
     }
   }

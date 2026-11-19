@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 import uuid
 from decimal import Decimal
 from typing import Optional
@@ -8,10 +7,8 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    Date,
     ForeignKey,
     Integer,
-    LargeBinary,
     Numeric,
     String,
     Text,
@@ -142,41 +139,6 @@ class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         default=DEFAULT_SESSION_TTL_HOURS,
         server_default=text("12"),
     )
-    smtp_host: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    smtp_port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    smtp_security: Mapped[str] = mapped_column(
-        String(16),
-        nullable=False,
-        default="starttls",
-        server_default=text("'starttls'"),
-    )
-    smtp_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    smtp_password_encrypted: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
-    smtp_from_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    smtp_from_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    smtp_reply_to: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    wa_phone_number_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    wa_business_account_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    wa_access_token_encrypted: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
-    wa_app_secret_encrypted: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
-    wa_invoice_template_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    wa_template_lang: Mapped[str] = mapped_column(
-        String(16),
-        nullable=False,
-        default="en",
-        server_default=text("'en'"),
-    )
-    payment_reminders_enabled: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default=text("false"),
-    )
-    payment_reminder_steps: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    payment_reminders_last_run_on: Mapped[Optional[datetime.date]] = mapped_column(
-        Date,
-        nullable=True,
-    )
 
     team: Mapped["Team"] = relationship()
     default_receive_location: Mapped[Optional["Location"]] = relationship(
@@ -191,14 +153,6 @@ class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         CheckConstraint(
             "session_ttl_hours >= 1 AND session_ttl_hours <= 720",
             name="ck_team_settings_session_ttl_hours",
-        ),
-        CheckConstraint(
-            "smtp_port IS NULL OR (smtp_port >= 1 AND smtp_port <= 65535)",
-            name="ck_team_settings_smtp_port",
-        ),
-        CheckConstraint(
-            "smtp_security IN ('starttls', 'ssl', 'plain')",
-            name="ck_team_settings_smtp_security",
         ),
     )
 

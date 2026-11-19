@@ -12,7 +12,6 @@ from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.sales_order import SalesOrderCreate, SalesOrderLineCreate
-from app.services.cin7_import.parse import NAMED_PRICE_TIERS, tier_price_list_name
 from app.services.pricing import (
     classification_for_legacy_customer_type,
     is_cin7_generated_price_list,
@@ -40,8 +39,7 @@ def _pdf_text(pdf_bytes: bytes) -> str:
 
 @pytest.mark.no_db
 def test_cin7_generated_list_names_do_not_count_as_overrides() -> None:
-    for tier, name, _includes_vat in NAMED_PRICE_TIERS:
-        assert tier_price_list_name(tier) == name
+    for name in ("Cin7 Stockist", "Cin7 Wholesale", "Cin7 Decorator", "Cin7 Retail"):
         assert is_cin7_generated_price_list(name)
     for tier in range(1, 11):
         assert is_cin7_generated_price_list(f"Cin7 Tier {tier}")

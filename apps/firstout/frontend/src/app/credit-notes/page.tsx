@@ -23,15 +23,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   canMutateBooks,
-  canSendComms,
   createCreditNote,
   downloadCreditNotePdf,
   formatZarAmount,
-  getCommsSettings,
   listCreditNotes,
   listInvoices,
-  openCommsSend,
-  sendDocument,
   type CreditNote,
   type InvoiceListItem,
 } from "@/lib/api";
@@ -77,7 +73,6 @@ export default function CreditNotesPage() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const canSend = canSendComms(user);
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [creditedInvoiceIds, setCreditedInvoiceIds] = useState<Set<string>>(() => new Set());
@@ -92,7 +87,6 @@ export default function CreditNotesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
-  const [smtpConfigured, setSmtpConfigured] = useState(false);
 
   const loadCreditNotes = useCallback(async () => {
     setLoading(true);
@@ -111,14 +105,6 @@ export default function CreditNotesPage() {
     }
   }, [page, pageSize]);
 
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-    void getCommsSettings()
-      .then((comms) => setSmtpConfigured(comms.smtp_configured))
-      .catch(() => setSmtpConfigured(false));
-  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -210,23 +196,6 @@ export default function CreditNotesPage() {
     }
   }
 
-  async function handleEmail(creditNote: CreditNote) {
-    setError(null);
-    try {
-      await sendDocument("credit-notes", creditNote.id, "email");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to email credit note.");
-    }
-  }
-
-  async function handleWhatsApp(creditNote: CreditNote) {
-    setError(null);
-    try {
-      openCommsSend(await sendDocument("credit-notes", creditNote.id, "whatsapp"));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to open WhatsApp.");
-    }
-  }
 
   const invoiceIdByCreditNoteId = useMemo(
     () => Object.fromEntries(creditNotes.map((entry) => [entry.id, entry.invoice_id])),
@@ -252,7 +221,7 @@ export default function CreditNotesPage() {
         <div>
           <h1 className="cds--type-productive-heading-04">Credit notes</h1>
           <p className="cds--type-body-01">
-            Reverse VAT and accounts receivable on a tax invoice. Credit notes are not emailed.
+            Reverse VAT and accounts receivable on a tax invoice.
           </p>
         </div>
         {canMutate ? (
@@ -355,36 +324,6 @@ export default function CreditNotesPage() {
                                     >
                                       Download PDF
                                     </Button>
-                                    {canSend ? (
-                                      <Button
-                                        kind="ghost"
-                                        size="sm"
-                                        disabled={!creditNote?.customer_email || !smtpConfigured}
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          if (creditNote) {
-                                            void handleEmail(creditNote);
-                                          }
-                                        }}
-                                      >
-                                        Email
-                                      </Button>
-                                    ) : null}
-                                    {canSend ? (
-                                      <Button
-                                        kind="ghost"
-                                        size="sm"
-                                        disabled={!creditNote?.customer_whatsapp_e164}
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          if (creditNote) {
-                                            void handleWhatsApp(creditNote);
-                                          }
-                                        }}
-                                      >
-                                        WhatsApp
-                                      </Button>
-                                    ) : null}
                                   </Stack>
                                 </TableCell>
                               );

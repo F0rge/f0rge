@@ -67,9 +67,6 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
         JSONB(none_as_null=True), nullable=True
     )
-    reminders_paused: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=text("false")
-    )
 
     customer: Mapped["Customer"] = relationship()
     lines: Mapped[list["InvoiceLine"]] = relationship(

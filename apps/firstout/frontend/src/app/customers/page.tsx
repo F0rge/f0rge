@@ -243,11 +243,6 @@ function CustomersScreen() {
       type: "number",
       nullable: true,
     },
-    {
-      key: "payment_reminders_opt_out",
-      label: "Opt out of reminders",
-      type: "boolean",
-    },
     ...(canEditCredit
       ? [
           {

@@ -204,7 +204,6 @@ def main() -> None:
             "PATH": str(Path(sys.executable).parent) + ":/usr/bin:/bin",
             "HOME": str(state),
             "JWT_SECRET": "local-only-checkout-jwt-secret-32char",
-            "PAYMENT_REMINDER_TICKER": "false",
             "SEED_BOOT_FIXTURES": "false",
             "SEED_PLAYGROUND": "false",
             "CLERK_ENABLED": "false",

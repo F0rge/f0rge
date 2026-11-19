@@ -24,6 +24,13 @@ class SignupIntent(BaseModel):
         return value
 
 
+class StaffCapacity(BaseModel):
+    active_count: int
+    member_count: int
+    pending_count: int
+    max_members: int
+
+
 class OrganisationInvitationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: EmailStr

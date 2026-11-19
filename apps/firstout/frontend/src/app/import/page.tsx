@@ -154,7 +154,7 @@ export default function ImportPage() {
         <div>
           <h1 className="cds--type-productive-heading-04">Import CSV</h1>
           <p className="cds--type-body-01">
-            Bulk import products and stock on hand (SOH). Required format based on Cin7 standards.
+            Bulk import products and stock on hand (SOH).
             Accepts `.csv` only.
           </p>
         </div>

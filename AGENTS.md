@@ -63,6 +63,8 @@ Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested 
 
 ## apps/firstout
 
+For Firstout changes, branch from the current `origin/main` and open the pull request against `main`.
+
 Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout/AGENTS.md). **Own Railway project** — do **not** add Firstout services, Postgres, or buckets to the Marrow project (`a633a271-…`). Live hosts (tracking `main`): https://firstout.co.za and https://api.firstout.co.za (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. Its existing UI uses IBM Carbon rather than `@f0rge/ui`; this is legacy inventory, not an approved exception to the Primer ADR.
 
 ## apps/storefront

@@ -116,8 +116,9 @@ export function useWorkspace<T extends { id: string }>(
   }, [result.data, query.offset, query.limit, update]);
   const items = result.data?.items ?? [];
   const recordId = params.get("record");
-  const active = items.find((item) => item.id === recordId) ?? items[0];
-  const focus = (id: string) =>
+  const requestedRecord = items.find((item) => item.id === recordId);
+  const active = requestedRecord ?? items[0];
+  const focus = (id?: string) =>
     router.replace(`${pathname}?${workspaceSearch(query, id)}`, {
       scroll: false,
     });
@@ -161,20 +162,20 @@ export function useWorkspace<T extends { id: string }>(
     }
     setSelection(next);
   };
-  const togglePage = (checked: boolean) => {
+  const togglePage = (checked: boolean, ids = items.map((item) => item.id)) => {
     const next = {
       ...selection,
       ids: new Set(selection.ids),
       excluded: new Set(selection.excluded),
       revisions: { ...selection.revisions },
     };
-    for (const item of items) {
+    for (const id of ids) {
       if (next.token) {
-        if (!next.ids.has(item.id)) continue;
-        if (checked) next.excluded.delete(item.id);
-        else next.excluded.add(item.id);
+        if (!next.ids.has(id)) continue;
+        if (checked) next.excluded.delete(id);
+        else next.excluded.add(id);
       } else if (checked) {
-        if (next.ids.size >= 500 && !next.ids.has(item.id)) {
+        if (next.ids.size >= 500 && !next.ids.has(id)) {
           setSelectionNotice({
             context,
             message:
@@ -182,11 +183,11 @@ export function useWorkspace<T extends { id: string }>(
           });
           continue;
         }
-        next.ids.add(item.id);
-        next.revisions[item.id] = result.data?.revisions[item.id] ?? "";
+        next.ids.add(id);
+        next.revisions[id] = result.data?.revisions[id] ?? "";
       } else {
-        next.ids.delete(item.id);
-        delete next.revisions[item.id];
+        next.ids.delete(id);
+        delete next.revisions[id];
       }
     }
     setSelection(next);
@@ -224,6 +225,7 @@ export function useWorkspace<T extends { id: string }>(
     result,
     items,
     active,
+    requestedRecord,
     focus,
     selected,
     selectedCount,
