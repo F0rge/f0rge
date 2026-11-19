@@ -908,6 +908,7 @@ export type Sku = {
   carton_count: number;
   is_kit: boolean;
   is_sellable: boolean;
+  till_no_stock_required?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -937,6 +938,7 @@ export type UpdateSkuPricePayload = {
   supplier_ref?: string | null;
   carton_count?: number;
   is_sellable?: boolean;
+  till_no_stock_required?: boolean;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -990,6 +992,7 @@ export type CreateSkuPayload = {
   opening_date?: string;
   carton_count?: number;
   is_sellable?: boolean;
+  till_no_stock_required?: boolean;
 };
 
 export type SkuListParams = {
@@ -2032,6 +2035,7 @@ export type InvoiceLine = {
   sku_id?: string | null;
   price_warning?: string | null;
   suspect_price_warning?: string | null;
+  till_no_stock_required?: boolean;
 };
 
 export type InvoiceListItem = {

@@ -41,6 +41,7 @@ import {
   listLocations,
   listReturns,
   type Invoice,
+  type InvoiceLine,
   type InvoiceListItem,
   type Location,
   type StockReturnListItem,
@@ -111,8 +112,8 @@ function defaultLocationId(locations: Location[]): string {
   return bedfordview?.id ?? locations[0]?.id ?? "";
 }
 
-function invoiceCanRestock(invoice: Invoice | null): boolean {
-  return Boolean(invoice?.lines.some((line) => line.sku_id));
+function isStockedInvoiceLine(line: InvoiceLine): boolean {
+  return Boolean(line.sku_id && !line.till_no_stock_required);
 }
 
 function ReturnsPageContent() {
@@ -142,8 +143,6 @@ function ReturnsPageContent() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const invoicePrefillConsumed = useRef(false);
-
-  const canRestock = invoiceCanRestock(selectedInvoice);
 
   const loadReturns = useCallback(async () => {
     setLoading(true);
@@ -243,7 +242,7 @@ function ReturnsPageContent() {
           qtys[line.id] = 0;
         }
         setLineQtys(qtys);
-        if (!invoiceCanRestock(invoice)) {
+        if (!invoice.lines.some(isStockedInvoiceLine)) {
           setDisposition("write_off");
         }
       })
@@ -286,8 +285,17 @@ function ReturnsPageContent() {
       .filter((line): line is NonNullable<typeof line> => line !== null);
   }, [selectedInvoice, lineQtys]);
 
+  const invoiceLines = selectedInvoice?.lines ?? [];
+  const linesForDisposition = selectedLines.length > 0
+    ? invoiceLines.filter((line) => Number(lineQtys[line.id]) > 0)
+    : invoiceLines;
+  const canRestock = linesForDisposition.some(isStockedInvoiceLine) &&
+    (selectedLines.length === 0 ||
+      linesForDisposition.every((line) => Boolean(line.sku_id || line.till_no_stock_required)));
+  const hasService = linesForDisposition.some((line) => line.till_no_stock_required);
   const formValid = Boolean(
-    invoiceId && locationId && reason && disposition && selectedLines.length > 0,
+    invoiceId && locationId && reason && selectedLines.length > 0 &&
+      (disposition === "write_off" || canRestock),
   );
 
   function resetCreateForm() {
@@ -595,11 +603,13 @@ function ReturnsPageContent() {
             onChange={(event) =>
               setDisposition(event.target.value as StockReturnDisposition)
             }
-            helperText={
-              !canRestock && selectedInvoice
-                ? "Restock is only available for till sales (invoices with SKU lines)."
-                : undefined
-            }
+            invalid={Boolean(selectedInvoice && disposition === "restock" && !canRestock)}
+            invalidText="Choose Write off or change the selected return quantities."
+            helperText={selectedInvoice && (
+              canRestock
+                ? hasService ? "Service charges are credited without changing stock." : undefined
+                : "Restock requires a stocked SKU in the return."
+            )}
           >
             <SelectItem
               value="restock"
@@ -618,6 +628,7 @@ function ReturnsPageContent() {
                   key={line.id}
                   id={`return-line-${line.id}`}
                   label={`${line.description} (max ${line.qty})`}
+                  helperText={line.till_no_stock_required ? "Service charge. Credit only." : undefined}
                   min={0}
                   max={line.qty}
                   step={1}

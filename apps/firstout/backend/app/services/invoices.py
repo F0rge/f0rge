@@ -300,6 +300,7 @@ class InvoiceService:
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
                     price_warning=line.price_warning,
+                    till_no_stock_required=line.till_no_stock_required,
                 )
                 for line in invoice.lines
             ],

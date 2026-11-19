@@ -145,6 +145,9 @@ export default function NewSkuPage() {
         design: createForm.design.trim(),
         fabric: createForm.fabric.trim(),
       };
+      if (createForm.till_no_stock_required) {
+        payload.till_no_stock_required = true;
+      }
       const barcode = createForm.our_barcode?.trim() ?? "";
       if (barcode) {
         payload.our_barcode = barcode;
@@ -372,6 +375,18 @@ export default function NewSkuPage() {
                     onChange={(_event, { value }) => {
                       setCartonCount(value === "" ? "" : Number(value));
                     }}
+                  />
+                </Column>
+                <Column lg={16} md={8} sm={4}>
+                  <Checkbox
+                    id="new-sku-till-no-stock-required"
+                    labelText="No stock needed"
+                    helperText="For delivery or installation charges. Till can sell this SKU without showroom stock."
+                    checked={createForm.till_no_stock_required ?? false}
+                    disabled={saving}
+                    onChange={(_event, { checked }) =>
+                      setCreateForm((form) => ({ ...form, till_no_stock_required: checked }))
+                    }
                   />
                 </Column>
                 <Column lg={16} md={8} sm={4}>

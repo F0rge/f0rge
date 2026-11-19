@@ -108,6 +108,10 @@ class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
         nullable=True,
     )
     price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Snapshot from the till sale. Later catalogue changes do not determine restock eligibility.
+    till_no_stock_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     invoice: Mapped[TaxInvoice] = relationship(back_populates="lines")
 

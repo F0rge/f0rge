@@ -92,6 +92,10 @@ export function tillScanErrorMessage(error: TillScanError): string {
   }
 }
 
+export function requiresTillFloorStock(sku: Pick<Sku, "is_kit" | "till_no_stock_required">): boolean {
+  return !sku.is_kit && !sku.till_no_stock_required;
+}
+
 export function resolveTillScan(options: {
   code: string;
   skus: Sku[];
@@ -115,11 +119,11 @@ export function resolveTillScan(options: {
   if (sku.is_archived || !sku.is_sellable) {
     return { ok: false, error: "not_sellable" };
   }
-  if (!sku.retail_ex_vat) {
+  if (!sku.retail_ex_vat || (sku.till_no_stock_required && Number(sku.retail_ex_vat) <= 0)) {
     return { ok: false, error: "no_retail" };
   }
 
-  if (!sku.is_kit) {
+  if (requiresTillFloorStock(sku)) {
     const onHand = options.floorOnHand(sku.id);
     if (onHand <= 0) {
       return { ok: false, error: "not_on_floor" };

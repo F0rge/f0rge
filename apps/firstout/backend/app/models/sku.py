@@ -61,6 +61,9 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     is_sellable: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
+    till_no_stock_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     storefront_published: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

@@ -13,6 +13,7 @@ from app.schemas.quantity import Quantity
 
 class SkuCreate(BaseModel):
     is_sellable: bool = True
+    till_no_stock_required: bool = False
     our_ref: str = Field(min_length=1, max_length=64)
     # Blank means the service assigns ``csv:<our_ref>``. The column itself stays required.
     our_barcode: Optional[str] = Field(default=None, max_length=64)
@@ -65,6 +66,7 @@ class SkuUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     is_sellable: Optional[bool] = None
+    till_no_stock_required: Optional[bool] = None
     our_ref: Optional[str] = Field(default=None, min_length=1, max_length=64)
     our_barcode: Optional[str] = Field(default=None, min_length=1, max_length=64)
     name: Optional[str] = Field(default=None, min_length=1)
@@ -95,6 +97,7 @@ class SkuResponse(BaseModel):
     archived_at: Optional[datetime.datetime] = None
     archived_by_id: Optional[uuid.UUID] = None
     is_sellable: bool
+    till_no_stock_required: bool = False
     id: uuid.UUID
     our_ref: str
     our_barcode: str

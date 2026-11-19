@@ -128,6 +128,7 @@ import {
   isDesktopPointer,
   isProtectedScanField,
   isQtyOrDiscountField,
+  requiresTillFloorStock,
   resolveTillScan,
   tillScanErrorMessage,
 } from "@/lib/barcode-scan";
@@ -462,6 +463,7 @@ export default function TillPage() {
   const floorOnHand =
     selectedInventory?.locations.find((loc) => loc.location_id === locationId)
       ?.on_hand ?? 0;
+  const selectedNeedsFloorStock = selectedSku && requiresTillFloorStock(selectedSku);
 
   const skuOptions = skus.filter((sku) => {
     if (
@@ -474,6 +476,9 @@ export default function TillPage() {
     }
     if (sku.is_kit) {
       return true;
+    }
+    if (sku.till_no_stock_required) {
+      return Number(sku.retail_ex_vat) > 0;
     }
     const row = inventoryBySku.get(sku.id);
     if (!row) {
@@ -520,6 +525,7 @@ export default function TillPage() {
     }
     return totals;
   }, [cart]);
+  const selectedRemaining = Math.max(floorOnHand - (cartQtyBySku.get(skuId) ?? 0), 0);
 
   const cartKits = useMemo(
     () => cart.filter((line) => line.sku.is_kit),
@@ -646,8 +652,7 @@ export default function TillPage() {
     selectedSku?.is_sellable &&
     !selectedSku.is_archived &&
     numericQty > 0 &&
-    (selectedSku?.is_kit ||
-      numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0)) &&
+    (!selectedNeedsFloorStock || numericQty <= selectedRemaining) &&
     unitExVat(selectedSku ?? ({} as Sku), selectedCustomer, priceLists) > 0;
 
   const floorOnHandFor = useCallback(
@@ -692,13 +697,20 @@ export default function TillPage() {
         setError(tillScanErrorMessage(result.error));
         return false;
       }
+      if (
+        result.sku.till_no_stock_required &&
+        unitExVat(result.sku, selectedCustomer, priceLists) <= 0
+      ) {
+        setError("No sale price for this customer.");
+        return false;
+      }
       setError(null);
       setCart((current) => mergeCartBySku(current, result.sku, result.qty));
       setScanValue("");
       focusScanField();
       return true;
     },
-    [canSell, cartQtyBySku, floorOnHandFor, focusScanField, locationId, skus],
+    [canSell, cartQtyBySku, floorOnHandFor, focusScanField, locationId, priceLists, selectedCustomer, skus],
   );
 
   useEffect(() => {
@@ -753,6 +765,13 @@ export default function TillPage() {
       if (line.sku.is_kit) {
         return line.qty > 0;
       }
+      if (line.sku.till_no_stock_required) {
+        return (
+          line.qty > 0 &&
+          Number(line.sku.retail_ex_vat) > 0 &&
+          unitExVat(line.sku, selectedCustomer, priceLists) > 0
+        );
+      }
       const onHand =
         inventoryBySku
           .get(line.sku.id)
@@ -774,8 +793,9 @@ export default function TillPage() {
       unitExVat(sku, selectedCustomer, priceLists) <= 0
     )
       return false;
+    const needsFloorStock = requiresTillFloorStock(sku);
     if (
-      !sku.is_kit &&
+      needsFloorStock &&
       quantity > floorOnHandFor(sku.id) - (cartQtyBySku.get(sku.id) ?? 0)
     ) {
       setError(tillScanErrorMessage("over_floor"));
@@ -786,7 +806,7 @@ export default function TillPage() {
       const reserved = current
         .filter((line) => line.sku.id === sku.id)
         .reduce((sum, line) => sum + line.qty, 0);
-      if (!sku.is_kit && quantity > floorOnHandFor(sku.id) - reserved)
+      if (needsFloorStock && quantity > floorOnHandFor(sku.id) - reserved)
         return current;
       return mergeCartBySku(current, sku, quantity);
     });
@@ -1264,10 +1284,9 @@ export default function TillPage() {
                     label="Quantity"
                     min={1}
                     max={
-                      Math.max(
-                        floorOnHand - (cartQtyBySku.get(skuId) ?? 0),
-                        0,
-                      ) || undefined
+                      selectedSku?.till_no_stock_required
+                        ? undefined
+                        : selectedRemaining || undefined
                     }
                     value={qty}
                     onChange={(_, { value }) => {
@@ -1280,8 +1299,10 @@ export default function TillPage() {
                       }
                     }}
                     helperText={
-                      skuId && locationId
-                        ? `${Math.max(floorOnHand - (cartQtyBySku.get(skuId) ?? 0), 0)} available at showroom`
+                      selectedSku && locationId
+                        ? selectedSku.till_no_stock_required
+                          ? "No stock needed"
+                          : `${selectedRemaining} available at showroom`
                         : undefined
                     }
                     disabled={!skuId}
@@ -1318,7 +1339,7 @@ export default function TillPage() {
                             !locationId ||
                             priced.unitExVat === null ||
                             priced.unitExVat <= 0 ||
-                            (!sku.is_kit && remaining <= 0)
+                            (requiresTillFloorStock(sku) && remaining <= 0)
                           }
                         >
                           <div className={styles.productCard}>
@@ -1355,7 +1376,9 @@ export default function TillPage() {
                             <p className="cds--type-label-01">
                               {sku.is_kit
                                 ? "Kit · parts checked at checkout"
-                                : `${formatQuantity(remaining)} available at showroom`}
+                                : sku.till_no_stock_required
+                                  ? "No stock needed"
+                                  : `${formatQuantity(remaining)} available at showroom`}
                             </p>
                             {priced.warning && (
                               <p className="cds--type-label-01">
@@ -1897,10 +1920,12 @@ export default function TillPage() {
                   Total inc VAT: {formatZarAmount(lastSale.total_inc_vat)}
                 </strong>
               </p>
-              <p>
-                Floor stock remaining at {lastSale.location.location_name}:{" "}
-                {lastSale.location.on_hand}
-              </p>
+              {!lastSale.lines[0]?.till_no_stock_required && (
+                <p>
+                  Floor stock remaining at {lastSale.location.location_name}:{" "}
+                  {lastSale.location.on_hand}
+                </p>
+              )}
             </div>
 
             <ButtonSet>

@@ -88,11 +88,9 @@ class StockReturnsService:
             raise ConflictError("Cannot return to archived location")
 
         invoice_lines_by_id = {line.id: line for line in invoice.lines}
-        line_models = self._build_line_models(
-            data.lines,
-            invoice_lines_by_id,
-            data.disposition,
-        )
+        line_models = self._build_line_models(data.lines, invoice_lines_by_id)
+        if data.disposition == StockReturnDisposition.RESTOCK:
+            self._restockable_lines(line_models, invoice_lines_by_id)
 
         stock_return = StockReturn(
             return_number="",
@@ -132,9 +130,10 @@ class StockReturnsService:
             invoice = await self.invoice_crud.get_by_id(stock_return.invoice_id, for_update=True)
             assert invoice is not None
             invoice_lines_by_id = {line.id: line for line in invoice.lines}
+            restock_lines: list[StockReturnLine] = []
             if stock_return.disposition == StockReturnDisposition.RESTOCK:
+                restock_lines = self._restockable_lines(stock_return.lines, invoice_lines_by_id)
                 await self.stocktakes.assert_location_unlocked(stock_return.location_id)
-                self._assert_restock_skus(stock_return.lines, invoice_lines_by_id)
             subtotal, vat_amount, total_inc, sales_splits = self._compute_credit_amounts(
                 stock_return.lines,
                 invoice_lines_by_id,
@@ -150,10 +149,10 @@ class StockReturnsService:
             stock_return.credit_note_id = credit_note.id
             stock_return.status = StockReturnStatus.COMPLETED
 
-            if stock_return.disposition == StockReturnDisposition.RESTOCK:
+            if restock_lines:
                 total_cogs = Decimal(0)
                 cogs_parts: list[tuple[str, Decimal, Decimal]] = []
-                for line in stock_return.lines:
+                for line in restock_lines:
                     invoice_line = invoice_lines_by_id[line.invoice_line_id]
                     sku_id = invoice_line.sku_id
                     assert sku_id is not None
@@ -230,7 +229,6 @@ class StockReturnsService:
         self,
         lines: list,
         invoice_lines_by_id: dict[uuid.UUID, InvoiceLine],
-        disposition: StockReturnDisposition,
     ) -> list[StockReturnLine]:
         seen_invoice_lines: set[uuid.UUID] = set()
         models: list[StockReturnLine] = []
@@ -247,8 +245,6 @@ class StockReturnsService:
                 raise ValidationError("Return quantity exceeds invoice line quantity")
 
             sku_id = invoice_line.sku_id if invoice_line.sku_id is not None else line.sku_id
-            if disposition == StockReturnDisposition.RESTOCK and invoice_line.sku_id is None:
-                raise ValidationError("Restock is only available for till sales")
 
             models.append(
                 StockReturnLine(
@@ -261,14 +257,21 @@ class StockReturnsService:
         return models
 
     @staticmethod
-    def _assert_restock_skus(
+    def _restockable_lines(
         lines: list[StockReturnLine],
         invoice_lines_by_id: dict[uuid.UUID, InvoiceLine],
-    ) -> None:
+    ) -> list[StockReturnLine]:
+        restockable = []
         for line in lines:
             invoice_line = invoice_lines_by_id[line.invoice_line_id]
+            if invoice_line.till_no_stock_required:
+                continue
             if invoice_line.sku_id is None:
                 raise ValidationError("Restock is only available for till sales")
+            restockable.append(line)
+        if not restockable:
+            raise ValidationError("Non-stock till services cannot be restocked. Select Write off.")
+        return restockable
 
     @staticmethod
     def _compute_credit_amounts(

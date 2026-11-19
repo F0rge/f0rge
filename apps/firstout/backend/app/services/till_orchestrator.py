@@ -129,6 +129,7 @@ class TillOrchestrator:
         line_inputs: list[tuple] = []
         cogs_parts: list[tuple[str, Decimal, Decimal]] = []
         stock_decrements: list[tuple[uuid.UUID, int]] = []
+        non_stock_service_sku_ids: set[uuid.UUID] = set()
         reserved: dict[uuid.UUID, int] = {}
         picks_to_link: list[Pick] = []
         kit_blocks: list[dict] = []
@@ -158,6 +159,10 @@ class TillOrchestrator:
             price_warning = resolved.warning
 
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
+            if sku.till_no_stock_required and existing_pick is None and not bom_lines:
+                non_stock_service_sku_ids.add(sku.id)
+                line_inputs.append((sku, line.qty, line.discount_percent, base_unit, price_warning))
+                continue
             if existing_pick is not None:
                 line_cogs = await self._pick_cogs(existing_pick, data.location_id)
                 picks_to_link.append(existing_pick)
@@ -236,6 +241,7 @@ class TillOrchestrator:
                     sort_order=index,
                     sku_id=sku.id,
                     price_warning=price_warning,
+                    till_no_stock_required=sku.id in non_stock_service_sku_ids,
                 )
             )
 
@@ -387,6 +393,7 @@ class TillOrchestrator:
                     sort_order=line.sort_order,
                     sku_id=line.sku_id,
                     price_warning=line.price_warning,
+                    till_no_stock_required=line.till_no_stock_required,
                 )
                 for line in reloaded.lines
             ],
