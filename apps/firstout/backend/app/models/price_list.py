@@ -28,6 +28,9 @@ class PriceList(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     is_archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    till_require_listed_price: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     items: Mapped[list[PriceListItem]] = relationship(
         "PriceListItem",
         back_populates="price_list",

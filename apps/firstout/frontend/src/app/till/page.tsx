@@ -68,7 +68,6 @@ import {
   canUseTill,
   canViewCostAudit,
   cancelPick,
-  computeInvoicePreview,
   confirmPick,
   createPick,
   createTillSale,
@@ -87,7 +86,7 @@ import {
   listPriceLists,
   listSkus,
   parsePriceInput,
-  roundHalfUp,
+  previewTillPrices,
   settingsLogoUrl,
   skuPhotoUrl,
   type AppSettings,
@@ -97,6 +96,8 @@ import {
   type PriceList,
   type Sku,
   type PickDocument,
+  type TillPricePreview,
+  type TillPriceRequest,
   type TillSaleResult,
   type TillTender,
 } from "@/lib/api";
@@ -107,7 +108,9 @@ import {
   restoreTillCartSkus,
 } from "@/lib/till-archive";
 import {
+  classificationOf,
   displayUnitAmount,
+  isCin7GeneratedPriceList,
   pricesIncludeVat,
   quoteLineSuspectWarning,
   quoteSkuUnitExVat,
@@ -176,93 +179,6 @@ function unitExVat(
   priceLists: PriceList[],
 ): number {
   return quoteSkuUnitExVat(sku, customer, priceLists).unitExVat ?? 0;
-}
-
-function unitIncVat(
-  sku: Sku,
-  customer: CustomerCrm | null,
-  priceLists: PriceList[],
-): number {
-  const ex = unitExVat(sku, customer, priceLists);
-  return ex > 0 ? exVatToIncVat(ex) : 0;
-}
-
-function lineDiscountedEx(
-  line: CartLine,
-  customer: CustomerCrm | null,
-  priceLists: PriceList[],
-): number {
-  const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(
-    unitExVat(line.sku, customer, priceLists) * factor * line.qty,
-    2,
-  );
-}
-
-function lineIncTotal(
-  line: CartLine,
-  customer: CustomerCrm | null,
-  priceLists: PriceList[],
-): number {
-  const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(
-    unitIncVat(line.sku, customer, priceLists) * factor * line.qty,
-    2,
-  );
-}
-
-function cartSummary(
-  lines: CartLine[],
-  customer: CustomerCrm | null,
-  priceLists: PriceList[],
-) {
-  const subtotalIncBeforeDiscount = lines.reduce(
-    (sum, line) =>
-      sum +
-      roundHalfUp(unitIncVat(line.sku, customer, priceLists) * line.qty, 2),
-    0,
-  );
-  const lineDiscounts = lines.reduce(
-    (sum, line) =>
-      sum +
-      roundHalfUp(
-        unitIncVat(line.sku, customer, priceLists) *
-          line.qty *
-          (line.discountPercent / 100),
-        2,
-      ),
-    0,
-  );
-  const discountedExSubtotal = lines.reduce(
-    (sum, line) => sum + lineDiscountedEx(line, customer, priceLists),
-    0,
-  );
-  const subtotalExBeforeDiscount = lines.reduce(
-    (sum, line) =>
-      sum +
-      roundHalfUp(unitExVat(line.sku, customer, priceLists) * line.qty, 2),
-    0,
-  );
-  const lineDiscountsEx = lines.reduce(
-    (sum, line) =>
-      sum +
-      roundHalfUp(
-        unitExVat(line.sku, customer, priceLists) *
-          line.qty *
-          (line.discountPercent / 100),
-        2,
-      ),
-    0,
-  );
-  const preview = computeInvoicePreview(discountedExSubtotal);
-  return {
-    subtotalIncBeforeDiscount,
-    subtotalExBeforeDiscount,
-    lineDiscounts,
-    lineDiscountsEx,
-    vatIncluded: preview.vat,
-    totalIncVat: preview.totalIncVat,
-  };
 }
 
 function clampDiscount(value: number): number {
@@ -362,6 +278,13 @@ export default function TillPage() {
   const [customerId, setCustomerId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [pricing, setPricing] = useState<{
+    request: TillPriceRequest;
+    attempt: number;
+    preview?: TillPricePreview;
+    error?: string;
+  } | null>(null);
+  const [pricingAttempt, setPricingAttempt] = useState(0);
   const [tender, setTender] = useState<TillTender>("cash");
   const [amountTendered, setAmountTendered] = useState("");
   const [loading, setLoading] = useState(true);
@@ -465,21 +388,17 @@ export default function TillPage() {
       ?.on_hand ?? 0;
   const selectedNeedsFloorStock = selectedSku && requiresTillFloorStock(selectedSku);
 
+  const selectedCustomer =
+    customers.find((customer) => customer.id === customerId) ??
+    (commitmentCustomer?.id === customerId ? commitmentCustomer : null);
+
   const skuOptions = skus.filter((sku) => {
-    if (
-      sku.is_archived ||
-      !sku.is_sellable ||
-      !locationId ||
-      !sku.retail_ex_vat
-    ) {
-      return false;
+    if (sku.is_archived || !sku.is_sellable || !locationId) return false;
+    if (sku.till_no_stock_required && !sku.is_kit) {
+      return unitExVat(sku, selectedCustomer, priceLists) > 0;
     }
-    if (sku.is_kit) {
-      return true;
-    }
-    if (sku.till_no_stock_required) {
-      return Number(sku.retail_ex_vat) > 0;
-    }
+    if (!sku.retail_ex_vat) return false;
+    if (sku.is_kit) return true;
     const row = inventoryBySku.get(sku.id);
     if (!row) {
       return false;
@@ -505,9 +424,6 @@ export default function TillPage() {
   );
 
   const selectedSkuOption = skuOptions.find((sku) => sku.id === skuId) ?? null;
-  const selectedCustomer =
-    customers.find((customer) => customer.id === customerId) ??
-    (commitmentCustomer?.id === customerId ? commitmentCustomer : null);
   const pendingTillPicks = tillPicks.filter(isPendingTillPick);
 
   useEffect(() => {
@@ -633,17 +549,64 @@ export default function TillPage() {
     });
   }, [cart, cartReady, customerId, linkedPickIds, locationId, pickId]);
 
-  const summary = cartSummary(cart, selectedCustomer, priceLists);
-  const showInclusive = pricesIncludeVat(selectedCustomer);
-  const totalIncLabel = formatPriceAmount(summary.totalIncVat);
+  const priceRequest = useMemo<TillPriceRequest>(() => ({
+    ...(customerId ? { customer_id: customerId } : {}),
+    lines: cart.map((line) => ({
+      sku_id: line.sku.id,
+      qty: line.qty,
+      ...(line.discountPercent > 0 ? { discount_percent: line.discountPercent } : {}),
+    })),
+  }), [cart, customerId]);
+  const activePricing = pricing?.request === priceRequest && pricing.attempt === pricingAttempt
+    ? pricing
+    : null;
+  const pricePreview = activePricing?.preview;
+  const pricingError = activePricing?.error;
+  const refreshPrices = () => setPricingAttempt((attempt) => attempt + 1);
+
+  useEffect(() => {
+    if (!canSell || !cartReady || priceRequest.lines.length === 0) return;
+    const controller = new AbortController();
+    void previewTillPrices(priceRequest, controller.signal).then((preview) => {
+      if (!controller.signal.aborted) {
+        setPricing({ request: priceRequest, attempt: pricingAttempt, preview });
+      }
+    }).catch((err: unknown) => {
+      if (!controller.signal.aborted) {
+        setPricing({
+          request: priceRequest,
+          attempt: pricingAttempt,
+          error: err instanceof Error ? err.message : "Could not check the sale prices.",
+        });
+      }
+    });
+    return () => controller.abort();
+  }, [canSell, cartReady, priceRequest, pricingAttempt]);
+
+  const showInclusive = pricePreview?.prices_include_vat ?? pricesIncludeVat(selectedCustomer);
+  const classification = pricePreview?.classification ?? classificationOf(selectedCustomer);
+  const assignedPriceList = priceLists.find((list) => list.id === selectedCustomer?.price_list_id);
+  const priceListName = pricePreview
+    ? pricePreview.price_list_name
+    : assignedPriceList && !isCin7GeneratedPriceList(assignedPriceList.name) ? assignedPriceList.name : null;
+  const totalInc = Number(pricePreview?.total_inc_vat ?? 0);
+  const totalIncLabel = pricePreview || !cart.length ? formatPriceAmount(totalInc) : "";
+  const money = (amount: string | number | undefined) =>
+    amount === undefined ? (cart.length ? "—" : formatZarAmount("0.00")) : formatZarAmount(formatPriceAmount(Number(amount)));
+  const beforeDiscount = pricePreview
+    ? Number(showInclusive ? pricePreview.before_discount_inc_vat : pricePreview.before_discount_ex_vat)
+    : undefined;
+  const discount = beforeDiscount === undefined || !pricePreview
+    ? undefined
+    : beforeDiscount - Number(showInclusive ? pricePreview.total_inc_vat : pricePreview.subtotal_ex_vat);
 
   useEffect(() => {
     setAmountTendered(totalIncLabel);
   }, [totalIncLabel]);
 
-  const tenderedAmount = parsePriceInput(amountTendered) ?? summary.totalIncVat;
-  const changeAmount = Math.max(0, tenderedAmount - summary.totalIncVat);
-  const showChange = tender === "cash" || tender === "eft";
+  const tenderedAmount = parsePriceInput(amountTendered) ?? totalInc;
+  const changeAmount = Math.max(0, tenderedAmount - totalInc);
+  const showChange = Boolean(pricePreview) && (tender === "cash" || tender === "eft");
 
   const addValid =
     canSell &&
@@ -692,16 +655,10 @@ export default function TillPage() {
         addQty,
         floorOnHand: floorOnHandFor,
         cartQty: (id) => cartQtyBySku.get(id) ?? 0,
+        hasServicePrice: (sku) => unitExVat(sku, selectedCustomer, priceLists) > 0,
       });
       if (!result.ok) {
         setError(tillScanErrorMessage(result.error));
-        return false;
-      }
-      if (
-        result.sku.till_no_stock_required &&
-        unitExVat(result.sku, selectedCustomer, priceLists) <= 0
-      ) {
-        setError("No sale price for this customer.");
         return false;
       }
       setError(null);
@@ -748,6 +705,8 @@ export default function TillPage() {
   const saleValid =
     canSell &&
     locationId &&
+    !!pricePreview &&
+    totalInc > 0 &&
     cart.length > 0 &&
     cart.every((line) => {
       if (!line.sku.is_sellable) return false;
@@ -762,15 +721,8 @@ export default function TillPage() {
           ) && cart.filter((item) => item.sku.id === line.sku.id).length === 1
         );
       }
-      if (line.sku.is_kit) {
+      if (!requiresTillFloorStock(line.sku)) {
         return line.qty > 0;
-      }
-      if (line.sku.till_no_stock_required) {
-        return (
-          line.qty > 0 &&
-          Number(line.sku.retail_ex_vat) > 0 &&
-          unitExVat(line.sku, selectedCustomer, priceLists) > 0
-        );
       }
       const onHand =
         inventoryBySku
@@ -787,7 +739,7 @@ export default function TillPage() {
       !locationId ||
       sku.is_archived ||
       !sku.is_sellable ||
-      !sku.retail_ex_vat ||
+      (!sku.till_no_stock_required && !sku.retail_ex_vat) ||
       !Number.isFinite(quantity) ||
       quantity <= 0 ||
       unitExVat(sku, selectedCustomer, priceLists) <= 0
@@ -904,7 +856,7 @@ export default function TillPage() {
   }
 
   async function handleCompleteSale() {
-    if (!saleValid) {
+    if (!saleValid || !pricePreview) {
       return;
     }
     if (creditOverride && canOverrideCredit && !creditOverrideReason.trim()) {
@@ -920,22 +872,9 @@ export default function TillPage() {
       const pickIds = salePickIds(linkedPickIds, pickId);
       const result = await createTillSale({
         location_id: locationId,
-        lines: cart.map((line) => {
-          const payload: {
-            sku_id: string;
-            qty: number;
-            discount_percent?: number;
-          } = {
-            sku_id: line.sku.id,
-            qty: line.qty,
-          };
-          if (line.discountPercent > 0) {
-            payload.discount_percent = line.discountPercent;
-          }
-          return payload;
-        }),
+        ...priceRequest,
+        price_revision: pricePreview.price_revision,
         tender,
-        ...(customerId ? { customer_id: customerId } : {}),
         ...(pickId ? { pick_id: pickId } : {}),
         ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
         ...(canOverrideCredit && creditOverride
@@ -964,6 +903,13 @@ export default function TillPage() {
             ? err.message
             : "Sale failed.";
       setError(message);
+      if (
+        err instanceof ApiError && err.status === 409 &&
+        err.detail && typeof err.detail === "object" &&
+        "code" in err.detail && err.detail.code === "till_price_conflict"
+      ) {
+        refreshPrices();
+      }
       if (
         err instanceof ApiError &&
         err.status === 409 &&
@@ -1492,6 +1438,21 @@ export default function TillPage() {
                   />
                 </div>
 
+                <div>
+                  <p className="cds--type-label-01">Pricing for this sale</p>
+                  <p className="cds--type-body-01">
+                    {classification} · {priceListName ?? "Catalogue tier"} · Unit prices {vatBasisLabel(showInclusive)}
+                  </p>
+                </div>
+                {pricingError ? (
+                  <Stack gap={3}>
+                    <InlineNotification kind="error" title="Could not confirm sale prices" subtitle={pricingError} lowContrast hideCloseButton />
+                    <div><Button kind="tertiary" size="sm" onClick={refreshPrices}>Check prices again</Button></div>
+                  </Stack>
+                ) : cart.length > 0 && !pricePreview ? (
+                  <p role="status" className="cds--type-body-01">Checking sale prices…</p>
+                ) : null}
+
                 {selectedCustomer?.on_hold ? (
                   <InlineNotification
                     kind="warning"
@@ -1519,16 +1480,15 @@ export default function TillPage() {
                       </p>
                     </div>
                   ) : (
-                    cart.map((line) => {
+                    cart.map((line, index) => {
+                      const linePricing = pricePreview?.lines[index];
                       const priced = quoteSkuUnitExVat(
                         line.sku,
                         selectedCustomer,
                         priceLists,
                       );
                       const suspect = quoteLineSuspectWarning(
-                        priced.unitExVat === null
-                          ? ""
-                          : formatPriceAmount(priced.unitExVat),
+                        linePricing?.unit_ex_vat ?? "",
                         line.sku,
                         priced,
                         canViewCost,
@@ -1569,11 +1529,6 @@ export default function TillPage() {
                               lowContrast
                               hideCloseButton
                             />
-                          )}
-                          {priced.warning && (
-                            <p className="cds--type-label-01">
-                              {priced.warning}
-                            </p>
                           )}
                           <div className={styles.cartControls}>
                             <NumberInput
@@ -1622,18 +1577,7 @@ export default function TillPage() {
                               Unit ({vatBasisLabel(showInclusive)})
                             </p>
                             <p className="cds--type-body-01">
-                              {formatZarAmount(
-                                formatPriceAmount(
-                                  displayUnitAmount(
-                                    unitExVat(
-                                      line.sku,
-                                      selectedCustomer,
-                                      priceLists,
-                                    ),
-                                    showInclusive,
-                                  ),
-                                ),
-                              )}
+                              {money(linePricing && displayUnitAmount(Number(linePricing.unit_ex_vat), showInclusive))}
                             </p>
                           </div>
                           <div className={styles.priceRow}>
@@ -1641,17 +1585,18 @@ export default function TillPage() {
                               Line total incl. VAT
                             </p>
                             <p className="cds--type-heading-compact-01">
-                              {formatZarAmount(
-                                formatPriceAmount(
-                                  lineIncTotal(
-                                    line,
-                                    selectedCustomer,
-                                    priceLists,
-                                  ),
-                                ),
-                              )}
+                              {money(linePricing?.inc_vat)}
                             </p>
                           </div>
+                          {linePricing?.price_warning && (
+                            <InlineNotification
+                              kind="warning"
+                              lowContrast
+                              hideCloseButton
+                              title="Price list or tier fallback"
+                              subtitle={linePricing.price_warning}
+                            />
+                          )}
                           {suspect && (
                             <InlineNotification
                               kind="warning"
@@ -1670,58 +1615,26 @@ export default function TillPage() {
 
                 <dl className="firstout-sale-summary">
                   <div className="firstout-sale-summary__row">
-                    <dt>
-                      {showInclusive
-                        ? "Subtotal (before discount, incl. VAT)"
-                        : "Subtotal excl. VAT"}
-                    </dt>
-                    <dd>
-                      {formatZarAmount(
-                        formatPriceAmount(
-                          showInclusive
-                            ? summary.subtotalIncBeforeDiscount
-                            : summary.subtotalExBeforeDiscount,
-                        ),
-                      )}
-                    </dd>
+                    <dt>{showInclusive ? "Subtotal (before discount, incl. VAT)" : "Subtotal (before discount, excl. VAT)"}</dt>
+                    <dd>{money(beforeDiscount)}</dd>
                   </div>
                   <div className="firstout-sale-summary__row firstout-sale-summary__row--discount">
-                    <dt>
-                      {showInclusive
-                        ? "Line discounts"
-                        : "Line discounts excl. VAT"}
-                    </dt>
-                    <dd>
-                      {(showInclusive
-                        ? summary.lineDiscounts
-                        : summary.lineDiscountsEx) > 0
-                        ? `- ${formatZarAmount(
-                            formatPriceAmount(
-                              showInclusive
-                                ? summary.lineDiscounts
-                                : summary.lineDiscountsEx,
-                            ),
-                          )}`
-                        : formatZarAmount(formatPriceAmount(0))}
-                    </dd>
+                    <dt>{showInclusive ? "Line discounts" : "Line discounts excl. VAT"}</dt>
+                    <dd>{discount && discount > 0 ? "- " : ""}{money(discount)}</dd>
                   </div>
+                  {!showInclusive && (
+                    <div className="firstout-sale-summary__row">
+                      <dt>Subtotal after discount excl. VAT</dt>
+                      <dd>{money(pricePreview?.subtotal_ex_vat)}</dd>
+                    </div>
+                  )}
                   <div className="firstout-sale-summary__row">
-                    <dt>
-                      {showInclusive
-                        ? `VAT (${vatRateLabel}) included`
-                        : `VAT (${vatRateLabel})`}
-                    </dt>
-                    <dd>
-                      {formatZarAmount(formatPriceAmount(summary.vatIncluded))}
-                    </dd>
+                    <dt>VAT ({vatRateLabel}){showInclusive ? " included" : ""}</dt>
+                    <dd>{money(pricePreview?.vat_amount)}</dd>
                   </div>
                   <div className="firstout-sale-summary__row firstout-sale-summary__row--total">
-                    <dt>
-                      {showInclusive ? "Total (incl. VAT)" : "Total incl. VAT"}
-                    </dt>
-                    <dd>
-                      {formatZarAmount(formatPriceAmount(summary.totalIncVat))}
-                    </dd>
+                    <dt>Total incl. VAT</dt>
+                    <dd>{money(pricePreview?.total_inc_vat)}</dd>
                   </div>
                 </dl>
 

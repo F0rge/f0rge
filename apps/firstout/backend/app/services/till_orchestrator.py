@@ -26,9 +26,18 @@ from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
 from app.models.payment import Payment, PaymentDirection
+from app.models.customer import Customer
+from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import InvoiceLineResponse
-from app.schemas.till import TillSaleCreate, TillSaleLocationStock, TillSaleResponse
+from app.schemas.till import (
+    TillPriceLine,
+    TillPricePreview,
+    TillPriceRequest,
+    TillSaleCreate,
+    TillSaleLocationStock,
+    TillSaleResponse,
+)
 from app.services.sku_bom import whole_component_qty
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
@@ -49,13 +58,13 @@ from app.services.till_kit_pick import (
     kit_pick_message,
 )
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
-from app.exceptions import ForbiddenError, KitRequiresPickError
+from app.exceptions import ForbiddenError, KitRequiresPickError, TillPriceConflictError
 from app.permissions import TILL_DISCOUNT, USERS_MANAGE
 from app.services.permissions import PermissionService
 from app.services.books_periods import assert_date_postable
-from app.services.pricing import resolve_unit_price, shows_prices_including_vat
+from app.services.till_pricing import TillPricing
 from app.services.suspect_price import annotate_line_warnings
-from app.services.vat import CENT, ex_to_inc
+from app.services.vat import CENT
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -76,26 +85,71 @@ class TillOrchestrator:
         self.bom_crud = SkuBomLineCRUD(db)
         self.pick_crud = PickCRUD(db)
 
-    async def create_sale(
-        self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
-    ) -> TillSaleResponse:
-        if user_id is not None and any(line.discount_percent > 0 for line in data.lines):
-            allowed = await PermissionService(self.db).has_permission(user_id, TILL_DISCOUNT)
-            if not allowed:
-                raise ForbiddenError("Till discount permission required")
+    async def _require_discounts(
+        self, request: TillPriceRequest, user_id: uuid.UUID | None, max_discount: Decimal | None
+    ) -> None:
+        if user_id is None or not any(line.discount_percent > 0 for line in request.lines):
+            return
+        permissions = PermissionService(self.db)
+        if not await permissions.has_permission(user_id, TILL_DISCOUNT):
+            raise ForbiddenError("Till discount permission required")
+        if max_discount is not None and any(
+            line.discount_percent > max_discount for line in request.lines
+        ):
+            if not await permissions.has_permission(user_id, USERS_MANAGE):
+                raise ConflictError(f"Discount exceeds maximum allowed ({max_discount}%)")
 
+    async def _active_customer(self, request: TillPriceRequest) -> Customer:
+        if request.customer_id is None:
+            customer = await self._get_walk_in_customer()
+        else:
+            customer = await self.customer_crud.get_by_id(request.customer_id)
+            if customer is None:
+                raise NotFoundError("Customer not found")
+        assert_customer_active(customer)
+        return customer
+
+    async def _price_cart(
+        self, request: TillPriceRequest, customer: Customer
+    ) -> tuple[list[Sku], TillPricePreview]:
+        pricing = await TillPricing.for_customer(self.db, customer)
+        skus = []
+        priced_lines = []
+        for line in request.lines:
+            sku = await self.sku_crud.get_by_id(line.sku_id)
+            if sku is None:
+                raise NotFoundError("SKU not found")
+            if sku.is_sellable is False:
+                assert_sku_sellable(sku)
+            skus.append(sku)
+            priced_lines.append(await pricing.line(sku, line))
+        return skus, pricing.preview(priced_lines)
+
+    async def preview_prices(
+        self, request: TillPriceRequest, user_id: uuid.UUID
+    ) -> TillPricePreview:
         team = await TeamCRUD(self.db).get_first()
         if team is None:
             raise NotFoundError("Team not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
-        max_discount = team_settings.max_till_discount_percent
-        if max_discount is not None and user_id is not None:
-            if any(line.discount_percent > max_discount for line in data.lines):
-                can_override = await PermissionService(self.db).has_permission(
-                    user_id, USERS_MANAGE
-                )
-                if not can_override:
-                    raise ConflictError(f"Discount exceeds maximum allowed ({max_discount}%)")
+        settings = await TeamSettingsCRUD(self.db).get_by_team_id(team.id)
+        await self._require_discounts(
+            request, user_id, settings.max_till_discount_percent if settings else None
+        )
+        customer = await self._active_customer(request)
+        _, preview = await self._price_cart(request, customer)
+        return preview
+
+    async def create_sale(
+        self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
+    ) -> TillSaleResponse:
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        settings_crud = TeamSettingsCRUD(self.db)
+        settings = await settings_crud.get_by_team_id(team.id)
+        await self._require_discounts(
+            data, user_id, settings.max_till_discount_percent if settings else None
+        )
 
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         from app.crud.location import LocationCRUD
@@ -108,13 +162,7 @@ class TillOrchestrator:
         if location.type != LocationType.SHOWROOM:
             raise ConflictError("Till sales are only allowed at showroom locations")
 
-        if data.customer_id is not None:
-            customer = await self.customer_crud.get_by_id(data.customer_id)
-            if customer is None:
-                raise NotFoundError("Customer not found")
-        else:
-            customer = await self._get_walk_in_customer()
-        assert_customer_active(customer)
+        customer = await self._active_customer(data)
         override_note = None
         if not self.credit.is_walk_in(customer):
             override_note = await self.credit.authorize_override(
@@ -126,7 +174,7 @@ class TillOrchestrator:
         sale_date = datetime.date.today()
         await assert_date_postable(self.db, sale_date)
 
-        line_inputs: list[tuple] = []
+        line_inputs: list[tuple[Sku, TillPriceLine]] = []
         cogs_parts: list[tuple[str, Decimal, Decimal]] = []
         stock_decrements: list[tuple[uuid.UUID, int]] = []
         non_stock_service_sku_ids: set[uuid.UUID] = set()
@@ -141,10 +189,12 @@ class TillOrchestrator:
         total_cogs = Decimal(0)
 
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in data.lines])
-        for line in data.lines:
-            sku = await self.sku_crud.get_by_id(line.sku_id)
-            if sku is None:
-                raise NotFoundError("SKU not found")
+        skus, preview = await self._price_cart(data, customer)
+        if data.price_revision is not None and data.price_revision != preview.price_revision:
+            raise TillPriceConflictError(
+                "Prices changed. Review the new total before completing the sale."
+            )
+        for sku, line in zip(skus, preview.lines, strict=True):
             existing_pick = None
             if sku.is_sellable is False:
                 assert_sku_sellable(sku)
@@ -154,14 +204,10 @@ class TillOrchestrator:
                 )
             else:
                 assert_sku_sellable(sku)
-            resolved = await resolve_unit_price(self.db, sku, customer)
-            base_unit = resolved.unit_ex_vat
-            price_warning = resolved.warning
-
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
             if sku.till_no_stock_required and existing_pick is None and not bom_lines:
                 non_stock_service_sku_ids.add(sku.id)
-                line_inputs.append((sku, line.qty, line.discount_percent, base_unit, price_warning))
+                line_inputs.append((sku, line))
                 continue
             if existing_pick is not None:
                 line_cogs = await self._pick_cogs(existing_pick, data.location_id)
@@ -207,40 +253,32 @@ class TillOrchestrator:
             total_cogs += line_cogs
             cogs_code = await self.category_posting.cogs_code_for_sku(sku)
             cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
-            line_inputs.append((sku, line.qty, line.discount_percent, base_unit, price_warning))
+            line_inputs.append((sku, line))
 
         if kit_blocks:
             raise KitRequiresPickError(kit_blocks)
 
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
-        total_inc = Decimal(0)
+        subtotal = preview.subtotal_ex_vat
+        vat_total = preview.vat_amount
+        total_inc = preview.total_inc_vat
         invoice_line_models: list[InvoiceLine] = []
         sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
-        for index, (sku, qty, discount_percent, base_unit, price_warning) in enumerate(line_inputs):
-            discounted_unit = (
-                base_unit * (Decimal(100) - discount_percent) / Decimal(100)
-            ).quantize(CENT, rounding=ROUND_HALF_UP)
-            ex_vat = (Decimal(qty) * discounted_unit).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
-            subtotal += ex_vat
-            vat_total += line_vat
-            total_inc += inc_vat
+        for index, (sku, line) in enumerate(line_inputs):
+            discounted_unit = (line.ex_vat / line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
             sales_code = await self.category_posting.sales_code_for_sku(sku)
-            sales_parts.append((sales_code, Decimal(0), ex_vat))
+            sales_parts.append((sales_code, Decimal(0), line.ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=sku.name,
-                    qty=qty,
+                    qty=line.qty,
                     unit_ex_vat=discounted_unit,
-                    ex_vat=ex_vat,
-                    inc_vat=inc_vat,
-                    vat_amount=line_vat,
+                    ex_vat=line.ex_vat,
+                    inc_vat=line.inc_vat,
+                    vat_amount=line.vat_amount,
                     sort_order=index,
                     sku_id=sku.id,
-                    price_warning=price_warning,
+                    price_warning=line.price_warning,
                     till_no_stock_required=sku.id in non_stock_service_sku_ids,
                 )
             )
@@ -253,6 +291,7 @@ class TillOrchestrator:
                 customer, total_inc, credit_override=data.credit_override
             )
 
+        team_settings = await settings_crud.get_or_create_for_team(team.id)
         due_date = compute_due_date(sale_date, customer, team_settings)
 
         async with unit_of_work(self.db):
@@ -268,7 +307,7 @@ class TillOrchestrator:
                 vat_amount=vat_total,
                 total_inc_vat=total_inc,
                 amount_paid=Decimal(0),
-                prices_include_vat=shows_prices_including_vat(customer),
+                prices_include_vat=preview.prices_include_vat,
                 lines=invoice_line_models,
             )
 
@@ -589,9 +628,7 @@ class TillOrchestrator:
                 line_cogs += (cost * alloc.qty).quantize(CENT, rounding=ROUND_HALF_UP)
         return line_cogs
 
-    async def _get_walk_in_customer(self):
-        from app.models.customer import Customer
-
+    async def _get_walk_in_customer(self) -> Customer:
         walk_in = (
             await self.db.execute(
                 select(Customer).where(Customer.name == WALK_IN_CUSTOMER_NAME).limit(1)

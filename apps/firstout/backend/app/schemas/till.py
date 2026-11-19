@@ -19,11 +19,41 @@ class TillSaleLineCreate(BaseModel):
     discount_percent: Decimal = Field(default=0, ge=0, le=100)
 
 
-class TillSaleCreate(BaseModel):
-    location_id: uuid.UUID
+class TillPriceRequest(BaseModel):
     lines: list[TillSaleLineCreate] = Field(min_length=1)
-    tender: Literal["cash", "card", "deposit", "eft"]
     customer_id: Optional[uuid.UUID] = None
+
+
+class TillPriceLine(BaseModel):
+    sku_id: uuid.UUID
+    qty: int
+    discount_percent: Decimal
+    unit_ex_vat: Decimal
+    before_discount_ex_vat: Decimal
+    ex_vat: Decimal
+    vat_amount: Decimal
+    inc_vat: Decimal
+    source: str
+    price_warning: Optional[str] = None
+
+
+class TillPricePreview(BaseModel):
+    classification: str
+    price_list_name: Optional[str]
+    prices_include_vat: bool
+    before_discount_ex_vat: Decimal
+    before_discount_inc_vat: Decimal
+    subtotal_ex_vat: Decimal
+    vat_amount: Decimal
+    total_inc_vat: Decimal
+    lines: list[TillPriceLine]
+    price_revision: str
+
+
+class TillSaleCreate(TillPriceRequest):
+    location_id: uuid.UUID
+    tender: Literal["cash", "card", "deposit", "eft"]
+    price_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     pick_id: Optional[uuid.UUID] = None
     pick_ids: list[uuid.UUID] = Field(default_factory=list)
     credit_override: bool = False

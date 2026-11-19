@@ -19,6 +19,7 @@ class PriceListResponse(BaseModel):
     id: uuid.UUID
     name: str
     is_archived: bool = False
+    till_require_listed_price: bool = False
     items: list[PriceListItemResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -26,10 +27,12 @@ class PriceListResponse(BaseModel):
 
 class PriceListCreate(BaseModel):
     name: str = Field(min_length=1)
+    till_require_listed_price: bool = False
 
 
 class PriceListUpdate(BaseModel):
     name: str = Field(min_length=1)
+    till_require_listed_price: bool | None = None
 
 
 class PriceListItemUpsert(BaseModel):

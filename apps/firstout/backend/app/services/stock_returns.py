@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
@@ -24,6 +25,7 @@ from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.page import Page, PageParams
 from app.schemas.stock_return import (
     StockReturnCreate,
+    StockReturnLineCreate,
     StockReturnLineResponse,
     StockReturnListItem,
     StockReturnResponse,
@@ -33,7 +35,7 @@ from app.services.chart_of_accounts import CODE_INVENTORY, LedgerPostingService
 from app.services.credit_notes import CreditNoteService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
-from app.services.vat import CENT, ex_to_inc
+from app.services.vat import CENT
 from app.services.archive_documents import assert_operational_document
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -88,6 +90,7 @@ class StockReturnsService:
             raise ConflictError("Cannot return to archived location")
 
         invoice_lines_by_id = {line.id: line for line in invoice.lines}
+        self._validate_lines(data.lines, invoice_lines_by_id)
         line_models = self._build_line_models(data.lines, invoice_lines_by_id)
         if data.disposition == StockReturnDisposition.RESTOCK:
             self._restockable_lines(line_models, invoice_lines_by_id)
@@ -130,6 +133,7 @@ class StockReturnsService:
             invoice = await self.invoice_crud.get_by_id(stock_return.invoice_id, for_update=True)
             assert invoice is not None
             invoice_lines_by_id = {line.id: line for line in invoice.lines}
+            self._validate_lines(stock_return.lines, invoice_lines_by_id)
             restock_lines: list[StockReturnLine] = []
             if stock_return.disposition == StockReturnDisposition.RESTOCK:
                 restock_lines = self._restockable_lines(stock_return.lines, invoice_lines_by_id)
@@ -225,13 +229,12 @@ class StockReturnsService:
         if existing is not None:
             raise ConflictError("This invoice already has a return")
 
-    def _build_line_models(
-        self,
-        lines: list,
+    @staticmethod
+    def _validate_lines(
+        lines: Sequence[StockReturnLineCreate | StockReturnLine],
         invoice_lines_by_id: dict[uuid.UUID, InvoiceLine],
-    ) -> list[StockReturnLine]:
+    ) -> None:
         seen_invoice_lines: set[uuid.UUID] = set()
-        models: list[StockReturnLine] = []
 
         for line in lines:
             if line.invoice_line_id in seen_invoice_lines:
@@ -244,6 +247,14 @@ class StockReturnsService:
             if line.qty > invoice_line.qty:
                 raise ValidationError("Return quantity exceeds invoice line quantity")
 
+    @staticmethod
+    def _build_line_models(
+        lines: list[StockReturnLineCreate],
+        invoice_lines_by_id: dict[uuid.UUID, InvoiceLine],
+    ) -> list[StockReturnLine]:
+        models: list[StockReturnLine] = []
+        for line in lines:
+            invoice_line = invoice_lines_by_id[line.invoice_line_id]
             sku_id = invoice_line.sku_id if invoice_line.sku_id is not None else line.sku_id
 
             models.append(
@@ -284,12 +295,20 @@ class StockReturnsService:
         sales_splits: list[tuple[Optional[uuid.UUID], Decimal]] = []
         for line in lines:
             invoice_line = invoice_lines_by_id[line.invoice_line_id]
-            ex_vat = (Decimal(line.qty) * invoice_line.unit_ex_vat).quantize(
-                CENT,
-                rounding=ROUND_HALF_UP,
-            )
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
+            if line.qty == invoice_line.qty:
+                ex_vat = invoice_line.ex_vat
+                line_vat = invoice_line.vat_amount
+                inc_vat = invoice_line.inc_vat
+            else:
+                # The posted extended line is authoritative. The stored unit
+                # is rounded for display and can differ when multiplied back.
+                ex_vat = (invoice_line.ex_vat * line.qty / invoice_line.qty).quantize(
+                    CENT, rounding=ROUND_HALF_UP
+                )
+                line_vat = (invoice_line.vat_amount * line.qty / invoice_line.qty).quantize(
+                    CENT, rounding=ROUND_HALF_UP
+                )
+                inc_vat = ex_vat + line_vat
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat

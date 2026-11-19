@@ -25,7 +25,7 @@ type BarcodeDetectorCtor = {
   getSupportedFormats?: () => Promise<string[]>;
 };
 
-export type TillScanError = "unknown" | "not_sellable" | "no_retail" | "not_on_floor" | "over_floor";
+export type TillScanError = "unknown" | "not_sellable" | "no_retail" | "no_service_price" | "not_on_floor" | "over_floor";
 
 export type TillScanResult =
   | { ok: true; sku: Sku; qty: number }
@@ -83,6 +83,8 @@ export function tillScanErrorMessage(error: TillScanError): string {
       return "This SKU is not for sale.";
     case "no_retail":
       return "No retail price for this SKU.";
+    case "no_service_price":
+      return "No sale price for this customer.";
     case "not_on_floor":
       return "Not on this floor.";
     case "over_floor":
@@ -103,6 +105,7 @@ export function resolveTillScan(options: {
   addQty: number;
   floorOnHand: (skuId: string) => number;
   cartQty: (skuId: string) => number;
+  hasServicePrice?: (sku: Sku) => boolean;
 }): TillScanResult {
   const code = options.code.trim();
   if (!code || options.addQty <= 0) {
@@ -119,7 +122,10 @@ export function resolveTillScan(options: {
   if (sku.is_archived || !sku.is_sellable) {
     return { ok: false, error: "not_sellable" };
   }
-  if (!sku.retail_ex_vat || (sku.till_no_stock_required && Number(sku.retail_ex_vat) <= 0)) {
+  if (sku.till_no_stock_required) {
+    const hasPrice = options.hasServicePrice?.(sku) ?? Number(sku.retail_ex_vat) > 0;
+    if (!hasPrice) return { ok: false, error: "no_service_price" };
+  } else if (!sku.retail_ex_vat) {
     return { ok: false, error: "no_retail" };
   }
 

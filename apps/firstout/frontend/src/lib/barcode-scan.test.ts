@@ -82,6 +82,20 @@ describe("till service charges", () => {
     expect(scan(sku, sku.our_barcode, 1, 1)).toEqual({ ok: false, error: "over_floor" });
   });
 
+  it("accepts a service priced by the selected customer list without a retail price", () => {
+    const option = { ...service, retail_ex_vat: null };
+    const result = resolveTillScan({
+      code: option.our_barcode,
+      skus: [option],
+      allowOurRef: true,
+      addQty: 1,
+      floorOnHand: () => 0,
+      cartQty: () => 0,
+      hasServicePrice: () => true,
+    });
+    expect(result).toEqual({ ok: true, sku: option, qty: 1 });
+  });
+
   it("keeps pricing, active and sellable gates for service charges", () => {
     expect(scan({ ...service, retail_ex_vat: null }).ok).toBe(false);
     expect(scan({ ...service, retail_ex_vat: "0.00" }).ok).toBe(false);

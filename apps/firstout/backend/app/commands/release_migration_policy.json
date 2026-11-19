@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "092_till_no_stock_required",
+  "target_revision": "093_till_price_list_policy",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -373,6 +373,10 @@
     },
     "092_till_no_stock_required": {
       "sha256": "569895ed2ef6ef5333500dc3c4d81ef659881820c712b524997e835ffe0294e6",
+      "automatic": true
+    },
+    "093_till_price_list_policy": {
+      "sha256": "36a2f4f9aaec2cf622ffdc78be519af05e2ce84eb9e58641b6fd82ea8dba08a5",
       "automatic": true
     }
   }
