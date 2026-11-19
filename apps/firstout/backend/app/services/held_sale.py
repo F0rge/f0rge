@@ -225,6 +225,7 @@ class HeldSaleService:
                 customer_id=data.customer_id,
                 customer_name=customer.name if customer is not None else WALK_IN_CUSTOMER_NAME,
                 held_by_name=actor.display_name or actor.email,
+                held_at=now,
                 note=data.note,
                 estimated_total_inc_vat=total,
                 pick_id=data.pick_id,
