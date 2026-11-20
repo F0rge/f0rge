@@ -138,6 +138,8 @@ function TokenDirectory({ organisation }: { organisation: string }) {
                       <span>{item.token_name} · {item.source === "mcp" ? "MCP" : "Firstout"} · <TokenDate value={item.occurred_at} showTime /></span>
                       {item.result === "failed" && <Tag size="sm" type="red">Failed</Tag>}
                       {item.result === "denied" && <Tag size="sm" type="red">Denied</Tag>}
+                      {item.result === "started" && <Tag size="sm" type="gray">Started</Tag>}
+                      {item.result === "unknown" && <Tag size="sm" type="magenta">Not confirmed</Tag>}
                     </li>
                   ))}
                 </ul>
