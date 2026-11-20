@@ -255,9 +255,15 @@ export function checkLiveCallers(manifest, paths, root = ROOT) {
   return errors;
 }
 
-// ADRs for the domains a change touches: the ADR files of each changed path's owning role, in index order.
+// ADRs for the domains a change touches, in index order: each changed path's owning role, plus
+// security when it is a required reviewer (auth, permissions, tenancy, secrets, migrations).
+// Other reviewers are left out so cross-cutting governance review doesn't pull every ADR into every PR.
 export function adrsFor(manifest, paths, root = ROOT) {
-  const files = new Set(paths.flatMap((path) => manifest.roles.find((role) => role.id === route(manifest, path).owner).adrFiles));
+  const roleIds = new Set(paths.flatMap((path) => {
+    const routed = route(manifest, path);
+    return routed.reviewers.includes('f0rge-security') ? [routed.owner, 'f0rge-security'] : [routed.owner];
+  }));
+  const files = new Set(manifest.roles.filter((role) => roleIds.has(role.id)).flatMap((role) => role.adrFiles));
   const index = [...read(root, 'docs/adr/README.md').matchAll(/^\| ([PC]-\d{3}) \| ([^|]+?) \|/gmu)].map((match) => ({ id: match[1], title: match[2] }));
   const fileOf = new Map([...files].flatMap((file) => [...read(root, file).matchAll(/^## ([PC]-\d{3})\s*$/gmu)].map((match) => [match[1], file])));
   return index.filter((adr) => fileOf.has(adr.id)).map((adr) => ({ ...adr, file: fileOf.get(adr.id) }));

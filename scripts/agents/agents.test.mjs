@@ -39,14 +39,20 @@ test('the pr skill keeps its F0rge ADR Check', () => {
 test('adrs lists only the touched domains, once each, in index order', () => {
   const ids = (paths) => adrsFor(manifest, paths).map((adr) => adr.id);
   const backend = ids([route(manifest, 'apps/marrow/backend/app/main.py').path]);
-  const backendFiles = new Set(adrsFor(manifest, ['apps/marrow/backend/app/main.py']).map((adr) => adr.file));
-  const owner = manifest.roles.find((role) => role.id === route(manifest, 'apps/marrow/backend/app/main.py').owner);
-  assert.deepEqual([...backendFiles].sort(), [...owner.adrFiles].sort());
+  const filesFor = (path) => [...new Set(adrsFor(manifest, [path]).map((adr) => adr.file))].sort();
+  const routed = route(manifest, 'apps/marrow/backend/app/main.py');
+  const expected = (routed.reviewers.includes('f0rge-security') ? [routed.owner, 'f0rge-security'] : [routed.owner])
+    .flatMap((id) => manifest.roles.find((role) => role.id === id).adrFiles).sort();
+  assert.deepEqual(filesFor('apps/marrow/backend/app/main.py'), expected);
+  // Security-sensitive paths owned by another domain still bring the security ADRs.
+  for (const path of ['libs/backend/db/f0rge_db/rls.py', 'apps/marrow/backend/migrations/versions/001_x.py']) {
+    if (route(manifest, path).reviewers.includes('f0rge-security')) assert.ok(filesFor(path).includes('docs/adr/security.md'), path);
+  }
   assert.ok(backend.length > 0 && backend.length < 66);
   const both = ids(['apps/marrow/backend/app/main.py', 'apps/marrow/backend/app/main.py', '.github/workflows/ci.yml']);
   assert.equal(new Set(both).size, both.length);
   assert.ok(backend.every((id) => both.includes(id)));
-  assert.ok(adrsFor(manifest, ['.github/workflows/ci.yml']).every((adr) => adr.file === 'docs/adr/delivery.md'));
+  assert.deepEqual(filesFor('.github/workflows/ci.yml'), ['docs/adr/delivery.md', 'docs/adr/security.md']);
   assert.throws(() => adrsFor(manifest, ['unclassified/zzz.unknown']), /Unclassified path/);
 });
 
