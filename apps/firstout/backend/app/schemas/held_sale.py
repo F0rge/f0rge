@@ -21,6 +21,58 @@ class HeldSaleLineCreate(BaseModel):
     )
 
 
+def _check_basket_lines(lines: list[HeldSaleLineCreate], linked: dict[uuid.UUID, uuid.UUID]):
+    skus = {line.sku_id for line in lines}
+    if len(skus) != len(lines):
+        raise ValueError("A basket can contain each SKU only once")
+    if not linked.keys() <= skus:
+        raise ValueError("Linked picks must correspond to lines in the basket")
+    if len(set(linked.values())) != len(linked):
+        raise ValueError("A pick cannot be linked to multiple lines")
+
+
+class TillBasketUpdate(BaseModel):
+    """Whole-basket replace; an empty line list is a valid open basket."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(ge=1)
+    operation_id: uuid.UUID
+    customer_id: Optional[uuid.UUID] = None
+    note: Optional[str] = Field(default=None, max_length=MAX_HELD_NOTE_LENGTH)
+    pick_id: Optional[uuid.UUID] = None
+    linked_pick_ids: dict[uuid.UUID, uuid.UUID] = Field(
+        default_factory=dict, max_length=MAX_HELD_LINES
+    )
+    lines: list[HeldSaleLineCreate] = Field(default_factory=list, max_length=MAX_HELD_LINES)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
+
+    @model_validator(mode="after")
+    def validate_basket(self) -> TillBasketUpdate:
+        _check_basket_lines(self.lines, self.linked_pick_ids)
+        return self
+
+
+class TillBasket(BaseModel):
+    id: uuid.UUID
+    location_id: uuid.UUID
+    customer_id: Optional[uuid.UUID]
+    note: Optional[str]
+    pick_id: Optional[uuid.UUID]
+    linked_pick_ids: dict[uuid.UUID, uuid.UUID]
+    lines: list[HeldSaleLineCreate]
+    version: int
+    updated_at: datetime.datetime
+    # While it has lines: when the sale (and its reservations) lapse unless changed.
+    expires_at: Optional[datetime.datetime] = None
+    # Set when the basket was last emptied by expiry, so the till can say so.
+    expired_at: Optional[datetime.datetime] = None
+
+
 class HeldSaleCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -33,6 +85,8 @@ class HeldSaleCreate(BaseModel):
         default_factory=dict, max_length=MAX_HELD_LINES
     )
     note: Optional[str] = Field(default=None, max_length=MAX_HELD_NOTE_LENGTH)
+    # When set, the caller's server basket is emptied in the same transaction.
+    basket_id: Optional[uuid.UUID] = None
 
     @field_validator("note")
     @classmethod
@@ -41,13 +95,7 @@ class HeldSaleCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_basket(self) -> HeldSaleCreate:
-        skus = {line.sku_id for line in self.lines}
-        if len(skus) != len(self.lines):
-            raise ValueError("A basket can contain each SKU only once")
-        if not self.linked_pick_ids.keys() <= skus:
-            raise ValueError("Linked picks must correspond to lines in the basket")
-        if len(set(self.linked_pick_ids.values())) != len(self.linked_pick_ids):
-            raise ValueError("A pick cannot be linked to multiple lines")
+        _check_basket_lines(self.lines, self.linked_pick_ids)
         return self
 
 
@@ -66,6 +114,8 @@ class HeldSaleResume(BaseModel):
     operation_id: uuid.UUID
     version: int = Field(ge=1)
     current: Optional[HeldSaleCreate] = None
+    # When set, the resumed contents are written into this server basket.
+    basket_id: Optional[uuid.UUID] = None
 
     @model_validator(mode="after")
     def validate_location(self) -> HeldSaleResume:
@@ -77,6 +127,7 @@ class HeldSaleResume(BaseModel):
 class HeldSaleResumeResult(BaseModel):
     resumed_id: uuid.UUID
     held_current_id: Optional[uuid.UUID] = None
+    basket: Optional[TillBasket] = None
 
 
 class HeldSaleDelete(BaseModel):
@@ -113,6 +164,7 @@ class HeldSale(BaseModel):
     customer_name: str
     held_by_name: str
     held_at: datetime.datetime
+    expires_at: datetime.datetime
     version: int
     note: Optional[str]
     estimated_total_inc_vat: Optional[Decimal]

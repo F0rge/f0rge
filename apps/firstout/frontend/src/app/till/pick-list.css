@@ -1,0 +1,51 @@
+.till-pick-list {
+  margin-top: 1rem;
+  scroll-margin-top: 1rem;
+}
+.till-pick-list__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: space-between;
+  align-items: start;
+}
+.till-pick-list__header h2 {
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+.till-pick-list__quiet {
+  color: var(--cds-text-secondary);
+}
+/* An open source menu pushes the footer down instead of covering it (and is not clipped by the table's overflow). */
+.till-pick-list__table--menu-open .cds--data-table-content {
+  padding-block-end: var(--till-pick-menu-space);
+}
+.till-pick-list__source {
+  min-inline-size: 16rem;
+}
+.till-pick-list__changed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.till-pick-list__hint {
+  margin-top: 0.5rem;
+}
+.till-pick-list__next ul {
+  margin: 0.5rem 0;
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+}
+.till-pick-list__next li + li {
+  margin-top: 0.25rem;
+}
+.till-pick-list__info {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.till-pick-list__info > svg {
+  flex-shrink: 0;
+}

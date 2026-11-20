@@ -1,29 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  clearTillCart,
-  loadTillCart,
   nextTillStateAfterKitConfirm,
   openPicksHrefForKit,
   parseKitRequiresPick,
   salePickIds,
-  saveTillCart,
-  type TillCartSnapshot,
   type TillKitBlock,
 } from "./till-kit-pick";
-
-function memoryStore() {
-  const data = new Map<string, string>();
-  return {
-    getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      data.set(key, value);
-    },
-    removeItem: (key: string) => {
-      data.delete(key);
-    },
-  };
-}
 
 const flower: TillKitBlock = {
   sku_id: "sku-flower",
@@ -107,29 +90,5 @@ describe("confirming a kit pick", () => {
       "pick-flower",
     );
     expect(ids).toEqual(["pick-flower", "pick-headboard"]);
-  });
-});
-
-describe("till cart snapshot", () => {
-  it("round-trips the cart and the selected pick", () => {
-    const store = memoryStore();
-    const snapshot: TillCartSnapshot = {
-      locationId: "loc-bedford",
-      customerId: "cust-changing-spaces",
-      pickId: "pick-flower",
-      linkedPickIds: { "sku-flower": "pick-flower" },
-      lines: [
-        { skuId: "sku-headboard", qty: 1, discountPercent: 33 },
-        { skuId: "sku-flower", qty: 1, discountPercent: 0 },
-      ],
-    };
-    saveTillCart(snapshot, store);
-    expect(loadTillCart(store)).toEqual(snapshot);
-    expect(saveTillCart({ ...snapshot, held: true }, store)).toBe(true);
-    expect(loadTillCart(store)).toEqual({ ...snapshot, held: true });
-    expect(loadTillCart(memoryStore())).toBeNull();
-    expect(saveTillCart(snapshot, { ...store, setItem: () => { throw new Error("Storage unavailable"); } })).toBe(false);
-    clearTillCart(store);
-    expect(loadTillCart(store)).toBeNull();
   });
 });

@@ -17,6 +17,7 @@ from app.schemas.pick import (
     PickComplete,
     PickConfirm,
     PickCreate,
+    PickDefaultAllocationsResponse,
     PickPreviewRequest,
     PickPreviewResponse,
     PickResponse,
@@ -61,6 +62,15 @@ async def get_pick(
     service: PickService = Depends(get_pick_service),
 ):
     return await service.get(pick_id)
+
+
+@picks_router.get("/{pick_id}/default-allocations", response_model=PickDefaultAllocationsResponse)
+async def get_pick_default_allocations(
+    pick_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    service: PickService = Depends(get_pick_service),
+):
+    return await service.default_allocations(pick_id, user_id)
 
 
 @picks_router.patch("/{pick_id}", response_model=PickResponse)

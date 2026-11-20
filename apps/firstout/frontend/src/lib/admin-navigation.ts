@@ -4,7 +4,7 @@ import { can } from "./permissions";
 export const SETTINGS_SECTIONS = [
   { id: "company", label: "Company", description: "Business identity, tax, currency and branding.", group: "Business" },
   { id: "documents", label: "Documents", description: "Numbering and formats for new documents.", group: "Business" },
-  { id: "locations", label: "Locations", description: "Receiving and till defaults, and pick priority.", group: "Operations" },
+  { id: "locations", label: "Locations", description: "Receiving and till defaults, sale hold time, and pick priority.", group: "Operations" },
   { id: "operations", label: "Operations", description: "Payment terms, till discount limits and purchase approvals.", group: "Operations" },
   { id: "labels", label: "Labels", description: "Printing dimensions and details for SKU and bin labels.", group: "Operations" },
 ] as const;

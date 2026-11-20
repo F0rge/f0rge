@@ -35,6 +35,7 @@ from app.services.chart_of_accounts import CODE_INVENTORY, LedgerPostingService
 from app.services.credit_notes import CreditNoteService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
+from app.services.till_invoice_pick import TillInvoicePick
 from app.services.vat import CENT
 from app.services.archive_documents import assert_operational_document
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -79,6 +80,7 @@ class StockReturnsService:
         if invoice is None:
             raise NotFoundError("Invoice not found")
         assert_operational_document(invoice)
+        await TillInvoicePick(self.db).assert_picks_confirmed(invoice.id, invoice.invoice_number)
 
         await self._assert_invoice_not_credited(data.invoice_id)
         await self._assert_no_active_return(data.invoice_id)
@@ -132,6 +134,9 @@ class StockReturnsService:
             await self._assert_invoice_not_credited(stock_return.invoice_id)
             invoice = await self.invoice_crud.get_by_id(stock_return.invoice_id, for_update=True)
             assert invoice is not None
+            await TillInvoicePick(self.db).assert_picks_confirmed(
+                invoice.id, invoice.invoice_number
+            )
             invoice_lines_by_id = {line.id: line for line in invoice.lines}
             self._validate_lines(stock_return.lines, invoice_lines_by_id)
             restock_lines: list[StockReturnLine] = []

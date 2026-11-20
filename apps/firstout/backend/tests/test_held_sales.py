@@ -72,8 +72,6 @@ async def test_holding_preserves_estimates_and_notes_without_posting(
         retail_ex_vat="100.55",
     )
     unpriced = await _sku(owner_client, "HOLD-UNPRICED-SOFA")
-    # Give the older basket the higher ID so an identical timestamp cannot
-    # accidentally make the UUID tie-breaker look like chronological ordering.
     priced_basket = _basket(location, sofa, id=str(uuid.UUID(int=2)), note="  collect Saturday  ")
     before = await _financial_counts(async_db)
 
@@ -89,9 +87,10 @@ async def test_holding_preserves_estimates_and_notes_without_posting(
     unknown = await _save(owner_client, _basket(location, unpriced, id=str(uuid.UUID(int=1))))
     assert unknown["estimated_total_inc_vat"] is None
     assert unknown["lines"][0]["estimated_total_inc_vat"] is None
+    # Soonest to expire first: the older hold.
     assert [item["id"] for item in await _list(owner_client, location)] == [
-        unknown["id"],
         saved["id"],
+        unknown["id"],
     ]
 
     note = {"location_id": location, "version": 1, "note": "Ring on arrival"}

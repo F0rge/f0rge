@@ -18,7 +18,6 @@ export type TillCartSnapshot = {
   customerId: string;
   pickId: string;
   linkedPickIds: Record<string, string>;
-  held?: boolean;
   note?: string;
   lines: { skuId: string; qty: number; discountPercent: number }[];
 };
@@ -29,22 +28,6 @@ export type TillKitSaleState<TCart> = {
   linkedPickIds: Record<string, string>;
   blocks: TillKitBlock[];
 };
-
-type KeyValueStore = {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-};
-
-const TILL_CART_KEY = "firstout.till.cart";
-
-function browserSession(): KeyValueStore | null {
-  try {
-    return typeof sessionStorage === "undefined" ? null : sessionStorage;
-  } catch {
-    return null;
-  }
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -140,68 +123,4 @@ export function nextTillStateAfterKitConfirm<TCart>(
     linkedPickIds: { ...state.linkedPickIds, [confirmed.skuId]: confirmed.id },
     blocks: state.blocks.filter((block) => block.sku_id !== confirmed.skuId),
   };
-}
-
-export function saveTillCart(snapshot: TillCartSnapshot, store?: KeyValueStore): boolean {
-  const target = store ?? browserSession();
-  if (!target) return false;
-  try {
-    target.setItem(TILL_CART_KEY, JSON.stringify(snapshot));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function loadTillCart(store?: KeyValueStore): TillCartSnapshot | null {
-  const target = store ?? browserSession();
-  if (!target) {
-    return null;
-  }
-  try {
-    const raw = target.getItem(TILL_CART_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    const row = asRecord(parsed);
-    if (!row || !Array.isArray(row.lines)) {
-      return null;
-    }
-    const lines = row.lines.flatMap((line) => {
-      const item = asRecord(line);
-      if (!item || typeof item.skuId !== "string") {
-        return [];
-      }
-      const qty = typeof item.qty === "number" ? item.qty : 1;
-      const discountPercent = typeof item.discountPercent === "number" ? item.discountPercent : 0;
-      return [{ skuId: item.skuId, qty, discountPercent }];
-    });
-    const linked = asRecord(row.linkedPickIds);
-    const linkedPickIds: Record<string, string> = {};
-    if (linked) {
-      for (const [skuId, pickId] of Object.entries(linked)) {
-        if (typeof pickId === "string") {
-          linkedPickIds[skuId] = pickId;
-        }
-      }
-    }
-    return {
-      locationId: typeof row.locationId === "string" ? row.locationId : "",
-      customerId: typeof row.customerId === "string" ? row.customerId : "",
-      pickId: typeof row.pickId === "string" ? row.pickId : "",
-      linkedPickIds,
-      ...(row.held === true ? { held: true } : {}),
-      lines,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function clearTillCart(store?: KeyValueStore): void {
-  const target = store ?? browserSession();
-  try {
-    target?.removeItem(TILL_CART_KEY);
-  } catch {
-    // Some browsers deny storage access after a session is created.
-  }
 }

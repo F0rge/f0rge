@@ -58,6 +58,9 @@ class TillSaleCreate(TillPriceRequest):
     pick_ids: list[uuid.UUID] = Field(default_factory=list)
     credit_override: bool = False
     credit_override_reason: Optional[str] = None
+    # Complete from the caller's server basket; it is emptied with the sale.
+    basket_id: Optional[uuid.UUID] = None
+    basket_version: Optional[int] = Field(default=None, ge=1)
 
 
 class TillSaleLocationStock(BaseModel):
@@ -68,6 +71,8 @@ class TillSaleLocationStock(BaseModel):
 
 class TillSaleResponse(BaseModel):
     invoice_id: uuid.UUID
+    # The draft pick for units reserved against the invoice, when stock was sold from elsewhere.
+    pick_id: Optional[uuid.UUID] = None
     invoice_number: str
     payment_id: uuid.UUID
     payment_number: str

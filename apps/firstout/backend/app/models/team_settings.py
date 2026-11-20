@@ -29,6 +29,7 @@ DEFAULT_ADDRESS = "Kramerville, Johannesburg, South Africa"
 DEFAULT_VAT_NUMBER = "4123456789"
 DEFAULT_PAYMENT_TERMS_DAYS = 30
 DEFAULT_SESSION_TTL_HOURS = 12
+DEFAULT_TILL_HOLD_HOURS = 3
 
 
 class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
@@ -139,6 +140,12 @@ class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         default=DEFAULT_SESSION_TTL_HOURS,
         server_default=text("12"),
     )
+    till_hold_hours: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=DEFAULT_TILL_HOLD_HOURS,
+        server_default=text("3"),
+    )
 
     team: Mapped["Team"] = relationship()
     default_receive_location: Mapped[Optional["Location"]] = relationship(
@@ -153,6 +160,10 @@ class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         CheckConstraint(
             "session_ttl_hours >= 1 AND session_ttl_hours <= 720",
             name="ck_team_settings_session_ttl_hours",
+        ),
+        CheckConstraint(
+            "till_hold_hours >= 1 AND till_hold_hours <= 24",
+            name="ck_team_settings_till_hold_hours",
         ),
     )
 

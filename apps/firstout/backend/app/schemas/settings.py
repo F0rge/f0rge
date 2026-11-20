@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 
 class DocumentSequenceResponse(BaseModel):
@@ -43,6 +43,7 @@ class SettingsResponse(BaseModel):
     po_approval_threshold_zar: Optional[Decimal] = None
     auto_process_exact_supplier_invoices: bool = False
     session_ttl_hours: int
+    till_hold_hours: int
     label_width_mm: int = 100
     label_height_mm: int = 60
     label_show_name: bool = True
@@ -79,4 +80,5 @@ class SettingsUpdate(BaseModel):
     po_approval_threshold_zar: Optional[Decimal] = Field(default=None, ge=0)
     auto_process_exact_supplier_invoices: Optional[bool] = None
     session_ttl_hours: Optional[int] = Field(default=None, ge=1, le=720, deprecated=True)
+    till_hold_hours: Optional[StrictInt] = Field(default=None, ge=1, le=24)
     document_sequences: Optional[list[DocumentSequenceUpdateItem]] = None

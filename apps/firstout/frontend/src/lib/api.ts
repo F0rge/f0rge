@@ -6,6 +6,7 @@ import {
   normalizePickSettings,
   normalizePreview,
   type CreatePickPayload,
+  type PickDefaultAllocations,
   type PickDocument,
   type PickPreview,
   type UpdatePickPayload,
@@ -340,6 +341,7 @@ export {
 export type {
   CreatePickPayload,
   PickAllocation,
+  PickDefaultAllocations,
   PickDocument,
   PickLine,
   PickPreview,
@@ -1324,7 +1326,63 @@ export type HeldSaleCreate = {
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   note?: string | null;
+  basket_id?: string;
 };
+
+/** The signed-in user's open till basket for one showroom. */
+export type TillBasket = {
+  id: string;
+  location_id: string;
+  customer_id: string | null;
+  note: string | null;
+  pick_id: string | null;
+  linked_pick_ids: Record<string, string>;
+  lines: { sku_id: string; qty: number; discount_percent: string }[];
+  version: number;
+  updated_at: string;
+  /** While it has lines: when the sale and its reservations lapse unless changed. */
+  expires_at?: string | null;
+  /** Set when expiry last emptied the basket, so the till can say so. */
+  expired_at?: string | null;
+};
+
+/** The soonest-freeing reservation on a SKU; names the showroom, never the person. */
+export type TillBlockingReservation = {
+  location_id: string;
+  location_name: string;
+  holder_kind: "basket" | "held_sale" | "invoice";
+  expires_at: string | null;
+};
+
+/** Stock reserved by holders other than the caller's own basket. */
+export type TillReservation = {
+  sku_id: string;
+  reserved_by_others: number;
+  blocking: TillBlockingReservation | null;
+};
+
+export function listTillReservations(locationId: string, signal?: AbortSignal): Promise<TillReservation[]> {
+  return apiFetch(`/till/reservations?location_id=${encodeURIComponent(locationId)}`, { signal });
+}
+
+/** Whole-basket replace; a stale version is rejected with basket_version_conflict. */
+export type TillBasketUpdate = {
+  version: number;
+  operation_id: string;
+  customer_id?: string;
+  note?: string | null;
+  pick_id?: string;
+  linked_pick_ids?: Record<string, string>;
+  lines: TillSaleLinePayload[];
+};
+
+export function getTillBasket(locationId: string): Promise<TillBasket> {
+  return apiFetch(`/till/basket?location_id=${encodeURIComponent(locationId)}`);
+}
+
+export function updateTillBasket(id: string, payload: TillBasketUpdate): Promise<TillBasket> {
+  return apiFetch(`/till/basket/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
 
 export type HeldSale = {
   id: string;
@@ -1334,6 +1392,8 @@ export type HeldSale = {
   customer_name: string;
   held_by_name: string;
   held_at: string;
+  /** ISO UTC; the stock stays reserved until then, then the sale is deleted. */
+  expires_at: string;
   version: number;
   note: string | null;
   estimated_total_inc_vat: string | null;
@@ -1354,6 +1414,7 @@ export type HeldSaleResume = {
   operation_id: string;
   version: number;
   current?: HeldSaleCreate;
+  basket_id?: string;
 };
 
 export function listHeldSales(locationId: string, signal?: AbortSignal): Promise<HeldSale[]> {
@@ -1374,6 +1435,7 @@ export function updateHeldSaleNote(id: string, locationId: string, version: numb
 export function resumeTillHeldSale(id: string, payload: HeldSaleResume): Promise<{
   resumed_id: string;
   held_current_id: string | null;
+  basket?: TillBasket;
 }> {
   return apiFetch(`/till/held-sales/${id}/resume`, {
     method: "POST",
@@ -1423,10 +1485,14 @@ export type TillSalePayload = TillPriceRequest & {
   pick_ids?: string[];
   credit_override?: boolean;
   credit_override_reason?: string;
+  basket_id?: string;
+  basket_version?: number;
 };
 
 export type TillSaleResult = {
   invoice_id: string;
+  /** Draft till pick for the units reserved against the invoice; null when the showroom had them all. */
+  pick_id: string | null;
   invoice_number: string;
   payment_id: string;
   payment_number: string;
@@ -1680,6 +1746,10 @@ export function listPicks(sourceType?: string): Promise<PickDocument[]> {
 
 export function getPick(id: string): Promise<PickDocument> {
   return apiFetch<unknown>(`/picks/${id}`).then(normalizePick);
+}
+
+export function getPickDefaultAllocations(id: string): Promise<PickDefaultAllocations> {
+  return apiFetch<PickDefaultAllocations>(`/picks/${id}/default-allocations`);
 }
 
 export function previewPick(payload: { sku_id: string; qty: number }): Promise<PickPreview> {
@@ -3464,6 +3534,8 @@ export type AppSettings = import("./label-settings").LabelSettings & {
   payment_terms_days: number;
   default_receive_location_id: string | null;
   default_till_location_id: string | null;
+  /** Company-wide sale hold time in whole hours (1..24). */
+  till_hold_hours: number;
   document_sequences: DocumentSequence[];
 };
 
@@ -3525,6 +3597,7 @@ export function updateSettings(payload: Partial<import("./label-settings").Label
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
+  till_hold_hours?: number;
   document_sequences?: DocumentSequenceUpdate[];
 }): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings", {

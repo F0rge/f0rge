@@ -24,6 +24,7 @@ from app.exceptions import (
     McpTokensUnconfiguredError,
     ForbiddenError,
     HeldResumeTargetChangedError,
+    TillBasketConflictError,
     KitRequiresPickError,
     TillPriceConflictError,
     RateLimitedError,
@@ -199,7 +200,13 @@ async def _kit_requires_pick_handler(_: Request, exc: Exception) -> JSONResponse
 
 async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
     if isinstance(
-        exc, (HeldResumeTargetChangedError, KitRequiresPickError, TillPriceConflictError)
+        exc,
+        (
+            HeldResumeTargetChangedError,
+            KitRequiresPickError,
+            TillBasketConflictError,
+            TillPriceConflictError,
+        ),
     ):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,

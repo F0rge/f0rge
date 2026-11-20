@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button, InlineNotification, Modal, Search, Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow, TableSelectAll, TableSelectRow, Tag, TextArea,
 } from "@carbon/react";
-import { ArrowRight, Edit, Renew, TrashCan } from "@carbon/icons-react";
+import { ArrowRight, Edit, Renew, Time, TrashCan, WarningAltFilled } from "@carbon/icons-react";
 
 import {
   ApiError, deleteTillHeldSales, formatZarAmount, listHeldSales, updateHeldSaleNote, type HeldSale,
 } from "@/lib/api";
 import { formatQuantity } from "@/lib/quantity";
+import { heldExpiryNotice, heldSalesExplainer, heldTimeLeft, tillClock } from "@/lib/till-reservations";
 
 import "./held-sales.css";
 
@@ -39,16 +40,24 @@ export function useHeldSales(locationId: string) {
     });
     return () => controller.abort();
   }, [locationId, revision]);
-  return {
-    sales: current?.sales ?? [],
-    error: current?.error,
-    loading,
-    refresh: () => setRevision((value) => value + 1),
-  };
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  return { sales: current?.sales ?? [], error: current?.error, loading, refresh };
+}
+
+/** Minute clock for the Time left column; stops when the tab closes. */
+function useMinuteClock(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }
 
 type HeldSalesWorkspaceProps = {
   locationId: string;
+  /** The team's till hold time; the explainer names it when known. */
+  holdHours?: number;
   showroom: string;
   list: ReturnType<typeof useHeldSales>;
   focusId: string;
@@ -62,10 +71,11 @@ type DeletePrompt = { kind: "one" | "selected" | "all"; drafts: HeldSale[] };
 const amount = (value: string | null) => value === null ? "—" : formatZarAmount(value);
 
 export function HeldSalesWorkspace({
-  locationId, showroom, list, focusId, busy, onBusy, onResume, onNotice,
+  locationId, holdHours, showroom, list, focusId, busy, onBusy, onResume, onNotice,
 }: HeldSalesWorkspaceProps) {
+  const now = useMinuteClock();
   const [query, setQuery] = useState("");
-  const [newestFirst, setNewestFirst] = useState(true);
+  const [soonestFirst, setSoonestFirst] = useState(true);
   const [selected, setSelected] = useState(focusId);
   const [checked, setChecked] = useState<string[]>([]);
   const [deletePrompt, setDeletePrompt] = useState<DeletePrompt | null>(null);
@@ -76,11 +86,19 @@ export function HeldSalesWorkspace({
   const filtered = list.sales.filter((sale) => [
     sale.reference, sale.customer_name, sale.note, ...sale.lines.map((line) => `${line.sku_code} ${line.sku_name}`),
   ].join(" ").toLowerCase().includes(queryText))
-    .sort((a, b) => newestFirst ? b.held_at.localeCompare(a.held_at) : a.held_at.localeCompare(b.held_at));
+    .sort((a, b) => (Date.parse(a.expires_at) - Date.parse(b.expires_at)) * (soonestFirst ? 1 : -1));
   const draft = filtered.find((sale) => sale.id === selected) ?? filtered[0];
   const checkedDrafts = filtered.filter((sale) => checked.includes(sale.id));
   const allChecked = filtered.length > 0 && checkedDrafts.length === filtered.length;
   const disabled = busy || list.loading || Boolean(list.error);
+  const draftLeft = draft && heldTimeLeft(draft.expires_at, now);
+  const draftWarning = draft && heldExpiryNotice(draft.expires_at, now);
+  // The server stops listing a sale once it expires: refetch when the set of lapsed sales changes.
+  const lapsed = list.sales.filter((sale) => Date.parse(sale.expires_at) <= now).map((sale) => sale.id).join();
+  const { refresh } = list;
+  useEffect(() => {
+    if (lapsed) refresh();
+  }, [lapsed, refresh]);
   const count = deletePrompt?.drafts.length ?? 0;
   const deleteTitle = deletePrompt?.kind === "all" ? "Delete all held sales?" :
     deletePrompt?.kind === "one" ? `Delete ${deletePrompt.drafts[0].reference}?` :
@@ -116,6 +134,7 @@ export function HeldSalesWorkspace({
         {list.error && <InlineNotification kind="error" title="Could not load held sales" subtitle={list.error} lowContrast hideCloseButton />}
         {error && !deletePrompt && !noteDraft && <InlineNotification kind="error" title="Held sales changed"
           subtitle={error} lowContrast onCloseButtonClick={() => setError(null)} />}
+        {locationId && <p className="held-explainer"><Time aria-hidden="true" />{heldSalesExplainer(holdHours)}</p>}
         <div className="held-toolbar">
           <Search id="held-search" size="lg" labelText="Search held sales" placeholder="Customer, reference, product or note"
             value={query} onChange={(event) => { setQuery(event.target.value); setChecked([]); }} />
@@ -142,19 +161,24 @@ export function HeldSalesWorkspace({
                 checked={allChecked} indeterminate={checkedDrafts.length > 0 && !allChecked}
                 onSelect={() => setChecked(allChecked ? [] : filtered.map((sale) => sale.id))} />
               <TableHeader>Sale</TableHeader><TableHeader>Customer</TableHeader>
-              <TableHeader isSortable isSortHeader sortDirection={newestFirst ? "DESC" : "ASC"}
-                onClick={() => setNewestFirst(!newestFirst)}>Held at</TableHeader>
+              <TableHeader>Held at</TableHeader>
+              <TableHeader isSortable isSortHeader sortDirection={soonestFirst ? "ASC" : "DESC"}
+                onClick={() => setSoonestFirst(!soonestFirst)}>Time left</TableHeader>
               <TableHeader>Est. total</TableHeader>
             </TableRow></TableHead>
-            <TableBody>{filtered.map((entry) => <TableRow key={entry.id} className={entry.id === draft?.id ? "held-table-selected" : ""}>
+            <TableBody>{filtered.map((entry) => { const left = heldTimeLeft(entry.expires_at, now); return <TableRow key={entry.id} className={entry.id === draft?.id ? "held-table-selected" : ""}>
               <TableSelectRow id={`held-${entry.id}`} name={entry.id} aria-label={`Select ${entry.reference}`}
                 checked={checked.includes(entry.id)} onSelect={() => selectRow(entry.id)} />
               <TableCell><button type="button" className="held-table-link" aria-pressed={entry.id === draft?.id}
                 onClick={() => setSelected(entry.id)}>{entry.reference}</button></TableCell>
               <TableCell>{entry.customer_name}</TableCell>
               <TableCell className="held-table-time">{savedTime(entry.held_at)}</TableCell>
+              <TableCell className="held-table-time">{left.urgent
+                ? <Tag size="sm" type="warm-gray" className="held-expiry-urgent" renderIcon={WarningAltFilled}>
+                  <span className="cds--visually-hidden">Expiring soon: </span>{left.label}</Tag>
+                : left.label}</TableCell>
               <TableCell>{amount(entry.estimated_total_inc_vat)}</TableCell>
-            </TableRow>)}</TableBody>
+            </TableRow>; })}</TableBody>
           </Table>
         </div>}
       </div>
@@ -164,6 +188,9 @@ export function HeldSalesWorkspace({
         </div>
         <h2>{draft.customer_name}</h2>
         <p className="held-detail-meta">Held {savedTime(draft.held_at)} · {draft.held_by_name}</p>
+        {draftWarning
+          ? <InlineNotification kind="warning" lowContrast hideCloseButton title={draftWarning.title} subtitle={draftWarning.subtitle} />
+          : <p className="held-detail-meta">Expires at {tillClock(draft.expires_at)} · {draftLeft?.duration} left</p>}
         <h3 className="held-product-heading">{draft.lines.length} product {draft.lines.length === 1 ? "line" : "lines"}</h3>
         <ul className="held-detail-products">{draft.lines.map((line, index) => <li key={`${line.sku_id}-${index}`}>
           <div><strong>{line.sku_name}</strong><span>{line.sku_code} · Qty {formatQuantity(line.qty)}{Number(line.discount_percent) > 0 && ` · ${Number(line.discount_percent)}% off`}</span></div>
@@ -176,7 +203,7 @@ export function HeldSalesWorkspace({
             onClick={() => { setError(null); setNoteDraft({ draft, text: draft.note ?? "" }); }}>{draft.note ? "Edit note" : "Add note"}</Button>
         </div>
         <div className="held-detail-actions">
-          <Button className="held-primary" renderIcon={ArrowRight} disabled={disabled} onClick={() => onResume(draft)}>Resume sale</Button>
+          <Button className="held-primary" renderIcon={ArrowRight} disabled={disabled || draftLeft?.expired} onClick={() => onResume(draft)}>Resume sale</Button>
           <Button kind="danger--ghost" renderIcon={TrashCan} disabled={disabled}
             onClick={() => { setError(null); setDeletePrompt({ kind: "one", drafts: [draft] }); }}>Delete sale</Button>
         </div>

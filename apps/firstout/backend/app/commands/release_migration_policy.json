@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "096_mcp_operations",
+  "target_revision": "101_stock_reservation_changes",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -389,6 +389,26 @@
     },
     "096_mcp_operations": {
       "sha256": "0f7417edfea2c96207f381459ef325f3bbb1f49b9f86f1b2c54c8f74a25a46c0",
+      "automatic": true
+    },
+    "097_till_hold_hours": {
+      "sha256": "70296d589d91d230c10d6f3e5baaea7a139afa3b53046348ce110ad0b8627408",
+      "automatic": true
+    },
+    "098_till_baskets": {
+      "sha256": "94b9ea77dabc976a0602d7edaed7c23f2d4d0df3e9062a69c24bf7bf6d24bb96",
+      "automatic": true
+    },
+    "099_stock_reservations": {
+      "sha256": "fc1242da52562356ac14393f85fb52d922e687b80c49b0e3f5286c546fd03ad0",
+      "automatic": true
+    },
+    "100_held_sale_expiry": {
+      "sha256": "e77441a15abff8c6839e0a59e9ebca0ffc1ab34dcfa97bea4ca364183cc8b47c",
+      "automatic": true
+    },
+    "101_stock_reservation_changes": {
+      "sha256": "58d337a823030545f7fd3e7f3cab71626d381b20bd4a7eed2fb5709f0d080ff5",
       "automatic": true
     }
   }

@@ -75,6 +75,14 @@ export type UpdatePickPayload = {
   lines: { sku_id: string; allocations: { location_id: string; qty: number }[] }[];
 };
 
+/** The allocator's choice on live stock for a draft pick, not saved (GET /picks/{id}/default-allocations). */
+export type PickDefaultAllocations = {
+  lines: {
+    sku_id: string;
+    allocations: { location_id: string; location_name: string; qty: number }[];
+  }[];
+};
+
 export type PickQtyMap = Record<string, Record<string, number>>;
 
 export const PICK_STATUS_LABELS: Record<PickStatus, string> = {
