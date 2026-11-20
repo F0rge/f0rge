@@ -6,11 +6,16 @@ export function contentsKey(contents: BasketContents): string {
   return JSON.stringify({ ...contents, linked_pick_ids: Object.entries(contents.linked_pick_ids ?? {}).sort() });
 }
 
-/** The server basket moved on (stale version) or no longer matches what is being sold or held. */
+const BASKET_CONFLICTS = new Set(["basket_version_conflict", "basket_changed", "stock_reserved", "basket_expired"]);
+
+/**
+ * The server kept its own basket: it moved on (stale version), no longer matches what is
+ * being sold or held, refused stock another sale reserved, or expired and was emptied.
+ */
 export function isBasketConflict(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409 && Boolean(
     error.detail && typeof error.detail === "object" && "code" in error.detail &&
-    (error.detail.code === "basket_version_conflict" || error.detail.code === "basket_changed"),
+    typeof error.detail.code === "string" && BASKET_CONFLICTS.has(error.detail.code),
   );
 }
 
@@ -18,8 +23,8 @@ export type SavedBasket = { id: string; version: number };
 
 type SaverOptions = {
   put: (id: string, body: TillBasketUpdate) => Promise<TillBasket>;
-  /** The saver has stopped; reload the server basket. */
-  onConflict: () => void;
+  /** The saver has stopped; show the server basket (the 409 usually carries it). */
+  onConflict: (error: unknown) => void;
   /** A save the server rejected; it is not retried until the contents change or flush() is called. */
   onError: (error: unknown) => void;
   retryDelay?: (attempt: number) => number;
@@ -65,7 +70,7 @@ export function createBasketSaver({
           if (started !== generation) continue;
           if (isBasketConflict(error)) {
             reset(null);
-            onConflict();
+            onConflict(error);
           } else if (isUncertainHeldResponse(error)) {
             resend = request;
             clearTimeout(timer);

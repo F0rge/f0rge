@@ -1338,7 +1338,30 @@ export type TillBasket = {
   lines: { sku_id: string; qty: number; discount_percent: string }[];
   version: number;
   updated_at: string;
+  /** While it has lines: when the sale and its reservations lapse unless changed. */
+  expires_at?: string | null;
+  /** Set when expiry last emptied the basket, so the till can say so. */
+  expired_at?: string | null;
 };
+
+/** The soonest-freeing reservation on a SKU; names the showroom, never the person. */
+export type TillBlockingReservation = {
+  location_id: string;
+  location_name: string;
+  holder_kind: "basket" | "held_sale" | "invoice";
+  expires_at: string | null;
+};
+
+/** Stock reserved by holders other than the caller's own basket. */
+export type TillReservation = {
+  sku_id: string;
+  reserved_by_others: number;
+  blocking: TillBlockingReservation | null;
+};
+
+export function listTillReservations(locationId: string, signal?: AbortSignal): Promise<TillReservation[]> {
+  return apiFetch(`/till/reservations?location_id=${encodeURIComponent(locationId)}`, { signal });
+}
 
 /** Whole-basket replace; a stale version is rejected with basket_version_conflict. */
 export type TillBasketUpdate = {

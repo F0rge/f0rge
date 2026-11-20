@@ -211,7 +211,7 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
         async with admin.begin() as conn:
             await conn.execute(
                 sa.text(
-                    "REVOKE ALL ON TABLE held_sales, held_sale_operations, till_baskets, "
+                    "REVOKE ALL ON TABLE held_sales, held_sale_operations, till_baskets, stock_reservations, "
                     f'mcp_operations, mcp_action_activity FROM "{name}"'
                 )
             )
@@ -248,6 +248,7 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
                 "held_sales",
                 "held_sale_operations",
                 "till_baskets",
+                "stock_reservations",
                 "mcp_operations",
                 "mcp_action_activity",
             ):

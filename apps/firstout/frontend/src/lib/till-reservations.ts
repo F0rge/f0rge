@@ -1,0 +1,115 @@
+import { ApiError, type InventorySku, type TillBasket, type TillBlockingReservation, type TillReservation } from "./api";
+
+const clock = new Intl.DateTimeFormat("en-ZA", {
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Johannesburg",
+});
+
+/** 24-hour showroom time (Africa/Johannesburg) for an ISO timestamp. */
+export function tillClock(iso: string): string {
+  return clock.format(new Date(iso));
+}
+
+/** Why a SKU cannot be added; names the showroom only, never the cashier or customer. */
+export function reservationReason(blocking: TillBlockingReservation | null): string {
+  if (!blocking) return "Reserved in another sale";
+  const where = blocking.holder_kind === "basket" ? "in open sale"
+    : blocking.holder_kind === "held_sale" ? "in held sale" : "for an invoice";
+  const frees = blocking.expires_at ? ` · frees ${tillClock(blocking.expires_at)} unless sold` : "";
+  return `Reserved ${where} at ${blocking.location_name}${frees}`;
+}
+
+export type TillAvailability = {
+  /** Units this till may hold in total: the floor, and the company's unreserved stock. */
+  limit: number;
+  /** Units it can still add on top of the cart. */
+  addable: number;
+  /** Set when other sales' reservations are what stops it. */
+  reason: string | null;
+};
+
+/** The server re-checks every add; this only decides what the till offers. */
+export function tillAvailability({ row, locationId, sellableLocationIds, reservation, inCart }: {
+  row: InventorySku | undefined;
+  locationId: string;
+  /** Active showroom and warehouse locations: the stock the company can sell. */
+  sellableLocationIds: ReadonlySet<string>;
+  reservation: TillReservation | undefined;
+  inCart: number;
+}): TillAvailability {
+  const locations = row?.locations ?? [];
+  const floor = locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0;
+  const company = locations.reduce(
+    (sum, loc) => sellableLocationIds.has(loc.location_id) ? sum + loc.on_hand : sum, 0,
+  );
+  const limit = Math.max(0, Math.min(floor, company - (reservation?.reserved_by_others ?? 0)));
+  const addable = Math.max(0, limit - inCart);
+  const blocked = reservation && addable === 0 && floor - inCart > 0;
+  return { limit, addable, reason: blocked ? reservationReason(reservation.blocking) : null };
+}
+
+export type TillNotice = { kind: "info" | "warning"; title: string; subtitle?: string };
+
+const RELEASE = "The items stay reserved until then; after that the sale is deleted and the stock released.";
+
+/** The Current sale header: low-contrast info, a warning in the last 15 minutes. */
+export function expiryNotice(expiresAt: string, now: number, holdHours?: number): TillNotice {
+  const time = tillClock(expiresAt);
+  const left = Date.parse(expiresAt) - now;
+  if (left <= 0) {
+    return { kind: "warning", title: `This sale expired at ${time}.`, subtitle: "Its items were released. Add them again." };
+  }
+  if (left <= 15 * 60_000) {
+    const minutes = Math.ceil(left / 60_000);
+    return {
+      kind: "warning",
+      title: `Expires at ${time}, in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`,
+      subtitle: "After that the sale is deleted and the stock released.",
+    };
+  }
+  const after = holdHours ? `, ${holdHours} ${holdHours === 1 ? "hour" : "hours"} after the last change` : "";
+  return { kind: "info", title: `This sale expires at ${time}${after}.`, subtitle: RELEASE };
+}
+
+export function expiredMessage(expiredAt: string): string {
+  return `Your sale expired at ${tillClock(expiredAt)}. Its items were released. Add them again.`;
+}
+
+/** A 409 that carries the server's current basket for the till to show instead of its own. */
+export type BasketConflict = {
+  code: string;
+  message?: string;
+  basket?: TillBasket;
+  sku_id?: string;
+  available?: number;
+  blocking?: TillBlockingReservation | null;
+};
+
+export function basketConflict(error: unknown): BasketConflict | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const detail = error.detail;
+  if (!detail || typeof detail !== "object" || !("code" in detail) || typeof detail.code !== "string") return null;
+  return detail as BasketConflict;
+}
+
+/** What the till says after adopting the server basket from a conflict. */
+export function conflictNotice(conflict: BasketConflict, skuName: (id: string) => string | undefined): TillNotice {
+  if (conflict.code === "stock_reserved") {
+    const name = (conflict.sku_id && skuName(conflict.sku_id)) || "This item";
+    return {
+      kind: "warning",
+      title: `${name} was not added`,
+      subtitle: conflict.blocking
+        ? `${reservationReason(conflict.blocking)}.`
+        : conflict.message ?? "There is not enough unreserved stock.",
+    };
+  }
+  if (conflict.code === "basket_expired") {
+    const expiredAt = conflict.basket?.expired_at;
+    return {
+      kind: "warning",
+      title: "Sale expired",
+      subtitle: expiredAt ? expiredMessage(expiredAt) : "Your sale expired. Its items were released. Add them again.",
+    };
+  }
+  return { kind: "info", title: "Basket updated elsewhere", subtitle: "The till now shows the latest saved basket." };
+}

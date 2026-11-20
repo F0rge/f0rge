@@ -61,9 +61,12 @@ class HeldSaleService:
                         data.basket_id, actor_id, data.location_id
                     )
                     baskets.assert_matches(basket, data.lines, None)
+                if data.basket_id is not None:
+                    await self._prune_baskets(now)
                 row = await self._save(data, actor_id, showroom, now)
                 if baskets is not None and basket is not None:
-                    baskets.set_contents(basket)
+                    # Held sales reserve nothing yet: emptying releases the basket's stock.
+                    await baskets.set_contents(basket)
                 return self._response(row)
         except IntegrityError as exc:
             if getattr(exc.orig, "sqlstate", None) != "23505":
@@ -103,7 +106,7 @@ class HeldSaleService:
                     current_basket = None
                     if data.basket_id is not None:
                         baskets, basket = await self._owned_basket(
-                            data.basket_id, actor_id, data.location_id
+                            data.basket_id, actor_id, data.location_id, refuse_expired=False
                         )
                         current_basket = baskets.response(basket)
                     return HeldSaleResumeResult(
@@ -155,7 +158,8 @@ class HeldSaleService:
                     current_id = (await self._save(data.current, actor_id, showroom, now)).id
                 loaded = None
                 if baskets is not None and basket is not None:
-                    baskets.set_contents(
+                    # Written through the reserve path: 409 stock_reserved aborts the resume.
+                    await baskets.set_contents(
                         basket,
                         customer_id=row.customer_id,
                         note=row.note,
@@ -165,6 +169,7 @@ class HeldSaleService:
                         operation_id=data.operation_id,
                     )
                     loaded = baskets.response(basket)
+                    await self._prune_baskets(now)
                 self._record_operation(
                     showroom.id,
                     actor_id,
@@ -276,15 +281,27 @@ class HeldSaleService:
         return row
 
     async def _owned_basket(
-        self, basket_id: uuid.UUID, actor_id: uuid.UUID, location_id: uuid.UUID
+        self,
+        basket_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        location_id: uuid.UUID,
+        *,
+        refuse_expired: bool = True,
     ):
         from app.services.till_basket import TillBasketService
 
         baskets = TillBasketService(self.db)
+        if refuse_expired:
+            return baskets, await baskets.lock_live(basket_id, actor_id, location_id)
         basket = await baskets.get_owned(basket_id, actor_id, lock=True)
         if basket.location_id != location_id:
             raise ValidationError("The basket belongs to a different showroom")
         return baskets, basket
+
+    async def _prune_baskets(self, now: datetime.datetime) -> None:
+        from app.services.till_basket import TillBasketService
+
+        await TillBasketService(self.db).prune(now)
 
     async def _validate_cart(
         self, data: HeldSaleCreate

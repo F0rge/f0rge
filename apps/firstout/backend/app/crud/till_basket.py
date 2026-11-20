@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,4 +49,34 @@ class TillBasketCRUD(BaseCRUD):
                 lines=[],
             )
             .on_conflict_do_nothing(index_elements=["team_id", "location_id", "user_id"])
+        )
+
+    async def empty_expired(self, now: datetime.datetime) -> None:
+        """Empty the tenant's expired baskets in one statement, skipping rows being edited."""
+        due = (
+            select(TillBasket.id)
+            .where(
+                TillBasket.team_id == tenant_id_ctx.get(),
+                TillBasket.expires_at <= now,
+                func.jsonb_array_length(TillBasket.lines) > 0,
+            )
+            .order_by(TillBasket.id)
+            .with_for_update(skip_locked=True)
+        )
+        await self.db.execute(
+            update(TillBasket)
+            .where(TillBasket.id.in_(due))
+            .values(
+                expired_at=TillBasket.expires_at,
+                expires_at=None,
+                lines=[],
+                customer_id=None,
+                note=None,
+                pick_id=None,
+                linked_pick_ids={},
+                last_operation_id=None,
+                version=TillBasket.version + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
         )

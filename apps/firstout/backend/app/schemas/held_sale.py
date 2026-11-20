@@ -67,6 +67,10 @@ class TillBasket(BaseModel):
     lines: list[HeldSaleLineCreate]
     version: int
     updated_at: datetime.datetime
+    # While it has lines: when the sale (and its reservations) lapse unless changed.
+    expires_at: Optional[datetime.datetime] = None
+    # Set when the basket was last emptied by expiry, so the till can say so.
+    expired_at: Optional[datetime.datetime] = None
 
 
 class HeldSaleCreate(BaseModel):

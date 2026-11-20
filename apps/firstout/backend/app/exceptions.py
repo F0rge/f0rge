@@ -69,6 +69,6 @@ class RateLimitedError(DomainError):
 class TillBasketConflictError(ConflictError):
     """The server basket moved on; the payload carries the current basket."""
 
-    def __init__(self, code: str, detail: str, basket: dict | None = None) -> None:
+    def __init__(self, code: str, detail: str, basket: dict | None = None, **extra: object) -> None:
         super().__init__(detail)
-        self.payload = {"code": code, "message": detail, "basket": basket}
+        self.payload = {"code": code, "message": detail, **extra, "basket": basket}

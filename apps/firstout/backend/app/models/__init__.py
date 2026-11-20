@@ -22,6 +22,7 @@ from app.models.document_sequence import DocumentSequence
 from app.models.customer import Customer
 from app.models.held_sale import HeldSale
 from app.models.held_sale_operation import HeldSaleOperation
+from app.models.stock_reservation import StockReservation
 from app.models.till_basket import TillBasket
 from app.models.inventory import LocationStock, SkuStock
 from app.models.location_bin import BinStock, LocationBin
@@ -138,6 +139,7 @@ __all__ = [
     "LocationBin",
     "HeldSale",
     "HeldSaleOperation",
+    "StockReservation",
     "TillBasket",
     "LocationStock",
     "LocationType",

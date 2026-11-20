@@ -18,6 +18,7 @@ from app.schemas.held_sale import (
     TillBasket,
     TillBasketUpdate,
 )
+from app.schemas.till_reservation import TillReservation
 from app.schemas.till import TillPricePreview, TillPriceRequest, TillSaleCreate, TillSaleResponse
 from app.services.held_sale import HeldSaleService
 from app.services.till_basket import TillBasketService
@@ -121,3 +122,13 @@ async def replace_basket(
     service: TillBasketService = Depends(get_baskets),
 ) -> TillBasket:
     return await service.replace(basket_id, body, user_id)
+
+
+@till_router.get("/reservations", response_model=list[TillReservation])
+async def list_reservations(
+    location_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_till),
+    service: TillBasketService = Depends(get_baskets),
+) -> list[TillReservation]:
+    """Stock held by other tills' open sales; the till combines it with its own inventory."""
+    return await service.reservations(location_id, user_id)

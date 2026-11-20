@@ -38,6 +38,7 @@ import {
   Building,
   Currency,
   Image as ImageIcon,
+  Locked,
   Money,
   Purchase,
   Scan,
@@ -94,6 +95,7 @@ import {
   listLocations,
   listPriceLists,
   listSkus,
+  listTillReservations,
   parsePriceInput,
   previewTillPrices,
   settingsLogoUrl,
@@ -107,9 +109,11 @@ import {
   type PriceList,
   type Sku,
   type PickDocument,
+  type TillBasket,
   type TillPricePreview,
   type TillPriceRequest,
   type TillSaleResult,
+  type TillReservation,
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -157,6 +161,13 @@ import {
   type PendingHeldOperation,
 } from "@/lib/till-held-sales";
 import { createBasketSaver, isBasketConflict } from "@/lib/till-basket";
+import {
+  basketConflict,
+  conflictNotice,
+  expiryNotice,
+  tillAvailability,
+  type BasketConflict,
+} from "@/lib/till-reservations";
 
 const WALK_IN_CUSTOMER_NAME = "Walk-in customer";
 
@@ -187,6 +198,9 @@ const TENDER_OPTIONS: {
   { value: "eft", label: "EFT", icon: Building },
   { value: "deposit", label: "Layby Deposit", icon: Bookmark },
 ];
+
+/** A search result; reserved SKUs stay listed but cannot be chosen. */
+type SkuOption = Sku & { disabled?: boolean; reason?: string };
 
 type CartLine = {
   key: string;
@@ -341,7 +355,8 @@ function TillWorkspace() {
   const [pendingBlocked, setPendingBlocked] = useState(false);
   const [originalAvailable, setOriginalAvailable] = useState(false);
   const heldLock = useRef(false);
-  const [basketUpdated, setBasketUpdated] = useState(false);
+  // What the till says after showing the server's basket instead of its own.
+  const [basketNotice, setBasketNotice] = useState<BasketConflict | null>(null);
   const [skuId, setSkuId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
@@ -388,18 +403,39 @@ function TillWorkspace() {
   const scanBufferRef = useRef("");
   // cartReady: the cart shows the server basket for this showroom and saves back to it.
   const [cartReady, setCartReady] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  // Active showroom and warehouse locations: the stock the company can sell.
+  const [sellableLocationIds, setSellableLocationIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [reservations, setReservations] = useState<{ locationId: string; rows: TillReservation[] } | null>(null);
+  const [reservationRevision, setReservationRevision] = useState(0);
+  const refreshReservations = useCallback(() => setReservationRevision((revision) => revision + 1), []);
+  // A basket a 409 carried; the restore effect shows it instead of fetching one.
+  const incomingBasket = useRef<TillBasket | null>(null);
+  const shownExpiry = useRef("");
+  const adoptServerBasket = useCallback((failure: unknown) => {
+    const conflict = basketConflict(failure) ?? { code: "basket_version_conflict" };
+    incomingBasket.current = conflict.basket ?? null;
+    if (conflict.code === "basket_expired") shownExpiry.current = conflict.basket?.expired_at ?? "";
+    setBasketNotice(conflict);
+    setCartReady(false);
+  }, []);
   const [saver] = useState(() => createBasketSaver({
-    put: updateTillBasket,
-    onConflict: () => {
-      setBasketUpdated(true);
-      setCartReady(false);
-    },
+    put: (id, body) => updateTillBasket(id, body).then((saved) => {
+      setExpiresAt(saved.expires_at ?? null);
+      setNow(Date.now());
+      refreshReservations();
+      return saved;
+    }),
+    onConflict: adoptServerBasket,
     onError: (failure) => setError(failure instanceof Error ? failure.message : "Could not save the basket."),
   }));
-  const reloadBasket = useCallback(() => {
+  /** Show the server basket again; a basket conflict's own basket is shown without a fetch. */
+  const reloadBasket = useCallback((conflict?: unknown) => {
     saver.reset(null);
+    if (conflict !== undefined) adoptServerBasket(conflict);
     setCartReady(false);
-  }, [saver]);
+  }, [adoptServerBasket, saver]);
   // Not gated on cartReady: reloading the basket after a hold or sale must not blank the list.
   const heldList = useHeldSales(canSell ? locationId : "");
   const heldLocked = heldBusy || heldListBusy || pendingHeld !== null;
@@ -449,6 +485,8 @@ function TillWorkspace() {
         (loc) => isActiveLocation(loc) && loc.type === "showroom",
       );
       setLocations(showrooms);
+      // Location types are showroom or warehouse; both count towards company stock.
+      setSellableLocationIds(new Set(locationData.filter(isActiveLocation).map((loc) => loc.id)));
       setCompanySettings(settingsData);
       setSkus(skuData.filter((sku) => !sku.is_archived));
       setTillPicks(pickData);
@@ -488,10 +526,6 @@ function TillWorkspace() {
   const vatRateLabel = `${companySettings?.vat_percent ?? "15"}%`;
 
   const selectedSku = skus.find((sku) => sku.id === skuId);
-  const selectedInventory = skuId ? inventoryBySku.get(skuId) : undefined;
-  const floorOnHand =
-    selectedInventory?.locations.find((loc) => loc.location_id === locationId)
-      ?.on_hand ?? 0;
   const selectedNeedsFloorStock = selectedSku && requiresTillFloorStock(selectedSku);
 
   const selectedCustomer =
@@ -529,7 +563,6 @@ function TillWorkspace() {
     browserPage * productPageSize,
   );
 
-  const selectedSkuOption = skuOptions.find((sku) => sku.id === skuId) ?? null;
   const pendingTillPicks = tillPicks.filter(isPendingTillPick);
 
   useEffect(() => {
@@ -547,7 +580,30 @@ function TillWorkspace() {
     }
     return totals;
   }, [cart]);
-  const selectedRemaining = Math.max(floorOnHand - (cartQtyBySku.get(skuId) ?? 0), 0);
+  const reservationsBySku = useMemo(
+    () => new Map((reservations?.locationId === locationId ? reservations.rows : [])
+      .map((row) => [row.sku_id, row])),
+    [locationId, reservations],
+  );
+  const availabilityFor = useCallback(
+    (id: string) => tillAvailability({
+      row: inventoryBySku.get(id),
+      locationId,
+      sellableLocationIds,
+      reservation: reservationsBySku.get(id),
+      inCart: cartQtyBySku.get(id) ?? 0,
+    }),
+    [cartQtyBySku, inventoryBySku, locationId, reservationsBySku, sellableLocationIds],
+  );
+  const selectedAvailability = availabilityFor(skuId);
+  const selectedRemaining = selectedAvailability.addable;
+  const reservedReason = (sku: Sku) =>
+    requiresTillFloorStock(sku) ? availabilityFor(sku.id).reason : null;
+  const comboOptions: SkuOption[] = skuOptions.map((sku) => {
+    const reason = reservedReason(sku);
+    return reason ? { ...sku, disabled: true, reason } : sku;
+  });
+  const selectedSkuOption = comboOptions.find((sku) => sku.id === skuId) ?? null;
 
   const cartKits = useMemo(
     () => cart.filter((line) => line.sku.is_kit),
@@ -589,11 +645,19 @@ function TillWorkspace() {
   useEffect(() => {
     if (!canSell || !loadSucceeded || !locationId || cartReady || restoreBlocked || pendingHeld) return;
     let cancelled = false;
+    const incoming = incomingBasket.current;
+    incomingBasket.current = null;
     void (async () => {
-      const basket = await getTillBasket(locationId);
+      const basket = incoming?.location_id === locationId ? incoming : await getTillBasket(locationId);
       if (cancelled) return;
       // Reset first so a basket that cannot be shown can still be discarded.
       saver.reset(basket);
+      setExpiresAt(basket.expires_at ?? null);
+      setNow(Date.now());
+      if (basket.expired_at && !basket.lines.length && shownExpiry.current !== basket.expired_at) {
+        shownExpiry.current = basket.expired_at;
+        setBasketNotice({ code: "basket_expired", basket });
+      }
       const snapshot = cartSnapshot(basket);
       try {
         const restored = await hydrateCart(snapshot, skus, tillPicks, customers);
@@ -613,6 +677,36 @@ function TillWorkspace() {
   }, [cartReady, currentSnapshot, pendingHeld, saver, tillPicks]);
 
   useEffect(() => () => saver.dispose(), [saver]);
+
+  useEffect(() => {
+    if (!canSell || !loadSucceeded || !locationId) return;
+    const controller = new AbortController();
+    // ponytail: a failed refresh keeps the last list; the server re-checks every add.
+    void listTillReservations(locationId, controller.signal).then((rows) => {
+      if (!controller.signal.aborted) setReservations({ locationId, rows });
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [canSell, loadSucceeded, locationId, reservationRevision]);
+
+  // Minute clock for the expiry notice; focus also refreshes other tills' reservations.
+  useEffect(() => {
+    const tick = () => {
+      setNow(Date.now());
+      // Expiry is lazy: fetching a lapsed basket empties it and the till says so.
+      if (expiresAt && Date.parse(expiresAt) <= Date.now() && cartReady && !pendingHeld &&
+          !submitting && !heldLock.current) reloadBasket();
+    };
+    const onFocus = () => {
+      tick();
+      refreshReservations();
+    };
+    const timer = expiresAt ? setInterval(tick, 60_000) : undefined;
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [cartReady, expiresAt, pendingHeld, refreshReservations, reloadBasket, submitting]);
 
   const priceRequest = useMemo<TillPriceRequest>(() => ({
     ...(customerId ? { customer_id: customerId } : {}),
@@ -704,6 +798,16 @@ function TillWorkspace() {
     }
   }, [loading, focusScanField, heldLocked, view]);
 
+  /** Other sales reserve this SKU's remaining stock: say why instead of adding it. */
+  const showReserved = useCallback((sku: Sku): boolean => {
+    if (!requiresTillFloorStock(sku) || !availabilityFor(sku.id).reason) return false;
+    setError(null);
+    setBasketNotice({
+      code: "stock_reserved", sku_id: sku.id, blocking: reservationsBySku.get(sku.id)?.blocking ?? null,
+    });
+    return true;
+  }, [availabilityFor, reservationsBySku]);
+
   const applyScan = useCallback(
     (code: string, allowOurRef: boolean, addQty = 1): boolean => {
       if (view !== 0 || heldLocked || heldLock.current || !cartReady || !canSell || !locationId) {
@@ -718,11 +822,14 @@ function TillWorkspace() {
         skus,
         allowOurRef,
         addQty,
-        floorOnHand: floorOnHandFor,
+        floorOnHand: (id) => availabilityFor(id).limit,
         cartQty: (id) => cartQtyBySku.get(id) ?? 0,
         hasServicePrice: (sku) => unitExVat(sku, selectedCustomer, priceLists) > 0,
       });
       if (!result.ok) {
+        const scanned = skus.find((sku) => sku.our_barcode === trimmed) ??
+          (allowOurRef ? skus.find((sku) => sku.our_ref === trimmed) : undefined);
+        if (scanned && showReserved(scanned)) return false;
         setError(tillScanErrorMessage(result.error));
         return false;
       }
@@ -732,7 +839,7 @@ function TillWorkspace() {
       focusScanField();
       return true;
     },
-    [canSell, cartQtyBySku, cartReady, floorOnHandFor, focusScanField, heldLocked, locationId, priceLists, selectedCustomer, skus, view],
+    [availabilityFor, canSell, cartQtyBySku, cartReady, focusScanField, heldLocked, locationId, priceLists, selectedCustomer, showReserved, skus, view],
   );
 
   useEffect(() => {
@@ -816,11 +923,9 @@ function TillWorkspace() {
     )
       return false;
     const needsFloorStock = requiresTillFloorStock(sku);
-    if (
-      needsFloorStock &&
-      quantity > floorOnHandFor(sku.id) - (cartQtyBySku.get(sku.id) ?? 0)
-    ) {
-      setError(tillScanErrorMessage("over_floor"));
+    const { limit, addable } = availabilityFor(sku.id);
+    if (needsFloorStock && quantity > addable) {
+      if (!showReserved(sku)) setError(tillScanErrorMessage("over_floor"));
       return false;
     }
     setError(null);
@@ -828,7 +933,7 @@ function TillWorkspace() {
       const reserved = current
         .filter((line) => line.sku.id === sku.id)
         .reduce((sum, line) => sum + line.qty, 0);
-      if (needsFloorStock && quantity > floorOnHandFor(sku.id) - reserved)
+      if (needsFloorStock && quantity > limit - reserved)
         return current;
       return mergeCartBySku(current, sku, quantity);
     });
@@ -961,6 +1066,7 @@ function TillWorkspace() {
     setCreditBlock(null);
     setHeldNote("");
     setHeldNotice(null);
+    setBasketNotice(null);
     setHeldFocus("");
   }
 
@@ -988,8 +1094,9 @@ function TillWorkspace() {
       if (operation.kind === "hold") {
         const draft = await holdTillSale(operation.request);
         acknowledged = true;
-        // The server emptied the basket with the hold.
+        // The server emptied the basket with the hold and released its stock.
         reloadBasket();
+        refreshReservations();
         setResumedSale(false);
         setHeldFocus(draft.id);
         setHeldNotice({ title: `${draft.reference} is on hold`, subtitle: "Choose Resume sale when you’re ready." });
@@ -1008,6 +1115,8 @@ function TillWorkspace() {
         setTillPicks(next.latestPicks);
         setInventory(next.latestInventory);
         saver.reset(result.basket);
+        setExpiresAt(result.basket.expires_at ?? null);
+        refreshReservations();
         applySnapshot(snapshot, restored);
         setResumedSale(true);
         setTender("cash");
@@ -1034,9 +1143,11 @@ function TillWorkspace() {
       heldList.refresh();
     } catch (failure: unknown) {
       if (!acknowledged && isBasketConflict(failure)) {
+        // Expired, reserved elsewhere or changed: show the server basket and say why.
         setPendingHeld(null);
-        reloadBasket();
+        reloadBasket(failure);
         heldList.refresh();
+        return;
       } else if (!acknowledged && !retry && !isUncertainHeldResponse(failure)) {
         setPendingHeld(null);
         heldList.refresh();
@@ -1077,7 +1188,10 @@ function TillWorkspace() {
       setResumeDraft(null);
       await finishHeldOperation(operation, prepared, false);
     } catch (failure: unknown) {
-      setError(failure instanceof Error ? failure.message : "Could not prepare the held sale.");
+      // The saver already showed the server basket for a basket conflict.
+      if (!isBasketConflict(failure)) {
+        setError(failure instanceof Error ? failure.message : "Could not prepare the held sale.");
+      }
     } finally {
       heldLock.current = false;
       setHeldBusy(false);
@@ -1154,11 +1268,17 @@ function TillWorkspace() {
       setKitBlocks([]);
       setHeldNote("");
       setHeldNotice(null);
+      setBasketNotice(null);
       // The server emptied the basket with the sale.
       reloadBasket();
       setQty(1);
       await loadData();
     } catch (err) {
+      if (isBasketConflict(err)) {
+        // Expired, reserved elsewhere or changed: show the server basket and say why.
+        reloadBasket(err);
+        return;
+      }
       const message =
         err instanceof ApiError
           ? err.message
@@ -1173,7 +1293,6 @@ function TillWorkspace() {
       ) {
         refreshPrices();
       }
-      if (isBasketConflict(err)) reloadBasket();
       if (
         err instanceof ApiError &&
         err.status === 409 &&
@@ -1323,6 +1442,12 @@ function TillWorkspace() {
     heldList.refresh();
   }
 
+  const basketMessage = basketNotice &&
+    conflictNotice(basketNotice, (id) => skus.find((sku) => sku.id === id)?.name);
+  const saleExpiry = cart.length > 0 && expiresAt
+    ? expiryNotice(expiresAt, now, companySettings?.till_hold_hours)
+    : null;
+
   if (!canSell) {
     return (
       <Stack gap={5}>
@@ -1387,8 +1512,8 @@ function TillWorkspace() {
         />
       ) : null}
 
-      {basketUpdated && <InlineNotification kind="info" lowContrast title="Basket updated elsewhere"
-        subtitle="The till now shows the latest saved basket." onCloseButtonClick={() => setBasketUpdated(false)} />}
+      {basketMessage && <InlineNotification kind={basketMessage.kind} lowContrast title={basketMessage.title}
+        subtitle={basketMessage.subtitle} onCloseButtonClick={() => setBasketNotice(null)} />}
       {heldNotice && <InlineNotification kind="success" lowContrast title={heldNotice.title}
         subtitle={heldNotice.subtitle} onCloseButtonClick={() => setHeldNotice(null)} />}
       {pendingHeld && <div>
@@ -1547,8 +1672,14 @@ function TillWorkspace() {
                       id="till-sku"
                       titleText="Find by product, SKU or barcode"
                       placeholder="Search by SKU, barcode, or name..."
-                      items={skuOptions}
+                      items={comboOptions}
                       itemToString={skuItemToString}
+                      itemToElement={(item) => item.reason ? (
+                        <span className={styles.reserved}>
+                          <Locked size={16} aria-hidden />
+                          <span>{skuItemToString(item)} · {item.reason}</span>
+                        </span>
+                      ) : skuItemToString(item)}
                       selectedItem={selectedSkuOption}
                       shouldFilterItem={filterSkuItem}
                       onChange={({ selectedItem }) =>
@@ -1591,7 +1722,7 @@ function TillWorkspace() {
                       selectedSku && locationId
                         ? selectedSku.till_no_stock_required
                           ? "No stock needed"
-                          : `${selectedRemaining} available at showroom`
+                          : selectedAvailability.reason ?? `${selectedRemaining} available at showroom`
                         : undefined
                     }
                     disabled={!skuId}
@@ -1606,11 +1737,8 @@ function TillWorkspace() {
                   </Button>
                   <div className={styles.productGrid}>
                     {visibleProducts.map((sku) => {
-                      const remaining = Math.max(
-                        0,
-                        floorOnHandFor(sku.id) -
-                          (cartQtyBySku.get(sku.id) ?? 0),
-                      );
+                      const remaining = availabilityFor(sku.id).addable;
+                      const reason = reservedReason(sku);
                       const priced = quoteSkuUnitExVat(
                         sku,
                         selectedCustomer,
@@ -1620,7 +1748,7 @@ function TillWorkspace() {
                         <ClickableTile
                           role="button"
                           key={sku.id}
-                          aria-label={`Add ${sku.name} to sale`}
+                          aria-label={`Add ${sku.name} to sale${reason ? `. ${reason}` : ""}`}
                           onClick={() => addProductFromBrowser(sku)}
                           disabled={
                             !cartReady ||
@@ -1662,13 +1790,20 @@ function TillWorkspace() {
                               </p>
                               <Purchase size={20} aria-hidden />
                             </div>
-                            <p className="cds--type-label-01">
-                              {sku.is_kit
-                                ? "Kit · parts checked at checkout"
-                                : sku.till_no_stock_required
-                                  ? "No stock needed"
-                                  : `${formatQuantity(remaining)} available at showroom`}
-                            </p>
+                            {reason ? (
+                              <p className={`cds--type-label-01 ${styles.reserved}`}>
+                                <Locked size={16} aria-hidden />
+                                {reason}
+                              </p>
+                            ) : (
+                              <p className="cds--type-label-01">
+                                {sku.is_kit
+                                  ? "Kit · parts checked at checkout"
+                                  : sku.till_no_stock_required
+                                    ? "No stock needed"
+                                    : `${formatQuantity(remaining)} available at showroom`}
+                              </p>
+                            )}
                             {priced.warning && (
                               <p className="cds--type-label-01">
                                 {priced.warning}
@@ -1759,6 +1894,10 @@ function TillWorkspace() {
                     {cart.length} product {cart.length === 1 ? "line" : "lines"}
                   </Tag>
                 </div>
+                {saleExpiry && (
+                  <InlineNotification kind={saleExpiry.kind} lowContrast hideCloseButton
+                    title={saleExpiry.title} subtitle={saleExpiry.subtitle} />
+                )}
                 <div className="firstout-till-picker-row">
                   <CustomerPicker
                     id="till-customer"

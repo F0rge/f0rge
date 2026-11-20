@@ -97,3 +97,11 @@
     flex-wrap: wrap;
   }
 }
+.reserved {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cds-spacing-02, 0.25rem);
+}
+.reserved > svg {
+  flex-shrink: 0;
+}

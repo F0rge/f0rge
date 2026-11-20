@@ -38,6 +38,10 @@ class TillBasket(TenantOwnedMixin, UUIDPkMixin, Base):
     lines: Mapped[list[dict]] = mapped_column(JSONB)
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
     last_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    # Set while the basket has lines; the clock restarts on every change.
+    expires_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(timezone=True))
+    # When the basket was last emptied by expiry, so the till can say so.
+    expired_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )
