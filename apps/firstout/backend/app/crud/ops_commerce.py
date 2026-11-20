@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 import uuid
 from typing import Optional
@@ -14,7 +14,15 @@ from app.models.inventory import LocationStock
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.sku import Sku
+from app.crud.stock_reservation import StockReservationCRUD
+from app.models.stock_reservation import StockReservation as Reservation
+from app.models.stock_reservation_change import StockReservationChange
 from app.models.team import Team
+
+
+def _utc(value: datetime) -> datetime:
+    # Naive timestamps are UTC, as the service's revision formatter already assumes.
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
 @dataclass(frozen=True)
@@ -119,14 +127,47 @@ class OpsCommerceCRUD:
                 previous = acknowledgement_revisions.get(sku_id)
                 if previous is None or updated_at > previous:
                     acknowledgement_revisions[sku_id] = updated_at
+        # Live till reservations (any holder) are promised stock; expired ones are ignored.
+        now = datetime.now(timezone.utc)
+        sku_ids = [row[0] for row in rows]
+        reserved = (
+            await StockReservationCRUD(self.db).reserved_by_others(now, None, sku_ids)
+            if rows
+            else {}
+        )
+        # A reservation change (create, release, move, prune) is marked by a database trigger;
+        # lazy expiry changes nothing, so an unpruned expired row counts from its expiry.
+        reservation_revisions: dict[uuid.UUID, datetime] = {}
+        if rows:
+            changed = await self.db.execute(
+                select(StockReservationChange.sku_id, StockReservationChange.changed_at).where(
+                    StockReservationChange.sku_id.in_(sku_ids)
+                )
+            )
+            reservation_revisions.update(changed.all())
+            expired = await self.db.execute(
+                select(Reservation.sku_id, func.max(Reservation.expires_at))
+                .where(Reservation.sku_id.in_(sku_ids), Reservation.expires_at <= now)
+                .group_by(Reservation.sku_id)
+            )
+            for sku_id, expires_at in expired.all():
+                if (
+                    sku_id not in reservation_revisions
+                    or expires_at > reservation_revisions[sku_id]
+                ):
+                    reservation_revisions[sku_id] = expires_at
         return [
             PublishedSkuSnapshot(
                 id=row[0],
                 sku=row[1],
                 name=row[2],
                 retail_ex_vat=row[3],
-                available_quantity=int(max(0, row[4])),
-                revision=max(row[5], acknowledgement_revisions.get(row[0], row[5])),
+                available_quantity=max(0, int(max(0, row[4])) - reserved.get(row[0], 0)),
+                revision=max(
+                    _utc(row[5]),
+                    _utc(acknowledgement_revisions.get(row[0], row[5])),
+                    _utc(reservation_revisions.get(row[0], row[5])),
+                ),
                 observed_at=row[6],
                 product_group_id=row[7],
                 product_title=row[8],

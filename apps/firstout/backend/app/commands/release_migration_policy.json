@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "100_held_sale_expiry",
+  "target_revision": "101_stock_reservation_changes",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -405,6 +405,10 @@
     },
     "100_held_sale_expiry": {
       "sha256": "8a02c734578dfe587c148b06cf6ba4489aeffc702f6f748876eec5562d6300d0",
+      "automatic": true
+    },
+    "101_stock_reservation_changes": {
+      "sha256": "58d337a823030545f7fd3e7f3cab71626d381b20bd4a7eed2fb5709f0d080ff5",
       "automatic": true
     }
   }

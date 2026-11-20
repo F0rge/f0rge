@@ -40,7 +40,7 @@ async def test_migrated_held_sales_respect_rls_and_serialize_concurrent_consumpt
         async with owner.begin() as conn:
             await conn.execute(sa.text("ALTER TABLE roles ENABLE ROW LEVEL SECURITY"))
             await conn.execute(sa.text("ALTER TABLE roles FORCE ROW LEVEL SECURITY"))
-        migrate(url, "100_held_sale_expiry")
+        migrate(url, "101_stock_reservation_changes")
         async with owner.begin() as conn:
             protected = (
                 await conn.execute(
@@ -62,7 +62,7 @@ async def test_migrated_held_sales_respect_rls_and_serialize_concurrent_consumpt
             await conn.execute(sa.text(f"GRANT USAGE ON SCHEMA public TO {role}"))
             await conn.execute(
                 sa.text(
-                    f"GRANT SELECT, INSERT, UPDATE, DELETE ON held_sales, held_sale_operations, stock_reservations TO {role}"
+                    f"GRANT SELECT, INSERT, UPDATE, DELETE ON held_sales, held_sale_operations, stock_reservations, stock_reservation_changes TO {role}"
                 )
             )
             await conn.execute(

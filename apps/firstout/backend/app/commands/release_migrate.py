@@ -287,6 +287,7 @@ async def migrate(
                             "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "
                             "record_workspace_batches, mcp_tokens, mcp_token_activity, "
                             "held_sales, held_sale_operations, till_baskets, stock_reservations, "
+                            "stock_reservation_changes, "
                             f"mcp_operations, mcp_action_activity TO {quoted_role}"
                         )
                     )
