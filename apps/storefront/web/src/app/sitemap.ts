@@ -3,6 +3,9 @@ import { canonicalUrl, sitemapPaths, storefrontIndexable } from "@/lib/launch-in
 import { merchandisingCollections } from "@/lib/catalogue-collections";
 import { listStoreProducts, productPath } from "@/lib/medusa";
 
+// Read the indexing switch at request time; the image is built once for every environment.
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_BASE_URL;
   if (!storefrontIndexable() || !base) return [];

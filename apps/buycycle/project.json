@@ -4,9 +4,17 @@
   "projectType": "application",
   "sourceRoot": "apps/buycycle",
   "targets": {
+    "image": {},
     "lint": {"executor": "nx:run-commands", "options": {"cwd": "apps/buycycle", "command": "uvx ruff@0.16.1 check ."}},
     "format-check": {"executor": "nx:run-commands", "options": {"cwd": "apps/buycycle", "command": "uvx ruff@0.16.1 format --check ."}},
     "test": {"executor": "nx:run-commands", "options": {"cwd": "apps/buycycle", "command": "uv run pytest -ra"}}
   },
-  "tags": ["platform:py", "scope:buycycle", "deploy-target:coolify"]
+  "tags": ["platform:py", "scope:buycycle"],
+  "metadata": {
+    "deploy": {
+      "host": "pi",
+      "services": [{ "name": "buycycle", "healthcheckPath": "/" }],
+      "check": { "port": 8095 }
+    }
+  }
 }

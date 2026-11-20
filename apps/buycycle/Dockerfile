@@ -16,5 +16,5 @@ RUN mkdir -p /app/site && /app/.venv/bin/python dashboard/render.py dashboard/in
 USER 1000:1000
 VOLUME ["/data"]
 EXPOSE 8095 8096
-HEALTHCHECK --interval=60s --timeout=5s CMD python -c "import urllib.request as u;u.urlopen('http://127.0.0.1:8095/');u.urlopen('http://127.0.0.1:8096/')"
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request as u;u.urlopen('http://127.0.0.1:8095/');u.urlopen('http://127.0.0.1:8096/')"
 ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,8 +1,8 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../docs/adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../docs/adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # apps/environment-monitor
 
-Room sensor dashboard (temperature and humidity). Two Coolify apps on the Pi, Dockerfiles built from `F0rge/f0rge` `main`. Source import of `leothesouthafrican/environment-monitor` `cursor/primer-theme-266b` at `39afb06a0cc603f3aaa4bb692041f0ebe8fa82f5`.
+Room sensor dashboard (temperature and humidity). App `envmon`: two Coolify applications on the Pi that run the Artifacts CI builds. Source import of `leothesouthafrican/environment-monitor` `cursor/primer-theme-266b` at `39afb06a0cc603f3aaa4bb692041f0ebe8fa82f5`.
 
 ## Data safety
 
@@ -14,14 +14,9 @@ Room sensor dashboard (temperature and humidity). Two Coolify apps on the Pi, Do
 - Env var names stay `BACKEND_URL` (frontend) and `PYTHONUNBUFFERED` (both).
 - This repo is public. Never commit `*.db`, `*.csv`, `data/`, or `.env`.
 
-## Deploy
+## Release
 
-| App | Nx project | Coolify UUID | Actions secret |
-|-----|------------|--------------|----------------|
-| Backend | `environment-monitor-backend` | `x408g80c0cggs4okgok4cc0o` | `COOLIFY_WEBHOOK_ENVMON_BACKEND` |
-| Frontend | `environment-monitor-frontend` | `zk8s00gk0g88cc08gkswkc44` | `COOLIFY_WEBHOOK_ENVMON_FRONTEND` |
-
-Coolify base directory is the app directory (`apps/environment-monitor/backend` or `.../frontend`), Dockerfile `Dockerfile`, watch path `apps/environment-monitor/backend/**` or `.../frontend/**`. Build context is that directory, not the repo root. Manifest entries omit `health_url` (Pi is not reachable from GitHub runners).
+Nx projects `environment-monitor-backend` and `environment-monitor-frontend` are Coolify "Docker image" applications with the same names. A reviewed merge to `main` that affects either releases both through [the pipeline](../../.github/deploy/README.md). The backend application keeps the data volume at `/app/data` through a Coolify Persistent Storage directory mount; Coolify ignores `-v` in Custom Docker Options. It also carries the network alias `em-backend`, which the frontend's nginx proxies to over the shared `coolify` network. Each Dockerfile's build context is its own app directory, not the repo root.
 
 ## Checks
 

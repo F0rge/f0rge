@@ -1,25 +1,30 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # f0rge Infrastructure
 
-Use the [shared protocol](../protocol.md) and resolve each path with `node scripts/agents/agents.mjs route <repo-relative-path...>`. `f0rge-delivery` owns build/CI work; `f0rge-devops` owns runtime infrastructure and operations. The manifest assigns the precise primary and reviewers; neither role authorizes a production release.
+Use the [shared protocol](../protocol.md) and resolve each path with `node scripts/agents/agents.mjs route <repo-relative-path...>`. `f0rge-delivery` owns build/CI work; `f0rge-devops` owns runtime infrastructure and operations. The manifest assigns the precise primary and reviewers.
 
-## Historical deployment target inventory
+## Pipeline
 
-| App | Target | Branches | Manifest component |
-|-----|--------|----------|-------------------|
-| marrow | Railway project `Marrow` (`a633a271-…`) | `main` only | `marrow-backend`, `marrow-frontend` |
-| firstout | **Own** Railway project `Firstout` (`c76d8df1-…`). Production environment `9f7b0c34-bd95-442b-b746-a9791dcc2895`; hosts `firstout.co.za` / `api.firstout.co.za` | `main` only | `firstout-backend`, `firstout-frontend` |
-| DasKasas storefront | Own Railway project `DasKasas` (`d58a2884-…`), production (`d73ff2d5-…`); services `storefront` and `storefront-commerce` | `main` only | `daskasas-web`, `daskasas-commerce` (outside this manifest) |
-| dk tag printer | Pi Coolify | `main` only | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
-| buycycle | Pi Coolify, internal only (host ports 8095/8096, no domain); tracker = Coolify scheduled task; Turso DB on `/data` volume | `main` only | `buycycle` |
-| environment-monitor | Pi Coolify, internal only (backend 5001, frontend 5000). SQLite `/app/data/readings.db` on volume `environment-monitor_sensor_data` | `main` only | `environment-monitor-backend`, `environment-monitor-frontend` |
+Overview and App table: [root `AGENTS.md`](../../../AGENTS.md#cicd). Programs, deploy block, manual Releases and accepted ceilings: [the deploy page](../../../.github/deploy/README.md). Terms: [Delivery glossary](../../../.github/CONTEXT.md).
 
-The existing **Deploy** workflow is disabled. This proposed change makes [`deploy.yml`](../../../.github/workflows/deploy.yml) manual preparation only and [`deploy-reusable.yml`](../../../.github/workflows/deploy-reusable.yml) an inert, failing release hold. Neither calls providers, uses deployment credentials or runs production smoke. Both reference the configured GitHub `production` environment with `deployment: false`; that protection has not been exercised with these workflows and does not protect direct Railway/Coolify operations.
+- A reviewed merge to `main` with CI passing releases every affected App (P-006). There is no release hold, no per-release approval and no release tag.
+- Service names, health paths, migration and start commands live in each Project's deploy block. Provider services are found by name. There are no provider config files in the repo.
+- Migrations are a service's `preDeployCommand`; Railway runs it before the new code starts (P-020). The release program refuses `preDeployCommand` and `startCommand` on a Pi service.
+- Each App's Host token lives in the GitHub environment named after the App: `RAILWAY_TOKEN` (a project token), or `COOLIFY_URL` and `COOLIFY_TOKEN`. Leo creates tokens and switches each App at its Host himself. An App that is not switched fails closed.
+- On the Pi, Coolify pulls the Artifact. Coolify's own Healthcheck stays off; every Pi Dockerfile needs a Docker `HEALTHCHECK`, which decides whether a Release is healthy. Do not SSH to the Pi to release, and do not add a per-App release program (P-048).
+- Provider operations outside the pipeline (variables, domains, volumes, databases, moving an App to another Host) need their own task authorization.
 
-Runtime provider state has not been checked for this change. Before any authorized release work, read [the release hold requirements](../../../.github/deploy/README.md): tested immutable artifact promotion, deployment-secret migration, an independent automation/approval identity and control of alternate provider paths remain future work. P-006 defines the Firstout CD scope; other apps still require Leo's explicit release approval.
+## Host notes
 
-Historical source-based path: [the manifest](../../../.github/deploy/manifest.yml) plus Nx affected selected Railway smoke or Coolify webhook POSTs. Retained [`railway-smoke-reusable.yml`](../../../.github/workflows/railway-smoke-reusable.yml) and webhook names are investigation inventory, not an active release path. The former Coolify secrets were `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DASKASAS_BACKEND`, `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`, `COOLIFY_WEBHOOK_BUYCYCLE`, `COOLIFY_WEBHOOK_ENVMON_BACKEND` and `COOLIFY_WEBHOOK_ENVMON_FRONTEND`; their current storage, consumers and permissions require a separate audit.
+| App | Notes |
+|-----|-------|
+| marrow | Railway project `Marrow`. Services `marrow-api`, `marrow-worker`, `marrow-mcp` (no HTTP health path) and `marrow-frontend`. |
+| firstout | **Own** Railway project `Firstout`; hosts `firstout.co.za` / `api.firstout.co.za`. |
+| daskasas | Own Railway project `DasKasas`; services `storefront` and `storefront-commerce`. |
+| dk | Pi, Coolify. Stateless. Host ports 8002 (backend) and 3002 (frontend). |
+| buycycle | Pi, Coolify, internal only (host ports 8095/8096, no domain). Data on the `/data` volume; the tracker is a Coolify scheduled task. |
+| envmon | Pi, Coolify, internal only (backend 5001, frontend 5000). SQLite `/app/data/readings.db` on volume `environment-monitor_sensor_data`. |
 
 # Marrow Infrastructure (Railway)
 
@@ -31,29 +36,18 @@ Historical source-based path: [the manifest](../../../.github/deploy/manifest.ym
 |---|---|---|---|---|
 | Production | `main` | https://marrow-health.com | https://api.marrow-health.com | https://mcp.marrow-health.com |
 
-**Do not open pull requests against `develop`.** A remote `develop` ref may still exist; it is not an approved long-lived branch. Railway and Coolify files describe deploys from `main`. That description is configuration inventory, not a live check and not Leo's approval of a release.
+**Do not open pull requests against `develop`.** A remote `develop` ref may still exist; it is not an approved long-lived branch.
 
 Railway `*.up.railway.app` hostnames also work for interim smoke.
 
 - Short-lived feature branches off `main` (`feat/…`, `fix/…`, `chore/…`, `docs/…`, `hotfix/…`); PRs into `main` only; CI green; squash merge. No long-lived branches. Hotfixes are ordinary PRs into `main`.
-- Green CI on `main` does not trigger a release in the proposed workflows. Preserve the release hold; historical reruns and direct provider paths need separate verification before activation.
-
-## Railway services
-
-| Role | Service | Config |
-|---|---|---|
-| API | `marrow-api` | `apps/marrow/backend/railway.toml` |
-| Worker | `marrow-worker` | `apps/marrow/backend/railway.worker.toml` |
-| MCP | `marrow-mcp` | `apps/marrow/backend/railway.mcp.toml` (no HTTP healthcheckPath) |
-| Frontend | `marrow-frontend` | `apps/marrow/frontend/railway.toml` |
-
-Shared monorepo: **no Root Directory**; Dockerfile build context = repo root.
+- Green CI on `main` releases Marrow when the change affects it.
 
 ## Postgres / Redis / photos
 
 - Postgres: Railway service `Postgres` (`d76d2b40-…`) with pgvector; roles via `scripts/railway_bootstrap_roles.sql`
 - Set `SKIP_DATABASE_ROLE_DDL=1` on Railway apps after bootstrap (managed roles are already provisioned)
-- Migrations: Railway `preDeployCommand` runs alembic as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker_app).
+- Migrations: the `preDeployCommand` in `marrow-backend`'s deploy block runs alembic as `MIGRATION_DATABASE_URL` (htmigrate) before each Release. Runtime uses `DATABASE_URL` (healthtracker_app).
 - Redis: Railway Redis plugin (`REDIS_URL`)
 - Photos: Railway Buckets (`AWS_*`, `BUCKET_NAME`); sync runbook `scripts/railway_bucket_sync.sh`
 
@@ -95,6 +89,6 @@ For every new `app/config.py` setting:
 
 - [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Plan production variable changes for a separately authorized Railway operation; preparation does not set them
+- [ ] Production variable changes are a separately authorized Railway operation; the pipeline does not set variables, and the merge releases the code
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing

@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../docs/adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../docs/adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # Firstout — Agent Instructions
 
@@ -601,7 +601,7 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 
 ## Railway
 
-> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Railway inspection on 8 November 2026 identified the `production` environment below; recheck live service bindings before infrastructure changes. Reviewed main commits release only through the dedicated P-006 CD pipeline; manual provider operations require task authorization. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+> **Main-only workflow.** A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Railway inspection on 8 November 2026 identified the `production` environment below; recheck live service bindings before infrastructure changes. A reviewed merge to `main` that affects Firstout releases it through [the pipeline](../../.github/deploy/README.md) (P-006), migrations included; provider operations outside the pipeline require task authorization. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Keep Firstout services and credentials within its own project.
 
@@ -617,9 +617,8 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 | Frontend | https://firstout.co.za |
 
 - **Capacity:** verify live replicas, region, and limits in Railway before changing them.
-- **Config files:** `apps/firstout/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
-- **`watchPatterns`:** `apps/firstout/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `firstout-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
-- **Manifest:** `.github/deploy/manifest.yml` — `branches: [main]`. Smoke targets `health_url.main` (the live hosts). The live environment is `production`.
+- **Deploy blocks:** `apps/firstout/{backend,frontend}/project.json` name the services, health paths and the migration command (`app.commands.release_migrate`, run by Railway before each Release). Both services run CI-built images; Railway does not build from the repo.
+- **Images:** the backend Dockerfile `COPY`s `libs/backend/{core,db,storage}`; build context is the repo root.
 - **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). `SEED_BOOT_FIXTURES` defaults false; set true only to also seed `till@` / `books@` / `warehouse@` / `buyer@example.com`, the storefront system user, and the Walk-in customer. Leave it false on the live API. These records require verified Clerk links and memberships before staff can sign in.
 - **Playground dataset:** use `SEED_PLAYGROUND=true` only with a disposable local database for catalogue / PO / till / books demos. Keep it off in production. See [Playground seed](#playground-seed-disposable-local-demos).
 - **Object storage:** committed notes name the dedicated `firstout-dev` bucket in this project. Verify its current provider binding before any rename; never reuse Marrow `photos` / `photos-dev` or Marrow project buckets. On `firstout-api`: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{firstout-dev.*}}`; `AWS_ENDPOINT_URL_S3` uses the bucket provider’s configured S3 endpoint; `AWS_REGION=auto`. Keep `DATABASE_URL`, the Clerk configuration, and `COOKIE_SECURE` for historical-cookie cleanup. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Verify the live bucket binding before changing storage configuration.

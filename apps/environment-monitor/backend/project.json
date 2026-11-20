@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/environment-monitor/backend",
   "targets": {
+    "image": {},
     "test": {
       "executor": "nx:run-commands",
       "options": {
@@ -12,5 +13,17 @@
       }
     }
   },
-  "tags": ["platform:py", "scope:envmon", "deploy-target:coolify"]
+  "tags": ["platform:py", "scope:envmon"],
+  "metadata": {
+    "deploy": {
+      "host": "pi",
+      "services": [{ "name": "environment-monitor-backend", "healthcheckPath": "/health" }],
+      "build": { "context": "apps/environment-monitor/backend" },
+      "check": {
+        "port": 5001,
+        "path": "/",
+        "env": { "BLINKA_FORCEBOARD": "GENERIC_LINUX_PC", "BLINKA_FORCECHIP": "GENERIC_X86" }
+      }
+    }
+  }
 }

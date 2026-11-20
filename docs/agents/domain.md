@@ -18,9 +18,8 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 /
 ├── CONTEXT-MAP.md
 ├── docs/adr/                              ← system-wide decisions
-├── apps/marrow/CONTEXT.md
-├── apps/firstout/CONTEXT.md
-└── apps/dk/tag-printer/CONTEXT.md
+├── .github/CONTEXT.md                     ← Delivery (CI/CD)
+└── apps/<app>/CONTEXT.md                  ← per app, created when needed
 ```
 
 Shared libraries (`libs/backend/*`, `libs/ui`) inherit the consuming app's context unless `CONTEXT-MAP.md` adds a `libs/` entry later.

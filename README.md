@@ -16,7 +16,7 @@ Personal Nx monorepo. Each app owns its business rules and data; reusable infras
 | Shared backend packages | `libs/backend/{core,db,storage,testing}/` | `f0rge-core`, `f0rge-db`, `f0rge-storage`, `f0rge-testing` |
 | Shared legacy UI kit | `libs/ui/` | `f0rge-ui` |
 
-The 18 registered projects include existing Python, Next.js, Medusa, Swift, and sensor/dashboard apps. New apps follow [the canonical ADRs](docs/adr/README.md); those decisions do not migrate the existing apps automatically.
+The registered projects include existing Python, Next.js, Medusa, Swift, and sensor/dashboard apps. New apps follow [the canonical ADRs](docs/adr/README.md); those decisions do not migrate the existing apps automatically.
 
 Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Deploy conventions: [`docs/agents/rules/infra.md`](docs/agents/rules/infra.md), [`.github/deploy/README.md`](.github/deploy/README.md).
 
@@ -43,7 +43,6 @@ npx nx reset                                   # clear the Nx cache
 
 ## CI/CD
 
-- **CI** ([`ci.yml`](.github/workflows/ci.yml)) runs affected lint, type, test and build checks. Required checks are `ci` and `playwright smoke` on PRs to `main`; see [branch rules](.github/branch-rules.md).
-- **Release hold:** the existing **Deploy** workflow is disabled. This proposed change replaces its source with manual preparation and makes the historical reusable entry point fail without deployment. Neither workflow calls a provider, uses deployment credentials or runs production smoke. [The manifest](.github/deploy/manifest.yml) remains historical target inventory; DasKasas has separate Railway configuration outside it.
-- **Protection and remaining work:** the GitHub `production` environment is configured, but it does not protect direct Railway/Coolify operations. Runtime provider state has not been checked for this change. Tested immutable artifact promotion, deployment-secret migration and an independent automation/approval identity remain future work; the proposed workflow protection has not been exercised. See [release guidance](.github/deploy/README.md) before activation.
-- **Production control:** [Firstout CD](.github/deploy/firstout-cd.md) automatically releases reviewed main commits after passing checks under P-006. Other apps remain under the release hold and require Leo’s per-release approval. Manual provider operations require explicit task authorization.
+- **CI** ([`ci.yml`](.github/workflows/ci.yml)) builds and tests only what a change affects, routed by language, and builds one Artifact per deployable Project. `merge-gate` is the single required check on PRs to `main`; see [branch rules](.github/branch-rules.md).
+- **CD** ([`cd.yml`](.github/workflows/cd.yml)) runs as the last job of CI on `main` and releases every affected App to its Host with the Artifacts CI just built. A failed Release puts each service back on the image it ran before.
+- Each deployable Project names its Host and services in the deploy block of its `project.json`. Manual Releases, rollbacks and accepted ceilings: [`.github/deploy/README.md`](.github/deploy/README.md). Terms: [Delivery glossary](.github/CONTEXT.md). Policy: [P-006](docs/adr/governance.md#p-006).

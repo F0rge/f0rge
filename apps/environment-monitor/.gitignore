@@ -11,9 +11,6 @@ __pycache__/
 dist/
 build/
 
-# Docker
-.dockerignore
-
 # IDE
 .vscode/
 .idea/

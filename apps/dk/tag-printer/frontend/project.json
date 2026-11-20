@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/dk/tag-printer/frontend",
   "targets": {
+    "image": {},
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
@@ -12,5 +13,13 @@
       }
     }
   },
-  "tags": ["platform:ts", "scope:dk", "deploy-target:coolify"]
+  "tags": ["platform:ts", "scope:dk"],
+  "metadata": {
+    "deploy": {
+      "host": "pi",
+      "services": [{ "name": "dk-tag-printer-frontend", "healthcheckPath": "/" }],
+      "build": { "args": { "NEXT_PUBLIC_API_URL": "https://tags-api.leo-figueiredo.com" } },
+      "check": { "port": 3000 }
+    }
+  }
 }

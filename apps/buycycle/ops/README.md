@@ -1,7 +1,7 @@
 # Buycycle operations
 
 This directory prepares the private Pi migration. It does not change the running
-service or authorize a release. [Readiness evidence](../docs/ops-readiness.md)
+service, and the new app has no deploy block, so the pipeline does not release it. [Readiness evidence](../docs/ops-readiness.md)
 separates tested source from the provider work that still blocks production.
 
 ```mermaid
@@ -10,8 +10,7 @@ flowchart LR
   Access --> Tunnel[Outbound tunnel]
   Tunnel --> App[Private Rust API + production React]
   App -->|runtime role| DB[(Buycycle database\non the Pi PostgreSQL cluster)]
-  Approval[Leo approves exact tested release] --> Agent[Separate mTLS release agent]
-  Agent -->|promote tested ARM64 image| App
+  Coolify -->|pulls the ARM64 Artifact| App
 ```
 
 ## Run locally
@@ -40,9 +39,8 @@ python3 apps/buycycle/ops/image_rehearsal.py \
 The image command builds and probes `linux/arm64`, including real PostgreSQL,
 signed identity, denied direct-origin access, production assets, state persistence
 and conflicts. Keep its archive and evidence outside Git. `--allow-dirty` is for
-exploration; its output cannot pass release verification. A production release
-needs the final clean commit's tested archive, successful main CI and protected
-immutable release tag, then approval of its published digest and receipt hashes.
+exploration. After the approved cutover the app is released like every other
+App: a deploy block, then [the pipeline](../../../.github/deploy/README.md).
 
 ## Production configuration
 
@@ -108,32 +106,26 @@ browser journals have no automatic purge.
    backup restores and reconciles into a separate candidate, including the latest
    acknowledged edit. The local dump drill does not prove production custody,
    encrypted restoration or WAL/PITR. Keep release blocked until these are proved.
-7. Prepare the GitHub requester App, least-privilege installation, protected
-   release-tag rules and separate mTLS agent. Restrict the agent to loopback or
-   the Pi tailnet address. Keep its Docker authority out of the app. It accepts
-   only a GitHub run ID and request UUID; the managed helper verifies the approved
-   image, successful CI, destination, receipts and single-use journal.
-8. Stage the connector and managed runtime configuration. Under the separately
+7. Stage the connector and managed runtime configuration. Under the separately
    approved provider setup, start the connector with `--no-deps`; plain
    `compose up tunnel` would follow `depends_on` and start the app prematurely.
-   The app must stay stopped until the approved exact-image promotion. Run the read-only
+   The app must stay stopped until the approved first Release. Run the read-only
    provider preflight below; unknown API fields, unsafe grants, missing secrets,
    wrong engine/configuration or active old writers refuse a passed receipt.
    Assemble migration/restore evidence with the same exact commit/target and a
    fresh UTC timestamp. Never turn a failed observation into `passed: true`.
-9. Publish the **already tested** archive and approve its exact digest and receipt
-   hashes. After Leo's release approval, the managed agent pulls and starts that
-   image without building source. It checks running image/config identity,
-   readiness and absent origin port bindings. Verify the deployed signed-in owner
+8. After Leo approves the cutover, add the deploy blocks and do the first Release
+   by hand (`gh workflow run cd.yml -f app=buycycle -f commit=<sha>`). Coolify pulls
+   and starts the Artifact without building source. Verify the deployed signed-in owner
    journey, denied other identity/direct origin, preserved browser state, logs
    and backup/monitor status. Keep collection activation a separately verified
    fixed-schedule step; do not enable arbitrary manual triggers.
 
 ## Read-only provider preflight
 
-Copy [the example policy](release-agent-policy.example.json) privately, replacing
-every placeholder with observed values. It combines agent and preflight fields;
-production tokens/private identities never belong in the repository. Configure
+Write the policy file privately with observed values; its fields are the keys
+`preflight.py` reads. Production tokens/private identities never belong in the
+repository. Configure
 scoped **read** access for Access applications/policies, identity providers, tunnel
 configuration, DNS, and the selected Coolify app/schedules. No write token is
 needed. The Coolify API must return the documented auto/preview-deploy settings;
@@ -153,9 +145,8 @@ It issues only HTTPS GET requests and fixed local Docker inspection/SELECT
 commands. It never stops services, changes policies, provisions a database or
 reads application rows. Its receipt records the exact commit, Pi engine ID,
 Compose/env hashes and observed safety gates, without credentials or owner email.
-The release helper independently requires fresh receipts (default one hour),
-their approved byte hashes and the same target/configuration. A receipt is a
-point-in-time observation, not a guarantee against later provider changes.
+A receipt is a point-in-time observation, not a guarantee against later provider
+changes.
 
 ## Recovery
 
@@ -186,9 +177,8 @@ runs. The age private decryption identity belongs in separate recovery custody.
 
 `collect.py` consumes `/etc/buycycle/collector.json`: managed Compose/env paths,
 pinned image/source commit, fixed Docker executable, timeout, protected
-`activation_file` and the release agent's `active_release_receipt`. Before first
-release there is no active receipt and collection stays held. Match the receipt
-path to `journal_dir/active.json` in the agent policy. Activation assertions must
+`activation_file` and an `active_release_receipt`. Nothing writes that receipt
+yet, so collection stays held until the cutover defines its writer. Activation assertions must
 come from the separately reviewed writer-fence and migration evidence; writing
 `enabled: true` is not evidence that the old writer stopped or the budget imported.
 Require protected provider/migration receipts and their exact byte hashes in both

@@ -10,7 +10,7 @@ Accepted and conditional decisions in [`docs/adr/README.md`](docs/adr/README.md)
 
 New apps use the accepted stack in that index: Rust, Actix Web, Diesel, PostgreSQL, standalone React, strict TypeScript, Vite, actual Primer, and TanStack Query, Router, and Form. `C-001` and `C-002` stay conditional. Apps already in this repo are legacy migration inventory, not approved exceptions, and these records do not migrate them.
 
-Review and automatic squash merging follow [P-005](docs/adr/governance.md#p-005); release authorization follows [P-006](docs/adr/governance.md#p-006). Manual provider operations require their own task authorization. Historical automatic deploy paths and retained provider configuration are inventory, not permission and not an approved exception.
+Review and automatic squash merging follow [P-005](docs/adr/governance.md#p-005). A reviewed merge to `main` with CI passing releases every affected App ([P-006](docs/adr/governance.md#p-006)). CI/CD does not enforce ADR compliance; the reviewer decides ([P-004](docs/adr/governance.md#p-004)). Provider operations outside the pipeline require their own task authorization.
 
 ## Stack
 
@@ -19,11 +19,11 @@ New apps follow [`docs/adr/README.md`](docs/adr/README.md). The list below is th
 - Legacy backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.11
 - Legacy frontend: Next.js 16 + React 19 + Tailwind 4 + the current `@f0rge/ui` kit (shadcn-style, not Primer)
 - Auth today: JWT in `ht_session` httpOnly cookie (email + password). This is one app's private-person mode, not a repo-wide vendor choice.
-- Documented host files: Railway configs for the API, worker, MCP, and frontend, plus Postgres, Redis, and a photo bucket. Those files are not a live grant check and not a release approval.
+- Host: Railway, with API, worker, MCP and frontend services plus Postgres, Redis and a photo bucket.
 
 ## Environments
 
-Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `zoological-fulfillment`). The database service is **Postgres** (`d76d2b40-…`). These identifiers are inventory; verify current provider state before operations. Do not use a `develop` branch workflow. A remote `develop` ref may still exist and is not an approved branch (see [Git flow](#git-flow-trunk-based-main-only)). dk tag-printer's committed config names Coolify on the Pi.
+Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `zoological-fulfillment`). The database service is **Postgres** (`d76d2b40-…`). These identifiers are inventory; verify current provider state before operations. Do not use a `develop` branch workflow. A remote `develop` ref may still exist and is not an approved branch (see [Git flow](#git-flow-trunk-based-main-only)).
 
 ### Production (`main`)
 
@@ -36,10 +36,11 @@ Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `z
 | Redis | `Redis` | via `REDIS_URL` |
 | Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
-Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. These are provider configuration references; current runtime state has not been checked for this release-hold change. The proposed GitHub release entry points perform no deployment or production smoke. See [README.md](README.md#cicd), [`docs/agents/rules/infra.md`](docs/agents/rules/infra.md), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
+Service names, health paths, the migration command and start commands live in the deploy blocks of `apps/marrow/backend/project.json` and `apps/marrow/frontend/project.json`. See [CI/CD](#cicd), [`docs/agents/rules/infra.md`](docs/agents/rules/infra.md), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
+
 ## apps/buycycle
 
-Private Buycycle deal finder on the Pi. Legacy Coolify ports 8095/8096 remain the running inventory; the unreleased Rust/PostgreSQL/React migration adds verified Cloudflare Access and protected artifact promotion. Read [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md) for source boundaries, safe local checks and release gates. Public repo: never commit its DBs, data or feed key.
+Private Buycycle deal finder on the Pi (Coolify, ports 8095/8096). The pipeline releases the legacy Python service, Nx project `buycycle`. The Rust/PostgreSQL/React rewrite is unreleased and has no deploy block. Read [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md) for source boundaries and safe local checks. Public repo: never commit its DBs, data or feed key.
 
 ## apps/environment-monitor
 
@@ -59,7 +60,7 @@ Local dev:
 cd apps/dk/tag-printer && docker compose up --build   # :3002 / :8002
 ```
 
-Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree). Historical Coolify repoint runbook: `apps/dk/tag-printer/scripts/repoint-coolify.sh`; using it requires a separately authorized provider operation, not merely a merge.
+Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree).
 
 ## apps/firstout
 
@@ -69,24 +70,42 @@ Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout
 
 ## apps/storefront
 
-DasKasas public storefront and Medusa commerce service. Nx projects: `daskasas-web` and `daskasas-commerce`; source remains under `apps/storefront/`. Railway project `DasKasas` (`d58a2884-d366-4230-9555-8b7bb4e42d4f`), environment `production` (`d73ff2d5-816d-4bc8-85b4-71a85b0398fa`), services `storefront` and `storefront-commerce`. Keep its data and infrastructure separate from Firstout and Marrow. These identifiers are inventory, not release permission; verify current provider state before operations. See [`apps/storefront/README.md`](apps/storefront/README.md).
+DasKasas public storefront and Medusa commerce service. Nx projects: `daskasas-web` and `daskasas-commerce`; source remains under `apps/storefront/`. Railway project `DasKasas`, environment `production`, services `storefront` and `storefront-commerce`; its App name in the pipeline is `daskasas`. Keep its data and infrastructure separate from Firstout and Marrow. See [`apps/storefront/README.md`](apps/storefront/README.md).
 
 ## Git flow (trunk-based, main only)
 
-Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. Follow P-005 for review/merge and P-006 for release authorization.
+Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. Follow P-005 for review/merge. A merge is a Release of every App it affects (P-006).
 
 - **Trunk-based development.** Everyone integrates into `main` continuously.
 - **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches (Codex or Claude Code) use `codex/<short-kebab-description>`, the only namespace the PR publisher accepts. Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
-- **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
+- **PRs into `main` only.** Never open a PR against `develop` or any other branch. The `merge-gate` check must be green before merge.
 - **Automatic squash merge** follows P-005 after Leo's review and all GitHub requirements pass, unless the task withholds merge authorization. Use a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
-- **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check. Firstout releases only through its dedicated P-006 CD path; a merge does not authorize other production operations.
+- **A merge to `main` goes to production.** CI on `main` releases every affected App to its Host. Do not merge what should not be live.
 - **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
 - **Hotfixes are just PRs into `main`** (`hotfix/<desc>` or `fix/<desc>`), same CI and squash merge.
 - Never force-push `main`. Force-pushing your own feature branch is fine when needed.
-- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names in committed files. They do not authorize a `develop` branch workflow. Committed files do not describe a deploy workflow for those names. That is not a live host check.
 
-- PRs into `main` run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build + prod-shaped frontend build) and `e2e-smoke.yml`.
-- The existing **Deploy** workflow is disabled. This proposed change makes `deploy.yml` manual preparation only and `deploy-reusable.yml` an inert, failing release hold; neither deploys nor smokes production. The GitHub `production` environment is configured, but it does not protect direct Railway/Coolify operations. For Firstout CD, read [the runbook](.github/deploy/firstout-cd.md). For other release work, read [the hold and remaining requirements](.github/deploy/README.md): tested immutable artifact promotion, secret migration, independent approval identity and provider-state verification remain future work.
+- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` in committed files are historical names. They do not authorize a `develop` branch workflow.
+
+## CI/CD
+
+Two workflows, read top to bottom. Terms (Project, App, Host, Artifact, Release) are defined in [the Delivery glossary](.github/CONTEXT.md).
+
+- **CI** ([`ci.yml`](.github/workflows/ci.yml)): a plan job asks Nx what is affected. Language jobs (Python, TypeScript, Rust) run only when their language is affected. After the language jobs pass, one image job per affected App builds each deployable Project's Artifact, starts it and calls its health endpoint. `merge-gate` is the single required check. No browser e2e in CI.
+- **CD** ([`cd.yml`](.github/workflows/cd.yml)): the last job of CI on `main`. One job per affected App releases that commit's Artifacts to its Host, migrations first. A failed Release puts each service back on the image it ran before and fails the run.
+- **Per Project**: a deploy block in `project.json` (`metadata.deploy`) names the Host and its services. `node .github/deploy/deployables.mjs` lists every App.
+- **By hand**: `gh workflow run cd.yml -f app=<app> -f commit=<sha>`. Details and accepted ceilings: [`.github/deploy/README.md`](.github/deploy/README.md).
+
+| App | Host | Deployable Projects |
+|---|---|---|
+| `firstout` | Railway | `firstout-backend`, `firstout-frontend` |
+| `marrow` | Railway | `marrow-backend`, `marrow-frontend` |
+| `daskasas` | Railway | `daskasas-commerce`, `daskasas-web` |
+| `dk` | Pi (Coolify) | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
+| `envmon` | Pi (Coolify) | `environment-monitor-backend`, `environment-monitor-frontend` |
+| `buycycle` | Pi (Coolify) | `buycycle` |
+
+Airflow runs on the Pi outside this pipeline.
 
 ## Running locally
 
@@ -139,7 +158,7 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 ## Nx conventions
 
-Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Agent review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
+Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Agent review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI's plan job turns `nx affected` into language booleans and the affected-Apps matrix; OpenAPI via `marrow-frontend:codegen:check`; Playwright locally via `nx run …:e2e`.
 
 Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. Build/test plumbing alone does not prove app or release compliance. P-010 now sequences the authorized Buycycle migration before the later holiday-explorer pilot.
 
@@ -155,7 +174,7 @@ Read the applicable Markdown rules explicitly before planning or changing files.
 | [backend](docs/agents/rules/backend.md) | `apps/marrow/backend/**/*.py`, migrations |
 | [frontend](docs/agents/rules/frontend.md) | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
 | [ui-kit](docs/agents/rules/ui-kit.md) | `libs/ui/**`, `apps/**/frontend/**` — design-system imports, tokens, primitives |
-| [infra](docs/agents/rules/infra.md) | `**/railway*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
+| [infra](docs/agents/rules/infra.md) | `.github/**`, deploy blocks in `**/project.json`, `**/Dockerfile`, `**/docker-entrypoint.sh`, `**/docker-compose*.yml` |
 | [qa-gate](docs/agents/rules/qa-gate.md) | Before preparing any PR or verifying a feature; tests, `libs/**`, workflows |
 | [data-pipelines](docs/agents/rules/data-pipelines.md) | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
@@ -171,7 +190,7 @@ Write specs and issues with Matt Pocock's `to-spec` and `to-tickets` skills (`.a
 
 ## Shipping features
 
-Use a short-lived branch and a pull request into `main`. Follow P-005 for review/automatic squash merging and P-006 for release authorization; another app's merge does not grant its production release.
+Use a short-lived branch and a pull request into `main`. Follow P-005 for review/automatic squash merging. The merge releases every App the change affects (P-006).
 
 Before creating, updating or reviewing a PR description, use the [`pr` skill](.agents/skills/pr/SKILL.md): Matt Pocock's template plus an ADR Check of only the touched domains (`node scripts/agents/agents.mjs adrs <changed files>`).
 
@@ -199,4 +218,4 @@ Canonical five: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-huma
 
 ### Domain docs
 
-Multi-context: root `CONTEXT-MAP.md` plus per-app `CONTEXT.md` (marrow, firstout, dk). See `docs/agents/domain.md`.
+Multi-context: root [`CONTEXT-MAP.md`](CONTEXT-MAP.md) lists the contexts. Today that is Delivery ([`.github/CONTEXT.md`](.github/CONTEXT.md)); app contexts are added when their terms are settled. See `docs/agents/domain.md`.

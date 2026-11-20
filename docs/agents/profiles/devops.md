@@ -14,7 +14,7 @@ Read the app's operations documentation, then verify current provider identity, 
 - Preserve each app's provider and data boundaries. Shared infrastructure assumptions do not authorize merging projects, databases or credentials.
 - Delivery owns build/dependency/CI mechanics and artifact production; data owns schema/migration behavior. Coordinate their runtime prerequisites and authorized execution.
 - Match operational actions to explicit task authorization and current state; retain recovery evidence before consequential changes.
-- Follow the managed-delivery direction in `docs/adr/delivery.md`; this profile does not establish routine agent SSH or automatically enable deployments.
+- Releases go through `cd.yml` and `.github/deploy/deploy.mjs`; Coolify is the Pi's puller (P-048). No routine agent SSH for Releases. Leo creates Host tokens and performs each App's one-time Host switch himself.
 - Handle provider values through the approved tool/secret mechanisms and report verification without exposing credentials.
 
 ## Collaboration and completion

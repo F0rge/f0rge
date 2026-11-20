@@ -152,6 +152,6 @@ backups and browser exports, reconcile every source record, and account for the
 old day's unknown request consumption. After new data/user edits exist, rollback
 must preserve them; restarting stale Turso is not a zero-loss recovery plan.
 
-This delivery changes no running Pi service or production data. Before any later
-release, follow the [release hold](../../../.github/deploy/README.md) and obtain
-Leo's explicit approval for the exact artifact, migration and recovery scope.
+This delivery changes no running Pi service or production data. The new app is
+released only after Leo approves the cutover and its Projects get deploy blocks;
+then [the pipeline](../../../.github/deploy/README.md) releases it like any App.

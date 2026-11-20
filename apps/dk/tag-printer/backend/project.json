@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/dk/tag-printer/backend",
   "targets": {
+    "image": {},
     "lint": {
       "executor": "nx:run-commands",
       "options": {
@@ -36,5 +37,12 @@
       "options": {}
     }
   },
-  "tags": ["platform:py", "scope:dk", "deploy-target:coolify"]
+  "tags": ["platform:py", "scope:dk"],
+  "metadata": {
+    "deploy": {
+      "host": "pi",
+      "services": [{ "name": "dk-tag-printer-backend", "healthcheckPath": "/health" }],
+      "check": { "port": 8000 }
+    }
+  }
 }

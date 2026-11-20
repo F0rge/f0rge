@@ -12,8 +12,7 @@ was performed. All fixtures below are synthetic.
 | Frontend | Nx lint/typecheck/test/build/codegen checks and shared Primer Storybook build. Twenty-one Chromium cases cover denied, loading, empty, error, saved, stale, partial, conflict, import, identity-change races and mobile keyboard behavior. Forty axe scans cover all eight workspace views plus loading/denied states in light/dark at desktop/mobile widths. Explicit computed contrast, default-token button styling and system-theme switching regressions pass. |
 | Integrated walkthrough | The production React build called the actual Rust API and PostgreSQL through a local RS256 identity gateway. Both categories and market insights loaded; a watch survived reload; a cost edit persisted; negative costs showed a labelled validation error. Direct origin without an assertion showed sign-in denial and no records. |
 | Operations | Real loopback mTLS permits only the expected certificate identity and fixed request schema; stalled TLS/header clients cannot block the accepting thread. Real PostgreSQL bootstrap tests verify separate runtime/migrator/read-only-backup privileges and no password disclosure on success or failure. |
-| Release | Fake loopback GitHub API exercises independent approval, commit/tag/CI/artifact/target binding, current receipts, replay denial and image identity. The collector consumes the verified active release and exact provider/migration receipt hashes before selecting that image. No deployment or registry publication was triggered. |
-| Routing and registration | Generated eight Codex adapters, routing fixtures, Nx project registration, Rust target guard and workflow regressions. Buycycle browser checks are a required frontend CI step; the native ARM64 image check feeds the aggregate `ci` gate. |
+| Routing and registration | Generated eight Codex adapters, routing fixtures, Nx project registration, Rust target guard and workflow regressions. Buycycle browser checks are a required frontend CI step; the native ARM64 image check feeds the aggregate `merge-gate` check. |
 
 ## Exact image evidence
 
@@ -25,11 +24,9 @@ state persistence, identity fencing, revision conflict, validation and idempoten
 browser import. Running image and canonical OCI config identities are checked.
 
 The evidence names the exact commit, architecture, Docker image ID, config
-digest, archive SHA256, test results and whether the source was dirty. The PR
-records the final local clean-commit result; CI retains the tested PR archive.
-PR merge-commit archives are not eligible for main-release promotion. Only a
-successful main-push CI archive can enter the separately approved publication
-path, which loads/retests it and never rebuilds source.
+digest, archive SHA256, test results and whether the source was dirty. It is
+rehearsal evidence only. Releases use the commit-tagged Artifact that CI on
+`main` builds and pushes ([the deploy page](../../../.github/deploy/README.md)).
 
 ## Evidence locations and limits
 
@@ -56,6 +53,5 @@ production recovery targets or zero-loss WAL/PITR.
 
 Actual owner-only Cloudflare OTP/tunnel/DNS, Pi grants/secrets, all old-writer and
 source-deploy fences, installed timers/notifications, production reconciliation,
-off-device recovery and the separate GitHub requester/managed agent remain
-explicit release gates in [Ops readiness](ops-readiness.md). Missing observations
+off-device recovery remain explicit cutover gates in [Ops readiness](ops-readiness.md). Missing observations
 must fail preflight; none may be replaced with a compliance tick.

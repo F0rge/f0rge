@@ -16,14 +16,10 @@ import os
 import re
 import stat
 import subprocess
-import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / ".github" / "deploy"))
-from buycycle_release import managed_docker_environment
 
 APP = "xi0qwpbyl2d8gf8u3xl13jkv"
 DOMAIN = "buycycle.leo-figueiredo.com"
@@ -224,7 +220,10 @@ def database_query() -> str:
 
 
 def docker(args: list[str]) -> str:
-    env = managed_docker_environment()
+    # Only a fixed environment reaches Docker; nothing else is inherited.
+    env = {"PATH": os.environ.get("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"), "LANG": "C.UTF-8"}
+    if os.environ.get("DOCKER_CONFIG"):
+        env["DOCKER_CONFIG"] = os.environ["DOCKER_CONFIG"]
     try:
         return subprocess.run(["docker", "--host", "unix:///run/docker.sock", *args], capture_output=True, text=True, env=env, check=True, timeout=30).stdout
     except (OSError, subprocess.SubprocessError) as exc:

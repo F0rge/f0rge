@@ -26,7 +26,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Decision:** Design and test loading, empty, error, denied, success and edit-conflict states.
 - **Proposed enforcement (not installed):** State matrix in feature brief; deterministic fixtures drive Storybook/browser scenarios and critical end-to-end journeys.
 - **Gate and limit:** Test + review: state coverage map, screenshots/traces and acceptance evidence. Existence of a story alone is insufficient.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Vitest files and Storybook stories for some primitives. Playwright smoke runs marrow e2e only when the detect job selects it.
+- **Static evidence at `f155a2ba` (not normative, not a live check):** Vitest files and Storybook stories for some primitives. A Playwright job ran Marrow e2e only when the detect job selected it.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).
 - **Risk noted in that assessment:** medium.

@@ -1,32 +1,113 @@
 name: CI
 
-# PR + push on main, plus workflow_dispatch: parallel Python/frontend/Rust via
-# `nx affected` (no detect job) → `ci` gate. This workflow does not deploy
-# or authorize a production release.
-# The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
-# Tests (pytest / frontend unit / e2e-smoke) run for main.
+# Runs on every pull request and every push to main. Read it top to bottom:
+#
+#   plan        asks Nx what the change affects, and runs the cheap repository guards
+#   python      )
+#   typescript  )  one `nx affected` line each; skipped when no Project of that language is affected
+#   rust        )
+#   image       pull requests: once per affected App, after the language jobs pass, build every
+#               deployable Project's image for the App's Host, start it and expect its health
+#               endpoint to answer. Read-only: it cannot push.
+#   image-push  main only: the same build and check, then push to GHCR. The only job that can
+#               write packages, so a pull request can never overwrite an image a release pulls.
+#   merge-gate  the single required check (the branch ruleset requires this exact name)
+#   cd          main only, after `merge-gate`: release the affected Apps with the images just pushed (cd.yml)
+#
+# On main, "affected" is measured from the last fully successful run, release included.
+# An App whose release failed is therefore built and released again by the next push.
 
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
-  actions: read
+  actions: read # nrwl/nx-set-shas looks up the last successful run
 
-# PR → target branch, push/dispatch → the branch itself.
-env:
-  TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
+# A newer push to a pull request cancels its older run. A run on main is never
+# cancelled once it has started: later pushes wait, so releases land in merge order.
+# GitHub keeps only the newest waiting run; it covers the ones it replaced, because
+# "affected" is measured from the last successful run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      base: ${{ steps.shas.outputs.base }}
+      head: ${{ steps.shas.outputs.head }}
+      py: ${{ steps.plan.outputs.py }}
+      ts: ${{ steps.plan.outputs.ts }}
+      rust: ${{ steps.plan.outputs.rust }}
+      apps: ${{ steps.plan.outputs.apps }} # [{ app, host, projects }] for the affected Apps
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: nrwl/nx-set-shas@v4
+        id: shas
+      - uses: ./.github/actions/setup-node-workspace
+      - name: Repository guards
+        run: |
+          npm run agents:check
+          npm run agents:test
+          bash .github/scripts/check-nx-projects.sh
+          bash .github/scripts/check-lib-boundary.sh
+          test ! -f uv.lock # a root uv.lock flips @nxlv/python into workspace mode
+          node scripts/security/check-ci-dependencies.cjs
+          npm audit --omit=dev --audit-level=high
+      - name: Plan
+        id: plan
+        shell: bash # pipefail: a failing plan must not be hidden by tee
+        run: node .github/scripts/plan.mjs | tee -a "$GITHUB_OUTPUT"
+
+  python:
+    needs: plan
+    if: needs.plan.outputs.py == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NX_BASE: ${{ needs.plan.outputs.base }}
+      NX_HEAD: ${{ needs.plan.outputs.head }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node-workspace
+      - uses: ./.github/actions/setup-python-uv
+      - run: npx nx affected -t lint,format-check,test,audit --exclude='*,!tag:platform:py'
+
+  typescript:
+    needs: plan
+    if: needs.plan.outputs.ts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NX_BASE: ${{ needs.plan.outputs.base }}
+      NX_HEAD: ${{ needs.plan.outputs.head }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node-workspace
+      - uses: ./.github/actions/setup-python-uv # marrow-frontend:codegen:check exports the backend's OpenAPI
+      - run: npx nx affected -t lint,typecheck,test,build,codegen:check,storybook-build,container-test --exclude='*,!tag:platform:ts'
+        env: # production-shaped Next builds
+          API_URL: http://backend:8000
+          NODE_ENV: production
+
   rust:
-    name: rust
-    concurrency:
-      group: ci-rust-${{ github.ref }}
-      cancel-in-progress: true
+    needs: plan
+    if: needs.plan.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -40,392 +121,93 @@ jobs:
           --health-cmd "pg_isready -U postgres -d buycycle_rehearsal"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
+      NX_BASE: ${{ needs.plan.outputs.base }}
+      NX_HEAD: ${{ needs.plan.outputs.head }}
       BUYCYCLE_TEST_DATABASE_URL: postgres://postgres:buycycle-ci-fixture@127.0.0.1:5549/buycycle_rehearsal
-      # Rust 1.95 debug-incremental ICE reproduced locally for async Diesel closures.
-      CARGO_INCREMENTAL: '0'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: ${{ env.TARGET_BRANCH }}
-
-      - uses: ./.github/actions/setup-node-workspace
-
-      - name: Install PostgreSQL build headers
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpq-dev
-
-      - name: Install pinned Rust toolchain
-        run: |
-          set -euo pipefail
-          RUST_VERSION=$(python3 -c 'import pathlib, re, tomllib; version = tomllib.loads(pathlib.Path("rust-toolchain.toml").read_text())["toolchain"]["channel"]; assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Rust channel must be an exact release"; print(version)')
-          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
-          echo "RUSTUP_TOOLCHAIN=$RUST_VERSION" >> "$GITHUB_ENV"
-          rustup run "$RUST_VERSION" rustc --version
-          rustup run "$RUST_VERSION" cargo --version
-
-      - name: Rust registration and failing-target regression checks
-        # Always exercise the uncached fixture suite, even before an app adopts Rust.
-        run: npx nx run f0rge-rust-checks:test
-
-      - name: Validate every Rust project before affected selection
-        run: node .github/rust/guard.mjs
-
-      - name: Nx affected Rust checks
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            npx nx run-many -t=lint,format-check,test,build --projects=tag:platform:rust
-          else
-            npx nx affected -t=lint,format-check,test,build --exclude='*,!tag:platform:rust' --base="${NX_BASE}" --head="${NX_HEAD}"
-          fi
-
-  python:
-    name: python
-    concurrency:
-      group: ci-python-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: ${{ env.TARGET_BRANCH }}
-
-      - uses: ./.github/actions/setup-python-uv
-        with:
-          install-ruff: "true"
-
-      - uses: ./.github/actions/setup-node-workspace
-
-      - name: Repository agent routing and generated adapter checks
-        run: |
-          npm run agents:check
-          npm run agents:test
-
-      - name: Assert no root uv.lock
-        run: bash .github/scripts/assert-no-root-uv-lock.sh
-
-      - name: Release evidence and deploy planner checks
-        # Always run this uncached tool target; it also reads deployment workflows.
-        run: npx nx run f0rge-release-checks:test
-
-      - name: Nx project registration guard
-        run: bash .github/scripts/check-nx-projects.sh
-
-      - name: Python lib boundary guard
-        run: bash .github/scripts/check-lib-boundary.sh
-
-      - name: Install affected Python deps
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -o pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            PROJECTS=$(npx nx show projects --projects tag:platform:py --json | jq -r '.[]')
-          else
-            PROJECTS=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r '.[]')
-          fi
-          for p in $PROJECTS; do
-            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            # Nested projects do not inherit a repo-root pin. A project
-            # .python-version selects the interpreter (Marrow, Firstout, and
-            # dk tag-printer are 3.11). Every other project stays on 3.10.
-            if [ -f "$ROOT/.python-version" ]; then
-              PY=$(tr -d '[:space:]' < "$ROOT/.python-version")
-            else
-              PY=3.10
-            fi
-            UV_PYTHON="$PY" uv sync --frozen --project "$ROOT"
-          done
-
-      - name: uv pip audit (high severity)
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -o pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            PROJECTS=$(npx nx show projects --projects tag:platform:py --json | jq -r 'join(" ")')
-          else
-            PROJECTS=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
-          fi
-          case " $PROJECTS " in
-            *" marrow-backend "*) ;;
-            *) echo "marrow-backend not affected — skip audit"; exit 0 ;;
-          esac
-          cd apps/marrow/backend
-          uv export --frozen --no-dev --no-hashes --no-editable -o /tmp/marrow-req.txt
-          python3 -m pip install --user pip-audit
-          python3 -m pip_audit -r /tmp/marrow-req.txt
-
-      # Pytest is expensive (testcontainers). Runs for main.
-      # workflow_dispatch uses run-many (full matrix).
-      - name: nx affected (python)
-        env:
-          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx run-many -t=lint,format-check,test --projects=tag:platform:py
-            else
-              npx nx run-many -t=lint,format-check --projects=tag:platform:py
-            fi
-          else
-            if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx affected -t=lint,format-check,test --exclude='*,!tag:platform:py' --base="${NX_BASE}" --head="${NX_HEAD}"
-            else
-              npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py' --base="${NX_BASE}" --head="${NX_HEAD}"
-            fi
-          fi
-
-  frontend:
-    name: frontend
-    concurrency:
-      group: ci-frontend-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: ${{ env.TARGET_BRANCH }}
-
-      - uses: ./.github/actions/setup-node-workspace
-
-      - uses: ./.github/actions/setup-python-uv
-
-      - name: Verify fixed dependencies and Medusa compatibility
-        run: node scripts/security/check-ci-dependencies.cjs
-
-      - name: npm audit (high severity, production deps)
-        run: npm audit --omit=dev --audit-level=high
-
-      - name: Boundary guard (libs must not import apps)
-        run: |
-          ! grep -rn "from ['\"].*apps/" libs/ --include='*.ts' --include='*.tsx'
-
-      - name: Nx project registration guard
-        run: bash .github/scripts/check-nx-projects.sh
-
-      - name: Commerce image retention checks
-        run: node --test apps/storefront/commerce/scripts/check-container.test.mjs
-
-      # main only: prod-shaped build.
-      - name: Prod-shaped build env
-        if: env.TARGET_BRANCH == 'main'
-        run: |
-          echo "API_URL=http://backend:8000" >> "$GITHUB_ENV"
-          echo "NODE_ENV=production" >> "$GITHUB_ENV"
-
-      # Install marrow-backend when OpenAPI codegen:check is in the affected set
-      # (frontend depends on marrow-backend via implicitDependencies).
-      - name: Install marrow-backend for OpenAPI (if affected)
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -o pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            NEED=true
-          else
-            PROJECTS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
-            case " $PROJECTS " in
-              *" marrow-frontend "*) NEED=true ;;
-              *) NEED=false ;;
-            esac
-          fi
-          if [ "$NEED" = "true" ]; then
-            UV_PYTHON=3.11 uv sync --frozen --project apps/marrow/backend
-          else
-            echo "marrow-frontend not affected — skip backend sync for codegen"
-          fi
-
-      # Unit tests run for main alongside lint/typecheck/build + codegen:check.
-      # Container tests build local images and run offline probes; they never publish or deploy.
-      - name: nx affected (frontend)
-        env:
-          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
-          EVENT_NAME: ${{ github.event_name }}
-          F0RGE_COMMERCE_IMAGE_ARCHIVE: ${{ runner.temp }}/f0rge-commerce-image.tar
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx run-many -t=lint,typecheck,test,build,codegen:check,storybook-build,container-test --projects=tag:platform:ts
-            else
-              npx nx run-many -t=lint,typecheck,build,codegen:check,storybook-build,container-test --projects=tag:platform:ts
-            fi
-          else
-            if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx affected -t=lint,typecheck,test,build,codegen:check,storybook-build,container-test --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
-            else
-              npx nx affected -t=lint,typecheck,build,codegen:check,storybook-build,container-test --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
-            fi
-          fi
-
-      - name: Buycycle browser and accessibility checks
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            npx playwright install --with-deps chromium
-            npx nx run-many -t=e2e --projects=buycycle-frontend
-          else
-            AFFECTED=$(npx nx show projects --affected --projects=buycycle-frontend --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -er 'if type == "array" and all(.[]; type == "string") then (index("buycycle-frontend") != null) | tostring else error("Invalid Nx project list") end')
-            if [ "$AFFECTED" = true ]; then
-              npx playwright install --with-deps chromium
-              npx nx affected -t=e2e --exclude='*,!buycycle-frontend' --base="${NX_BASE}" --head="${NX_HEAD}"
-            fi
-          fi
-
-      # Browser evidence contains only the local synthetic Buycycle fixtures.
-      - name: Retain Buycycle browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: buycycle-browser-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: apps/buycycle/frontend/test-results/
-          if-no-files-found: ignore
-
-      - name: Check retained commerce image
-        id: commerce-image
-        env:
-          ARCHIVE: ${{ runner.temp }}/f0rge-commerce-image.tar
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            EXPECTED=true
-          else
-            EXPECTED=$(npx nx show projects --affected --projects=daskasas-commerce --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -er 'if type == "array" and all(.[]; type == "string") then (index("daskasas-commerce") != null) | tostring else error("Invalid Nx project list") end')
-          fi
-          if [ "$EXPECTED" = true ]; then
-            test -s "$ARCHIVE"
-            test -s "$ARCHIVE.json"
-            echo 'present=true' >> "$GITHUB_OUTPUT"
-          else
-            test ! -e "$ARCHIVE"
-            test ! -e "$ARCHIVE.json"
-            echo 'present=false' >> "$GITHUB_OUTPUT"
-          fi
-
-      # This unpromoted archive is not a registry manifest, attestation, or release approval.
-      # PR archives use the synthetic merge commit and must not be promoted as main artifacts.
-      - name: Retain tested commerce image
-        if: steps.commerce-image.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-daskasas-commerce-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/f0rge-commerce-image.tar
-            ${{ runner.temp }}/f0rge-commerce-image.tar.json
-          if-no-files-found: error
-
-  buycycle-image:
-    name: buycycle image
-    concurrency:
-      group: ci-buycycle-image-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
-    env:
-      NX_DAEMON: 'false'
-      NX_ISOLATE_PLUGINS: 'false'
+      CARGO_INCREMENTAL: '0' # Rust 1.95 debug-incremental ICE with async Diesel closures
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: ${{ env.TARGET_BRANCH }}
       - uses: ./.github/actions/setup-node-workspace
-      - uses: ./.github/actions/setup-python-uv
-      - uses: docker/setup-buildx-action@v3
-      - name: Select private image output
-        run: echo "BUYCYCLE_IMAGE_OUTPUT=$RUNNER_TEMP/buycycle-image" >> "$GITHUB_ENV"
-      - name: Test affected ARM64 image through Nx
-        env:
-          EVENT_NAME: ${{ github.event_name }}
+      - name: Install libpq headers and the toolchain pinned in rust-toolchain.toml
         run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            npx nx run-many -t=container-test --projects=tag:platform:rust
-          else
-            npx nx affected -t=container-test --exclude='*,!tag:platform:rust' --base="${NX_BASE}" --head="${NX_HEAD}"
-          fi
-      - name: Check retained Buycycle image
-        id: buycycle-image
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            EXPECTED=true
-          else
-            EXPECTED=$(npx nx show projects --affected --projects=buycycle-backend --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -er 'if type == "array" and all(.[]; type == "string") then (index("buycycle-backend") != null) | tostring else error("Invalid Nx project list") end')
-          fi
-          if [ "$EXPECTED" = true ]; then
-            test -s "$BUYCYCLE_IMAGE_OUTPUT/image.tar"
-            test -s "$BUYCYCLE_IMAGE_OUTPUT/evidence.json"
-            echo 'present=true' >> "$GITHUB_OUTPUT"
-          else
-            test ! -e "$BUYCYCLE_IMAGE_OUTPUT/image.tar"
-            test ! -e "$BUYCYCLE_IMAGE_OUTPUT/evidence.json"
-            echo 'present=false' >> "$GITHUB_OUTPUT"
-          fi
-      - name: Retain tested Buycycle image
-        if: steps.buycycle-image.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-buycycle-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/buycycle-image/image.tar
-            ${{ runner.temp }}/buycycle-image/evidence.json
-          if-no-files-found: error
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libpq-dev
+          rustup toolchain install
+      - run: node .github/rust/guard.mjs # every Cargo project is registered before Nx selects any
+      - run: npx nx affected -t lint,format-check,test,build --exclude='*,!tag:platform:rust'
 
-  ci:
-    name: ci
-    needs: [python, frontend, rust, buycycle-image]
+  image:
+    name: image (${{ matrix.app }})
+    # Only after the tests: a language job that ran must have passed. One that was skipped
+    # (its language not affected) does not block; hence the status check is written out.
+    needs: [plan, python, typescript, rust]
+    if: ${{ github.event_name == 'pull_request' && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.apps != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.apps) }}
+    runs-on: ${{ matrix.host == 'pi' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }} # the Pi is ARM64
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node-workspace
+      # Every deployable Project of the App, so all of its images come from this one commit.
+      - run: npx nx run-many -t image --projects="$PROJECTS"
+        env:
+          PROJECTS: ${{ matrix.projects }}
+
+  # Same as `image`, on main, plus the push. Kept as a separate job so packages: write never
+  # reaches a pull request.
+  image-push:
+    name: image-push (${{ matrix.app }})
+    needs: [plan, python, typescript, rust]
+    if: ${{ github.event_name == 'push' && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.apps != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.apps) }}
+    runs-on: ${{ matrix.host == 'pi' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node-workspace
+      - run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<< "$GITHUB_TOKEN"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: npx nx run-many -t image --projects="$PROJECTS"
+        env:
+          PROJECTS: ${{ matrix.projects }}
+          IMAGE_PUSH: 'true'
+
+  merge-gate:
+    needs: [plan, python, typescript, rust, image, image-push]
     if: always()
-    concurrency:
-      group: ci-${{ github.ref }}
-      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Aggregate gate
-        env:
-          PYTHON_RESULT: ${{ needs.python.result }}
-          FRONTEND_RESULT: ${{ needs.frontend.result }}
-          RUST_RESULT: ${{ needs.rust.result }}
-          BUYCYCLE_IMAGE_RESULT: ${{ needs.buycycle-image.result }}
-        run: |
-          if [ "$PYTHON_RESULT" != "success" ]; then
-            echo "python job required but result was: $PYTHON_RESULT"
-            exit 1
-          fi
-          if [ "$FRONTEND_RESULT" != "success" ]; then
-            echo "frontend job required but result was: $FRONTEND_RESULT"
-            exit 1
-          fi
-          if [ "$BUYCYCLE_IMAGE_RESULT" != "success" ]; then
-            echo "buycycle image job required but result was: $BUYCYCLE_IMAGE_RESULT"
-            exit 1
-          fi
-          if [ "$RUST_RESULT" != "success" ]; then
-            echo "rust job required but result was: $RUST_RESULT"
-            exit 1
-          fi
+      # A skipped job is one the plan did not need. Anything failed or cancelled fails the gate.
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+
+  cd:
+    needs: [plan, merge-gate]
+    # Stated in full: the default "everything before succeeded" would skip this whenever a language job was skipped.
+    if: ${{ !cancelled() && needs.merge-gate.result == 'success' && github.event_name == 'push' && needs.plan.outputs.apps != '[]' }}
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/cd.yml
+    with:
+      apps: ${{ needs.plan.outputs.apps }}
+      commit: ${{ github.sha }}

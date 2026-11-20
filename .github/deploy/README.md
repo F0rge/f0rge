@@ -1,153 +1,67 @@
-# Release paths and retained holds
+# Releasing
 
-Firstout has a dedicated [continuous-deployment pipeline](firstout-cd.md) for
-reviewed main commits, coordinated backend/frontend images, controlled compatible
-migrations and automatic application recovery under P-006. Activation requires
-the documented credential, backup and rollback-baseline setup; this PR does not
-claim those live prerequisites have been configured.
+A reviewed merge to `main` with CI passing releases every App the change affects ([P-006](../../docs/adr/governance.md#p-006)). Terms (Project, App, Host, Artifact, Release): [glossary](../CONTEXT.md).
 
-The [frontend and API operator release paths](firstout-release.md) remain
-available for explicitly authorized manual operations. Their closed component
-profiles bind tested immutable images to fixed services, verify serving
-identities and require a separately controlled API migration head. Publication,
-merge and successful CI do not authorize arbitrary operator deployment or data
-replacement. There is no fallback through source rebuilds or hotpatches when
-artifact verification fails.
+[`ci.yml`](../workflows/ci.yml) builds and health-checks one Artifact per deployable Project and, on `main`, pushes it as `ghcr.io/f0rge/<nx project>:<commit sha>`. Its last job calls [`cd.yml`](../workflows/cd.yml), which runs one job per affected App in the GitHub environment named after the App. That job runs `deploy.mjs`.
 
-Those manual paths do not activate CD or extend its standing authorization to
-other apps. Generic entry points and other apps remain under the holds below;
-GitHub environments do not protect direct operator CLI access.
+## The two programs
 
-## Generic release hold and historical deploy manifest
+- **`deployables.mjs`** lists what can be released. It finds every `project.json` with a deploy block and groups the Projects by their `scope:<app>` tag. `node .github/deploy/deployables.mjs` prints the list. It fails when an App mixes Hosts or a deployable Project has no scope tag.
+- **`deploy.mjs --app <app> --commit <sha>`** releases every service of the App at that commit, services with a `preDeployCommand` first, and waits for each to become healthy.
+  - Railway: sets the service's image, health path, pre-deploy and start command, and triggers a deployment. Railway's own health check decides success. Needs `RAILWAY_TOKEN`, a project token.
+  - Pi: sets the image tag on the Coolify "Docker image" application with the service's name and triggers a deployment. Needs `COOLIFY_URL` and `COOLIFY_TOKEN`. `preDeployCommand` and `startCommand` are refused on a Pi service. Coolify's own Healthcheck stays off: each Pi image carries a Docker `HEALTHCHECK`, and a service counts as healthy only when Coolify reports `running:healthy` (or `running:unknown`) for the whole settle window.
+  - Before changing a service it records the image the Host has it configured to run. On failure it puts each service it touched back on that image, in reverse order and without its `preDeployCommand`, then exits non-zero. A service that had no previous image (a first Release, or a service still built from the repository) is left as it is.
+  - It fails closed, before changing anything, when a token is missing or a service is not found by name on the Host.
 
-The generic repository release entry points are **inert**; Firstout uses only its dedicated CD path. The manual
-`deploy.yml` and callable `deploy-reusable.yml` target the fixed GitHub
-`production` environment without calling a provider, reading deployment
-credentials or running a smoke against production. Both jobs set
-`deployment: false`; the manual preparation job reports its limited scope and
-the retired callable entry point fails. Neither is an approved release path. The repository's Nx CI
-runs builds and tests; those results do not authorize a release. GitHub support
-for `deployment: false` and the environment's effective protection have not
-been verified by running this workflow.
+| Variable | Default | Meaning |
+|---|---|---|
+| `DEPLOY_TIMEOUT_SECONDS` | `900` | How long one service may take to become healthy. |
+| `DEPLOY_SETTLE_SECONDS` | `90` | Pi only: how long a container must stay up and not unhealthy before it counts as healthy. |
 
-On 14 November 2026, the repository `production` environment was configured
-with Leo as the sole required reviewer, prevent self-review, no administrator
-bypass and the `main` branch restriction. It has no environment secrets. Verify
-settings and the exact selected environment again before activation. A separate
-automation identity is needed for a release that Leo can approve independently;
-an agent using Leo's account is not independent human approval.
-The current environment allows `main` only and no tags; P-045's release-tag
-grammar and corresponding protected tag allowlist need design before a
-tag-triggered release.
+Both are plain Node with no dependencies. Tests: `npx nx run f0rge-deploy:test`.
 
-No separate release requester has been verified. `workflow_run` does not by
-itself establish a bot identity. A candidate private GitHub App and its
-setup and validation plan are documented in [release-requester-app.md](release-requester-app.md).
-A token with repository Actions write access can enable disabled workflows and
-rerun historical workflows; do not grant it until historical release paths and
-production credentials are contained. Before activation, verify a
-separate least-privilege requester, Leo's independent approval, and fresh
-approval on reruns in an isolated nonproduction setting.
+## Deploy block
 
-`release_evidence.py` compares supplied candidate, artifact and check fields
-offline. `test_release_evidence.py` exercises mismatches and the no-effect
-workflow configuration. These fixtures do not retrieve trustworthy GitHub
-approval or CI facts, prove a human acted, prevent real approval replay, verify
-a provider's running digest or authorize a release.
+A Project is deployable when its `project.json` has this block. Its App is its `scope:<app>` tag. All deployable Projects of one App share one `host`.
 
-The `daskasas-commerce:container-test` target can retain its locally tested
-image as an archive outside the checkout, with the source commit, platform,
-Docker image ID and archive checksum. CI retains that archive when this project
-is affected or a full manual CI run is requested. The probe checks runtime
-imports and hosted-configuration guards with container networking disabled; it
-is not a full application or checkout
-journey. The image ID and archive checksum are not a registry manifest digest,
-and the accompanying metadata is not signed provenance or an approval. Pull
-request archives use a synthetic merge commit; neither those nor non-main or
-manual-run archives are trusted production release artifacts.
-No other app image is covered by this retention path.
+```json
+"metadata": {
+  "deploy": {
+    "host": "railway",
+    "services": [
+      { "name": "example-api", "healthcheckPath": "/health", "preDeployCommand": "…", "startCommand": "…" },
+      { "name": "example-worker", "startCommand": "…" }
+    ]
+  }
+}
+```
 
-The documented Railway deployment metadata and Coolify configuration inspected
-so far do not independently establish each running instance's image digest.
-Provider verification remains a release blocker until a trusted source and
-nonproduction rehearsal establish the exact running image, target and health.
-See the [provider verification design](provider-verification.md).
+`host` is `railway` or `pi`. Only `name` is required per service; it is the service's name on Railway or the application's name in Coolify. One Project can back several services, all running the same Artifact.
 
-Expiry and replay enforcement are not implemented here. Before activation,
-test that an expired review is rejected and that reusing the same approved
-commit/digest/target is handled safely after a restart or with a different
-approval ID. Verify whether a rerun requires fresh GitHub approval. No
-process-local fixture is proof of durable replay protection.
+The block also carries what CI needs to build and check the Artifact: `check.port` (required), and optionally `check.path`, `check.migrate`, `check.postgres`, `check.redis`, `check.env`, `build.context` and `build.args`. [`image.mjs`](../scripts/image.mjs) documents them; `npx nx run <project>:image` runs the same build and check locally. Build arguments are public.
 
-Before a future release path is enabled, build and test a target-specific image
-once, retain its immutable digest, obtain independent GitHub approval for that
-commit/digest/target, promote that same image without rebuilding and verify the
-running digest and health. Test reruns, mismatches and recovery in an isolated
-environment. Audit and control Railway, Coolify, manual, historical rerun and
-other alternate provider paths; their current live state is not established by
-this change. Do not put deployment credentials into repository-level secrets or
-activate a provider trigger merely to make this hold pass. P-006 permits Firstout releases only through its dedicated CD path; other apps still need Leo's explicit per-release approval.
+## Release or roll back by hand
 
-## Historical configuration — not an active release path
+```bash
+gh workflow run cd.yml -f app=<app> -f commit=<sha>
+```
 
-The following inventory and commands document the former source-based path;
-they do not describe a runnable deployment workflow in this change. Do not add
-secrets or use the legacy webhooks to bypass the release hold. Retained code
-and tests support investigation, not production authorization.
+Use it for a first Release, a redeploy or a rollback. `<app>` is `firstout`, `marrow`, `daskasas`, `dk`, `envmon` or `buycycle`. `<sha>` is a full commit that CI built on `main`; the run fails if any of the App's Artifacts is missing at that commit. The App's GitHub environment holds its tokens and shows its deploy history.
 
-The manifest records the legacy mapping of Nx projects to deployment targets.
-The historical orchestrator intersected it with `nx affected`, then delegated
-to Railway smoke or Coolify executors; those jobs are no longer present in the
-proposed workflows.
+Rolling back by hand across a migration runs the older commit's `preDeployCommand` against the newer schema. If that fails, the Release fails and each service is put back on the image it ran before.
 
-Committed configuration describes **Railway deployment plus Actions smoke** for Marrow. Check current provider triggers before an authorized release; this file does not enable them or grant production approval.
-dk tag-printer, buycycle, and environment-monitor run on Coolify (Pi). Firstout is a **separate Railway
-project** (not Marrow),
-**`main` only**, in Railway environment `production`
-(`9f7b0c34-bd95-442b-b746-a9791dcc2895`). Hosts: `firstout.co.za` /
-`api.firstout.co.za` (Swagger at `/docs`).
+## Switching an App at its Host
 
-DasKasas storefront is a separate Railway project (`d58a2884-d366-4230-9555-8b7bb4e42d4f`),
-production environment `d73ff2d5-816d-4bc8-85b4-71a85b0398fa`, with services
-`storefront` and `storefront-commerce`. Its `apps/storefront/` Railway configs are
-outside this manifest; verify both services separately for an approved release.
+Each App is switched once, by Leo: the Host is pointed at images, and the token goes into the App's GitHub environment. `switch/<app>.sh` walks through the steps for that App. Until then the App fails closed.
 
-## Historical webhook secret inventory
+The first `main` run after this pipeline merges tries to release all six Apps. Each App that is not yet switched fails closed, and later runs on `main` retry it until every App is green.
 
-The former workflow used `COOLIFY_BASE_URL` and per-component
-`COOLIFY_WEBHOOK_*` values, with optional `SMOKE_EMAIL` and `SMOKE_PASSWORD`
-for Railway smoke. A read-only GitHub inventory on 14 November 2026 confirmed
-repository-level Coolify and smoke secret names remain present; their values
-were not read. Consumers and provider permissions require further verification.
-The new inert workflows neither receive nor use
-these values. Any future production credentials must be restricted to an
-approved protected environment and unavailable to ungated jobs.
+Order: dk tag printer, environment monitor, Buycycle, DasKasas storefront, Marrow, Firstout. Storefront and Marrow must be switched before 1 December 2026, when Railway stops reading config files from the repo.
 
-## Historical Coolify monorepo settings (per app)
+## Accepted ceilings
 
-| Field | dk tag printer | environment-monitor |
-|-------|----------------|---------------------|
-| Repo | `F0rge/f0rge` | `F0rge/f0rge` |
-| Branch | `main` | `main` |
-| Base directory | `/` | `apps/environment-monitor/backend` or `.../frontend` |
-| Dockerfile | `apps/dk/tag-printer/backend/Dockerfile` or `.../frontend/Dockerfile` | `Dockerfile` (relative to that base) |
-| Watch paths | `apps/dk/tag-printer/backend/**` or `.../frontend/**` | `apps/environment-monitor/backend/**` or `.../frontend/**` |
-| Frontend build-time env | `NEXT_PUBLIC_API_URL=https://tags-api.leo-figueiredo.com` | keep existing `BACKEND_URL` |
-| Backend runtime env | `CORS_ORIGINS=https://tags.leo-figueiredo.com` | keep existing `PYTHONUNBUFFERED` (both apps) |
-
-The former webhook supplied a Git diff and signed it with a component-specific
-secret. It classified queued, watch-path-skipped and rejected responses.
-These details describe the retired source-building path, not an approval or
-immutable artifact mechanism. Retained payload and planner tests document the
-legacy behavior without contacting a provider.
-
-See also [manifest.yml](manifest.yml) and [plan_deploy.py](plan_deploy.py).
-
-## Historical workflow selection
-
-The former `workflow_run` deployment used the default branch's workflow files.
-Historical reruns can use historical workflow definitions, so removing a trigger
-from a new revision does not prove those paths are closed. On 14 November 2026
-the old Deploy workflow was disabled, but a successful historical run was
-still within GitHub's rerun window. Actions write can re-enable a disabled
-workflow. Verify controls before activating any release mechanism.
+- Nothing checks a whole App before production.
+- No backup check before migrations.
+- A migration that is not backward compatible can make the automatic rollback fail.
+- A commit tag can in principle be overwritten; only `main` CI pushes.
+- On the Pi a bad Release causes downtime until the rollback completes.

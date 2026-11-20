@@ -39,7 +39,7 @@ Use a reproducible failure for a bug, then verify the corrected behavior at the 
 For UI/API behavior, include the authorized live-server walkthrough required by the repository; report whether it used a local production build or a deployed service.
 Run the checks relevant to the change and preserve their actual results, including skipped or unavailable checks.
 Read `docs/adr/delivery.md` and `docs/adr/operations.md` before release or provider work.
-Follow P-005 for Leo's personal review and automatic squash merging, and P-006 for release authorization. Manual provider operations need task authorization. An app's merge does not expand P-006's release scope.
+Follow P-005 for Leo's personal review and automatic squash merging. Under P-006 a reviewed merge to `main` releases every affected App, migrations included. Provider operations outside that pipeline need task authorization.
 Use existing explicit authorization within its scope; do not ask again merely because a different agent handles the next step.
 Verify the target environment and current state before an authorized consequential action; retain its required recovery evidence.
 

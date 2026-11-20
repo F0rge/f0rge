@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/firstout/frontend",
   "targets": {
+    "image": {},
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
@@ -19,5 +20,21 @@
       }
     }
   },
-  "tags": ["platform:ts", "scope:firstout"]
+  "tags": ["platform:ts", "scope:firstout"],
+  "metadata": {
+    "deploy": {
+      "host": "railway",
+      "services": [
+        { "name": "firstout-frontend", "healthcheckPath": "/healthz", "startCommand": "node apps/firstout/frontend/server.js" }
+      ],
+      "build": {
+        "args": {
+          "API_URL": "https://api.firstout.co.za",
+          "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZmlyc3RvdXQuY28uemEk",
+          "NEXT_PUBLIC_TENANT_SUBDOMAINS_ENABLED": "false"
+        }
+      },
+      "check": { "port": 3000 }
+    }
+  }
 }

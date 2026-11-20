@@ -1,0 +1,78 @@
+name: CD
+
+# Releases Apps: for each one, tells its Host to run the images CI built for one commit.
+#
+#   from CI      last job of a push to main, for the Apps that push affected (ci.yml)
+#   by hand      Actions → CD → Run workflow: one App and one commit, for a first
+#                release, a redeploy or a rollback
+#
+# Nothing is built here. A commit can only be released if CI on main pushed an image
+# for every deployable Project of the App; a manual run fails otherwise.
+# What an App consists of is the `metadata.deploy` block in its Projects' project.json.
+# How a release, its health wait and its automatic rollback work: .github/deploy/deploy.mjs.
+
+on:
+  workflow_call:
+    inputs:
+      apps:
+        description: 'The affected Apps as planned by CI, a JSON list of { "app": … }'
+        type: string
+        required: true
+      commit:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      app:
+        type: choice
+        required: true
+        options: [buycycle, daskasas, dk, envmon, firstout, marrow]
+      commit:
+        description: Full commit SHA that CI built on main
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  release:
+    name: release (${{ matrix.app }})
+    strategy:
+      fail-fast: false # one App failing must not stop another App's release half-way
+      matrix:
+        include: ${{ fromJSON(inputs.apps || format('[{{"app":"{0}"}}]', inputs.app)) }}
+    # The App's own GitHub environment holds its Host token and records its release history.
+    environment: ${{ matrix.app }}
+    # One release per App at a time, in order; a release in flight is never cancelled.
+    concurrency:
+      group: release-${{ matrix.app }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    # Above deploy.mjs's own worst case, so it always gets to finish its rollback: up to 15 min
+    # (DEPLOY_TIMEOUT_SECONDS) per service released and again per service put back. Marrow has four.
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      packages: read
+    env:
+      APP: ${{ matrix.app }}
+      COMMIT: ${{ inputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Every image of the App exists for this commit
+        shell: bash # pipefail: a failing deployables.mjs must not leave an empty-but-passing list
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<< "$GITHUB_TOKEN"
+          node .github/deploy/deployables.mjs | jq -r --arg app "$APP" '.[] | select(.app == $app) | .projects[].image' > images
+          test -s images
+          xargs -I{} docker manifest inspect "{}:$COMMIT" < images > /dev/null
+      - name: Release
+        run: node .github/deploy/deploy.mjs --app "$APP" --commit "$COMMIT"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}

@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/storefront/commerce/src",
   "targets": {
+    "image": {},
     "lint": {
       "executor": "nx:run-commands",
       "options": { "cwd": "apps/storefront/commerce", "command": "npm run lint" }
@@ -28,8 +29,32 @@
       "executor": "nx:run-commands",
       "cache": false,
       "inputs": ["default", "^default", "{workspaceRoot}/package.json", "{workspaceRoot}/package-lock.json"],
-      "options": { "command": "node apps/storefront/commerce/scripts/check-container.mjs" }
+      "options": { "command": "node --test apps/storefront/commerce/scripts/check-container.test.mjs && node apps/storefront/commerce/scripts/check-container.mjs" }
     }
   },
-  "tags": ["platform:ts", "scope:daskasas"]
+  "tags": ["platform:ts", "scope:daskasas"],
+  "metadata": {
+    "deploy": {
+      "host": "railway",
+      "services": [
+        {
+          "name": "storefront-commerce",
+          "healthcheckPath": "/health",
+          "preDeployCommand": "node /app/node_modules/.bin/medusa db:migrate"
+        }
+      ],
+      "check": {
+        "port": 9000,
+        "postgres": "postgres:17",
+        "redis": "redis:7-alpine",
+        "env": {
+          "DATABASE_URL": "postgres://f0rge:f0rge@postgres:5432/f0rge?sslmode=disable",
+          "REDIS_URL": "redis://redis:6379",
+          "JWT_SECRET": "image-check-jwt-secret-32-chars-minimum",
+          "COOKIE_SECRET": "image-check-cookie-secret-32-chars-min",
+          "STOREFRONT_BFF_SECRET": "image-check-bff-secret-32-chars-minimum"
+        }
+      }
+    }
+  }
 }
