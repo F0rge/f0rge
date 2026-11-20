@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypeVar, get_type_hints
 
-from fastapi import APIRouter
 from fastapi.params import Depends
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 from pydantic_core import to_jsonable_python
@@ -91,8 +90,8 @@ def mcp_action(
 
     The endpoint is returned unchanged. MCP runs `handler`, not the endpoint, so the change
     stays in the transaction that saves its receipt and audit entry. Without `arguments`, they
-    are derived from the endpoint's non-dependency parameters. The mark is inert until the
-    endpoint's router is passed to `endpoint_actions` for the catalogue.
+    are derived from the endpoint's non-dependency parameters. `register_route_actions`
+    collects the mark from whichever app route serves the endpoint.
     """
 
     def mark(endpoint: Endpoint) -> Endpoint:
@@ -109,15 +108,6 @@ def mcp_action(
         return endpoint
 
     return mark
-
-
-def endpoint_actions(router: APIRouter) -> tuple[Action, ...]:
-    """Collect the marks on the router that declares the routes. A parent that only includes
-    that router yields nothing."""
-    marks = (
-        getattr(getattr(route, "endpoint", None), "mcp_action", None) for route in router.routes
-    )
-    return tuple(action for action in marks if action is not None)
 
 
 class PageArguments(Arguments):

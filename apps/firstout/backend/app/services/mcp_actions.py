@@ -9,12 +9,11 @@ from collections.abc import Iterable
 from fastapi import FastAPI
 
 from app.config import settings
-from app.routers.transfers import transfers_router
-from app.services.mcp_action_types import Action, Arguments, endpoint_actions
+from app.services.mcp_action_types import Action, Arguments
 from app.services.mcp_drafts import DRAFT_ACTIONS
 from app.services.mcp_domains import READ_ACTIONS
 from app.services.mcp_operations import lookup_operation
-from app.services.mcp_routes import route_actions
+from app.services.mcp_routes import marked_actions, route_actions
 from app.services.mcp_transfers import TRANSFER_ACTIONS
 
 
@@ -40,7 +39,6 @@ ACTIONS = catalogue(
         *READ_ACTIONS,
         *DRAFT_ACTIONS,
         *TRANSFER_ACTIONS,
-        *endpoint_actions(transfers_router),
         Action(
             name="operations_lookup",
             tab="Admin / MCP tokens",
@@ -54,10 +52,15 @@ ACTIONS = catalogue(
 
 
 def register_route_actions(app: FastAPI) -> None:
-    """Add one action per offered API route. Call once, after every router is included."""
-    hand_written = frozenset(name for name, action in ACTIONS.items() if action.route is None)
-    # A second call repeats every route name, which the duplicate guard refuses.
-    ACTIONS.update(catalogue((*ACTIONS.values(), *route_actions(app, hand_written))))
+    """Add the app's `mcp_action` marks, then one action per offered API route.
+
+    Call once, after every router is included; until then the registry is incomplete.
+    Marked names are reserved first so route names do not depend on registration order.
+    """
+    # A second call repeats every mark and route name, which the duplicate guard refuses.
+    actions = catalogue((*ACTIONS.values(), *marked_actions(app)))
+    hand_written = frozenset(name for name, action in actions.items() if action.route is None)
+    ACTIONS.update(catalogue((*actions.values(), *route_actions(app, hand_written))))
 
 
 def _permitted(granted: set[str]) -> list[Action]:

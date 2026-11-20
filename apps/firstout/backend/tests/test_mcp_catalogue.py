@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import uuid
 from pathlib import Path
@@ -488,3 +489,16 @@ def test_receipt_keeps_top_level_identifiers_only():
         "invoice_number": "INV-1",
         "http_status": 201,
     }
+
+
+def test_services_never_import_routers():
+    """A service depends on nothing above it; marks reach the catalogue through the app."""
+    imported = []
+    for module in (Path(__file__).parents[1] / "app" / "services").rglob("*.py"):
+        for node in ast.walk(ast.parse(module.read_text())):
+            if isinstance(node, ast.Import):
+                imported += [(module.name, alias.name) for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                # `from app import routers` and `from app.routers.x import y` both name app.routers.
+                imported += [(module.name, f"{node.module}.{alias.name}") for alias in node.names]
+    assert [item for item in imported if f"{item[1]}.".startswith("app.routers.")] == []

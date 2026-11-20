@@ -114,6 +114,12 @@ def api_routes(app: FastAPI) -> Iterator[RouteContext]:
     )
 
 
+def marked_actions(app: FastAPI) -> tuple[Action, ...]:
+    """The `mcp_action` marks on the app's API routes, from any included router."""
+    marks = (getattr(route.endpoint, "mcp_action", None) for route in api_routes(app))
+    return tuple(action for action in marks if action is not None)
+
+
 def _tree(dependant: Dependant) -> Iterator[Dependant]:
     for child in dependant.dependencies:
         yield child
