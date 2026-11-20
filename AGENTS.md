@@ -1,6 +1,6 @@
 # F0rge — Agent Instructions
 
-This is the repository entry point for Codex. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
+This is the repository entry point for Codex and Claude Code. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
 
 Personal Nx monorepo for Marrow, Firstout, DasKasas storefront and tag printer, Buycycle, Environment Monitor, and Airflow.
 
@@ -159,7 +159,7 @@ Read the applicable Markdown rules explicitly before planning or changing files.
 | [qa-gate](docs/agents/rules/qa-gate.md) | Before preparing any PR or verifying a feature; tests, `libs/**`, workflows |
 | [data-pipelines](docs/agents/rules/data-pipelines.md) | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
-Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/dk/tag-printer/AGENTS.md` and `libs/ui/AGENTS.md`). A generated Codex profile does not load scoped rules automatically; read the files selected by the table above.
+Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/dk/tag-printer/AGENTS.md` and `libs/ui/AGENTS.md`). A generated Codex or Claude Code profile does not load scoped rules automatically; read the files selected by the table above.
 
 ## Sub-agents
 

@@ -55,8 +55,8 @@ test('first matching owner never suppresses later or same-role independent revie
 
 test('generation is deterministic, self-contained, and inherits native model/tools/permissions', (t) => {
   const root = fixture(t);
-  assert.equal(generate(manifest, root), 8);
-  assert.deepEqual(readdirSync(root).sort(), ['.codex', 'docs']);
+  assert.equal(generate(manifest, root), 16);
+  assert.deepEqual(readdirSync(root).sort(), ['.claude', '.codex', 'docs']);
   const first = adapterContents(manifest, root);
   generate(manifest, root);
   assert.deepEqual(adapterContents(manifest, root), first);
@@ -66,7 +66,10 @@ test('generation is deterministic, self-contained, and inherits native model/too
       if (!path.includes(role.id)) continue;
       const protocol = readFileSync(join(root, manifest.protocol), 'utf8').trim();
       const profile = readFileSync(join(root, role.profile), 'utf8').trim();
-      const decoded = body.slice(body.indexOf('developer_instructions = """\n') + 'developer_instructions = """\n'.length, -4).replaceAll('\\"', '"').replaceAll('\\\\', '\\');
+      const decoded = path.endsWith('.toml')
+        ? body.slice(body.indexOf('developer_instructions = """\n') + 'developer_instructions = """\n'.length, -4).replaceAll('\\"', '"').replaceAll('\\\\', '\\')
+        : body.slice(body.indexOf('\n---\n') + 5);
+      if (path.endsWith('.md')) assert.ok(body.startsWith(`---\nname: ${role.id}\ndescription: ${JSON.stringify(role.description)}\n---\n`));
       assert.ok(decoded.includes(protocol));
       assert.ok(decoded.includes(profile));
       assert.ok(!/^(?:model|tools|permission_mode|sandbox_mode)\s*[:=]/mu.test(body));

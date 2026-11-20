@@ -2,7 +2,8 @@
   "schemaVersion": 1,
   "protocol": "docs/agents/protocol.md",
   "adapters": [
-    "codex"
+    "codex",
+    "claude"
   ],
   "roles": [
     {
@@ -159,7 +160,9 @@
         "docs/adr/README.md",
         "docs/agents/**",
         ".codex/agents/**",
+        ".claude/agents/**",
         ".agents/skills/**",
+        ".claude/skills/**",
         "scripts/agents/**",
         ".vscode/settings.json",
         "**/CONTEXT.md",
@@ -495,6 +498,7 @@
         "scripts/agents/**",
         "docs/agents/**",
         ".codex/agents/**",
+        ".claude/agents/**",
         "**/AGENTS.md",
         "docs/adr/governance.md",
         "docs/adr/security.md",
@@ -612,7 +616,8 @@
         "docs/agents/**",
         "scripts/agents/**",
         "**/AGENTS.md",
-        ".codex/agents/**"
+        ".codex/agents/**",
+        ".claude/agents/**"
       ],
       "reviewers": [
         "f0rge-delivery",
