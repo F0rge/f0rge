@@ -30,6 +30,12 @@ test('ordered primary routing and independently accumulated reviewers', async (t
   });
 });
 
+test('the upstream pr skill keeps its F0rge edit deferring to the PR process', () => {
+  // `npx skills update` silently restores upstream's own template; this fails until the edit is reapplied.
+  const skill = readFileSync(join(ROOT, '.agents/skills/pr/SKILL.md'), 'utf8');
+  assert.ok(skill.includes('docs/agents/pr-process.md') && skill.includes('.github/PULL_REQUEST_TEMPLATE.md'));
+});
+
 test('every current tracked or non-ignored repository path has an explicit classification', () => {
   const paths = repositoryFiles();
   assert.ok(paths.length > 1000);

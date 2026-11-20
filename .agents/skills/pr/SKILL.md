@@ -10,17 +10,21 @@ metadata:
 ---
 
 <!-- F0rge-local edit (not upstream): the template below defers to docs/agents/pr-process.md.
-     `npx skills update` overwrites this file; reapply the edit afterwards. -->
+     `npx skills update` overwrites this file; reapply the edit afterwards (agents:test fails until you do). -->
 
-In F0rge, the PR body structure is [`docs/agents/pr-process.md`](../../../docs/agents/pr-process.md)
-(required by ADR P-003). Read it before writing. It requires, in order:
+In F0rge, the PR body follows [`docs/agents/pr-process.md`](../../../docs/agents/pr-process.md)
+(required by ADR P-003). Read it, then start from
+[`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.md), which already
+holds the five sections and every ADR row; do not rebuild the ADR table by hand.
 
-1. **What changed**
-2. **Why it changed**
-3. **Solution design**: use the Summary guidance below to pick the diagram
-4. **ADR assessment**: the complete table, one row per ID in `docs/adr/README.md`
-5. **Checks and limitations**: use the Evidence guidance below, then end with **Merge Danger**
-   (door and blast radius, as described below)
+How the guidance below fits that structure:
+
+- **Solution design** must include a Mermaid diagram. The other Summary views below are
+  optional extras next to it.
+- **Checks and limitations** reports the checks actually run and their results, independent
+  review and untested behavior, as pr-process.md requires. The Evidence guidance below helps
+  show before/after; it does not replace those items. End the section with a bold
+  **Merge Danger** paragraph (door and blast radius), not a separate heading.
 
 `docs/agents/pr-process.md` wins wherever it differs from the guidance below.
 
