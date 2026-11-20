@@ -7,7 +7,7 @@ import uuid
 from decimal import Decimal
 
 import pytest
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, FastAPI
 from pydantic import ValidationError as ArgumentError
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
@@ -23,8 +23,9 @@ from app.permissions import STOCK_TRANSFER
 from app.schemas.stocktake import StocktakeCreate
 from app.schemas.transfer import TransferCreate, TransferReceive
 from app.services.locations import LocationSeedService
-from app.services.mcp_action_types import Action, endpoint_actions, mcp_action
+from app.services.mcp_action_types import Action, mcp_action
 from app.services.mcp_actions import ACTIONS, catalogue
+from app.services.mcp_routes import marked_actions
 from app.services.mcp_transfers import (
     TRANSFER_ACTIONS,
     DispatchArguments,
@@ -314,7 +315,12 @@ def test_catalogue_fails_closed():
     router = APIRouter()
     assert router.post("/{transfer_id}")(mark(by_id)) is by_id
     router.get("/unmarked")(with_body)
-    (marked,) = endpoint_actions(router)
+    fixture = FastAPI()
+    fixture.include_router(APIRouter(prefix="/outer"))
+    fixture.include_router(router, prefix="/transfers")
+    (marked,) = marked_actions(fixture)
     assert isinstance(marked, Action) and set(marked.arguments.model_fields) == {"transfer_id"}
+    # The same endpoint served on a second route repeats its mark, which the catalogue refuses.
+    fixture.include_router(router, prefix="/again")
     with pytest.raises(ValueError, match="Duplicate MCP action name: fixture_action"):
-        catalogue((marked, marked))
+        catalogue(marked_actions(fixture))

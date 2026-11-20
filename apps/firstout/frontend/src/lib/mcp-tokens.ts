@@ -21,7 +21,7 @@ export type McpTokenActivity = {
   operation_id: string | null;
   source: "firstout" | "mcp";
   token_name: string;
-  result: "success" | "denied" | "failed";
+  result: "success" | "denied" | "failed" | "started" | "unknown";
   occurred_at: string;
 };
 

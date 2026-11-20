@@ -108,6 +108,18 @@ class AuditHubService:
                     & McpOperation.confirmed_by.is_(None),
                     literal("write completed"),
                 ),
+                (
+                    (event.action == "write_requested") & (event.result == "started"),
+                    literal("write started"),
+                ),
+                (
+                    (event.action == "write_requested") & (event.result == "failed"),
+                    literal("write failed"),
+                ),
+                (
+                    (event.action == "write_requested") & (event.result == "unknown"),
+                    literal("write not confirmed"),
+                ),
                 else_=func.replace(event.action, "_", " "),
             )
             activity = (

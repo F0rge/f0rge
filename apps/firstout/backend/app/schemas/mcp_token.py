@@ -56,7 +56,9 @@ class McpTokenActivityResponse(BaseModel):
     operation_id: Optional[uuid.UUID]
     source: Literal["firstout", "mcp"]
     token_name: str
-    result: Literal["success", "denied", "failed"]
+    # A route write records "started" before it runs, then exactly one outcome. "unknown"
+    # means the route gave no usable answer, so the change may or may not have been made.
+    result: Literal["success", "denied", "failed", "started", "unknown"]
     occurred_at: datetime
 
 

@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypeVar, get_type_hints
 
-from fastapi import APIRouter
 from fastapi.params import Depends
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 from pydantic_core import to_jsonable_python
@@ -17,6 +16,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.mcp_token import McpToken
 from app.schemas.page import PageParams
+
+
+@dataclass(frozen=True)
+class RouteCall:
+    """How MCP calls one API route in-process. Built only from the route's own definition."""
+
+    app: Any
+    method: str
+    path: str
+    path_params: tuple[str, ...]
+    # Argument name and the name the API expects on the query string.
+    query_params: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -30,10 +41,14 @@ class Action:
     handler: Callable[[AsyncSession, McpToken, Any], Awaitable[dict]]
     effect: Literal["read", "write"] = "read"
     related_tabs: tuple[str, ...] = ()
+    # Set for an action generated from an API route. MCP then runs that route, not `handler`.
+    route: RouteCall | None = None
 
     def __post_init__(self) -> None:
-        # Fail closed at import rather than expose a loosely declared action.
-        if self.effect == "write" and not self.permissions:
+        # Fail closed at import rather than expose a loosely declared action. A route action
+        # takes its permissions from the route's own dependencies and the route enforces them
+        # again when it runs, so an empty tuple there means the API allows any staff member.
+        if self.effect == "write" and not self.permissions and self.route is None:
             raise ValueError(f"MCP write {self.name} must name a permission")
         if self.arguments.model_config.get("extra") != "forbid":
             raise ValueError(f"MCP action {self.name} arguments must forbid extra fields")
@@ -75,8 +90,8 @@ def mcp_action(
 
     The endpoint is returned unchanged. MCP runs `handler`, not the endpoint, so the change
     stays in the transaction that saves its receipt and audit entry. Without `arguments`, they
-    are derived from the endpoint's non-dependency parameters. The mark is inert until the
-    endpoint's router is passed to `endpoint_actions` for the catalogue.
+    are derived from the endpoint's non-dependency parameters. `register_route_actions`
+    collects the mark from whichever app route serves the endpoint.
     """
 
     def mark(endpoint: Endpoint) -> Endpoint:
@@ -93,15 +108,6 @@ def mcp_action(
         return endpoint
 
     return mark
-
-
-def endpoint_actions(router: APIRouter) -> tuple[Action, ...]:
-    """Collect the marks on the router that declares the routes. A parent that only includes
-    that router yields nothing."""
-    marks = (
-        getattr(getattr(route, "endpoint", None), "mcp_action", None) for route in router.routes
-    )
-    return tuple(action for action in marks if action is not None)
 
 
 class PageArguments(Arguments):

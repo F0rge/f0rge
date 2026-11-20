@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Awaitable, Callable
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -302,148 +303,41 @@ async def _require_keys(
     return user_id
 
 
-async def require_till(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (TILL_SELL,))
+def _require(*keys: str) -> Callable[..., Awaitable[uuid.UUID]]:
+    """A dependency granting access to holders of any of ``keys``.
+
+    ``permissions`` is the same tuple the dependency enforces, so readers of the
+    attribute (the MCP action catalogue) cannot drift from the HTTP check.
+    """
+
+    async def dependency(
+        user_id: uuid.UUID = Depends(get_current_user_id),
+        db: AsyncSession = Depends(get_db),
+    ) -> uuid.UUID:
+        return await _require_keys(user_id, db, keys)
+
+    dependency.permissions = keys  # type: ignore[attr-defined]
+    return dependency
 
 
-async def require_laybys(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_LAYBYS,))
-
-
-async def require_quotes(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_QUOTES,))
-
-
-async def require_orders(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_ORDERS,))
-
-
-async def require_storefront_refunds(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_REFUNDS,))
-
-
-async def require_storefront_handoff_read(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_ORDERS, SALES_REFUNDS, SALES_DELIVERIES))
-
-
-async def require_owner(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (USERS_MANAGE,))
-
-
-async def require_settings(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SETTINGS_MUTATE,))
-
-
-async def require_location_mutate(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (STOCK_RECEIVE,))
-
-
-async def require_catalogue_mutate(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (CATALOGUE_MUTATE,))
-
-
-async def require_po_line_edit(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (CATALOGUE_MUTATE, USERS_MANAGE))
-
-
-async def require_returns_mutate(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_RETURNS,))
-
-
-async def require_deliveries_mutate(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_DELIVERIES,))
-
-
-async def require_receive(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (STOCK_RECEIVE,))
-
-
-async def require_transfer(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (STOCK_TRANSFER,))
-
-
-async def require_transfer_receive(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL))
-
-
-async def require_books_mutate(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (BOOKS_MUTATE,))
-
-
-async def require_customers_mutate(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_CUSTOMERS,))
-
-
-async def require_customers_patch(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_CUSTOMERS, USERS_MANAGE, PO_RAISE))
-
-
-async def require_cost_audit_view(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (STOCK_COST_VIEW,))
-
-
-async def require_picks_mutate(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES))
+require_till = _require(TILL_SELL)
+require_laybys = _require(SALES_LAYBYS)
+require_quotes = _require(SALES_QUOTES)
+require_orders = _require(SALES_ORDERS)
+require_storefront_refunds = _require(SALES_REFUNDS)
+require_storefront_handoff_read = _require(SALES_ORDERS, SALES_REFUNDS, SALES_DELIVERIES)
+require_owner = _require(USERS_MANAGE)
+require_settings = _require(SETTINGS_MUTATE)
+require_location_mutate = _require(STOCK_RECEIVE)
+require_catalogue_mutate = _require(CATALOGUE_MUTATE)
+require_po_line_edit = _require(CATALOGUE_MUTATE, USERS_MANAGE)
+require_returns_mutate = _require(SALES_RETURNS)
+require_deliveries_mutate = _require(SALES_DELIVERIES)
+require_receive = _require(STOCK_RECEIVE)
+require_transfer = _require(STOCK_TRANSFER)
+require_transfer_receive = _require(STOCK_TRANSFER, TILL_SELL)
+require_books_mutate = _require(BOOKS_MUTATE)
+require_customers_mutate = _require(SALES_CUSTOMERS)
+require_customers_patch = _require(SALES_CUSTOMERS, USERS_MANAGE, PO_RAISE)
+require_cost_audit_view = _require(STOCK_COST_VIEW)
+require_picks_mutate = _require(STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES)
