@@ -3,7 +3,8 @@
 The root production audit gate remains `npm audit --omit=dev --audit-level=high`.
 The October 2026 dependency refresh fixes four upstream advisories without
 changing Medusa 2.21.1 or application behavior. Next stayed at 16.3.8 in that
-refresh and moves to 16.4.3 in the later audit repair below.
+refresh, moved to 16.4.3 in the 24 Oct audit repair and to 16.4.6 on 20 Nov
+(both below).
 
 | Package | Previous version | Fixed official release | Advisory |
 | --- | --- | --- | --- |
@@ -66,7 +67,8 @@ accepts 7.3.7. Vite's dependency set is unchanged between 7.3.6 and 7.3.7.
 `npm audit --omit=dev --audit-level=high` failed on `next` 16.3.8 (critical),
 `zod` &lt;4.6.6 (high, including Medusa 2.21.1's exact 4.2.0 pins), `body-parser`
 &lt;1.20.9 (high), and `multer` &lt;2.5.0 (high). Medusa stays on 2.21.1. Direct
-`next` dependencies and the root override are 16.4.3, the latest stable 16.x.
+`next` dependencies and the root override were 16.4.3, then the latest stable 16.x
+(now 16.4.6; see the 20 Nov 2026 section).
 Commerce's direct `zod` dependency is 4.6.7. The other fixes are root overrides:
 
 | Override | Version | Why this shape |
@@ -79,3 +81,18 @@ Commerce's direct `zod` dependency is 4.6.7. The other fixes are root overrides:
 | `bullmq` → `uuid` | 11.1.1 | BullMQ 5.13.0 (pinned by Medusa) only calls `uuid.v4()`. Uuid 11 still ships that function for `require()`. The root production dependency hoists `uuid@11.1.1` so `@medusajs/core-flows` can `require("uuid")` in the commerce image. `@nxlv/python` keeps nested uuid 9. |
 | `@rushstack/node-core-library` → `ajv` | 8.20.0 | The production copy under MikroORM's `umzug` was ajv 8.13.0. Ajv 6 stays for ESLint. |
 | `postcss-selector-parser@^7` | 7.1.7 | Patches the 7.1.x copy (shadcn). The 6.x copies under Tailwind 3 / `postcss-nested` stay on 6.1.5: Tailwind 3 requires `postcss-selector-parser/dist/util/unesc`, which a major bump to 7.x would drop. GHSA-rj75-hqrm-r3gf therefore remains moderate and does not fail `--audit-level=high`. |
+
+## 20 Nov 2026 Next.js 16.4.6
+
+`next` 16.4.3 was in range of seven moderate advisories, all fixed in 16.4.5:
+[GHSA-mfr8-8qww-v76h](https://github.com/advisories/GHSA-mfr8-8qww-v76h),
+[GHSA-vc7v-qv4w-wrv8](https://github.com/advisories/GHSA-vc7v-qv4w-wrv8),
+[GHSA-7qx7-33qx-rqx2](https://github.com/advisories/GHSA-7qx7-33qx-rqx2),
+[GHSA-f3mh-rxg3-f5g2](https://github.com/advisories/GHSA-f3mh-rxg3-f5g2),
+[GHSA-pc58-hwjq-p385](https://github.com/advisories/GHSA-pc58-hwjq-p385),
+[GHSA-rhh4-g77r-r9qj](https://github.com/advisories/GHSA-rhh4-g77r-r9qj) and
+[GHSA-vvgp-ww4w-46vf](https://github.com/advisories/GHSA-vvgp-ww4w-46vf).
+They are below the audit gate's `high` threshold, but Next's own `next build`
+check stopped on them. The root override and the four app pins are now 16.4.6
+(latest stable, no advisories); the lockfile changed only `next` and `@next/*`.
+16.4.6 compresses route handler responses automatically.
