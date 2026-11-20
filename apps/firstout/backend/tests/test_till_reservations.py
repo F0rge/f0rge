@@ -26,7 +26,7 @@ from tests.test_purchase_orders import _create_till, _location_id_by_name, _relo
 from tests.test_sku_archive_commit_races import isolated_requests
 from tests.test_sku_bom import _sku
 from tests.test_till import _inventory_on_hand
-from tests.test_till_basket import BASKET, HELD, SALES, _fill, _get, _line, _put
+from tests.test_till_basket import BASKET, SALES, _fill, _get, _line, _put
 
 RESERVATIONS = "/api/v1/till/reservations"
 TILL_EMAIL = "till-po@example.com"
@@ -176,50 +176,6 @@ async def test_sale_releases_reservations_and_deducts_as_before(
     assert await _inventory_on_hand(owner_client, sofa["id"], showroom) == 3
     emptied = await _get(owner_client, showroom)
     assert emptied["lines"] == [] and emptied["expires_at"] is None
-
-
-async def test_hold_releases_and_resume_reserves_again_or_fails_whole(
-    async_client: AsyncClient, owner_client: AsyncClient, async_db: AsyncSession
-):
-    showroom = await _location_id_by_name(owner_client, "Bedfordview")
-    sofa = await _stocked(owner_client, "RES-HOLD", showroom, 2)
-    basket = await _fill(owner_client, await _get(owner_client, showroom), [_line(sofa, 2)])
-    held = await owner_client.post(
-        HELD,
-        json={
-            "id": str(uuid.uuid4()),
-            "location_id": showroom,
-            "lines": [_line(sofa, 2)],
-            "basket_id": basket["id"],
-        },
-    )
-    assert held.status_code == 201, held.text
-    assert await _reservations(async_db, basket["id"]) == {}
-
-    # Another till takes the units while the sale is held; resuming is refused whole.
-    await _second_user(async_client, async_db)
-    await _as(async_client, TILL_EMAIL)
-    theirs = await _get(async_client, showroom)
-    taken = await _fill(async_client, theirs, [_line(sofa, 2)])
-    await _relogin_owner(async_client)
-    resume = {
-        "operation_id": str(uuid.uuid4()),
-        "location_id": showroom,
-        "version": held.json()["version"],
-        "basket_id": basket["id"],
-    }
-    refused = await async_client.post(f"{HELD}/{held.json()['id']}/resume", json=resume)
-    assert refused.status_code == 409, refused.text
-    assert refused.json()["detail"]["code"] == "stock_reserved"
-    assert len((await async_client.get(HELD, params={"location_id": showroom})).json()) == 1
-
-    await _as(async_client, TILL_EMAIL)
-    await _fill(async_client, taken, [])
-    await _relogin_owner(async_client)
-    resumed = await async_client.post(f"{HELD}/{held.json()['id']}/resume", json=resume)
-    assert resumed.status_code == 200, resumed.text
-    assert await _reservations(async_db, basket["id"]) == {sofa["id"]: 2}
-    assert resumed.json()["basket"]["expires_at"] is not None
 
 
 async def test_expired_basket_is_emptied_on_read_and_frees_stock(

@@ -41,18 +41,44 @@ class HeldSaleCRUD(BaseCRUD):
             HeldSale.team_id == tenant_id_ctx.get(), HeldSale.location_id == location_id
         )
 
-    async def list(self, location_id: uuid.UUID) -> list[HeldSale]:
-        query = self._scoped_sales(location_id).order_by(
-            HeldSale.held_at.desc(), HeldSale.id.desc()
+    async def list(self, location_id: uuid.UUID, now: datetime.datetime) -> list[HeldSale]:
+        """Live held sales, soonest to expire first."""
+        query = (
+            self._scoped_sales(location_id)
+            .where(HeldSale.expires_at > now)
+            .order_by(HeldSale.expires_at, HeldSale.id)
         )
         return list(await self.db.scalars(query))
 
-    async def get(self, location_id: uuid.UUID, held_id: uuid.UUID) -> Optional[HeldSale]:
-        return await self.db.scalar(self._scoped_sales(location_id).where(HeldSale.id == held_id))
+    async def get(
+        self,
+        location_id: uuid.UUID,
+        held_id: uuid.UUID,
+        live_at: Optional[datetime.datetime] = None,
+    ) -> Optional[HeldSale]:
+        """The row, expired or not, unless ``live_at`` hides the expired."""
+        query = self._scoped_sales(location_id).where(HeldSale.id == held_id)
+        if live_at is not None:
+            query = query.where(HeldSale.expires_at > live_at)
+        return await self.db.scalar(query)
 
-    async def ids(self, location_id: uuid.UUID) -> set[uuid.UUID]:
-        query = self._scoped_sales(location_id).with_only_columns(HeldSale.id)
+    async def ids(self, location_id: uuid.UUID, now: datetime.datetime) -> set[uuid.UUID]:
+        query = (
+            self._scoped_sales(location_id)
+            .where(HeldSale.expires_at > now)
+            .with_only_columns(HeldSale.id)
+        )
         return set(await self.db.scalars(query))
+
+    async def delete_expired(self, now: datetime.datetime) -> list[uuid.UUID]:
+        """Delete the tenant's expired held sales, returning their ids."""
+        result = await self.db.scalars(
+            delete(HeldSale)
+            .where(HeldSale.team_id == tenant_id_ctx.get(), HeldSale.expires_at <= now)
+            .returning(HeldSale.id)
+            .execution_options(synchronize_session=False)
+        )
+        return list(result)
 
     async def delete_sales(self, location_id: uuid.UUID, ids: set[uuid.UUID]) -> None:
         await self.db.execute(

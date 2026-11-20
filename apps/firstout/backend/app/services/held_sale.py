@@ -9,13 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.held_sale import HeldSaleCRUD
 from app.crud.user import UserCRUD
-from app.exceptions import HeldResumeTargetChangedError
+from app.exceptions import HeldResumeTargetChangedError, HeldSaleExpiredError
 from app.models.customer import Customer
 from app.models.held_sale import HeldSale as HeldSaleRow
 from app.models.held_sale_operation import HeldSaleOperation
 from app.models.location import Location
 from app.models.pick import Pick, PickSourceType, PickStatus
 from app.models.sku import Sku
+from app.models.stock_reservation import HOLDER_BASKET, HOLDER_HELD_SALE
 from app.schemas.held_sale import (
     HeldSale,
     HeldSaleCreate,
@@ -30,12 +31,21 @@ from app.schemas.till import TillSaleLineCreate
 from app.services.party_archive import assert_customer_active
 from app.services.record_workspace_filters import payload_hash
 from app.services.sellability import assert_sku_sellable
+from app.services.stock_availability import StockAvailability
 from app.services.till_pricing import TillPricing
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 _RECEIPT_TTL = datetime.timedelta(days=30)
+# South Africa has no daylight saving, so a fixed offset is exact.
+_SAST = datetime.timezone(datetime.timedelta(hours=2))
+
+
+def clock(moment: datetime.datetime) -> str:
+    return moment.astimezone(_SAST).strftime("%H:%M")
+
+
 _PICK_COMMITMENT_STATUSES = (PickStatus.CONFIRMED, PickStatus.PICKING, PickStatus.STAGED)
 
 
@@ -43,10 +53,16 @@ class HeldSaleService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = HeldSaleCRUD(db)
+        self.availability = StockAvailability(db)
 
     async def list(self, location_id: uuid.UUID) -> list[HeldSale]:
         self._require_active(await self._showroom(location_id))
-        return [self._response(row) for row in await self.crud.list(location_id)]
+        now = datetime.datetime.now(datetime.timezone.utc)
+        return [self._response(row) for row in await self.crud.list(location_id, now)]
+
+    async def prune_expired(self, now: datetime.datetime) -> None:
+        """Lazy expiry: delete the tenant's expired held sales and free their stock."""
+        await self.availability.release(HOLDER_HELD_SALE, await self.crud.delete_expired(now))
 
     async def create(self, data: HeldSaleCreate, actor_id: uuid.UUID) -> HeldSale:
         try:
@@ -54,6 +70,7 @@ class HeldSaleService:
                 showroom = await self._showroom(data.location_id, lock=True)
                 now = datetime.datetime.now(datetime.timezone.utc)
                 await self.crud.prune_operations(showroom.id, now)
+                await self.prune_expired(now)
                 baskets = basket = None
                 # A retried hold must not wipe a basket the cashier refilled since.
                 if data.basket_id is not None and await self.crud.get(showroom.id, data.id) is None:
@@ -65,7 +82,10 @@ class HeldSaleService:
                     await self._prune_baskets(now)
                 row = await self._save(data, actor_id, showroom, now)
                 if baskets is not None and basket is not None:
-                    # Held sales reserve nothing yet: emptying releases the basket's stock.
+                    # The held sale takes over the basket's reservations, never freeing them.
+                    await self.availability.move(
+                        (HOLDER_BASKET, basket.id), (HOLDER_HELD_SALE, row.id), row.expires_at
+                    )
                     await baskets.set_contents(basket)
                 return self._response(row)
         except IntegrityError as exc:
@@ -76,7 +96,9 @@ class HeldSaleService:
     async def edit_note(self, held_id: uuid.UUID, data: HeldSaleNoteUpdate) -> HeldSale:
         async with unit_of_work(self.db):
             self._require_active(await self._showroom(data.location_id, lock=True))
-            row = await self.crud.get(data.location_id, held_id)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            await self.prune_expired(now)
+            row = await self.crud.get(data.location_id, held_id, now)
             if row is None:
                 raise NotFoundError("Held sale not found in this showroom")
             note = (data.note or "").strip() or None
@@ -120,6 +142,12 @@ class HeldSaleService:
                     raise HeldResumeTargetChangedError(
                         "This sale is no longer held in this showroom"
                     )
+                if row.expires_at <= now:
+                    message = f"This held sale expired at {clock(row.expires_at)}."
+                    async with unit_of_work(self.db):
+                        await self.prune_expired(now)
+                    raise HeldSaleExpiredError(message)
+                await self.prune_expired(now)
                 if row.version != data.version:
                     raise HeldResumeTargetChangedError(
                         "The held sale changed. Refresh the list before resuming."
@@ -155,10 +183,27 @@ class HeldSaleService:
                 await self.crud.flush()
                 current_id = None
                 if data.current is not None:
-                    current_id = (await self._save(data.current, actor_id, showroom, now)).id
+                    fresh = await self.crud.get(showroom.id, data.current.id) is None
+                    current = await self._save(data.current, actor_id, showroom, now)
+                    current_id = current.id
+                    if fresh and basket is not None:
+                        # The basket's sale is now held: its reservations follow it.
+                        await self.availability.move(
+                            (HOLDER_BASKET, basket.id),
+                            (HOLDER_HELD_SALE, current.id),
+                            current.expires_at,
+                        )
                 loaded = None
-                if baskets is not None and basket is not None:
-                    # Written through the reserve path: 409 stock_reserved aborts the resume.
+                if baskets is None or basket is None:
+                    await self.availability.release(HOLDER_HELD_SALE, [row.id])
+                else:
+                    # Reservations of the resumed sale move into the basket; one without
+                    # any (held before reservations existed) is reserved, and checked, below.
+                    await self.availability.move(
+                        (HOLDER_HELD_SALE, row.id),
+                        (HOLDER_BASKET, basket.id),
+                        now + await self.availability.hold_time(),
+                    )
                     await baskets.set_contents(
                         basket,
                         customer_id=row.customer_id,
@@ -194,12 +239,15 @@ class HeldSaleService:
         async with unit_of_work(self.db):
             showroom = await self._showroom(data.location_id, lock=True)
             self._require_active(showroom)
-            actual = await self.crud.ids(showroom.id)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            await self.prune_expired(now)
+            actual = await self.crud.ids(showroom.id, now)
             selected = set(data.ids)
             if (data.all and selected != actual) or not selected <= actual:
                 raise ConflictError("Held sales changed. Refresh the list before deleting.")
             if selected:
                 await self.crud.delete_sales(showroom.id, selected)
+                await self.availability.release(HOLDER_HELD_SALE, list(selected))
             return HeldSaleDeleteResult(deleted_count=len(selected))
 
     async def _save(
@@ -270,6 +318,7 @@ class HeldSaleService:
                 customer_name=customer.name if customer is not None else WALK_IN_CUSTOMER_NAME,
                 held_by_name=actor.display_name or actor.email,
                 held_at=now,
+                expires_at=now + await self.availability.hold_time(),
                 note=data.note,
                 estimated_total_inc_vat=total,
                 pick_id=data.pick_id,
@@ -411,6 +460,7 @@ class HeldSaleService:
             customer_name=row.customer_name,
             held_by_name=row.held_by_name,
             held_at=row.held_at,
+            expires_at=row.expires_at,
             version=row.version,
             note=row.note,
             estimated_total_inc_vat=row.estimated_total_inc_vat,

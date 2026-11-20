@@ -13,10 +13,13 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.stock_reservation import Holder, StockReservationCRUD
 from app.models.stock_reservation import StockReservation
+from app.models.team_settings import DEFAULT_TILL_HOLD_HOURS, TeamSettings
+from f0rge_db.organisation import tenant_id_ctx
 
 
 class StockUnavailable(Exception):
@@ -99,6 +102,33 @@ class StockAvailability:
             {"sku_id": sku_id, "reserved_by_others": qty, "blocking": blocking.get(sku_id)}
             for sku_id, qty in reserved.items()
         ]
+
+    async def hold_time(self) -> datetime.timedelta:
+        hours = await self.db.scalar(
+            select(TeamSettings.till_hold_hours).where(TeamSettings.team_id == tenant_id_ctx.get())
+        )
+        return datetime.timedelta(hours=hours or DEFAULT_TILL_HOLD_HOURS)
+
+    async def move(
+        self,
+        source: Holder,
+        target: Holder,
+        expires_at: Optional[datetime.datetime],
+    ) -> bool:
+        """Hand all of one holder's reservations to another without ever freeing them.
+
+        The target's own reservations are replaced. Returns False, changing nothing, when
+        the source holds none.
+        """
+        if not await self.crud.held_by(source):
+            return False
+        await self.crud.release(target[0], [target[1]])
+        await self.crud.move(source, target, expires_at)
+        return True
+
+    async def release(self, holder_kind: str, holder_ids: list[uuid.UUID]) -> None:
+        if holder_ids:
+            await self.crud.release(holder_kind, holder_ids)
 
     async def prune(self, now: datetime.datetime) -> None:
         await self.crud.delete_expired(now)

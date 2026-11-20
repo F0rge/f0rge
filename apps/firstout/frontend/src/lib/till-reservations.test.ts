@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError, type InventorySku, type TillBlockingReservation } from "./api";
 import {
-  basketConflict, conflictNotice, expiryNotice, reservationReason, tillAvailability, tillClock,
+  basketConflict, conflictNotice, expiryNotice, heldExpiryNotice, heldSalesExplainer, heldTimeLeft,
+  reservationReason, tillAvailability, tillClock,
 } from "./till-reservations";
 
 // 14:32 in Johannesburg (UTC+2).
@@ -95,5 +96,51 @@ describe("basket conflicts", () => {
     expect(conflictNotice({ code: "basket_expired", basket }, name).subtitle)
       .toBe("Your sale expired at 14:32. Its items were released. Add them again.");
     expect(conflictNotice({ code: "basket_version_conflict", basket }, name).title).toBe("Basket updated elsewhere");
+  });
+});
+
+describe("held sale expiry", () => {
+  const expires = Date.parse(FREES);
+  const before = (minutes: number) => expires - minutes * 60_000;
+
+  it("labels the time left and the showroom expiry time", () => {
+    expect(heldTimeLeft(FREES, before(130)).label).toBe("2 h 10 min · 14:32");
+    expect(heldTimeLeft(FREES, before(120)).label).toBe("2 h · 14:32");
+    expect(heldTimeLeft(FREES, before(45)).label).toBe("45 min · 14:32");
+    // Partial minutes round up, so the label never says 0 min before expiry.
+    expect(heldTimeLeft(FREES, expires - 1_000)).toMatchObject({ label: "1 min · 14:32", minutes: 1 });
+  });
+
+  it("marks the last 15 minutes as urgent and the passed clock as expired", () => {
+    expect(heldTimeLeft(FREES, before(15) - 1).urgent).toBe(false);
+    expect(heldTimeLeft(FREES, before(15))).toMatchObject({ urgent: true, expired: false, duration: "15 min" });
+    expect(heldTimeLeft(FREES, expires)).toEqual({
+      expired: true, urgent: false, minutes: 0, duration: "", label: "Expired",
+    });
+  });
+
+  it("warns on the selected sale only in its last 15 minutes", () => {
+    expect(heldExpiryNotice(FREES, before(16))).toBeNull();
+    expect(heldExpiryNotice(FREES, before(12))).toEqual({
+      kind: "warning",
+      title: "Expires at 14:32, in 12 minutes.",
+      subtitle: "Resume it to keep the stock reserved. Otherwise it is deleted and the stock released.",
+    });
+    expect(heldExpiryNotice(FREES, before(0.5))?.title).toBe("Expires at 14:32, in 1 minute.");
+    expect(heldExpiryNotice(FREES, expires)?.title).toBe("Expired at 14:32.");
+  });
+
+  it("explains the hold time, with or without the setting", () => {
+    expect(heldSalesExplainer(3)).toBe(
+      "Held sales keep their stock reserved for 3 hours from when they were held. " +
+      "After that they are deleted and the stock released. Resuming a sale starts a new 3 hours.",
+    );
+    expect(heldSalesExplainer(1)).toContain("for 1 hour from");
+    expect(heldSalesExplainer()).not.toMatch(/\d/);
+  });
+
+  it("shows the server's message when a resumed sale had expired", () => {
+    expect(conflictNotice({ code: "held_sale_expired", message: "This held sale expired at 14:32." }, () => undefined))
+      .toEqual({ kind: "warning", title: "Held sale expired", subtitle: "This held sale expired at 14:32." });
   });
 });

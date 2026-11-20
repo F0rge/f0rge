@@ -164,6 +164,7 @@ class HeldSale(BaseModel):
     customer_name: str
     held_by_name: str
     held_at: datetime.datetime
+    expires_at: datetime.datetime
     version: int
     note: Optional[str]
     estimated_total_inc_vat: Optional[Decimal]

@@ -1390,6 +1390,8 @@ export type HeldSale = {
   customer_name: string;
   held_by_name: string;
   held_at: string;
+  /** ISO UTC; the stock stays reserved until then, then the sale is deleted. */
+  expires_at: string;
   version: number;
   note: string | null;
   estimated_total_inc_vat: string | null;

@@ -70,6 +70,57 @@ export function expiryNotice(expiresAt: string, now: number, holdHours?: number)
   return { kind: "info", title: `This sale expires at ${time}${after}.`, subtitle: RELEASE };
 }
 
+const URGENT_MS = 15 * 60_000;
+
+export type HeldTimeLeft = {
+  expired: boolean;
+  /** The last 15 minutes: marked with a warning tag. */
+  urgent: boolean;
+  /** Whole minutes left, rounded up; 0 once expired. */
+  minutes: number;
+  /** "2 h 10 min", "45 min"; empty once expired. */
+  duration: string;
+  /** Table cell text: "2 h 10 min · 14:28", or "Expired". */
+  label: string;
+};
+
+/** How long a held sale keeps its stock reserved. */
+export function heldTimeLeft(expiresAt: string, now: number): HeldTimeLeft {
+  const left = Date.parse(expiresAt) - now;
+  if (left <= 0) return { expired: true, urgent: false, minutes: 0, duration: "", label: "Expired" };
+  const minutes = Math.ceil(left / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const duration = hours ? `${hours} h${rest ? ` ${rest} min` : ""}` : `${rest} min`;
+  return { expired: false, urgent: left <= URGENT_MS, minutes, duration, label: `${duration} · ${tillClock(expiresAt)}` };
+}
+
+/** The one line above the Held sales table. */
+export function heldSalesExplainer(holdHours?: number): string {
+  if (!holdHours) {
+    return "Held sales keep their stock reserved for the hold time from when they were held. " +
+      "After that they are deleted and the stock released. Resuming a sale starts the hold time again.";
+  }
+  const span = `${holdHours} ${holdHours === 1 ? "hour" : "hours"}`;
+  return `Held sales keep their stock reserved for ${span} from when they were held. ` +
+    `After that they are deleted and the stock released. Resuming a sale starts a new ${span}.`;
+}
+
+/** The selected held sale's warning; null while it is not yet in its last 15 minutes. */
+export function heldExpiryNotice(expiresAt: string, now: number): TillNotice | null {
+  const left = heldTimeLeft(expiresAt, now);
+  const time = tillClock(expiresAt);
+  if (left.expired) {
+    return { kind: "warning", title: `Expired at ${time}.`, subtitle: "It is deleted and the stock released." };
+  }
+  if (!left.urgent) return null;
+  return {
+    kind: "warning",
+    title: `Expires at ${time}, in ${left.minutes} ${left.minutes === 1 ? "minute" : "minutes"}.`,
+    subtitle: "Resume it to keep the stock reserved. Otherwise it is deleted and the stock released.",
+  };
+}
+
 export function expiredMessage(expiredAt: string): string {
   return `Your sale expired at ${tillClock(expiredAt)}. Its items were released. Add them again.`;
 }
@@ -109,6 +160,13 @@ export function conflictNotice(conflict: BasketConflict, skuName: (id: string) =
       kind: "warning",
       title: "Sale expired",
       subtitle: expiredAt ? expiredMessage(expiredAt) : "Your sale expired. Its items were released. Add them again.",
+    };
+  }
+  if (conflict.code === "held_sale_expired") {
+    return {
+      kind: "warning",
+      title: "Held sale expired",
+      subtitle: conflict.message ?? "It was deleted and its stock released.",
     };
   }
   return { kind: "info", title: "Basket updated elsewhere", subtitle: "The till now shows the latest saved basket." };

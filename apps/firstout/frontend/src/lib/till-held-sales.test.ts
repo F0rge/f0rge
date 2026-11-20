@@ -7,7 +7,7 @@ import {
 
 const held: HeldSale = {
   id: "sale-1", reference: "HS-1042", location_id: "showroom", customer_id: "customer",
-  customer_name: "Example", held_by_name: "Staff", held_at: "2026-11-19T16:00:00Z",
+  customer_name: "Example", held_by_name: "Staff", held_at: "2026-11-19T16:00:00Z", expires_at: "2026-11-19T19:00:00Z",
   version: 3, note: "Collect this afternoon", estimated_total_inc_vat: "115.00",
   pick_id: null, linked_pick_ids: { service: "pick" },
   lines: [{

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import uuid
 
 import pytest
@@ -39,7 +40,7 @@ async def test_migrated_held_sales_respect_rls_and_serialize_concurrent_consumpt
         async with owner.begin() as conn:
             await conn.execute(sa.text("ALTER TABLE roles ENABLE ROW LEVEL SECURITY"))
             await conn.execute(sa.text("ALTER TABLE roles FORCE ROW LEVEL SECURITY"))
-        migrate(url, "095_till_held_sales")
+        migrate(url, "100_held_sale_expiry")
         async with owner.begin() as conn:
             protected = (
                 await conn.execute(
@@ -61,7 +62,7 @@ async def test_migrated_held_sales_respect_rls_and_serialize_concurrent_consumpt
             await conn.execute(sa.text(f"GRANT USAGE ON SCHEMA public TO {role}"))
             await conn.execute(
                 sa.text(
-                    f"GRANT SELECT, INSERT, UPDATE, DELETE ON held_sales, held_sale_operations TO {role}"
+                    f"GRANT SELECT, INSERT, UPDATE, DELETE ON held_sales, held_sale_operations, stock_reservations TO {role}"
                 )
             )
             await conn.execute(
@@ -89,6 +90,8 @@ async def test_migrated_held_sales_respect_rls_and_serialize_concurrent_consumpt
                 "location_id": showroom_a,
                 "customer_name": "Walk-in customer",
                 "held_by_name": "Synthetic cashier",
+                "expires_at": datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(hours=1),
                 "linked_pick_ids": {},
                 "lines": [
                     {
@@ -151,4 +154,48 @@ async def test_migrated_held_sales_respect_rls_and_serialize_concurrent_consumpt
             ):
                 await conn.execute(sa.text(f"DROP OWNED BY {role}"))
                 await conn.execute(sa.text(f"DROP ROLE {role}"))
+        await owner.dispose()
+
+
+async def test_held_sales_that_predate_the_expiry_get_three_hours_from_migration(
+    second_postgres_url,
+):
+    url = second_postgres_url
+    migrate(url, "094_personal_mcp_tokens")
+    owner = create_async_engine(url)
+    team, showroom, held_id = (uuid.uuid4() for _ in range(3))
+    try:
+        async with owner.begin() as conn:
+            await conn.execute(sa.text("ALTER TABLE roles ENABLE ROW LEVEL SECURITY"))
+            await conn.execute(sa.text("ALTER TABLE roles FORCE ROW LEVEL SECURITY"))
+        migrate(url, "099_stock_reservations")
+        async with owner.begin() as conn:
+            await conn.execute(
+                sa.text("""INSERT INTO teams(id,name,slug,status,created_at,updated_at)
+                    VALUES (:id,'Synthetic showroom team',:slug,'active',now(),now())"""),
+                {"id": team, "slug": f"held-expiry-{team.hex}"},
+            )
+            await conn.execute(
+                sa.text("""INSERT INTO locations(id,team_id,name,type,is_archived,created_at,updated_at)
+                    VALUES (:id,:team,'Synthetic showroom','showroom',false,now(),now())"""),
+                {"id": showroom, "team": team},
+            )
+            await conn.execute(
+                sa.text("""INSERT INTO held_sales(id,team_id,location_id,customer_name,held_by_name,
+                        linked_pick_ids,lines)
+                    VALUES (:id,:team,:location,'Walk-in customer','Synthetic cashier','{}','[]')"""),
+                {"id": held_id, "team": team, "location": showroom},
+            )
+        before = datetime.datetime.now(datetime.timezone.utc)
+        migrate(url, "100_held_sale_expiry")
+        after = datetime.datetime.now(datetime.timezone.utc)
+        async with owner.begin() as conn:
+            expires = await conn.scalar(
+                sa.text("SELECT expires_at FROM held_sales WHERE id=:id"), {"id": held_id}
+            )
+            reserved = await conn.scalar(sa.text("SELECT count(*) FROM stock_reservations"))
+        three = datetime.timedelta(hours=3)
+        assert before + three <= expires <= after + three
+        assert reserved == 0
+    finally:
         await owner.dispose()

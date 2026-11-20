@@ -1148,6 +1148,12 @@ function TillWorkspace() {
         reloadBasket(failure);
         heldList.refresh();
         return;
+      } else if (!acknowledged && basketConflict(failure)?.code === "held_sale_expired") {
+        // The server deleted it and released its stock; the current basket is untouched.
+        setPendingHeld(null);
+        setBasketNotice(basketConflict(failure));
+        heldList.refresh();
+        return;
       } else if (!acknowledged && !retry && !isUncertainHeldResponse(failure)) {
         setPendingHeld(null);
         heldList.refresh();
@@ -2358,6 +2364,7 @@ function TillWorkspace() {
               {view === 1 && <HeldSalesWorkspace
                 key={`${locationId}:${heldFocus}`}
                 locationId={locationId}
+                holdHours={companySettings?.till_hold_hours}
                 showroom={locations.find((location) => location.id === locationId)?.name ?? ""}
                 list={heldList}
                 focusId={heldFocus}

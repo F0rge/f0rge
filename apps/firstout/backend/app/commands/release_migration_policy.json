@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "099_stock_reservations",
+  "target_revision": "100_held_sale_expiry",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -401,6 +401,10 @@
     },
     "099_stock_reservations": {
       "sha256": "fc1242da52562356ac14393f85fb52d922e687b80c49b0e3f5286c546fd03ad0",
+      "automatic": true
+    },
+    "100_held_sale_expiry": {
+      "sha256": "8a02c734578dfe587c148b06cf6ba4489aeffc702f6f748876eec5562d6300d0",
       "automatic": true
     }
   }

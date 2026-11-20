@@ -13,18 +13,13 @@ from app.exceptions import TillBasketConflictError
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
 from app.models.stock_reservation import HOLDER_BASKET
-from app.models.team_settings import DEFAULT_TILL_HOLD_HOURS, TeamSettings
 from app.models.till_basket import TillBasket as TillBasketRow
 from app.schemas.held_sale import TillBasket, TillBasketUpdate
 from app.schemas.till_reservation import BlockingReservation, TillReservation
-from app.services.held_sale import HeldSaleService
+from app.services.held_sale import HeldSaleService, clock as _clock
 from app.services.stock_availability import StockAvailability, StockUnavailable
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
-from f0rge_db.organisation import tenant_id_ctx
-
-# South Africa has no daylight saving, so a fixed offset is exact.
-_SAST = datetime.timezone(datetime.timedelta(hours=2))
 
 
 def line_key(sku_id: Any, qty: Any, discount: Any) -> tuple[str, int, Decimal]:
@@ -44,10 +39,6 @@ def line_keys(lines: Iterable[Any]) -> list[tuple[str, int, Decimal]]:
 
 def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
-
-
-def _clock(moment: datetime.datetime) -> str:
-    return moment.astimezone(_SAST).strftime("%H:%M")
 
 
 class TillBasketService:
@@ -147,8 +138,9 @@ class TillBasketService:
         raise TillBasketConflictError("basket_expired", message, expired)
 
     async def prune(self, now: datetime.datetime) -> None:
-        """Drop the tenant's expired reservations and empty its expired baskets."""
+        """Drop the tenant's expired reservations, held sales and baskets."""
         await self.availability.prune(now)
+        await self.held.prune_expired(now)
         await self.crud.empty_expired(now)
 
     def assert_matches(self, row: TillBasketRow, lines: Iterable[Any], version: Optional[int]):
@@ -187,7 +179,7 @@ class TillBasketService:
             }
             for line in (lines or [])
         ]
-        expires_at = now + await self._hold_time() if stored else None
+        expires_at = now + await self.availability.hold_time() if stored else None
         try:
             await self.availability.reserve(
                 (HOLDER_BASKET, row.id),
@@ -233,12 +225,6 @@ class TillBasketService:
         lapsed = row.expires_at
         await self.set_contents(row)
         row.expired_at = lapsed
-
-    async def _hold_time(self) -> datetime.timedelta:
-        hours = await self.db.scalar(
-            select(TeamSettings.till_hold_hours).where(TeamSettings.team_id == tenant_id_ctx.get())
-        )
-        return datetime.timedelta(hours=hours or DEFAULT_TILL_HOLD_HOURS)
 
     async def _reservable(self, lines: list[dict]) -> dict[uuid.UUID, int]:
         """Qty per SKU to reserve; kits and no-stock-needed SKUs keep their own rules."""

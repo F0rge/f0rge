@@ -6,7 +6,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import and_, delete, func, not_, or_, select
+from sqlalchemy import and_, delete, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import LocationStock
@@ -125,6 +125,30 @@ class StockReservationCRUD(BaseCRUD):
             .where(
                 Reservation.team_id == tenant_id_ctx.get(),
                 Reservation.expires_at <= now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+
+    async def move(self, source: Holder, target: Holder, expires_at: Optional[datetime.datetime]):
+        """Reassign every reservation of one holder to another, in place."""
+        await self.db.execute(
+            update(Reservation)
+            .where(
+                Reservation.team_id == tenant_id_ctx.get(),
+                Reservation.holder_kind == source[0],
+                Reservation.holder_id == source[1],
+            )
+            .values(holder_kind=target[0], holder_id=target[1], expires_at=expires_at)
+            .execution_options(synchronize_session=False)
+        )
+
+    async def release(self, holder_kind: str, holder_ids: list[uuid.UUID]) -> None:
+        await self.db.execute(
+            delete(Reservation)
+            .where(
+                Reservation.team_id == tenant_id_ctx.get(),
+                Reservation.holder_kind == holder_kind,
+                Reservation.holder_id.in_(holder_ids),
             )
             .execution_options(synchronize_session=False)
         )

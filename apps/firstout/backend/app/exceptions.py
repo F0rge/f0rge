@@ -72,3 +72,11 @@ class TillBasketConflictError(ConflictError):
     def __init__(self, code: str, detail: str, basket: dict | None = None, **extra: object) -> None:
         super().__init__(detail)
         self.payload = {"code": code, "message": detail, **extra, "basket": basket}
+
+
+class HeldSaleExpiredError(HeldResumeTargetChangedError):
+    """The held sale outlived the hold time; it is gone and its stock released."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.payload = {"code": "held_sale_expired", "message": detail}
