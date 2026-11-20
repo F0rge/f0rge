@@ -1,5 +1,8 @@
 """Give held sales an expiry; existing ones get three hours from the migration.
 
+The column keeps a three-hour default so code from before this release, which
+inserts held sales without an expiry, still works after a rollback (P-020).
+
 Revision ID: 100_held_sale_expiry
 Revises: 099_stock_reservations
 """
@@ -16,9 +19,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("held_sales", sa.Column("expires_at", sa.DateTime(timezone=True)))
-    op.execute("UPDATE held_sales SET expires_at = now() + interval '3 hours'")
-    op.alter_column("held_sales", "expires_at", nullable=False)
+    op.add_column(
+        "held_sales",
+        sa.Column(
+            "expires_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now() + interval '3 hours'"),
+        ),
+    )
 
 
 def downgrade() -> None:

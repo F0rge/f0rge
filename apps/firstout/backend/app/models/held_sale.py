@@ -34,7 +34,9 @@ class HeldSale(TenantOwnedMixin, UUIDPkMixin, Base):
         DateTime(timezone=True), server_default=text("now()")
     )
     # Hold time after being held; the reservations expire with it.
-    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now() + interval '3 hours'")
+    )
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
     note: Mapped[Optional[str]] = mapped_column(String(500))
     estimated_total_inc_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 2))
