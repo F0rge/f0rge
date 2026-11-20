@@ -174,7 +174,6 @@
     {
       "patterns": [
         "scripts/security/**",
-        "vendor/braces/**",
         "docs/security-dependency-overrides.md"
       ],
       "owner": "f0rge-security",
@@ -460,7 +459,6 @@
     {
       "patterns": [
         "scripts/security/**",
-        "vendor/braces/**",
         "docs/security-dependency-overrides.md",
         "**/package.json",
         "**/package-lock.json",
@@ -505,7 +503,6 @@
         "docs/adr/delivery.md",
         "docs/adr/operations.md",
         "scripts/security/**",
-        "vendor/braces/**",
         "docs/security-dependency-overrides.md",
         "**/.env.example",
         "**/.gitignore",

@@ -35,7 +35,6 @@ Run after a complete clean install:
 
 ```sh
 npm ci --no-audit --no-fund
-node scripts/security/check-braces.cjs
 node scripts/security/check-ci-dependencies.cjs
 npm audit --omit=dev --audit-level=high
 ```
@@ -44,8 +43,11 @@ The new guard verifies every locked and installed copy of the four packages,
 checks prototype pollution and proxy trust handling, bounds the source-map attack
 probe in a child process, decodes and resizes SVG with the actual Sharp binding,
 and generates types through Medusa's real consumer. CI runs it before the
-unchanged audit gate. Existing transparent `braces` security backport and its
-provenance checks remain in place.
+unchanged audit gate. The former vendored `braces` backport was removed on 20
+November 2026 after GitHub withdrew its advisory (GHSA-vfj7-8cjw-p6xm, withdrawn
+23 October 2026) and `npm audit` stopped flagging upstream `braces@3.0.3`. No app code passes untrusted
+input to `micromatch`/`braces`; any future use on request data must cap pattern
+length well below braces' default `maxLength` (10,000).
 
 When upstream Medusa's dependency ranges include these fixed releases, remove
 redundant overrides individually and rerun these checks plus commerce native

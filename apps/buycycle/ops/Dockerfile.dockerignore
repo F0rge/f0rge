@@ -15,8 +15,6 @@
 !libs/primer/**
 !libs/rust/api-errors/**
 !libs/rust/identity/**
-!vendor/
-!vendor/braces/**
 **/node_modules
 **/target
 **/.env
