@@ -102,10 +102,10 @@ No current PR was armed, merged or deployed by this setup task.
 
 ## Publish a prepared branch
 
-Complete the [PR process](pr-process.md), relevant checks and independent review
-first. Push the authorized `codex/*` branch through the normal Git identity.
-Write the exact five-section PR body to a private file with actual newlines;
-keep the complete ADR table, evidence and visible gaps.
+Complete the relevant checks and independent review first. Push the authorized
+`codex/*` branch through the normal Git identity. Write the PR body with the
+[`pr` skill](../../.agents/skills/pr/SKILL.md) to a private file with actual
+newlines; keep its ADR Check, evidence and visible gaps.
 
 From the repository root:
 

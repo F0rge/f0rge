@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { ROOT, MANIFEST, ROLE_IDS, loadManifest, validateManifest, globRegex, route, generate, adapterContents, checkAdapters, checkAdrReferences, checkLiveCallers, check, repositoryFiles, skillLinks } from './agents.mjs';
+import { ROOT, MANIFEST, ROLE_IDS, loadManifest, validateManifest, globRegex, route, generate, adapterContents, checkAdapters, checkAdrReferences, checkLiveCallers, check, repositoryFiles, skillLinks, adrsFor } from './agents.mjs';
 
 const manifest = loadManifest();
 const fixtures = JSON.parse(readFileSync(new URL('./routing-fixtures.json', import.meta.url), 'utf8'));
@@ -30,10 +30,24 @@ test('ordered primary routing and independently accumulated reviewers', async (t
   });
 });
 
-test('the upstream pr skill keeps its F0rge edit deferring to the PR process', () => {
-  // `npx skills update` silently restores upstream's own template; this fails until the edit is reapplied.
+test('the pr skill keeps its F0rge ADR Check', () => {
+  // `npx skills update` silently restores upstream's template; this fails until the ADR Check is re-added.
   const skill = readFileSync(join(ROOT, '.agents/skills/pr/SKILL.md'), 'utf8');
-  assert.ok(skill.includes('docs/agents/pr-process.md') && skill.includes('.github/PULL_REQUEST_TEMPLATE.md'));
+  assert.ok(skill.includes('## ADR Check') && skill.includes('scripts/agents/agents.mjs adrs'));
+});
+
+test('adrs lists only the touched domains, once each, in index order', () => {
+  const ids = (paths) => adrsFor(manifest, paths).map((adr) => adr.id);
+  const backend = ids([route(manifest, 'apps/marrow/backend/app/main.py').path]);
+  const backendFiles = new Set(adrsFor(manifest, ['apps/marrow/backend/app/main.py']).map((adr) => adr.file));
+  const owner = manifest.roles.find((role) => role.id === route(manifest, 'apps/marrow/backend/app/main.py').owner);
+  assert.deepEqual([...backendFiles].sort(), [...owner.adrFiles].sort());
+  assert.ok(backend.length > 0 && backend.length < 66);
+  const both = ids(['apps/marrow/backend/app/main.py', 'apps/marrow/backend/app/main.py', '.github/workflows/ci.yml']);
+  assert.equal(new Set(both).size, both.length);
+  assert.ok(backend.every((id) => both.includes(id)));
+  assert.ok(adrsFor(manifest, ['.github/workflows/ci.yml']).every((adr) => adr.file === 'docs/adr/delivery.md'));
+  assert.throws(() => adrsFor(manifest, ['unclassified/zzz.unknown']), /Unclassified path/);
 });
 
 test('every current tracked or non-ignored repository path has an explicit classification', () => {

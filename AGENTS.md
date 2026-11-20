@@ -173,7 +173,7 @@ Use [issue-writing guidance](docs/agents/issue-writing.md) for self-contained im
 
 Use a short-lived branch and a pull request into `main`. Follow P-005 for review/automatic squash merging and P-006 for release authorization; another app's merge does not grant its production release.
 
-Before creating, updating or reviewing a PR description, follow [the PR process](docs/agents/pr-process.md) and [PR template](.github/PULL_REQUEST_TEMPLATE.md): explain what changed, why and the solution design, then assess every ADR with evidence and visible gaps.
+Before creating, updating or reviewing a PR description, use the [`pr` skill](.agents/skills/pr/SKILL.md): Matt Pocock's template plus an ADR Check of only the touched domains (`node scripts/agents/agents.mjs adrs <changed files>`).
 
 Before opening or replacing a PR, follow [the GitHub publisher guide](docs/agents/github-publisher.md): use the configured App for authorship and leave required human approval to Leo. An unavailable publisher is not permission to fall back to a personal account.
 

@@ -9,28 +9,38 @@ metadata:
     url: "https://github.com/humanlayer/skills/blob/main/plugins/show-me/skills/show-me/SKILL.md"
 ---
 
-<!-- F0rge-local edit (not upstream): the template below defers to docs/agents/pr-process.md.
-     `npx skills update` overwrites this file; reapply the edit afterwards (agents:test fails until you do). -->
+Use this template for writing the PR body:
 
-In F0rge, the PR body follows [`docs/agents/pr-process.md`](../../../docs/agents/pr-process.md)
-(required by ADR P-003). Read it, then start from
-[`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.md), which already
-holds the five sections and every ADR row; do not rebuild the ADR table by hand.
+```markdown
+## Summary
 
-How the guidance below fits that structure:
+<diagram, diff-sketch, or tree>
 
-- **Solution design** must include a Mermaid diagram. The other Summary views below are
-  optional extras next to it.
-- **Checks and limitations** reports the checks actually run and their results, independent
-  review and untested behavior, as pr-process.md requires. The Evidence guidance below helps
-  show before/after; it does not replace those items. End the section with a bold
-  **Merge Danger** paragraph (door and blast radius), not a separate heading.
+## Evidence
 
-`docs/agents/pr-process.md` wins wherever it differs from the guidance below.
+- **Before:** <screenshot/output/failing test run>
+  **After:** <screenshot/output/passing test run>
+
+## Merge Danger
+
+**Door:** <one-way or two-way>
+
+<optional: description>
+
+**Blast Radius:** <one-word description>
+
+<optional: potential ramifications of merge>
+
+## ADR Check
+
+| ADR | Complies? | Comment |
+| --- | --- | --- |
+<rows printed by the adrs command>
+```
 
 ## Sections
 
-Skip all preambles and keep prose brief. Use the domain language from the relevant `CONTEXT.md` (see `docs/agents/domain.md`).
+Skip all preambles and keep prose brief. Use the user's domain language from `GLOSSARY.md`.
 
 ### Summary
 
@@ -164,3 +174,18 @@ Execution-based evidence is A-tier. Test results, console output. Show the exact
 Describe whether it's a one-way or two-way door. You can walk back through two-way doors, but not one-way doors. A PR that is cheap to roll back is lower risk. Changes that involve destructive actions or hard-to-reverse decisions are one-way doors.
 
 The blast radius is the potential impact or scope of the changes introduced by this PR. Consider all possibilities. Examples are layout shift, breakages for consumers, mobile responsiveness, etc.
+
+### ADR Check
+
+<!-- F0rge addition (not upstream). `npx skills update` removes it; agents:test fails until it is re-added. -->
+
+List only the ADRs for the domains this PR touches. Print their rows with:
+
+```sh
+node scripts/agents/agents.mjs adrs $(git diff --name-only origin/main...HEAD)
+```
+
+The command routes each changed file to its owning role in `docs/agents/manifest.json` and prints that role's ADRs, so unrelated domains stay out. Fill in each row:
+
+- **Complies?:** `Yes`, `Partial`, `No` or `N/A` (the ADR's domain is touched but this decision isn't).
+- **Comment:** one line of evidence or reason. `Partial` or `No` names the gap; an exception links Leo's approval.
