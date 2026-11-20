@@ -23,23 +23,3 @@ class McpOperationCRUD(BaseCRUD):
                 McpOperation.request_id == request_id,
             )
         )
-
-    async def review_token(self, operation_id: uuid.UUID) -> uuid.UUID | None:
-        return await self.db.scalar(
-            select(McpOperation.token_id).where(
-                *self.owner,
-                McpOperation.id == operation_id,
-                McpOperation.preview.is_not(None),
-            )
-        )
-
-    async def review(self, operation_id: uuid.UUID) -> McpOperation:
-        return (
-            await self.db.scalars(
-                select(McpOperation).where(
-                    *self.owner,
-                    McpOperation.id == operation_id,
-                    McpOperation.preview.is_not(None),
-                )
-            )
-        ).one()

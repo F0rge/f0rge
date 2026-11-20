@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
@@ -12,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.transfer import TransferCRUD
 from app.models.location_bin import LocationBin
 from app.models.mcp_token import McpToken
-from app.models.transfer import Transfer, TransferStatus
+from app.models.transfer import Transfer
 from app.permissions import STOCK_TRANSFER, TILL_SELL
 from app.schemas.transfer import (
     TransferCreate,
@@ -21,7 +20,7 @@ from app.schemas.transfer import (
     TransferReceiveLine,
     TransferResponse,
 )
-from app.services.mcp_domains import Action
+from app.services.mcp_action_types import Action
 from app.services.transfers import TransferService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 
@@ -70,26 +69,23 @@ async def _draft(db: AsyncSession, token: McpToken, args: TransferDraftArguments
 
 
 async def _dispatch(db: AsyncSession, token: McpToken, args: DispatchArguments) -> dict:
+    await _check_standalone_transfer(db, token, args.transfer_id)
     transfer = await TransferService(db).stage_dispatch(args.transfer_id, token.user_id)
     return _receipt(transfer)
 
 
 async def _receive(db: AsyncSession, token: McpToken, args: ReceiveArguments) -> dict:
+    await _check_standalone_transfer(db, token, args.transfer_id)
     transfer = await TransferService(db).stage_receipt(
         args.transfer_id, TransferReceive(lines=args.lines), token.user_id
     )
     return _receipt(transfer)
 
 
-def _quantity(value: Decimal) -> str:
-    return format(value.normalize(), "f")
-
-
-async def _review_bins(
+async def _movement_bins(
     db: AsyncSession, transfer: Transfer, bin_ids: set[uuid.UUID]
 ) -> tuple[dict, dict]:
-    # Lock the resolved default as well as named bins until the approved movement
-    # finishes. A change of default between request and confirmation changes the snapshot.
+    # Keep both named and default bins stable through the stock movement.
     rows = await db.scalars(
         select(LocationBin)
         .where(
@@ -108,34 +104,17 @@ async def _review_bins(
     return by_id, defaults
 
 
-async def preview_transfer(
-    db: AsyncSession, token: McpToken, action_name: str, args: DispatchArguments
-) -> dict:
-    """Rebuild the same review inside the confirmation transaction before moving stock."""
-    transfer = await TransferCRUD(db).get_by_id(args.transfer_id, for_update=True)
+async def _check_standalone_transfer(
+    db: AsyncSession, token: McpToken, transfer_id: uuid.UUID
+) -> None:
+    """Apply MCP scope and bin checks under the same lock as the domain transition."""
+    transfer = await TransferCRUD(db).get_by_id(transfer_id, for_update=True)
     if transfer is None or transfer.team_id != token.team_id:
         raise NotFoundError("Transfer not found")
     if transfer.pick_id is not None:
         raise ConflictError("Complete transfers linked to a pick in the warehouse")
     if len(transfer.lines) > 50:
-        raise ValidationError("Review transfers with more than 50 lines in the warehouse")
-
-    counted = {}
-    if action_name == "transfers_receive" and isinstance(args, ReceiveArguments):
-        if transfer.status != TransferStatus.IN_TRANSIT:
-            raise ConflictError("Transfer is not in transit")
-        counted = {item.line_id: item.qty_received for item in args.lines}
-        if len(counted) != len(args.lines) or counted.keys() != {
-            line.id for line in transfer.lines
-        }:
-            raise ValidationError("Enter one counted quantity for each transfer line")
-        if any(counted[line.id] != line.qty_dispatched for line in transfer.lines):
-            raise ValidationError("The counts differ from dispatch. Resolve this in the warehouse")
-    elif action_name == "transfers_dispatch":
-        if transfer.status != TransferStatus.DRAFT:
-            raise ConflictError("Transfer is not a draft")
-    else:
-        raise ValidationError("Unsupported transfer review")
+        raise ValidationError("Process transfers with more than 50 lines in the warehouse")
 
     bin_ids = {
         bin_id
@@ -143,9 +122,8 @@ async def preview_transfer(
         for bin_id in (line.from_bin_id, line.to_bin_id)
         if bin_id is not None
     }
-    by_id, defaults = await _review_bins(db, transfer, bin_ids)
-    lines = []
-    for line in sorted(transfer.lines, key=lambda line: line.id):
+    by_id, defaults = await _movement_bins(db, transfer, bin_ids)
+    for line in transfer.lines:
         source = (
             by_id.get(line.from_bin_id)
             if line.from_bin_id
@@ -158,31 +136,6 @@ async def preview_transfer(
             raise ConflictError(
                 "Select active destination and available source bins in the warehouse"
             )
-        detail = {
-            "line_id": str(line.id),
-            "sku_id": str(line.sku_id),
-            "sku": line.sku.our_ref,
-            "name": line.sku.name,
-            "quantity": _quantity(line.qty_dispatched),
-            "from_bin_id": str(source.id),
-            "from_bin": source.code,
-            "to_bin_id": str(dest.id),
-            "to_bin": dest.code,
-        }
-        if counted:
-            detail["counted_quantity"] = _quantity(counted[line.id])
-        lines.append(detail)
-
-    return {
-        "transfer_id": str(transfer.id),
-        "transfer_number": transfer.transfer_number,
-        "status": transfer.status.value,
-        "from_location_id": str(transfer.from_location_id),
-        "from_location": transfer.from_location.name,
-        "to_location_id": str(transfer.to_location_id),
-        "to_location": transfer.to_location.name,
-        "lines": lines,
-    }
 
 
 TRANSFER_ACTIONS = (
@@ -198,19 +151,19 @@ TRANSFER_ACTIONS = (
     Action(
         name="transfers_dispatch",
         tab="Warehouse / Transfers",
-        description="Request dispatch of a draft transfer. Confirmation removes stock at the source.",
+        description="Dispatch a standalone draft transfer now. This removes stock at the source.",
         arguments=DispatchArguments,
         permissions=(STOCK_TRANSFER,),
         handler=_dispatch,
-        effect="review",
+        effect="write",
     ),
     Action(
         name="transfers_receive",
         tab="Warehouse / Transfers",
-        description="Request receipt of a transfer in transit using actual counts for every line. Confirmation adds stock at its destination.",
+        description="Receive a standalone transfer in transit now. Supply the actual counted quantity for every line. This adds stock at the destination.",
         arguments=ReceiveArguments,
         permissions=(STOCK_TRANSFER, TILL_SELL),
         handler=_receive,
-        effect="review",
+        effect="write",
     ),
 )
