@@ -325,3 +325,61 @@ async def test_default_allocations_need_a_session(owner_client: AsyncClient):
     url = f"{PICKS}/{body['pick_id']}/default-allocations"
     del owner_client.headers["Authorization"]
     assert (await owner_client.get(url)).status_code == 401
+
+
+async def test_return_is_refused_until_the_off_site_pick_is_confirmed(
+    owner_client: AsyncClient, async_db: AsyncSession
+):
+    from tests.test_stock_returns import _return_payload
+
+    showroom = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _location_id_by_name(owner_client, "Kramerville")
+    bench = await _stocked(owner_client, "ANY-RETURN", warehouse, 5)
+    body = (await _sell(owner_client, showroom, bench, 2)).json()
+    line_id = body["lines"][0]["id"]
+    payload = _return_payload(body["invoice_id"], warehouse, line_id, "restock")
+
+    refused = await owner_client.post("/api/v1/returns", json=payload)
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["detail"].startswith("Confirm the pick list for INV-")
+    assert refused.json()["detail"].endswith("before processing a return.")
+    assert await _inventory_on_hand(owner_client, bench["id"], warehouse) == 5
+    held = await _invoice_reservations(async_db, body["invoice_id"])
+    assert [(r.sku_id, r.qty) for r in held] == [(uuid.UUID(bench["id"]), 2)]
+
+    confirmed = await owner_client.post(f"{PICKS}/{body['pick_id']}/confirm", json={})
+    assert confirmed.status_code == 200, confirmed.text
+    created = await owner_client.post("/api/v1/returns", json=payload)
+    assert created.status_code == 201, created.text
+    completed = await owner_client.post(f"/api/v1/returns/{created.json()['id']}/complete")
+    assert completed.status_code == 200, completed.text
+
+
+async def test_pick_priority_chooses_between_two_off_site_sources(
+    owner_client: AsyncClient,
+):
+    showroom = await _location_id_by_name(owner_client, "Bedfordview")
+    kramerville = await _location_id_by_name(owner_client, "Kramerville")
+    second = (
+        await owner_client.post(
+            "/api/v1/locations", json={"name": "Kramerville-warehouse-2", "type": "warehouse"}
+        )
+    ).json()["id"]
+    chair = await _stocked(owner_client, "ANY-PRIORITY", kramerville, 4)
+    await _move(owner_client, chair, kramerville, second, 2)
+
+    async def sell_and_source(priority: list[str], prefer_warehouse: bool) -> list[str]:
+        patched = await owner_client.patch(
+            "/api/v1/settings",
+            json={"always_prefer_warehouse": prefer_warehouse, "pick_priority": priority},
+        )
+        assert patched.status_code == 200, patched.text
+        sale = (await _sell(owner_client, showroom, chair, 1)).json()
+        pick = (await owner_client.get(f"{PICKS}/{sale['pick_id']}")).json()
+        (line,) = pick["lines"]
+        return [a["location_id"] for a in line["allocations"] if a["qty"]]
+
+    assert await sell_and_source([second, kramerville], False) == [second]
+    assert await sell_and_source([kramerville, second], False) == [kramerville]
+    # Both are warehouses, so preferring warehouses keeps the configured order.
+    assert await sell_and_source([second, kramerville], True) == [second]

@@ -17,6 +17,7 @@ from app.models.sku import Sku
 from app.crud.stock_reservation import StockReservationCRUD
 from app.models.stock_reservation import StockReservation as Reservation
 from app.models.stock_reservation_change import StockReservationChange
+from f0rge_db.organisation import tenant_id_ctx
 from app.models.team import Team
 
 
@@ -141,13 +142,18 @@ class OpsCommerceCRUD:
         if rows:
             changed = await self.db.execute(
                 select(StockReservationChange.sku_id, StockReservationChange.changed_at).where(
-                    StockReservationChange.sku_id.in_(sku_ids)
+                    StockReservationChange.team_id == tenant_id_ctx.get(),
+                    StockReservationChange.sku_id.in_(sku_ids),
                 )
             )
             reservation_revisions.update(changed.all())
             expired = await self.db.execute(
                 select(Reservation.sku_id, func.max(Reservation.expires_at))
-                .where(Reservation.sku_id.in_(sku_ids), Reservation.expires_at <= now)
+                .where(
+                    Reservation.team_id == tenant_id_ctx.get(),
+                    Reservation.sku_id.in_(sku_ids),
+                    Reservation.expires_at <= now,
+                )
                 .group_by(Reservation.sku_id)
             )
             for sku_id, expires_at in expired.all():

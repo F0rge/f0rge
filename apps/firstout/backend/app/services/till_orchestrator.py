@@ -59,7 +59,12 @@ from app.services.till_kit_pick import (
     kit_pick_message,
 )
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
-from app.exceptions import ForbiddenError, KitRequiresPickError, TillPriceConflictError
+from app.exceptions import (
+    BasketExpiredSignal,
+    ForbiddenError,
+    KitRequiresPickError,
+    TillPriceConflictError,
+)
 from app.permissions import TILL_DISCOUNT, USERS_MANAGE
 from app.services.permissions import PermissionService
 from app.services.books_periods import assert_date_postable
@@ -143,6 +148,8 @@ class TillOrchestrator:
     async def create_sale(
         self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
     ) -> TillSaleResponse:
+        # Taken before any lock wait: a request that started before expiry completes.
+        started = datetime.datetime.now(datetime.timezone.utc)
         team = await TeamCRUD(self.db).get_first()
         if team is None:
             raise NotFoundError("Team not found")
@@ -171,9 +178,13 @@ class TillOrchestrator:
             if user_id is None:
                 raise ValidationError("A basket sale needs a signed-in user")
             # An expired basket is emptied and refused here, before anything posts.
-            basket = await baskets.lock_live(data.basket_id, user_id, data.location_id)
+            try:
+                basket = await baskets.lock_live(data.basket_id, user_id, data.location_id, started)
+            except BasketExpiredSignal as expired:
+                await baskets.refuse_expired(expired)
+                raise
             baskets.assert_matches(basket, data.lines, data.basket_version)
-            await baskets.prune(datetime.datetime.now(datetime.timezone.utc))
+            await baskets.prune(started)
 
         customer = await self._active_customer(data)
         override_note = None

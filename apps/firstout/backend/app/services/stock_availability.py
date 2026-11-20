@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.stock_reservation import Holder, StockReservationCRUD
-from app.models.stock_reservation import StockReservation
+from app.models.stock_reservation import HOLDER_BASKET, StockReservation
 from app.models.team_settings import DEFAULT_TILL_HOLD_HOURS, TeamSettings
 from f0rge_db.organisation import tenant_id_ctx
 
@@ -95,7 +95,7 @@ class StockAvailability:
     async def others_at_till(
         self, now: datetime.datetime, own_basket_id: Optional[uuid.UUID]
     ) -> list[dict]:
-        exclude = ("basket", own_basket_id) if own_basket_id else None
+        exclude = (HOLDER_BASKET, own_basket_id) if own_basket_id else None
         reserved = await self.crud.reserved_by_others(now, exclude)
         blocking = await self.crud.blocking(now, exclude)
         return [

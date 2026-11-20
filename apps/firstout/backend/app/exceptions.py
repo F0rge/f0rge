@@ -74,6 +74,28 @@ class TillBasketConflictError(ConflictError):
         self.payload = {"code": code, "message": detail, **extra, "basket": basket}
 
 
+class BasketExpiredSignal(Exception):
+    """Internal: a basket was found due inside a transaction that must not write.
+
+    The service rolls back, then empties the basket in a fresh transaction and
+    raises the public 409 (never escapes the service layer).
+    """
+
+    def __init__(self, basket_id: object, user_id: object, expires_at: object) -> None:
+        super().__init__("basket expired")
+        self.basket_id = basket_id
+        self.user_id = user_id
+        self.expires_at = expires_at
+
+
+class HeldSaleExpiredSignal(Exception):
+    """Internal twin of ``BasketExpiredSignal`` for a held sale found due on resume."""
+
+    def __init__(self, expires_at: object) -> None:
+        super().__init__("held sale expired")
+        self.expires_at = expires_at
+
+
 class HeldSaleExpiredError(HeldResumeTargetChangedError):
     """The held sale outlived the hold time; it is gone and its stock released."""
 

@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.held_sale import HeldSaleCRUD
 from app.crud.user import UserCRUD
-from app.exceptions import HeldResumeTargetChangedError, HeldSaleExpiredError
+from app.exceptions import (
+    BasketExpiredSignal,
+    HeldResumeTargetChangedError,
+    HeldSaleExpiredError,
+    HeldSaleExpiredSignal,
+)
 from app.models.customer import Customer
 from app.models.held_sale import HeldSale as HeldSaleRow
 from app.models.held_sale_operation import HeldSaleOperation
@@ -56,7 +61,7 @@ class HeldSaleService:
         self.availability = StockAvailability(db)
 
     async def list(self, location_id: uuid.UUID) -> list[HeldSale]:
-        self._require_active(await self._showroom(location_id))
+        self.require_active(await self.showroom(location_id))
         now = datetime.datetime.now(datetime.timezone.utc)
         return [self._response(row) for row in await self.crud.list(location_id, now)]
 
@@ -65,17 +70,18 @@ class HeldSaleService:
         await self.availability.release(HOLDER_HELD_SALE, await self.crud.delete_expired(now))
 
     async def create(self, data: HeldSaleCreate, actor_id: uuid.UUID) -> HeldSale:
+        # Taken before any lock wait: a request that started before expiry completes.
+        now = datetime.datetime.now(datetime.timezone.utc)
         try:
             async with unit_of_work(self.db):
-                showroom = await self._showroom(data.location_id, lock=True)
-                now = datetime.datetime.now(datetime.timezone.utc)
+                showroom = await self.showroom(data.location_id, lock=True)
                 await self.crud.prune_operations(showroom.id, now)
                 await self.prune_expired(now)
                 baskets = basket = None
                 # A retried hold must not wipe a basket the cashier refilled since.
                 if data.basket_id is not None and await self.crud.get(showroom.id, data.id) is None:
                     baskets, basket = await self._owned_basket(
-                        data.basket_id, actor_id, data.location_id
+                        data.basket_id, actor_id, data.location_id, now
                     )
                     baskets.assert_matches(basket, data.lines, None)
                 if data.basket_id is not None:
@@ -88,6 +94,9 @@ class HeldSaleService:
                     )
                     await baskets.set_contents(basket)
                 return self._response(row)
+        except BasketExpiredSignal as expired:
+            await self._refuse_expired_basket(expired)
+            raise
         except IntegrityError as exc:
             if getattr(exc.orig, "sqlstate", None) != "23505":
                 raise
@@ -95,7 +104,7 @@ class HeldSaleService:
 
     async def edit_note(self, held_id: uuid.UUID, data: HeldSaleNoteUpdate) -> HeldSale:
         async with unit_of_work(self.db):
-            self._require_active(await self._showroom(data.location_id, lock=True))
+            self.require_active(await self.showroom(data.location_id, lock=True))
             now = datetime.datetime.now(datetime.timezone.utc)
             await self.prune_expired(now)
             row = await self.crud.get(data.location_id, held_id, now)
@@ -112,10 +121,10 @@ class HeldSaleService:
     async def resume(
         self, held_id: uuid.UUID, data: HeldSaleResume, actor_id: uuid.UUID
     ) -> HeldSaleResumeResult:
+        now = datetime.datetime.now(datetime.timezone.utc)
         try:
             async with unit_of_work(self.db):
-                showroom = await self._showroom(data.location_id, lock=True)
-                now = datetime.datetime.now(datetime.timezone.utc)
+                showroom = await self.showroom(data.location_id, lock=True)
                 await self.crud.prune_operations(showroom.id, now)
                 fingerprint = payload_hash(
                     {"held_id": str(held_id), "request": data.model_dump(mode="json")}
@@ -136,23 +145,20 @@ class HeldSaleService:
                         held_current_id=replay.held_current_id,
                         **({"basket": current_basket} if current_basket else {}),
                     )
-                self._require_active(showroom)
+                self.require_active(showroom)
                 row = await self.crud.get(showroom.id, held_id)
                 if row is None:
                     raise HeldResumeTargetChangedError(
                         "This sale is no longer held in this showroom"
                     )
                 if row.expires_at <= now:
-                    message = f"This held sale expired at {clock(row.expires_at)}."
-                    async with unit_of_work(self.db):
-                        await self.prune_expired(now)
-                    raise HeldSaleExpiredError(message)
+                    raise HeldSaleExpiredSignal(row.expires_at)
                 await self.prune_expired(now)
                 if row.version != data.version:
                     raise HeldResumeTargetChangedError(
                         "The held sale changed. Refresh the list before resuming."
                     )
-                await self._validate_cart(
+                await self.validate_cart(
                     HeldSaleCreate(
                         id=row.id,
                         location_id=row.location_id,
@@ -174,7 +180,7 @@ class HeldSaleService:
                 baskets = basket = None
                 if data.basket_id is not None:
                     baskets, basket = await self._owned_basket(
-                        data.basket_id, actor_id, data.location_id
+                        data.basket_id, actor_id, data.location_id, now
                     )
 
                 # Retire the selected basket and save the current basket in
@@ -230,6 +236,17 @@ class HeldSaleService:
                     held_current_id=current_id,
                     **({"basket": loaded} if loaded else {}),
                 )
+        except HeldSaleExpiredSignal as expired:
+            # The transaction rolled back without writing; prune in a fresh one.
+            async with unit_of_work(self.db):
+                await self.showroom(data.location_id, lock=True)
+                await self.prune_expired(now)
+            raise HeldSaleExpiredError(
+                f"This held sale expired at {clock(expired.expires_at)}."
+            ) from None
+        except BasketExpiredSignal as expired:
+            await self._refuse_expired_basket(expired)
+            raise
         except IntegrityError as exc:
             if getattr(exc.orig, "sqlstate", None) != "23505":
                 raise
@@ -237,8 +254,8 @@ class HeldSaleService:
 
     async def delete(self, data: HeldSaleDelete) -> HeldSaleDeleteResult:
         async with unit_of_work(self.db):
-            showroom = await self._showroom(data.location_id, lock=True)
-            self._require_active(showroom)
+            showroom = await self.showroom(data.location_id, lock=True)
+            self.require_active(showroom)
             now = datetime.datetime.now(datetime.timezone.utc)
             await self.prune_expired(now)
             actual = await self.crud.ids(showroom.id, now)
@@ -265,10 +282,10 @@ class HeldSaleService:
             if existing is None:
                 raise ConflictError("This sale is no longer held in this showroom")
             return existing
-        self._require_active(showroom)
+        self.require_active(showroom)
         if existing is not None:
             raise ConflictError("This held-sale ID is already in use")
-        customer, skus = await self._validate_cart(data)
+        customer, skus = await self.validate_cart(data)
         actor = await UserCRUD(self.db).get_by_id(actor_id)
         if actor is None:
             raise NotFoundError("Staff member not found")
@@ -334,6 +351,7 @@ class HeldSaleService:
         basket_id: uuid.UUID,
         actor_id: uuid.UUID,
         location_id: uuid.UUID,
+        now: Optional[datetime.datetime] = None,
         *,
         refuse_expired: bool = True,
     ):
@@ -341,18 +359,24 @@ class HeldSaleService:
 
         baskets = TillBasketService(self.db)
         if refuse_expired:
-            return baskets, await baskets.lock_live(basket_id, actor_id, location_id)
+            assert now is not None
+            return baskets, await baskets.lock_live(basket_id, actor_id, location_id, now)
         basket = await baskets.get_owned(basket_id, actor_id, lock=True)
         if basket.location_id != location_id:
             raise ValidationError("The basket belongs to a different showroom")
         return baskets, basket
+
+    async def _refuse_expired_basket(self, expired: BasketExpiredSignal) -> None:
+        from app.services.till_basket import TillBasketService
+
+        await TillBasketService(self.db).refuse_expired(expired)
 
     async def _prune_baskets(self, now: datetime.datetime) -> None:
         from app.services.till_basket import TillBasketService
 
         await TillBasketService(self.db).prune(now)
 
-    async def _validate_cart(
+    async def validate_cart(
         self, data: HeldSaleCreate
     ) -> tuple[Optional[Customer], dict[uuid.UUID, Sku]]:
         # Acquire SKU locks ordered by ID before any pick locks, as checkout does.
@@ -407,14 +431,14 @@ class HeldSaleService:
             )
         )
 
-    async def _showroom(self, location_id: uuid.UUID, *, lock: bool = False) -> Location:
+    async def showroom(self, location_id: uuid.UUID, *, lock: bool = False) -> Location:
         showroom = await self.crud.showroom(location_id, lock=lock)
         if showroom is None:
             raise NotFoundError("Showroom not found")
         return showroom
 
     @staticmethod
-    def _require_active(showroom: Location) -> None:
+    def require_active(showroom: Location) -> None:
         if showroom.is_archived:
             raise ConflictError("Held sales require an active showroom")
 

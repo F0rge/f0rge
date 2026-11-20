@@ -3,13 +3,13 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, NoReturn, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.till_basket import TillBasketCRUD
-from app.exceptions import TillBasketConflictError
+from app.exceptions import BasketExpiredSignal, TillBasketConflictError
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
 from app.models.stock_reservation import HOLDER_BASKET
@@ -56,7 +56,7 @@ class TillBasketService:
 
     async def get_or_create(self, location_id: uuid.UUID, user_id: uuid.UUID) -> TillBasket:
         async with unit_of_work(self.db):
-            self.held._require_active(await self.held._showroom(location_id))
+            self.held.require_active(await self.held.showroom(location_id))
             await self.crud.ensure(user_id, location_id)
             row = await self.crud.owned(user_id, location_id=location_id, lock=True)
             assert row is not None
@@ -69,7 +69,7 @@ class TillBasketService:
         self, location_id: uuid.UUID, user_id: uuid.UUID
     ) -> list[TillReservation]:
         """Stock reserved by baskets other than the caller's own at this showroom."""
-        self.held._require_active(await self.held._showroom(location_id))
+        self.held.require_active(await self.held.showroom(location_id))
         own = await self.crud.owned(user_id, location_id=location_id)
         rows = await self.availability.others_at_till(_now(), own.id if own else None)
         return [TillReservation.model_validate(row) for row in rows]
@@ -83,36 +83,55 @@ class TillBasketService:
         return row
 
     async def lock_live(
-        self, basket_id: uuid.UUID, user_id: uuid.UUID, location_id: uuid.UUID
+        self,
+        basket_id: uuid.UUID,
+        user_id: uuid.UUID,
+        location_id: uuid.UUID,
+        now: datetime.datetime,
     ) -> TillBasketRow:
         """Lock the caller's basket for a sale, hold or resume.
 
-        One that expired before this request is emptied and the emptying committed,
-        then refused; the caller must add its items again.
+        ``now`` is the request's start, taken before waiting on the row lock. A basket
+        due at that moment raises ``BasketExpiredSignal`` without writing; the caller
+        rolls back and passes it to ``refuse_expired`` in a fresh transaction.
         """
         row = await self.get_owned(basket_id, user_id, lock=True)
         if row.location_id != location_id:
             raise ValidationError("The basket belongs to a different showroom")
-        if self._due(row, _now()):
-            async with unit_of_work(self.db):
-                message = f"This sale expired at {_clock(row.expires_at)}. Add the items again."
-                await self._expire(row)
-                payload = self.response(row).model_dump(mode="json")
-            raise TillBasketConflictError("basket_expired", message, payload)
+        if self._due(row, now):
+            raise BasketExpiredSignal(row.id, user_id, row.expires_at)
         return row
+
+    async def refuse_expired(self, signal: BasketExpiredSignal) -> NoReturn:
+        """Empty the basket in a fresh transaction, then refuse with ``basket_expired``."""
+        async with unit_of_work(self.db):
+            row = await self.get_owned(signal.basket_id, signal.user_id, lock=True)
+            if row.lines and row.expires_at == signal.expires_at:
+                error = await self._expire_and_describe(row)
+            else:
+                error = TillBasketConflictError(
+                    "basket_changed",
+                    "The basket changed. Review it before continuing.",
+                    self.response(row).model_dump(mode="json"),
+                )
+        raise error
+
+    async def _expire_and_describe(self, row: TillBasketRow) -> TillBasketConflictError:
+        message = f"This sale expired at {_clock(row.expires_at)}. Add the items again."
+        await self._expire(row)
+        return TillBasketConflictError(
+            "basket_expired", message, self.response(row).model_dump(mode="json")
+        )
 
     async def replace(
         self, basket_id: uuid.UUID, data: TillBasketUpdate, user_id: uuid.UUID
     ) -> TillBasket:
-        expired: Optional[dict] = None
-        message = ""
+        expired: Optional[TillBasketConflictError] = None
         async with unit_of_work(self.db):
             row = await self.get_owned(basket_id, user_id, lock=True)
             now = _now()
             if self._due(row, now):
-                message = f"This sale expired at {_clock(row.expires_at)}. Add the items again."
-                await self._expire(row)
-                expired = self.response(row).model_dump(mode="json")
+                expired = await self._expire_and_describe(row)
             else:
                 if row.last_operation_id == data.operation_id:
                     return self.response(row)
@@ -123,8 +142,8 @@ class TillBasketService:
                         self.response(row).model_dump(mode="json"),
                     )
                 await self.prune(now)
-                self.held._require_active(await self.held._showroom(row.location_id, lock=True))
-                await self.held._validate_cart(data)
+                self.held.require_active(await self.held.showroom(row.location_id, lock=True))
+                await self.held.validate_cart(data)
                 await self.set_contents(
                     row,
                     customer_id=data.customer_id,
@@ -135,7 +154,8 @@ class TillBasketService:
                     operation_id=data.operation_id,
                 )
                 return self.response(row)
-        raise TillBasketConflictError("basket_expired", message, expired)
+        assert expired is not None
+        raise expired
 
     async def prune(self, now: datetime.datetime) -> None:
         """Drop the tenant's expired reservations, held sales and baskets."""

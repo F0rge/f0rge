@@ -11,12 +11,13 @@ import datetime
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.stock_reservation import StockReservationCRUD
 from app.models.journal import JournalDocumentType
-from app.models.pick import Pick, PickSourceType
+from app.models.pick import Pick, PickSourceType, PickStatus
 from app.models.stock_reservation import HOLDER_INVOICE, StockReservation
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.books_periods import assert_date_postable
@@ -40,6 +41,23 @@ def is_invoice_reserved(pick: Pick) -> bool:
 class TillInvoicePick:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    async def assert_picks_confirmed(self, invoice_id: uuid.UUID, invoice_number: str) -> None:
+        """A return needs the invoice's off-site stock deducted first, or it would credit stock never taken."""
+        unconfirmed = await self.db.scalar(
+            select(Pick.id)
+            .where(
+                Pick.invoice_id == invoice_id,
+                Pick.source_type == PickSourceType.TILL,
+                Pick.kit_sku_id.is_(None),
+                Pick.status == PickStatus.DRAFT,
+            )
+            .limit(1)
+        )
+        if unconfirmed is not None:
+            raise ConflictError(
+                f"Confirm the pick list for {invoice_number} before processing a return."
+            )
 
     def reserve(
         self, invoice_id: uuid.UUID, location_id: uuid.UUID, remainders: dict[uuid.UUID, int]
@@ -67,7 +85,7 @@ class TillInvoicePick:
         await assert_date_postable(self.db, today)
         stocks = LocationStockCRUD(self.db)
         category_posting = CategoryPostingService(self.db)
-        movements: list[tuple[uuid.UUID, uuid.UUID, int, str]] = []
+        movements: list[tuple[uuid.UUID, uuid.UUID, int]] = []
         cogs_parts: list[tuple[str, Decimal, Decimal]] = []
         total_cogs = Decimal(0)
         consumed: dict[uuid.UUID, int] = {}
@@ -83,7 +101,7 @@ class TillInvoicePick:
                 cogs = (stock.unit_cost_zar * alloc.qty).quantize(CENT, rounding=ROUND_HALF_UP)
                 total_cogs += cogs
                 cogs_parts.append((await category_posting.cogs_code_for_sku(line.sku), cogs, 0))
-                movements.append((line.sku_id, alloc.location_id, alloc.qty, line.sku.our_ref))
+                movements.append((line.sku_id, alloc.location_id, alloc.qty))
                 consumed[line.sku_id] = consumed.get(line.sku_id, 0) + alloc.qty
 
         if total_cogs > 0:
@@ -94,7 +112,7 @@ class TillInvoicePick:
                 category_posting.collapse([*cogs_parts, (CODE_INVENTORY, Decimal(0), total_cogs)]),
                 entry_date=today,
             )
-        for sku_id, location_id, qty, _ in movements:
+        for sku_id, location_id, qty in movements:
             await StockMovementService(self.db).apply_outgoing_qty(
                 sku_id=sku_id,
                 location_id=location_id,
