@@ -71,6 +71,8 @@ class TillSaleLocationStock(BaseModel):
 
 class TillSaleResponse(BaseModel):
     invoice_id: uuid.UUID
+    # The draft pick for units reserved against the invoice, when stock was sold from elsewhere.
+    pick_id: Optional[uuid.UUID] = None
     invoice_number: str
     payment_id: uuid.UUID
     payment_number: str

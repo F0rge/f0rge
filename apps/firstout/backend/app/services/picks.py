@@ -55,6 +55,7 @@ from app.services.pick_allocator import (
 )
 from app.services.pick_sheet import build_pick_sheet_pdf
 from app.services.settings import SettingsService, parse_pick_priority
+from app.services.till_invoice_pick import TillInvoicePick, is_invoice_reserved
 from app.services.transfers import TransferService
 from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -105,6 +106,12 @@ class PickService:
             assert data.sku_id is not None and data.qty is not None
             origin = await self._origin_from_till(data.sku_id, data.qty, data.customer_id)
 
+        async with unit_of_work(self.db):
+            pick = await self.stage_draft(origin, user_id)
+        return await self.get(pick.id)
+
+    async def stage_draft(self, origin: "_PickOrigin", user_id: uuid.UUID) -> Pick:
+        """Allocate and add a draft pick without committing, so a caller can join its transaction."""
         held = await self._held_sales_order_allocation(origin)
         result = held if held is not None else await self._allocate(origin.needs, user_id)
         lines = [
@@ -119,7 +126,7 @@ class PickService:
             for line in result.lines
         ]
         pick = Pick(
-            number="",
+            number=await self.crud.get_next_pick_number(),
             source_type=origin.source_type,
             source_id=origin.source_id,
             kit_sku_id=origin.kit_sku_id,
@@ -130,10 +137,29 @@ class PickService:
             invoice_id=origin.invoice_id,
             lines=lines,
         )
-        async with unit_of_work(self.db):
-            pick.number = await self.crud.get_next_pick_number()
-            await self.crud.add_and_flush(pick)
-        return await self.get(pick.id)
+        await self.crud.add_and_flush(pick)
+        return pick
+
+    async def stage_till_invoice_pick(
+        self,
+        invoice_id: uuid.UUID,
+        customer_id: uuid.UUID,
+        remainders: dict[uuid.UUID, int],
+        user_id: uuid.UUID,
+    ) -> Pick:
+        """Draft pick for the units a till sale left reserved against its invoice."""
+        return await self.stage_draft(
+            _PickOrigin(
+                source_type=PickSourceType.TILL,
+                source_id=None,
+                kit_sku_id=None,
+                kit_qty=None,
+                customer_id=customer_id,
+                invoice_id=invoice_id,
+                needs=[ComponentNeed(sku_id=s, qty_needed=q) for s, q in remainders.items()],
+            ),
+            user_id,
+        )
 
     async def list(self, source_type: Optional[PickSourceType] = None) -> list[PickResponse]:
         if source_type is None:
@@ -192,13 +218,21 @@ class PickService:
         data: PickConfirm,
         user_id: uuid.UUID,
     ) -> PickResponse:
-        pick = await self._get_or_404(pick_id)
+        pick = await self.crud.get_by_id(pick_id, for_update=True)
+        if pick is None:
+            raise NotFoundError("Pick not found")
         if pick.status != PickStatus.DRAFT:
             raise ConflictError("Pick is not a draft")
         for line in pick.lines:
             allocated = sum(item.qty for item in line.allocations)
             if allocated != line.qty_needed:
                 raise ValidationError("Confirm requires a full allocation")
+        if is_invoice_reserved(pick):
+            # Its stock is reserved against the invoice: deduct it here, so there is no split to confirm.
+            async with unit_of_work(self.db):
+                await TillInvoicePick(self.db).deduct(pick, user_id)
+                pick.status = PickStatus.CONFIRMED
+            return await self.get(pick_id)
         if await self._needs_confirm(pick) and not data.confirm_split:
             raise ConflictError("confirm_split required")
         async with unit_of_work(self.db):
@@ -239,7 +273,9 @@ class PickService:
 
         if alloc_locations == {staging_id}:
             skip_transfers = True
-        if pick.source_type == PickSourceType.SALES_ORDER and pick.kit_sku_id is None:
+        if (
+            pick.source_type == PickSourceType.SALES_ORDER and pick.kit_sku_id is None
+        ) or is_invoice_reserved(pick):
             skip_transfers = True
 
         if skip_transfers:

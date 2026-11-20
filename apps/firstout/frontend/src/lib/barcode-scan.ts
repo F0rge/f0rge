@@ -86,9 +86,9 @@ export function tillScanErrorMessage(error: TillScanError): string {
     case "no_service_price":
       return "No sale price for this customer.";
     case "not_on_floor":
-      return "Not on this floor.";
+      return "Out of stock at every location.";
     case "over_floor":
-      return "Not enough stock on the floor.";
+      return "Not enough stock across locations.";
     default:
       return "Could not add scanned item.";
   }

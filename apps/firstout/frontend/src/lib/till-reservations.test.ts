@@ -37,14 +37,21 @@ describe("till availability", () => {
   } as InventorySku;
   const sellable = new Set(["here", "warehouse"]);
   const at = (reserved: number, inCart: number) => tillAvailability({
-    row, locationId: "here", sellableLocationIds: sellable, inCart,
+    row, sellableLocationIds: sellable, inCart,
     reservation: reserved ? { sku_id: "sofa", reserved_by_others: reserved, blocking: open } : undefined,
   });
 
-  it("is limited by the floor, then by the company's unreserved stock, less the cart", () => {
-    expect(at(0, 0)).toEqual({ limit: 2, addable: 2, reason: null });
+  it("is limited by the company's unreserved stock at active locations, less the cart, not the floor", () => {
+    expect(at(0, 0)).toEqual({ limit: 3, addable: 3, reason: null });
     expect(at(2, 0)).toEqual({ limit: 1, addable: 1, reason: null });
-    expect(at(0, 2)).toEqual({ limit: 2, addable: 0, reason: null });
+    expect(at(0, 2)).toEqual({ limit: 3, addable: 1, reason: null });
+    expect(at(0, 3)).toEqual({ limit: 3, addable: 0, reason: null });
+  });
+
+  it("offers a SKU the showroom does not hold", () => {
+    const warehouseOnly = { ...row, locations: [{ location_id: "warehouse", on_hand: 1 }] } as InventorySku;
+    expect(tillAvailability({ row: warehouseOnly, sellableLocationIds: sellable, inCart: 0, reservation: undefined }))
+      .toEqual({ limit: 1, addable: 1, reason: null });
   });
 
   it("explains a SKU that other sales' reservations block", () => {

@@ -9,6 +9,7 @@ import {
   ClickableTile,
   ComboBox,
   InlineNotification,
+  Link,
   Modal,
   NumberInput,
   Pagination,
@@ -38,6 +39,7 @@ import {
   Building,
   Currency,
   Image as ImageIcon,
+  Location as LocationIcon,
   Locked,
   Money,
   Purchase,
@@ -63,7 +65,6 @@ import {
   getMobileScanSnapshot,
   subscribeMobileScan,
 } from "@/lib/mobile-scan";
-import { formatQuantity } from "@/lib/quantity";
 import styles from "./page.module.css";
 import { TillLoading } from "./loading-layout";
 import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
@@ -168,6 +169,7 @@ import {
   tillAvailability,
   type BasketConflict,
 } from "@/lib/till-reservations";
+import { basketStockNote, resultStockState, type TillStock } from "@/lib/till-stock-notes";
 
 const WALK_IN_CUSTOMER_NAME = "Walk-in customer";
 
@@ -539,14 +541,10 @@ function TillWorkspace() {
     }
     if (!sku.retail_ex_vat) return false;
     if (sku.is_kit) return true;
-    const row = inventoryBySku.get(sku.id);
-    if (!row) {
-      return false;
-    }
-    const atLocation = row.locations.find(
-      (loc) => loc.location_id === locationId,
+    // Any active location: stock not at this showroom is picked against the invoice.
+    return (inventoryBySku.get(sku.id)?.locations ?? []).some(
+      (loc) => loc.on_hand > 0 && sellableLocationIds.has(loc.location_id),
     );
-    return (atLocation?.on_hand ?? 0) > 0;
   });
 
   const browserProducts = skuOptions.filter(
@@ -588,13 +586,27 @@ function TillWorkspace() {
   const availabilityFor = useCallback(
     (id: string) => tillAvailability({
       row: inventoryBySku.get(id),
-      locationId,
       sellableLocationIds,
       reservation: reservationsBySku.get(id),
       inCart: cartQtyBySku.get(id) ?? 0,
     }),
-    [cartQtyBySku, inventoryBySku, locationId, reservationsBySku, sellableLocationIds],
+    [cartQtyBySku, inventoryBySku, reservationsBySku, sellableLocationIds],
   );
+  const showroomName = locations.find((loc) => loc.id === locationId)?.name ?? "this showroom";
+  const stockFor = (id: string): TillStock => ({
+    row: inventoryBySku.get(id),
+    locationId,
+    locationName: showroomName,
+    sellableLocationIds,
+    inCart: cartQtyBySku.get(id) ?? 0,
+  });
+  /** The one quiet stock line under a search result or tile. */
+  const stockState = (sku: Sku) =>
+    sku.is_kit
+      ? "Kit · parts checked at checkout"
+      : sku.till_no_stock_required
+        ? "No stock needed"
+        : resultStockState(stockFor(sku.id), availabilityFor(sku.id));
   const selectedAvailability = availabilityFor(skuId);
   const selectedRemaining = selectedAvailability.addable;
   const reservedReason = (sku: Sku) =>
@@ -777,14 +789,6 @@ function TillWorkspace() {
     (!selectedNeedsFloorStock || numericQty <= selectedRemaining) &&
     unitExVat(selectedSku ?? ({} as Sku), selectedCustomer, priceLists) > 0;
 
-  const floorOnHandFor = useCallback(
-    (id: string) =>
-      inventoryBySku
-        .get(id)
-        ?.locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0,
-    [inventoryBySku, locationId],
-  );
-
   const focusScanField = useCallback(() => {
     if (!isDesktopPointer()) {
       return;
@@ -876,7 +880,7 @@ function TillWorkspace() {
 
   const unavailableStock = resumedSale ? cart.filter((line) =>
     requiresTillFloorStock(line.sku) &&
-    (cartQtyBySku.get(line.sku.id) ?? 0) > floorOnHandFor(line.sku.id)
+    (cartQtyBySku.get(line.sku.id) ?? 0) > availabilityFor(line.sku.id).limit
   ) : [];
 
   const saleValid =
@@ -901,12 +905,7 @@ function TillWorkspace() {
       if (!requiresTillFloorStock(line.sku)) {
         return line.qty > 0;
       }
-      const onHand =
-        inventoryBySku
-          .get(line.sku.id)
-          ?.locations.find((loc) => loc.location_id === locationId)?.on_hand ??
-        0;
-      return line.qty > 0 && (cartQtyBySku.get(line.sku.id) ?? 0) <= onHand;
+      return line.qty > 0 && (cartQtyBySku.get(line.sku.id) ?? 0) <= availabilityFor(line.sku.id).limit;
     });
 
   function addKnownProduct(sku: Sku, quantity: number): boolean {
@@ -1572,7 +1571,7 @@ function TillWorkspace() {
           subtitle="Check the payment method, prices and available stock before completing the sale." />
       )}
       {unavailableStock.length > 0 && <InlineNotification kind="warning" lowContrast hideCloseButton
-        title="Not enough showroom stock"
+        title="Not enough stock"
         subtitle={`Review the quantities for ${unavailableStock.map((line) => line.sku.our_ref).join(", ")} before taking payment.`} />}
 
       <Modal
@@ -1685,7 +1684,12 @@ function TillWorkspace() {
                           <Locked size={16} aria-hidden />
                           <span>{skuItemToString(item)} · {item.reason}</span>
                         </span>
-                      ) : skuItemToString(item)}
+                      ) : (
+                        <span>
+                          {skuItemToString(item)}
+                          <span className={styles.stockState}> · {stockState(item)}</span>
+                        </span>
+                      )}
                       selectedItem={selectedSkuOption}
                       shouldFilterItem={filterSkuItem}
                       onChange={({ selectedItem }) =>
@@ -1726,9 +1730,7 @@ function TillWorkspace() {
                     }}
                     helperText={
                       selectedSku && locationId
-                        ? selectedSku.till_no_stock_required
-                          ? "No stock needed"
-                          : selectedAvailability.reason ?? `${selectedRemaining} available at showroom`
+                        ? stockState(selectedSku)
                         : undefined
                     }
                     disabled={!skuId}
@@ -1802,12 +1804,8 @@ function TillWorkspace() {
                                 {reason}
                               </p>
                             ) : (
-                              <p className="cds--type-label-01">
-                                {sku.is_kit
-                                  ? "Kit · parts checked at checkout"
-                                  : sku.till_no_stock_required
-                                    ? "No stock needed"
-                                    : `${formatQuantity(remaining)} available at showroom`}
+                              <p className={`cds--type-label-01 ${styles.stockState}`}>
+                                {stockState(sku)}
                               </p>
                             )}
                             {priced.warning && (
@@ -1975,6 +1973,9 @@ function TillWorkspace() {
                         selectedCustomer,
                         priceLists,
                       );
+                      const stockNote = requiresTillFloorStock(line.sku)
+                        ? basketStockNote(stockFor(line.sku.id))
+                        : null;
                       const suspect = quoteLineSuspectWarning(
                         linePricing?.unit_ex_vat ?? "",
                         line.sku,
@@ -1993,6 +1994,12 @@ function TillWorkspace() {
                               <p className="cds--type-label-01">
                                 {line.sku.our_ref}
                               </p>
+                              {stockNote && (
+                                <p className={`cds--type-helper-text-01 ${styles.reserved} ${styles.stockState}`}>
+                                  <LocationIcon size={16} aria-hidden />
+                                  {stockNote}
+                                </p>
+                              )}
                             </div>
                             <Button
                               kind="ghost"
@@ -2025,6 +2032,11 @@ function TillWorkspace() {
                               label="Quantity"
                               size="sm"
                               min={1}
+                              max={
+                                requiresTillFloorStock(line.sku)
+                                  ? availabilityFor(line.sku.id).limit || undefined
+                                  : undefined
+                              }
                               value={line.qty}
                               onChange={(_, { value }) => {
                                 const next =
@@ -2097,6 +2109,11 @@ function TillWorkspace() {
                         </div>
                       );
                     })
+                  )}
+                  {cart.some((line) => requiresTillFloorStock(line.sku)) && (
+                    <p className={`cds--type-helper-text-01 ${styles.stockState}`}>
+                      Stock notes are for staff only and are not printed on the invoice.
+                    </p>
                   )}
                 </section>
                 <h3 className="cds--type-heading-compact-01">Sale summary</h3>
@@ -2225,6 +2242,16 @@ function TillWorkspace() {
         />
       ) : null}
 
+      {lastSale?.pick_id && (
+        <InlineNotification
+          kind="success"
+          lowContrast
+          hideCloseButton
+          title="Pick list created for the items from other locations."
+        >
+          <Link href={`/picks/${lastSale.pick_id}`}>Open pick list</Link>
+        </InlineNotification>
+      )}
       {lastSale ? (
         <Tile className="firstout-tax-invoice">
           <Stack gap={5}>

@@ -1489,6 +1489,8 @@ export type TillSalePayload = TillPriceRequest & {
 
 export type TillSaleResult = {
   invoice_id: string;
+  /** Draft till pick for the units reserved against the invoice; null when the showroom had them all. */
+  pick_id: string | null;
   invoice_number: string;
   payment_id: string;
   payment_number: string;

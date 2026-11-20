@@ -19,7 +19,7 @@ export function reservationReason(blocking: TillBlockingReservation | null): str
 }
 
 export type TillAvailability = {
-  /** Units this till may hold in total: the floor, and the company's unreserved stock. */
+  /** Units this till may hold in total: the company's unreserved stock at any active location. */
   limit: number;
   /** Units it can still add on top of the cart. */
   addable: number;
@@ -28,22 +28,20 @@ export type TillAvailability = {
 };
 
 /** The server re-checks every add; this only decides what the till offers. */
-export function tillAvailability({ row, locationId, sellableLocationIds, reservation, inCart }: {
+export function tillAvailability({ row, sellableLocationIds, reservation, inCart }: {
   row: InventorySku | undefined;
-  locationId: string;
   /** Active showroom and warehouse locations: the stock the company can sell. */
   sellableLocationIds: ReadonlySet<string>;
   reservation: TillReservation | undefined;
   inCart: number;
 }): TillAvailability {
-  const locations = row?.locations ?? [];
-  const floor = locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0;
-  const company = locations.reduce(
+  const company = (row?.locations ?? []).reduce(
     (sum, loc) => sellableLocationIds.has(loc.location_id) ? sum + loc.on_hand : sum, 0,
   );
-  const limit = Math.max(0, Math.min(floor, company - (reservation?.reserved_by_others ?? 0)));
+  // The server splits a sale: the showroom's units deduct now, the rest is picked against the invoice.
+  const limit = Math.max(0, company - (reservation?.reserved_by_others ?? 0));
   const addable = Math.max(0, limit - inCart);
-  const blocked = reservation && addable === 0 && floor - inCart > 0;
+  const blocked = reservation && addable === 0 && company - inCart > 0;
   return { limit, addable, reason: blocked ? reservationReason(reservation.blocking) : null };
 }
 

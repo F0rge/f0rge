@@ -52,6 +52,7 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.stocktakes import StocktakeService
+from app.services.till_invoice_pick import TillInvoicePick
 from app.services.till_kit_pick import (
     REASON_MISSING_PARTS,
     REASON_SPLIT_PICK,
@@ -191,6 +192,7 @@ class TillOrchestrator:
         stock_decrements: list[tuple[uuid.UUID, int]] = []
         non_stock_service_sku_ids: set[uuid.UUID] = set()
         reserved: dict[uuid.UUID, int] = {}
+        remainders: dict[uuid.UUID, int] = {}
         picks_to_link: list[Pick] = []
         kit_blocks: list[dict] = []
         used_pick_ids: set[uuid.UUID] = set()
@@ -199,6 +201,7 @@ class TillOrchestrator:
             if candidate is not None and candidate not in candidate_pick_ids:
                 candidate_pick_ids.append(candidate)
         total_cogs = Decimal(0)
+        pick_id: Optional[uuid.UUID] = None
 
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in data.lines])
         skus, preview = await self._price_cart(data, customer)
@@ -249,18 +252,31 @@ class TillOrchestrator:
                 available = (
                     location_stock.on_hand if location_stock is not None else 0
                 ) - reserved.get(sku.id, 0)
-                if location_stock is None or available < line.qty:
-                    raise ConflictError(
-                        f"Insufficient on-hand quantity for {sku.our_ref} at this location"
+                here = line.qty
+                if available < line.qty:
+                    if basket is None:
+                        raise ConflictError(
+                            f"Insufficient on-hand quantity for {sku.our_ref} at this location"
+                        )
+                    # Sold from the basket: this showroom gives what it has, the rest is
+                    # reserved for the invoice and picked from elsewhere.
+                    here = min(line.qty, whole_available_quantity(max(available, 0)))
+                    remainders[sku.id] = remainders.get(sku.id, 0) + line.qty - here
+                line_cogs = Decimal(0)
+                if here > 0:
+                    assert location_stock is not None
+                    if location_stock.unit_cost_zar is None:
+                        raise ConflictError(f"No unit cost for {sku.our_ref} at this location")
+                    line_cogs = (location_stock.unit_cost_zar * here).quantize(
+                        CENT,
+                        rounding=ROUND_HALF_UP,
                     )
-                if location_stock.unit_cost_zar is None:
-                    raise ConflictError(f"No unit cost for {sku.our_ref} at this location")
-                line_cogs = (location_stock.unit_cost_zar * line.qty).quantize(
-                    CENT,
-                    rounding=ROUND_HALF_UP,
-                )
-                reserved[sku.id] = reserved.get(sku.id, 0) + line.qty
-                stock_decrements.append((sku.id, line.qty))
+                    reserved[sku.id] = reserved.get(sku.id, 0) + here
+                    stock_decrements.append((sku.id, here))
+                else:
+                    # Nothing here: the line books no cost of sales until its pick is confirmed.
+                    line_inputs.append((sku, line))
+                    continue
 
             total_cogs += line_cogs
             cogs_code = await self.category_posting.cogs_code_for_sku(sku)
@@ -393,6 +409,16 @@ class TillOrchestrator:
             if basket is not None:
                 # Releases the basket's reservations in the transaction that deducts stock.
                 await baskets.set_contents(basket)
+            if remainders:
+                # Same transaction: the units are never unreserved, and the pick exists with them.
+                assert user_id is not None
+                TillInvoicePick(self.db).reserve(invoice.id, data.location_id, remainders)
+                from app.services.picks import PickService
+
+                till_pick = await PickService(self.db).stage_till_invoice_pick(
+                    invoice.id, customer.id, remainders, user_id
+                )
+                pick_id = till_pick.id
             await self.events.record(
                 BooksDocumentType.INVOICE,
                 invoice.id,
@@ -426,6 +452,7 @@ class TillOrchestrator:
 
         sale = TillSaleResponse(
             invoice_id=reloaded.id,
+            pick_id=pick_id,
             invoice_number=reloaded.invoice_number,
             payment_id=payment.id,
             payment_number=payment.payment_number,
