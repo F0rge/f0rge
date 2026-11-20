@@ -13,7 +13,10 @@ from app.dependencies.auth import (
     require_transfer_receive,
 )
 from app.models.transfer import TransferStatus
+from app.permissions import STOCK_TRANSFER
 from app.schemas.transfer import TransferCreate, TransferReceive, TransferResponse
+from app.services.mcp_action_types import mcp_action
+from app.services.mcp_transfers import cancel_draft
 from app.services.transfers import TransferService
 
 transfers_router = APIRouter(prefix="/api/v1/transfers", tags=["transfers"])
@@ -76,6 +79,13 @@ async def receive_transfer(
 
 
 @transfers_router.post("/{transfer_id}/cancel", response_model=TransferResponse)
+@mcp_action(
+    "transfers_cancel_draft",
+    "Warehouse / Transfers",
+    "Cancel a standalone transfer before it is dispatched. Stock stays in place.",
+    permissions=(STOCK_TRANSFER,),
+    handler=cancel_draft,
+)
 async def cancel_transfer(
     transfer_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_transfer),

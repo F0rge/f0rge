@@ -255,6 +255,14 @@ class TransferService:
 
         return self._to_response(await self._get_or_404(transfer_id))
 
+    async def stage_cancel_draft(self, transfer_id: uuid.UUID) -> TransferResponse:
+        """Cancel a draft in the caller's transaction. A draft has moved no stock."""
+        transfer = await self._get_or_404(transfer_id, for_update=True)
+        if transfer.status != TransferStatus.DRAFT:
+            raise ConflictError("Transfer is not a draft")
+        transfer.status = TransferStatus.CANCELLED
+        return self._to_response(await self._get_or_404(transfer_id))
+
     async def serve_pdf(self, transfer_id: uuid.UUID) -> Response:
         transfer = await self._get_or_404(transfer_id)
         dispatcher = transfer.dispatched_by

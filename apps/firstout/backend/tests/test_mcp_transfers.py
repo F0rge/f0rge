@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from decimal import Decimal
 
 import pytest
+from fastapi import APIRouter, Depends
+from pydantic import ValidationError as ArgumentError
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
@@ -16,9 +19,12 @@ from app.models.mcp_token import McpToken
 from app.models.pick import Pick, PickSourceType, PickStatus
 from app.models.transfer import Transfer, TransferStatus
 from app.models.unit_cost_audit import UnitCostAuditSource
+from app.permissions import STOCK_TRANSFER
 from app.schemas.stocktake import StocktakeCreate
 from app.schemas.transfer import TransferCreate, TransferReceive
 from app.services.locations import LocationSeedService
+from app.services.mcp_action_types import Action, endpoint_actions, mcp_action
+from app.services.mcp_actions import ACTIONS, catalogue
 from app.services.mcp_transfers import (
     TRANSFER_ACTIONS,
     DispatchArguments,
@@ -28,7 +34,7 @@ from app.services.mcp_transfers import (
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.transfers import TransferService
-from f0rge_core.exceptions import ConflictError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 from tests.test_sku_archive_commit_races import isolated_requests
 
@@ -211,3 +217,104 @@ async def test_direct_dispatch_keeps_nonstandalone_or_large_transfers_in_warehou
                     LocationStock.location_id == draft.from_location_id,
                 )
             ) == Decimal("1.25")
+
+
+async def test_cancel_draft_leaves_shipped_and_pick_linked_transfers(second_postgres_url):
+    cancel = ACTIONS["transfers_cancel_draft"]
+    async with isolated_requests(second_postgres_url) as (maker, ids):
+        actor = ids["actor"]
+        token = McpToken(team_id=ids["team"], user_id=actor)
+        async with maker() as db:
+            await LocationSeedService(db).seed_if_empty()
+            async with unit_of_work(db):
+                draft = await _stock_and_draft(db, actor, ids["sku"])
+                pick = Pick(
+                    number="PICK-TEST", source_type=PickSourceType.TILL, status=PickStatus.CONFIRMED
+                )
+                db.add(pick)
+                await db.flush()
+                service = TransferService(db)
+                plain = await service.stage_draft(TransferCreate(**draft.model_dump()), actor)
+                linked = await service.stage_draft(
+                    TransferCreate(**draft.model_dump(), pick_id=pick.id), actor
+                )
+                shipped = await service.stage_draft(TransferCreate(**draft.model_dump()), actor)
+                await service.stage_dispatch(shipped.id, actor)
+
+        async def run(transfer, token=token):
+            async with maker() as db, unit_of_work(db):
+                return await cancel.handler(db, token, cancel.arguments(transfer_id=transfer.id))
+
+        async def statuses():
+            async with maker() as db:
+                rows = await db.execute(select(Transfer.id, Transfer.status))
+                return dict(rows.all())
+
+        # The session can see the transfer; only the token's business keeps it out of reach.
+        with pytest.raises(NotFoundError, match="Transfer not found"):
+            await run(plain, McpToken(team_id=uuid.uuid4(), user_id=actor))
+        assert (await statuses())[plain.id] == TransferStatus.DRAFT
+        receipt = await run(plain)
+        assert receipt["status"] == "cancelled" and receipt["transfer_id"] == str(plain.id)
+        for transfer, message in (
+            (linked, "linked to a pick"),
+            (shipped, "Transfer is not a draft"),
+            (plain, "Transfer is not a draft"),
+        ):
+            with pytest.raises(ConflictError, match=message):
+                await run(transfer)
+        async with maker() as db:
+            assert await statuses() == {
+                plain.id: TransferStatus.CANCELLED,
+                linked.id: TransferStatus.DRAFT,
+                shipped.id: TransferStatus.IN_TRANSIT,
+            }
+            # Only the dispatch moved stock: nothing was restocked or taken by a cancel.
+            assert await db.scalar(
+                select(LocationStock.on_hand).where(
+                    LocationStock.sku_id == ids["sku"],
+                    LocationStock.location_id == draft.from_location_id,
+                )
+            ) == Decimal("0")
+
+
+@pytest.mark.no_db
+def test_catalogue_fails_closed():
+    cancel = ACTIONS["transfers_cancel_draft"]
+    transfer_id = str(uuid.uuid4())
+    assert (cancel.effect, cancel.permissions) == ("write", (STOCK_TRANSFER,))
+    assert str(cancel.arguments.model_validate({"transfer_id": transfer_id}).transfer_id) == (
+        transfer_id
+    )
+    for arguments in ({}, {"transfer_id": "TRF-0001"}, {"transfer_id": transfer_id, "force": True}):
+        with pytest.raises(ArgumentError):
+            cancel.arguments.model_validate(arguments)
+
+    async def handler(db, token, args):
+        return {}
+
+    async def with_body(data: TransferCreate, user_id: uuid.UUID = Depends(lambda: None)): ...
+
+    async def by_id(transfer_id: uuid.UUID, user_id: uuid.UUID = Depends(lambda: None)): ...
+
+    def mark(endpoint, **overrides):
+        options = {"permissions": (STOCK_TRANSFER,), "handler": handler, **overrides}
+        return mcp_action("fixture_action", "Warehouse / Transfers", "Fixture.", **options)(
+            endpoint
+        )
+
+    with pytest.raises(TypeError, match="arguments="):
+        mark(with_body)
+    with pytest.raises(ValueError, match="permission"):
+        mark(by_id, permissions=())
+    with pytest.raises(ValueError, match="extra"):
+        mark(with_body, arguments=TransferCreate)
+    assert not hasattr(with_body, "mcp_action")
+
+    router = APIRouter()
+    assert router.post("/{transfer_id}")(mark(by_id)) is by_id
+    router.get("/unmarked")(with_body)
+    (marked,) = endpoint_actions(router)
+    assert isinstance(marked, Action) and set(marked.arguments.model_fields) == {"transfer_id"}
+    with pytest.raises(ValueError, match="Duplicate MCP action name: fixture_action"):
+        catalogue((marked, marked))

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import inspect
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypeVar, get_type_hints
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from fastapi import APIRouter
+from fastapi.params import Depends
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model
 from pydantic_core import to_jsonable_python
 from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,9 +31,77 @@ class Action:
     effect: Literal["read", "write"] = "read"
     related_tabs: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        # Fail closed at import rather than expose a loosely declared action.
+        if self.effect == "write" and not self.permissions:
+            raise ValueError(f"MCP write {self.name} must name a permission")
+        if self.arguments.model_config.get("extra") != "forbid":
+            raise ValueError(f"MCP action {self.name} arguments must forbid extra fields")
+
 
 class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+Endpoint = TypeVar("Endpoint", bound=Callable[..., Any])
+
+
+def _endpoint_arguments(name: str, endpoint: Callable[..., Any]) -> type[BaseModel]:
+    hints = get_type_hints(endpoint, include_extras=True)
+    fields: dict[str, Any] = {}
+    for param in inspect.signature(endpoint).parameters.values():
+        if isinstance(param.default, Depends):
+            continue
+        # Only required UUID path/query parameters are derived. Bodies, optional filters and
+        # Annotated parameters need a reviewed model.
+        if hints.get(param.name) is not uuid.UUID or param.default is not param.empty:
+            raise TypeError(
+                f"MCP action {name} cannot derive '{param.name}'; pass a strict arguments= model"
+            )
+        fields[param.name] = (uuid.UUID, ...)
+    return create_model(name.title().replace("_", "") + "Arguments", __base__=Arguments, **fields)
+
+
+def mcp_action(
+    name: str,
+    tab: str,
+    description: str,
+    *,
+    permissions: tuple[str, ...],
+    handler: Callable[[AsyncSession, McpToken, Any], Awaitable[dict]],
+    arguments: type[BaseModel] | None = None,
+) -> Callable[[Endpoint], Endpoint]:
+    """Mark an API endpoint as an MCP write.
+
+    The endpoint is returned unchanged. MCP runs `handler`, not the endpoint, so the change
+    stays in the transaction that saves its receipt and audit entry. Without `arguments`, they
+    are derived from the endpoint's non-dependency parameters. The mark is inert until the
+    endpoint's router is passed to `endpoint_actions` for the catalogue.
+    """
+
+    def mark(endpoint: Endpoint) -> Endpoint:
+        action = Action(
+            name=name,
+            tab=tab,
+            description=description,
+            arguments=arguments or _endpoint_arguments(name, endpoint),
+            permissions=permissions,
+            handler=handler,
+            effect="write",
+        )
+        setattr(endpoint, "mcp_action", action)
+        return endpoint
+
+    return mark
+
+
+def endpoint_actions(router: APIRouter) -> tuple[Action, ...]:
+    """Collect the marks on the router that declares the routes. A parent that only includes
+    that router yields nothing."""
+    marks = (
+        getattr(getattr(route, "endpoint", None), "mcp_action", None) for route in router.routes
+    )
+    return tuple(action for action in marks if action is not None)
 
 
 class PageArguments(Arguments):
