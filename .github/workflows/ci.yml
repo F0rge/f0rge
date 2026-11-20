@@ -211,3 +211,6 @@ jobs:
     with:
       apps: ${{ needs.plan.outputs.apps }}
       commit: ${{ github.sha }}
+    # Without this a called workflow sees none of its environments' secrets, so every Release
+    # failed with "RAILWAY_TOKEN not set". Each release job reads only its own App's environment.
+    secrets: inherit
