@@ -3464,6 +3464,8 @@ export type AppSettings = import("./label-settings").LabelSettings & {
   payment_terms_days: number;
   default_receive_location_id: string | null;
   default_till_location_id: string | null;
+  /** Company-wide sale hold time in whole hours (1..24). */
+  till_hold_hours: number;
   document_sequences: DocumentSequence[];
 };
 
@@ -3525,6 +3527,7 @@ export function updateSettings(payload: Partial<import("./label-settings").Label
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
+  till_hold_hours?: number;
   document_sequences?: DocumentSequenceUpdate[];
 }): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings", {

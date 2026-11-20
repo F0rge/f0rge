@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "096_mcp_operations",
+  "target_revision": "097_till_hold_hours",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -389,6 +389,10 @@
     },
     "096_mcp_operations": {
       "sha256": "0f7417edfea2c96207f381459ef325f3bbb1f49b9f86f1b2c54c8f74a25a46c0",
+      "automatic": true
+    },
+    "097_till_hold_hours": {
+      "sha256": "70296d589d91d230c10d6f3e5baaea7a139afa3b53046348ce110ad0b8627408",
       "automatic": true
     }
   }

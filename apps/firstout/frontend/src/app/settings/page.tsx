@@ -85,6 +85,10 @@ function SettingsForm({ section }: { section: SettingsSection }) {
   const [logoVersion, setLogoVersion] = useState(0);
   const [defaultReceiveLocationId, setDefaultReceiveLocationId] = useState("");
   const [defaultTillLocationId, setDefaultTillLocationId] = useState("");
+  const [tillHoldHours, setTillHoldHours] = useState("3");
+  const holdHours = Number(tillHoldHours);
+  // Empty reads as 0, so the range check also rejects it.
+  const holdHoursValid = Number.isInteger(holdHours) && holdHours >= 1 && holdHours <= 24;
   const [documentSequences, setDocumentSequences] = useState<
     DocumentSequence[]
   >([]);
@@ -130,6 +134,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
     setHasLogo(data.has_logo);
     setDefaultReceiveLocationId(data.default_receive_location_id ?? "");
     setDefaultTillLocationId(data.default_till_location_id ?? "");
+    setTillHoldHours(String(data.till_hold_hours));
     setDocumentSequences(data.document_sequences.map((entry) =>
       draft?.sequence?.doc_type === entry.doc_type ? { ...entry, ...draft.sequence } : entry,
     ));
@@ -197,9 +202,11 @@ function SettingsForm({ section }: { section: SettingsSection }) {
           }] };
           break;
         case "locations":
+          if (!holdHoursValid) return;
           patch = {
             default_receive_location_id: defaultReceiveLocationId || null,
             default_till_location_id: defaultTillLocationId || null,
+            till_hold_hours: holdHours,
             always_prefer_warehouse: preferWarehouse,
             auto_process_exact_supplier_invoices: autoProcessExactInvoices,
             pick_priority: pickPriority,
@@ -378,6 +385,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
       fields = {
         default_receive_location_id: defaultReceiveLocationId || null,
         default_till_location_id: defaultTillLocationId || null,
+        till_hold_hours: holdHours,
         always_prefer_warehouse: preferWarehouse,
         auto_process_exact_supplier_invoices: autoProcessExactInvoices,
         pick_priority: pickPriority,
@@ -638,25 +646,45 @@ function SettingsForm({ section }: { section: SettingsSection }) {
                       />
                     ))}
                   </Select>
-                  <Select
-                    id="default-till-location"
-                    labelText="Default till location"
-                    helperText="Showroom locations only."
-                    value={defaultTillLocationId}
-                    disabled={!canMutate || saving}
-                    onChange={(event) =>
-                      setDefaultTillLocationId(event.target.value)
-                    }
-                  >
-                    <SelectItem value="" text="None" />
-                    {showrooms.map((location) => (
-                      <SelectItem
-                        key={location.id}
-                        value={location.id}
-                        text={location.name}
-                      />
-                    ))}
-                  </Select>
+                  <div className={styles.formGrid}>
+                    <Select
+                      id="default-till-location"
+                      labelText="Default till location"
+                      helperText="Showroom locations only."
+                      value={defaultTillLocationId}
+                      disabled={!canMutate || saving}
+                      onChange={(event) =>
+                        setDefaultTillLocationId(event.target.value)
+                      }
+                    >
+                      <SelectItem value="" text="None" />
+                      {showrooms.map((location) => (
+                        <SelectItem
+                          key={location.id}
+                          value={location.id}
+                          text={location.name}
+                        />
+                      ))}
+                    </Select>
+                    <NumberInput
+                      id="till-hold-hours"
+                      allowEmpty
+                      label="Sale hold time (hours)"
+                      helperText="Applies to every till. An open sale expires this long after its last change; a held sale this long after it was held or resumed. Expiry deletes the sale and releases its reserved stock."
+                      invalid={!holdHoursValid}
+                      invalidText="Enter a whole number of hours from 1 to 24."
+                      value={tillHoldHours}
+                      min={1}
+                      max={24}
+                      step={1}
+                      disabled={!canMutate || saving}
+                      onChange={(_, { value }) => {
+                        if (typeof value === "number" || typeof value === "string") {
+                          setTillHoldHours(String(value));
+                        }
+                      }}
+                    />
+                  </div>
                   <Toggle
                     id="always-prefer-warehouse"
                     labelText="Always prefer warehouse"
@@ -745,7 +773,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
                   </p>
                 </>
               ) : null}
-              <AdminSaveActions canMutate={canMutate} saving={saving || logoUploading} dirty={dirty} onDiscard={discardChanges} onSave={() => void handleSave()} />
+              <AdminSaveActions canMutate={canMutate} saving={saving || logoUploading} dirty={dirty} saveDisabled={section === "locations" && !holdHoursValid} onDiscard={discardChanges} onSave={() => void handleSave()} />
             </Stack>
           )}
         </Tile>

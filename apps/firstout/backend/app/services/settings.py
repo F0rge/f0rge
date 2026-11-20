@@ -139,6 +139,8 @@ class SettingsService:
                 settings.auto_process_exact_supplier_invoices = (
                     data.auto_process_exact_supplier_invoices
                 )
+            if data.till_hold_hours is not None:
+                settings.till_hold_hours = data.till_hold_hours
             if data.document_sequences is not None:
                 await self._apply_sequence_updates(
                     (tenant_id_ctx.get() or user.team_id), data.document_sequences
@@ -301,6 +303,7 @@ class SettingsService:
                 settings.auto_process_exact_supplier_invoices
             ),
             session_ttl_hours=int(settings.session_ttl_hours),
+            till_hold_hours=int(settings.till_hold_hours),
             has_logo=bool(settings.logo_storage_key),
             document_sequences=sequence_rows,
         )
