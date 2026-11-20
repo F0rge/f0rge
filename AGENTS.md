@@ -78,7 +78,7 @@ Do not open a `develop` branch workflow. A remote `develop` ref may still exist;
 
 - **Trunk-based development.** Everyone integrates into `main` continuously.
 - **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches (Codex or Claude Code) use `codex/<short-kebab-description>`, the only namespace the PR publisher accepts. Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
-- **PRs into `main` only.** Never open a PR against `develop` or any other branch. The `ci` check must be green before merge.
+- **PRs into `main` only.** Never open a PR against `develop` or any other branch. The `merge-gate` check must be green before merge.
 - **Automatic squash merge** follows P-005 after Leo's review and all GitHub requirements pass, unless the task withholds merge authorization. Use a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
 - **A merge to `main` goes to production.** CI on `main` releases every affected App to its Host. Do not merge what should not be live.
 - **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
@@ -91,7 +91,7 @@ Do not open a `develop` branch workflow. A remote `develop` ref may still exist;
 
 Two workflows, read top to bottom. Terms (Project, App, Host, Artifact, Release) are defined in [the Delivery glossary](.github/CONTEXT.md).
 
-- **CI** ([`ci.yml`](.github/workflows/ci.yml)): a plan job asks Nx what is affected. Language jobs (Python, TypeScript, Rust) run only when their language is affected. After the language jobs pass, one image job per affected App builds each deployable Project's Artifact, starts it and calls its health endpoint. `ci` is the single required check. No browser e2e in CI.
+- **CI** ([`ci.yml`](.github/workflows/ci.yml)): a plan job asks Nx what is affected. Language jobs (Python, TypeScript, Rust) run only when their language is affected. After the language jobs pass, one image job per affected App builds each deployable Project's Artifact, starts it and calls its health endpoint. `merge-gate` is the single required check. No browser e2e in CI.
 - **CD** ([`cd.yml`](.github/workflows/cd.yml)): the last job of CI on `main`. One job per affected App releases that commit's Artifacts to its Host, migrations first. A failed Release puts each service back on the image it ran before and fails the run.
 - **Per Project**: a deploy block in `project.json` (`metadata.deploy`) names the Host and its services. `node .github/deploy/deployables.mjs` lists every App.
 - **By hand**: `gh workflow run cd.yml -f app=<app> -f commit=<sha>`. Details and accepted ceilings: [`.github/deploy/README.md`](.github/deploy/README.md).

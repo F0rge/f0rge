@@ -11,8 +11,8 @@ name: CI
 #               endpoint to answer. Read-only: it cannot push.
 #   image-push  main only: the same build and check, then push to GHCR. The only job that can
 #               write packages, so a pull request can never overwrite an image a release pulls.
-#   ci          the single required check (the branch ruleset requires this exact name)
-#   cd          main only, after `ci`: release the affected Apps with the images just pushed (cd.yml)
+#   merge-gate  the single required check (the branch ruleset requires this exact name)
+#   cd          main only, after `merge-gate`: release the affected Apps with the images just pushed (cd.yml)
 #
 # On main, "affected" is measured from the last fully successful run, release included.
 # An App whose release failed is therefore built and released again by the next push.
@@ -190,7 +190,7 @@ jobs:
           PROJECTS: ${{ matrix.projects }}
           IMAGE_PUSH: 'true'
 
-  ci:
+  merge-gate:
     needs: [plan, python, typescript, rust, image, image-push]
     if: always()
     runs-on: ubuntu-latest
@@ -201,9 +201,9 @@ jobs:
         run: exit 1
 
   cd:
-    needs: [plan, ci]
+    needs: [plan, merge-gate]
     # Stated in full: the default "everything before succeeded" would skip this whenever a language job was skipped.
-    if: ${{ !cancelled() && needs.ci.result == 'success' && github.event_name == 'push' && needs.plan.outputs.apps != '[]' }}
+    if: ${{ !cancelled() && needs.merge-gate.result == 'success' && github.event_name == 'push' && needs.plan.outputs.apps != '[]' }}
     permissions:
       contents: read
       packages: read

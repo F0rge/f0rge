@@ -30,7 +30,7 @@ registered Rust projects with the guard, then runs one `nx affected` line. This
 fixture suite is the `test` target of `f0rge-rust-checks` (tagged
 `platform:rust`), so it runs when `.github/rust/**` changes. The static part of
 the guard runs on every change, in the `plan` job. A failed or cancelled Rust
-job fails the `ci` gate.
+job fails the `merge-gate` check.
 
 ## Register a future crate
 

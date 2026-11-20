@@ -12,7 +12,7 @@ was performed. All fixtures below are synthetic.
 | Frontend | Nx lint/typecheck/test/build/codegen checks and shared Primer Storybook build. Twenty-one Chromium cases cover denied, loading, empty, error, saved, stale, partial, conflict, import, identity-change races and mobile keyboard behavior. Forty axe scans cover all eight workspace views plus loading/denied states in light/dark at desktop/mobile widths. Explicit computed contrast, default-token button styling and system-theme switching regressions pass. |
 | Integrated walkthrough | The production React build called the actual Rust API and PostgreSQL through a local RS256 identity gateway. Both categories and market insights loaded; a watch survived reload; a cost edit persisted; negative costs showed a labelled validation error. Direct origin without an assertion showed sign-in denial and no records. |
 | Operations | Real loopback mTLS permits only the expected certificate identity and fixed request schema; stalled TLS/header clients cannot block the accepting thread. Real PostgreSQL bootstrap tests verify separate runtime/migrator/read-only-backup privileges and no password disclosure on success or failure. |
-| Routing and registration | Generated eight Codex adapters, routing fixtures, Nx project registration, Rust target guard and workflow regressions. Buycycle browser checks are a required frontend CI step; the native ARM64 image check feeds the aggregate `ci` gate. |
+| Routing and registration | Generated eight Codex adapters, routing fixtures, Nx project registration, Rust target guard and workflow regressions. Buycycle browser checks are a required frontend CI step; the native ARM64 image check feeds the aggregate `merge-gate` check. |
 
 ## Exact image evidence
 

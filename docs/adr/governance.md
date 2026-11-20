@@ -48,7 +48,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Category:** Governance
 - **Decision:** ADR compliance is not enforced by CI/CD. The reviewer decides, even where an ADR is broken. The pipeline contains no code whose only purpose is to prove an ADR was followed. Cheap guards that catch real breakage stay.
 - **Amendment (20 November 2026):** Leo requested that CI/CD stop enforcing ADR compliance. This replaces "deterministic automated architecture checks block merge and release where enforceable". The ADR Check in PR descriptions (P-003) stays, as information for the reviewer.
-- **Enforcement:** `ci` is the single required check. It runs lint, format, typecheck, tests, builds, the Artifact health check and the guards for real breakage: Nx project registration, the libs-to-apps boundary, OpenAPI drift, dependency audits and the agent-profile checks.
+- **Enforcement:** `merge-gate` is the single required check. It runs lint, format, typecheck, tests, builds, the Artifact health check and the guards for real breakage: Nx project registration, the libs-to-apps boundary, OpenAPI drift, dependency audits and the agent-profile checks.
 - **Approved exception:** None.
 
 ## P-005
@@ -74,8 +74,8 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Decision:** Every App is released automatically after a reviewed merge to `main` with CI passing. There is no per-release approval. Review and automatic squash merging follow P-005.
 - **Amendment (15 November 2026):** Leo requested automatic deployment for Firstout.
 - **Amendment (20 November 2026):** Leo requested the same for every App: migrations included (P-020), no per-release approval, no backup preflight, no release tags (P-045). This replaces the Firstout-only scope and the release holds on the other Apps.
-- **Enforcement:** `ci.yml` calls `cd.yml` as its last job on pushes to `main`, after the `ci` gate. `cd.yml` runs one job per affected App in the GitHub environment named after the App, which holds that App's Host token. Releases of one App run one at a time, in merge order. A running Release is never cancelled; a newer one replaces a Release still waiting in the queue. A failed Release puts each service back on the image it ran before and fails the run. A manual run releases a commit that CI already built on `main`: `gh workflow run cd.yml -f app=<app> -f commit=<sha>`.
-- **Gate and limit:** Leo's review (P-005) and the `ci` check are the gate. An App that has not been switched at its Host fails closed. Provider operations outside this pipeline, and moving an App to another Host (P-047), still need their own task authorization. Nothing checks a whole App before production.
+- **Enforcement:** `ci.yml` calls `cd.yml` as its last job on pushes to `main`, after the `merge-gate` check. `cd.yml` runs one job per affected App in the GitHub environment named after the App, which holds that App's Host token. Releases of one App run one at a time, in merge order. A running Release is never cancelled; a newer one replaces a Release still waiting in the queue. A failed Release puts each service back on the image it ran before and fails the run. A manual run releases a commit that CI already built on `main`: `gh workflow run cd.yml -f app=<app> -f commit=<sha>`.
+- **Gate and limit:** Leo's review (P-005) and the `merge-gate` check are the gate. An App that has not been switched at its Host fails closed. Provider operations outside this pipeline, and moving an App to another Host (P-047), still need their own task authorization. Nothing checks a whole App before production.
 - **Approved exception:** None.
 
 ## P-007

@@ -43,6 +43,6 @@ npx nx reset                                   # clear the Nx cache
 
 ## CI/CD
 
-- **CI** ([`ci.yml`](.github/workflows/ci.yml)) builds and tests only what a change affects, routed by language, and builds one Artifact per deployable Project. `ci` is the single required check on PRs to `main`; see [branch rules](.github/branch-rules.md).
+- **CI** ([`ci.yml`](.github/workflows/ci.yml)) builds and tests only what a change affects, routed by language, and builds one Artifact per deployable Project. `merge-gate` is the single required check on PRs to `main`; see [branch rules](.github/branch-rules.md).
 - **CD** ([`cd.yml`](.github/workflows/cd.yml)) runs as the last job of CI on `main` and releases every affected App to its Host with the Artifacts CI just built. A failed Release puts each service back on the image it ran before.
 - Each deployable Project names its Host and services in the deploy block of its `project.json`. Manual Releases, rollbacks and accepted ceilings: [`.github/deploy/README.md`](.github/deploy/README.md). Terms: [Delivery glossary](.github/CONTEXT.md). Policy: [P-006](docs/adr/governance.md#p-006).
