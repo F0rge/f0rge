@@ -73,7 +73,7 @@ Read these files explicitly; they are review references, not another ownership m
 | Backend; legacy Python persistence/API changes | `docs/agents/review-context/fastapi-backend-playbook.md` |
 | Frontend and client contracts | `docs/agents/review-context/frontend-dev-playbook.md` |
 | Delivery and DevOps | `docs/agents/review-context/devops-playbook.md` |
-| Quality/testing evidence | `docs/agents/review-context/qa-engineer-playbook.md` |
+| Quality/testing evidence | `docs/agents/rules/qa-gate.md` |
 
 Data, security and workflows reviewers select the affected-area playbooks from
 their diff, alongside their own required ADR readings. There are no invented

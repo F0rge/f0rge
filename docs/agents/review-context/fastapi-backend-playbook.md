@@ -114,6 +114,8 @@ Resolve ownership and reviewers with `node scripts/agents/agents.mjs route <repo
 
 - **pgvector extension before `create_all`** — any test fixture or startup path that calls `Base.metadata.create_all` on a fresh Postgres must first execute `CREATE EXTENSION IF NOT EXISTS vector`. BLOCK if missing. See `project_byok_pgvector.md`.
 
+- **`asyncpg` `add_listener` must be awaited** — `raw_conn.add_listener(...)` is a coroutine; a sync call only logs a `RuntimeWarning` and silently kills LISTEN/NOTIFY. BLOCK any new un-awaited call.
+
 ### Migrations
 
 - **asyncpg DDL parameter marker prohibition** — `ALTER ROLE ... PASSWORD $1` is invalid in Postgres DDL. New migrations that set passwords must embed the value via Python f-string (value comes from an owned env var, so interpolation is safe). BLOCK if bound parameters used in DDL. See `project_mcp_migrations.md`.
