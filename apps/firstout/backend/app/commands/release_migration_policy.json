@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "097_till_hold_hours",
+  "target_revision": "098_till_baskets",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -393,6 +393,10 @@
     },
     "097_till_hold_hours": {
       "sha256": "70296d589d91d230c10d6f3e5baaea7a139afa3b53046348ce110ad0b8627408",
+      "automatic": true
+    },
+    "098_till_baskets": {
+      "sha256": "94b9ea77dabc976a0602d7edaed7c23f2d4d0df3e9062a69c24bf7bf6d24bb96",
       "automatic": true
     }
   }

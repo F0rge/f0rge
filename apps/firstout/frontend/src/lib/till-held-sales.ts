@@ -1,4 +1,7 @@
-import { ApiError, type HeldSale, type HeldSaleCreate, type HeldSaleResume, type PickDocument } from "./api";
+import {
+  ApiError, type HeldSale, type HeldSaleCreate, type HeldSaleResume, type PickDocument, type TillBasket,
+  type TillBasketUpdate,
+} from "./api";
 import type { TillCartSnapshot } from "./till-kit-pick";
 
 export type PendingHeldOperation =
@@ -8,62 +11,27 @@ export type PendingHeldOperation =
       startedAt?: number;
     };
 
-export type TillSession = { cart: TillCartSnapshot; pending?: PendingHeldOperation };
+/** Basket contents in the shape shared by held sales and the server basket. */
+export type BasketContents = Omit<TillBasketUpdate, "version" | "operation_id">;
 
-export function tillSessionKey(teamId: string, userId: string): string {
-  return `firstout.till.cart.v2:${JSON.stringify([teamId, userId])}`;
-}
-
-export function readTillSession(key: string): TillSession | null {
-  const raw = sessionStorage.getItem(key);
-  if (!raw) return null;
-  const value = JSON.parse(raw) as TillSession | null;
-  if (!value?.cart || !Array.isArray(value.cart.lines) || typeof value.cart.locationId !== "string") {
-    throw new Error("The saved till cart could not be read.");
-  }
-  if (value.pending &&
-      (!["hold", "resume"].includes(value.pending.kind) ||
-       value.pending.request?.location_id !== value.cart.locationId ||
-       (value.pending.kind === "resume" &&
-        value.pending.destination?.locationId !== value.cart.locationId))) {
-    throw new Error("The saved till operation could not be read.");
-  }
-  return value;
-}
-
-export function saveTillSession(key: string, value: TillSession): boolean {
-  try {
-    sessionStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function snapshotHeldSale(sale: HeldSale): TillCartSnapshot {
+export function cartSnapshot(source: HeldSale | TillBasket): TillCartSnapshot {
   return {
-    locationId: sale.location_id,
-    customerId: sale.customer_id ?? "",
-    pickId: sale.pick_id ?? "",
-    linkedPickIds: sale.linked_pick_ids,
-    note: sale.note ?? "",
-    held: true,
-    lines: sale.lines.map((line) => ({
+    locationId: source.location_id,
+    customerId: source.customer_id ?? "",
+    pickId: source.pick_id ?? "",
+    linkedPickIds: source.linked_pick_ids,
+    note: source.note ?? "",
+    lines: source.lines.map((line) => ({
       skuId: line.sku_id, qty: line.qty, discountPercent: Number(line.discount_percent),
     })),
   };
 }
 
-export function heldSaleRequest(
-  cart: TillCartSnapshot,
-  picks: PickDocument[] = [],
-): HeldSaleCreate {
+export function basketContents(cart: TillCartSnapshot, picks: PickDocument[] = []): BasketContents {
   const lines = new Set(cart.lines.map((line) => line.skuId));
   const legacyPick = picks.find((pick) => pick.id === cart.pickId);
   const pickId = legacyPick?.kit_sku_id && !lines.has(legacyPick.kit_sku_id) ? "" : cart.pickId;
   return {
-    id: crypto.randomUUID(),
-    location_id: cart.locationId,
     ...(cart.customerId ? { customer_id: cart.customerId } : {}),
     ...(pickId ? { pick_id: pickId } : {}),
     linked_pick_ids: Object.fromEntries(
@@ -75,6 +43,13 @@ export function heldSaleRequest(
       ...(line.discountPercent ? { discount_percent: line.discountPercent } : {}),
     })),
   };
+}
+
+export function heldSaleRequest(
+  cart: TillCartSnapshot,
+  picks: PickDocument[] = [],
+): HeldSaleCreate {
+  return { id: crypto.randomUUID(), location_id: cart.locationId, ...basketContents(cart, picks) };
 }
 
 export function isUncertainHeldResponse(error: unknown): boolean {

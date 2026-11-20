@@ -1324,7 +1324,40 @@ export type HeldSaleCreate = {
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   note?: string | null;
+  basket_id?: string;
 };
+
+/** The signed-in user's open till basket for one showroom. */
+export type TillBasket = {
+  id: string;
+  location_id: string;
+  customer_id: string | null;
+  note: string | null;
+  pick_id: string | null;
+  linked_pick_ids: Record<string, string>;
+  lines: { sku_id: string; qty: number; discount_percent: string }[];
+  version: number;
+  updated_at: string;
+};
+
+/** Whole-basket replace; a stale version is rejected with basket_version_conflict. */
+export type TillBasketUpdate = {
+  version: number;
+  operation_id: string;
+  customer_id?: string;
+  note?: string | null;
+  pick_id?: string;
+  linked_pick_ids?: Record<string, string>;
+  lines: TillSaleLinePayload[];
+};
+
+export function getTillBasket(locationId: string): Promise<TillBasket> {
+  return apiFetch(`/till/basket?location_id=${encodeURIComponent(locationId)}`);
+}
+
+export function updateTillBasket(id: string, payload: TillBasketUpdate): Promise<TillBasket> {
+  return apiFetch(`/till/basket/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
 
 export type HeldSale = {
   id: string;
@@ -1354,6 +1387,7 @@ export type HeldSaleResume = {
   operation_id: string;
   version: number;
   current?: HeldSaleCreate;
+  basket_id?: string;
 };
 
 export function listHeldSales(locationId: string, signal?: AbortSignal): Promise<HeldSale[]> {
@@ -1374,6 +1408,7 @@ export function updateHeldSaleNote(id: string, locationId: string, version: numb
 export function resumeTillHeldSale(id: string, payload: HeldSaleResume): Promise<{
   resumed_id: string;
   held_current_id: string | null;
+  basket?: TillBasket;
 }> {
   return apiFetch(`/till/held-sales/${id}/resume`, {
     method: "POST",
@@ -1423,6 +1458,8 @@ export type TillSalePayload = TillPriceRequest & {
   pick_ids?: string[];
   credit_override?: boolean;
   credit_override_reason?: string;
+  basket_id?: string;
+  basket_version?: number;
 };
 
 export type TillSaleResult = {

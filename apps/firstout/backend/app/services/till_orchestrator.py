@@ -162,6 +162,18 @@ class TillOrchestrator:
         if location.type != LocationType.SHOWROOM:
             raise ConflictError("Till sales are only allowed at showroom locations")
 
+        basket = baskets = None
+        if data.basket_id is not None:
+            from app.services.till_basket import TillBasketService
+
+            if user_id is None:
+                raise ValidationError("A basket sale needs a signed-in user")
+            baskets = TillBasketService(self.db)
+            basket = await baskets.get_owned(data.basket_id, user_id, lock=True)
+            if basket.location_id != data.location_id:
+                raise ValidationError("The basket belongs to a different showroom")
+            baskets.assert_matches(basket, data.lines, data.basket_version)
+
         customer = await self._active_customer(data)
         override_note = None
         if not self.credit.is_walk_in(customer):
@@ -378,6 +390,8 @@ class TillOrchestrator:
                 pick.invoice_id = invoice.id
 
             invoice.amount_paid = total_inc
+            if baskets is not None and basket is not None:
+                baskets.set_contents(basket)
             await self.events.record(
                 BooksDocumentType.INVOICE,
                 invoice.id,

@@ -80,6 +80,7 @@ import {
   downloadInvoicePdf,
   getSettings,
   getSku,
+  getTillBasket,
   getCustomer,
   holdTillSale,
   resumeTillHeldSale,
@@ -97,6 +98,7 @@ import {
   previewTillPrices,
   settingsLogoUrl,
   skuPhotoUrl,
+  updateTillBasket,
   type AppSettings,
   type CustomerCrm,
   type InventorySku,
@@ -127,8 +129,6 @@ import {
 } from "@/lib/quote-sku-price";
 import { isCreditBlockMessage } from "@/lib/customer-crm";
 import {
-  clearTillCart,
-  loadTillCart,
   nextTillStateAfterKitConfirm,
   openPicksHrefForKit,
   parseKitRequiresPick,
@@ -148,15 +148,15 @@ import {
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import {
+  basketContents,
   canKeepOriginalBasket,
+  cartSnapshot,
   heldSaleRequest,
   isUncertainHeldResponse,
-  readTillSession,
-  saveTillSession,
-  snapshotHeldSale,
-  tillSessionKey,
+  type BasketContents,
   type PendingHeldOperation,
 } from "@/lib/till-held-sales";
+import { createBasketSaver, isBasketConflict } from "@/lib/till-basket";
 
 const WALK_IN_CUSTOMER_NAME = "Walk-in customer";
 
@@ -274,9 +274,7 @@ function SkuThumb({ sku }: { sku: Sku }) {
 
 type RestoredCart = { lines: CartLine[]; customer: CustomerCrm | null };
 
-function blankCart(locationId: string): TillCartSnapshot {
-  return { locationId, customerId: "", pickId: "", linkedPickIds: {}, lines: [] };
-}
+const EMPTY_BASKET: BasketContents = { linked_pick_ids: {}, lines: [] };
 
 async function hydrateCart(
   snapshot: TillCartSnapshot,
@@ -343,8 +341,7 @@ function TillWorkspace() {
   const [pendingBlocked, setPendingBlocked] = useState(false);
   const [originalAvailable, setOriginalAvailable] = useState(false);
   const heldLock = useRef(false);
-  const operationSource = useRef<TillCartSnapshot | null>(null);
-  const restoringLegacy = useRef(false);
+  const [basketUpdated, setBasketUpdated] = useState(false);
   const [skuId, setSkuId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
@@ -389,9 +386,22 @@ function TillWorkspace() {
     error: string | null;
   } | null>(null);
   const scanBufferRef = useRef("");
+  // cartReady: the cart shows the server basket for this showroom and saves back to it.
   const [cartReady, setCartReady] = useState(false);
-  const sessionKey = user ? tillSessionKey(user.team.id, user.id) : "";
-  const heldList = useHeldSales(canSell && cartReady ? locationId : "");
+  const [saver] = useState(() => createBasketSaver({
+    put: updateTillBasket,
+    onConflict: () => {
+      setBasketUpdated(true);
+      setCartReady(false);
+    },
+    onError: (failure) => setError(failure instanceof Error ? failure.message : "Could not save the basket."),
+  }));
+  const reloadBasket = useCallback(() => {
+    saver.reset(null);
+    setCartReady(false);
+  }, [saver]);
+  // Not gated on cartReady: reloading the basket after a hold or sale must not blank the list.
+  const heldList = useHeldSales(canSell ? locationId : "");
   const heldLocked = heldBusy || heldListBusy || pendingHeld !== null;
 
   const currentSnapshot = useMemo<TillCartSnapshot>(() => ({
@@ -577,64 +587,32 @@ function TillWorkspace() {
   }, [cartKitKey]);
 
   useEffect(() => {
-    if (!canSell || !loadSucceeded || cartReady || restoreBlocked || pendingHeld || heldLock.current) return;
+    if (!canSell || !loadSucceeded || !locationId || cartReady || restoreBlocked || pendingHeld) return;
     let cancelled = false;
     void (async () => {
-      let session;
+      const basket = await getTillBasket(locationId);
+      if (cancelled) return;
+      // Reset first so a basket that cannot be shown can still be discarded.
+      saver.reset(basket);
+      const snapshot = cartSnapshot(basket);
       try {
-        session = readTillSession(sessionKey);
+        const restored = await hydrateCart(snapshot, skus, tillPicks, customers);
+        if (!cancelled) applySnapshot(snapshot, restored);
       } catch (failure) {
-        if (failure instanceof DOMException && failure.name === "SecurityError") {
-          // Normal till sales can run without a browser cart. Held writes will
-          // require a working recovery cache before posting anything.
-          setCartReady(true);
-          return;
-        }
+        if (!cancelled) setRestoreBlocked(true);
         throw failure;
       }
-      const legacy = session ? null : loadTillCart();
-      const snapshot = session?.cart ?? legacy;
-      if (!snapshot || (!session && !locations.some((location) => location.id === snapshot.locationId))) {
-        setCartReady(true);
-        return;
-      }
-      restoringLegacy.current = Boolean(legacy);
-      if (session?.pending) {
-        operationSource.current = snapshot;
-        setPendingHeld(session.pending);
-        if (snapshot.locationId) setLocationId(snapshot.locationId);
-        return;
-      }
-      if (snapshot.locationId && !locations.some((location) => location.id === snapshot.locationId)) {
-        throw new Error("The showroom for the saved cart is no longer available.");
-      }
-      const restored = await hydrateCart(snapshot, skus, tillPicks, customers);
-      if (cancelled) return;
-      if (legacy && saveTillSession(sessionKey, { cart: snapshot })) {
-        clearTillCart();
-        restoringLegacy.current = false;
-      }
-      applySnapshot(snapshot, restored);
-      setResumedSale(snapshot.held === true && restored.lines.length > 0);
-      if (legacy?.held && restored.lines.length) {
-        setHeldNotice({
-          title: "Held sale restored from this tab",
-          subtitle: "Use Hold sale to save it to the showroom’s shared Held sales list.",
-        });
-      }
     })().catch((failure: unknown) => {
-      if (cancelled) return;
-      setRestoreBlocked(true);
-      setError(failure instanceof Error ? failure.message : "Could not restore the saved cart.");
+      if (!cancelled) setError(failure instanceof Error ? failure.message : "Could not restore the saved cart.");
     });
     return () => { cancelled = true; };
-  }, [applySnapshot, canSell, cartReady, customers, loadSucceeded, locations, pendingHeld, restoreBlocked, sessionKey, skus, tillPicks]);
+  }, [applySnapshot, canSell, cartReady, customers, loadSucceeded, locationId, pendingHeld, restoreBlocked, saver, skus, tillPicks]);
 
   useEffect(() => {
-    if (cartReady && !pendingHeld && !heldLock.current) {
-      saveTillSession(sessionKey, { cart: currentSnapshot });
-    }
-  }, [cartReady, currentSnapshot, pendingHeld, sessionKey]);
+    if (cartReady && !pendingHeld) saver.save(basketContents(currentSnapshot, tillPicks));
+  }, [cartReady, currentSnapshot, pendingHeld, saver, tillPicks]);
+
+  useEffect(() => () => saver.dispose(), [saver]);
 
   const priceRequest = useMemo<TillPriceRequest>(() => ({
     ...(customerId ? { customer_id: customerId } : {}),
@@ -956,8 +934,23 @@ function TillWorkspace() {
     }
   }
 
-  function changeShowroom(next: string) {
+  async function changeShowroom(next: string) {
     setPendingShowroom(null);
+    if (heldLock.current) return;
+    heldLock.current = true;
+    setHeldBusy(true);
+    try {
+      // Changing showroom clears the cart, so leave this showroom's basket empty.
+      saver.save(EMPTY_BASKET);
+      await saver.flush();
+    } catch {
+      // The save callbacks report a rejected save; the old showroom keeps its basket.
+    } finally {
+      heldLock.current = false;
+      setHeldBusy(false);
+    }
+    reloadBasket();
+    setRestoreBlocked(false);
     setLocationId(next);
     setSkuId("");
     setCart([]);
@@ -981,13 +974,12 @@ function TillWorkspace() {
     const [latestSkus, latestPicks, latestInventory] = await Promise.all([
       listSkus(), listPicks("till"), listInventory(),
     ]);
-    const restored = await hydrateCart(snapshot, latestSkus, latestPicks, []);
-    return { restored, latestSkus, latestPicks, latestInventory };
+    await hydrateCart(snapshot, latestSkus, latestPicks, []);
+    return { latestSkus, latestPicks, latestInventory };
   }
 
   async function finishHeldOperation(
     operation: PendingHeldOperation,
-    source: TillCartSnapshot,
     destination: Awaited<ReturnType<typeof restoreHeldDestination>> | null,
     retry: boolean,
   ) {
@@ -996,11 +988,8 @@ function TillWorkspace() {
       if (operation.kind === "hold") {
         const draft = await holdTillSale(operation.request);
         acknowledged = true;
-        const empty = blankCart(source.locationId);
-        if (!saveTillSession(sessionKey, { cart: empty })) {
-          throw new Error("The sale is held but this browser could not clear the recovered cart.");
-        }
-        applySnapshot(empty, { lines: [], customer: null });
+        // The server emptied the basket with the hold.
+        reloadBasket();
         setResumedSale(false);
         setHeldFocus(draft.id);
         setHeldNotice({ title: `${draft.reference} is on hold`, subtitle: "Choose Resume sale when you’re ready." });
@@ -1008,18 +997,18 @@ function TillWorkspace() {
       } else {
         const result = await resumeTillHeldSale(operation.id, operation.request);
         acknowledged = true;
-        if (result.resumed_id !== operation.id ||
+        if (result.resumed_id !== operation.id || !result.basket ||
             (result.held_current_id ?? null) !== (operation.request.current?.id ?? null)) {
           throw new Error("The till could not confirm which basket was resumed.");
         }
         const next = destination ?? await restoreHeldDestination(operation.destination);
-        if (!saveTillSession(sessionKey, { cart: operation.destination })) {
-          throw new Error("The till could not store the resumed basket in this browser.");
-        }
+        const snapshot = cartSnapshot(result.basket);
+        const restored = await hydrateCart(snapshot, next.latestSkus, next.latestPicks, []);
         setSkus(next.latestSkus.filter((sku) => !sku.is_archived));
         setTillPicks(next.latestPicks);
         setInventory(next.latestInventory);
-        applySnapshot(operation.destination, next.restored);
+        saver.reset(result.basket);
+        applySnapshot(snapshot, restored);
         setResumedSale(true);
         setTender("cash");
         setCreditOverride(false);
@@ -1042,13 +1031,14 @@ function TillWorkspace() {
       setPendingHeld(null);
       setPendingBlocked(false);
       setOriginalAvailable(false);
-      operationSource.current = null;
       heldList.refresh();
     } catch (failure: unknown) {
-      if (!acknowledged && !retry && !isUncertainHeldResponse(failure) &&
-          saveTillSession(sessionKey, { cart: source })) {
+      if (!acknowledged && isBasketConflict(failure)) {
         setPendingHeld(null);
-        operationSource.current = null;
+        reloadBasket();
+        heldList.refresh();
+      } else if (!acknowledged && !retry && !isUncertainHeldResponse(failure)) {
+        setPendingHeld(null);
         heldList.refresh();
       } else if (acknowledged || !isUncertainHeldResponse(failure)) {
         setPendingBlocked(true);
@@ -1065,7 +1055,8 @@ function TillWorkspace() {
     setHeldBusy(true);
     setError(null);
     try {
-      const destination = draft ? snapshotHeldSale(draft) : null;
+      const basket = await saver.flush();
+      const destination = draft ? cartSnapshot(draft) : null;
       const prepared = destination ? await restoreHeldDestination(destination) : null;
       const operation: PendingHeldOperation = draft && destination ? {
         kind: "resume",
@@ -1076,18 +1067,15 @@ function TillWorkspace() {
           version: draft.version,
           location_id: locationId,
           operation_id: crypto.randomUUID(),
+          basket_id: basket.id,
           ...(currentSnapshot.lines.length ? { current: heldSaleRequest(currentSnapshot, tillPicks) } : {}),
         },
         destination,
-      } : { kind: "hold", request: heldSaleRequest(currentSnapshot, tillPicks) };
-      if (!saveTillSession(sessionKey, { cart: currentSnapshot, pending: operation })) {
-        throw new Error("This browser could not save a recovery copy. The sale has not changed.");
-      }
-      operationSource.current = currentSnapshot;
+      } : { kind: "hold", request: { ...heldSaleRequest(currentSnapshot, tillPicks), basket_id: basket.id } };
       setPendingHeld(operation);
       setPendingBlocked(false);
       setResumeDraft(null);
-      await finishHeldOperation(operation, currentSnapshot, prepared, false);
+      await finishHeldOperation(operation, prepared, false);
     } catch (failure: unknown) {
       setError(failure instanceof Error ? failure.message : "Could not prepare the held sale.");
     } finally {
@@ -1097,52 +1085,34 @@ function TillWorkspace() {
   }
 
   async function retryHeldOperation() {
-    if (!pendingHeld || !operationSource.current || heldLock.current) return;
+    if (!pendingHeld || heldLock.current) return;
     heldLock.current = true;
     setHeldBusy(true);
     setError(null);
     setOriginalAvailable(false);
     try {
-      await finishHeldOperation(pendingHeld, operationSource.current, null, true);
+      await finishHeldOperation(pendingHeld, null, true);
     } finally {
       heldLock.current = false;
       setHeldBusy(false);
     }
   }
 
-  async function keepOriginalBasket() {
-    const source = operationSource.current;
-    if (!originalAvailable || !source || heldLock.current) return;
-    heldLock.current = true;
-    setHeldBusy(true);
-    try {
-      const next = await restoreHeldDestination(source);
-      if (!saveTillSession(sessionKey, { cart: source })) {
-        throw new Error("This browser could not save the original basket in this tab.");
-      }
-      setSkus(next.latestSkus.filter((sku) => !sku.is_archived));
-      setTillPicks(next.latestPicks);
-      setInventory(next.latestInventory);
-      applySnapshot(source, next.restored);
-      setPendingHeld(null);
-      setPendingBlocked(false);
-      setOriginalAvailable(false);
-      operationSource.current = null;
-      setError(null);
-      setHeldNotice({ title: "Current basket kept" });
-      showView(0);
-      refreshPrices();
-      heldList.refresh();
-    } catch (failure: unknown) {
-      setError(failure instanceof Error ? failure.message : "Could not restore the original basket.");
-    } finally {
-      heldLock.current = false;
-      setHeldBusy(false);
-    }
+  /** The resume did not happen, so the server basket still holds the original sale. */
+  function keepOriginalBasket() {
+    if (!originalAvailable || heldLock.current) return;
+    setPendingHeld(null);
+    setPendingBlocked(false);
+    setOriginalAvailable(false);
+    setError(null);
+    setHeldNotice({ title: "Current basket kept" });
+    showView(0);
+    reloadBasket();
+    heldList.refresh();
   }
 
   async function handleCompleteSale() {
-    if (!saleValid || !pricePreview || heldLocked || heldLock.current || submitting) {
+    if (!saleValid || !pricePreview || !cartReady || heldLocked || heldLock.current || submitting) {
       return;
     }
     if (creditOverride && canOverrideCredit && !creditOverrideReason.trim()) {
@@ -1156,8 +1126,11 @@ function TillWorkspace() {
     setLastSale(null);
     try {
       const pickIds = salePickIds(linkedPickIds, pickId);
+      const basket = await saver.flush();
       const result = await createTillSale({
         location_id: locationId,
+        basket_id: basket.id,
+        basket_version: basket.version,
         ...priceRequest,
         price_revision: pricePreview.price_revision,
         tender,
@@ -1181,7 +1154,8 @@ function TillWorkspace() {
       setKitBlocks([]);
       setHeldNote("");
       setHeldNotice(null);
-      saveTillSession(sessionKey, { cart: blankCart(locationId) });
+      // The server emptied the basket with the sale.
+      reloadBasket();
       setQty(1);
       await loadData();
     } catch (err) {
@@ -1199,6 +1173,7 @@ function TillWorkspace() {
       ) {
         refreshPrices();
       }
+      if (isBasketConflict(err)) reloadBasket();
       if (
         err instanceof ApiError &&
         err.status === 409 &&
@@ -1316,12 +1291,36 @@ function TillWorkspace() {
     }
   }
 
-  function openPicksForKit(kit: TillKitBlock) {
-    if (!saveTillSession(sessionKey, { cart: currentSnapshot })) {
+  async function openPicksForKit(kit: TillKitBlock) {
+    try {
+      await saver.flush();
+    } catch {
       setError("This browser could not save the cart. Keep the till open while you finish the sale.");
       return;
     }
     router.push(openPicksHrefForKit(kit));
+  }
+
+  async function discardSavedCart() {
+    if (!pendingHeld) {
+      try {
+        saver.save(EMPTY_BASKET);
+        await saver.flush();
+      } catch {
+        setError("This browser could not update the saved cart.");
+        return;
+      }
+    }
+    setDiscardRestored(false);
+    setRestoreBlocked(false);
+    setPendingHeld(null);
+    setPendingBlocked(false);
+    setOriginalAvailable(false);
+    setResumedSale(false);
+    setHeldNotice(null);
+    setError(null);
+    reloadBasket();
+    heldList.refresh();
   }
 
   if (!canSell) {
@@ -1388,6 +1387,8 @@ function TillWorkspace() {
         />
       ) : null}
 
+      {basketUpdated && <InlineNotification kind="info" lowContrast title="Basket updated elsewhere"
+        subtitle="The till now shows the latest saved basket." onCloseButtonClick={() => setBasketUpdated(false)} />}
       {heldNotice && <InlineNotification kind="success" lowContrast title={heldNotice.title}
         subtitle={heldNotice.subtitle} onCloseButtonClick={() => setHeldNotice(null)} />}
       {pendingHeld && <div>
@@ -1397,42 +1398,23 @@ function TillWorkspace() {
           {heldBusy ? "Confirming…" : "Retry held sale operation"}
         </Button>
         {originalAvailable && <Button kind="secondary" disabled={heldBusy}
-          onClick={() => void keepOriginalBasket()}>Keep current basket</Button>}
+          onClick={keepOriginalBasket}>Keep current basket</Button>}
         {pendingBlocked && <Button kind="danger--ghost" disabled={heldBusy}
           onClick={() => setDiscardRestored(true)}>Discard recovery copy</Button>}
       </div>}
       {restoreBlocked && !pendingHeld && <div>
         <InlineNotification kind="warning" lowContrast hideCloseButton title="Saved cart needs attention"
-          subtitle="The saved cart is still in this tab. Reload after correcting the issue, or discard the saved cart to start again." />
+          subtitle="Your saved basket could not be loaded as it is. Reload after correcting the issue, or discard the saved cart to start again." />
         <Button kind="danger--ghost" onClick={() => setDiscardRestored(true)}>Discard saved cart</Button>
       </div>}
       <Modal open={discardRestored} danger
         modalHeading={pendingHeld ? "Discard the recovery copy?" : "Discard the saved cart?"}
         primaryButtonText={pendingHeld ? "Discard recovery copy" : "Discard cart"}
         secondaryButtonText="Keep cart" shouldSubmitOnEnter={false}
-        onRequestClose={() => setDiscardRestored(false)} onRequestSubmit={() => {
-          const empty = blankCart(locationId);
-          if (!saveTillSession(sessionKey, { cart: empty })) {
-            setError("This browser could not update the saved cart.");
-            return;
-          }
-          if (restoringLegacy.current) clearTillCart();
-          restoringLegacy.current = false;
-          setDiscardRestored(false);
-          setRestoreBlocked(false);
-          setPendingHeld(null);
-          setPendingBlocked(false);
-          setOriginalAvailable(false);
-          operationSource.current = null;
-          setResumedSale(false);
-          setHeldNotice(null);
-          applySnapshot(empty, { lines: [], customer: null });
-          setError(null);
-          heldList.refresh();
-        }}>
+        onRequestClose={() => setDiscardRestored(false)} onRequestSubmit={() => void discardSavedCart()}>
         <p>{pendingHeld
-          ? "This clears the unfinished cart from this tab. Check Held sales for any baskets already saved there. A sale already resumed may only be recoverable from this tab."
-          : "This removes the unfinished cart stored in this tab."}</p>
+          ? "This clears the unfinished cart. Check Held sales for any baskets already saved there."
+          : "This empties your saved basket for this showroom."}</p>
       </Modal>
       <Modal open={resumeDraft !== null} modalHeading={`Resume ${resumeDraft?.reference ?? "held sale"}?`}
         primaryButtonText={heldBusy ? "Resuming…" : "Hold current and resume"} primaryButtonDisabled={heldBusy}
@@ -1470,7 +1452,7 @@ function TillWorkspace() {
         danger
         onRequestClose={() => setPendingShowroom(null)}
         onRequestSubmit={() => {
-          if (pendingShowroom !== null) changeShowroom(pendingShowroom);
+          if (pendingShowroom !== null) void changeShowroom(pendingShowroom);
         }}
       >
         <p>Changing the showroom will clear the current cart.</p>
@@ -1489,7 +1471,7 @@ function TillWorkspace() {
             <Button kind="primary" onClick={() => void startKitPick(kit)}>
               Create pick for this kit
             </Button>
-            <Button kind="ghost" onClick={() => openPicksForKit(kit)}>
+            <Button kind="ghost" onClick={() => void openPicksForKit(kit)}>
               Open picks
             </Button>
           </div>
@@ -1523,7 +1505,7 @@ function TillWorkspace() {
                       if (cart.length) {
                         setPendingShowroom(next);
                       } else {
-                        changeShowroom(next);
+                        void changeShowroom(next);
                       }
                     }}
                   >
@@ -2073,6 +2055,7 @@ function TillWorkspace() {
                   kind="primary"
                   disabled={
                     !saleValid ||
+                    !cartReady ||
                     heldLocked ||
                     submitting ||
                     (creditOverride &&

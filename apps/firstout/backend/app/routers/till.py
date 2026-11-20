@@ -15,9 +15,12 @@ from app.schemas.held_sale import (
     HeldSaleNoteUpdate,
     HeldSaleResume,
     HeldSaleResumeResult,
+    TillBasket,
+    TillBasketUpdate,
 )
 from app.schemas.till import TillPricePreview, TillPriceRequest, TillSaleCreate, TillSaleResponse
 from app.services.held_sale import HeldSaleService
+from app.services.till_basket import TillBasketService
 from app.services.till_orchestrator import TillOrchestrator
 
 till_router = APIRouter(prefix="/api/v1/till", tags=["till"])
@@ -73,7 +76,12 @@ async def edit_held_sale_note(
     return await service.edit_note(held_id, body)
 
 
-@till_router.post("/held-sales/{held_id}/resume", response_model=HeldSaleResumeResult)
+# exclude_unset keeps the response unchanged for callers that send no basket_id.
+@till_router.post(
+    "/held-sales/{held_id}/resume",
+    response_model=HeldSaleResumeResult,
+    response_model_exclude_unset=True,
+)
 async def resume_held_sale(
     held_id: uuid.UUID,
     body: HeldSaleResume,
@@ -90,3 +98,26 @@ async def delete_held_sales(
     service: HeldSaleService = Depends(get_held_sales),
 ) -> HeldSaleDeleteResult:
     return await service.delete(body)
+
+
+def get_baskets(db: AsyncSession = Depends(get_db)) -> TillBasketService:
+    return TillBasketService(db)
+
+
+@till_router.get("/basket", response_model=TillBasket)
+async def get_basket(
+    location_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_till),
+    service: TillBasketService = Depends(get_baskets),
+) -> TillBasket:
+    return await service.get_or_create(location_id, user_id)
+
+
+@till_router.put("/basket/{basket_id}", response_model=TillBasket)
+async def replace_basket(
+    basket_id: uuid.UUID,
+    body: TillBasketUpdate,
+    user_id: uuid.UUID = Depends(require_till),
+    service: TillBasketService = Depends(get_baskets),
+) -> TillBasket:
+    return await service.replace(basket_id, body, user_id)

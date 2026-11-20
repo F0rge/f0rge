@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ApiError, type HeldSale } from "./api";
 import {
-  canKeepOriginalBasket, heldSaleRequest, isUncertainHeldResponse, readTillSession, saveTillSession,
-  snapshotHeldSale, tillSessionKey, type PendingHeldOperation, type TillSession,
+  canKeepOriginalBasket, cartSnapshot, heldSaleRequest, isUncertainHeldResponse, type PendingHeldOperation,
 } from "./till-held-sales";
 
 const held: HeldSale = {
@@ -17,52 +16,29 @@ const held: HeldSale = {
   }],
 };
 
-afterEach(() => vi.unstubAllGlobals());
-
 describe("held sale resume recovery", () => {
-  it("stores the exact pending request and both baskets under the organisation and actor", () => {
-    const data = new Map<string, string>();
-    vi.stubGlobal("sessionStorage", {
-      getItem: (key: string) => data.get(key),
-      setItem: (key: string, item: string) => data.set(key, item),
-    });
-    const destination = snapshotHeldSale(held);
-    const cart = { ...destination, lines: [] };
-    const staged: TillSession = {
-      cart,
-      pending: {
-        kind: "resume", id: held.id, reference: held.reference, destination,
-        request: { location_id: "showroom", operation_id: "stable-operation", version: 3, current: heldSaleRequest(destination) },
-      },
-    };
-    const key = tillSessionKey("team", "staff");
-    expect(saveTillSession(key, staged)).toBe(true);
-    expect(readTillSession(key)).toEqual(staged);
-    expect(readTillSession(tillSessionKey("team", "another-staff"))).toBeNull();
-    expect(readTillSession(tillSessionKey("another-team", "staff"))).toBeNull();
+  it("loads a held sale into the cart and holds the same contents again", () => {
+    const destination = cartSnapshot(held);
     expect(destination.lines).toEqual([{ skuId: "service", qty: 2, discountPercent: 12.5 }]);
     expect(destination.linkedPickIds).toEqual({ service: "pick" });
     expect(destination.note).toBe("Collect this afternoon");
+    expect(heldSaleRequest(destination)).toMatchObject({
+      location_id: "showroom", customer_id: "customer", note: "Collect this afternoon",
+      linked_pick_ids: { service: "pick" }, lines: [{ sku_id: "service", qty: 2, discount_percent: 12.5 }],
+    });
   });
 
   it("drops links from removed products without removing links from retained kits", () => {
     const cart = {
-      ...snapshotHeldSale(held),
+      ...cartSnapshot(held),
       linkedPickIds: { service: "valid-pick", removed: "stale-pick" },
     };
     expect(heldSaleRequest(cart).linked_pick_ids).toEqual({service: "valid-pick"});
   });
 
-  it("fails closed when the browser cannot store the recovery copy", () => {
-    vi.stubGlobal("sessionStorage", {
-      setItem: () => { throw new DOMException("Storage disabled", "SecurityError"); },
-    });
-    expect(saveTillSession("session-key", { cart: snapshotHeldSale(held) })).toBe(false);
-  });
-
   it("allows recovery of the original basket only after a receipt-first target conflict within the receipt window", () => {
     const operation: PendingHeldOperation = {
-      kind: "resume", id: held.id, reference: held.reference, destination: snapshotHeldSale(held),
+      kind: "resume", id: held.id, reference: held.reference, destination: cartSnapshot(held),
       request: { location_id: "showroom", operation_id: "stable-operation", version: 3 },
       startedAt: 1_000,
     };

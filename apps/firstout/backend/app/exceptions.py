@@ -64,3 +64,11 @@ class RateLimitedError(DomainError):
 
     def __init__(self, detail: str = "Too many attempts. Try again later.") -> None:
         super().__init__(detail)
+
+
+class TillBasketConflictError(ConflictError):
+    """The server basket moved on; the payload carries the current basket."""
+
+    def __init__(self, code: str, detail: str, basket: dict | None = None) -> None:
+        super().__init__(detail)
+        self.payload = {"code": code, "message": detail, "basket": basket}

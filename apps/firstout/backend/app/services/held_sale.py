@@ -54,7 +54,17 @@ class HeldSaleService:
                 showroom = await self._showroom(data.location_id, lock=True)
                 now = datetime.datetime.now(datetime.timezone.utc)
                 await self.crud.prune_operations(showroom.id, now)
-                return self._response(await self._save(data, actor_id, showroom, now))
+                baskets = basket = None
+                # A retried hold must not wipe a basket the cashier refilled since.
+                if data.basket_id is not None and await self.crud.get(showroom.id, data.id) is None:
+                    baskets, basket = await self._owned_basket(
+                        data.basket_id, actor_id, data.location_id
+                    )
+                    baskets.assert_matches(basket, data.lines, None)
+                row = await self._save(data, actor_id, showroom, now)
+                if baskets is not None and basket is not None:
+                    baskets.set_contents(basket)
+                return self._response(row)
         except IntegrityError as exc:
             if getattr(exc.orig, "sqlstate", None) != "23505":
                 raise
@@ -90,8 +100,16 @@ class HeldSaleService:
                 )
                 if replay is not None:
                     self._require_matching_request(replay, fingerprint)
+                    current_basket = None
+                    if data.basket_id is not None:
+                        baskets, basket = await self._owned_basket(
+                            data.basket_id, actor_id, data.location_id
+                        )
+                        current_basket = baskets.response(basket)
                     return HeldSaleResumeResult(
-                        resumed_id=replay.held_sale_id, held_current_id=replay.held_current_id
+                        resumed_id=replay.held_sale_id,
+                        held_current_id=replay.held_current_id,
+                        **({"basket": current_basket} if current_basket else {}),
                     )
                 self._require_active(showroom)
                 row = await self.crud.get(showroom.id, held_id)
@@ -122,6 +140,11 @@ class HeldSaleService:
                 )
                 if data.current is not None and data.current.id == row.id:
                     raise ValidationError("The current basket needs a different held-sale ID")
+                baskets = basket = None
+                if data.basket_id is not None:
+                    baskets, basket = await self._owned_basket(
+                        data.basket_id, actor_id, data.location_id
+                    )
 
                 # Retire the selected basket and save the current basket in
                 # the same transaction, so a failed swap leaves both untouched.
@@ -130,6 +153,18 @@ class HeldSaleService:
                 current_id = None
                 if data.current is not None:
                     current_id = (await self._save(data.current, actor_id, showroom, now)).id
+                loaded = None
+                if baskets is not None and basket is not None:
+                    baskets.set_contents(
+                        basket,
+                        customer_id=row.customer_id,
+                        note=row.note,
+                        pick_id=row.pick_id,
+                        linked_pick_ids=row.linked_pick_ids,
+                        lines=row.lines,
+                        operation_id=data.operation_id,
+                    )
+                    loaded = baskets.response(basket)
                 self._record_operation(
                     showroom.id,
                     actor_id,
@@ -140,7 +175,11 @@ class HeldSaleService:
                     now,
                     held_current_id=current_id,
                 )
-                return HeldSaleResumeResult(resumed_id=held_id, held_current_id=current_id)
+                return HeldSaleResumeResult(
+                    resumed_id=held_id,
+                    held_current_id=current_id,
+                    **({"basket": loaded} if loaded else {}),
+                )
         except IntegrityError as exc:
             if getattr(exc.orig, "sqlstate", None) != "23505":
                 raise
@@ -235,6 +274,17 @@ class HeldSaleService:
         )
         self._record_operation(showroom.id, actor_id, "save", data.id, fingerprint, row.id, now)
         return row
+
+    async def _owned_basket(
+        self, basket_id: uuid.UUID, actor_id: uuid.UUID, location_id: uuid.UUID
+    ):
+        from app.services.till_basket import TillBasketService
+
+        baskets = TillBasketService(self.db)
+        basket = await baskets.get_owned(basket_id, actor_id, lock=True)
+        if basket.location_id != location_id:
+            raise ValidationError("The basket belongs to a different showroom")
+        return baskets, basket
 
     async def _validate_cart(
         self, data: HeldSaleCreate

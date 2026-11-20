@@ -58,6 +58,9 @@ class TillSaleCreate(TillPriceRequest):
     pick_ids: list[uuid.UUID] = Field(default_factory=list)
     credit_override: bool = False
     credit_override_reason: Optional[str] = None
+    # Complete from the caller's server basket; it is emptied with the sale.
+    basket_id: Optional[uuid.UUID] = None
+    basket_version: Optional[int] = Field(default=None, ge=1)
 
 
 class TillSaleLocationStock(BaseModel):
