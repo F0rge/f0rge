@@ -167,7 +167,7 @@ The coordinator assigns a named `f0rge-` primary and independent reviewers to ea
 
 ## Creating issues
 
-Use [issue-writing guidance](docs/agents/issue-writing.md) for self-contained implementation briefs, plus the [issue tracker](docs/agents/issue-tracker.md).
+Write specs and issues with Matt Pocock's `to-spec` and `to-tickets` skills (`.agents/skills/`); tracker conventions are in the [issue tracker guide](docs/agents/issue-tracker.md).
 
 ## Shipping features
 

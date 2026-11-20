@@ -35,9 +35,9 @@ Report every violation with `file:line`.
 
 **Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first. No `@base-ui/react` or `@mantine/*` imports in `apps/**` (see `docs/agents/rules/ui-kit.md`). When `libs/ui` is affected and Storybook exists, run `npx nx run f0rge-ui:storybook` build. Enforce restricted-imports ESLint when configured.
 
-**Shared libs / Nx:** lib tests pass; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`. Follow `docs/agents/rules/nx.md` (affected CI, OpenAPI `codegen:check`, Playwright via Nx `e2e`).
+**Shared libs / Nx:** lib tests pass, and a `libs/**` change that alters behavior adds or updates tests in that lib's `tests/`; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`. Follow `docs/agents/rules/nx.md` (affected CI, OpenAPI `codegen:check`, Playwright via Nx `e2e`).
 
-**Data:** confidence scores on AI output, idempotent ETL, versioned/traceable source data.
+**Data:** confidence scores on AI output, idempotent ETL, versioned/traceable source data. Run QA queries against a local Postgres; Marrow's MCP `read_sql` reaches the production database.
 
 ### Phase 3: Test Coverage
 

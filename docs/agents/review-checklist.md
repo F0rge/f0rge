@@ -1,8 +1,15 @@
 > Canonical decisions: [`docs/adr/README.md`](../adr/README.md). Follow [P-005](../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
 
-# Codex PR review checklist
+# PR review checklist
 
 Implementation detail: `docs/agents/rules/nx.md`. Block on the following when reviewing PRs.
+
+## Every review
+
+1. **Class-of-bug audit.** When a fix names a pattern (a category, not a one-off line), the author greps for sibling occurrences and either fixes all of them or opens a tracked follow-up, and says so in the PR. Block if neither.
+2. **No mocks at the seam under test.** A test for a service must not monkeypatch that service or its in-module collaborators. Mock only trust boundaries: outbound HTTP/SDKs, the clock, randomness, read-only config.
+3. **Git boundaries.** Block `--no-verify`, `--no-gpg-sign`, force-pushes to `main`, PRs targeting any branch other than `main`, deleting branches without explicit user approval, and changes to `.git/config` or `gh auth` state.
+4. **Findings format.** Prefix each finding `[block]` (violates a rule here; cannot merge), `[warn]` (fix or ticket) or `[nit]`, with `file:line`, one sentence on the problem and one on the fix, citing the committed rule and inspected evidence. End with a verdict: `GO`, `NO-GO` or `GO with follow-ups`. A diff-only reviewer adds a verification ticket for the live-server checks in `docs/agents/rules/qa-gate.md` and keeps the gate open until they run.
 
 ## Instant block
 
