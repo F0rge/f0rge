@@ -97,6 +97,7 @@ SYNONYMS = {
     "raise": "create",
     "add": "create",
     "new": "create",
+    "vat": "vat201",
 }
 
 

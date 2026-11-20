@@ -47,6 +47,15 @@ _META = {
 @asynccontextmanager
 async def _staff_connection(database_url, monkeypatch):
     async with isolated_requests(database_url) as (maker, ids):
+        # Every new connection, MCP's and the route's, gives up on a lock after 10 s, so a
+        # lock held across the route fails a test instead of hanging the suite.
+        engine = maker.kw["bind"]
+
+        def bounded_lock_waits(connection, _record):
+            connection.run_async(lambda raw: raw.execute("SET lock_timeout = '10s'"))
+
+        event.listen(engine.sync_engine, "connect", bounded_lock_waits)
+        await engine.dispose()
         monkeypatch.setattr("app.database.async_session_maker", maker)
         monkeypatch.setattr(settings, "clerk_secret_key", "fixture-mcp-clerk-key")
         boundary = ClerkBoundary()
@@ -427,15 +436,6 @@ async def test_same_request_id_in_parallel_makes_one_record_and_holds_no_lock(
             return await real(route, args, body)
 
         monkeypatch.setattr(mcp_server, "run_route", counted)
-        # Every new connection, MCP's and the route's, gives up on a lock after 10 s, so a
-        # lock held across the route fails this test instead of hanging the suite.
-        engine = mcp.maker.kw["bind"]
-
-        def bounded_lock_waits(connection, _record):
-            connection.run_async(lambda raw: raw.execute("SET lock_timeout = '10s'"))
-
-        event.listen(engine.sync_engine, "connect", bounded_lock_waits)
-        await engine.dispose()
 
         async def bounded(*calls):
             # Holding MCP's lock across the route would make the route wait on it forever.
