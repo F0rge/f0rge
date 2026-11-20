@@ -38,6 +38,10 @@ contains `storefront`, `vellano-frontend`, `vellano-api`, and `Postgres`; it
 does not show dedicated storefront Medusa or Redis services. This does not
 demonstrate the project and data-service isolation required above.
 
+Railway has since renamed this project `Firstout`, with services
+`firstout-frontend` and `firstout-api` (metadata checked 2026-11-20). The
+storefront now runs in the separate `DasKasas` project.
+
 Unauthenticated `GET /api/health` returned `200` with exactly
 `{"status":"ok"}`. Unauthenticated `GET /` returned `503`, without a
 `WWW-Authenticate` challenge, and included
