@@ -7,6 +7,7 @@ appears in `TABS`; everything else is left out and must be named in an exclusion
 
 from __future__ import annotations
 
+import uuid
 from collections import Counter
 from collections.abc import Iterator
 from typing import Any
@@ -182,6 +183,38 @@ def _permissions(route: RouteContext) -> tuple[str, ...]:
     return tuple(next(iter(guards.values()), ()))
 
 
+def _closed(schema: Any) -> None:
+    """Mark every object schema with declared properties as accepting nothing else."""
+    if isinstance(schema, dict):
+        if schema.get("type") == "object" and "properties" in schema:
+            schema["additionalProperties"] = False
+        for value in schema.values():
+            _closed(value)
+    elif isinstance(schema, list):
+        for value in schema:
+            _closed(value)
+
+
+class RouteArguments(Arguments):
+    """A route's arguments. An unknown key anywhere in the body is refused, never dropped.
+
+    Most API request models ignore unknown fields, so a misspelt optional field would
+    otherwise be discarded and the write reported as completed. The API's own models and
+    HTTP behaviour are unchanged: only MCP validation and the published schema are strict.
+    """
+
+    @classmethod
+    def model_validate(cls, obj: Any, **kwargs: Any) -> Any:
+        # Applies to nested models, list items, optionals and union members as well.
+        return super().model_validate(obj, **{**kwargs, "extra": "forbid"})
+
+    @classmethod
+    def model_json_schema(cls, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        schema = super().model_json_schema(*args, **kwargs)
+        _closed(schema)
+        return schema
+
+
 async def _runs_through_the_api(db: Any, token: Any, args: Any) -> dict:
     raise RuntimeError("A route action runs its API route, not a handler")
 
@@ -203,6 +236,8 @@ def _action(app: FastAPI, route: RouteContext, name: str) -> Action:
         fields["body"] = (field.field_info.annotation, field.field_info)
     if (
         extra
+        # A path value of any other type could name a sibling route, e.g. `/skus/unit-costs`.
+        or any(field.field_info.annotation not in (uuid.UUID, int) for field in path)
         or len(body) > 1
         or len(name) > _MAX_NAME
         or len(fields) != len(path) + len(query) + len(body)
@@ -222,7 +257,7 @@ def _action(app: FastAPI, route: RouteContext, name: str) -> Action:
         tab=_tab(route),
         description=f"{(summary or title).rstrip('.')}. {method} {route.path}",
         arguments=create_model(
-            name.title().replace("_", "") + "RouteArguments", __base__=Arguments, **fields
+            name.title().replace("_", "") + "RouteArguments", __base__=RouteArguments, **fields
         ),
         permissions=_permissions(route),
         handler=_runs_through_the_api,

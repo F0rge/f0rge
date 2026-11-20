@@ -27,12 +27,18 @@ class McpActor:
 
     user_id: uuid.UUID
     clerk_org_id: str
+    # The token's business. The membership resolved from the organisation must match it.
+    team_id: uuid.UUID
 
     def __post_init__(self) -> None:
         # An empty organisation would make resolve_membership fall back to the legacy
         # home grant instead of the organisation the MCP token was verified against.
-        if not isinstance(self.user_id, uuid.UUID) or not self.clerk_org_id:
-            raise ValueError("An MCP actor needs a user ID and a Clerk organisation ID")
+        if (
+            not isinstance(self.user_id, uuid.UUID)
+            or not isinstance(self.team_id, uuid.UUID)
+            or not self.clerk_org_id
+        ):
+            raise ValueError("An MCP actor needs a user ID, a Clerk organisation ID and a team ID")
 
 
 # Task-local and settable only by code in this process: no header, cookie, body or ASGI
@@ -42,9 +48,9 @@ mcp_actor_ctx: ContextVar[Optional[McpActor]] = ContextVar("mcp_actor", default=
 
 
 @contextmanager
-def mcp_actor(user_id: uuid.UUID, clerk_org_id: str) -> Iterator[None]:
+def mcp_actor(user_id: uuid.UUID, clerk_org_id: str, team_id: uuid.UUID) -> Iterator[None]:
     """Run in-process API requests as this staff member; always restores the previous value."""
-    token = mcp_actor_ctx.set(McpActor(user_id, clerk_org_id))
+    token = mcp_actor_ctx.set(McpActor(user_id, clerk_org_id, team_id))
     try:
         yield
     finally:
@@ -120,7 +126,11 @@ async def get_current_user_id(
             # Two identities on one request is a caller bug; refuse instead of choosing.
             raise HTTPException(401, "Invalid session")
         user = await IdentityLookup(db).by_session_subject(actor.user_id)
-        return await _enter_staff_context(db, await _staff_identity(db, user, actor.clerk_org_id))
+        identity = await _staff_identity(db, user, actor.clerk_org_id)
+        if identity.team_id != actor.team_id:
+            # The organisation now resolves to another business than the token's.
+            raise HTTPException(401, "Invalid session")
+        return await _enter_staff_context(db, identity)
     bearer = _bearer_token(authorization)
     if not bearer:
         raise HTTPException(401, "A Clerk sign-in is required")

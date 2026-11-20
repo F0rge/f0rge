@@ -77,13 +77,21 @@ def _refusal(status: int, payload: Any) -> str:
 
 
 def receipt_fields(status: int, payload: Any) -> dict[str, Any]:
-    """The HTTP status and the response's short top-level values, never nested documents."""
+    """The HTTP status and the response's top-level identifiers, never names or contact details.
+
+    Kept forever for replays, so only `id`, `status`, `number` and `*_id` / `*_number` scalars.
+    """
     fields = {
         key: value
         for key, value in (payload.items() if isinstance(payload, dict) else ())
-        if value is None
-        or isinstance(value, (bool, int, float))
-        or (isinstance(value, str) and len(value) <= _MAX_RECEIPT_TEXT)
+        if (key in ("id", "status", "number") or key.endswith(("_id", "_number")))
+        # Tax and company registration numbers identify a party, not the record written.
+        and key not in ("vat_number", "cipc_number")
+        and (
+            value is None
+            or isinstance(value, (bool, int, float))
+            or (isinstance(value, str) and len(value) <= _MAX_RECEIPT_TEXT)
+        )
     }
     return {**fields, "http_status": status}
 

@@ -56,9 +56,11 @@ INSTRUCTIONS = (
     "to three actions you may use, each with its input schema; with no arguments it lists "
     "your domains. 2) run_read runs a read action. 3) run_write runs a write action "
     "immediately, as the token owner and under their Firstout permissions, so confirm "
-    "intent with the user first. Give every intended change a fresh UUID request_id and "
-    "reuse it only to retry that same change. If an outcome is uncertain, call run_read "
-    "with action operations_lookup and that request_id before trying again with a new one. "
+    "intent with the user first. Give every intended change a fresh UUID request_id. "
+    "Sending a recorded request_id again never repeats the change: it returns that "
+    "change's receipt, completed, failed or unknown. After a failed or unknown outcome, "
+    "check with run_read action operations_lookup and that request_id, then the record "
+    "itself, and use a new request_id for any further attempt. "
     f"The resource {ACTIONS_URI} lists every action you may use now, grouped by tab. "
     "Domains: Home, Till, Catalogue, Stock, Warehouse, Sales, Books, Admin. Access, "
     "identity, file uploads and document downloads stay in the Firstout app."
@@ -243,7 +245,8 @@ async def _run_route(
     That transaction locked the token and team rows. The route works on its own connection
     and may need those rows, so nothing of ours stays open while it runs.
     """
-    with mcp_actor(token.user_id, get_access_token().claims["clerk_organisation"]):
+    organisation = get_access_token().claims["clerk_organisation"]
+    with mcp_actor(token.user_id, organisation, token.team_id):
         outcome = await run_route(action.route, args, body)
     try:
         async with tenant_session(token.team_id) as db, unit_of_work(db):
@@ -339,7 +342,7 @@ async def run_read(action: Annotated[str, Field(max_length=80)], arguments: dict
 async def run_write(
     action: Annotated[str, Field(max_length=80)], arguments: dict, request_id: uuid.UUID
 ) -> dict[str, Any]:
-    """Execute a discovered write immediately as the token owner. Use a new UUID for each intended change and reuse it on retry."""
+    """Execute a discovered write immediately as the token owner. Use a new UUID request_id for each intended change. Sending the same one again returns that change's receipt and never repeats it."""
     return await _execute(action, arguments, request_id)
 
 

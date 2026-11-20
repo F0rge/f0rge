@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from pathlib import Path
 
 import jsonschema
 import pytest
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.dependencies.auth import _require, require_catalogue_mutate, require_transfer
 from app.main import app
+from app.schemas.transfer import TransferCreate
 from app.middleware.auth import get_current_user_id
 from app.permissions import CATALOGUE_MUTATE
 from app.services import mcp_route_runner
@@ -135,6 +137,47 @@ def test_route_action_permissions_are_the_route_dependency_keys():
         Action("x", "Home", "x", Arguments, (), ROUTE_ACTIONS["get_sku"].handler, "write")
 
 
+def _objects(schema):
+    if isinstance(schema, dict):
+        if schema.get("type") == "object" and "properties" in schema:
+            yield schema
+        for value in schema.values():
+            yield from _objects(value)
+    elif isinstance(schema, list):
+        for value in schema:
+            yield from _objects(value)
+
+
+def test_every_offered_input_schema_is_closed_at_every_depth():
+    nested = 0
+    for action in ACTIONS.values():
+        objects = list(_objects(action.arguments.model_json_schema()))
+        assert objects and all(item["additionalProperties"] is False for item in objects), (
+            action.name
+        )
+        nested += len(objects) > 1
+    assert nested > 70
+
+
+def test_unknown_body_keys_are_refused_at_any_depth_not_dropped():
+    transfer = ROUTE_ACTIONS["create_transfer"].arguments
+    line = {"sku_id": str(uuid.uuid4()), "qty": 1}
+    body = {"from_location_id": str(uuid.uuid4()), "to_location_id": str(uuid.uuid4())}
+    body["lines"] = [line]
+    transfer.model_validate({"body": body})
+    for bad, loc in (
+        ({**body, "invoice_id": "x"}, ("body", "invoice_id")),
+        ({**body, "lines": [{**line, "bin": "A"}]}, ("body", "lines", 0, "bin")),
+    ):
+        with pytest.raises(ValidationError) as refused:
+            transfer.model_validate({"body": bad})
+        assert [(issue["loc"], issue["type"]) for issue in refused.value.errors()] == [
+            (loc, "extra_forbidden")
+        ]
+        # The API's own model, and so the HTTP route, still ignores the unknown key.
+        TransferCreate.model_validate(bad)
+
+
 def test_route_inputs_are_strict_self_contained_schemas_of_the_route_parameters():
     for action in ROUTE_ACTIONS.values():
         schema = action.arguments.model_json_schema()
@@ -223,9 +266,53 @@ def test_underivable_or_unclassified_routes_fail_closed():
         @router.post("", response_model=_Thing)
         async def named(body: uuid.UUID, data: _Thing, _=staff): ...
 
-    for build in (two_guards, empty_guard, custom_header, body_name_taken):
+    def text_path(router):
+        # `/things/{name}` with name `upload` would reach the sibling route.
+        @router.get("/{name}", response_model=_Thing)
+        async def by_name(name: str, _=staff): ...
+
+    def number_path(router):
+        @router.get("/{number}", response_model=_Thing)
+        async def by_number(number: int, _=staff): ...
+
+    assert [action.name for action in route_actions(_derive(number_path), frozenset())] == [
+        "by_number"
+    ]
+    for build in (two_guards, empty_guard, custom_header, body_name_taken, text_path):
         with pytest.raises(TypeError, match="MCP cannot"):
             route_actions(_derive(build), frozenset())
+
+
+ROUTE_ACTION_NAMES = Path(__file__).with_name("mcp_route_action_names.txt")
+
+
+def test_route_action_names_are_pinned():
+    assert sorted(ROUTE_ACTIONS) == ROUTE_ACTION_NAMES.read_text().split(), (
+        "Route action names come from endpoint function names and are saved in MCP write "
+        "receipts. Renaming, adding or removing an offered endpoint renames a persisted MCP "
+        f"action: update {ROUTE_ACTION_NAMES.name} deliberately."
+    )
+
+
+@pytest.mark.parametrize(
+    ("task", "action"),
+    [
+        ("create a product", "create_sku"),
+        ("receive a purchase order", "receive_purchase_order"),
+        ("complete a stocktake", "complete_stocktake"),
+        ("record a customer payment", "create_payment"),
+        ("post a journal", "post_journal"),
+        ("create a layby", "create_layby"),
+        ("raise a purchase order", "create_purchase_order"),
+        ("cancel a delivery", "cancel_delivery"),
+        ("aged stock", "aged_stock"),
+        # `lock_period` locks a VAT201 period.
+        ("close a books period", "lock_books_period"),
+    ],
+)
+def test_staff_tasks_find_their_action_in_the_first_three(task, action):
+    found = search_actions(task, "", EVERY_PERMISSION)["actions"]
+    assert action in [item["name"] for item in found]
 
 
 def test_search_finds_route_actions_and_ranks_hand_written_actions_first_on_a_tie():
@@ -238,7 +325,9 @@ def test_search_finds_route_actions_and_ranks_hand_written_actions_first_on_a_ti
     assert found("post journal")[0] == "post_journal"
     assert "create_sku" in found("create sku")
     # Equal scores: the hand-written read comes first, then route actions by name.
-    assert found("record a payment") == ["payments_find", "create_payment", "list_payments"]
+    assert found("payment") == ["payments_find", "create_payment", "list_payments"]
+    # A route's synthesised description repeats its name and earns nothing on top.
+    assert found("create transfer")[:2] == ["transfers_create_draft", "create_transfer"]
     assert "create_sku" not in found("create sku", "Books")
     # Without the key only the routes open to all staff remain.
     assert found("create sku") != [
@@ -369,24 +458,33 @@ async def test_route_answers_map_to_denial_refusal_unknown_and_size_limit(monkey
     assert invalid.error == "Invalid arguments: body.qty (int_parsing), body.x (extra_forbidden)"
 
 
-def test_receipt_keeps_short_top_level_values_only():
+def test_receipt_keeps_top_level_identifiers_only():
     assert receipt_fields(
         201,
         {
             "id": "7",
             "number": "TR-1",
-            "total": 12.5,
+            "status": "draft",
+            "customer_id": "c1",
+            "invoice_number": "INV-1",
             "paid": False,
+            "total": 12.5,
+            "name": "A Person",
+            "email": "a@example.com",
+            "phone": "+27 11 000 0000",
+            "state": "Gauteng",
+            "vat_number": "4000000000",
+            "cipc_number": "2020/000000/07",
             "notes": None,
             "lines": [{"id": 1}],
             "customer": {"email": "a@example.com"},
-            "long": "x" * 201,
+            "long_id": "x" * 201,
         },
     ) == {
         "id": "7",
         "number": "TR-1",
-        "total": 12.5,
-        "paid": False,
-        "notes": None,
+        "status": "draft",
+        "customer_id": "c1",
+        "invoice_number": "INV-1",
         "http_status": 201,
     }

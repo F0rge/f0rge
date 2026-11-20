@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import uuid
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import httpx
 import pytest
-from sqlalchemy import func, select, text, update
+from sqlalchemy import event, func, select, text, update
 
 from app import mcp_server
 from app.config import settings
@@ -110,6 +112,15 @@ async def _staff_connection(database_url, monkeypatch):
                             )
                         )
 
+                async def outcomes(operation_id):
+                    """The label and result of every activity entry for one operation."""
+                    rows = await events(str(operation_id))
+                    return sorted(
+                        (row["summary"].split(" · ")[1], row["summary"].rsplit(" · ", 1)[1])
+                        for row in rows
+                        if row["operation_id"] == str(operation_id)
+                    )
+
                 async def events(query):
                     reply = await client.get(
                         "/api/v1/audit/events", headers=staff, params={"source": "mcp", "q": query}
@@ -124,12 +135,25 @@ async def _staff_connection(database_url, monkeypatch):
                     suppliers=suppliers,
                     operation=operation,
                     events=events,
+                    outcomes=outcomes,
                     maker=maker,
                     ids=ids,
                     user=user,
                     team=team,
                     token=issued.json()["token"],
                 )
+
+
+def _count_runs(monkeypatch):
+    """Record every route MCP runs, then run it."""
+    real, runs = mcp_server.run_route, []
+
+    async def counted(route, args, body):
+        runs.append(route.path)
+        return await real(route, args, body)
+
+    monkeypatch.setattr(mcp_server, "run_route", counted)
+    return runs
 
 
 def _supplier(name, request_id=None):
@@ -166,6 +190,7 @@ async def test_route_read_write_receipt_replay_and_audit(second_postgres_url, mo
             "run_read", action="create_supplier", arguments={}, expected_error="runner matching"
         )
 
+        runs = _count_runs(monkeypatch)
         write = _supplier("Route Timber")
         first = await mcp.call("run_write", **write)
         # Only the first answer carries the route's own response.
@@ -173,7 +198,8 @@ async def test_route_read_write_receipt_replay_and_audit(second_postgres_url, mo
         receipt = first
         assert receipt["status"] == "completed" and receipt["action"] == "create_supplier"
         result = receipt["result"]
-        assert result["http_status"] == 201 and result["name"] == "Route Timber"
+        # The saved receipt keeps identifiers only. The name was in the first response.
+        assert set(result) == {"id", "http_status"} and result["http_status"] == 201
         assert uuid.UUID(result["id"])
         # The same request ID returns the saved receipt and never runs the route again.
         assert await mcp.call("run_write", **write) == receipt
@@ -186,6 +212,7 @@ async def test_route_read_write_receipt_replay_and_audit(second_postgres_url, mo
             expected_error="already used for a different change",
         )
         assert await mcp.suppliers("Another name") == 0
+        assert runs == ["/api/v1/suppliers"]
 
         rows = [
             row
@@ -193,6 +220,12 @@ async def test_route_read_write_receipt_replay_and_audit(second_postgres_url, mo
             if row["operation_id"] == receipt["operation_id"]
         ]
         assert sum("write completed" in row["summary"] for row in rows) == 1
+        # One neutral start, then exactly one outcome.
+        assert [
+            outcome
+            for outcome in await mcp.outcomes(receipt["operation_id"])
+            if outcome[0] != "write replayed"
+        ] == [("write completed", "success"), ("write started", "started")]
         assert any("write replayed" in row["summary"] for row in rows)
         assert {row["record_id"] for row in rows} == {result["id"]}
         assert {row["origin"] for row in rows} == {"mcp"}
@@ -237,7 +270,7 @@ async def test_route_permissions_exclusions_and_paused_writes(second_postgres_ur
         # Even past MCP's own check, the route refuses with its own permission dependency.
         action = ACTIONS["create_supplier"]
         args = action.arguments.model_validate(denied["arguments"])
-        with mcp_actor(mcp.user.id, mcp.team.clerk_org_id):
+        with mcp_actor(mcp.user.id, mcp.team.clerk_org_id, mcp.team.id):
             outcome = await run_route(action.route, args, denied["arguments"]["body"])
         assert (outcome.status, outcome.audit) == (403, "denied")
         with monkeypatch.context() as patch:
@@ -310,10 +343,10 @@ async def test_route_refusals_are_reported_and_saved_as_failed(second_postgres_u
         lookup = {"request_id": duplicate["request_id"]}
         assert await mcp.call("run_read", action="operations_lookup", arguments=lookup) == replay
         assert await mcp.suppliers("Archive race supplier") == 1
-        assert any(
-            "write requested · create supplier · failed" in row["summary"]
-            for row in await mcp.events("failed")
-        )
+        # Never a success for a write that failed.
+        assert [
+            outcome for outcome in await mcp.outcomes(saved.id) if outcome[0] != "write replayed"
+        ] == [("write failed", "failed"), ("write started", "started")]
 
 
 async def test_unrecorded_outcome_is_unknown_and_never_runs_twice(second_postgres_url, monkeypatch):
@@ -351,6 +384,11 @@ async def test_unrecorded_outcome_is_unknown_and_never_runs_twice(second_postgre
                     db, token, action, args, uuid.UUID(lost["request_id"])
                 )
         assert raced["status"] == "unknown" and misses == []
+        # The outcome could not be saved, so the log shows only the neutral start.
+        lost_op = await mcp.operation(lost["request_id"])
+        assert [
+            outcome for outcome in await mcp.outcomes(lost_op.id) if outcome[0] != "write replayed"
+        ] == [("write started", "started")]
 
         failing = _supplier("Server Error Timber")
         with monkeypatch.context() as patch:
@@ -363,6 +401,12 @@ async def test_unrecorded_outcome_is_unknown_and_never_runs_twice(second_postgre
             assert "hunter2" not in error
         assert (await mcp.call("run_write", **failing))["status"] == "unknown"
         assert await mcp.suppliers("Server Error Timber") == 0
+        failing_op = await mcp.operation(failing["request_id"])
+        assert [
+            outcome
+            for outcome in await mcp.outcomes(failing_op.id)
+            if outcome[0] != "write replayed"
+        ] == [("write not confirmed", "unknown"), ("write started", "started")]
 
 
 async def test_same_request_id_in_parallel_makes_one_record_and_holds_no_lock(
@@ -383,12 +427,30 @@ async def test_same_request_id_in_parallel_makes_one_record_and_holds_no_lock(
             return await real(route, args, body)
 
         monkeypatch.setattr(mcp_server, "run_route", counted)
-        alone = await mcp.call("run_write", **_supplier("Unlocked Timber"))
+        # Every new connection, MCP's and the route's, gives up on a lock after 10 s, so a
+        # lock held across the route fails this test instead of hanging the suite.
+        engine = mcp.maker.kw["bind"]
+
+        def bounded_lock_waits(connection, _record):
+            connection.run_async(lambda raw: raw.execute("SET lock_timeout = '10s'"))
+
+        event.listen(engine.sync_engine, "connect", bounded_lock_waits)
+        await engine.dispose()
+
+        async def bounded(*calls):
+            # Holding MCP's lock across the route would make the route wait on it forever.
+            try:
+                async with asyncio.timeout(15):
+                    return await asyncio.gather(*calls)
+            except TimeoutError:
+                pytest.fail("A write waited 15 s: MCP held a lock while the route ran")
+
+        (alone,) = await bounded(mcp.call("run_write", **_supplier("Unlocked Timber")))
         assert alone["status"] == "completed" and runs.pop() == "/api/v1/suppliers"
 
         check_locks = False  # A parallel caller briefly holds the token row to authenticate.
         write = _supplier("Parallel Timber")
-        first, second = await asyncio.gather(
+        first, second = await bounded(
             mcp.call("run_write", **write), mcp.call("run_write", **write)
         )
         # The loser sees the started receipt, or the finished one if it arrived late.
@@ -400,6 +462,82 @@ async def test_same_request_id_in_parallel_makes_one_record_and_holds_no_lock(
             "run_read", action="operations_lookup", arguments={"request_id": write["request_id"]}
         )
         assert settled["status"] == "completed"
+
+
+async def test_unknown_body_keys_are_refused_before_the_route_runs(
+    second_postgres_url, monkeypatch
+):
+    async with _staff_connection(second_postgres_url, monkeypatch) as mcp:
+        runs = _count_runs(monkeypatch)
+        top = _supplier("Misspelt Timber")
+        top["arguments"]["body"]["vat_numbr"] = "4000000000"
+        error = await mcp.call("run_write", **top, expected_error="Invalid arguments")
+        assert error.endswith(": Invalid arguments: body.vat_numbr (extra_forbidden)")
+        line = {"sku_id": str(mcp.ids["sku"]), "qty": 1, "bin": "A1"}
+        nested = {
+            "action": "create_transfer",
+            "arguments": {
+                "body": {
+                    "from_location_id": str(uuid.uuid4()),
+                    "to_location_id": str(uuid.uuid4()),
+                    "lines": [line],
+                }
+            },
+            "request_id": str(uuid.uuid4()),
+        }
+        error = await mcp.call("run_write", **nested, expected_error="Invalid arguments")
+        assert error.endswith(": Invalid arguments: body.lines.0.bin (extra_forbidden)")
+        assert runs == [] and await mcp.suppliers("Misspelt Timber") == 0
+        for refused in (top, nested):
+            assert await mcp.operation(refused["request_id"]) is None
+
+        del top["arguments"]["body"]["vat_numbr"]
+        assert (await mcp.call("run_write", **top))["status"] == "completed"
+        assert runs == ["/api/v1/suppliers"]
+
+
+async def test_route_writes_keep_a_digest_and_identifiers_only(second_postgres_url, monkeypatch):
+    async with _staff_connection(second_postgres_url, monkeypatch) as mcp:
+        private = {
+            "email": "private.person@example.com",
+            "phone": "+27 82 555 0101",
+            "billing_address": "12 Private Road, Johannesburg",
+        }
+        body = {"name": "Private Person", **private}
+        write = {
+            "action": "create_customer",
+            "arguments": {"body": body},
+            "request_id": str(uuid.uuid4()),
+        }
+        first = await mcp.call("run_write", **write)
+        # The caller gets the route's full answer once. It is never stored.
+        response = first.pop("response")
+        assert response["email"] == private["email"]
+
+        saved = await mcp.operation(write["request_id"])
+        canonical = json.dumps({"body": body}, sort_keys=True, separators=(",", ":"))
+        assert saved.arguments == {
+            "sha256": hashlib.sha256(canonical.encode()).hexdigest(),
+            "path": {},
+        }
+        assert saved.result["id"] == response["id"] and saved.result["http_status"] == 201
+        assert all(key.endswith("_id") for key in set(saved.result) - {"id", "http_status"})
+        stored = json.dumps([saved.arguments, saved.result])
+        assert not any(value in stored for value in (*private.values(), body["name"]))
+
+        assert await mcp.call("run_write", **write) == first
+        changed = {**write, "arguments": {"body": {**body, "phone": "+27 82 555 0102"}}}
+        await mcp.call("run_write", **changed, expected_error="already used for a different change")
+
+        # A path value names the record and is kept beside the digest.
+        update = {
+            "action": "update_sku",
+            "arguments": {"sku_id": str(mcp.ids["sku"]), "body": {"name": "Renamed"}},
+            "request_id": str(uuid.uuid4()),
+        }
+        await mcp.call("run_write", **update)
+        kept = (await mcp.operation(update["request_id"])).arguments
+        assert kept["path"] == {"sku_id": str(mcp.ids["sku"])} and set(kept) == {"sha256", "path"}
 
 
 @pytest.mark.parametrize("modern", [True, False])

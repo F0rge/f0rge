@@ -2,11 +2,14 @@
 
 A hand-written action commits its change, audit entry and receipt together. A route action
 commits a started receipt first, runs the API route in the route's own transaction, then
-records the outcome. A request ID is therefore single-use for a route action.
+records the outcome. A request ID is therefore single-use for a route action, and only a
+digest of its arguments is kept.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -118,6 +121,13 @@ async def begin_route_operation(
     """
     # Unset fields stay unset: a PATCH that omits a field differs from one that clears it.
     values = args.model_dump(mode="json", exclude_unset=True)
+    # The body may hold contact details, prices or journal lines. Only a digest is kept, to
+    # tell a retry from a different change, with the path values that name the record.
+    canonical = json.dumps(values, sort_keys=True, separators=(",", ":"))
+    values = {
+        "sha256": hashlib.sha256(canonical.encode()).hexdigest(),
+        "path": {name: values[name] for name in action.route.path_params},
+    }
     operations = McpOperationCRUD(db, token.team_id, token.user_id)
     audit = McpTokenService(db, token.team_id)
     replayed = await _replayed(operations, audit, token, action, values, request_id)
@@ -142,7 +152,10 @@ async def begin_route_operation(
         if replayed is None:
             raise
         return replayed
-    audit.record(token, "write_requested", "mcp", action_name=action.name, operation_id=op.id)
+    # Neutral until the route answers. finish_route_operation records the one outcome.
+    audit.record(
+        token, "write_requested", "mcp", "started", action_name=action.name, operation_id=op.id
+    )
     return None
 
 
@@ -156,21 +169,20 @@ async def finish_route_operation(
     if outcome.audit == "success":
         op.result = outcome.receipt
         op.completed_at = datetime.now(UTC)
-    else:
-        if outcome.status is not None:
-            op.result = {
-                "state": "failed",
-                "http_status": outcome.status,
-                "message": outcome.error,
-            }
-        McpTokenService(db, token.team_id).record(
-            token,
-            "write_requested",
-            "mcp",
-            outcome.audit,
-            action_name=op.action_name,
-            operation_id=op.id,
-        )
+    elif outcome.status is not None:
+        op.result = {
+            "state": "failed",
+            "http_status": outcome.status,
+            "message": outcome.error,
+        }
+    McpTokenService(db, token.team_id).record(
+        token,
+        "write_requested",
+        "mcp",
+        outcome.audit if outcome.status is not None else "unknown",
+        action_name=op.action_name,
+        operation_id=op.id,
+    )
     return _receipt(op)
 
 

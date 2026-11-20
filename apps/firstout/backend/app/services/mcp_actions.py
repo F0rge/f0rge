@@ -88,11 +88,24 @@ def _words(text: str) -> set[str]:
     return {word.removesuffix("s") for word in re.findall(r"[a-z0-9]+", text.casefold())}
 
 
+# Staff words -> the catalogue's word for the same thing. A query term also matches its synonym.
+SYNONYMS = {
+    "product": "sku",
+    "item": "sku",
+    "close": "lock",
+    "record": "create",
+    "raise": "create",
+    "add": "create",
+    "new": "create",
+}
+
+
 def search_actions(query: str, tab: str, granted: set[str], offset: int = 0) -> dict:
     permitted = _permitted(granted)
     if not query.strip() and not tab.strip():
         return {"domains": sorted({action.tab.split(" / ")[0] for action in permitted})}
     terms = _words(query) - {"a", "an", "the", "to", "and", "in", "my", "of", "for", "i"}
+    terms |= {SYNONYMS[term] for term in terms if term in SYNONYMS}
     tab_terms = _words(tab)
     matches = []
     for action in permitted:
@@ -100,10 +113,14 @@ def search_actions(query: str, tab: str, granted: set[str], offset: int = 0) -> 
         if not any(tab_terms <= area for area in areas):
             continue
         name = _words(action.name)
+        described = _words(action.description)
+        if action.route is not None:
+            # A route's method and path, and a summary made from its name, say nothing new.
+            described -= name | _words(f"{action.route.method} {action.route.path}")
         score = (
             4 * len(terms & name)
             + 2 * max(len(terms & area) for area in areas)
-            + len(terms & _words(action.description))
+            + len(terms & described)
         )
         if not terms or score:
             # On equal relevance a hand-written action ranks before the route it mirrors.

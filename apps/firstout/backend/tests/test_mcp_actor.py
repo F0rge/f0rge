@@ -42,20 +42,20 @@ async def test_actor_runs_real_routes_under_the_routes_own_permission_check(
     bay = {"name": "Actor seam bay", "type": "warehouse"}
     assert "authorization" not in async_client.headers
 
-    with mcp_actor(warehouse.id, team.clerk_org_id):
+    with mcp_actor(warehouse.id, team.clerk_org_id, team.id):
         me = await async_client.get(ME)
         created = await async_client.post(LOCATIONS, json=bay)
     assert (me.status_code, me.json()["id"]) == (200, str(warehouse.id))
     assert created.status_code == 201, created.text
 
-    with mcp_actor(till.id, team.clerk_org_id):
+    with mcp_actor(till.id, team.clerk_org_id, team.id):
         assert (await async_client.get(ME)).json()["id"] == str(till.id)
         refused = await async_client.post(LOCATIONS, json=bay)
     assert (refused.status_code, refused.json()["detail"]) == (403, "Forbidden")
 
     # The in-process request has no external host, so no Host value is needed or checked.
     monkeypatch.setattr(settings, "cookie_secure", True)
-    with mcp_actor(warehouse.id, team.clerk_org_id):
+    with mcp_actor(warehouse.id, team.clerk_org_id, team.id):
         assert (
             await async_client.get(ME, headers={"Host": "in-process.invalid"})
         ).status_code == 200
@@ -83,7 +83,7 @@ async def test_external_request_cannot_become_an_actor(async_client):
     entered, release = asyncio.Event(), asyncio.Event()
 
     async def tool_call() -> None:
-        with mcp_actor(owner.id, team.clerk_org_id):
+        with mcp_actor(owner.id, team.clerk_org_id, team.id):
             entered.set()
             await release.wait()
 
@@ -99,18 +99,18 @@ async def test_external_request_cannot_become_an_actor(async_client):
 async def test_actor_ends_with_its_block_and_never_combines_with_a_bearer(async_client):
     warehouse, team = await _staff(async_client, "warehouse")
 
-    with mcp_actor(warehouse.id, team.clerk_org_id):
+    with mcp_actor(warehouse.id, team.clerk_org_id, team.id):
         assert (await async_client.get(ME)).status_code == 200
     assert mcp_actor_ctx.get() is None
     assert (await async_client.get(ME)).status_code == 401
 
-    with pytest.raises(RuntimeError), mcp_actor(warehouse.id, team.clerk_org_id):
+    with pytest.raises(RuntimeError), mcp_actor(warehouse.id, team.clerk_org_id, team.id):
         raise RuntimeError("tool failed")
     assert mcp_actor_ctx.get() is None
 
     # A valid sign-in for someone else neither wins nor is silently ignored.
     assert (await authenticate_as(async_client, "owner@example.com")).status_code == 200
-    with mcp_actor(warehouse.id, team.clerk_org_id):
+    with mcp_actor(warehouse.id, team.clerk_org_id, team.id):
         assert (await async_client.get(ME)).status_code == 401
     assert (await async_client.get(ME)).json()["role"] == "owner"
 
@@ -124,12 +124,13 @@ async def test_actor_ends_with_its_block_and_never_combines_with_a_bearer(async_
         ("suspended_team", 403),
         ("other_organisation", 401),
         ("unknown_user", 401),
+        ("other_team", 401),
     ],
 )
 async def test_actor_is_refused_when_current_access_is_gone(async_client, breakage, status):
     db = async_client.test_db
     user, team = await _staff(async_client, "warehouse")
-    actor = (user.id, team.clerk_org_id)
+    actor = (user.id, team.clerk_org_id, team.id)
     with mcp_actor(*actor):
         assert (await async_client.get(ME)).status_code == 200
 
@@ -144,9 +145,12 @@ async def test_actor_is_refused_when_current_access_is_gone(async_client, breaka
         team.status = "suspended"
     elif breakage == "other_organisation":
         db.add(Team(slug="actor-other", name="Other", clerk_org_id="org_actor_other"))
-        actor = (user.id, "org_actor_other")
+        actor = (user.id, "org_actor_other", team.id)
+    elif breakage == "other_team":
+        # The organisation resolves to this team, but the token belongs to another.
+        actor = (user.id, team.clerk_org_id, uuid.uuid4())
     else:
-        actor = (uuid.uuid4(), team.clerk_org_id)
+        actor = (uuid.uuid4(), team.clerk_org_id, team.id)
     await db.flush()
 
     with mcp_actor(*actor):
@@ -155,15 +159,18 @@ async def test_actor_is_refused_when_current_access_is_gone(async_client, breaka
 
 
 @pytest.mark.no_db
-def test_actor_needs_a_user_id_and_an_organisation():
-    for user_id, organisation in (
-        (uuid.uuid4(), ""),
-        (str(uuid.uuid4()), "org_1"),
-        (None, "org_1"),
+def test_actor_needs_a_user_id_an_organisation_and_a_team():
+    team = uuid.uuid4()
+    for user_id, organisation, team_id in (
+        (uuid.uuid4(), "", team),
+        (str(uuid.uuid4()), "org_1", team),
+        (None, "org_1", team),
+        (uuid.uuid4(), "org_1", None),
+        (uuid.uuid4(), "org_1", str(team)),
     ):
         with pytest.raises(ValueError):
-            McpActor(user_id, organisation)
-        with pytest.raises(ValueError), mcp_actor(user_id, organisation):
+            McpActor(user_id, organisation, team_id)
+        with pytest.raises(ValueError), mcp_actor(user_id, organisation, team_id):
             pass
     assert mcp_actor_ctx.get() is None
 
