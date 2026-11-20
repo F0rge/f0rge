@@ -104,6 +104,9 @@ test('every shared skill is linked for Claude Code and none is Claude-only', (t)
   const errors = checkAdapters(manifest, root);
   assert.ok(errors.some((error) => error.includes('Missing or wrong Claude skill link: .claude/skills/tdd')));
   assert.ok(errors.some((error) => error.includes('Claude-only skill: .claude/skills/claude-only')));
+  symlinkSync(join(root, '.agents/skills/tdd'), join(root, '.agents/skills/linked-skill'));
+  assert.ok(checkAdapters(manifest, root).some((error) => error.includes('Shared skill must be a real directory: .agents/skills/linked-skill')));
+  rmSync(join(root, '.agents/skills/linked-skill'));
   assert.throws(() => { rmSync(join(root, '.claude/skills/claude-only'), { recursive: true }); write(root, '.claude/skills/tdd/SKILL.md', 'hand-made'); generate(manifest, root); }, /non-generated skill entry/);
 });
 

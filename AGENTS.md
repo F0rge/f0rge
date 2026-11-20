@@ -139,7 +139,7 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 ## Nx conventions
 
-Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Codex review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
+Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Agent review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
 
 Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. Build/test plumbing alone does not prove app or release compliance. P-010 now sequences the authorized Buycycle migration before the later holiday-explorer pilot.
 
@@ -181,7 +181,7 @@ Before opening or replacing a PR, follow [the GitHub publisher guide](docs/agent
 
 Review playbooks live in `docs/agents/review-context/`. Read `_shared/*.md` plus the existing area playbooks selected by the [agent guide's review-reference mapping](docs/agents/README.md). Their historical filenames remain stable; they are review references, not another ownership map or proof of automatic loading.
 
-Read the [Codex PR review checklist](docs/agents/review-checklist.md) explicitly. It holds Nx gates and legacy UI kit import bans; area playbooks point to it instead of depending on an external review bot.
+Read the [agent PR review checklist](docs/agents/review-checklist.md) explicitly. It holds Nx gates and legacy UI kit import bans; area playbooks point to it instead of depending on an external review bot.
 
 ## Task learnings
 

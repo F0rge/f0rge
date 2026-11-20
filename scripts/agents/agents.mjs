@@ -191,6 +191,13 @@ export function checkAdapters(manifest, root = ROOT) {
   for (const [path, target] of links) {
     if (linkStatus(root, path, target) !== 'ok') errors.push(`Missing or wrong Claude skill link: ${path} -> ${target}. Run npm run agents:generate.`);
   }
+  // A symlinked skill (or skills dir) would be visible to Codex but skipped or redirected for Claude Code.
+  if (manifest.adapters.includes('claude') && existsSync(resolve(root, SKILLS_DIR))) {
+    if (lstatSync(resolve(root, SKILLS_DIR)).isSymbolicLink()) errors.push(`${SKILLS_DIR} must be a real directory, not a symlink`);
+    for (const entry of readdirSync(resolve(root, SKILLS_DIR), { withFileTypes: true })) {
+      if (!entry.isDirectory()) errors.push(`Shared skill must be a real directory: ${SKILLS_DIR}/${entry.name}`);
+    }
+  }
   if (manifest.adapters.includes('claude') && existsSync(resolve(root, CLAUDE_SKILLS_DIR))) {
     for (const name of readdirSync(resolve(root, CLAUDE_SKILLS_DIR))) {
       if (!links.has(`${CLAUDE_SKILLS_DIR}/${name}`)) errors.push(`Claude-only skill: ${CLAUDE_SKILLS_DIR}/${name}. Put shared skills in ${SKILLS_DIR}/ and run npm run agents:generate.`);
