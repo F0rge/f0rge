@@ -207,9 +207,6 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
-      - name: Verify braces security backport
-        run: node scripts/security/check-braces.cjs
-
       - name: Verify fixed dependencies and Medusa compatibility
         run: node scripts/security/check-ci-dependencies.cjs
 

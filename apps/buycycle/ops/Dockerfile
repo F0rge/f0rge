@@ -10,7 +10,6 @@ COPY apps/storefront/web/package.json apps/storefront/web/package.json
 COPY libs/ui/package.json libs/ui/package.json
 COPY libs/primer/package.json libs/primer/package.json
 COPY apps/buycycle/frontend/package.json apps/buycycle/frontend/package.json
-COPY vendor/braces vendor/braces
 RUN npm ci
 COPY libs/primer libs/primer
 COPY apps/buycycle/frontend apps/buycycle/frontend

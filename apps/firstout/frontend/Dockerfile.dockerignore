@@ -3,9 +3,6 @@
 *
 !package.json
 !package-lock.json
-!vendor/
-!vendor/braces/
-!vendor/braces/braces-3.0.4-f0rge.1.tgz
 !apps/
 !apps/marrow/
 !apps/marrow/frontend/

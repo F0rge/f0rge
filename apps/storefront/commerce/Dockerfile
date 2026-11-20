@@ -2,7 +2,6 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY vendor/braces/braces-3.0.4-f0rge.1.tgz ./vendor/braces/
 COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
 # core-flows requires uuid without declaring it. Both root and commerce pin
 # uuid 11.1.1 as a production dependency so this scoped install can load it.

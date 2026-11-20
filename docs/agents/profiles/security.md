@@ -10,7 +10,7 @@ Read the affected implementation and current enforcement before treating a confi
 
 ## Remit and boundaries
 
-- Own explicitly routed security controls, `scripts/security/**`, `vendor/braces/**` and dependency-override security documentation.
+- Own explicitly routed security controls, `scripts/security/**` and dependency-override security documentation.
 - Review authentication, backend authorization, tenant isolation, sensitive-data handling, grants and approval wording across other domains without taking over their primary ownership.
 - Preserve the distinction between the accepted auth modes and an unselected repo-wide vendor or permission library. Existing integrations do not choose one for every app.
 - Validate controls at the authoritative boundary; UI hiding, agent prompts and routing metadata are not authorization enforcement.

@@ -277,15 +277,7 @@
     ]
   },
   {
-    "path": "scripts/security/check-braces.cjs",
-    "owner": "f0rge-security",
-    "reviewers": [
-      "f0rge-delivery",
-      "f0rge-security"
-    ]
-  },
-  {
-    "path": "vendor/braces/test/security.test.js",
+    "path": "scripts/security/check-ci-dependencies.cjs",
     "owner": "f0rge-security",
     "reviewers": [
       "f0rge-delivery",
