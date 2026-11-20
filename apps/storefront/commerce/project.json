@@ -40,7 +40,7 @@
         {
           "name": "storefront-commerce",
           "healthcheckPath": "/health",
-          "preDeployCommand": "node /app/node_modules/.bin/medusa db:migrate"
+          "preDeployCommand": "node /app/node_modules/.bin/medusa db:migrate && node /app/node_modules/.bin/medusa exec ./src/scripts/bootstrap-storefront.js"
         }
       ],
       "check": {
