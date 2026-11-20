@@ -1,7 +1,8 @@
 # GitHub PR publisher
 
 Use the configured `f0rge-codex-publisher` GitHub App to open agent-prepared PRs
-to `F0rge/f0rge` `main`. Branch pushes keep the authorized user's Git identity.
+to `F0rge/f0rge` `main`. Codex and Claude Code share this App, helper and `codex/*`
+branch namespace; neither opens PRs through Leo's `gh` login. Branch pushes keep the authorized user's Git identity.
 The bot authors the PR; Leo performs the required human review in his own GitHub
 session. Review/automatic squash merging follows [P-005](../adr/governance.md#p-005);
 release authorization follows [P-006](../adr/governance.md#p-006). Independent
