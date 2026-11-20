@@ -6,6 +6,7 @@ import {
   normalizePickSettings,
   normalizePreview,
   type CreatePickPayload,
+  type PickDefaultAllocations,
   type PickDocument,
   type PickPreview,
   type UpdatePickPayload,
@@ -340,6 +341,7 @@ export {
 export type {
   CreatePickPayload,
   PickAllocation,
+  PickDefaultAllocations,
   PickDocument,
   PickLine,
   PickPreview,
@@ -1744,6 +1746,10 @@ export function listPicks(sourceType?: string): Promise<PickDocument[]> {
 
 export function getPick(id: string): Promise<PickDocument> {
   return apiFetch<unknown>(`/picks/${id}`).then(normalizePick);
+}
+
+export function getPickDefaultAllocations(id: string): Promise<PickDefaultAllocations> {
+  return apiFetch<PickDefaultAllocations>(`/picks/${id}/default-allocations`);
 }
 
 export function previewPick(payload: { sku_id: string; qty: number }): Promise<PickPreview> {

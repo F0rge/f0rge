@@ -84,6 +84,21 @@ class PickLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DefaultAllocation(BaseModel):
+    location_id: uuid.UUID
+    location_name: str
+    qty: int
+
+
+class DefaultLineAllocations(BaseModel):
+    sku_id: uuid.UUID
+    allocations: list[DefaultAllocation] = Field(default_factory=list)
+
+
+class PickDefaultAllocationsResponse(BaseModel):
+    lines: list[DefaultLineAllocations] = Field(default_factory=list)
+
+
 class PickPreviewResponse(BaseModel):
     kit_sku_id: uuid.UUID
     kit_qty: int

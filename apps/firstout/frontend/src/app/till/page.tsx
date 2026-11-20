@@ -4,12 +4,10 @@ import { StaffImage } from "@/components/staff-image";
 
 import {
   Button,
-  ButtonSet,
   Checkbox,
   ClickableTile,
   ComboBox,
   InlineNotification,
-  Link,
   Modal,
   NumberInput,
   Pagination,
@@ -68,6 +66,7 @@ import {
 import styles from "./page.module.css";
 import { TillLoading } from "./loading-layout";
 import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
+import { TillPickList } from "./till-pick-list";
 
 import {
   ApiError,
@@ -2242,16 +2241,6 @@ function TillWorkspace() {
         />
       ) : null}
 
-      {lastSale?.pick_id && (
-        <InlineNotification
-          kind="success"
-          lowContrast
-          hideCloseButton
-          title="Pick list created for the items from other locations."
-        >
-          <Link href={`/picks/${lastSale.pick_id}`}>Open pick list</Link>
-        </InlineNotification>
-      )}
       {lastSale ? (
         <Tile className="firstout-tax-invoice">
           <Stack gap={5}>
@@ -2358,7 +2347,7 @@ function TillWorkspace() {
               )}
             </div>
 
-            <ButtonSet>
+            <div className="firstout-catalogue-actions">
               <Button
                 kind="tertiary"
                 onClick={() =>
@@ -2379,10 +2368,33 @@ function TillWorkspace() {
               >
                 Process Return
               </Button>
-            </ButtonSet>
+              {lastSale.pick_id && (
+                <Button kind="ghost" href="#pick-list">
+                  View pick list
+                </Button>
+              )}
+            </div>
           </Stack>
         </Tile>
       ) : null}
+      {lastSale?.pick_id && (
+        <TillPickList
+          key={lastSale.pick_id}
+          pickId={lastSale.pick_id}
+          showroomId={lastSale.location.location_id}
+          noStockLabels={lastSale.lines
+            .filter((line) => line.till_no_stock_required)
+            .map((line) => {
+              const ref = skus.find((sku) => sku.id === line.sku_id)?.our_ref;
+              return ref ? `${line.description} (${ref})` : line.description;
+            })}
+          onNewSale={() => {
+            setLastSale(null);
+            resetMainScroll();
+            focusScanField();
+          }}
+        />
+      )}
 
             </div>
           </TabPanel>

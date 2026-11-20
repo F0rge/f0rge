@@ -35,6 +35,9 @@ from app.schemas.pick import (
     PickComplete,
     PickConfirm,
     PickCreate,
+    DefaultAllocation,
+    DefaultLineAllocations,
+    PickDefaultAllocationsResponse,
     PickPreviewRequest,
     PickPreviewResponse,
     PickResponse,
@@ -170,6 +173,35 @@ class PickService:
 
     async def get(self, pick_id: uuid.UUID) -> PickResponse:
         return await self._to_response(await self._get_or_404(pick_id))
+
+    async def default_allocations(
+        self, pick_id: uuid.UUID, user_id: uuid.UUID
+    ) -> PickDefaultAllocationsResponse:
+        """What the allocator would pick for this draft's lines on live stock, without saving."""
+        pick = await self._get_or_404(pick_id)
+        if pick.status != PickStatus.DRAFT:
+            raise ConflictError("Pick is not a draft")
+        needs = [
+            ComponentNeed(sku_id=line.sku_id, qty_needed=line.qty_needed) for line in pick.lines
+        ]
+        result = await self._allocate(needs, user_id)
+        names = {loc.id: loc.name for loc in await self.location_crud.list_all()}
+        return PickDefaultAllocationsResponse(
+            lines=[
+                DefaultLineAllocations(
+                    sku_id=line.sku_id,
+                    allocations=[
+                        DefaultAllocation(
+                            location_id=a.location_id,
+                            location_name=names[a.location_id],
+                            qty=a.qty,
+                        )
+                        for a in line.allocations
+                    ],
+                )
+                for line in result.lines
+            ]
+        )
 
     async def update(self, pick_id: uuid.UUID, data: PickUpdate) -> PickResponse:
         pick = await self._get_or_404(pick_id)

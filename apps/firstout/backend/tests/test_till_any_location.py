@@ -264,3 +264,64 @@ async def test_showroom_only_sale_has_no_pick(owner_client: AsyncClient, async_d
     assert await _inventory_on_hand(owner_client, sofa["id"], showroom) == 1
     assert await _invoice_reservations(async_db, sale.json()["invoice_id"]) == []
     assert await _reservations(async_db, sale.json()["invoice_id"]) == {}
+
+
+def _stored(pick: dict) -> list[tuple[str, int]]:
+    return [(a["location_id"], a["qty"]) for a in pick["lines"][0]["allocations"] if a["qty"]]
+
+
+def _defaults(body: dict) -> list[tuple[str, int]]:
+    return [(a["location_id"], a["qty"]) for a in body["lines"][0]["allocations"]]
+
+
+async def test_default_allocations_survive_an_override_and_restore_confirms(
+    owner_client: AsyncClient, async_db: AsyncSession
+):
+    showroom = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _location_id_by_name(owner_client, "Kramerville")
+    sandton = (
+        await owner_client.post("/api/v1/locations", json={"name": "Sandton", "type": "warehouse"})
+    ).json()["id"]
+    bench = await _stocked(owner_client, "ANY-DEFAULTS", warehouse, 5)
+    await _move(owner_client, bench, warehouse, sandton, 3)
+    body = (await _sell(owner_client, showroom, bench, 2)).json()
+    url = f"{PICKS}/{body['pick_id']}"
+
+    pick = (await owner_client.get(url)).json()
+    defaults = await owner_client.get(f"{url}/default-allocations")
+    assert defaults.status_code == 200, defaults.text
+    assert defaults.json()["lines"][0]["sku_id"] == bench["id"]
+    assert _defaults(defaults.json()) == _stored(pick) == [(warehouse, 2)]
+    assert defaults.json()["lines"][0]["allocations"][0]["location_name"] == "Kramerville"
+
+    override = {
+        "lines": [{"sku_id": bench["id"], "allocations": [{"location_id": sandton, "qty": 2}]}]
+    }
+    assert (await owner_client.patch(url, json=override)).status_code == 200
+    assert _stored((await owner_client.get(url)).json()) == [(sandton, 2)]
+    again = await owner_client.get(f"{url}/default-allocations")
+    assert _defaults(again.json()) == [(warehouse, 2)]
+    assert _stored((await owner_client.get(url)).json()) == [(sandton, 2)]
+
+    restore = {
+        "lines": [{"sku_id": bench["id"], "allocations": [{"location_id": warehouse, "qty": 2}]}]
+    }
+    assert (await owner_client.patch(url, json=restore)).status_code == 200
+    confirmed = await owner_client.post(f"{url}/confirm", json={})
+    assert confirmed.status_code == 200, confirmed.text
+    assert await _inventory_on_hand(owner_client, bench["id"], warehouse) == 0
+    assert await _invoice_reservations(async_db, body["invoice_id"]) == []
+
+    pdf = await owner_client.get(f"{url}/pdf")
+    assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
+    assert (await owner_client.get(f"{url}/default-allocations")).status_code == 409
+
+
+async def test_default_allocations_need_a_session(owner_client: AsyncClient):
+    showroom = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _location_id_by_name(owner_client, "Kramerville")
+    bench = await _stocked(owner_client, "ANY-DEFAULTS-AUTH", warehouse, 3)
+    body = (await _sell(owner_client, showroom, bench, 1)).json()
+    url = f"{PICKS}/{body['pick_id']}/default-allocations"
+    del owner_client.headers["Authorization"]
+    assert (await owner_client.get(url)).status_code == 401
