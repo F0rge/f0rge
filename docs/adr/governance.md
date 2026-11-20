@@ -92,13 +92,13 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 
 ## P-007
 
-- **Policy status:** Accepted (amended by Leo’s 14 November 2026 request)
+- **Policy status:** Accepted (amended by Leo’s 14 and 20 November 2026 requests)
 - **Temporary ID:** P-007
 - **Category:** Governance
-- **Decision:** Codex is the supported repository coding harness. Maintain repository-aligned instructions through `AGENTS.md`, shared Markdown rules and review references under `docs/agents/`, procedure skills under `.agents/skills/`, and generated `.codex/agents/` profiles. Keep role routing in the manifest and independent review separate from implementation.
-- **Rationale and trade-off:** Supporting multiple instruction adapters creates duplicate maintenance and hides useful rules behind editor-specific loading. Leo requested one Codex workflow and removal of the other adapter. Explicit scope pointers preserve the useful domain instructions without relying on editor rule attachment.
-- **Enforcement:** `npm run agents:generate`, `npm run agents:check` and `npm run agents:test` maintain canonical-source/generated-profile consistency and representative routing cases. They do not enforce the whole ADR register or prove native discovery.
-- **Proposed enforcement (not installed):** Repeatable native Codex discovery/invocation smoke and a deliberately violating task, with recorded instruction-load and negative-test evidence.
+- **Decision:** Codex and Claude Code are the supported repository coding harnesses, with an identical setup generated from one source. Maintain repository-aligned instructions through `AGENTS.md` (read natively by both; no `CLAUDE.md`), shared Markdown rules and review references under `docs/agents/`, procedure skills under `.agents/skills/` (linked into `.claude/skills/`), and generated `.codex/agents/` and `.claude/agents/` profiles. Keep role routing in the manifest and independent review separate from implementation.
+- **Rationale and trade-off:** Supporting multiple instruction adapters creates duplicate maintenance and hides useful rules behind editor-specific loading. Leo requested one Codex workflow and removal of the other adapter (14 November), then Claude Code support with an identical setup (20 November). Claude Code adds no second instruction source: both harnesses' profiles and skill links are generated from the same files, and the checks fail on any divergence. Explicit scope pointers preserve the useful domain instructions without relying on editor rule attachment.
+- **Enforcement:** `npm run agents:generate`, `npm run agents:check` and `npm run agents:test` maintain canonical-source/generated-profile consistency, Codex/Claude Code parity (byte-identical role instructions; every shared skill linked, none harness-only) and representative routing cases. They do not enforce the whole ADR register or prove native discovery.
+- **Proposed enforcement (not installed):** Repeatable native Codex and Claude Code discovery/invocation smoke and a deliberately violating task, with recorded instruction-load and negative-test evidence.
 - **Gate and limit:** Static generation/routing checks plus independent review; native discovery and worker compliance require separate observed evidence. Plaintext profiles do not grant tools or permissions.
 - **Static evidence at `f155a2ba` (historical, not normative, not a live check):** No instruction-discovery smoke test or deliberate-violation test was in CI.
 - **Implementation:** Partial: repository role profiles and generation checks exist. This amendment consolidates the supported workflow; native discovery and deliberate-violation coverage remain separately reported verification.
