@@ -88,6 +88,7 @@ from app.routers import (
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.clerk_api import ClerkAPI
 from app.services.locations import LocationSeedService
+from app.services.mcp_actions import register_route_actions
 from app.services.mcp_tokens import mcp_signing_key
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
@@ -303,4 +304,6 @@ app.include_router(records.records_router)
 app.include_router(clerk_webhooks.router)
 app.include_router(tenant_signup.router)
 app.include_router(tenant_signup.organisations_router)
+# After every router is included. An offered route MCP cannot derive stops startup.
+register_route_actions(app)
 app.router.routes.append(Route(MCP_PATH, endpoint=McpEndpoint()))

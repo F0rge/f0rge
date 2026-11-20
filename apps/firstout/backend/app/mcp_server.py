@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from decimal import Decimal
@@ -24,8 +25,16 @@ from app.crud.sku import SkuCRUD
 from app.crud.user import TeamCRUD, UserCRUD
 from app.database import tenant_session
 from app.exceptions import ForbiddenError
-from app.services.mcp_actions import ACTIONS, search_actions
-from app.services.mcp_operations import execute_operation
+from app.middleware.auth import mcp_actor
+from app.models.mcp_token import McpToken
+from app.services.mcp_action_types import Action
+from app.services.mcp_actions import ACTIONS, actions_index, search_actions
+from app.services.mcp_operations import (
+    begin_route_operation,
+    execute_operation,
+    finish_route_operation,
+)
+from app.services.mcp_route_runner import UNAVAILABLE, no_answer, run_route
 from app.permissions import STOCK_COST_VIEW
 from app.services.clerk_api import ClerkAPI
 from app.services.inventory import InventoryService
@@ -36,7 +45,24 @@ from f0rge_core.exceptions import ConflictError, DomainError, ExternalServiceErr
 from f0rge_db.auth_context import user_id_ctx
 from f0rge_db.crud import unit_of_work
 
+logger = logging.getLogger(__name__)
+
 MCP_PATH = "/mcp"
+ACTIONS_URI = "firstout://actions"
+# The same for every caller. What a caller may use comes from find_actions and the index.
+INSTRUCTIONS = (
+    "Firstout is a furniture retailer's back office: catalogue, stock, warehouse, sales, till "
+    "and books. Work in three steps. 1) find_actions with a task or a sidebar tab returns up "
+    "to three actions you may use, each with its input schema; with no arguments it lists "
+    "your domains. 2) run_read runs a read action. 3) run_write runs a write action "
+    "immediately, as the token owner and under their Firstout permissions, so confirm "
+    "intent with the user first. Give every intended change a fresh UUID request_id and "
+    "reuse it only to retry that same change. If an outcome is uncertain, call run_read "
+    "with action operations_lookup and that request_id before trying again with a new one. "
+    f"The resource {ACTIONS_URI} lists every action you may use now, grouped by tab. "
+    "Domains: Home, Till, Catalogue, Stock, Warehouse, Sales, Books, Admin. Access, "
+    "identity, file uploads and document downloads stay in the Firstout app."
+)
 _MCP_SCOPE = "firstout:mcp"
 _MAX_REQUEST_BYTES = 64 * 1024
 _CLERK_TIMEOUT_SECONDS = 5
@@ -201,6 +227,49 @@ async def find_actions(
         return page
 
 
+async def list_actions() -> str:
+    """Every action your current permissions allow, by sidebar tab. No input schemas."""
+    async with _staff_action() as (db, service, token):
+        granted = set(await PermissionService(db).keys_for_user(token.user_id))
+        service.record(token, "actions_found", "mcp")
+        return actions_index(granted)
+
+
+async def _run_route(
+    action: Action, token: McpToken, args: BaseModel, body: Any, request_id: uuid.UUID | None
+) -> dict[str, Any]:
+    """Run a route action after its authorising transaction has committed.
+
+    That transaction locked the token and team rows. The route works on its own connection
+    and may need those rows, so nothing of ours stays open while it runs.
+    """
+    with mcp_actor(token.user_id, get_access_token().claims["clerk_organisation"]):
+        outcome = await run_route(action.route, args, body)
+    try:
+        async with tenant_session(token.team_id) as db, unit_of_work(db):
+            if request_id is not None:
+                receipt = await finish_route_operation(db, token, request_id, outcome)
+            else:
+                McpTokenService(db, token.team_id).record(
+                    token, "action_read", "mcp", outcome.audit, action_name=action.name
+                )
+    except Exception:
+        # The route has answered. A started receipt already reports this as unknown.
+        logger.exception("MCP could not record the outcome of %s", action.name)
+        raise ToolError(no_answer(action.route)) from None
+    if outcome.error is not None:
+        raise ToolError(outcome.error)
+    if request_id is None:
+        return outcome.result
+    # Only this first answer carries the route's response. A replay returns the receipt.
+    if outcome.result is None:
+        return {
+            **receipt,
+            "response_note": "The response was too large to return. Read the record.",
+        }
+    return {**receipt, "response": outcome.result}
+
+
 async def _execute(
     action_name: str, arguments: dict, request_id: uuid.UUID | None
 ) -> dict[str, Any]:
@@ -215,7 +284,7 @@ async def _execute(
         if action is None or not await PermissionService(db).current_member_has_any(
             token.user_id, action.permissions
         ):
-            failure = "This action is unavailable with your current access"
+            failure = UNAVAILABLE
             outcome = "denied"
         elif writing and not settings.mcp_writes_enabled:
             failure = "MCP writes are paused"
@@ -228,11 +297,19 @@ async def _execute(
                 args = action.arguments.model_validate(arguments)
                 # Roll back partial business changes before committing a failure audit.
                 async with db.begin_nested():
-                    if request_id is not None:
+                    if action.route is not None:
+                        replayed = writing and await begin_route_operation(
+                            db, token, action, args, request_id
+                        )
+                        if replayed:
+                            return replayed
+                        failure = None
+                    elif request_id is not None:
                         return await execute_operation(db, token, action, args, request_id)
-                    result = await action.handler(db, token, args)
-                    service.record(token, event, "mcp", action_name=action.name)
-                    return result
+                    else:
+                        result = await action.handler(db, token, args)
+                        service.record(token, event, "mcp", action_name=action.name)
+                        return result
             except ValidationError as exc:
                 # Include only schema locations and error codes, never input values.
                 issues = exc.errors(include_input=False, include_url=False, include_context=False)
@@ -244,8 +321,14 @@ async def _execute(
             except DomainError as exc:
                 failure = exc.detail
                 outcome = "denied" if isinstance(exc, ForbiddenError) else "failed"
-        service.record(token, event, "mcp", outcome, action_name=action.name if action else None)
-    raise ToolError(failure)
+        if failure is not None:
+            service.record(
+                token, event, "mcp", outcome, action_name=action.name if action else None
+            )
+    if failure is not None:
+        raise ToolError(failure)
+    # The client's own body is sent, as the app would send it. The route validates it again.
+    return await _run_route(action, token, args, arguments.get("body"), request_id)
 
 
 async def run_read(action: Annotated[str, Field(max_length=80)], arguments: dict) -> dict[str, Any]:
@@ -265,6 +348,7 @@ def create_mcp_app(provider: ClerkAPI) -> Starlette:
     endpoint = urlsplit(url)
     server = MCPServer(
         "Firstout",
+        instructions=INSTRUCTIONS,
         token_verifier=McpTokenVerifier(provider),
         # These pre-issued personal tokens have no OAuth issuer to discover.
         auth=AuthSettings(issuer_url=url, resource_server_url=None, required_scopes=[_MCP_SCOPE]),
@@ -283,6 +367,13 @@ def create_mcp_app(provider: ClerkAPI) -> Starlette:
             readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
         )
     )(run_write)
+    server.resource(
+        ACTIONS_URI,
+        name="actions",
+        title="Firstout actions",
+        description="Every action your current permissions allow, grouped by sidebar tab.",
+        mime_type="text/plain",
+    )(list_actions)
     app = server.streamable_http_app(
         streamable_http_path=MCP_PATH,
         stateless_http=True,

@@ -20,6 +20,18 @@ from app.schemas.page import PageParams
 
 
 @dataclass(frozen=True)
+class RouteCall:
+    """How MCP calls one API route in-process. Built only from the route's own definition."""
+
+    app: Any
+    method: str
+    path: str
+    path_params: tuple[str, ...]
+    # Argument name and the name the API expects on the query string.
+    query_params: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
 class Action:
     name: str
     tab: str
@@ -30,10 +42,14 @@ class Action:
     handler: Callable[[AsyncSession, McpToken, Any], Awaitable[dict]]
     effect: Literal["read", "write"] = "read"
     related_tabs: tuple[str, ...] = ()
+    # Set for an action generated from an API route. MCP then runs that route, not `handler`.
+    route: RouteCall | None = None
 
     def __post_init__(self) -> None:
-        # Fail closed at import rather than expose a loosely declared action.
-        if self.effect == "write" and not self.permissions:
+        # Fail closed at import rather than expose a loosely declared action. A route action
+        # takes its permissions from the route's own dependencies and the route enforces them
+        # again when it runs, so an empty tuple there means the API allows any staff member.
+        if self.effect == "write" and not self.permissions and self.route is None:
             raise ValueError(f"MCP write {self.name} must name a permission")
         if self.arguments.model_config.get("extra") != "forbid":
             raise ValueError(f"MCP action {self.name} arguments must forbid extra fields")
