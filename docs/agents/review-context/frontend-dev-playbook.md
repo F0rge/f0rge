@@ -152,6 +152,10 @@ No `+`, `…`, `Manage`, `Add`, `Edit`, or `Archive` button anywhere on a `/chec
 
 ---
 
+**Overlay stacking.** For a new `Dialog`, overlay or fixed-position UI, check with `document.elementsFromPoint(cx, cy)` that it sits above the capsule (z:40) and alongside Dialog/bottom nav (z:50).
+
+**dnd-kit touch needs a real device.** Drive drag with real `page.mouse` events; CDP `Input.dispatchTouchEvent` does not activate dnd-kit's `TouchSensor`, so mobile drag needs real-device verification.
+
 ## Class-of-bug audit
 
 When a finding matches one of these patterns, grep the full diff for siblings before reporting — these recur in clusters:
