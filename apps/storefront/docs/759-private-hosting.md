@@ -26,16 +26,16 @@ items below still require their own evidence; this update does not certify them.
 ### Historical hosted audit (2026-09-30 UTC; superseded destination)
 
 Railway metadata was checked with explicit project and environment IDs; no
-variables or logs were read, and no infrastructure was changed. The project is
-**Vellano** (`c76d8df1-d839-454c-a94a-79b930deaf38`), the existing Firstout /
-Vellano project. Its `production` environment has ID
+variables or logs were read, and no infrastructure was changed. The Railway
+project is `Vellano` (`c76d8df1-d839-454c-a94a-79b930deaf38`), the existing
+Firstout project. Its `production` environment has ID
 `a639e365-f653-44db-a46d-a6a94e083894` and zero service instances. Its
 `develop` environment (`7a8ce6f1-c514-4e5d-9c50-4b7918865321`) has one
-successful Vellano web deployment, commit
+successful storefront web deployment, commit
 `33c01651ecfb5f09003157dd35784a5cb91430d8` on `develop`, at
 `https://storefront-develop-6009.up.railway.app`. The project service list
 contains `storefront`, `vellano-frontend`, `vellano-api`, and `Postgres`; it
-does not show dedicated Vellano Medusa or Redis services. This does not
+does not show dedicated storefront Medusa or Redis services. This does not
 demonstrate the project and data-service isolation required above.
 
 Unauthenticated `GET /api/health` returned `200` with exactly
