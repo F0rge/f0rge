@@ -24,7 +24,7 @@ class Action:
     # Empty allows any active staff member. Otherwise one listed permission is sufficient.
     permissions: tuple[str, ...]
     handler: Callable[[AsyncSession, McpToken, Any], Awaitable[dict]]
-    effect: Literal["read", "write", "review"] = "read"
+    effect: Literal["read", "write"] = "read"
     related_tabs: tuple[str, ...] = ()
 
 

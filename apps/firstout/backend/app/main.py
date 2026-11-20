@@ -68,7 +68,6 @@ from app.routers import (
     repeating_invoices,
     returns,
     laybys,
-    mcp_operations,
     mcp_tokens,
     quotes,
     sales_orders,
@@ -250,7 +249,6 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router)
 app.include_router(users.users_router)
 app.include_router(users.profile_router)
-app.include_router(mcp_operations.router)
 app.include_router(mcp_tokens.router)
 app.include_router(roles.roles_router)
 app.include_router(record_workspace.record_workspace_router)

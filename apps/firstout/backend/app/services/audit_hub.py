@@ -100,6 +100,16 @@ class AuditHubService:
                     func.concat("/journals?record=", document_id),
                 ),
             )
+            action_label = case(
+                (
+                    (event.action == "write_requested")
+                    & (event.result == "success")
+                    & McpOperation.completed_at.is_not(None)
+                    & McpOperation.confirmed_by.is_(None),
+                    literal("write completed"),
+                ),
+                else_=func.replace(event.action, "_", " "),
+            )
             activity = (
                 select(
                     event.id,
@@ -109,7 +119,7 @@ class AuditHubService:
                     func.concat_ws(
                         " · ",
                         event.token_name,
-                        func.replace(event.action, "_", " "),
+                        action_label,
                         func.replace(event.action_name, "_", " "),
                         func.coalesce(
                             McpOperation.result["transfer_number"].as_string(),

@@ -25,7 +25,7 @@ from app.crud.user import TeamCRUD, UserCRUD
 from app.database import tenant_session
 from app.exceptions import ForbiddenError
 from app.services.mcp_actions import ACTIONS, search_actions
-from app.services.mcp_operations import request_operation
+from app.services.mcp_operations import execute_operation
 from app.permissions import STOCK_COST_VIEW
 from app.services.clerk_api import ClerkAPI
 from app.services.inventory import InventoryService
@@ -229,7 +229,7 @@ async def _execute(
                 # Roll back partial business changes before committing a failure audit.
                 async with db.begin_nested():
                     if request_id is not None:
-                        return await request_operation(db, token, action, args, request_id)
+                        return await execute_operation(db, token, action, args, request_id)
                     result = await action.handler(db, token, args)
                     service.record(token, event, "mcp", action_name=action.name)
                     return result
@@ -253,10 +253,10 @@ async def run_read(action: Annotated[str, Field(max_length=80)], arguments: dict
     return await _execute(action, arguments, None)
 
 
-async def request_write(
+async def run_write(
     action: Annotated[str, Field(max_length=80)], arguments: dict, request_id: uuid.UUID
 ) -> dict[str, Any]:
-    """Request a write. Save one UUID per intent and reuse it on retry. Present any review URL to the employee."""
+    """Execute a discovered write immediately as the token owner. Use a new UUID for each intended change and reuse it on retry."""
     return await _execute(action, arguments, request_id)
 
 
@@ -279,8 +279,10 @@ def create_mcp_app(provider: ClerkAPI) -> Starlette:
     for read_tool in (find_actions, run_read):
         server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))(read_tool)
     server.tool(
-        annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False)
-    )(request_write)
+        annotations=ToolAnnotations(
+            readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
+        )
+    )(run_write)
     app = server.streamable_http_app(
         streamable_http_path=MCP_PATH,
         stateless_http=True,

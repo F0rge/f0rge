@@ -234,7 +234,7 @@ async def test_token_lifecycle_secret_isolation_mcp_audit_and_current_permission
         "catalogue_search",
         "find_actions",
         "run_read",
-        "request_write",
+        "run_write",
     }
     args = {
         "name": "catalogue_search",
@@ -387,7 +387,7 @@ async def test_discovery_paging_and_runners_follow_current_membership(mcp_fixtur
     name = "quotes_create_draft"
     assert name not in {action["name"] for action in await discover()}
     request = dict(action=name, request_id=str(uuid.uuid4()), arguments={})
-    assert (await call("request_write", **request))["isError"]
+    assert (await call("run_write", **request))["isError"]
     async with tenant_session(team.id) as db, unit_of_work(db):
         role_id = await db.scalar(
             select(Role.id).where(Role.team_id == team.id, Role.slug == "reader")
@@ -396,12 +396,12 @@ async def test_discovery_paging_and_runners_follow_current_membership(mcp_fixtur
     assert name in {action["name"] for action in await discover()}
     wrong_runner = await call("run_read", action=name, arguments={})
     assert wrong_runner["isError"] and "runner" in wrong_runner["content"][0]["text"]
-    invalid = await call("request_write", **request)
+    invalid = await call("run_write", **request)
     assert invalid["isError"] and "Invalid arguments" in invalid["content"][0]["text"]
 
     monkeypatch.setattr(settings, "mcp_writes_enabled", False)
     assert name not in {action["name"] for action in await discover()}
-    paused = await call("request_write", **request)
+    paused = await call("run_write", **request)
     assert paused["isError"] and "paused" in paused["content"][0]["text"]
     assert not (await call("run_read", action="catalogue_search", arguments={"query": "Fixture"}))[
         "isError"
@@ -409,7 +409,7 @@ async def test_discovery_paging_and_runners_follow_current_membership(mcp_fixtur
     monkeypatch.setattr(settings, "mcp_writes_enabled", True)
     async with tenant_session(team.id) as db, unit_of_work(db):
         await db.execute(delete(RolePermission).where(RolePermission.team_id == team.id))
-    denied = await call("request_write", **request)
+    denied = await call("run_write", **request)
     assert denied["isError"] and "unavailable" in denied["content"][0]["text"]
     history = (await client.get(_TOKENS, headers=_clerk(users[0], team))).json()["activity"]
     assert history[0]["action_name"] == name and history[0]["result"] == "denied"

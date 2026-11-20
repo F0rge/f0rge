@@ -20,8 +20,8 @@ import styles from "./mcp-tokens.module.css";
 const activityLabels: Record<McpTokenActivity["action"], string> = {
   actions_found: "Looked up available actions",
   action_read: "Read a record",
-  write_requested: "Requested a change",
-  write_replayed: "Retrieved an earlier request",
+  write_requested: "Write action",
+  write_replayed: "Retrieved an earlier result",
   write_confirmed: "Confirmed a change",
   generated: "Generated token",
   rotated: "Replaced token",

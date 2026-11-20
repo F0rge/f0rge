@@ -30,7 +30,7 @@ ACTIONS = {
         Action(
             name="operations_lookup",
             tab="Admin / MCP tokens",
-            description="Check the status or receipt of a previous write using its request ID.",
+            description="Look up a write receipt by request ID, including whether an earlier request was executed.",
             arguments=OperationLookup,
             permissions=(),
             handler=_lookup,
