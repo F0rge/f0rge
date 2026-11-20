@@ -1,6 +1,7 @@
 ---
 description: FastAPI backend conventions — Router → Service → Dependency pattern, Pydantic v2, async SQLAlchemy, domain exceptions. Use proactively when writing or reviewing Python API code, routers, services, schemas, migrations, or backend tests.
 globs: apps/marrow/backend/**/*.py, apps/marrow/backend/migrations/**
+paths: "apps/marrow/backend/**/*.py, apps/marrow/backend/migrations/**"
 alwaysApply: false
 ---
 

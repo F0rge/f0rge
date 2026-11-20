@@ -1,6 +1,7 @@
 ---
 description: ETL pipelines, ingredient normalization, ML prompts, and dietary data schema for marrow. Use proactively for data ingestion, transformation scripts, normalization layers, prompt engineering, or reference table maintenance.
 globs: apps/marrow/backend/scripts/**, apps/marrow/backend/data/**
+paths: "apps/marrow/backend/scripts/**, apps/marrow/backend/data/**"
 alwaysApply: false
 ---
 

@@ -1,6 +1,7 @@
 ---
 description: QA gate protocol — static analysis, rule adherence, tests, integration, e2e, deployment config audit. Use proactively before any PR or after completing a feature that needs verification.
 globs: apps/marrow/backend/tests/**, libs/**, .github/workflows/**
+paths: "apps/marrow/backend/tests/**, libs/**, .github/workflows/**"
 alwaysApply: false
 ---
 

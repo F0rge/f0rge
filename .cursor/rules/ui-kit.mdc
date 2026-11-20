@@ -1,6 +1,7 @@
 ---
 description: Design-system hard rules — @f0rge/ui imports, token layers, banned engines, forms via wrappers. Use when editing apps frontend, libs/ui, or adding UI primitives/forms.
 globs: libs/ui/**,apps/**/frontend/**/*.tsx,apps/**/frontend/**/*.ts,apps/**/frontend/**/*.css
+paths: "libs/ui/**,apps/**/frontend/**/*.tsx,apps/**/frontend/**/*.ts,apps/**/frontend/**/*.css"
 alwaysApply: false
 ---
 

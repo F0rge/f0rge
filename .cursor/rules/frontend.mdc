@@ -1,6 +1,7 @@
 ---
 description: Marrow App Router UX — Next.js stack, API/auth, customize-hub contract, onboarding tour, quality gate. Kit/import/token rules live in ui-kit.mdc.
 globs: apps/marrow/frontend/**/*.tsx, apps/marrow/frontend/**/*.ts
+paths: "apps/marrow/frontend/**/*.tsx, apps/marrow/frontend/**/*.ts"
 alwaysApply: false
 ---
 

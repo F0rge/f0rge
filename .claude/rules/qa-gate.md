@@ -1,0 +1,1 @@
+../../.cursor/rules/qa-gate.mdc

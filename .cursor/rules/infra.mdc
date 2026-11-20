@@ -1,6 +1,7 @@
 ---
 description: Railway + Coolify deploy, CI/CD, and Docker build conventions. Use proactively for railway.toml, fly.toml (legacy), Dockerfiles, GitHub Actions, and env configuration.
-globs: **/railway*.toml, **/fly*.toml, .github/**, **/Dockerfile, **/docker-entrypoint.sh, **/docker-compose*.yml
+globs: .github/**, **/railway*.toml, **/fly*.toml, **/Dockerfile, **/docker-entrypoint.sh, **/docker-compose*.yml
+paths: "**/railway*.toml, **/fly*.toml, .github/**, **/Dockerfile, **/docker-entrypoint.sh, **/docker-compose*.yml"
 alwaysApply: false
 ---
 

@@ -1,6 +1,7 @@
 ---
 description: Shared library conventions for libs/backend/* and libs/ui. Use when creating, modifying, or consuming shared libs.
 globs: libs/**
+paths: "libs/**"
 alwaysApply: false
 ---
 
