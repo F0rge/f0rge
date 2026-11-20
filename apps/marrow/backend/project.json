@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/marrow/backend",
   "targets": {
+    "image": {},
     "lint": {
       "executor": "nx:run-commands",
       "options": {
@@ -23,6 +24,13 @@
       "options": {
         "cwd": "apps/marrow/backend",
         "command": "uv run pytest -ra"
+      }
+    },
+    "audit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/marrow/backend",
+        "command": "uv export --frozen --no-dev --no-hashes --no-emit-local -o /tmp/marrow-req.txt && uvx pip-audit -r /tmp/marrow-req.txt --no-deps --disable-pip"
       }
     },
     "lock": {
@@ -47,5 +55,33 @@
       ]
     }
   },
-  "tags": ["platform:py", "scope:marrow"]
+  "tags": ["platform:py", "scope:marrow"],
+  "metadata": {
+    "deploy": {
+      "host": "railway",
+      "services": [
+        {
+          "name": "marrow-api",
+          "healthcheckPath": "/api/v1/health",
+          "preDeployCommand": "/bin/sh -c 'DATABASE_URL=\"${MIGRATION_DATABASE_URL:-$DATABASE_URL}\" uv run alembic upgrade head'",
+          "startCommand": "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+        },
+        { "name": "marrow-worker", "startCommand": "uv run python -m app.embedding_pipeline" },
+        { "name": "marrow-mcp", "startCommand": "/app/apps/marrow/backend/.venv/bin/python -m app.mcp --transport streamable-http" }
+      ],
+      "check": {
+        "port": 8000,
+        "postgres": "pgvector/pgvector:pg16",
+        "env": {
+          "DATABASE_URL": "postgresql+asyncpg://f0rge:f0rge@postgres:5432/f0rge",
+          "JWT_SECRET": "image-check-jwt-secret-32-chars-minimum",
+          "SETTINGS_ENCRYPTION_KEY": "dGVzdC1rZXktMzJieXRzLWZvci1mZXJuZXQtMTIzNDU2Nzg=",
+          "HEALTHTRACKER_RO_PASSWORD": "image-check-ro",
+          "HEALTHTRACKER_APP_PASSWORD": "image-check-app",
+          "FOOD_ANALYSIS_ENABLED": "false",
+          "WEATHER_FETCH_ENABLED": "false"
+        }
+      }
+    }
+  }
 }

@@ -1,11 +1,5 @@
 name: Setup Python uv
-description: uv + Python 3.10 (repo default) and 3.11 (Marrow, Firstout, dk tag-printer), optionally install pinned ruff from .github/ruff-version
-
-inputs:
-  install-ruff:
-    description: Install pinned ruff via uv tool
-    required: false
-    default: "false"
+description: uv with Python 3.10 (default) and 3.11 (projects with a .python-version, such as Marrow, Firstout and dk tag-printer)
 
 runs:
   using: composite
@@ -50,16 +44,10 @@ runs:
       # uv may append build/target metadata after its semantic version.
       run: test "$(uv --version | awk '{print $2}')" = "$UV_BOOTSTRAP_VERSION"
 
-    - name: Pin Python 3.10 and 3.11
+    - name: Install Python 3.10 and 3.11
       shell: bash
-      # Both interpreters are installed. CI sync selects 3.11 when the
-      # project .python-version says so (Marrow, Firstout, dk tag-printer).
-      # Other projects pass UV_PYTHON=3.10 so they do not pick up 3.11.
+      # A project's own .python-version selects its interpreter. The user-level pin is
+      # the fallback for every project without one, so `uv run` needs no per-project setup.
       run: |
-        uv python install 3.10
-        uv python install 3.11
-
-    - name: Install pinned ruff
-      if: inputs.install-ruff == 'true'
-      shell: bash
-      run: uv tool install "ruff==$(tr -d '[:space:]' < .github/ruff-version)"
+        uv python install 3.10 3.11
+        uv python pin --global 3.10

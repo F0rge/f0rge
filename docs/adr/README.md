@@ -18,7 +18,7 @@ The decisions were reconstructed from the 7 November 2026 architecture conversat
 
 ## New work versus what is already here
 
-New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Follow [P-005](governance.md#p-005) for Leo's review and automatic squash merging, and [P-006](governance.md#p-006) for release authorization. Every PR includes the ADR Check for its touched domains required by P-003, written with the [`pr` skill](../../.agents/skills/pr/SKILL.md). The table below is the decision index, not a compliance assessment. This repo does not yet have a mechanical compliance checker.
+New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Follow [P-005](governance.md#p-005) for Leo's review and automatic squash merging; a reviewed merge releases the affected Apps ([P-006](governance.md#p-006)). Every PR includes the ADR Check for its touched domains required by P-003, written with the [`pr` skill](../../.agents/skills/pr/SKILL.md). The table below is the decision index, not a compliance assessment. ADR compliance is judged in review, not by CI ([P-004](governance.md#p-004)).
 
 Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, Turso, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
 
@@ -28,8 +28,8 @@ Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor
 
 These are not decisions. Do not invent a selection.
 
-- Airflow hosting, executor, capacity, and secure routes between Railway, a separate Airflow project, and the home Pi. Cloud independence from the home Pi was not accepted. Namespaces, pools, and experimental multi-team mode are not hard tenant isolation; that limit is recorded on `P-060`, not as a new decision.
-- How a separate Airflow project would reach app APIs. Railway private DNS does not cross projects. Do not share app databases to solve that.
+- Airflow executor and capacity. Hosting is decided (20 November 2026): Airflow lives on the Pi and Railway Apps reach it over a secure connection. That decision gets its own record in a separate change; bringing Airflow under Coolify and into the pipeline is a follow-up. Namespaces, pools, and experimental multi-team mode are not hard tenant isolation; that limit is recorded on `P-060`, not as a new decision.
+- The mechanism of the secure connection between Railway Apps and Airflow on the Pi. Do not share app databases to solve that.
 - Airflow bundle packaging and whether a git bundle pin also pins helpers, the Rust API, or retained inputs. It does not.
 - Durable queue and the lighter scheduler. Apalis was a candidate, not a standard. Diesel transaction participation is unproven because Diesel is not in the tree.
 - Repo-wide permission library. RBAC plus ABAC and the two auth modes are accepted. Personal apps may choose Cloudflare Access email-code login; multi-user apps may choose Clerk (15 November update to P-035). Neither is mandatory for every app.
@@ -39,9 +39,9 @@ These are not decisions. Do not invent a selection.
 
 ## Release and checklist
 
-Review and merging follow [P-005](governance.md#p-005); release authorization follows [P-006](governance.md#p-006). Manual provider operations require explicit task authorization. Existing GitHub workflows and host docs still describe automatic paths. Those paths are not an approved exception, and editing these records does not turn them off or authorize them.
+Review and merging follow [P-005](governance.md#p-005). A reviewed merge to `main` with CI passing releases every affected App to its Host, migrations included, with no per-release approval ([P-006](governance.md#p-006), [P-020](data.md#p-020)). How: [the deploy page](../../.github/deploy/README.md). Provider operations outside the pipeline require explicit task authorization.
 
-Every pull request into `main` includes an ADR Check for the domains it touches (P-003): the [`pr` skill](../../.agents/skills/pr/SKILL.md) lists the IDs that `node scripts/agents/agents.mjs adrs <changed files>` prints, each with a compliance status and reason. Unrelated work does not certify the existing app; known gaps in the touched domains remain visible. There is no `adr-coverage` job in CI; human review still judges the evidence and rationale.
+Every pull request into `main` includes an ADR Check for the domains it touches (P-003): the [`pr` skill](../../.agents/skills/pr/SKILL.md) lists the IDs that `node scripts/agents/agents.mjs adrs <changed files>` prints, each with a compliance status and reason. It is information for the reviewer. CI does not enforce ADR compliance (P-004); the reviewer decides.
 
 ## Index
 
@@ -50,9 +50,9 @@ Every pull request into `main` includes an ADR Check for the domains it touches 
 | P-001 | Canonical ADRs | Accepted | Repo-wide ADRs are authoritative. AGENTS.md points to them; no drifting policy copies. | [P-001](governance.md#p-001) |
 | P-002 | Default stack and migrations | Accepted | One default stack, exceptions approved by Leo. Apply new standards to new apps first; migrate existing apps gradually. | [P-002](governance.md#p-002) |
 | P-003 | ADR assessment on every PR | Accepted | Every PR to main includes an ADR Check for the domains it touches, with statuses and justified exceptions. | [P-003](governance.md#p-003) |
-| P-004 | Automated architecture checks | Accepted | Deterministic automated architecture checks block merge and release where enforceable; exceptions need Leo. | [P-004](governance.md#p-004) |
+| P-004 | Reviewer judges ADR compliance | Accepted | ADR compliance is not enforced by CI/CD; the reviewer decides. Cheap guards that catch real breakage stay. | [P-004](governance.md#p-004) |
 | P-005 | Human review and automatic squash merge | Accepted | Independent review and CI; Leo alone supplies required code-owner review, then native GitHub squash auto-merge follows protected-main requirements unless the task withholds merging. | [P-005](governance.md#p-005) |
-| P-006 | Production release authorization | Accepted | P-006 permits Firstout continuous deployment after reviewed main merges and successful checks; other apps require Leo’s approval for every production release. | [P-006](governance.md#p-006) |
+| P-006 | Every App released on merge | Accepted | Every App is released automatically after a reviewed merge to `main` with CI passing; no per-release approval. | [P-006](governance.md#p-006) |
 | P-007 | Repository agent profiles | Accepted | Codex and Claude Code are the supported repository coding harnesses, with one canonical source generating identical role profiles and skill links. | [P-007](governance.md#p-007) |
 | P-008 | Brief and mockup before substantial work | Accepted | Before an app or substantial feature: agree a short brief, testable outcomes and clickable mockup with Leo. | [P-008](product.md#p-008) |
 | P-009 | Design all user states | Accepted | Design and test loading, empty, error, denied, success and edit-conflict states. | [P-009](product.md#p-009) |
@@ -66,7 +66,7 @@ Every pull request into `main` includes an ADR Check for the domains it touches 
 | P-017 | App-owned data and APIs | Accepted | Each app owns its data. Other apps and Airflow use approved APIs, never direct cross-app database reads/writes. | [P-017](data.md#p-017) |
 | P-018 | Separate app databases on Pi | Accepted | On Pi, one PostgreSQL cluster with separate app databases and restricted app logins. | [P-018](data.md#p-018) |
 | P-019 | Separate Railway projects | Accepted | On Railway, each app keeps its own project and PostgreSQL service; no giant shared F0rge app project. | [P-019](data.md#p-019) |
-| P-020 | Controlled release migrations | Accepted | Tested compatible Firstout migrations run once in its controlled CD release; other apps retain approved-release migrations. Destructive changes require explicit recovery planning. | [P-020](data.md#p-020) |
+| P-020 | Migrations as the pre-release step | Accepted | Migrations run unattended as the Host's pre-release step for every App; no approval and no backup check. | [P-020](data.md#p-020) |
 | P-021 | Rust contracts and generated clients | Accepted | Rust endpoint/request/response definitions are authoritative; generate the API contract and typed React clients, with compatibility checked in CI. | [P-021](api.md#p-021) |
 | P-022 | Shared API errors | Accepted | Shared API error format and shared frontend handling for field errors, permission failures and edit conflicts; no internal debug-detail leaks. | [P-022](api.md#p-022) |
 | P-023 | Standalone React frontend | Accepted | Standalone React frontend; Rust owns the backend. | [P-023](frontend.md#p-023) |
@@ -91,16 +91,16 @@ Every pull request into `main` includes an ADR Check for the domains it touches 
 | P-042 | Safe external-service testing | Accepted | Local/CI external services use fakes or sandboxes: no real emails, charges, paid-service side effects or production writes. | [P-042](development.md#p-042) |
 | P-043 | Tests use the actual database engine | Accepted | Test against the actual chosen database engine, not a convenient substitute. | [P-043](development.md#p-043) |
 | P-044 | Reviewed dependency upgrades | Accepted | Shared dependency upgrades are reviewed and tested against affected apps; no silent production upgrades. | [P-044](development.md#p-044) |
-| P-045 | Release tags select the host | Accepted | A release tag selects Pi or Railway—not an app configuration switch. | [P-045](delivery.md#p-045) |
-| P-046 | Exact tested release artifacts | Accepted | Deploy exact CI-tested immutable artifacts, not a production rebuild; test target-specific artifacts where needed. | [P-046](delivery.md#p-046) |
+| P-045 | Host recorded per Project | Accepted | No release tags. The Host is recorded once per deployable Project in its `project.json` deploy block; release history is the App's GitHub environment. | [P-045](delivery.md#p-045) |
+| P-046 | Artifacts built once in CI | Accepted | Each Artifact is built once in CI and released by commit tag; public unless a build needs a secret. | [P-046](delivery.md#p-046) |
 | P-047 | Approved host migration | Accepted | Moving an app between Pi and Railway needs explicit migration, cutover and recovery approval. | [P-047](delivery.md#p-047) |
-| P-048 | Managed Pi artifact deployment | Accepted | Pi deployment uses a managed service pulling approved artifacts; no routine agent SSH. | [P-048](delivery.md#p-048) |
+| P-048 | Coolify pulls on the Pi | Accepted | Coolify is the Pi's managed puller; no custom release agent and no routine agent SSH for Releases. | [P-048](delivery.md#p-048) |
 | P-049 | Protected gateway and origins | Accepted | One protected gateway with app subdomains; block origin bypass. | [P-049](delivery.md#p-049) |
 | P-050 | Standard app domains | Accepted | Default domain is <app-folder>.leo-figueiredo.com under a standard naming rule; other domains need Leo approval. | [P-050](delivery.md#p-050) |
 | P-051 | Health checks and visibility | Accepted | Health checks and operational visibility are mandatory on Pi and Railway. | [P-051](operations.md#p-051) |
 | P-052 | Logs and resource limits | Accepted | Both hosts require useful logs and resource limits. | [P-052](operations.md#p-052) |
 | P-053 | Managed secrets | Accepted | Use managed secrets; keep credentials and sensitive data out of source and exposed logs. | [P-053](operations.md#p-053) |
-| P-054 | Backups and tested recovery | Accepted | Backups, tested restoration and recovery procedures on both hosts. | [P-054](operations.md#p-054) |
+| P-054 | Backups, recovery and automatic rollback | Accepted | Backups, tested restoration and recovery procedures on both hosts; a failed Release puts each service back on the image it ran before. | [P-054](operations.md#p-054) |
 | P-055 | Rust jobs and Python orchestration | Accepted | Rust owns APIs, business logic and durable app jobs; lighter schedulers for isolated timed work; Airflow for coordinated multi-step workflows. Python may provide thin orchestration. | [P-055](workflows.md#p-055) |
 | P-056 | Transactional queue or outbox | Accepted | When state changes and pending work must happen together, use a proven transactional local queue or a cross-system outbox, with safe retries. | [P-056](workflows.md#p-056) |
 | P-057 | Safe retries and ambiguous outcomes | Accepted | Repeat-safe operations, bounded transient retries, and status checks/manual review for ambiguous external outcomes. | [P-057](workflows.md#p-057) |

@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../adr/README.md). Follow [P-005](../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../adr/README.md). Follow [P-005](../adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # PR review checklist
 
@@ -15,12 +15,13 @@ Implementation detail: `docs/agents/rules/nx.md`. Block on the following when re
 
 1. **New app/lib without `project.json`** under `apps/**` or `libs/**` that has `package.json`, `pyproject.toml` or a Cargo package manifest. Virtual Cargo workspace manifests follow the [Rust registration rules](../../.github/rust/README.md).
 2. **Missing matching `platform:py`, `platform:ts` or `platform:rust` tag** on a registered project (exception: `marrow-ios` — `scope:marrow` only). Rust projects must satisfy the [fixed target and dependency contract](../../.github/rust/README.md); a tag alone does not establish build/test coverage.
-3. **Custom CI detect / project-list plumbing** — reintroducing `nx show projects --affected` into a detect job that feeds `run-many --projects "$LIST"`. Prefer `nx affected -t=… --exclude='*,!tag:platform:…'`. Do not pass `--projects` to `nx affected` (it is forwarded into the task).
+3. **A second change detector** — path filters or hand-kept project lists beside the plan job in `ci.yml`. Nx decides what is affected. Do not pass `--projects` to `nx affected` (it is forwarded into the task).
 4. **Libs importing apps** — `libs/**` → `apps/` (TS or Python).
 5. **OpenAPI drift bypass** — removing `codegen:check`, `marrow-backend:openapi`, or frontend `implicitDependencies: ["marrow-backend"]` without an equivalent graph-aware check.
-6. **Playwright outside Nx** — new/changed CI that runs `npx playwright test` instead of `npx nx run …:e2e`.
+6. **Browser e2e added to CI** — it is not run in CI for now; reinstating it is Leo's decision. Locally, run Playwright through `npx nx run …:e2e`.
 7. **Root `uv.lock`** created or committed.
-8. **Deprecated Nx remote cache packages** (`@nx/s3-cache`, `@nx/gcs-cache`, `@nx/azure-cache`, `@nx/shared-fs-cache`) or GHA restore of `.nx/cache` across machines.
+8. **Pipeline code that only proves an ADR was followed** (provenance, approval, journal, evidence), or a per-App release program or workflow. Releases go through `cd.yml` and the deploy block (P-004, P-048).
+9. **Deprecated Nx remote cache packages** (`@nx/s3-cache`, `@nx/gcs-cache`, `@nx/azure-cache`, `@nx/shared-fs-cache`) or GHA restore of `.nx/cache` across machines.
 
 ## Soft flags
 

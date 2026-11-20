@@ -5,10 +5,25 @@
   "sourceRoot": "apps/storefront/web/src",
   "implicitDependencies": ["daskasas-commerce"],
   "targets": {
+    "image": {},
     "typecheck": {
       "executor": "nx:run-commands",
       "options": { "cwd": "apps/storefront/web", "command": "npm run typecheck" }
     }
   },
-  "tags": ["platform:ts", "scope:daskasas"]
+  "tags": ["platform:ts", "scope:daskasas"],
+  "metadata": {
+    "deploy": {
+      "host": "railway",
+      "services": [{ "name": "storefront", "healthcheckPath": "/api/health" }],
+      "build": {
+        "args": {
+          "NEXT_PUBLIC_BASE_URL": "https://www.daskasas.co.za",
+          "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aW50ZW5zZS1oYXJlLTQ4MzguY2xlcmsuYWNjb3VudHMuZGV2JA",
+          "NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN": "phc_owbkg63yQTaZKNMaRAP8J97aaatPfdk9MK7VRfsVtDDw"
+        }
+      },
+      "check": { "port": 3000 }
+    }
+  }
 }

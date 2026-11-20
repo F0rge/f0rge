@@ -1,18 +1,17 @@
 # Railway environment variables (marrow)
 
-Committed files describe Marrow production from git branch `main` (`.github/deploy/manifest.yml` and Railway config). That description is not a live trigger check and not Leo's approval to release. The smoke URLs below are the ones those files name. Do not open pull requests against `develop`. Canonical decisions: [`docs/adr/README.md`](../../../../docs/adr/README.md).
+Marrow runs in the Railway project **Marrow** from images CI builds on `main`. Service names, start commands, health path and the migration command live in the deploy blocks of `apps/marrow/backend/project.json` and `apps/marrow/frontend/project.json`; `.github/deploy/deploy.mjs` sends them with every Release ([the deploy page](../../../../.github/deploy/README.md)). There are no Railway config files in the repo. Variables below stay in Railway. Canonical decisions: [`docs/adr/README.md`](../../../../docs/adr/README.md).
 
-Shared monorepo services. Do **not** set Root Directory. Point each service's
-Config File at the matching `railway*.toml`.
+## Services
 
-## Service → config
+| Service | Project (image) | Public domain | Port var |
+|---------|-----------------|---------------|----------|
+| `marrow-api` | `marrow-backend` | yes | `PORT=8000` |
+| `marrow-worker` | `marrow-backend` | no | — |
+| `marrow-mcp` | `marrow-backend` | yes | `PORT=8005` |
+| `marrow-frontend` | `marrow-frontend` | yes | `PORT=3000` |
 
-| Service | Config path | Public domain | Port var |
-|---------|-------------|---------------|----------|
-| `marrow-api` | `apps/marrow/backend/railway.toml` | yes | `PORT=8000` |
-| `marrow-worker` | `apps/marrow/backend/railway.worker.toml` | no | — |
-| `marrow-mcp` | `apps/marrow/backend/railway.mcp.toml` | yes | `PORT=8005` |
-| `marrow-frontend` | `apps/marrow/frontend/railway.toml` | yes | `PORT=3000` |
+`marrow-api` runs the migration (`alembic upgrade head` as `MIGRATION_DATABASE_URL`) as its pre-deploy command, so it is released first.
 
 ## Reference variables
 
@@ -59,7 +58,7 @@ APNS keys, `DEFAULT_STORAGE_USER_ID`, optional `SENTRY_DSN`. Keep existing value
 | `PHOTO_DIR` | `/app/photos` |
 | `DIETARY_DATA_DIR` | `/app/data-seed` |
 | `MCP_SERVER_HOST` / `MCP_SERVER_PORT` | `0.0.0.0` / `8005` |
-| `API_URL` (frontend **build arg**) | Public API URL for Next rewrites |
+| `API_URL` (frontend **build arg**) | Public API URL for Next rewrites; set in `marrow-frontend`'s deploy block (`build.args`), not in Railway |
 | `SKIP_DATABASE_ROLE_DDL` | Set `1` after running `scripts/railway_bootstrap_roles.sql` (roles already exist) |
 | `FOOD_ANALYSIS_VIA_AIRFLOW` | `true` to enqueue meal classify on Pi Airflow instead of BackgroundTasks |
 | `AIRFLOW_URL` | `https://airflow.leo-figueiredo.com` (same UI for both envs) |

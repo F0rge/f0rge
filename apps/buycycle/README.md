@@ -24,7 +24,8 @@ and UI mechanisms live under `libs/`.
 - [Production readiness and remaining gates](docs/ops-readiness.md)
 
 The legacy `tracker/`, `dashboard/`, root Dockerfile and `deploy/` runbook are
-retained migration/recovery inventory. Do not start their writer beside the new
-collector. A production cutover requires Leo's separate release approval, current
-data/browser reconciliation and all provider/recovery gates. Never commit private
+what runs today: the pipeline releases them as Nx project `buycycle`. The new
+backend and frontend have no deploy block and are not released. Do not start the
+legacy writer beside the new collector. The cutover to the new app requires Leo's
+separate approval, current data/browser reconciliation and all provider/recovery gates. Never commit private
 databases, exports, user state, secrets or feed keys to this public repository.

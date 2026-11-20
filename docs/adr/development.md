@@ -25,7 +25,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Category:** Development
 - **Decision:** Agents build/test the entire app locally; CI runs automated tests. No hosted preview/staging environment is required.
 - **Proposed enforcement (not installed):** Documented local harness and reproducible CI jobs; capture commands, commit, results and browser evidence. Release uses the same tested build.
-- **Gate and limit:** Test + review: honest run reports, not agent claims alone. This policy does not authorize production testing or remove release approval.
+- **Gate and limit:** Test + review: honest run reports, not agent claims alone. This policy does not authorize production testing.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** nx affected lint, format, test, typecheck, build, codegen, and storybook targets, plus a separate e2e workflow. Historical push runs on main succeeded through 2026-10-29. Those runs were not performed here.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).
@@ -67,7 +67,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Category:** Development
 - **Decision:** Shared dependency upgrades are reviewed and tested against affected apps; no silent production upgrades.
 - **Proposed enforcement (not installed):** Lockfiles, reverse-dependency impact matrix and reviewed upgrade PRs; shared policy changes trigger wider regression tests. Assess Dependabot/Renovate later.
-- **Gate and limit:** Static + tests + release: lockfile diff and affected-app results. Update bot not selected; bot PR does not grant production release approval.
+- **Gate and limit:** Static + tests + release: lockfile diff and affected-app results. Update bot not selected; a bot PR is reviewed like any other before it merges and releases.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** Lockfiles, Dependabot for three directories, npm audit on CI, marrow pip-audit when that project is affected, and nx affected tests.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).

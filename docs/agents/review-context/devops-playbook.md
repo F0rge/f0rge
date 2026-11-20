@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # Delivery and DevOps Review Playbook
 
@@ -6,7 +6,7 @@ Review reference for `f0rge-delivery` and `f0rge-devops`. Read the [shared proto
 
 ## Review coverage — not ownership routing
 
-- `.github/**`, `**/railway*.toml`, Dockerfiles, compose and entrypoint files.
+- `.github/**`, deploy blocks in `project.json`, Dockerfiles, compose and entrypoint files.
 - Nx registration, root build/dependency configuration, `.dockerignore`, and `.gitignore`.
 - Migration deployment compatibility and database roles; app behavior belongs to the backend reviewer.
 - Domain, certificate, storage, and hosting changes.
@@ -16,11 +16,11 @@ Review reference for `f0rge-delivery` and `f0rge-devops`. Read the [shared proto
 - Docker builds use the repository root when they consume shared libraries. A narrowed context must still include every dependency.
 - Marrow `.dockerignore` files use an allowlist so unrelated apps, credentials, and local data stay outside the build context.
 - Keep per-project Python locks; reject a root `uv.lock`.
-- Marrow Railway configs use `preDeployCommand` for migrations. The command is configuration, not production approval. Runtime database credentials remain least-privilege; destructive migrations need a recovery plan.
+- Migrations are the `preDeployCommand` in a deploy block and run unattended on every Release (P-020). Each must work with the previous commit's code: the automatic rollback does not downgrade the schema. Runtime database credentials remain least-privilege; a destructive migration names its recovery plan in the PR.
 - Role creation and production access changes require explicit authorization. Preserve migration-role and runtime-role separation.
 - Reject committed deployment credentials, database passwords, and JWT secrets.
 - Domain/certificate changes need an authorized operations task. New domains follow the canonical ADR naming/approval rules.
-- CI status does not establish production approval, the running artifact, or successful app behavior. Verify the exact release and actual checks executed; preserve release holds.
+- A merge releases. Review a deploy-block, Dockerfile or workflow change as a production change: service names must match the Host.
 
 ## New environment variables
 
@@ -30,6 +30,6 @@ Review reference for `f0rge-delivery` and `f0rge-devops`. Read the [shared proto
 
 ## Verification
 
-Use [the deploy manifest](../../../.github/deploy/manifest.yml) and app-local Railway/Coolify configuration to identify the affected services. Confirm current provider identity before an authorized operation. A queued deployment or HTTP 200 alone does not prove successful rollout; verify the running version and affected user journey.
+`node .github/deploy/deployables.mjs` lists each App's Host, Projects and services. The App's GitHub environment shows its Release history. Confirm current provider identity before an authorized operation outside the pipeline.
 
 Marrow production smoke targets are `https://api.marrow-health.com/api/v1/health` and `https://marrow-health.com/`. Firstout and DasKasas use their own projects and service checks; do not substitute Marrow health for a sibling app.

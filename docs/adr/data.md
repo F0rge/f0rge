@@ -54,7 +54,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Decision:** On Railway, each app keeps its own project and PostgreSQL service; no giant shared F0rge app project.
 - **Proposed enforcement (not installed):** Proposed deployment inventory validates app-to-project/DB mapping; approved infrastructure assessment checks project references and accidental shared credentials.
 - **Gate and limit:** Infra + human: project/resource mapping. No account inspection performed, and sharing Airflow does not override separate app projects.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Docs and railway.toml comments. The deploy manifest does not include storefront or commerce. No checker compares Railway project IDs.
+- **Static evidence at `f155a2ba` (not normative, not a live check):** Docs only. No checker compares Railway project IDs.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).
 - **Risk noted in that assessment:** high.
@@ -62,15 +62,12 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 
 ## P-020
 
-- **Policy status:** Accepted
+- **Policy status:** Accepted (amended by Leo’s 15 and 20 November 2026 requests)
 - **Temporary ID:** P-020
 - **Category:** Data
-- **Decision:** Tested migrations run as one controlled release step, never independently at each application instance startup. For Firstout's automatic deployment under P-006, reviewed backward-compatible migrations may run automatically before the new backend is promoted. Other apps retain their explicit release approval. Preserve old/new application and data compatibility; destructive changes require a separately reviewed recovery plan and explicit approval.
-- **Enforcement:** Firstout's versioned image contains a checksummed migration policy. The pre-deploy runner holds a PostgreSQL advisory lock, bounds lock/statement waits, refuses unknown, modified or unapproved pending revisions, and commits a source/schema/policy-bound operational receipt with the schema transaction. Readiness exposes only non-sensitive version/receipt facts. Uninitialized production databases and historical upgrades before the reviewed `089_merge_record_workspaces` baseline are never automatic; the initial policy permits only additive receipt revision `090_release_migration_receipts`. CI's explicit empty test-database bootstrap is restricted to named disposable databases.
-- **Gate and limit:** PostgreSQL upgrade, denial, concurrent-lock and failure-rollback tests plus old/new compatibility checks are required. Automatic application rollback keeps compatible expanded schema and customer writes; it never runs database downgrade or restores a backup. Drop/rename/data-removal work follows expand/migrate/contract releases after all consumers and the retained rollback window permit it. Partial or ambiguous outcomes stop further deployment for inspection.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Some Alembic upgrade tests exist under Marrow and Firstout tests. CI e2e applies alembic upgrade head to its ephemeral database. No check fails when a container migrates on startup. No destructive-change classifier.
-- **Implementation:** Firstout's runner/policy and PostgreSQL regression tests are committed with its CD path. Production activation, role grants and live recovery rehearsal remain prerequisites; this record does not claim a production migration has run. Other apps retain their existing migration inventory.
-- **Assessment label:** partial (read-only assessment, not a gate).
-- **Risk noted in that assessment:** high.
+- **Decision:** Migrations run unattended as the Host's pre-release step for every App that has them: once per Release, never at each instance's startup. There is no per-release approval and no backup check before them. Keep each migration compatible with the previous commit's code, because the automatic rollback puts the old code back and never downgrades the schema. A destructive change (drop, rename, data removal) is called out in the PR with its recovery plan; the reviewer decides.
+- **Amendment (15 November 2026):** Leo requested automatic migrations for Firstout's continuous deployment.
+- **Amendment (20 November 2026):** Leo requested the same for every App, with no approval and no backup preflight. This replaces "other apps retain their explicit release approval".
+- **Enforcement:** A service's `preDeployCommand` in its Project's deploy block is sent to Railway with each Release, and Railway runs it before the new code starts. A rollback does not run it. Firstout, Marrow and DasKasas commerce have one today. No Pi App has migrations today, and the release program refuses a `preDeployCommand` on a Pi service.
+- **Gate and limit:** The reviewer judges migration safety; nothing in the pipeline classifies a migration. A migration that is not backward compatible can make the automatic rollback fail. No backup is checked or restored by the pipeline.
 - **Approved exception:** None.
-

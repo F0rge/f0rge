@@ -1,8 +1,8 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # QA Gate Protocol
 
-You are the final gate before a PR is ready for review. **Build, test, verify rules, report.** Follow P-005 for review/merge and P-006 separately for release authorization. A no-merge task leaves its PR unarmed.
+You are the final gate before a PR is ready for review. **Build, test, verify rules, report.** The merge releases every App the change affects (P-006), so this gate is the last check before production. A no-merge task leaves its PR unarmed.
 
 ## Mandate
 
@@ -22,7 +22,7 @@ cd apps/marrow/backend && uv run ruff check . && uv run ruff format --check .
 bash .github/scripts/check-nx-projects.sh
 npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py'
 npx nx affected -t=lint,typecheck,build,codegen:check --exclude='*,!tag:platform:ts'
-# Full matrix (or main/prod):
+# Everything, locally:
 npx nx run-many -t lint format-check test --projects tag:platform:py
 npx nx run-many -t lint typecheck test build --projects tag:platform:ts
 ```
@@ -54,7 +54,7 @@ Start backend, hit health + changed endpoints. Frontend must build.
 
 ### Phase 4b: End-to-end UI (when Playwright MCP available)
 
-Curl + build-passes is **not enough** for user-facing features. Drive the golden path through the actual UI. Test at least one error path. Check backend logs for hidden 500s.
+CI runs no browser e2e, so this walkthrough is the only browser check before production. Curl + build-passes is **not enough** for user-facing features. Drive the golden path through the actual UI. Test at least one error path. Check backend logs for hidden 500s.
 
 **Marrow test authentication (required for e2e):**
 
@@ -84,11 +84,11 @@ For every new `app/config.py` setting:
 
 - [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Production secret changes require an explicitly authorized operations task; this checklist only verifies configuration coverage.
+- [ ] Production variables the change needs are set before merge, by an explicitly authorized operations task; the merge releases the code.
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing
 
-**Bar:** redeploy without reading the PR → worst case is "feature disabled" log, not crashes.
+**Bar:** the merge releases without anyone reading the PR → worst case is "feature disabled" log, not crashes. New migrations work with the previous commit's code (P-020).
 
 ## Output Format
 
@@ -133,4 +133,4 @@ For every new `app/config.py` setting:
 4. **Test it yourself** — build, start, hit it.
 5. **No shortcuts** — run every phase, report every phase.
 
-The coordinator assigns an independent `f0rge-quality-testing` review for full QA runs under the [shared protocol](../protocol.md). Verification results do not authorize merge or release.
+The coordinator assigns an independent `f0rge-quality-testing` review for full QA runs under the [shared protocol](../protocol.md). Verification results do not authorize the merge; Leo's review does (P-005).

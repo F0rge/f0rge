@@ -21,6 +21,10 @@ COPY . .
 
 # Expose port
 EXPOSE 5001
+# /health is 503 unless the sensor read in the last 60 s and SQLite answers: on the Pi that is real health.
+# (The CI image check has no sensor, so it probes / instead; it does not use this HEALTHCHECK.)
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+  CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:5001/health', timeout=4)"
 
 # Use Gunicorn for production.
 # No --max-requests: it was a band-aid for the JSON-era all-data-in-RAM bloat

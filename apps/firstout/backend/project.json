@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/firstout/backend",
   "targets": {
+    "image": {},
     "lint": {
       "executor": "nx:run-commands",
       "options": {
@@ -36,5 +37,25 @@
       "options": {}
     }
   },
-  "tags": ["platform:py", "scope:firstout"]
+  "tags": ["platform:py", "scope:firstout"],
+  "metadata": {
+    "deploy": {
+      "host": "railway",
+      "services": [
+        {
+          "name": "firstout-api",
+          "healthcheckPath": "/api/v1/ready",
+          "preDeployCommand": "uv run --no-sync python -m app.commands.release_migrate",
+          "startCommand": "uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000"
+        }
+      ],
+      "check": {
+        "port": 8000,
+        "path": "/api/v1/health",
+        "migrate": "uv run --no-sync alembic upgrade head",
+        "postgres": "postgres:18",
+        "env": { "DATABASE_URL": "postgresql+asyncpg://f0rge:f0rge@postgres:5432/f0rge" }
+      }
+    }
+  }
 }

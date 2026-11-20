@@ -25,11 +25,12 @@ test cases, not production changes. Fixtures never scrape Buycycle or use its
 data. The source guard lives in [guard.mjs](guard.mjs), and all Rust target
 commands use [run-target.mjs](run-target.mjs).
 
-CI always runs this fixture suite and validates all registered Rust projects
-before selecting affected Rust tasks. The Rust job is a required input to the
-existing `ci` aggregate: failure, cancellation or unexpected skip prevents that
-gate from succeeding. Manual CI dispatch checks all Rust projects. Normal PRs
-and main pushes use `nx affected`; there is no custom project-list detect job.
+CI's Rust job runs only when a Rust project is affected. It validates all
+registered Rust projects with the guard, then runs one `nx affected` line. This
+fixture suite is the `test` target of `f0rge-rust-checks` (tagged
+`platform:rust`), so it runs when `.github/rust/**` changes. The static part of
+the guard runs on every change, in the `plan` job. A failed or cancelled Rust
+job fails the `ci` gate.
 
 ## Register a future crate
 

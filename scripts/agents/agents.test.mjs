@@ -74,7 +74,7 @@ test('wildcards respect segments and zero-directory **; invalid path syntax fail
 });
 
 test('first matching owner never suppresses later or same-role independent reviewers', () => {
-  const result = route(manifest, '.github/workflows/deploy.yml');
+  const result = route(manifest, '.github/workflows/cd.yml');
   assert.equal(result.owner, 'f0rge-delivery');
   assert.deepEqual(result.reviewers, ['f0rge-quality-testing', 'f0rge-devops', 'f0rge-delivery', 'f0rge-security']);
 });

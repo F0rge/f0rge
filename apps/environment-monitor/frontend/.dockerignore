@@ -1,0 +1,8 @@
+# Never bake local secrets or sensor data into the public image.
+**/.env*
+**/*.db
+**/*.db-*
+data/
+**/node_modules
+**/__pycache__
+.venv

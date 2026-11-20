@@ -42,7 +42,7 @@
     {
       "id": "f0rge-delivery",
       "profile": "docs/agents/profiles/delivery.md",
-      "description": "Builds, dependencies, CI and release artifacts; prepares releases without authorizing them.",
+      "description": "Builds, dependencies, CI, release artifacts and the CI/CD workflows.",
       "adrFiles": [
         "docs/adr/delivery.md"
       ]
@@ -92,7 +92,7 @@
         "apps/buycycle/ops/**"
       ],
       "owner": "f0rge-devops",
-      "reason": "Buycycle private runtime, backup/restore and immutable release operations."
+      "reason": "Buycycle private runtime and backup/restore operations."
     },
     {
       "patterns": [
@@ -226,7 +226,6 @@
     {
       "patterns": [
         ".github/deploy/**",
-        "**/railway*.toml",
         "**/docker-compose*.yml",
         "**/docker-compose*.yaml",
         "**/compose.yml",
@@ -236,7 +235,6 @@
         "**/nginx.conf",
         "**/.env.example",
         "apps/airflow/scripts/**",
-        "apps/dk/tag-printer/scripts/repoint-coolify.sh",
         "apps/environment-monitor/backup-sensor-data.sh",
         "apps/environment-monitor/restore-sensor-data.sh",
         "apps/marrow/backend/scripts/pg_backup.sh",
@@ -246,7 +244,7 @@
         "apps/marrow/backend/docs/railway*.md"
       ],
       "owner": "f0rge-devops",
-      "reason": "Provider targets, runtime operations and recovery configuration."
+      "reason": "Release program, provider targets, runtime operations and recovery configuration."
     },
     {
       "patterns": [
@@ -285,7 +283,7 @@
         "apps/marrow/ios/Marrow.xcodeproj/**"
       ],
       "owner": "f0rge-delivery",
-      "reason": "Packaging, dependencies, build configuration and CI; no release authority."
+      "reason": "Packaging, dependencies, build configuration and the CI/CD workflows."
     },
     {
       "patterns": [
@@ -476,7 +474,7 @@
         "**/Dockerfile.*",
         "**/.dockerignore",
         "**/*.dockerignore",
-        "**/railway*.toml",
+        "**/project.json",
         "**/docker-compose*.yml",
         "**/docker-compose*.yaml",
         "**/docker-entrypoint.sh",

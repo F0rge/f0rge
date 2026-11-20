@@ -73,12 +73,10 @@ non-null `is_archived` boolean with server default `false` and a
 active. The migration does not select accounts for archival or alter their
 financial and contact rows.
 
-For a separately approved release, verify the Firstout target and recovery
-evidence, apply migration 084 as a controlled step, then release the matching
-backend and frontend. Do not deploy application code that expects these columns
-before the migration. Follow the repository’s
-[release hold and remaining requirements](../../../.github/deploy/README.md);
-this document and the checks below grant no merge or production-release approval.
+A merge to `main` releases Firstout through [the pipeline](../../../.github/deploy/README.md):
+the backend's pre-deploy command applies migration 084 before the new backend
+starts, then the frontend follows. Both run the same commit, so no code that
+expects these columns runs before the migration.
 
 An application rollback can retain the additive columns and indexes. Older code
 may ignore archive restrictions, so verify behavior before resuming writes.

@@ -9,7 +9,9 @@ RUN npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# The whole install, not only /app/node_modules: npm nests some workspace
+# dependencies (libs/ui/node_modules, the app's own node_modules).
+COPY --from=deps /app ./
 COPY package.json package-lock.json ./
 COPY libs/ui ./libs/ui
 COPY apps/dk/tag-printer/frontend ./apps/dk/tag-printer/frontend
@@ -36,5 +38,9 @@ USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
+# Next standalone listens on $HOSTNAME, which Docker sets to the container id; 0.0.0.0 adds loopback for the check.
+ENV HOSTNAME=0.0.0.0
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1
 
 CMD ["node", "apps/dk/tag-printer/frontend/server.js"]

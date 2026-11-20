@@ -4,6 +4,7 @@
   "projectType": "application",
   "sourceRoot": "apps/environment-monitor/frontend",
   "targets": {
+    "image": {},
     "build": {
       "executor": "nx:run-commands",
       "options": {
@@ -12,5 +13,13 @@
       }
     }
   },
-  "tags": ["platform:ts", "scope:envmon", "deploy-target:coolify"]
+  "tags": ["platform:ts", "scope:envmon"],
+  "metadata": {
+    "deploy": {
+      "host": "pi",
+      "services": [{ "name": "environment-monitor-frontend", "healthcheckPath": "/health" }],
+      "build": { "context": "apps/environment-monitor/frontend" },
+      "check": { "port": 5000 }
+    }
+  }
 }

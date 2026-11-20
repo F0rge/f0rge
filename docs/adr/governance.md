@@ -34,30 +34,21 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 
 ## P-003
 
-- **Policy status:** Accepted (amended by Leo’s 20 November 2026 request)
+- **Policy status:** Accepted (amended by Leo’s 20 November 2026 requests)
 - **Temporary ID:** P-003
 - **Category:** Governance
-- **Decision:** Every PR to main includes an ADR Check covering only the ADRs of the domains it touches: the ADR files of the owning role of each changed path (`node scripts/agents/agents.mjs adrs`), each with a compliance status and reason; exceptions need Leo's approval. The PR body follows the `pr` skill.
-- **Proposed enforcement (not installed):** A PR check that the ADR Check lists exactly the IDs `agents.mjs adrs` prints for the PR's changed files.
-- **Gate and limit:** PR gate (proposed): adr-coverage verifies the touched-domain ADRs appear and exceptions are valid. Checking a box is not proof; link real test/review evidence.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Ruleset main-pr-gate required_status_checks contexts ci and playwright smoke. No ADR appendix job.
-- **Implementation:** Pending. This record does not claim the decision is built.
-- **Assessment label:** gap (read-only assessment, not a gate).
-- **Risk noted in that assessment:** high.
+- **Decision:** Every PR to main includes an ADR Check covering only the ADRs of the domains it touches: the ADR files of the owning role of each changed path (`node scripts/agents/agents.mjs adrs`), each with a compliance status and reason. The PR body follows the `pr` skill. The ADR Check is information for the reviewer, who decides (P-004).
+- **Enforcement:** None in CI. The reviewer reads the ADR Check with the diff and the test evidence.
 - **Approved exception:** None.
 
 ## P-004
 
-- **Policy status:** Accepted
+- **Policy status:** Accepted (amended by Leo’s 20 November 2026 request)
 - **Temporary ID:** P-004
 - **Category:** Governance
-- **Decision:** Deterministic automated architecture checks block merge and release where enforceable; exceptions need Leo.
-- **Proposed enforcement (not installed):** Required architecture gate aggregates register, dependency, contract, test and policy results. Release rechecks approved commit/digest evidence. Protect checks and policy against tampering.
-- **Gate and limit:** Merge + release: fail on missing, failed or unexpected skipped required checks. Semantic/human-only requirements stay explicit, not falsely automated.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Required contexts ci and playwright smoke on main. CI also runs check-nx-projects.sh, check-lib-boundary.sh, a libs/ import grep, npm audit, and marrow pip-audit when marrow-backend is affected.
-- **Implementation:** Partial static evidence only. This record does not claim the decision is built.
-- **Assessment label:** partial (read-only assessment, not a gate).
-- **Risk noted in that assessment:** high.
+- **Decision:** ADR compliance is not enforced by CI/CD. The reviewer decides, even where an ADR is broken. The pipeline contains no code whose only purpose is to prove an ADR was followed. Cheap guards that catch real breakage stay.
+- **Amendment (20 November 2026):** Leo requested that CI/CD stop enforcing ADR compliance. This replaces "deterministic automated architecture checks block merge and release where enforceable". The ADR Check in PR descriptions (P-003) stays, as information for the reviewer.
+- **Enforcement:** `ci` is the single required check. It runs lint, format, typecheck, tests, builds, the Artifact health check and the guards for real breakage: Nx project registration, the libs-to-apps boundary, OpenAPI drift, dependency audits and the agent-profile checks.
 - **Approved exception:** None.
 
 ## P-005
@@ -77,17 +68,14 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 
 ## P-006
 
-- **Policy status:** Accepted
+- **Policy status:** Accepted (amended by Leo’s 15 and 20 November 2026 requests)
 - **Temporary ID:** P-006
 - **Category:** Governance
-- **Decision:** Firstout uses continuous deployment: reviewed merges to `main` with successful required checks authorize the dedicated Firstout pipeline to release the exact tested backend/frontend images and compatible database migrations, including automatic application rollback. Other apps still require Leo's explicit approval for every production release. Review and automatic squash merging follow P-005; merging another app does not authorize its deployment.
-- **Amendment (15 November 2026):** Leo requested automatic deployment for Firstout, then explicitly requested implementation of the pipeline and ADR updates. This standing authorization is limited to the Firstout project/production environment and reviewed pipeline; it does not authorize arbitrary operator deployments, destructive database recovery, host changes or other apps.
-- **Enforcement:** Firstout releases bind the successful main CI run, source SHA, immutable image digests, migration policy and fixed target. Deploy credentials are isolated to its production job; failed/ambiguous releases pause further deployment until reconciled. Other apps retain their protected per-release approval requirements. Implementation and activation evidence are recorded separately in the [Firstout CD runbook](../../.github/deploy/firstout-cd.md).
-- **Gate and limit:** Firstout requires reviewed main provenance, mandatory successful tests, exact artifact/serving-version verification, one release at a time and durable recovery state. Its production environment has no per-release human approval once bootstrapped. Missing credentials, backup evidence or required configuration stop the release. Other apps require Leo approval bound to their commit/artifact/target. This ADR change does not itself configure provider credentials or activate a deployment.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Deploy workflow guard requires a successful CI workflow_run on push or workflow_dispatch to main, or a direct workflow_dispatch. No Leo approval record and no environment required reviewers in the GET payload.
-- **Implementation:** Firstout workflow, migration runner, durable release/recovery controller and policy checks are implemented in this PR. Production credential/baseline setup and an isolated provider rehearsal remain activation requirements. Other apps retain their release holds.
-- **Assessment label:** gap (read-only assessment, not a gate).
-- **Risk noted in that assessment:** high.
+- **Decision:** Every App is released automatically after a reviewed merge to `main` with CI passing. There is no per-release approval. Review and automatic squash merging follow P-005.
+- **Amendment (15 November 2026):** Leo requested automatic deployment for Firstout.
+- **Amendment (20 November 2026):** Leo requested the same for every App: migrations included (P-020), no per-release approval, no backup preflight, no release tags (P-045). This replaces the Firstout-only scope and the release holds on the other Apps.
+- **Enforcement:** `ci.yml` calls `cd.yml` as its last job on pushes to `main`, after the `ci` gate. `cd.yml` runs one job per affected App in the GitHub environment named after the App, which holds that App's Host token. Releases of one App run one at a time, in merge order. A running Release is never cancelled; a newer one replaces a Release still waiting in the queue. A failed Release puts each service back on the image it ran before and fails the run. A manual run releases a commit that CI already built on `main`: `gh workflow run cd.yml -f app=<app> -f commit=<sha>`.
+- **Gate and limit:** Leo's review (P-005) and the `ci` check are the gate. An App that has not been switched at its Host fails closed. Provider operations outside this pipeline, and moving an App to another Host (P-047), still need their own task authorization. Nothing checks a whole App before production.
 - **Approved exception:** None.
 
 ## P-007

@@ -5,6 +5,7 @@
   "sourceRoot": "apps/marrow/frontend",
   "implicitDependencies": ["marrow-backend"],
   "targets": {
+    "image": {},
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
@@ -21,5 +22,15 @@
       }
     }
   },
-  "tags": ["platform:ts", "scope:marrow"]
+  "tags": ["platform:ts", "scope:marrow"],
+  "metadata": {
+    "deploy": {
+      "host": "railway",
+      "services": [
+        { "name": "marrow-frontend", "healthcheckPath": "/", "startCommand": "node apps/marrow/frontend/server.js" }
+      ],
+      "build": { "args": { "API_URL": "https://api.marrow-health.com" } },
+      "check": { "port": 3000 }
+    }
+  }
 }

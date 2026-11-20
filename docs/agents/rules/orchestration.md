@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # Orchestration — Plan, Delegate, Verify
 
@@ -16,10 +16,10 @@ The plan records unresolved decisions and testable acceptance criteria. UI/API b
 
 ## Dispatch and handoff
 
-Use the [shared protocol](../protocol.md) for the brief and result contract. Include the approved objective, owned paths, resolved primary/reviewers, relevant ADR and app-context pointers, dependencies, allowed effects, acceptance criteria and available tool capabilities. Preserve explicit release holds.
+Use the [shared protocol](../protocol.md) for the brief and result contract. Include the approved objective, owned paths, resolved primary/reviewers, relevant ADR and app-context pointers, dependencies, allowed effects, acceptance criteria and available tool capabilities. State when a merge will release an App.
 
 Select an available runtime/model through the host's supported configuration. If the required agent or tool is unavailable, report the limitation and agree a supported allocation; do not claim a profile provides capabilities or permission controls the host does not enforce.
 
 ## PR and release boundary
 
-Use a short-lived branch and a pull request into `main`. Run applicable checks, include the ADR Check for the touched domains (P-003), and obtain independent review. Follow P-005 for Leo's personal review and default native squash auto-merge, and P-006 for release authorization. A task withholding merge authorization keeps its PR unarmed. CI, agent findings and provider configuration do not authorize manual production operations. Use the repository protocol for shipping work.
+Use a short-lived branch and a pull request into `main`. Run applicable checks, include the ADR Check for the touched domains (P-003), and obtain independent review. Follow P-005 for Leo's personal review and default native squash auto-merge. The merge releases every affected App (P-006). A task withholding merge authorization keeps its PR unarmed. CI and agent findings do not authorize provider operations outside the pipeline. Use the repository protocol for shipping work.

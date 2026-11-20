@@ -1,0 +1,14 @@
+{
+  "name": "f0rge-ci",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "tags": ["platform:ts", "scope:shared"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test .github/scripts/*.test.mjs && uv run --no-project --python 3.11 --with keyring==25.6.0 python .github/scripts/test_f0rge_pr_publisher.py"
+      }
+    }
+  }
+}

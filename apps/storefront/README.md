@@ -211,9 +211,10 @@ section motion, and reduced-motion preferences disable these animations.
 The isolated private-preview build, server-only access credentials, cost
 estimate, verification steps, and recovery procedure are documented in
 [`docs/759-private-hosting.md`](docs/759-private-hosting.md). The checked-in
-Dockerfiles and Railway config files belong to the existing DasKasas project.
-Verify live service configuration and release evidence before deploying. Do not
-connect these configs to the Firstout or Marrow Railway projects.
+Dockerfiles and the deploy blocks in `web/project.json` and `commerce/project.json`
+belong to the existing DasKasas project (App `daskasas`). A reviewed merge to
+`main` that affects them releases both services. Do not point them at the
+Firstout or Marrow Railway projects.
 
 ## Optional analytics
 

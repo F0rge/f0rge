@@ -1,10 +1,10 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../docs/adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../docs/adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # Airflow — Agent Instructions
 
 > **Inventory, not a work order.** Use the `main`-only workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. The `airflow`, `marrow_dev`, and `dk` bundles below still set `tracking_ref: develop` in `docker-compose.yml`. That is read-only inventory. Do not repoint the live scheduler from this document.
 
-The text below documents a shared Airflow 3 compose layout on the Pi. Airflow hosting, connectivity, and independence from the home Pi are still open. This file does not accept that layout as the decision. Do not treat it as permission to SSH, redeploy, or share app databases.
+The text below documents the shared Airflow 3 compose layout on the Pi. Airflow lives on the Pi and Railway Apps reach it over a secure connection (decided 20 November 2026; its ADR is a separate change). It runs by hand, outside Coolify and the CI/CD pipeline; a merge does not release it. Do not treat this file as permission to SSH, redeploy, or share app databases.
 
 CeleryExecutor + Redis. DAGs come from GitHub via **GitDagBundle** (not host bind mounts). Apps trigger DAGs over the Airflow REST API.
 
@@ -115,7 +115,7 @@ Airflow UI task instances show the worker hostname that ran them.
 - Set `AIRFLOW__API_AUTH__JWT_SECRET` explicitly. Without it each process auto-generates a different key and tasks fail with `Invalid auth token: Signature verification failed`.
 - Airflow 3 public API needs JWT from `POST /auth/token` (not basic auth on `/api/v2`).
 - DAG imports: use `from airflow.sdk import dag, task` on 3.0.3 base image (not `airflow.providers.common.compat.sdk` — that needs extra providers).
-- Do not put this under Coolify; webhook redeploys would bounce the scheduler.
+- Not under Coolify yet: Coolify force-recreates whole compose projects, which bounces the scheduler. Bringing Airflow under Coolify is a follow-up.
 - Setting `dag_bundle_config_list` **replaces** the default LocalDagBundle. After cutover from LocalExecutor, retarget leftover `dag_version.bundle_name = 'dags-folder'` rows (and delete the inactive `dag_bundle` row). Otherwise `/ui/dags/recent_dag_runs` 500s with `Requested bundle 'dags-folder' is not configured` and the UI shows "Importing a module script failed."
 - `apache-airflow-providers-git` 0.0.4 (what 3.0.3 ships) has no `sparse_dirs`; each bundle clones the repo. f0rge is ~4 MB — fine. Do not bump the git provider to 0.4.x on this image (`common-compat` 1.7.2 vs ≥1.15).
 - `AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_STORAGE_PATH=/opt/airflow/dag_bundles` — default `/tmp` ignores the named volume. Fresh `dag-bundles` volume is root-owned; `airflow-init` chowns it to `AIRFLOW_UID:0`.

@@ -152,7 +152,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Decision:** WCAG 2.2 AA target, with automated checks plus keyboard and screen-reader checks on core journeys.
 - **Proposed enforcement (not installed):** Storybook/Playwright accessibility scans, keyboard focus journeys and recorded manual assistive-technology review; custom themes included.
 - **Gate and limit:** Test + human: scan results and journey-specific manual evidence. Automated scanners do not certify complete WCAG conformance.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Playwright smoke for Marrow when selected. It is not an accessibility gate. No keyboard-journey artifact is required.
+- **Static evidence at `f155a2ba` (not normative, not a live check):** A Playwright job for Marrow when selected. It is not an accessibility gate. No keyboard-journey artifact is required.
 - **Implementation:** Pending. This record does not claim the decision is built.
 - **Assessment label:** gap (read-only assessment, not a gate).
 - **Risk noted in that assessment:** medium.

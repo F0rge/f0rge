@@ -29,7 +29,7 @@ npx nx run marrow-frontend:codegen:check
 npx nx run marrow-frontend:e2e
 ```
 
-The browser checks need the running API and frontend. API types are generated
+The browser checks need the running API and frontend; CI does not run them. API types are generated
 from Marrow's backend contract; do not edit generated files by hand. Shared UI
 primitives and forms live in `libs/ui`; inspect them with
 `npx nx run f0rge-ui:storybook`.
@@ -41,6 +41,6 @@ produces Next.js standalone output. The npm workspace is named `frontend`, while
 its Nx project is named `marrow-frontend`; existing Docker and CI commands use
 both identifiers.
 
-[railway.toml](railway.toml) describes the frontend service configuration. See the
-[deployment guidance](../../../.github/deploy/README.md) for the release workflow.
-Production releases require Leo's approval.
+The deploy block in [project.json](project.json) names the Railway service. A
+reviewed merge to `main` that affects Marrow releases it; see the
+[deploy page](../../../.github/deploy/README.md).

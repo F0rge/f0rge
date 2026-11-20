@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). Follow [P-005](../../../docs/adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../../docs/adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../../docs/adr/README.md). Follow [P-005](../../../docs/adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../../docs/adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
@@ -17,4 +17,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Branches
 
-Use the `main`-only workflow. A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Branch off `main`. Follow P-005 for review/merge and P-006 separately for release authorization. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).
+Use the `main`-only workflow. A remote `develop` ref may still exist; it is read-only inventory here, not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. Branch off `main`. Follow P-005 for review/merge; the merge releases Marrow (P-006). See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).

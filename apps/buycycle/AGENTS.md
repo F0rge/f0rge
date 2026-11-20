@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../docs/adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../docs/adr/README.md). Follow [P-005](../../docs/adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../docs/adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # apps/buycycle
 
@@ -15,7 +15,7 @@ The running legacy service and the unreleased ADR migration are separate below.
 - `migration/`: lossless legacy export/import and PostgreSQL restore rehearsals.
   Preserve all five legacy tables, browser archives, history, nulls and units.
 - `ops/`: one-command local startup, tested ARM64 image, private-origin Compose,
-  controlled migration, backup/monitor sources and protected release preparation.
+  controlled migration and backup/monitor sources.
   Read [the operations runbook](ops/README.md) before local, image or provider work.
 - Read [the work plan](docs/adr-migration-plan.md) and
   [readiness evidence](docs/ops-readiness.md) before claiming completion. Leo chose
@@ -30,19 +30,19 @@ The running legacy service and the unreleased ADR migration are separate below.
   replace production data, or resume stale Turso after any PostgreSQL writes.
   Preserve every original browser origin/profile export before cutover.
 - PR checks: `buycycle-backend:{format-check,lint,test,build}`,
-  `buycycle-frontend:{lint,typecheck,test,build,codegen:check,e2e}`,
+  `buycycle-frontend:{lint,typecheck,test,build,codegen:check}` (run `e2e` locally; CI does not),
   `f0rge-primer:{lint,typecheck,test,storybook-build}` and
   `buycycle-ops:{lint,format-check,test}` through Nx. Backend integration tests
   require the explicit synthetic `BUYCYCLE_TEST_DATABASE_URL`; missing PostgreSQL
-  fails rather than skipping. The ARM64 `container-test` is uncached.
-- Release preparation is not activation: successful checks, receipts or a merge
-  do not supply Leo's release approval. Provider identity, grants, secret custody,
-  writer fencing, current encrypted recovery and exact artifact verification must
-  pass the release gates before an authorized cutover.
+  fails rather than skipping. The ARM64 `container-test` is a local check; CI does not run it.
+- The rewrite is unreleased: `buycycle-backend` and `buycycle-frontend` have no
+  deploy block, so a merge does not release them. Replacing the legacy service is a
+  separately approved cutover: provider identity, grants, secret custody, writer
+  fencing and current encrypted recovery come first.
 
 ## Retained legacy runtime and recovery inventory
 
-The existing Pi service is one Coolify app built from source. These files remain
+The existing Pi service is one Coolify app, Nx project `buycycle`. These files remain
 for characterization and data-preserving recovery until a separately approved
 cutover; they are not the new backend/frontend or an approved ADR exception.
 
@@ -53,8 +53,8 @@ cutover; they are not the new backend/frontend or an approved ADR exception.
 - `dashboard/`: a single Primer template (`index.tpl.html`) rendered by `render.py` into `index-bikes.html` / `index-wheels.html`; `serve.py` is the static gzip server. **Primer only**: Primer CSS, Primer View Components CSS and the Primer React DataTable CSS, all vendored, plus Octicons. Add no custom CSS. Layout is purely responsive (`d-md-*`), with no manual toggle.
 - Ports: 8095 bikes, 8096 wheels. Tailnet/LAN only: **no domain, no Traefik, no cloudflared route.**
 - Data: the `/data` volume (`buycycle.turso.db`, `bikes/`, `wheels/`, `tracker.env`). **This repo is public:** never commit DBs, JSON dumps or the feed key (`BUYCYCLE_API_KEY`, which lives only in `/data/tracker.env`).
-- Release hold: manifest component `buycycle` (`target: coolify`, `host: pi`) is historical target inventory. The existing **Deploy** workflow is disabled; the proposed preparation/hold workflows send no Coolify webhook. The configured GitHub `production` environment does not protect direct Coolify operations, and runtime provider state has not been checked for this change. Before authorized release work, read [the remaining artifact, secret migration and independent approval requirements](../../.github/deploy/README.md); Leo must explicitly approve every production release.
-- Documented runtime: the tracker runs as a Coolify scheduled task (`/app/run-tracker.sh`, cron `15 4,5 * * *` UTC, with a DST guard that only runs at 06:xx Europe/Luxembourg). Verify current provider state before using the historical cutover runbook: [deploy/PI_CUTOVER.md](deploy/PI_CUTOVER.md).
+- Release: a merge to `main` that affects Nx project `buycycle` releases its Artifact to the Pi through Coolify (App `buycycle`), keeping the `/data` volume. See [the deploy page](../../.github/deploy/README.md).
+- Documented runtime: the tracker runs as a Coolify scheduled task (`/app/run-tracker.sh`, cron `15 4,5 * * *` UTC, with a DST guard that only runs at 06:xx Europe/Luxembourg). Coolify settings, the scheduled task and the way back to systemd: [deploy/PI_CUTOVER.md](deploy/PI_CUTOVER.md).
 - Checks: `npx nx run buycycle:lint`, `buycycle:format-check`, `buycycle:test`.
 
 The original [brief](docs/migration-brief.md) and [clickable mockup](docs/migration-mockup.html)

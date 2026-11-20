@@ -16,7 +16,7 @@
     ]
   },
   {
-    "path": ".github/workflows/deploy.yml",
+    "path": ".github/workflows/ci.yml",
     "owner": "f0rge-delivery",
     "reviewers": [
       "f0rge-quality-testing",
@@ -26,9 +26,77 @@
     ]
   },
   {
-    "path": ".github/deploy/manifest.yml",
+    "path": ".github/workflows/cd.yml",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".github/deploy/deploy.mjs",
     "owner": "f0rge-devops",
     "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".github/deploy/deployables.mjs",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".github/deploy/switch/marrow.sh",
+    "owner": "f0rge-devops",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".github/deploy/README.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": ".github/CONTEXT.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing",
+      "f0rge-devops",
+      "f0rge-delivery",
+      "f0rge-security"
+    ]
+  },
+  {
+    "path": "CONTEXT-MAP.md",
+    "owner": "f0rge-quality-testing",
+    "reviewers": [
+      "f0rge-quality-testing"
+    ]
+  },
+  {
+    "path": "apps/marrow/backend/project.json",
+    "owner": "f0rge-delivery",
+    "reviewers": [
+      "f0rge-quality-testing",
       "f0rge-devops",
       "f0rge-delivery",
       "f0rge-security"

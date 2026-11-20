@@ -1,5 +1,5 @@
 name: Setup Node workspace
-description: Node 22 + npm ci with lockfile cache (repo root workspaces)
+description: Node 22 and the root npm workspace install, restored from cache when package-lock.json is unchanged
 
 runs:
   using: composite
@@ -7,9 +7,16 @@ runs:
     - uses: actions/setup-node@v4
       with:
         node-version: 22
-        cache: npm
-        cache-dependency-path: package-lock.json
+
+    # The installed tree is cached, not npm's download cache: `npm ci` itself is the slow part.
+    # .nx/cache is deliberately not persisted between machines.
+    - uses: actions/cache@v4
+      id: node-modules
+      with:
+        path: '**/node_modules'
+        key: node-modules-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package-lock.json') }}
 
     - name: Install root deps
+      if: steps.node-modules.outputs.cache-hit != 'true'
       shell: bash
       run: npm ci

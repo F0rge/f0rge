@@ -1,4 +1,4 @@
-> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging and [P-006](../../adr/governance.md#p-006) for release authorization. Legacy commands below remain inventory, not approved exceptions or release permission.
+> Canonical decisions: [`docs/adr/README.md`](../../adr/README.md). Follow [P-005](../../adr/governance.md#p-005) for review/automatic squash merging. A reviewed merge to `main` releases the affected Apps ([P-006](../../adr/governance.md#p-006)). Legacy commands below remain inventory, not approved exceptions.
 
 # Legacy FastAPI Backend Review Playbook
 
@@ -192,7 +192,7 @@ Source of truth: `docs/architecture/ai_seams.md`.
 
 ## Migration safety
 
-- Marrow `railway.toml` files contain `preDeployCommand`. That configuration is not permission to migrate production. See `docs/agents/rules/infra.md`.
+- Marrow migrations run as the `preDeployCommand` in `marrow-backend`'s deploy block on every Release, unattended. A merged migration reaches production; it must work with the previous commit's code. See `docs/agents/rules/infra.md`.
 - `RUN_MIGRATIONS=1` + `docker-entrypoint.sh` is optional for **local Docker image** builds only — do not set on MCP or embedding-worker containers.
 - After `alembic revision --autogenerate -m "..."`, always audit the generated file. Autogenerate misses: index renames, `server_default` changes, `CHECK` constraint adds/drops, and extension-level DDL. Hand-write those `op.execute()` calls.
 - Migration 004 introduced `HEALTHTRACKER_RO_PASSWORD` env var requirement. Any new migration that references Postgres roles must document the required env var in the migration file's docstring and in `apps/marrow/backend/.env.example`. See `project_mcp_migrations.md`.
@@ -202,7 +202,7 @@ Source of truth: `docs/architecture/ai_seams.md`.
 ## What NOT to flag (false-positive suppression)
 
 - **Pre-existing redirect branches** — `photos.serve_photo` and `account.serve_avatar` contain `if` for presigned URL redirects. Do not block a PR for touching them without worsening the violation.
-- **`ruff format --check`** is enforced in CI via `nx run-many -t format-check`. Flag format regressions on touched files.
+- **`ruff format --check`** is enforced in CI via the `format-check` target. Flag format regressions on touched files.
 - **Narrow ruff rule set** — CI runs `ruff check` with `E/F/W` rules, `E501`/`F821` excluded. Don't flag line-length violations or forward-reference resolution issues unless they indicate a real semantic problem.
 - **`lazy="selectin"` on models added before the async migration** — pre-existing models may be missing this. Don't block; open a follow-up. BLOCK only on new `relationship()` calls.
 - **`lab_extraction.py` BYOK bypass** — pre-existing tracked follow-up. Don't block PRs that don't touch `lab_extraction.py` for this.

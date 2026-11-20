@@ -45,7 +45,7 @@ Use a reproducible failure for a bug, then verify the corrected behavior at the 
 For UI/API behavior, include the authorized live-server walkthrough required by the repository; report whether it used a local production build or a deployed service.
 Run the checks relevant to the change and preserve their actual results, including skipped or unavailable checks.
 Read `docs/adr/delivery.md` and `docs/adr/operations.md` before release or provider work.
-Follow P-005 for Leo's personal review and automatic squash merging, and P-006 for release authorization. Manual provider operations need task authorization. An app's merge does not expand P-006's release scope.
+Follow P-005 for Leo's personal review and automatic squash merging. Under P-006 a reviewed merge to `main` releases every affected App, migrations included. Provider operations outside that pipeline need task authorization.
 Use existing explicit authorization within its scope; do not ask again merely because a different agent handles the next step.
 Verify the target environment and current state before an authorized consequential action; retain its required recovery evidence.
 
@@ -76,7 +76,7 @@ Read the app's operations documentation, then verify current provider identity, 
 - Preserve each app's provider and data boundaries. Shared infrastructure assumptions do not authorize merging projects, databases or credentials.
 - Delivery owns build/dependency/CI mechanics and artifact production; data owns schema/migration behavior. Coordinate their runtime prerequisites and authorized execution.
 - Match operational actions to explicit task authorization and current state; retain recovery evidence before consequential changes.
-- Follow the managed-delivery direction in `docs/adr/delivery.md`; this profile does not establish routine agent SSH or automatically enable deployments.
+- Releases go through `cd.yml` and `.github/deploy/deploy.mjs`; Coolify is the Pi's puller (P-048). No routine agent SSH for Releases. Leo creates Host tokens and performs each App's one-time Host switch himself.
 - Handle provider values through the approved tool/secret mechanisms and report verification without exposing credentials.
 
 ## Collaboration and completion

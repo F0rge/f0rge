@@ -15,7 +15,9 @@ RUN npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# The whole install, not only /app/node_modules: npm nests some workspace
+# dependencies (libs/ui/node_modules, the app's own node_modules).
+COPY --from=deps /app ./
 COPY package.json package-lock.json ./
 COPY libs/ui ./libs/ui
 COPY apps/marrow/frontend ./apps/marrow/frontend

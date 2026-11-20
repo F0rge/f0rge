@@ -4,8 +4,8 @@ Use the configured `f0rge-codex-publisher` GitHub App to open agent-prepared PRs
 to `F0rge/f0rge` `main`. Codex and Claude Code share this App, helper and `codex/*`
 branch namespace; neither opens PRs through Leo's `gh` login. Branch pushes keep the authorized user's Git identity.
 The bot authors the PR; Leo performs the required human review in his own GitHub
-session. Review/automatic squash merging follows [P-005](../adr/governance.md#p-005);
-release authorization follows [P-006](../adr/governance.md#p-006). Independent
+session. Review/automatic squash merging follows [P-005](../adr/governance.md#p-005).
+The merge releases every affected App ([P-006](../adr/governance.md#p-006)). Independent
 agent review and CI remain separate evidence.
 
 If the App, private configuration or Keychain item is unavailable, finish the
@@ -18,8 +18,7 @@ that fallback. Existing authorization to open a PR does not choose that fallback
 The App requests only repository **Contents: read**, **Pull requests: write** and
 GitHub's **Metadata: read**. Install it on the selected `F0rge/f0rge` repository
 only, verified by repository ID `1194719185`. It has no Actions, administration,
-deployment, secrets or content-write permission. This publisher is separate from
-the proposed [release requester](../../.github/deploy/release-requester-app.md).
+deployment, secrets or content-write permission.
 
 GitHub's PR-write permission covers more operations than this helper exposes.
 The reviewed [publisher helper](../../.github/scripts/f0rge_pr_publisher.py) offers
@@ -167,10 +166,8 @@ state and record it rather than treating command success as a merge receipt.
 merge SHA. GitHub dismisses approvals when reviewable code changes, while
 unchanged-diff rebases or empty commits may retain approval. New checks and other
 GitHub requirements still apply. Do not claim a fresh review for every SHA change.
-Firstout CD independently requires its exact-head review/provenance evidence;
-obtain Leo's fresh head approval if native GitHub retained an older commit's
-review, or CD can remain paused. Other apps, including
-Buycycle, still need separate production-release approval under P-006.
+Once merged, CI on `main` releases every affected App (P-006); arm auto-merge only
+for a change that is ready for production.
 
 ## Replace a PR with unchanged code
 
@@ -187,11 +184,9 @@ GitHub cannot change an existing PR's author. When Leo authorizes replacement:
 5. Close the original only after the replacement is verified and closing was
    explicitly authorized. The open-only helper does not perform this operation.
 
-A same-SHA replacement preserves source artifact identity; it does not make an
-old PR's checks, reviews or synthetic merge artifact a production release grant.
-Follow P-005 for default native squash merging after activation and P-006 for
-any subsequent release. A task's explicit no-merge instruction keeps its PR
-unarmed.
+A same-SHA replacement does not carry over the old PR's checks or reviews.
+Follow P-005 for default native squash merging; the merge releases (P-006).
+A task's explicit no-merge instruction keeps its PR unarmed.
 
 ## Revoke or repair access
 

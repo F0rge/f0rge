@@ -1,7 +1,7 @@
 {
   "name": "f0rge-rust-checks",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "tags": ["scope:shared"],
+  "tags": ["platform:rust", "scope:shared"],
   "targets": {
     "test": {
       "executor": "nx:run-commands",
