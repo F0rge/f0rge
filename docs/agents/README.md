@@ -12,10 +12,19 @@ holds role metadata and ordered routing rules. `docs/agents/protocol.md` supplie
 the shared brief; `docs/agents/profiles/` holds the role bodies. Keep instruction
 changes in those sources and regenerate the adapters.
 
-Codex and Claude Code are the supported repository coding harnesses. For each role the
-generator writes `.codex/agents/f0rge-*.toml` and `.claude/agents/f0rge-*.md`. Shared
-skills live under `.agents/skills/`; `.claude/skills/*` are symlinks to them. Claude Code
-reads `AGENTS.md` natively, so there is no `CLAUDE.md`.
+Codex and Claude Code are the supported repository coding harnesses, and they get an
+identical setup:
+
+| | Source (edit here) | Codex reads | Claude Code reads |
+| --- | --- | --- | --- |
+| Instructions | `AGENTS.md` (+ nested) | `AGENTS.md` | `AGENTS.md` (native; no `CLAUDE.md`) |
+| Roles | `manifest.json` + `protocol.md` + `profiles/` | `.codex/agents/f0rge-*.toml` | `.claude/agents/f0rge-*.md` |
+| Skills | `.agents/skills/` | `.agents/skills/` | `.claude/skills/*` (symlinks) |
+
+Only the file format differs, because each harness reads its own native format. `npm run
+agents:generate` writes both role formats and the skill links; `npm run agents:check` (CI)
+fails on drift, a missing link or a Claude-only skill; `npm run agents:test` asserts each
+role's Codex and Claude instructions are byte-identical.
 
 The generator embeds the shared protocol and selected profile body. References
 inside them are literal repository-root-relative paths so they retain their

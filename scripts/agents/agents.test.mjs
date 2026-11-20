@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { ROOT, MANIFEST, ROLE_IDS, loadManifest, validateManifest, globRegex, route, generate, adapterContents, checkAdapters, checkAdrReferences, checkLiveCallers, check, repositoryFiles } from './agents.mjs';
+import { ROOT, MANIFEST, ROLE_IDS, loadManifest, validateManifest, globRegex, route, generate, adapterContents, checkAdapters, checkAdrReferences, checkLiveCallers, check, repositoryFiles, skillLinks } from './agents.mjs';
 
 const manifest = loadManifest();
 const fixtures = JSON.parse(readFileSync(new URL('./routing-fixtures.json', import.meta.url), 'utf8'));
@@ -77,6 +77,34 @@ test('generation is deterministic, self-contained, and inherits native model/too
       assert.match(body, /description\s*[:=]/u);
     }
   }
+});
+
+test('Codex and Claude Code adapters carry byte-identical instructions per role', (t) => {
+  const contents = adapterContents(manifest, fixture(t));
+  for (const role of manifest.roles) {
+    const toml = contents.get(`.codex/agents/${role.id}.toml`);
+    const md = contents.get(`.claude/agents/${role.id}.md`);
+    const codex = toml.slice(toml.indexOf('developer_instructions = """\n') + 'developer_instructions = """\n'.length, -4).replaceAll('\\"', '"').replaceAll('\\\\', '\\');
+    const claude = md.slice(md.indexOf('-->\n\n') + 5);
+    assert.equal(claude, codex, role.id);
+    assert.ok(toml.includes(`description = ${JSON.stringify(role.description)}`) && md.includes(`description: ${JSON.stringify(role.description)}`), role.id);
+  }
+});
+
+test('every shared skill is linked for Claude Code and none is Claude-only', (t) => {
+  const root = fixture(t);
+  write(root, '.agents/skills/tdd/SKILL.md', '---\nname: tdd\n---\n');
+  write(root, '.agents/skills/grilling/SKILL.md', '---\nname: grilling\n---\n');
+  generate(manifest, root);
+  assert.equal(skillLinks(manifest, root).size, 2);
+  assert.equal(readFileSync(join(root, '.claude/skills/tdd/SKILL.md'), 'utf8'), '---\nname: tdd\n---\n');
+  assert.deepEqual(checkAdapters(manifest, root), []);
+  rmSync(join(root, '.claude/skills/tdd'));
+  write(root, '.claude/skills/claude-only/SKILL.md', 'x');
+  const errors = checkAdapters(manifest, root);
+  assert.ok(errors.some((error) => error.includes('Missing or wrong Claude skill link: .claude/skills/tdd')));
+  assert.ok(errors.some((error) => error.includes('Claude-only skill: .claude/skills/claude-only')));
+  assert.throws(() => { rmSync(join(root, '.claude/skills/claude-only'), { recursive: true }); write(root, '.claude/skills/tdd/SKILL.md', 'hand-made'); generate(manifest, root); }, /non-generated skill entry/);
 });
 
 test('adapter escaping preserves quotes, backslashes and triple quotes', (t) => {

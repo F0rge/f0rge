@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Repository-owned routing and adapter generation, not a harness loader or permission boundary.
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -10,6 +10,9 @@ export const MANIFEST = 'docs/agents/manifest.json';
 export const ROLE_IDS = ['backend', 'frontend', 'data', 'security', 'delivery', 'devops', 'workflows', 'quality-testing'].map((id) => `f0rge-${id}`);
 // Harness -> generated adapter directory. Each harness discovers its own native format there.
 export const ADAPTER_DIRS = { codex: '.codex/agents', claude: '.claude/agents' };
+// Shared skills have one copy, read natively by Codex; Claude Code gets one relative symlink per skill.
+export const SKILLS_DIR = '.agents/skills';
+export const CLAUDE_SKILLS_DIR = '.claude/skills';
 
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
@@ -117,6 +120,18 @@ export function adapterContents(manifest, root = ROOT) {
   return generated;
 }
 
+export function skillLinks(manifest, root = ROOT) {
+  if (!manifest.adapters.includes('claude') || !existsSync(resolve(root, SKILLS_DIR))) return new Map();
+  return new Map(readdirSync(resolve(root, SKILLS_DIR), { withFileTypes: true }).filter((entry) => entry.isDirectory())
+    .map((entry) => [`${CLAUDE_SKILLS_DIR}/${entry.name}`, `../../${SKILLS_DIR}/${entry.name}`]));
+}
+
+function linkStatus(root, path, target) {
+  const status = lstatSync(resolve(root, path), { throwIfNoEntry: false });
+  if (!status) return 'missing';
+  return status.isSymbolicLink() && readlinkSync(resolve(root, path)) === target ? 'ok' : 'wrong';
+}
+
 function preflightOutputs(paths, root) {
   // Inspect the selected repository root and every output component without following
   // links. Finish the whole preflight before mkdir/write so a later unsafe output
@@ -140,9 +155,17 @@ export function generate(manifest, root = ROOT) {
   validateManifest(manifest, root);
   const generated = adapterContents(manifest, root);
   preflightOutputs(generated.keys(), root);
+  const links = skillLinks(manifest, root);
+  // Reuse the no-symlink ancestor walk for .claude/skills itself (the leaf name is never created).
+  preflightOutputs([...links.keys()].map((path) => `${dirname(path)}/.preflight`), root);
+  for (const [path, target] of links) requireValue(linkStatus(root, path, target) !== 'wrong', `Refusing to replace non-generated skill entry: ${path}`);
   for (const [path, content] of generated) {
     mkdirSync(dirname(resolve(root, path)), { recursive: true });
     writeFileSync(resolve(root, path), content);
+  }
+  for (const [path, target] of links) {
+    mkdirSync(dirname(resolve(root, path)), { recursive: true });
+    if (linkStatus(root, path, target) === 'missing') symlinkSync(target, resolve(root, path));
   }
   // Deliberately do not remove extra files, including other owners' profiles.
   return generated.size;
@@ -161,6 +184,16 @@ export function checkAdapters(manifest, root = ROOT) {
       // Check only our namespace; built-ins and user/other repository profiles are independent.
       const path = `${dir}/${name}`;
       if (name.startsWith('f0rge-') && !expected.has(path)) errors.push(`Unexpected repository-owned adapter: ${path}`);
+    }
+  }
+  // Skill parity: every shared skill is linked for Claude Code, and nothing is Claude-only.
+  const links = skillLinks(manifest, root);
+  for (const [path, target] of links) {
+    if (linkStatus(root, path, target) !== 'ok') errors.push(`Missing or wrong Claude skill link: ${path} -> ${target}. Run npm run agents:generate.`);
+  }
+  if (manifest.adapters.includes('claude') && existsSync(resolve(root, CLAUDE_SKILLS_DIR))) {
+    for (const name of readdirSync(resolve(root, CLAUDE_SKILLS_DIR))) {
+      if (!links.has(`${CLAUDE_SKILLS_DIR}/${name}`)) errors.push(`Claude-only skill: ${CLAUDE_SKILLS_DIR}/${name}. Put shared skills in ${SKILLS_DIR}/ and run npm run agents:generate.`);
     }
   }
   const profiles = new Set(manifest.roles.map((role) => role.profile));
@@ -229,7 +262,7 @@ function main() {
   const [command, ...paths] = process.argv.slice(2);
   const manifest = loadManifest();
   if (command === 'generate' && paths.length === 0) {
-    console.log(`Generated ${generate(manifest)} adapters (${manifest.adapters.join(', ')}). Run npm run agents:check.`);
+    console.log(`Generated ${generate(manifest)} adapters (${manifest.adapters.join(', ')}) and ${skillLinks(manifest).size} Claude skill links. Run npm run agents:check.`);
   } else if (command === 'check' && paths.length === 0) {
     const files = repositoryFiles();
     const errors = check(manifest, ROOT, files);
