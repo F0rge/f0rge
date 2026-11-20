@@ -126,7 +126,7 @@ async def test_personal_token_domain_workflow(second_postgres_url, monkeypatch):
 
                 matches = await call("find_actions", query="draft transfer", tab="Warehouse")
                 assert 1 <= len(matches["actions"]) <= 3
-                assert "transfers_create_draft" in {item["name"] for item in matches["actions"]}
+                assert matches["actions"][0]["name"] == "transfers_create_draft"
                 read = await call(
                     "run_read", action="stock_on_hand", arguments={"sku_id": str(ids["sku"])}
                 )
@@ -195,14 +195,35 @@ async def test_personal_token_domain_workflow(second_postgres_url, monkeypatch):
                 assert legacy["status"] == "not_executed" and "review_url" not in legacy
                 assert await balances() == {str(source): Decimal("2")}
 
+                spare = await call("run_write", **{**write, "request_id": str(uuid.uuid4())})
+                cancel = {
+                    "action": "transfers_cancel_draft",
+                    "arguments": {"transfer_id": spare["result"]["transfer_id"]},
+                    "request_id": str(uuid.uuid4()),
+                }
+
+                async def found_to_cancel():
+                    found = await call("find_actions", query="cancel draft transfer")
+                    return [item["name"] for item in found["actions"]]
+
                 dispatch = {
                     "action": "transfers_dispatch",
                     "arguments": args,
                     "request_id": str(uuid.uuid4()),
                 }
-                await set_role("till")  # May receive but cannot dispatch.
+                await set_role("till")  # May receive but cannot dispatch or cancel.
                 await call("run_write", **dispatch, expected_error="unavailable")
+                await call("run_write", **cancel, expected_error="unavailable")
+                assert "transfers_cancel_draft" not in await found_to_cancel()
                 await set_role("owner")
+                assert (await found_to_cancel())[0] == "transfers_cancel_draft"
+                cancelled = await call("run_write", **cancel)
+                assert (
+                    cancelled["status"] == "completed"
+                    and cancelled["result"]["status"] == "cancelled"
+                )
+                assert await call("run_write", **cancel) == cancelled
+                assert await balances() == {str(source): Decimal("2")}
                 with monkeypatch.context() as patch:
                     patch.setattr(settings, "mcp_writes_enabled", False)
                     await call("run_write", **dispatch, expected_error="paused")

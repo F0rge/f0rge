@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
@@ -82,6 +83,11 @@ async def _receive(db: AsyncSession, token: McpToken, args: ReceiveArguments) ->
     return _receipt(transfer)
 
 
+async def cancel_draft(db: AsyncSession, token: McpToken, args: Any) -> dict:
+    await _standalone_transfer(db, token, args.transfer_id)
+    return _receipt(await TransferService(db).stage_cancel_draft(args.transfer_id))
+
+
 async def _movement_bins(
     db: AsyncSession, transfer: Transfer, bin_ids: set[uuid.UUID]
 ) -> tuple[dict, dict]:
@@ -104,15 +110,23 @@ async def _movement_bins(
     return by_id, defaults
 
 
-async def _check_standalone_transfer(
+async def _standalone_transfer(
     db: AsyncSession, token: McpToken, transfer_id: uuid.UUID
-) -> None:
-    """Apply MCP scope and bin checks under the same lock as the domain transition."""
+) -> Transfer:
+    """Lock a transfer in the token's business. Pick-linked transfers stay in the warehouse."""
     transfer = await TransferCRUD(db).get_by_id(transfer_id, for_update=True)
     if transfer is None or transfer.team_id != token.team_id:
         raise NotFoundError("Transfer not found")
     if transfer.pick_id is not None:
         raise ConflictError("Complete transfers linked to a pick in the warehouse")
+    return transfer
+
+
+async def _check_standalone_transfer(
+    db: AsyncSession, token: McpToken, transfer_id: uuid.UUID
+) -> None:
+    """Apply MCP scope and bin checks under the same lock as the domain transition."""
+    transfer = await _standalone_transfer(db, token, transfer_id)
     if len(transfer.lines) > 50:
         raise ValidationError("Process transfers with more than 50 lines in the warehouse")
 

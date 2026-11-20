@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Iterable
 
 from app.config import settings
-from app.services.mcp_action_types import Action, Arguments
+from app.routers.transfers import transfers_router
+from app.services.mcp_action_types import Action, Arguments, endpoint_actions
 from app.services.mcp_drafts import DRAFT_ACTIONS
 from app.services.mcp_domains import READ_ACTIONS
 from app.services.mcp_operations import lookup_operation
@@ -21,12 +23,21 @@ async def _lookup(db, token, args: OperationLookup) -> dict:
     return await lookup_operation(db, token, args.request_id, actions=ACTIONS.values())
 
 
-ACTIONS = {
-    action.name: action
-    for action in (
+def catalogue(actions: Iterable[Action]) -> dict[str, Action]:
+    by_name: dict[str, Action] = {}
+    for action in actions:
+        if action.name in by_name:
+            raise ValueError(f"Duplicate MCP action name: {action.name}")
+        by_name[action.name] = action
+    return by_name
+
+
+ACTIONS = catalogue(
+    (
         *READ_ACTIONS,
         *DRAFT_ACTIONS,
         *TRANSFER_ACTIONS,
+        *endpoint_actions(transfers_router),
         Action(
             name="operations_lookup",
             tab="Admin / MCP tokens",
@@ -36,7 +47,7 @@ ACTIONS = {
             handler=_lookup,
         ),
     )
-}
+)
 
 
 def _words(text: str) -> set[str]:
