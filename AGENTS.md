@@ -128,11 +128,11 @@ Delegate per `~/.cursor/rules/leo-system-wide.mdc` and `.cursor/rules/orchestrat
 
 ## Creating issues
 
-Agent-ready GitHub issue authoring (scope split, decision surfacing, parent/sub-issues): `.cursor/skills/create-github-issue/SKILL.md`.
+Spec from the conversation: `/to-spec`. Split into agent-ready sub-issues: `/to-tickets`. Body structure: [Writing issues for sub-agents](#writing-issues-for-sub-agents).
 
 ## Shipping features
 
-End-to-end workflow (prompt or GitHub issue → develop → dev smoke → main PR): `.cursor/skills/ship-feature/SKILL.md`.
+Implement a spec or tickets with `/implement`, PR into `develop`, then promote per [Branch workflow](#branch-workflow).
 
 ## PR review context
 
@@ -207,4 +207,4 @@ Canonical five: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-huma
 
 ### Domain docs
 
-Multi-context: root `CONTEXT-MAP.md` plus per-app `CONTEXT.md` (marrow, firstout, dk). See `docs/agents/domain.md`.
+Multi-context: root `GLOSSARY-MAP.md` plus per-app `GLOSSARY.md` (marrow, firstout, dk). See `docs/agents/domain.md`.

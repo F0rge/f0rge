@@ -14,7 +14,7 @@ See `AGENTS.md` § Shared libraries for the canonical inventory. **Nx gates** (a
 
 ## Plans must delegate to sub-agents
 
-**At planning time** (before any code), every implementation plan MUST include a sub-agent map: one named sub-agent from `~/.cursor/agents/` per work chunk, with deliverable and dependencies. The planning agent orchestrates; it does not implement the chunks. See `.cursor/rules/orchestration.mdc` and `.cursor/skills/ship-feature/SKILL.md`.
+**At planning time** (before any code), every implementation plan MUST include a sub-agent map: one named sub-agent from `~/.cursor/agents/` per work chunk, with deliverable and dependencies. The planning agent orchestrates; it does not implement the chunks. See `.cursor/rules/orchestration.mdc`.
 
 At PR review time: if the PR description outlines multi-step work that does NOT name a sub-agent per chunk, flag it. Solo plans where the main agent did all the work are not acceptable.
 

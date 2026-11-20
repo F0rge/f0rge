@@ -56,8 +56,6 @@ Apps import **only**:
 3. Add a Storybook story when `libs/ui/.storybook` exists.
 4. **Never** copy shadcn into `apps/**/components/ui`.
 
-Workflow skill: `.cursor/skills/add-ui-primitive/SKILL.md`.
-
 ## Catalogue
 
 When Storybook is present, it is the source of truth:

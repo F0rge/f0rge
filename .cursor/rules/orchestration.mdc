@@ -14,7 +14,7 @@ When producing an implementation plan (Plan mode, issue spec, or ad-hoc scope), 
 1. **Sub-agent map** — one row per work chunk: `Chunk | Owner (sub-agent) | Deliverable | Depends on`
 2. **Owner = a named sub-agent** from `~/.cursor/agents/` or a built-in (`explore`, `bash`, `browser`) — not "main agent" or "me". Plan is a *mode*, not a sub-agent; don't assign chunks to it.
 3. **Right-sized delegation** — match scope to agent count (see table)
-4. **Verification plan** — ends with live-server E2E when UI/API changes; dev-env smoke when shipping via `ship-feature` skill
+4. **Verification plan** — ends with live-server E2E when UI/API changes
 5. **Explicit sign-off** — unresolved decisions listed before execution
 
 Solo plans where the orchestrator implements every chunk are **not acceptable**. Exception: trivial single-file edits (typo, dep bump, one-line config).
@@ -54,8 +54,6 @@ Each brief MUST include:
 4. Scope: plan slice with file paths and acceptance criteria
 5. Write back gotchas to memory when done
 
-Template: `.cursor/skills/ship-feature/references/sub-agent-brief-template.md`
-
 ## End-to-end shipping
 
-For idea or GitHub issue implementation through develop → dev smoke → main PR, use the **`ship-feature`** skill (`.cursor/skills/ship-feature/SKILL.md`).
+For idea or GitHub issue implementation through develop → main PR: spec with `/to-spec`, split with `/to-tickets`, build with `/implement`.

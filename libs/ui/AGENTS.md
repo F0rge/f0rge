@@ -23,4 +23,4 @@ This package is the **only** UI kit for f0rge apps. Apps consume; never reverse-
 npx nx run f0rge-ui:storybook
 ```
 
-Full contract: `.cursor/rules/ui-kit.mdc`. Workflow: `.cursor/skills/add-ui-primitive/SKILL.md`.
+Full contract: `.cursor/rules/ui-kit.mdc`.

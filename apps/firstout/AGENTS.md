@@ -16,7 +16,7 @@ Read `~/.cursor/agent-memory/<agent>/MEMORY.md` first. Write gotchas back when d
 
 - **This app uses IBM Carbon (`@carbon/react`, `@carbon/styles`, `@carbon/icons-react`).**
 - Do **not** import `@f0rge/ui`, `@f0rge/ui/forms`, or `@f0rge/ui/api`.
-- Do **not** put Carbon in `libs/ui`. Do **not** run `add-ui-primitive` for Firstout.
+- Do **not** put Carbon in `libs/ui`.
 - `ui-kit.mdc` remains the default for Marrow and dk. This nested AGENTS.md is the exception.
 - Superdesign: try the Superdesign plugin first for frontend/UI. If the CLI reports credits/quota/paywall/auth failure, skip the canvas, implement Carbon, and record that in the PR. Do not invent extra retries.
 
