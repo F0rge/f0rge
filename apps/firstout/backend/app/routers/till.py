@@ -106,7 +106,7 @@ def get_baskets(db: AsyncSession = Depends(get_db)) -> TillBasketService:
 
 
 @till_router.get("/basket", response_model=TillBasket)
-async def get_basket(
+async def get_till_basket(
     location_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_till),
     service: TillBasketService = Depends(get_baskets),
@@ -115,7 +115,7 @@ async def get_basket(
 
 
 @till_router.put("/basket/{basket_id}", response_model=TillBasket)
-async def replace_basket(
+async def replace_till_basket(
     basket_id: uuid.UUID,
     body: TillBasketUpdate,
     user_id: uuid.UUID = Depends(require_till),
@@ -125,7 +125,7 @@ async def replace_basket(
 
 
 @till_router.get("/reservations", response_model=list[TillReservation])
-async def list_reservations(
+async def list_till_reservations(
     location_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_till),
     service: TillBasketService = Depends(get_baskets),

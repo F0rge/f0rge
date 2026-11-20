@@ -83,6 +83,7 @@ get_journal
 get_layby
 get_period
 get_pick
+get_pick_default_allocations
 get_price_list
 get_proforma
 get_purchase_order
@@ -95,6 +96,7 @@ get_sku
 get_sku_bom
 get_stocktake
 get_supplier
+get_till_basket
 get_transfer
 home_home_summary
 journal_report
@@ -142,6 +144,7 @@ list_supplier_addresses
 list_supplier_contacts
 list_supplier_prices
 list_suppliers
+list_till_reservations
 list_transfers
 list_unmatched_counts
 list_unmatched_lines
@@ -168,6 +171,7 @@ remainder_invoice
 reopen_books_period
 reopen_period
 replace_sku_bom
+replace_till_basket
 reprice_customer_drafts
 resume_held_sale
 run_repeating_invoice
