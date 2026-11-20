@@ -9,25 +9,12 @@ import { useStorefrontAnalytics } from "@/components/analytics/analytics-provide
 import { zarMinorUnits } from "@/lib/analytics/money";
 import { formatCustomerPrice } from "@/lib/order-money";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
+import { offerState, pieceDimensions } from "@/lib/piece-spec";
+import { selectedImages } from "@/lib/product-images";
 
 function formatPrice(variant?: MedusaVariant): string {
   const amount = variant?.calculated_price?.calculated_amount;
   return amount == null ? "Price unavailable" : formatCustomerPrice(amount, variant?.calculated_price?.currency_code);
-}
-
-function selectedImages(product: StoreProduct, variant?: MedusaVariant): string[] {
-  const all = [...(variant?.images?.map((image) => image.url) || []), ...(product.images?.map((image) => image.url) || [])];
-  const suitableValue = variant?.metadata?.suitable_image_urls;
-  let suitable: string[] = [];
-  if (Array.isArray(suitableValue)) suitable = suitableValue;
-  else if (typeof suitableValue === "string") {
-    try {
-      const parsed: unknown = JSON.parse(suitableValue);
-      if (Array.isArray(parsed)) suitable = parsed.filter((url): url is string => typeof url === "string");
-    } catch { /* Invalid merchant metadata falls back to the product gallery. */ }
-  }
-  if (suitable?.length) return Array.from(new Set(all.filter((url) => suitable.includes(url))));
-  return Array.from(new Set(all.length ? all : variant?.thumbnail ? [variant.thumbnail] : product.thumbnail ? [product.thumbnail] : []));
 }
 
 export function ProductDetail({ product }: { product: StoreProduct }) {
@@ -47,20 +34,21 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const imagePosition = image ? gallery.indexOf(image) + 1 : 0;
   const quantity = variant?.inventory_quantity ?? 0;
   const offer = variant?.metadata?.made_to_order_offer;
-  const offerObservedAt = offer?.observed_at ? Date.parse(offer.observed_at) : NaN;
-  const offerFresh = Number.isFinite(offerObservedAt) && Date.now() - offerObservedAt <= 5 * 60_000 && offerObservedAt <= Date.now() + 60_000;
-  const offerAvailable = !!offer && offerFresh && offer.remaining_capacity > 0 && Date.parse(offer.expires_at) > Date.now();
+  const offerStatus = offerState(offer);
+  const offerFresh = offerStatus !== "stale";
+  const offerAvailable = offerStatus === "available";
   const promisedWindow = offerAvailable ? (() => {
     const start = new Date();
     const end = new Date();
-    start.setUTCDate(start.getUTCDate() + offer.min_lead_time_days);
-    end.setUTCDate(end.getUTCDate() + offer.max_lead_time_days);
+    start.setUTCDate(start.getUTCDate() + offer!.min_lead_time_days);
+    end.setUTCDate(end.getUTCDate() + offer!.max_lead_time_days);
     const date = (value: Date) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(value);
     return `${date(start)} – ${date(end)}`;
   })() : null;
   const availability = !variant ? "This combination is unavailable" : quantity > 0 ? `${quantity} in stock` : offerAvailable ? `Made to order · ${offer!.min_lead_time_days}–${offer!.max_lead_time_days} days` : offer && !offerFresh ? "Made-to-order availability needs refreshing" : offer ? "Made-to-order allowance exhausted or expired" : "Currently unavailable";
-  const dimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
-  const hasDimensions = dimensions.every((value) => value != null && value > 0);
+  const measured = pieceDimensions(product, variant);
+  const dimensions = [measured.length, measured.width, measured.height];
+  const hasDimensions = dimensions.every((value) => value != null);
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
   const description = customerFacingCopy(product.description);
   const feedback = bagMessage ? purchaseFeedback(bagMessage, bagFailed) : null;

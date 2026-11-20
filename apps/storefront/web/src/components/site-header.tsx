@@ -23,9 +23,9 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
       {links.map((link) => <Link key={link.href} href={link.href} aria-current={pathname === link.href ? "page" : undefined}>{link.label}</Link>)}
     </nav>
     <div className="header-actions">
-      <div className="desktop-account"><Link href="/account" aria-current={pathname.startsWith("/account") ? "page" : undefined}>Account</Link>{clerkConfigured && <HeaderAuth />}</div>
+      <span className="header-divider" aria-hidden="true" /><div className="desktop-account"><Link href="/account" aria-current={pathname.startsWith("/account") ? "page" : undefined}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></svg>Account</Link>{clerkConfigured && <HeaderAuth />}</div>
       <Link className="header-bag" href="/bag" aria-current={pathname === "/bag" ? "page" : undefined}>
-        <svg width="18" height="20" viewBox="0 0 20 22" fill="none" aria-hidden="true"><path d="M3 7h14l1 13H2L3 7Z" stroke="currentColor" strokeWidth="1.25"/><path d="M6 8V5a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.25"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M5 8h14l-1 13H6L5 8z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></svg>
         Bag
       </Link>
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
@@ -34,14 +34,14 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
         </DialogTrigger>
         <DialogContent className="mobile-menu">
           <DialogTitle className="wordmark"><Wordmark /></DialogTitle>
-          <DialogDescription>Find furniture for your everyday life.</DialogDescription>
+          <DialogDescription>Furniture for living and dining rooms.</DialogDescription>
           <nav aria-label="Mobile navigation">
             {links.map((link) => <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)} aria-current={pathname === link.href ? "page" : undefined}>{link.label}<span aria-hidden="true">↗</span></Link>)}
             <Link href="/account" onClick={() => setMenuOpen(false)}>Account<span aria-hidden="true">↗</span></Link>
             <Link href="/contact" onClick={() => setMenuOpen(false)}>Contact<span aria-hidden="true">↗</span></Link>
           </nav>
           {clerkConfigured && <div className="mobile-menu-auth"><HeaderAuth /></div>}
-          <p className="menu-note">Furniture. For everyday life.</p>
+          <p className="menu-note">Prices in rand, VAT included.</p>
         </DialogContent>
       </Dialog>
     </div>

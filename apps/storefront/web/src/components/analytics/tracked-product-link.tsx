@@ -9,11 +9,13 @@ function currentSurface(): AnalyticsSurface | null {
   return typeof window === "undefined" ? null : analyticsSurfaceForPathname(window.location.pathname);
 }
 
-export function TrackedProductLink({ href, productId, className, children }: {
+export function TrackedProductLink({ href, productId, className, children, trackImpression = true }: {
   href: string;
   productId: string;
   className: string;
   children: ReactNode;
+  /** False for a second link to a product already counted by another impression on the page; clicks are still recorded. */
+  trackImpression?: boolean;
 }) {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const impressionSentRef = useRef(false);
@@ -21,7 +23,7 @@ export function TrackedProductLink({ href, productId, className, children }: {
 
   useEffect(() => {
     const element = linkRef.current;
-    if (!element || choice !== "accepted" || impressionSentRef.current || typeof IntersectionObserver === "undefined") return;
+    if (!element || !trackImpression || choice !== "accepted" || impressionSentRef.current || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry || entry.intersectionRatio < 0.5 || impressionSentRef.current) return;
       const surface = currentSurface();
@@ -32,7 +34,7 @@ export function TrackedProductLink({ href, productId, className, children }: {
     }, { threshold: [0.5] });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [capture, choice, productId]);
+  }, [capture, choice, productId, trackImpression]);
 
   return <Link ref={linkRef} href={href} className={className} onClick={() => {
     const surface = currentSurface();

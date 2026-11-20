@@ -28,7 +28,7 @@ A ready file prints the published count and still sets `public_selling` to false
 
 Privacy, terms, refunds, returns, delivery, and contact are linked from the footer. The analytics panel still links to `/policies/privacy` before a visitor can accept analytics. Until a reviewed launch pack is supplied, company identity, phone, email, physical address, delivery zones and rates, and the Information Officer stay as `[PLACEHOLDER: …]` lines. Return, refund, and the returns section of the terms use adapted store rules and are not left blank. A reviewed pack replaces that draft.
 
-DasKasas still uses the existing oxblood / citron tokens. `collectorSkinAttribute` applies that skin only when the pack names `Oxblood / citron`. The other nine named skins have no approved colour values here, so they are not applied and there is no theme switch. Retired placeholder lines ("taking shape", "a considered addition to your living space") are not rendered.
+DasKasas uses the navy ledger palette defined in `apps/storefront/web/src/app/style.css`: ivory ground `#F5F4F0`, navy ink `#14213A`, steel-blue accent `#2F5D8A` and muted text `#525A68`. It applies on every page whatever the pack says. No oxblood / citron tokens exist in the web stylesheets. `collectorSkinAttribute` still sets `data-collector-skin="oxblood-citron"` on `<html>` when the pack names `Oxblood / citron`, but no CSS reads that attribute, so it changes nothing. The other nine named skins have no approved colour values here, so they are not applied and there is no theme switch. Retired placeholder lines ("taking shape", "a considered addition to your living space") are not rendered.
 
 ## Indexing and a future hostname
 
@@ -38,9 +38,9 @@ No public hostname has been chosen. When the owner authorizes one, set `NEXT_PUB
 
 ## Accessibility and performance
 
-Purchase failures on the bag, product, and checkout pages use a focusable `role="alert"`. The collection error heading takes focus when the catalogue cannot load. Text pairs in the current oxblood / citron palette measure above WCAG AA 4.5:1 (ink on paper 11.22, paper on oxblood 9.59, citron on oxblood 7.68, muted on paper 4.69, ink on citron 8.98).
+Purchase failures on the bag, product, and checkout pages use a focusable `role="alert"`. The collection error heading takes focus when the catalogue cannot load. Text pairs in the navy ledger palette, computed from the shipped CSS values with the WCAG formula, measure above AA 4.5:1 (ink on ivory 14.58, ivory on navy buttons 14.58, muted on ivory 6.32, steel on ivory 6.25, white on the steel in-stock label 6.88, muted on the `#E6E6E1` fill 5.55, error red `#A41020` on its `#FBF1F1` tint 7.09). The hairline rule colour `#C6C8CC` is 1.52:1 on ivory. It draws decorative rules and the border of unselected gallery thumbnails; each thumbnail's photograph identifies that control, and the selected thumbnail has a navy border.
 
-The first hero image and the product gallery image request high priority and reserve a 4:5 box. Median LCP, CLS, and field INP were not measured: there is no approved image pack, so those numbers are not invented. Hosted Clerk sign-in and Peach checkout were not exercised: those credentials are not in this environment.
+The first hero image and the product gallery image request high priority. The CSS reserves a 4:3 box for the hero photograph (`.hero-photograph`) and a 1:1 box for the product gallery image (`.hero-study`). Median LCP, CLS, and field INP were not measured: there is no approved image pack, so those numbers are not invented. Hosted Clerk sign-in and Peach checkout were not exercised: those credentials are not in this environment.
 
 ## Rollback
 

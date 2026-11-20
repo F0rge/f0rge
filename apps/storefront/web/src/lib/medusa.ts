@@ -157,10 +157,6 @@ export function productPath(product: StoreProduct): string {
   return `/product/${product.handle.replace(/^firstout-(?!group-)/, "")}`;
 }
 
-export function publicCollections(products: StoreProduct[]): NonNullable<StoreProduct["collection"]>[] {
-  return [...new Map(products.flatMap((product) => product.collection ? [[product.collection.handle, product.collection] as const] : [])).values()];
-}
-
 export function lowestPricedVariant(variants: MedusaVariant[]): MedusaVariant | undefined {
   return variants.filter((variant) => variant.calculated_price?.calculated_amount != null)
     .sort((a, b) => a.calculated_price!.calculated_amount - b.calculated_price!.calculated_amount)[0];
