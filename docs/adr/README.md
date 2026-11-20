@@ -18,7 +18,7 @@ The decisions were reconstructed from the 7 November 2026 architecture conversat
 
 ## New work versus what is already here
 
-New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Follow [P-005](governance.md#p-005) for Leo's review and automatic squash merging, and [P-006](governance.md#p-006) for release authorization. Every PR includes the full ADR assessment required by [the PR process](../agents/pr-process.md). The table below is the decision index, not a compliance assessment. This repo does not yet have a mechanical compliance checker.
+New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Follow [P-005](governance.md#p-005) for Leo's review and automatic squash merging, and [P-006](governance.md#p-006) for release authorization. Every PR includes the ADR Check for its touched domains required by P-003, written with the [`pr` skill](../../.agents/skills/pr/SKILL.md). The table below is the decision index, not a compliance assessment. This repo does not yet have a mechanical compliance checker.
 
 Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, Turso, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
 
@@ -41,7 +41,7 @@ These are not decisions. Do not invent a selection.
 
 Review and merging follow [P-005](governance.md#p-005); release authorization follows [P-006](governance.md#p-006). Manual provider operations require explicit task authorization. Existing GitHub workflows and host docs still describe automatic paths. Those paths are not an approved exception, and editing these records does not turn them off or authorize them.
 
-Every pull request into `main` follows [the PR process](../agents/pr-process.md) and includes all 66 IDs with short titles. The assessment distinguishes review, compliance for the change, existing gaps and supporting reasons. Unrelated work does not certify the existing app; known migration gaps remain visible. The process defines the table values and sort order. There is no `adr-coverage` job in CI; human review still judges the evidence and rationale.
+Every pull request into `main` includes an ADR Check for the domains it touches (P-003): the [`pr` skill](../../.agents/skills/pr/SKILL.md) lists the IDs that `node scripts/agents/agents.mjs adrs <changed files>` prints, each with a compliance status and reason. Unrelated work does not certify the existing app; known gaps in the touched domains remain visible. There is no `adr-coverage` job in CI; human review still judges the evidence and rationale.
 
 ## Index
 
@@ -49,7 +49,7 @@ Every pull request into `main` follows [the PR process](../agents/pr-process.md)
 | --- | --- | --- | --- | --- |
 | P-001 | Canonical ADRs | Accepted | Repo-wide ADRs are authoritative. AGENTS.md points to them; no drifting policy copies. | [P-001](governance.md#p-001) |
 | P-002 | Default stack and migrations | Accepted | One default stack, exceptions approved by Leo. Apply new standards to new apps first; migrate existing apps gradually. | [P-002](governance.md#p-002) |
-| P-003 | ADR assessment on every PR | Accepted | Every PR to main includes an ALL-ADR compliance checklist, with statuses and justified exceptions. | [P-003](governance.md#p-003) |
+| P-003 | ADR assessment on every PR | Accepted | Every PR to main includes an ADR Check for the domains it touches, with statuses and justified exceptions. | [P-003](governance.md#p-003) |
 | P-004 | Automated architecture checks | Accepted | Deterministic automated architecture checks block merge and release where enforceable; exceptions need Leo. | [P-004](governance.md#p-004) |
 | P-005 | Human review and automatic squash merge | Accepted | Independent review and CI; Leo alone supplies required code-owner review, then native GitHub squash auto-merge follows protected-main requirements unless the task withholds merging. | [P-005](governance.md#p-005) |
 | P-006 | Production release authorization | Accepted | P-006 permits Firstout continuous deployment after reviewed main merges and successful checks; other apps require Leo’s approval for every production release. | [P-006](governance.md#p-006) |

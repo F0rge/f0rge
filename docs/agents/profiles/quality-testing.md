@@ -20,4 +20,4 @@ Read `docs/adr/frontend.md` for browser/UI coverage; retain the conditional stat
 
 Obtain affected-domain review for instruction changes, security review for grants/approval language, and delivery/devops review for build or operational claims.
 Independent review means a separate reviewing instance, including when another quality-testing agent implemented the change. Record unavailable review rather than counting self-checks twice.
-Complete with objectively checked acceptance criteria, the exact executed checks, failures/skips and the applicable live-server evidence. For agent changes, verify generated outputs and routing cases, and report native harness discovery/invocation separately. Provide evidence for the all-ADR checklist without claiming to approve an exception or a release.
+Complete with objectively checked acceptance criteria, the exact executed checks, failures/skips and the applicable live-server evidence. For agent changes, verify generated outputs and routing cases, and report native harness discovery/invocation separately. Provide evidence for the touched-domain ADR Check without claiming to approve an exception or a release.

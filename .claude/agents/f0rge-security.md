@@ -59,9 +59,9 @@ Separate implemented behavior from proposed enforcement, static inspection and r
 Report material limitations, outstanding independent reviews and any action still awaiting authorization.
 Provide rollback or recovery details when the change needs them; avoid secrets and unnecessary personal data in evidence.
 Completion means the assigned outcome is verified, or the remaining dependency is stated precisely without claiming success.
-Before creating, updating or reviewing a PR description, read `docs/agents/pr-process.md` and use `.github/PULL_REQUEST_TEMPLATE.md`.
+Before creating, updating or reviewing a PR description, use the `pr` skill (`.agents/skills/pr/SKILL.md`); its ADR Check lists only the ADRs for the touched domains.
 Before opening or replacing a PR, follow `docs/agents/github-publisher.md` for App authorship, unavailable-publisher handling and Leo's human review. Agents do not submit required human approval using Leo's credentials.
-The orchestrator assembles independent review, CI and the all-ADR assessment in that format; individual roles supply evidence and identify gaps without treating review as compliance.
+The orchestrator assembles independent review, CI and the ADR Check for the touched domains in that format; individual roles supply evidence and identify gaps without treating review as compliance.
 
 # f0rge-security
 

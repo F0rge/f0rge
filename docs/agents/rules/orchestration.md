@@ -22,4 +22,4 @@ Select an available runtime/model through the host's supported configuration. If
 
 ## PR and release boundary
 
-Use a short-lived branch and a pull request into `main`. Run applicable checks, include the all-ADR compliance assessment, and obtain independent review. Follow P-005 for Leo's personal review and default native squash auto-merge, and P-006 for release authorization. A task withholding merge authorization keeps its PR unarmed. CI, agent findings and provider configuration do not authorize manual production operations. Use the repository protocol for shipping work.
+Use a short-lived branch and a pull request into `main`. Run applicable checks, include the ADR Check for the touched domains (P-003), and obtain independent review. Follow P-005 for Leo's personal review and default native squash auto-merge, and P-006 for release authorization. A task withholding merge authorization keeps its PR unarmed. CI, agent findings and provider configuration do not authorize manual production operations. Use the repository protocol for shipping work.

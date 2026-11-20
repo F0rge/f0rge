@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { ROOT, MANIFEST, ROLE_IDS, loadManifest, validateManifest, globRegex, route, generate, adapterContents, checkAdapters, checkAdrReferences, checkLiveCallers, check, repositoryFiles, skillLinks } from './agents.mjs';
+import { ROOT, MANIFEST, ROLE_IDS, loadManifest, validateManifest, globRegex, route, generate, adapterContents, checkAdapters, checkAdrReferences, checkLiveCallers, check, repositoryFiles, skillLinks, adrsFor } from './agents.mjs';
 
 const manifest = loadManifest();
 const fixtures = JSON.parse(readFileSync(new URL('./routing-fixtures.json', import.meta.url), 'utf8'));
@@ -28,6 +28,32 @@ test('ordered primary routing and independently accumulated reviewers', async (t
     for (const reviewer of item.reviewers) assert.ok(result.reviewers.includes(reviewer), `Missing ${reviewer}`);
     assert.equal(result.reviewers.length, new Set(result.reviewers).size);
   });
+});
+
+test('the pr skill keeps its F0rge ADR Check', () => {
+  // `npx skills update` silently restores upstream's template; this fails until the ADR Check is re-added.
+  const skill = readFileSync(join(ROOT, '.agents/skills/pr/SKILL.md'), 'utf8');
+  assert.ok(skill.includes('## ADR Check') && skill.includes('scripts/agents/agents.mjs adrs'));
+});
+
+test('adrs lists only the touched domains, once each, in index order', () => {
+  const ids = (paths) => adrsFor(manifest, paths).map((adr) => adr.id);
+  const backend = ids([route(manifest, 'apps/marrow/backend/app/main.py').path]);
+  const filesFor = (path) => [...new Set(adrsFor(manifest, [path]).map((adr) => adr.file))].sort();
+  const routed = route(manifest, 'apps/marrow/backend/app/main.py');
+  const expected = (routed.reviewers.includes('f0rge-security') ? [routed.owner, 'f0rge-security'] : [routed.owner])
+    .flatMap((id) => manifest.roles.find((role) => role.id === id).adrFiles).sort();
+  assert.deepEqual(filesFor('apps/marrow/backend/app/main.py'), expected);
+  // Security-sensitive paths owned by another domain still bring the security ADRs.
+  for (const path of ['libs/backend/db/f0rge_db/rls.py', 'apps/marrow/backend/migrations/versions/001_x.py']) {
+    if (route(manifest, path).reviewers.includes('f0rge-security')) assert.ok(filesFor(path).includes('docs/adr/security.md'), path);
+  }
+  assert.ok(backend.length > 0 && backend.length < 66);
+  const both = ids(['apps/marrow/backend/app/main.py', 'apps/marrow/backend/app/main.py', '.github/workflows/ci.yml']);
+  assert.equal(new Set(both).size, both.length);
+  assert.ok(backend.every((id) => both.includes(id)));
+  assert.deepEqual(filesFor('.github/workflows/ci.yml'), ['docs/adr/delivery.md', 'docs/adr/security.md']);
+  assert.throws(() => adrsFor(manifest, ['unclassified/zzz.unknown']), /Unclassified path/);
 });
 
 test('every current tracked or non-ignored repository path has an explicit classification', () => {

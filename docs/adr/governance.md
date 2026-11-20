@@ -34,12 +34,12 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 
 ## P-003
 
-- **Policy status:** Accepted
+- **Policy status:** Accepted (amended by Leo’s 20 November 2026 request)
 - **Temporary ID:** P-003
 - **Category:** Governance
-- **Decision:** Every PR to main includes an ALL-ADR compliance checklist, with statuses and justified exceptions.
-- **Proposed enforcement (not installed):** Generate a complete appendix from the register for every main PR using [the PR process](../agents/pr-process.md), with distinct review and compliance status, existing gaps, evidence and reasons. An impacted-ADR summary may precede it, never replace it.
-- **Gate and limit:** PR gate: adr-coverage verifies every current ADR appears and exceptions are valid. Checking a box is not proof; link real test/review evidence.
+- **Decision:** Every PR to main includes an ADR Check covering only the ADRs of the domains it touches: the ADR files of the owning role of each changed path (`node scripts/agents/agents.mjs adrs`), each with a compliance status and reason; exceptions need Leo's approval. The PR body follows the `pr` skill.
+- **Proposed enforcement (not installed):** A PR check that the ADR Check lists exactly the IDs `agents.mjs adrs` prints for the PR's changed files.
+- **Gate and limit:** PR gate (proposed): adr-coverage verifies the touched-domain ADRs appear and exceptions are valid. Checking a box is not proof; link real test/review evidence.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** Ruleset main-pr-gate required_status_checks contexts ci and playwright smoke. No ADR appendix job.
 - **Implementation:** Pending. This record does not claim the decision is built.
 - **Assessment label:** gap (read-only assessment, not a gate).
@@ -67,7 +67,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Category:** Governance
 - **Decision:** Independent agent review and required CI accompany Leo's personal review of the code. Leo is the sole required code owner. Agent-prepared PRs default to GitHub's native automatic squash merge after his approval and all GitHub requirements pass; another merge confirmation is not required unless the task withholds merge authorization.
 - **Amendment (15 November 2026):** Leo requested removal of Luis from required approvers and automatic squash merging after Leo's review. This replaces the earlier blanket prohibition on auto-merge. App-authored PRs let Leo review without being their author; agents never submit the required human approval through Leo's account.
-- **Enforcement:** The App authors the PR; the existing authorized GitHub CLI identity requests native squash auto-merge with the expected current head checked when arming it. Effective protected-main rules must require Leo's code-owner review, dismiss stale approvals when reviewable code changes, require successful checks and resolved threads, and allow no bypass. Independent review receives the diff, complete ADR assessment and test evidence; CI independently computes mechanical results. The publisher App remains separate and cannot push or merge contents.
+- **Enforcement:** The App authors the PR; the existing authorized GitHub CLI identity requests native squash auto-merge with the expected current head checked when arming it. Effective protected-main rules must require Leo's code-owner review, dismiss stale approvals when reviewable code changes, require successful checks and resolved threads, and allow no bypass. Independent review receives the diff, the touched-domain ADR Check and test evidence; CI independently computes mechanical results. The publisher App remains separate and cannot push or merge contents.
 - **Gate and limit:** The head check applies when auto-merge is armed, not an immutable lease on its eventual merge SHA. GitHub may retain approval for unchanged-diff rebases or empty commits; do not promise fresh review after every SHA change. Native GitHub requirements govern the queued merge. Activation requires the global sole-owner file on protected `main` and verified settings/rules; source policy and a working bot alone do not establish it. AI review never substitutes for Leo's personal review. Production authorization remains governed by P-006.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** CI aggregate job ci. No required human or independent-reviewer check. No CODEOWNERS file.
 - **Implementation:** Publisher identity and human-review smoke are verified separately from the prepared ownership/default-merge changes; activation evidence belongs in the [publisher guide](../agents/github-publisher.md). This policy amendment does not arm any PR for merging.

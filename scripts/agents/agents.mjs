@@ -255,6 +255,20 @@ export function checkLiveCallers(manifest, paths, root = ROOT) {
   return errors;
 }
 
+// ADRs for the domains a change touches, in index order: each changed path's owning role, plus
+// security when it is a required reviewer (auth, permissions, tenancy, secrets, migrations).
+// Other reviewers are left out so cross-cutting governance review doesn't pull every ADR into every PR.
+export function adrsFor(manifest, paths, root = ROOT) {
+  const roleIds = new Set(paths.flatMap((path) => {
+    const routed = route(manifest, path);
+    return routed.reviewers.includes('f0rge-security') ? [routed.owner, 'f0rge-security'] : [routed.owner];
+  }));
+  const files = new Set(manifest.roles.filter((role) => roleIds.has(role.id)).flatMap((role) => role.adrFiles));
+  const index = [...read(root, 'docs/adr/README.md').matchAll(/^\| ([PC]-\d{3}) \| ([^|]+?) \|/gmu)].map((match) => ({ id: match[1], title: match[2] }));
+  const fileOf = new Map([...files].flatMap((file) => [...read(root, file).matchAll(/^## ([PC]-\d{3})\s*$/gmu)].map((match) => [match[1], file])));
+  return index.filter((adr) => fileOf.has(adr.id)).map((adr) => ({ ...adr, file: fileOf.get(adr.id) }));
+}
+
 export function check(manifest, root = ROOT, paths = repositoryFiles(root)) {
   validateManifest(manifest, root);
   const instructionPaths = [...new Set([manifest.protocol, ...manifest.roles.map((role) => role.profile), ...paths.filter((path) => matches(path, manifest.liveCallerPatterns))])];
@@ -278,7 +292,10 @@ function main() {
   } else if (command === 'route' && paths.length > 0) {
     validateManifest(manifest);
     console.log(JSON.stringify(paths.map((path) => route(manifest, path)), null, 2));
-  } else throw new Error('Usage: node scripts/agents/agents.mjs generate|check|route <repo-relative-path...>');
+  } else if (command === 'adrs' && paths.length > 0) {
+    validateManifest(manifest);
+    for (const adr of adrsFor(manifest, paths)) console.log(`| [${adr.id} — ${adr.title}](https://github.com/F0rge/f0rge/blob/main/${adr.file}#${adr.id.toLowerCase()}) | | |`);
+  } else throw new Error('Usage: node scripts/agents/agents.mjs generate|check|route|adrs <repo-relative-path...>');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

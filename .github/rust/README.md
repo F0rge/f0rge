@@ -122,6 +122,6 @@ contracts, Primer UI, ARM64 runtime correctness or release compliance. Gate chan
 published or promoted, and no provider credential is used.
 
 Before app adoption, complete its approved brief and the current P-010 sequencing.
-Every PR uses [the PR process](../../docs/agents/pr-process.md), including the
-full named ADR assessment with actual gaps. Release authorization follows P-006;
+Every PR body uses the [`pr` skill](../../.agents/skills/pr/SKILL.md), including
+its ADR Check for the touched domains, with actual gaps. Release authorization follows P-006;
 review and automatic squash merging follow P-005.
