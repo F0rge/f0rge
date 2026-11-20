@@ -12,18 +12,30 @@ holds role metadata and ordered routing rules. `docs/agents/protocol.md` supplie
 the shared brief; `docs/agents/profiles/` holds the role bodies. Keep instruction
 changes in those sources and regenerate the adapters.
 
-Codex is the supported repository coding harness. The generator writes eight
-`.codex/agents/f0rge-*.toml` profiles; shared skills remain under `.agents/skills/`.
+Codex and Claude Code are the supported repository coding harnesses, and they get an
+identical setup:
+
+| | Source (edit here) | Codex reads | Claude Code reads |
+| --- | --- | --- | --- |
+| Instructions | `AGENTS.md` (+ nested) | `AGENTS.md` | `AGENTS.md` (native; no `CLAUDE.md`) |
+| Roles | `manifest.json` + `protocol.md` + `profiles/` | `.codex/agents/f0rge-*.toml` | `.claude/agents/f0rge-*.md` |
+| Skills | `.agents/skills/` | `.agents/skills/` | `.claude/skills/*` (symlinks) |
+
+Only the file format differs, because each harness reads its own native format. `npm run
+agents:generate` writes both role formats and the skill links; `npm run agents:check` (CI)
+fails on drift, a missing link or a Claude-only skill; `npm run agents:test` asserts each
+role's Codex and Claude instructions are byte-identical.
 
 The generator embeds the shared protocol and selected profile body. References
 inside them are literal repository-root-relative paths so they retain their
-meaning in the Codex profiles. Edit the source, not an embedded generated copy.
+meaning in every generated profile. Edit the source, not an embedded generated copy.
 The manifest is repository metadata, not a native tool permission configuration.
 No model or provider is selected by these profiles.
 
-The native format is documented by [Codex](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+The native formats are documented by [Codex](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+and [Claude Code](https://code.claude.com/docs/en/sub-agents).
 The shared Markdown sources and routing manifest are repository conventions;
-Codex profile discovery and the available delegation tools belong to the host.
+profile discovery and the available delegation tools belong to the host.
 
 ## Routing and handoffs
 
@@ -92,10 +104,10 @@ consistency, valid references, generated output and routing cases. They do not
 prove that a native harness discovered or invoked a profile, that its worker
 followed every instruction, or that the accepted ADRs are implemented.
 
-Use Codex’s supported discovery/invocation mechanism in a fresh repository session. Dispatch a read-only task to a generated
+Use the harness’s supported discovery/invocation mechanism in a fresh repository session. Dispatch a read-only task to a generated
 role, confirm which profile was selected, and record the invocation, observed
 result and any unavailable capability. Keep this native smoke evidence separate
-from generator tests. An unavailable Codex smoke is reported as not run,
+from generator tests. An unavailable native smoke is reported as not run,
 not replaced by a successful file scan.
 
 Instruction-only changes need these checks and independent review. App behavior

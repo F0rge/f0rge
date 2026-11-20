@@ -84,3 +84,6 @@ apps/environment-monitor/**/*.csv
 apps/environment-monitor/**/.env
 apps/environment-monitor/**/.env.*
 apps/environment-monitor/**/data/
+
+# Claude Code (per-user)
+.claude/settings.local.json

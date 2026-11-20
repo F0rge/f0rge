@@ -23,7 +23,7 @@ The required contexts `ci` and `playwright smoke` are the current ruleset names.
 Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. P-005 governs review/merge and P-006 governs release authorization; a no-merge task leaves its PR unarmed.
 
 - **Trunk-based development.** Everyone integrates into `main` continuously.
-- **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches may keep their tool prefix (`codex/…`). Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
+- **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches (Codex or Claude Code) use `codex/…`, the only namespace the PR publisher accepts. Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
 - **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
 - **Native automatic squash merge** follows P-005, with a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
 - **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check; release authorization follows P-006.

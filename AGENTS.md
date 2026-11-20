@@ -1,6 +1,6 @@
 # F0rge — Agent Instructions
 
-This is the repository entry point for Codex. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
+This is the repository entry point for Codex and Claude Code. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
 
 Personal Nx monorepo for Marrow, Firstout, DasKasas storefront and tag printer, Buycycle, Environment Monitor, and Airflow.
 
@@ -76,7 +76,7 @@ DasKasas public storefront and Medusa commerce service. Nx projects: `daskasas-w
 Do not open a `develop` branch workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Pull requests go to `main`. Follow P-005 for review/merge and P-006 for release authorization.
 
 - **Trunk-based development.** Everyone integrates into `main` continuously.
-- **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Codex-created branches use `codex/<short-kebab-description>`. Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
+- **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches (Codex or Claude Code) use `codex/<short-kebab-description>`, the only namespace the PR publisher accepts. Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
 - **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
 - **Automatic squash merge** follows P-005 after Leo's review and all GitHub requirements pass, unless the task withholds merge authorization. Use a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
 - **Committed deploy files name `main`.** They describe Railway services (Marrow, Firstout, DasKasas) and Coolify for dk. That is not a live check. Firstout releases only through its dedicated P-006 CD path; a merge does not authorize other production operations.
@@ -139,7 +139,7 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 ## Nx conventions
 
-Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Codex review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
+Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Agent review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
 
 Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. Build/test plumbing alone does not prove app or release compliance. P-010 now sequences the authorized Buycycle migration before the later holiday-explorer pilot.
 
@@ -159,7 +159,7 @@ Read the applicable Markdown rules explicitly before planning or changing files.
 | [qa-gate](docs/agents/rules/qa-gate.md) | Before preparing any PR or verifying a feature; tests, `libs/**`, workflows |
 | [data-pipelines](docs/agents/rules/data-pipelines.md) | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
-Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/dk/tag-printer/AGENTS.md` and `libs/ui/AGENTS.md`). A generated Codex profile does not load scoped rules automatically; read the files selected by the table above.
+Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/dk/tag-printer/AGENTS.md` and `libs/ui/AGENTS.md`). A generated Codex or Claude Code profile does not load scoped rules automatically; read the files selected by the table above.
 
 ## Sub-agents
 
@@ -181,7 +181,7 @@ Before opening or replacing a PR, follow [the GitHub publisher guide](docs/agent
 
 Review playbooks live in `docs/agents/review-context/`. Read `_shared/*.md` plus the existing area playbooks selected by the [agent guide's review-reference mapping](docs/agents/README.md). Their historical filenames remain stable; they are review references, not another ownership map or proof of automatic loading.
 
-Read the [Codex PR review checklist](docs/agents/review-checklist.md) explicitly. It holds Nx gates and legacy UI kit import bans; area playbooks point to it instead of depending on an external review bot.
+Read the [agent PR review checklist](docs/agents/review-checklist.md) explicitly. It holds Nx gates and legacy UI kit import bans; area playbooks point to it instead of depending on an external review bot.
 
 ## Task learnings
 
