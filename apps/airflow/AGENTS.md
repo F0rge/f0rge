@@ -2,7 +2,7 @@
 
 # Airflow — Agent Instructions
 
-> **Inventory, not a work order.** Use the `main`-only workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. The `airflow`, `marrow_dev`, and `dk` bundles below still set `tracking_ref: develop` in `docker-compose.yml`. That is read-only inventory. Do not repoint the live scheduler from this document.
+> **Inventory, not a work order.** Use the `main`-only workflow. A remote `develop` ref may still exist; it is not an approved long-lived branch. Do not open pull requests against it, and do not delete the ref or its ruleset from this file. The `airflow` and `marrow_dev` bundles below still set `tracking_ref: develop` in `docker-compose.yml`. That is read-only inventory. Do not repoint the live scheduler from this document.
 
 The text below documents the shared Airflow 3 compose layout on the Pi. Airflow lives on the Pi and Railway Apps reach it over a secure connection (decided 20 November 2026; its ADR is a separate change). It runs by hand, outside Coolify and the CI/CD pipeline; a merge does not release it. Do not treat this file as permission to SSH, redeploy, or share app databases.
 
@@ -18,7 +18,6 @@ CeleryExecutor + Redis. DAGs come from GitHub via **GitDagBundle** (not host bin
 | `scripts/status.sh` | Stack health: compose ps, stats, redis, celery ping, API |
 | `scripts/scale-workers.sh` | Scale celery workers `1\|2\|3` |
 | `apps/marrow/dags` | Marrow-owned DAGs (`marrow_*`) — GitDagBundles `marrow_dev` (@ develop) and `marrow_prod` (@ main) |
-| `apps/dk/dags` | dk-owned DAGs (`dk_*`) — GitDagBundle `dk` |
 
 ## Boot (rpi)
 
@@ -51,7 +50,7 @@ A plain `docker compose up -d` resets workers to **1** unless you pass `--scale 
 
 1. Merge DAG Python under `apps/<app>/dags/` with the right `dag_id` prefix.
 2. dag-processor GitDagBundle fetches `https://github.com/F0rge/f0rge.git` about every **60s**.
-3. Four bundles, same repo, different `subdir` / `tracking_ref`: `airflow` → `apps/airflow/dags` @ `develop`, `marrow_dev` → `apps/marrow/dags` @ `develop`, `marrow_prod` → `apps/marrow/dags` @ `main`, `dk` → `apps/dk/dags` @ `develop`.
+3. Three bundles, same repo, different `subdir` / `tracking_ref`: `airflow` → `apps/airflow/dags` @ `develop`, `marrow_dev` → `apps/marrow/dags` @ `develop`, `marrow_prod` → `apps/marrow/dags` @ `main`.
 4. Meal classify `dag_id`s must differ (`marrow_classify_meal_dev` vs `_prod`) so both clones can load. Env (S3 conn + Marrow URL/token) is derived from the clone path, not a process env var.
 5. Repo is **public** — no deploy key / PAT. If it becomes private, add an Airflow `git` connection (`AIRFLOW_CONN_GIT_DEFAULT`) and `git_conn_id` on each bundle.
 
@@ -60,7 +59,7 @@ No `git pull` on the Pi for DAGs. Compose/env changes still need a copy onto the
 ## DAG ownership
 
 - Platform owns the runtime; apps own DAG Python under `apps/<app>/dags/`.
-- `dag_id` **must** be prefixed: `airflow_*`, `marrow_*`, `dk_*`.
+- `dag_id` **must** be prefixed: `airflow_*` or `marrow_*`.
 - Extra providers (OpenRouter, common-ai, …) belong in a **follow-up image layer** only when a consumer DAG needs them — not in the base platform image.
 
 ## Consumption contract (no client lib yet)

@@ -168,7 +168,6 @@
         "**/docker-compose.local*.yaml",
         "**/compose.test*.yml",
         "**/compose.test*.yaml",
-        "apps/dk/tag-printer/docker-compose.yml",
         "apps/firstout/backend/scripts/local_storefront_fixture.py",
         "apps/storefront/web/scripts/**",
         "apps/storefront/commerce/scripts/verify-live.mjs",
@@ -275,7 +274,6 @@
     },
     {
       "patterns": [
-        "apps/dk/tag-printer/backend/app/models/**",
         "apps/environment-monitor/backend/models/**"
       ],
       "owner": "f0rge-backend",
@@ -305,7 +303,6 @@
       "patterns": [
         "libs/ui/**",
         "apps/*/frontend/**",
-        "apps/dk/tag-printer/frontend/**",
         "apps/storefront/web/**",
         "apps/marrow/ios/**",
         "apps/firstout/.superdesign/**",
@@ -331,7 +328,6 @@
         "libs/backend/db/**",
         "libs/backend/storage/**",
         "apps/*/backend/**",
-        "apps/dk/tag-printer/backend/**",
         "apps/storefront/commerce/**"
       ],
       "owner": "f0rge-backend",
@@ -341,7 +337,6 @@
       "patterns": [
         "apps/*/docs/**",
         "apps/*/CONTEXT.md",
-        "apps/dk/tag-printer/FOLLOWUPS.md",
         "apps/storefront/*.md"
       ],
       "owner": "f0rge-quality-testing",
@@ -395,7 +390,6 @@
       "patterns": [
         "libs/backend/**",
         "apps/*/backend/**",
-        "apps/dk/tag-printer/backend/**",
         "apps/storefront/commerce/**"
       ],
       "reviewers": [
@@ -406,7 +400,6 @@
       "patterns": [
         "libs/ui/**",
         "apps/*/frontend/**",
-        "apps/dk/tag-printer/frontend/**",
         "apps/storefront/web/**",
         "apps/marrow/ios/**"
       ],

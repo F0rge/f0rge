@@ -2,7 +2,7 @@
 
 # Firstout — Agent Instructions
 
-Gauteng furniture retailer back office (stock, books, till). Sibling app next to Marrow and dk. **Never** nest this under `apps/marrow/`. **Never** a new repo.
+Gauteng furniture retailer back office (stock, books, till). Sibling app next to Marrow. **Never** nest this under `apps/marrow/`. **Never** a new repo.
 
 Use the repository [agent guide](../../docs/agents/README.md) and [shared protocol](../../docs/agents/protocol.md). From the repo root, run `node scripts/agents/agents.mjs route <repo-relative-path...>` for the primary and reviewers. The [manifest](../../docs/agents/manifest.json) owns routing, including model/migration, server-contract, test-harness and runtime-infrastructure exceptions.
 
@@ -11,7 +11,7 @@ Use the repository [agent guide](../../docs/agents/README.md) and [shared protoc
 - **This app uses IBM Carbon (`@carbon/react`, `@carbon/styles`, `@carbon/icons-react`).**
 - Do **not** import `@f0rge/ui`, `@f0rge/ui/forms`, or `@f0rge/ui/api`.
 - Do **not** put Carbon in `libs/ui`. Do **not** run `add-ui-primitive` for Firstout.
-- Preserve Firstout's current Carbon integration for maintenance. Marrow and dk retain their current `ui-kit.mdc` rules. These legacy choices are not approved exceptions to the Primer ADR and do not authorize a migration.
+- Preserve Firstout's current Carbon integration for maintenance. Marrow follows its [UI kit rules](../../docs/agents/rules/ui-kit.md). These legacy choices are not approved exceptions to the Primer ADR and do not authorize a migration.
 - Superdesign: try the Superdesign plugin first for frontend/UI. If the CLI reports credits/quota/paywall/auth failure, skip the canvas, implement Carbon, and record that in the PR. Do not invent extra retries.
 
 ## Stack
@@ -29,7 +29,7 @@ Use the repository [agent guide](../../docs/agents/README.md) and [shared protoc
 | Frontend | `:3003` |
 | Postgres | `:5433` |
 
-Do not use Marrow `:8000/:3000` or dk `:8002/:3002`.
+Do not use Marrow `:8000/:3000`.
 
 ## Own database
 

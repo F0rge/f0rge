@@ -38,11 +38,6 @@
         "libs/backend/storage/src",
         "libs/backend/testing/src"
       ]
-    },
-    {
-      "root": "apps/dk/tag-printer/backend",
-      "pythonVersion": "3.11",
-      "extraPaths": ["apps/dk/tag-printer/backend"]
     }
   ]
 }

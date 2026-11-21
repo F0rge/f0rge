@@ -35,4 +35,4 @@ Implementation detail: `docs/agents/rules/nx.md`. Block on the following when re
 2. **New shadcn primitive under `apps/**/components/ui`** — add to `libs/ui` instead.
 3. **New `CompactStepper`-style fork** instead of `@f0rge/ui` `Stepper` (`libs/ui/src/components/ui/stepper.tsx`).
 4. **New primitive in `libs/ui` without a Storybook story** — when `libs/ui/.storybook` exists (skip until Storybook is set up).
-5. **Brand tokens (`--marrow-*`, `--dk-*`) inside `libs/ui` TSX** — brand vars live in `libs/ui/src/styles/skins/` only.
+5. **Brand tokens (`--marrow-*`) inside `libs/ui` TSX** — brand vars live in `libs/ui/src/styles/skins/` only.

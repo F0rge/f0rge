@@ -9,7 +9,6 @@ Personal Nx monorepo. Each app owns its business rules and data; reusable infras
 | Marrow health check-in | `apps/marrow/` | `marrow-backend`, `marrow-frontend`, `marrow-ios` |
 | Firstout back office | `apps/firstout/` | `firstout-backend`, `firstout-frontend` |
 | DasKasas storefront | `apps/storefront/` | `daskasas-commerce`, `daskasas-web` |
-| DasKasas tag printer | `apps/dk/tag-printer/` | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 | Environment Monitor | `apps/environment-monitor/` | `environment-monitor-backend`, `environment-monitor-frontend` |
 | Workflow orchestration | `apps/airflow/` | `airflow` |
 | Shared backend packages | `libs/backend/{core,db,storage,testing}/` | `f0rge-core`, `f0rge-db`, `f0rge-storage`, `f0rge-testing` |

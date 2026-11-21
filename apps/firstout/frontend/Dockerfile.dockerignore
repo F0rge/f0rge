@@ -7,10 +7,6 @@
 !apps/marrow/
 !apps/marrow/frontend/
 !apps/marrow/frontend/package.json
-!apps/dk/
-!apps/dk/tag-printer/
-!apps/dk/tag-printer/frontend/
-!apps/dk/tag-printer/frontend/package.json
 !apps/storefront/
 !apps/storefront/commerce/
 !apps/storefront/commerce/package.json

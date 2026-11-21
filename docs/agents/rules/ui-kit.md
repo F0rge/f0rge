@@ -6,7 +6,7 @@ This package is the legacy shared kit for existing apps (shadcn-style primitives
 
 ## Four layers (never skip or fork)
 
-1. **Tokens** — semantic map in `libs/ui/src/styles/tokens.css`; brand skins in `libs/ui/src/styles/skins/*.css`. Apps `@import` a skin from `globals.css`. Brand vars (`--marrow-*`, `--dk-*`) live in skin CSS only — never in TSX.
+1. **Tokens** — semantic map in `libs/ui/src/styles/tokens.css`; brand skins in `libs/ui/src/styles/skins/*.css`. Apps `@import` a skin from `globals.css`. Brand vars (`--marrow-*`) live in skin CSS only — never in TSX.
 2. **Composition** — app screens and domain widgets (Bristol grid, meal chips, symptom picker).
 3. **Wrappers** — `libs/ui/src/components/ui/*`; engines stay inside this package.
 4. **Documented overrides** — `libs/ui/src/styles/extras.css` only; never edit `node_modules` or fork engine internals.
@@ -17,7 +17,7 @@ Apps import **only**:
 
 - `@f0rge/ui` — primitives, `cn`, date formatters, hooks
 - `@f0rge/ui/forms` — labeled data-entry (Mantine wrappers)
-- `@f0rge/ui/api` — marrow API client only; dk keeps its own axios client
+- `@f0rge/ui/api` — Marrow API client
 
 **Never** in `apps/**`:
 
@@ -34,7 +34,7 @@ Apps import **only**:
 ## Tokens in components
 
 - **Lib components:** semantic tokens only (`bg-primary`, `text-muted-foreground`, `var(--primary)`).
-- **Brand vars:** `--marrow-*`, `--dk-*` only in app CSS skins — never inside `libs/ui` TSX.
+- **Brand vars:** `--marrow-*` only in app CSS skins — never inside `libs/ui` TSX.
 
 ## Forms
 

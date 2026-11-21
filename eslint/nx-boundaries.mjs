@@ -20,10 +20,6 @@ const boundaryRule = {
           onlyDependOnLibsWithTags: ["scope:shared", "scope:marrow"],
         },
         {
-          sourceTag: "scope:dk",
-          onlyDependOnLibsWithTags: ["scope:shared", "scope:dk"],
-        },
-        {
           sourceTag: "scope:firstout",
           onlyDependOnLibsWithTags: ["scope:shared", "scope:firstout"],
         },

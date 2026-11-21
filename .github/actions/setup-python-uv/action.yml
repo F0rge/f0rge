@@ -1,5 +1,5 @@
 name: Setup Python uv
-description: uv with Python 3.10 (default) and 3.11 (projects with a .python-version, such as Marrow, Firstout and dk tag-printer)
+description: uv with Python 3.10 (default) and 3.11 (projects with a .python-version, such as Marrow and Firstout)
 
 runs:
   using: composite

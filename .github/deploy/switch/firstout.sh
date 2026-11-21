@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time switch of Firstout (Railway) to Releases by cd.yml. Order of use: 5 of 5.
+# One-time switch of Firstout (Railway) to Releases by cd.yml. Order of use: 4 of 4.
 # Firstout's services already run images; this moves it to the shared path and its own environment.
 #   .github/deploy/switch/firstout.sh
 APP=firstout

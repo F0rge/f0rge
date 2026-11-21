@@ -177,7 +177,7 @@
           <tr><td>RLS today</td><td><span class="path">register_rls_hook()</span> sets <span class="path">app.user_id</span> from <span class="path">f0rge_db</span>. Firstout migrations have no <span class="path">ENABLE ROW LEVEL SECURITY</span>.</td></tr>
           <tr><td>Railway</td><td>Project <span class="path">Firstout</span>. Live environment named <span class="path">production</span>. <span class="path">firstout-api</span> at <span class="path">api.firstout.co.za</span>; frontend at <span class="path">firstout.co.za</span> and <span class="path">www.firstout.co.za</span>. Leo has since added Railway Pro (his words, 6 Nov 17:45). This document treats Pro as chosen; it does not itself change Railway.</td></tr>
           <tr><td>Migrations</td><td>001 through 078 (<span class="path">078_password_reset</span>).</td></tr>
-          <tr><td>Printing</td><td>In-browser SKU and bin labels (JsBarcode + <span class="path">printHtml</span>). Not the DasKasas tag-printer.</td></tr>
+          <tr><td>Printing</td><td>In-browser SKU and bin labels (JsBarcode + <span class="path">printHtml</span>).</td></tr>
         </tbody>
       </table>
       <p>Cin7 import, payment-reminder ticker, WhatsApp webhook, and object storage behave as described in the 6 Nov draft: global one-job Cin7 lock, detached workers with no tenant context, storage prefix <span class="path">firstout</span>, uploads at <span class="path">cin7-imports/{id}.zip</span>.</p>
@@ -497,7 +497,7 @@
 
     <section id="labels">
       <h2>16. Tag and label printing</h2>
-      <p>Unchanged: Firstout prints SKU and bin labels in the browser (<span class="path">sku-label-print.ts</span>, <span class="path">print-bin-labels.ts</span>, <span class="path">print-html.ts</span>). Per-tenant setup is label size and which fields/logo to show, stored on <span class="path">team_settings</span>. Do not route tenants through DasKasas (<span class="path">apps/dk/tag-printer</span>, no auth, no database).</p>
+      <p>Firstout prints SKU and bin labels in the browser (<span class="path">sku-label-print.ts</span>, <span class="path">print-bin-labels.ts</span>, <span class="path">print-html.ts</span>). Per-tenant setup is label size and which fields/logo to show, stored on <span class="path">team_settings</span>.</p>
     </section>
 
     <section id="testing">

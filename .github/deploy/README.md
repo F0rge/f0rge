@@ -46,7 +46,7 @@ The block also carries what CI needs to build and check the Artifact: `check.por
 gh workflow run cd.yml -f app=<app> -f commit=<sha>
 ```
 
-Use it for a first Release, a redeploy or a rollback. `<app>` is `firstout`, `marrow`, `daskasas`, `dk` or `envmon`. `<sha>` is a full commit that CI built on `main`; the run fails if any of the App's Artifacts is missing at that commit. The App's GitHub environment holds its tokens and shows its deploy history.
+Use it for a first Release, a redeploy or a rollback. `<app>` is `firstout`, `marrow`, `daskasas` or `envmon`. `<sha>` is a full commit that CI built on `main`; the run fails if any of the App's Artifacts is missing at that commit. The App's GitHub environment holds its tokens and shows its deploy history.
 
 Rolling back by hand across a migration runs the older commit's `preDeployCommand` against the newer schema. If that fails, the Release fails and each service is put back on the image it ran before.
 
@@ -56,7 +56,7 @@ Each App is switched once, by Leo: the Host is pointed at images, and the token 
 
 The first `main` run after this pipeline merges tries to release every App. Each App that is not yet switched fails closed, and later runs on `main` retry it until every App is green.
 
-Order: dk tag printer, environment monitor, DasKasas storefront, Marrow, Firstout. Storefront and Marrow must be switched before 1 December 2026, when Railway stops reading config files from the repo.
+Switch Environment Monitor first, followed by the DasKasas storefront, Marrow and Firstout. Storefront and Marrow must be switched before 1 December 2026, when Railway stops reading config files from the repo.
 
 ## Accepted ceilings
 
