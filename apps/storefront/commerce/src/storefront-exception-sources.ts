@@ -75,7 +75,11 @@ export async function paystackSourceRows(db: Knex): Promise<{
   return { attempts: rows[0], inbox: rows[1], refunds: rows[2] };
 }
 
-/** Classifies one stored Paystack attempt for the exception scan. */
+/**
+ * Classifies one stored Paystack attempt for the exception scan. Attempts
+ * Paystack itself reported as declined or abandoned are confirmed non-payments
+ * and raise nothing, even after automatic checks stop.
+ */
 export function paystackAttemptFinding(row: Record<string, unknown>, orderIds: Set<unknown>, now: number): {
   kind: "missing_operational_paid_order" | "unknown_payment"; explanation: string; extra: Partial<ExceptionObservation>;
 } | null {

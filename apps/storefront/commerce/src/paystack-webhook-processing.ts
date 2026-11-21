@@ -202,8 +202,12 @@ export async function processClaimedPaystackObservation(container: Container, db
     if (state !== "paid") {
       const status = state === "declined" ? PaymentSessionStatus.ERROR : PaymentSessionStatus.PENDING;
       await setSessionStatus(status);
+      // Keep Paystack's own "abandoned" (the customer left the hosted page) apart
+      // from in-progress pending: like declined, it is a confirmed non-payment
+      // that is still re-checked but never raised as an uncertain payment.
       await updatePaystackAttempt(db, attempt.id, {
-        status: state, last_event_timestamp: event.event_timestamp, last_event_state: state,
+        status: event.provider_status === "abandoned" ? "abandoned" : state,
+        last_event_timestamp: event.event_timestamp, last_event_state: state,
         ...(event.transaction_id ? { transaction_id: event.transaction_id } : {}),
       });
       await completePaystackObservation(db, event.id, event.lease_token, state === "unknown" ? "ignored" : "processed");

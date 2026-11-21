@@ -72,7 +72,7 @@ export type PaystackRefundDispatch = {
 
 // Declined stays open: the hosted page lets the shopper retry another card,
 // and a later success must not be lost if its webhook never arrives.
-const STATUS_CHECK_STATES = ["initiating", "checkout_created", "initiation_unknown", "pending", "unknown", "declined"];
+const STATUS_CHECK_STATES = ["initiating", "checkout_created", "initiation_unknown", "pending", "unknown", "declined", "abandoned"];
 /** Matches Paystack's 72 hour live webhook retry horizon. Older open attempts are left to the exception scan. */
 export const PAYSTACK_STATUS_CHECK_WINDOW_HOURS = 72;
 
@@ -119,10 +119,14 @@ export async function claimPaystackAttemptStatusCheck(db: Knex, id: string, targ
   return changed > 0;
 }
 
-/** A charge observation that Paystack's verify endpoint reported as paid, matching the attempt exactly. */
+/**
+ * A verified paid charge observation for this attempt that our processor is
+ * handling right now. Settled rows (processed, paid_exception, ignored) do not
+ * qualify, so Medusa's payment hooks only succeed inside that processing call.
+ */
 export async function hasVerifiedPaidObservation(db: Knex, attempt: Pick<PaystackAttempt, "reference" | "amount_minor" | "currency_code">): Promise<boolean> {
   const row = await db(PAYSTACK_INBOX_TABLE).where({
-    kind: "charge", reference: attempt.reference, result_state: "paid", currency_code: attempt.currency_code,
+    kind: "charge", reference: attempt.reference, result_state: "paid", currency_code: attempt.currency_code, status: "processing",
   }).where("amount_minor", Number(attempt.amount_minor)).whereNull("deleted_at").first();
   return Boolean(row);
 }

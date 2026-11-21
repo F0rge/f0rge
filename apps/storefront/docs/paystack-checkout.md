@@ -62,8 +62,11 @@ commerce ingress; this change does not modify Railway. Medusa's generic
    declined ones, because Paystack sends webhooks only for successful charges and
    its hosted page lets the shopper retry another card after a decline. It checks
    every minute for the first hour, then every 15 minutes, and stops after 72
-   hours (Paystack's live webhook retry horizon). An attempt still uncertain
-   then becomes a terminal `unknown_payment` exception for staff; their repair
+   hours (Paystack's live webhook retry horizon). Attempts Paystack reported as
+   `failed` or `abandoned` are confirmed non-payments: they are re-checked in that
+   window but never raise an exception. An attempt Paystack never confirmed, or
+   one still `unknown` or `initiation_unknown`, becomes a terminal
+   `unknown_payment` exception for staff when the window ends; their repair
    action re-verifies it regardless of age.
 6. A verified fact enters the durable inbox, deduplicated by its normalized
    content (Paystack has no event ID and re-signs retries). Only a `success`
@@ -71,7 +74,8 @@ commerce ingress; this change does not modify Railway. Medusa's generic
    captures the payment and completes the cart, under the inventory lock. The
    provider's own webhook and authorize methods read only the reference from
    any payload, then require the stored captured attempt and its verified paid
-   observation; amount, currency and state in a body are ignored. A
+   observation while our processor is handling it; amount, currency and state
+   in a body are ignored. A
    mismatched paid amount is kept for staff review and no order is created.
    A success after the hold expired, or after the bag changed, becomes a paid
    exception with the original checkout snapshot.

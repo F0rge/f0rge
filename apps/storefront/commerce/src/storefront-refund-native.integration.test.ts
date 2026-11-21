@@ -8,8 +8,10 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import type { Knex } from "knex";
 import { consumeCapacity, mergeCapacityState, reserveCapacity } from "./made-to-order-capacity";
 import { PAYSTACK_PAYMENT_PROVIDER_ID } from "./paystack-payment-config";
-import { parsePaystackRefund, type PaystackObservation } from "./paystack-checkout";
-import { createPaystackAttempt, updatePaystackAttempt } from "./paystack-payment-store";
+import { parsePaystackRefund, parsePaystackVerifyResponse, type PaystackObservation } from "./paystack-checkout";
+import {
+  claimPaystackObservation, completePaystackObservation, createPaystackAttempt, receivePaystackObservation, updatePaystackAttempt,
+} from "./paystack-payment-store";
 import {
   processClaimedPaystackRefund, syncStorefrontPaystackRefundCommands,
 } from "./storefront-paystack-refunds";
@@ -467,7 +469,17 @@ if (liveTestEnabled) {
               currency_code: "ZAR",
             },
           });
+          // Medusa's payment hooks accept a capture only while the processor
+          // holds the verified paid observation, so stand in for that call.
+          const verified = parsePaystackVerifyResponse({ status: true, data: {
+            id: Number(syntheticPaystackTransactionId), status: "success", reference: captureId, amount: 115000, currency: "ZAR",
+            paid_at: new Date().toISOString(), created_at: new Date().toISOString(),
+          } }, captureId);
+          if (!verified) throw new Error("medusa_native_test_verified_charge_invalid");
+          const inFlight = await claimPaystackObservation(db, (await receivePaystackObservation(db, verified, "status")).id);
+          if (!inFlight) throw new Error("medusa_native_test_verified_charge_not_claimable");
           const payment = await paymentModule.authorizePaymentSession(session.id, {});
+          await completePaystackObservation(db, inFlight.id, inFlight.lease_token, "processed");
           if (!payment || typeof payment.id !== "string") throw new Error("medusa_native_test_capture_create_failed");
           paymentId = payment.id;
           await orderModule.addOrderTransactions([{

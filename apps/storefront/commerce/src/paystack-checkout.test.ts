@@ -197,7 +197,15 @@ describe("Paystack hosted checkout boundary", () => {
     expect(expired?.explanation).toMatch(/stopped after 72 hours/);
     expect(paystackAttemptFinding({ status: "checkout_created", created_at: hoursAgo(80) }, new Set(), now))
       .toMatchObject({ kind: "unknown_payment", extra: { status: "terminal" } });
-    expect(paystackAttemptFinding({ status: "declined", created_at: hoursAgo(80) }, new Set(), now)).toBeNull();
+    // Paystack-confirmed non-payments never alert: not after 5 minutes, not after the window.
+    for (const status of ["declined", "abandoned"]) {
+      for (const hours of [0.2, 2, 80]) expect(paystackAttemptFinding({ status, created_at: hoursAgo(hours) }, new Set(), now)).toBeNull();
+    }
+    // Attempts Paystack never confirmed still alert.
+    expect(paystackAttemptFinding({ status: "checkout_created", created_at: hoursAgo(2) }, new Set(), now))
+      .toMatchObject({ kind: "unknown_payment", extra: { status: "aged" } });
+    expect(paystackAttemptFinding({ status: "unknown", created_at: hoursAgo(80) }, new Set(), now))
+      .toMatchObject({ kind: "unknown_payment", extra: { status: "terminal" } });
     expect(paystackAttemptFinding({ status: "captured", captured_order_id: "order_1", created_at: hoursAgo(1) }, new Set(["order_1"]), now)).toBeNull();
     expect(paystackAttemptFinding({ status: "captured", captured_order_id: null, created_at: hoursAgo(1) }, new Set(), now))
       .toMatchObject({ kind: "missing_operational_paid_order" });
