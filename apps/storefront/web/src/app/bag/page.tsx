@@ -7,12 +7,13 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } fro
 import { BagLine, BagTotals, DELIVERY_NOTE, isHeld, itemCount, promiseDates, useBag } from "@/components/bag";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { purchaseFeedback } from "@/lib/purchase-feedback";
 
 const assurances = [
   { icon: Truck, title: "Delivery", description: "Selected Gauteng areas. The charge is confirmed before payment." },
   { icon: Store, title: "Collection", description: "From our showroom at Bedford Square, Bedfordview." },
-  { icon: RotateCcw, title: "Returns", description: "Change of mind within 30 days of delivery or collection, unused." },
+  { icon: RotateCcw, title: "Returns", description: [RETURNS_SUMMARY.coolingOff, RETURNS_SUMMARY.changeOfMind, currentCustomerPolicies() ? "" : POLICY_DRAFT_NOTICE].join(" ").trim() },
   { icon: UserRound, title: "Guest checkout", description: "No account needed." },
 ];
 

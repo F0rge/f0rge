@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Ban, Clock, Mail, MapPin, PackageX, Phone, Receipt, RefreshCw, Store, Truck, Undo2, type LucideIcon } from "lucide-react";
+import { Ban, CalendarClock, Clock, Mail, MapPin, PackageX, Phone, Receipt, RefreshCw, Store, Truck, Undo2, type LucideIcon } from "lucide-react";
+import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { SHOWROOM } from "@/lib/showroom";
 
 // Rendered per request so the layout's robots meta reads the live indexing switch.
@@ -27,9 +28,10 @@ const columns: { id: string; title: string; items: { icon: LucideIcon; title: st
     id: "returns",
     title: "Returns",
     items: [
-      { icon: RefreshCw, title: "Change of mind", description: "Within 30 days of delivery or collection, if the piece is unused and in the condition it arrived in, with its labels and tags, original packaging and the invoice or delivery note." },
-      { icon: Undo2, title: "How to return", description: "Contact us with your order number before sending anything back, and we agree a collection or drop-off. If we collect a change-of-mind return, we quote the collection fee first; there is no fee if you bring the piece to us. The original delivery charge is not refunded." },
-      { icon: Ban, title: "Not returnable for a change of mind", description: "Bespoke commissions, and pieces personalised or made to a measurement, fabric or finish chosen for your order." },
+      { icon: CalendarClock, title: "Online orders: 7 days to cancel", description: RETURNS_SUMMARY.coolingOff },
+      { icon: RefreshCw, title: "Change of mind", description: RETURNS_SUMMARY.changeOfMind },
+      { icon: Undo2, title: "How to return", description: `${RETURNS_SUMMARY.howToReturn} ${RETURNS_SUMMARY.changeOfMindCosts}` },
+      { icon: Ban, title: "Not returnable for a change of mind", description: RETURNS_SUMMARY.notReturnable },
       { icon: PackageX, title: "Wrong, faulty or not as described", description: "Leave the labels and packaging as they are and tell us straight away. A wrong piece, missing parts or a piece that does not match its description is collected at no charge, and the piece and its delivery charge are refunded. Your rights under the Consumer Protection Act apply to faults." },
     ],
   },
@@ -51,6 +53,7 @@ export default function HelpPage() {
     <div className="mt-10 grid grid-cols-1 gap-12 md:grid-cols-2">
       {columns.map((column) => <section key={column.id} id={column.id} aria-labelledby={`${column.id}-title`} className="space-y-6">
         <h2 id={`${column.id}-title`} className="text-2xl font-bold tracking-tight md:text-3xl">{column.title}</h2>
+        {column.id === "returns" && !currentCustomerPolicies() && <p className="rounded-lg border p-4 text-sm" role="note">{POLICY_DRAFT_NOTICE}</p>}
         {column.items.map(({ icon: Icon, title, description }) => <div key={title} className="flex items-start gap-3">
           <div className="mt-1 rounded-md bg-muted p-2"><Icon aria-hidden="true" className="size-5 text-muted-foreground" /></div>
           <div className="min-w-0">

@@ -94,6 +94,16 @@ test('checkout with delivery reaches the card-payment-unavailable step and relea
   await page.getByLabel('City').fill('Johannesburg')
   await expect(page.getByLabel('Province')).toHaveValue('Gauteng')
   await page.getByLabel('Postal code').fill('2007')
+
+  // CPA s49(4)(b): the important terms are shown above the button that leads to payment, before any payment step exists.
+  const beforeYouPay = page.getByRole('region', { name: 'Before you pay' })
+  await expect(beforeYouPay).toBeVisible()
+  await expect(beforeYouPay).toContainText('Wood, leather and natural fabrics vary')
+  await expect(beforeYouPay.getByRole('link', { name: 'Read our full terms of sale' })).toHaveAttribute('href', '/policies/terms')
+  const pay = page.getByRole('button', { name: 'Continue to payment' })
+  await expect(pay).toHaveAccessibleDescription('By continuing you accept our terms of sale.')
+  expect(await beforeYouPay.evaluate((box, button) => Boolean(box.compareDocumentPosition(button!) & Node.DOCUMENT_POSITION_FOLLOWING), await pay.elementHandle())).toBe(true)
+  await expect(page.getByTestId('card-payment-unavailable')).toHaveCount(0)
   const prepared = page.waitForRequest((request) => request.url().endsWith('/api/checkout/prepare'))
   await page.getByRole('button', { name: 'Continue to payment' }).click()
   expect((await prepared).postDataJSON()).toMatchObject({ fulfillment_type: 'delivery', province: 'Gauteng', city: 'Johannesburg', address_2: 'Bedfordview', postal_code: '2007' })
@@ -109,6 +119,7 @@ test('checkout with delivery reaches the card-payment-unavailable step and relea
 test('checkout with collection shows the showroom and reaches the unavailable step', async ({ page }) => {
   await addToBag(page, chair)
   await page.goto('/bag')
+  await expect(page.getByRole('main')).toContainText(/If you buy online, you may cancel within 7 days.+Our own policy: .+within 30 days after delivery or collection.+Draft for owner and legal review before go-live\./)
   await page.getByRole('main').getByRole('button', { name: 'Continue to checkout' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
   await fillContact(page)

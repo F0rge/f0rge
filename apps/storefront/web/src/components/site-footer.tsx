@@ -7,7 +7,7 @@ import { Wordmark } from "./wordmark";
 const columns = [
   { title: "Shop", links: [{ label: "Shop all", href: "/shop" }, ...SHOP_CATEGORIES.map(({ name, href }) => ({ label: name, href }))] },
   { title: "Help", links: [{ label: "Help", href: "/help" }, { label: "Delivery and collection", href: "/policies/delivery" }, { label: "Returns", href: "/policies/returns" }, { label: "Refunds", href: "/policies/refunds" }] },
-  { title: "Policies", links: [{ label: "Terms and conditions", href: "/policies/terms" }, { label: "Privacy policy", href: "/policies/privacy" }] },
+  { title: "Policies", links: [{ label: "Terms and conditions", href: "/policies/terms" }, { label: "About DasKasas", href: "/policies/terms#business-information" }, { label: "Privacy policy", href: "/policies/privacy" }] },
 ];
 
 const linkClass = "text-sm text-muted-foreground transition-colors hover:text-foreground";

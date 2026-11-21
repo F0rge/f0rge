@@ -6,6 +6,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { Checkbox, Select } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import { BagTotals, DELIVERY_COST, isHeld, money, promiseDates, useBag } from "@/components/bag";
+import { BeforeYouPay, TERMS_ACCEPTANCE_ID } from "@/components/before-you-pay";
 import { PieceImage } from "@/components/piece-image";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
@@ -284,7 +285,8 @@ export default function CheckoutPage() {
 
               {/* Mantine's unlayered button reset makes buttons inherit their font, so the wrapper carries it. */}
               <div className="grid gap-3 text-sm font-medium">
-                <Button type="submit" size="lg" className="h-12 w-full" disabled={busy || bagBusy || !held}>{busy ? "Checking order…" : "Continue to payment"}</Button>
+                <BeforeYouPay />
+                <Button type="submit" size="lg" className="h-12 w-full" aria-describedby={TERMS_ACCEPTANCE_ID} disabled={busy || bagBusy || !held}>{busy ? "Checking order…" : "Continue to payment"}</Button>
                 {!held && <p role="alert" className="font-normal">Your reservation expired. Return to your bag to review and reserve the pieces again.</p>}
               </div>
             </form>}

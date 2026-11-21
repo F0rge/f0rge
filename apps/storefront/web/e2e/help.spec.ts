@@ -11,7 +11,15 @@ test('help covers delivery and collection, returns and contact with the showroom
   const delivery = page.getByRole('region', { name: 'Delivery and collection' })
   await expect(delivery).toContainText('confirmed in your order total before payment')
   await expect(delivery).toContainText('Shop GL15, Bedford Square, Smith Road, Bedfordview, Johannesburg, 2007')
-  await expect(page.getByRole('region', { name: 'Returns' })).toContainText('Within 30 days of delivery or collection')
+  const returns = page.getByRole('region', { name: 'Returns' })
+  await expect(returns.getByRole('heading', { name: 'Online orders: 7 days to cancel' })).toBeVisible()
+  await expect(returns).toContainText('within 7 days after you receive the goods')
+  await expect(returns).toContainText('made to your specifications or clearly personalised')
+  await expect(returns).toContainText('within 30 days after delivery or collection')
+  await expect(returns).toContainText('keep the original delivery charge')
+  await expect(returns).not.toContainText('delivery charge is not refunded')
+  // Owner document absent in the fixture: the change-of-mind rules are flagged as a draft, as on the policy pages.
+  await expect(returns.getByRole('note')).toHaveText('Draft for owner and legal review before go-live.')
 
   const contact = page.getByRole('region', { name: 'Contact us' })
   for (const fact of ['Shop GL15, Bedford Square', 'Monday to Friday', '09:00–18:00', '09:00–17:00', '09:00–15:00', 'Cindy@daskasas.co.za']) {

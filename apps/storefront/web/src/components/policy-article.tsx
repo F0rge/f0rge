@@ -13,7 +13,7 @@ export function PolicyArticle({ page, section }: { page: PolicyView; section: st
     <h1 className="text-3xl font-bold tracking-tight md:text-4xl">{page.title}</h1>
     {page.blocks.map((block, index) => {
       if (block.type === "notice") return <p key={`${section}-notice-${index}`} className="mt-6 rounded-lg border p-4 text-sm" role="note">{block.text}</p>;
-      if (block.type === "heading") return <h2 key={`${section}-heading-${index}`} className="mt-10 text-xl font-semibold">{block.text}</h2>;
+      if (block.type === "heading") return <h2 key={`${section}-heading-${index}`} id={block.id} className="mt-10 text-xl font-semibold">{block.text}</h2>;
       return <p key={`${section}-paragraph-${index}`} className="mt-4 leading-relaxed text-muted-foreground">{withPlaceholders(block.text)}</p>;
     })}
     {page.links.length > 0 && <nav className="mt-10 flex flex-wrap gap-x-6 border-t pt-6" aria-label="Related policies">

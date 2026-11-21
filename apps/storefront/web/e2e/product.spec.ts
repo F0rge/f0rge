@@ -34,6 +34,9 @@ test('an in-stock piece shows its facts, caps quantity at stock and adds to the 
 
   await expect(page.getByRole('region', { name: 'Delivery and returns' })).toContainText('selected Gauteng areas')
   await expect(page.getByRole('region', { name: 'Delivery and returns' })).toContainText('confirmed in your order total before payment')
+  const returns = page.getByRole('region', { name: 'Delivery and returns' })
+  await expect(returns).toContainText(/If you buy online, you may cancel within 7 days.+Our own policy: .+within 30 days after delivery or collection/)
+  await expect(returns.getByRole('note')).toHaveText('Draft for owner and legal review before go-live.')
   expect((await relatedTitles(page))[0]).toBe('Test chair')
 })
 

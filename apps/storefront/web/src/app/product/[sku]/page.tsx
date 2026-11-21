@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { RotateCcw, Truck } from "lucide-react";
 import { PieceImage } from "@/components/piece-image";
 import { fromPrice, getStoreProduct, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
+import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { SHOWROOM } from "@/lib/showroom";
 import { ProductDetail } from "./product-detail";
 
@@ -42,7 +43,8 @@ function DeliveryAndReturns() {
       <div className="flex flex-col items-center text-center md:items-start md:text-left">
         <div className="mb-4 flex size-12 items-center justify-center rounded-lg bg-primary/10"><RotateCcw aria-hidden="true" className="size-6 text-primary" /></div>
         <h2 className="mb-3 text-lg font-semibold">Returns</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">Changed your mind? Return a piece within 30 days of delivery or collection, unused and in the condition and packaging it arrived in. Contact us with your order number first. Bespoke pieces and pieces made to a measurement, fabric or finish chosen for your order cannot be returned for a change of mind.</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{[RETURNS_SUMMARY.coolingOff, RETURNS_SUMMARY.changeOfMind, RETURNS_SUMMARY.howToReturn, RETURNS_SUMMARY.notReturnable].join(" ")}</p>
+        {!currentCustomerPolicies() && <p className="mt-3 rounded-lg border p-3 text-sm" role="note">{POLICY_DRAFT_NOTICE}</p>}
         <Link href="/policies/returns" className="mt-3 inline-flex min-h-11 items-center text-sm font-medium underline-offset-4 hover:underline">Return policy</Link>
       </div>
     </div>

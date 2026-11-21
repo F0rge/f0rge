@@ -6,6 +6,7 @@ import { PieceImage } from "@/components/piece-image";
 import { CategoryTiles } from "@/components/category-tiles";
 import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
 import { fromPrice, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
+import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { SHOWROOM } from "@/lib/showroom";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ const faqs: { question: string; answer: string; returnPolicy?: true }[] = [
   },
   {
     question: "Can I return a piece?",
-    answer: "Yes, if you change your mind within 30 days of delivery or collection, and the piece is unused and in the condition it arrived in, with its labels and tags, original packaging and the invoice or delivery note. Contact us with your order number first, before sending anything back. Bespoke pieces and pieces made to a measurement, fabric or finish chosen for your order cannot be returned for a change of mind.",
+    answer: [RETURNS_SUMMARY.coolingOff, RETURNS_SUMMARY.changeOfMind, RETURNS_SUMMARY.howToReturn, RETURNS_SUMMARY.notReturnable].join(" "),
     returnPolicy: true,
   },
   {
@@ -172,7 +173,7 @@ export default async function HomePage() {
           <AccordionTrigger>{faq.question}</AccordionTrigger>
           <AccordionContent className="text-base font-normal text-muted-foreground">
             {faq.answer}
-            {faq.returnPolicy && <> <Link href="/policies/returns">Read the return policy</Link>.</>}
+            {faq.returnPolicy && <> <Link href="/policies/returns">Read the return policy</Link>.{!currentCustomerPolicies() && ` ${POLICY_DRAFT_NOTICE}`}</>}
           </AccordionContent>
         </AccordionItem>)}
       </Accordion>
