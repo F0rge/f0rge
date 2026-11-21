@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  invoiceStatusTag,
   partialPaymentError,
   settlementStatusLabel,
   settlementTagType,
@@ -15,6 +16,26 @@ describe("settlement status", () => {
     expect(settlementTagType("paid")).toBe("green");
     expect(settlementStatusLabel("unknown")).toBe("Not imported");
     expect(settlementTagType("unknown")).toBe("gray");
+  });
+});
+
+describe("invoiceStatusTag", () => {
+  const invoice = { payment_status: "unpaid" as const, on_account: true, is_archive: false };
+
+  it("shows an unpaid on-account invoice as On statement until a payment", () => {
+    expect(invoiceStatusTag(invoice)).toEqual({ label: "On statement", type: "purple" });
+    expect(invoiceStatusTag({ ...invoice, payment_status: "partially_paid" }).label).toBe("Partially paid");
+    expect(invoiceStatusTag({ ...invoice, payment_status: "paid" }).label).toBe("Paid");
+  });
+
+  it("keeps other invoices on their settlement label", () => {
+    expect(invoiceStatusTag({ ...invoice, on_account: false }).label).toBe("Unpaid");
+    expect(invoiceStatusTag({ ...invoice, is_archive: true }).label).toBe("Not imported");
+  });
+
+  it("shows a past-due balance as Overdue", () => {
+    expect(invoiceStatusTag({ ...invoice, status: "overdue" })).toEqual({ label: "Overdue", type: "red" });
+    expect(invoiceStatusTag({ ...invoice, status: "on_statement" }).label).toBe("On statement");
   });
 });
 

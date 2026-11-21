@@ -71,6 +71,15 @@ class QuoteCRUD(BaseCRUD):
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total
 
+    async def list_all(self) -> list[Quote]:
+        result = await self.db.execute(
+            select(Quote).options(
+                selectinload(Quote.customer),
+                selectinload(Quote.lines).selectinload(QuoteLine.sku),
+            )
+        )
+        return list(result.scalars().unique().all())
+
     async def get_next_quote_number(self) -> str:
         from app.services.document_numbering import DocumentNumberingService
 

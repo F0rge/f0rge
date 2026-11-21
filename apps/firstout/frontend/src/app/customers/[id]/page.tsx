@@ -20,6 +20,7 @@ import {
 import {
   canManageCustomerCredit,
   canMutateCustomers,
+  customerInvoicesHref,
   formatZarAmount,
   getCustomer,
   listPriceLists,
@@ -220,7 +221,7 @@ export default function CustomerDetailPage() {
             /> : null}
             <Button
               kind="tertiary"
-              onClick={() => router.push(`/invoices?customer=${customer.id}`)}
+              onClick={() => router.push(customerInvoicesHref(customer.name))}
             >
               View invoices
             </Button>

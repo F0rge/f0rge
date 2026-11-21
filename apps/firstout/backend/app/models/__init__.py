@@ -7,7 +7,7 @@ from app.models.account import Account, AccountType, TaxTreatment
 from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.books_period import BooksPeriod, BooksPeriodStatus
 from app.models.bank_rule import BankRule
-from app.models.bill import Bill, BillLine
+from app.models.bill import Bill, BillAttachment, BillLine
 from app.models.books_event import BooksDocumentType, BooksEvent, BooksEventAction
 from app.models.category_account_map import CategoryAccountMap
 from app.models.credit_note import CreditNote
@@ -56,6 +56,7 @@ from app.models.purchase_order import (
 )
 from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.models.record_workspace import RecordWorkspaceBatch
+from app.models.sales_staff import SalesStaff
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
 from app.models.sku_supplier_price import SkuSupplierPrice
@@ -111,6 +112,7 @@ __all__ = [
     "BooksPeriod",
     "BooksPeriodStatus",
     "Bill",
+    "BillAttachment",
     "BillLine",
     "BooksDocumentType",
     "BooksEvent",
@@ -185,6 +187,7 @@ __all__ = [
     "RecordWorkspaceBatch",
     "Role",
     "RolePermission",
+    "SalesStaff",
     "Sku",
     "SkuBomLine",
     "SkuSupplierPrice",

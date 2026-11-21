@@ -8,6 +8,7 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/payments", label: "Payments" },
   { href: "/bank-reconciliation", label: "Bank reconciliation" },
   { href: "/reports", label: "Reports" },
+  { href: "/commission", label: "Commission" },
   { href: "/vat201", label: "VAT201" },
   { href: "/books-periods", label: "Books periods" },
 ] as const;
@@ -57,6 +58,7 @@ export const SALES_NAV_ITEMS = [
 export const ADMIN_NAV_ITEMS = [
   { href: "/organisation", label: "Organisation", permission: "users.manage" as const },
   { href: "/users", label: "Team members", permission: "users.manage" as const },
+  { href: "/sales-staff", label: "Sales staff", permission: "users.manage" as const },
   { href: "/roles", label: "Roles & permissions", permission: "users.manage" as const },
   { href: "/audit", label: "Audit log" },
   { href: "/profile", label: "My profile" },

@@ -11,33 +11,30 @@ from app.models.bill import Bill
 from app.models.supplier import Supplier
 from f0rge_db.crud import BaseCRUD
 
+_DETAIL = (selectinload(Bill.supplier), selectinload(Bill.lines), selectinload(Bill.attachments))
+
 
 class BillCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
-    async def get_by_id(self, bill_id: uuid.UUID) -> Optional[Bill]:
-        return (
-            await self.db.execute(
-                select(Bill)
-                .options(
-                    selectinload(Bill.supplier),
-                    selectinload(Bill.lines),
-                )
-                .where(Bill.id == bill_id)
-            )
-        ).scalar_one_or_none()
-
-    async def list_all(self) -> list[Bill]:
-        result = await self.db.execute(
+    async def get_by_id(self, bill_id: uuid.UUID, *, for_update: bool = False) -> Optional[Bill]:
+        # Always fresh: the session may already hold this bill with an older collection.
+        stmt = (
             select(Bill)
-            .options(
-                selectinload(Bill.supplier),
-                selectinload(Bill.lines),
-            )
-            .order_by(Bill.bill_number)
+            .options(*_DETAIL)
+            .where(Bill.id == bill_id)
+            .execution_options(populate_existing=True)
         )
-        return list(result.scalars().all())
+        if for_update:
+            stmt = stmt.with_for_update()
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def list_all(self, *, include_imported: bool = True) -> list[Bill]:
+        stmt = select(Bill).options(*_DETAIL).order_by(Bill.bill_number)
+        if not include_imported:
+            stmt = stmt.where(Bill.is_archive.is_(False))
+        return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_page(
         self,
@@ -63,7 +60,7 @@ class BillCRUD(BaseCRUD):
 
         stmt = (
             select(Bill)
-            .options(selectinload(Bill.supplier))
+            .options(selectinload(Bill.supplier), selectinload(Bill.attachments))
             .join(Supplier, Bill.supplier_id == Supplier.id)
         )
         if filters:

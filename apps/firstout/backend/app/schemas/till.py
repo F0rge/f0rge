@@ -7,7 +7,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.invoice import InvoiceLineResponse
+from app.schemas.invoice import DocumentNote, InvoiceLineResponse
 
 
 from app.schemas.quantity import Quantity
@@ -50,9 +50,15 @@ class TillPricePreview(BaseModel):
     price_revision: str
 
 
+TillTender = Literal["statement", "cash", "card", "deposit", "eft"]
+
+
 class TillSaleCreate(TillPriceRequest):
     location_id: uuid.UUID
-    tender: Literal["cash", "card", "deposit", "eft"]
+    # "statement" issues the invoice unpaid, on account; no payment is recorded.
+    tender: TillTender
+    # Defaults to issue date + payment terms; must not be before the issue date.
+    due_date: Optional[datetime.date] = None
     price_revision: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     pick_id: Optional[uuid.UUID] = None
     pick_ids: list[uuid.UUID] = Field(default_factory=list)
@@ -61,6 +67,12 @@ class TillSaleCreate(TillPriceRequest):
     # Complete from the caller's server basket; it is emptied with the sale.
     basket_id: Optional[uuid.UUID] = None
     basket_version: Optional[int] = Field(default=None, ge=1)
+    note_printed: DocumentNote = None
+    note_internal: DocumentNote = None
+    # Required when the business has an active sales colleague.
+    sales_staff_id: Optional[uuid.UUID] = None
+    # The open quote this sale converts; it is marked converted with the sale.
+    quote_id: Optional[uuid.UUID] = None
 
 
 class TillSaleLocationStock(BaseModel):
@@ -74,10 +86,15 @@ class TillSaleResponse(BaseModel):
     # The draft pick for units reserved against the invoice, when stock was sold from elsewhere.
     pick_id: Optional[uuid.UUID] = None
     invoice_number: str
-    payment_id: uuid.UUID
-    payment_number: str
-    tender: Literal["cash", "card", "deposit", "eft"]
+    # None for a statement sale: nothing is paid at the till.
+    payment_id: Optional[uuid.UUID] = None
+    payment_number: Optional[str] = None
+    tender: TillTender
     issue_date: datetime.date
+    due_date: Optional[datetime.date] = None
+    on_account: bool = False
+    # The quote the sale converted.
+    quote_number: Optional[str] = None
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal

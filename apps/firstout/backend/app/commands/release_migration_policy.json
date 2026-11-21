@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "101_stock_reservation_changes",
+  "target_revision": "109_document_template",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -409,6 +409,38 @@
     },
     "101_stock_reservation_changes": {
       "sha256": "58d337a823030545f7fd3e7f3cab71626d381b20bd4a7eed2fb5709f0d080ff5",
+      "automatic": true
+    },
+    "102_invoice_on_account": {
+      "sha256": "94c126adf67bc40ed98bd33d604996024b6a581314ba7ac3c2879e8f50cdf480",
+      "automatic": true
+    },
+    "103_invoice_notes": {
+      "sha256": "bd5c6b38f4fcbf0cd47eef7307a0977ab992c3745aed9a8920da220742b0c2db",
+      "automatic": true
+    },
+    "104_sales_staff_commission": {
+      "sha256": "d81f14d809ea8f3954c416a169971e77fe8a73c82f38428bd451d38623b52a2c",
+      "automatic": true
+    },
+    "105_quote_conversion": {
+      "sha256": "39956d9039038cc49dfad094ef776ed3810cb4af04d46147bc8d68e19f20b3b5",
+      "automatic": true
+    },
+    "106_payment_reference_void": {
+      "sha256": "e8bfaa322ee70ea267331412f039f0d2eb0b64db70e8007dd46da6f955e576ab",
+      "automatic": true
+    },
+    "107_bill_approval_attachments": {
+      "sha256": "3bae5b4410aa9998d46d28d25800aa9c38a26ead5946ccef24b19fe6079e8333",
+      "automatic": true
+    },
+    "108_invoice_archive": {
+      "sha256": "6329c84a6b2001730aa70b9cb33701089ecb45e72783c68e22e7aa6b225c935c",
+      "automatic": true
+    },
+    "109_document_template": {
+      "sha256": "a7948d04d6ee91f4c6186cb962833f7d691d47c631929ab56a8b905c4e35d230",
       "automatic": true
     }
   }

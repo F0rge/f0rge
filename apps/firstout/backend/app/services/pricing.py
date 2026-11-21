@@ -74,9 +74,12 @@ def shows_prices_including_vat(customer: Optional[Customer]) -> bool:
 
 
 def format_pdf_unit(unit_ex: Decimal, including_vat: bool) -> str:
-    if including_vat:
-        return f"{ex_to_inc(unit_ex):.2f} incl. VAT"
-    return f"{unit_ex:.2f} excl. VAT"
+    # The basis lives in the column header (pdf_unit_header), as on the invoice screen.
+    return f"{ex_to_inc(unit_ex) if including_vat else unit_ex:.2f}"
+
+
+def pdf_unit_header(including_vat: bool) -> str:
+    return "Unit incl. VAT" if including_vat else "Unit excl. VAT"
 
 
 def pdf_unit_basis_note(including_vat: bool) -> str:

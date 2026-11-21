@@ -17,7 +17,7 @@ from app.crud.payment import PaymentCRUD
 from app.models.account import Account
 from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.bank_rule import BankRule
-from app.models.bill import Bill
+from app.models.bill import Bill, BillApprovalStatus
 from app.models.tax_invoice import TaxInvoice
 from app.models.journal import JournalDocumentType, JournalStatus
 from app.schemas.bank_import import (
@@ -244,6 +244,8 @@ class BankImportService:
         payment = await self.payment_crud.get_by_id(payment_id)
         if payment is None:
             raise NotFoundError("Payment not found")
+        if payment.voided_at is not None:
+            raise ValidationError("Payment is voided")
         if payment.is_reconciled:
             raise ValidationError("Payment is already reconciled")
 
@@ -412,7 +414,7 @@ class BankImportService:
 
         payments = await self.payment_crud.list_all()
         for payment in payments:
-            if payment.is_reconciled:
+            if payment.is_reconciled or payment.voided_at is not None:
                 continue
             expected = (
                 payment.amount_zar if payment.direction.value == "in" else -payment.amount_zar
@@ -484,7 +486,7 @@ class BankImportService:
 
     async def auto_match_preview(self, account_id: Optional[uuid.UUID] = None) -> AutoMatchPreview:
         lines = await self.line_crud.list_unmatched(account_id)
-        documents = await self._open_documents()
+        documents = await self.open_documents()
         matches: list[AutoMatchPreviewItem] = []
         for line in lines:
             ranked = rank_documents(
@@ -507,7 +509,7 @@ class BankImportService:
     ) -> AutoMatchConfirmResult:
         applied: list[AutoMatchPreviewItem] = []
         skipped: list[str] = []
-        documents = await self._open_documents()
+        documents = await self.open_documents()
         for line_id in data.line_ids:
             line = await self.line_crud.get_by_id(line_id)
             if line is None or self._is_matched(line):
@@ -650,7 +652,7 @@ class BankImportService:
             transaction_date=line.transaction_date,
             description=line.description,
             reference=line.reference,
-            documents=await self._open_documents(),
+            documents=await self.open_documents(),
         )
         auto = unique_auto_match(ranked)
         return [
@@ -668,7 +670,7 @@ class BankImportService:
             for item in ranked
         ]
 
-    async def _open_documents(self) -> list[OpenDocument]:
+    async def open_documents(self) -> list[OpenDocument]:
         cached = getattr(self, "_open_document_cache", None)
         if cached is not None:
             return cached
@@ -690,6 +692,9 @@ class BankImportService:
                     select(Bill)
                     .options(selectinload(Bill.supplier))
                     .where(Bill.is_archive.is_(False))
+                    # Only approved, active bills can be paid.
+                    .where(Bill.approval_status == BillApprovalStatus.APPROVED)
+                    .where(Bill.archived_at.is_(None))
                     .where(Bill.amount_zar > Bill.amount_paid_zar)
                 )
             )

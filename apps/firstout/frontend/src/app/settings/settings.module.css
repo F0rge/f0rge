@@ -1,9 +1,49 @@
 .panel { padding: 1.5rem; }
+.tabPanel { padding: 1.5rem 0 0; }
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   align-items: start;
+}
+.templateToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.templateLayout {
+  display: grid;
+  grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+.templatePreview { position: sticky; top: 4rem; }
+.templateFrame {
+  width: 100%;
+  height: min(80vh, 60rem);
+  border: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-02);
+}
+.swatches { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.swatch {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--cds-border-subtle);
+  cursor: pointer;
+}
+.swatch[aria-pressed="true"] { outline: 2px solid var(--cds-focus); outline-offset: 2px; }
+.swatch:disabled { cursor: not-allowed; opacity: 0.5; }
+.sectionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.25rem;
+}
+@media (max-width: 66rem) {
+  .templateLayout { grid-template-columns: minmax(0, 1fr); }
+  .templatePreview { position: static; }
 }
 @media (max-width: 48rem) {
   .panel { padding: 1rem; }

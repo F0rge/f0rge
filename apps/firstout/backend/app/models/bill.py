@@ -1,21 +1,27 @@
 from __future__ import annotations
 
 import datetime
+import enum
 import uuid
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
+    DateTime,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     event,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -25,6 +31,12 @@ from app.database import Base
 from app.models.tenant import TenantOwnedMixin
 from app.services.settlement import SettlementStatus, bill_settlement_status
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
+
+
+class BillApprovalStatus(str, enum.Enum):
+    DRAFT = "draft"
+    AWAITING_APPROVAL = "awaiting_approval"
+    APPROVED = "approved"
 
 
 class Bill(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
@@ -69,7 +81,30 @@ class Bill(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         default=SettlementStatus.UNPAID,
         server_default=SettlementStatus.UNPAID.value,
     )
+    # Legacy single attachment, copied into bill_attachments by 107. Kept for rollback.
     pdf_storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    due_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
+    # Only approved bills are posted to the ledger and can be paid.
+    approval_status: Mapped[BillApprovalStatus] = mapped_column(
+        Enum(
+            BillApprovalStatus,
+            name="bill_approval_status",
+            native_enum=False,
+            length=32,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=False,
+        default=BillApprovalStatus.APPROVED,
+        server_default=BillApprovalStatus.APPROVED.value,
+    )
+    # User archiving hides a bill from the active list; ``is_archive`` means a Cin7 import.
+    archived_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archived_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     purchase_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("purchase_orders.id", ondelete="SET NULL"),
@@ -82,9 +117,20 @@ class Bill(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="BillLine.sort_order",
     )
+    attachments: Mapped[list["BillAttachment"]] = relationship(
+        back_populates="bill",
+        cascade="all, delete-orphan",
+        order_by="BillAttachment.uploaded_at",
+    )
 
     __table_args__ = (
         UniqueConstraint("bill_number", name="uq_bills_bill_number"),
+        # Target of tenant FKs; existing databases may carry it as 080's tenant_ref_* key.
+        UniqueConstraint("team_id", "id", name="uq_bills_team_id_id"),
+        CheckConstraint(
+            "approval_status IN ('draft', 'awaiting_approval', 'approved')",
+            name="ck_bills_approval_status",
+        ),
         Index(
             "uq_bills_supplier_ref_ci",
             "team_id",
@@ -112,6 +158,31 @@ class BillLine(TenantOwnedMixin, UUIDPkMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     bill: Mapped[Bill] = relationship(back_populates="lines")
+
+
+class BillAttachment(TenantOwnedMixin, UUIDPkMixin, Base):
+    __tablename__ = "bill_attachments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["team_id", "bill_id"],
+            ["bills.team_id", "bills.id"],
+            name="fk_bill_attachments_bill_tenant",
+            ondelete="CASCADE",
+        ),
+    )
+
+    bill_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    uploaded_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    uploaded_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    bill: Mapped[Bill] = relationship(back_populates="attachments")
 
 
 @event.listens_for(Bill, "before_insert")

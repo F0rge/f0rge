@@ -13,7 +13,7 @@ import {
 } from "@carbon/react";
 import { Scan, UserFollow } from "@carbon/icons-react";
 import { LoadingField, LoadingRegion } from "@/components/page-loading";
-import styles from "./page.module.css";
+import styles from "@/components/cart-editor.module.css";
 
 export function TillLoading({
   mobileScan = false,
@@ -96,7 +96,7 @@ export function TillLoading({
                 <RadioButton key={value} id={`loading-till-tender-${value}`} value={value} labelText={label} />
               ))}
             </RadioButtonGroup>
-            <TextInput id="loading-till-tendered" labelText="Amount Tendered" disabled />
+            {tender === "statement" ? null : <TextInput id="loading-till-tendered" labelText="Amount Tendered" disabled />}
             <Button disabled>Complete sale</Button>
           </Stack>
         </Tile>

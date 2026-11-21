@@ -120,6 +120,8 @@ class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
     )
     logo_storage_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Validated by app.schemas.document_template.DocumentTemplate; null prints the default.
+    document_template: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     max_till_discount_percent: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(5, 2),
         nullable=True,
@@ -127,12 +129,6 @@ class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     po_approval_threshold_zar: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(14, 2),
         nullable=True,
-    )
-    auto_process_exact_supplier_invoices: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default=text("false"),
     )
     session_ttl_hours: Mapped[int] = mapped_column(
         Integer,

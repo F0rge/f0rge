@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.journal import JournalEntry, JournalLine, JournalStatus
+from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
 from f0rge_db.crud import BaseCRUD
 
 
@@ -25,6 +25,18 @@ class JournalCRUD(BaseCRUD):
         return (
             await self.db.execute(self._with_lines().where(JournalEntry.id == entry_id))
         ).scalar_one_or_none()
+
+    async def list_posted_for_document(
+        self, document_type: JournalDocumentType, document_id: uuid.UUID
+    ) -> list[JournalEntry]:
+        result = await self.db.execute(
+            self._with_lines().where(
+                JournalEntry.document_type == document_type,
+                JournalEntry.document_id == document_id,
+                JournalEntry.status == JournalStatus.POSTED,
+            )
+        )
+        return list(result.scalars().all())
 
     async def list_all(self) -> list[JournalEntry]:
         result = await self.db.execute(

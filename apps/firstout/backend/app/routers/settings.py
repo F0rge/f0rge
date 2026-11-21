@@ -3,11 +3,17 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import Response
 
 from app.dependencies.auth import (
     get_current_user_id,
     get_settings_service,
     require_settings,
+)
+from app.schemas.document_template import (
+    DocumentTemplate,
+    DocumentTemplatePreview,
+    DocumentTemplateResponse,
 )
 from app.schemas.settings import SettingsResponse, SettingsUpdate
 from app.services.settings import SettingsService
@@ -47,3 +53,33 @@ async def get_logo(
     service: SettingsService = Depends(get_settings_service),
 ):
     return await service.serve_logo(user_id)
+
+
+@settings_router.get("/document-template", response_model=DocumentTemplateResponse)
+async def get_document_template(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: SettingsService = Depends(get_settings_service),
+) -> DocumentTemplateResponse:
+    return await service.get_document_template()
+
+
+@settings_router.put("/document-template", response_model=DocumentTemplateResponse)
+async def update_document_template(
+    template: DocumentTemplate,
+    _: uuid.UUID = Depends(require_settings),
+    service: SettingsService = Depends(get_settings_service),
+) -> DocumentTemplateResponse:
+    return await service.update_document_template(template)
+
+
+@settings_router.post(
+    "/document-template/preview",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+async def preview_document_template(
+    body: DocumentTemplatePreview,
+    _: uuid.UUID = Depends(require_settings),
+    service: SettingsService = Depends(get_settings_service),
+) -> Response:
+    return await service.preview_document_template(body)

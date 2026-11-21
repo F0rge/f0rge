@@ -20,12 +20,16 @@ from app.schemas.record_workspace import (
     WorkspaceQueryResponse,
 )
 from app.services.accounts import AccountService
+from app.services.bills import BillService
 from app.services.customers_crm import CustomersCrmService
 from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
+from app.services.invoices import InvoiceService
 from app.services.locations import LocationService
+from app.services.payments import PaymentService
 from app.services.permissions import PermissionService
 from app.services.price_lists import PriceListService
 from app.services.proformas import ProformaService
+from app.services.quotes import QuotesService
 from app.services.record_workspace_actions import blocked_reason, validate_patch
 from app.services.record_workspace_filters import archived, filter_rows, label, revision
 from app.services.record_workspace_registry import DEFINITIONS
@@ -73,6 +77,8 @@ class RecordWorkspaceService:
             return await PriceListService(self.db).list(archived=None)
         if resource == "proformas":
             return await ProformaService(self.db).list(archived=None)
+        if resource == "quotes":
+            return await QuotesService(self.db).list_all()
         if resource == "locations":
             return [
                 LocationResponse.model_validate(row)
@@ -84,6 +90,12 @@ class RecordWorkspaceService:
             return await RoleService(self.db).list()
         if resource == "accounts":
             return await AccountService(self.db).list()
+        if resource == "payments":
+            return await PaymentService(self.db).list_all()
+        if resource == "bills":
+            return await BillService(self.db).list_all()
+        if resource == "invoices":
+            return await InvoiceService(self.db).list_all()
         return await RepeatingInvoiceService(self.db).list()
 
     async def row(
@@ -100,12 +112,18 @@ class RecordWorkspaceService:
             return await PriceListService(self.db).get(record_id)
         if resource == "proformas":
             return await ProformaService(self.db).get(record_id)
+        if resource == "quotes":
+            return await QuotesService(self.db).get_item(record_id)
         if resource == "repeating-invoices":
             return await RepeatingInvoiceService(self.db).get(record_id)
         if resource == "users":
             return await UserService(self.db).get(record_id)
         if resource == "accounts":
             return await AccountService(self.db).get(record_id)
+        if resource == "bills":
+            return await BillService(self.db).get_list_item(record_id)
+        if resource == "invoices":
+            return await InvoiceService(self.db).get_list_item(record_id)
         service = RoleService(self.db) if resource == "roles" else LocationService(self.db)
         record = await service.crud.get_by_id(record_id)
         if record is None:

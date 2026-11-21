@@ -216,6 +216,10 @@ export function AppShell({ children }: AppShellProps) {
   const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
     ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders")
     : SALES_NAV_ITEMS;
+  // Commission is gated like GET /reports/commission (books.mutate or users.manage).
+  const booksNavItems = can(user, "books.mutate") || can(user, "users.manage")
+    ? BOOKS_NAV_ITEMS
+    : BOOKS_NAV_ITEMS.filter((item) => item.href !== "/commission");
 
   function renderNavMenu(
     title: string,
@@ -380,7 +384,7 @@ export function AppShell({ children }: AppShellProps) {
             )}
             {renderNavLink(TILL_NAV_ITEM.href, TILL_NAV_ITEM.label)}
             {salesNavItems.length ? renderNavMenu("Sales", Store, isSalesPath(pathname), salesNavItems, "sales") : null}
-            {renderNavMenu("Books", Finance, isBooksPath(pathname), BOOKS_NAV_ITEMS, "books")}
+            {renderNavMenu("Books", Finance, isBooksPath(pathname), booksNavItems, "books")}
             {renderNavLink(administrationHome(user), "Admin", undefined, isAdministration, Settings)}
           </SideNavItems>}
         </SideNav>

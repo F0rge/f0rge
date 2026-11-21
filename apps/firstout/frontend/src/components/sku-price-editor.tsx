@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Checkbox,
   DataTable,
   InlineNotification,
   Select,
@@ -63,6 +64,7 @@ type EditorFormState = {
   madeToOrderMaxDays: string;
   madeToOrderExpiresAt: string;
   reorderMin: string;
+  excludeFromCommission: boolean;
 };
 
 function emptyPrices(): Record<TierKey, TierForm> {
@@ -107,6 +109,7 @@ const emptyForm: EditorFormState = {
   madeToOrderMaxDays: "",
   madeToOrderExpiresAt: "",
   reorderMin: "",
+  excludeFromCommission: false,
 };
 
 function localDateTimeInput(value: string | null): string {
@@ -148,6 +151,7 @@ function formFromSku(sku: Sku): EditorFormState {
     madeToOrderMaxDays: sku.made_to_order_lead_time_max_days !== null ? String(sku.made_to_order_lead_time_max_days) : "",
     madeToOrderExpiresAt: localDateTimeInput(sku.made_to_order_expires_at),
     reorderMin: sku.reorder_min !== null ? String(sku.reorder_min) : "",
+    excludeFromCommission: !!sku.exclude_from_commission,
   };
 }
 
@@ -235,6 +239,10 @@ function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
     payload.reorder_min = reorderMin;
   }
 
+  if (form.excludeFromCommission !== !!sku.exclude_from_commission) {
+    payload.exclude_from_commission = form.excludeFromCommission;
+  }
+
   if (madeToOrderFormChanged(sku, form)) {
     const disabled = !form.madeToOrderCapacity.trim() && !form.madeToOrderMinDays.trim() &&
       !form.madeToOrderMaxDays.trim() && !form.madeToOrderExpiresAt.trim();
@@ -261,6 +269,9 @@ function hasFormEdits(sku: Sku, form: EditorFormState): boolean {
     return true;
   }
   if (parseReorderMin(form.reorderMin) !== sku.reorder_min) {
+    return true;
+  }
+  if (form.excludeFromCommission !== !!sku.exclude_from_commission) {
     return true;
   }
   return madeToOrderFormChanged(sku, form);
@@ -626,6 +637,17 @@ export function SkuPriceEditor({
             />
           </div>
         ))}
+        <div>
+          <h3 className="cds--type-productive-heading-02">Commission</h3>
+          <Checkbox
+            id="sku-exclude-from-commission"
+            labelText="Exclude from commission"
+            helperText="Tick for products that shouldn't earn sales commission, such as delivery and installation. Applies to sales from when you save; invoices already issued keep their commission."
+            checked={form.excludeFromCommission}
+            disabled={readOnly}
+            onChange={(_, { checked }) => setForm((current) => ({ ...current, excludeFromCommission: checked }))}
+          />
+        </div>
         {showCostAudit ? (
           <div>
             <h3 className="cds--type-productive-heading-02">Cost history</h3>

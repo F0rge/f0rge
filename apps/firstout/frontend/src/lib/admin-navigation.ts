@@ -19,6 +19,7 @@ export const ADMIN_DESTINATIONS = {
   organisation: { href: "/organisation", label: "Organisation", description: "Business identity, staff access and operating locations." },
   settings: { href: "/settings", label: "Settings directory", description: "Find the defaults your team uses across the back office." },
   team: { href: "/users", label: "Team members", description: "Manage staff access, roles and invitations." },
+  salesStaff: { href: "/sales-staff", label: "Sales staff", description: "The colleagues credited with sales, and their commission rates." },
   roles: { href: "/roles", label: "Roles & permissions", description: "Review role capabilities and manage access." },
   integrations: { href: "/settings/integrations", label: "Integrations", description: "Manage connections between your account and other tools." },
   mcp: { href: "/settings/integrations/mcp-tokens", label: "MCP tokens", description: "Manage personal tokens for connected tools." },
@@ -30,7 +31,7 @@ export type AdminDestination = keyof typeof ADMIN_DESTINATIONS | SettingsSection
 
 export const ADMIN_NAV_GROUPS: readonly { label: string; items: readonly AdminDestination[] }[] = [
   { label: "Workspace", items: ["organisation", "settings"] },
-  { label: "People & access", items: ["team", "roles"] },
+  { label: "People & access", items: ["team", "salesStaff", "roles"] },
   { label: "Business settings", items: SETTINGS_SECTIONS.map(({ id }) => id) },
   { label: "Integrations", items: ["mcp"] },
   { label: "Activity & data", items: ["audit"] },
@@ -56,6 +57,7 @@ export function canOpenAdminDestination(id: AdminDestination, user: AdminIdentit
     case "organisation":
       return user?.role === "owner" && can(user, "users.manage");
     case "team":
+    case "salesStaff":
     case "roles":
       return can(user, "users.manage");
     default:

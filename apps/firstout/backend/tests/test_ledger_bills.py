@@ -57,13 +57,17 @@ async def test_bill_attachment_upload_and_download(owner_client: AsyncClient) ->
     bill_id = create_resp.json()["id"]
 
     upload_resp = await owner_client.post(
-        f"/api/v1/bills/{bill_id}/attachment",
+        f"/api/v1/bills/{bill_id}/attachments",
         files={"file": ("bill.pdf", MINIMAL_PDF, "application/pdf")},
     )
     assert upload_resp.status_code == 200
-    assert upload_resp.json()["pdf_storage_key"] is not None
+    (attachment,) = upload_resp.json()["attachments"]
+    assert attachment["filename"] == "bill.pdf"
+    assert upload_resp.json()["attachment_count"] == 1
 
-    download_resp = await owner_client.get(f"/api/v1/bills/{bill_id}/attachment")
+    download_resp = await owner_client.get(
+        f"/api/v1/bills/{bill_id}/attachments/{attachment['id']}"
+    )
     assert download_resp.status_code == 200
     assert download_resp.headers["content-type"] == "application/pdf"
     assert download_resp.content == MINIMAL_PDF

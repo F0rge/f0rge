@@ -7,6 +7,10 @@ import {
   Button,
   InlineNotification,
   Modal,
+  OverflowMenu,
+  OverflowMenuItem,
+  Select,
+  SelectItem,
   SkeletonText,
   Stack,
   Tag,
@@ -20,11 +24,14 @@ import {
   TextArea,
   TextInput,
 } from "@carbon/react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { ArchiveInvoiceModal } from "@/components/archive-invoice-modal";
 import { BooksHistory } from "@/components/books-history";
+import { PaymentMethodFields, paymentMethodLabel } from "@/components/payment-method-fields";
 import {
+  INVOICE_NOTE_MAX,
   canMutateBooks,
   createCreditNote,
   createPayment,
@@ -35,22 +42,24 @@ import {
   getCustomer,
   getInvoice,
   getSettings,
+  invoiceAction,
   settingsLogoUrl,
   listCreditNotes,
+  updateInvoiceNote,
+  updateInvoiceSalesStaff,
   listPayments,
+  listSalesStaffOptions,
   type AppSettings,
   type CreditNote,
   type CustomerCrm,
   type Invoice,
   type Payment,
+  type SalesStaffOption,
+  type PaymentMethod,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
-import {
-  partialPaymentError,
-  settlementStatusLabel,
-  settlementTagType,
-} from "@/lib/payment-status";
+import { invoiceStatusTag, partialPaymentError } from "@/lib/payment-status";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -63,6 +72,8 @@ function hasPositiveBalance(balance: string): boolean {
 export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  // The invoices list opens Record payment or Issue credit note here with ?action=.
+  const requestedAction = useSearchParams().get("action");
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -76,16 +87,25 @@ export default function InvoiceDetailPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(todayIso());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("eft");
+  const [paymentReference, setPaymentReference] = useState("");
   const [creditOpen, setCreditOpen] = useState(false);
   const [creditReason, setCreditReason] = useState("");
   const [lastPayment, setLastPayment] = useState<Payment | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
+  const [colleagueSaving, setColleagueSaving] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [actionHandled, setActionHandled] = useState(false);
 
   const loadInvoice = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const invoiceData = await getInvoice(params.id);
+      setNoteDraft(invoiceData.note_internal ?? "");
       if (invoiceData.is_archive) {
         setInvoice(invoiceData);
         setCustomer(null);
@@ -143,6 +163,7 @@ export default function InvoiceDetailPage() {
     }
     setPaymentAmount(invoice.balance);
     setPaymentDate(todayIso());
+    setPaymentReference("");
     setPaymentOpen(true);
   }
 
@@ -168,6 +189,8 @@ export default function InvoiceDetailPage() {
         amount: paymentAmount.trim(),
         currency: "ZAR",
         paid_on: paymentDate,
+        tender: paymentMethod,
+        reference: paymentReference.trim() || undefined,
       });
       setLastPayment(payment);
       setPaymentOpen(false);
@@ -177,6 +200,80 @@ export default function InvoiceDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to record payment.");
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (actionHandled || !invoice || invoice.is_archive || !canMutate) return;
+    setActionHandled(true);
+    if (requestedAction === "pay" && hasPositiveBalance(invoice.balance)) {
+      setPaymentAmount(invoice.balance);
+      setPaymentDate(todayIso());
+      setPaymentReference("");
+      setPaymentOpen(true);
+    } else if (requestedAction === "credit" && !creditNote) {
+      setCreditOpen(true);
+    }
+  }, [actionHandled, canMutate, creditNote, invoice, requestedAction]);
+
+  async function handleArchive(archived: boolean) {
+    if (!invoice) return;
+    setArchiveOpen(false);
+    setActionLoading(true);
+    setError(null);
+    try {
+      const saved = await invoiceAction(invoice.id, archived ? "archive" : "restore");
+      setInvoice(saved);
+      setSuccess(
+        archived
+          ? `${saved.invoice_number} archived. It still counts in the books, VAT and reports.`
+          : `${saved.invoice_number} restored to the active list.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change the invoice.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (canMutate) listSalesStaffOptions().then(setColleagues).catch(() => setColleagues(null));
+  }, [canMutate]);
+
+  async function handleSalesColleague(staffId: string) {
+    if (!invoice) return;
+    setColleagueSaving(true);
+    setError(null);
+    try {
+      const saved = await updateInvoiceSalesStaff(invoice.id, staffId || null);
+      setInvoice(saved);
+      setSuccess(
+        saved.sales_staff_name
+          ? `Commission on ${saved.invoice_number} now goes to ${saved.sales_staff_name}.`
+          : `${saved.invoice_number} no longer has a sales colleague.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change the sales colleague.");
+    } finally {
+      setColleagueSaving(false);
+    }
+  }
+
+  async function handleSaveNote() {
+    if (!invoice) {
+      return;
+    }
+    setNoteSaving(true);
+    setError(null);
+    try {
+      const saved = await updateInvoiceNote(invoice.id, noteDraft.trim());
+      setInvoice(saved);
+      setNoteDraft(saved.note_internal ?? "");
+      setSuccess("Internal note saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save the internal note.");
+    } finally {
+      setNoteSaving(false);
     }
   }
 
@@ -263,8 +360,10 @@ export default function InvoiceDetailPage() {
 
   const showPayment = !invoice.is_archive && canMutate && hasPositiveBalance(invoice.balance);
   const showCreditNote = !invoice.is_archive && canMutate && !creditNote;
-  const paymentStatus = invoice.is_archive ? "unknown" : invoice.payment_status;
+  const statusTag = invoiceStatusTag(invoice);
   const formatInvoiceAmount = invoice.is_archive ? formatArchiveCurrency : formatZarAmount;
+  const canEditNote = !invoice.is_archive && canMutate;
+  const noteChanged = noteDraft.trim() !== (invoice.note_internal ?? "");
 
   return (
     <Stack gap={6}>
@@ -278,10 +377,25 @@ export default function InvoiceDetailPage() {
         <p className="cds--type-body-01">
           {invoice.customer_name} · Issued {invoice.issue_date}
         </p>
-        <Tag type={settlementTagType(paymentStatus)} size="sm">
-          {settlementStatusLabel(paymentStatus)}
+        <Tag type={statusTag.type} size="sm">
+          {statusTag.label}
         </Tag>
+        {invoice.is_archived ? (
+          <Tag type="outline" size="sm">
+            Archived
+          </Tag>
+        ) : null}
       </div>
+
+      {invoice.is_archived ? (
+        <InlineNotification
+          kind="info"
+          title="Archived"
+          subtitle="Hidden from the default list. It still counts in the books, VAT and reports."
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
 
       {invoice.is_archive ? (
         <InlineNotification
@@ -327,7 +441,22 @@ export default function InvoiceDetailPage() {
             Issue credit note
           </Button>
         ) : null}
+        {canMutate ? (
+          <OverflowMenu aria-label="More invoice actions" iconDescription="More invoice actions" flipped size="lg">
+            {invoice.is_archived ? (
+              <OverflowMenuItem itemText="Restore" disabled={actionLoading} onClick={() => void handleArchive(false)} />
+            ) : (
+              <OverflowMenuItem itemText="Archive" disabled={actionLoading} onClick={() => setArchiveOpen(true)} />
+            )}
+          </OverflowMenu>
+        ) : null}
       </Stack> : null}
+
+      <ArchiveInvoiceModal
+        invoiceNumber={archiveOpen ? invoice.invoice_number : null}
+        onClose={() => setArchiveOpen(false)}
+        onConfirm={() => void handleArchive(true)}
+      />
 
       {!invoice.is_archive && creditNote ? (
         <Stack gap={3}>
@@ -438,7 +567,73 @@ export default function InvoiceDetailPage() {
             Balance owing: {formatSettlementAmount(invoice.balance, invoice.is_archive)}
           </p>
         </div>
+        {invoice.note_printed ? (
+          <div>
+            <p className="cds--type-label-01">Note</p>
+            <p className="cds--type-body-01" style={{ whiteSpace: "pre-wrap" }}>{invoice.note_printed}</p>
+          </div>
+        ) : null}
       </section>
+
+      {canEditNote && colleagues ? (
+        <div style={{ maxWidth: "20rem" }}>
+          <Select
+            id="invoice-sales-colleague"
+            labelText="Sales colleague"
+            helperText="Who made this sale. Their commission counts it."
+            value={invoice.sales_staff_id ?? ""}
+            disabled={colleagueSaving}
+            onChange={(event) => void handleSalesColleague(event.target.value)}
+          >
+            <SelectItem value="" text="No colleague (unattributed)" />
+            {invoice.sales_staff_id && !colleagues.some((item) => item.id === invoice.sales_staff_id) ? (
+              <SelectItem value={invoice.sales_staff_id} text={`${invoice.sales_staff_name ?? "Colleague"} (inactive)`} />
+            ) : null}
+            {colleagues.map((item) => <SelectItem key={item.id} value={item.id} text={item.name} />)}
+          </Select>
+        </div>
+      ) : invoice.sales_staff_name ? (
+        <div>
+          <p className="cds--type-label-01">Sales colleague</p>
+          <p className="cds--type-body-01">{invoice.sales_staff_name}</p>
+        </div>
+      ) : null}
+
+      {canEditNote ? (
+        <Stack gap={3}>
+          <TextArea
+            id="invoice-note-internal"
+            labelText="Internal note"
+            helperText="Staff only. Never printed."
+            rows={3}
+            maxCount={INVOICE_NOTE_MAX}
+            enableCounter
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+          />
+          {noteChanged ? (
+            <Stack gap={3} orientation="horizontal">
+              <Button size="sm" disabled={noteSaving} onClick={() => void handleSaveNote()}>
+                {noteSaving ? "Saving…" : "Save note"}
+              </Button>
+              <Button
+                size="sm"
+                kind="ghost"
+                disabled={noteSaving}
+                onClick={() => setNoteDraft(invoice.note_internal ?? "")}
+              >
+                Cancel
+              </Button>
+            </Stack>
+          ) : null}
+        </Stack>
+      ) : invoice.note_internal ? (
+        <div>
+          <p className="cds--type-label-01">Internal note</p>
+          <p className="cds--type-body-01" style={{ whiteSpace: "pre-wrap" }}>{invoice.note_internal}</p>
+          <p className="cds--type-helper-text-01">Staff only. Never printed.</p>
+        </div>
+      ) : null}
 
       {invoice.is_archive ? <p className="cds--type-body-01">Payments: Not imported</p> : <TableContainer title="Payments" description="Money received against this invoice">
         <Table>
@@ -447,13 +642,15 @@ export default function InvoiceDetailPage() {
               <TableHeader>Number</TableHeader>
               <TableHeader>Paid on</TableHeader>
               <TableHeader>Amount</TableHeader>
+              <TableHeader>Method</TableHeader>
+              <TableHeader>Reference</TableHeader>
               <TableHeader>Reconciled</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
             {payments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4}>No payments recorded yet.</TableCell>
+                <TableCell colSpan={6}>No payments recorded yet.</TableCell>
               </TableRow>
             ) : (
               payments.map((payment) => (
@@ -461,7 +658,9 @@ export default function InvoiceDetailPage() {
                   <TableCell>{payment.payment_number}</TableCell>
                   <TableCell>{payment.paid_on}</TableCell>
                   <TableCell>{formatZarAmount(payment.amount)}</TableCell>
-                  <TableCell>{payment.is_reconciled ? "Yes" : "No"}</TableCell>
+                  <TableCell>{paymentMethodLabel(payment.tender)}</TableCell>
+                  <TableCell>{payment.reference ?? "—"}</TableCell>
+                  <TableCell>{payment.is_voided ? "Voided" : payment.is_reconciled ? "Yes" : "No"}</TableCell>
                 </TableRow>
               ))
             )}
@@ -469,7 +668,7 @@ export default function InvoiceDetailPage() {
         </Table>
       </TableContainer>}
 
-      <BooksHistory documentType="invoice" documentId={invoice.id} />
+      <BooksHistory key={invoice.sales_staff_id ?? ""} documentType="invoice" documentId={invoice.id} />
 
       {!invoice.is_archive ? <Modal
         open={paymentOpen}
@@ -496,6 +695,13 @@ export default function InvoiceDetailPage() {
             value={paymentDate}
             onChange={(event) => setPaymentDate(event.target.value)}
             required
+          />
+          <PaymentMethodFields
+            idPrefix="invoice-payment"
+            method={paymentMethod}
+            reference={paymentReference}
+            onMethodChange={setPaymentMethod}
+            onReferenceChange={setPaymentReference}
           />
         </Stack>
       </Modal> : null}

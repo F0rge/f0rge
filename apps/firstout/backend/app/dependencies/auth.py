@@ -51,7 +51,6 @@ from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
 from app.services.settings import SettingsService
-from app.services.document_intake.invoice_flow import InvoiceIntakeService
 from app.services.document_intake.service import DocumentIntakeService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
@@ -72,6 +71,7 @@ from app.services.transfers import TransferService
 from app.services.picks import PickService
 from app.services.till_orchestrator import TillOrchestrator
 from app.services.roles import RoleService
+from app.services.sales_staff import SalesStaffService
 from app.services.users import BootstrapService, ProfileService, UserService
 from app.services.vat201_periods import Vat201PeriodService
 from app.services.books_periods import BooksPeriodService
@@ -120,10 +120,6 @@ def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
 
 def get_document_intake_service(db: AsyncSession = Depends(get_db)) -> DocumentIntakeService:
     return DocumentIntakeService(db)
-
-
-def get_invoice_intake_service(db: AsyncSession = Depends(get_db)) -> InvoiceIntakeService:
-    return InvoiceIntakeService(db)
 
 
 def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
@@ -286,6 +282,10 @@ def get_pick_service(db: AsyncSession = Depends(get_db)) -> PickService:
     return PickService(db)
 
 
+def get_sales_staff_service(db: AsyncSession = Depends(get_db)) -> SalesStaffService:
+    return SalesStaffService(db)
+
+
 def get_role_service(db: AsyncSession = Depends(get_db)) -> RoleService:
     return RoleService(db)
 
@@ -341,3 +341,7 @@ require_customers_mutate = _require(SALES_CUSTOMERS)
 require_customers_patch = _require(SALES_CUSTOMERS, USERS_MANAGE, PO_RAISE)
 require_cost_audit_view = _require(STOCK_COST_VIEW)
 require_picks_mutate = _require(STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES)
+# Commission amounts are pay information: books or staff managers only.
+require_commission_view = _require(BOOKS_MUTATE, USERS_MANAGE)
+# Names of active sales colleagues for the till and invoice screens.
+require_sales_staff_options = _require(TILL_SELL, SALES_QUOTES, BOOKS_MUTATE, USERS_MANAGE)

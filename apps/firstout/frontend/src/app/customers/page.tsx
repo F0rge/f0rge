@@ -41,6 +41,7 @@ import {
   PRICE_CLASSIFICATIONS,
   canManageCustomerCredit,
   canMutateCustomers,
+  customerInvoicesHref,
   createCustomer,
   findCustomerDuplicates,
   formatZarAmount,
@@ -418,7 +419,7 @@ function CustomersScreen() {
                     <Button
                       kind="ghost"
                       size="sm"
-                      href={`/invoices?customer=${item.id}`}
+                      href={customerInvoicesHref(item.name)}
                     >
                       View invoices
                     </Button>

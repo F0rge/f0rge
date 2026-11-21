@@ -80,9 +80,9 @@ async def test_named_customer_quote_and_pdf_says_quote(
     assert pdf.status_code == 200
     text = _pdf_text(pdf.content)
     assert "Quote" in text
-    assert "Quote No" in text
-    assert "Invoice No" not in text
-    assert "Tax Invoice" not in text
+    assert "Quote no." in text
+    assert "Invoice no." not in text
+    assert "Tax invoice" not in text
 
 
 async def test_quote_requires_customer(owner_client: AsyncClient) -> None:

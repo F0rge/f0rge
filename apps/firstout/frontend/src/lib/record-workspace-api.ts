@@ -10,7 +10,11 @@ export type WorkspaceResource =
   | "roles"
   | "accounts"
   | "repeating-invoices"
-  | "proformas";
+  | "proformas"
+  | "quotes"
+  | "payments"
+  | "bills"
+  | "invoices";
 export type WorkspaceValue = string | number | boolean | null;
 export type WorkspaceOperator =
   | "eq"

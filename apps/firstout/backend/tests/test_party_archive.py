@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import json
 import uuid
 
 import pytest
@@ -359,33 +358,3 @@ async def test_archived_supplier_cannot_be_new_catalogue_assignment_until_restor
         json={"preferred_supplier_id": supplier["id"], "lead_time_days": 21},
     )
     assert unchanged.status_code == 200
-
-
-async def test_incoming_invoice_for_existing_po_accepts_archived_supplier(owner_client, async_db):
-    from tests.test_document_intake_invoice import (
-        INVOICE_PDF,
-        INVOICE_JSON,
-        _open_order,
-        _process_payload,
-        _document,
-        _usage,
-    )
-    from app.services.document_intake.service import DocumentIntakeService
-
-    po = await _open_order(owner_client)
-    await archive_party(owner_client, "suppliers", po["supplier_id"])
-    intake = DocumentIntakeService(async_db)
-    new_proforma = await intake.build_proforma_review(_document(INVOICE_JSON), _usage())
-    assert new_proforma.supplier.supplier_id is None
-    incoming = await intake.build_proforma_review(
-        _document(INVOICE_JSON), _usage(), include_archived_suppliers=True
-    )
-    assert str(incoming.supplier.supplier_id) == po["supplier_id"]
-    processed = await owner_client.post(
-        "/api/v1/document-intake/invoices/process",
-        data={"payload": json.dumps(_process_payload(po))},
-        files={"file": ("archive.pdf", INVOICE_PDF, "application/pdf")},
-    )
-    assert processed.status_code == 200, processed.text
-    bill = await owner_client.get(f"/api/v1/bills/{processed.json()['bill_id']}")
-    assert bill.status_code == 200 and bill.json()["purchase_order_id"] == po["po_id"]

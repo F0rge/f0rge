@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi.responses import Response
 
@@ -10,8 +11,10 @@ from f0rge_core.exceptions import NotFoundError
 
 
 def _content_disposition(filename: str) -> str:
-    safe = filename.replace('"', "")
-    return f'attachment; filename="{safe}"'
+    """ASCII ``filename`` for old clients, RFC 5987 ``filename*`` for the real name."""
+    name = "".join(ch for ch in filename if ch.isprintable()).strip() or "download"
+    fallback = "".join(ch if ch.isascii() and ch not in '"\\' else "_" for ch in name)
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(name, safe='')}"
 
 
 def media_type_for_storage_key(storage_key: str) -> str:

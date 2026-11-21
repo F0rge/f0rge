@@ -22,10 +22,13 @@ from app.schemas.repeating_invoice import RepeatingInvoiceUpdate
 from app.schemas.supplier import SupplierUpdate
 from app.schemas.user import UserUpdate
 from app.services.accounts import AccountService
+from app.services.bills import BillService
 from app.services.customers_crm import CustomersCrmService
+from app.services.invoices import InvoiceService
 from app.services.locations import LocationService
 from app.services.price_lists import PriceListService
 from app.services.proformas import ProformaService
+from app.services.quotes import QuotesService
 from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.roles import RoleService
 from app.services.suppliers import SupplierService
@@ -88,6 +91,10 @@ async def blocked_reason(
             return "Names must be changed individually to preserve unique record identities"
     if resource == "roles":
         return await RoleService(db).deletion_block_reason(row)
+    if resource == "invoices" and row.source == "imported":
+        return "Imported invoices are read-only history"
+    if resource == "quotes" and row.is_converted:
+        return "Converted quotes are kept; duplicate one to quote again"
     if resource == "users" and action == "disable":
         owner_slugs = await RoleCRUD(db).list_owner_slugs()
         if row.role == SLUG_OWNER or row.role in owner_slugs:
@@ -156,6 +163,12 @@ async def apply_action(
             await service.set_archived(record_id, action == "archive")
     elif resource == "proformas":
         await ProformaService(db).set_archived(record_id, action == "archive")
+    elif resource == "quotes":
+        await QuotesService(db).delete(record_id)
+    elif resource == "bills":
+        await BillService(db).set_archived(record_id, action == "archive", actor)
+    elif resource == "invoices":
+        await InvoiceService(db).set_archived(record_id, action == "archive", actor)
     elif resource == "locations":
         data = patch if action == "edit" else {"is_archived": action == "archive"}
         await LocationService(db).update(record_id, LocationUpdate.model_validate(data))

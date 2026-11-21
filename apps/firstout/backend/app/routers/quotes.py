@@ -17,10 +17,13 @@ from app.schemas.quote import (
     QuoteAccept,
     QuoteCreate,
     QuoteListItem,
+    QuotePreviewRequest,
+    QuoteReplace,
     QuoteResponse,
     QuoteUpdate,
 )
 from app.schemas.sales_order import SalesOrderResponse
+from app.schemas.till import TillPricePreview
 from app.services.quotes import QuotesService
 
 quotes_router = APIRouter(prefix="/api/v1/quotes", tags=["quotes"])
@@ -45,6 +48,15 @@ async def create_quote(
     return await service.create(body, user_id)
 
 
+@quotes_router.post("/preview", response_model=TillPricePreview)
+async def preview_quote_prices(
+    body: QuotePreviewRequest,
+    user_id: uuid.UUID = Depends(require_quotes),
+    service: QuotesService = Depends(get_quote_service),
+):
+    return await service.preview(body, user_id)
+
+
 @quotes_router.get("/{quote_id}", response_model=QuoteResponse)
 async def get_quote(
     quote_id: uuid.UUID,
@@ -64,6 +76,27 @@ async def update_quote(
     return await service.update(quote_id, body, user_id)
 
 
+@quotes_router.put("/{quote_id}", response_model=QuoteResponse)
+async def replace_quote(
+    quote_id: uuid.UUID,
+    body: QuoteReplace,
+    user_id: uuid.UUID = Depends(require_quotes),
+    service: QuotesService = Depends(get_quote_service),
+):
+    return await service.update(quote_id, body, user_id)
+
+
+@quotes_router.delete("/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quote(
+    quote_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_quotes),
+    service: QuotesService = Depends(get_quote_service),
+) -> Response:
+    await service.delete(quote_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# Not offered by the quotes screen any more; sales orders and older tools still use these.
 @quotes_router.post("/{quote_id}/mark-sent", response_model=QuoteResponse)
 async def mark_quote_sent(
     quote_id: uuid.UUID,

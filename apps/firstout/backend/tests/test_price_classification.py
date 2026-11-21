@@ -204,7 +204,7 @@ async def test_retail_pdf_shows_inclusive_unit_and_same_vat_totals(
     pdf = await owner_client.get(f"/api/v1/quotes/{body['id']}/pdf")
     assert pdf.status_code == 200
     text = _pdf_text(pdf.content)
-    assert "1150.00 incl. VAT" in text
+    assert "Unit incl. VAT" in text and "1150.00" in text
     assert "Unit prices incl. VAT" in text
     assert "150.00" in text
 
@@ -224,7 +224,7 @@ async def test_retail_pdf_shows_inclusive_unit_and_same_vat_totals(
     invoice_pdf = await owner_client.get(f"/api/v1/invoices/{invoice_body['id']}/pdf")
     assert invoice_pdf.status_code == 200
     invoice_text = _pdf_text(invoice_pdf.content)
-    assert "1150.00 incl. VAT" in invoice_text
+    assert "Unit incl. VAT" in invoice_text and "1150.00" in invoice_text
     assert "Unit prices incl. VAT" in invoice_text
 
 
@@ -251,7 +251,7 @@ async def test_wholesale_pdf_shows_exclusive_unit(
     assert body["total_inc_vat"] == "920.00"
     pdf = await owner_client.get(f"/api/v1/quotes/{body['id']}/pdf")
     text = _pdf_text(pdf.content)
-    assert "800.00 excl. VAT" in text
+    assert "Unit excl. VAT" in text and "800.00" in text
     assert "Unit prices excl. VAT" in text
     assert "920.00" in text
 

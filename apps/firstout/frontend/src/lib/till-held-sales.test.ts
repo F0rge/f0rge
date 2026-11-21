@@ -28,6 +28,28 @@ describe("held sale resume recovery", () => {
     });
   });
 
+  it("keeps the sale's printed and internal notes through a hold", () => {
+    const destination = cartSnapshot({ ...held, note_printed: "Deliver after 10:00", note_internal: "Staff only" });
+    expect(heldSaleRequest(destination)).toMatchObject({
+      note_printed: "Deliver after 10:00", note_internal: "Staff only",
+    });
+    expect(heldSaleRequest(cartSnapshot(held))).not.toHaveProperty("note_printed");
+  });
+
+  it("keeps the sales colleague through a hold", () => {
+    expect(heldSaleRequest(cartSnapshot({ ...held, sales_staff_id: "staff-1" }))).toMatchObject({
+      sales_staff_id: "staff-1",
+    });
+    expect(heldSaleRequest(cartSnapshot(held))).not.toHaveProperty("sales_staff_id");
+  });
+
+  it("keeps the quote a sale converts through a hold", () => {
+    expect(heldSaleRequest(cartSnapshot({ ...held, quote_id: "quote-1" }))).toMatchObject({
+      quote_id: "quote-1",
+    });
+    expect(heldSaleRequest(cartSnapshot(held))).not.toHaveProperty("quote_id");
+  });
+
   it("drops links from removed products without removing links from retained kits", () => {
     const cart = {
       ...cartSnapshot(held),

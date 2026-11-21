@@ -1,0 +1,39 @@
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  border: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+  margin: 0 0 1rem;
+}
+
+.kpi {
+  padding: 0.875rem 1.25rem;
+  min-width: 0;
+  border-inline-start: 1px solid var(--cds-border-subtle-01);
+}
+
+.kpi:first-child {
+  border-inline-start: 0;
+}
+
+.kpi dt {
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+}
+
+.kpi dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.75rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi .sub {
+  color: var(--cds-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.warn dd:first-of-type {
+  color: var(--cds-text-error);
+}

@@ -6,7 +6,17 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -55,6 +65,16 @@ class Payment(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     tender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
     is_reconciled: Mapped[bool] = mapped_column(nullable=False, default=False)
     reconciled_at: Mapped[Optional[datetime.datetime]] = mapped_column(nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    voided_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    voided_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    void_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     invoice: Mapped[Optional["TaxInvoice"]] = relationship()
     bill: Mapped[Optional["Bill"]] = relationship()

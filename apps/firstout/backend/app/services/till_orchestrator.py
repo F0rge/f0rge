@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
+from app.services.sales_staff import SalesStaffService
 from app.services.party_archive import assert_customer_active
 from app.services.sellability import assert_sku_sellable
 from app.services.sku_archive import SkuArchiveService
@@ -26,6 +27,7 @@ from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
 from app.models.payment import Payment, PaymentDirection
+from app.models.quote import QuoteStatus
 from app.models.customer import Customer
 from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
@@ -91,9 +93,10 @@ class TillOrchestrator:
         self.bom_crud = SkuBomLineCRUD(db)
         self.pick_crud = PickCRUD(db)
 
-    async def _require_discounts(
+    async def require_discounts(
         self, request: TillPriceRequest, user_id: uuid.UUID | None, max_discount: Decimal | None
     ) -> None:
+        """Line discounts need till.discount; above the team maximum, users.manage too."""
         if user_id is None or not any(line.discount_percent > 0 for line in request.lines):
             return
         permissions = PermissionService(self.db)
@@ -138,7 +141,7 @@ class TillOrchestrator:
         if team is None:
             raise NotFoundError("Team not found")
         settings = await TeamSettingsCRUD(self.db).get_by_team_id(team.id)
-        await self._require_discounts(
+        await self.require_discounts(
             request, user_id, settings.max_till_discount_percent if settings else None
         )
         customer = await self._active_customer(request)
@@ -155,7 +158,7 @@ class TillOrchestrator:
             raise NotFoundError("Team not found")
         settings_crud = TeamSettingsCRUD(self.db)
         settings = await settings_crud.get_by_team_id(team.id)
-        await self._require_discounts(
+        await self.require_discounts(
             data, user_id, settings.max_till_discount_percent if settings else None
         )
 
@@ -169,6 +172,15 @@ class TillOrchestrator:
             raise ConflictError("Cannot sell from archived location")
         if location.type != LocationType.SHOWROOM:
             raise ConflictError("Till sales are only allowed at showroom locations")
+        await SalesStaffService(self.db).check_sale_colleague(data.sales_staff_id)
+        quote = None
+        quote_number: Optional[str] = None
+        if data.quote_id is not None:
+            from app.services.quotes import QuotesService
+
+            # Locked until the sale commits: a quote converts into exactly one invoice.
+            quote = await QuotesService(self.db).lock_for_conversion(data.quote_id)
+            quote_number = quote.quote_number
 
         from app.services.till_basket import TillBasketService
 
@@ -187,8 +199,11 @@ class TillOrchestrator:
             await baskets.prune(started)
 
         customer = await self._active_customer(data)
+        on_account = data.tender == "statement"
+        # Pay on statement takes any customer: no credit hold or limit checks.
+        credit_checked = not on_account and not self.credit.is_walk_in(customer)
         override_note = None
-        if not self.credit.is_walk_in(customer):
+        if credit_checked:
             override_note = await self.credit.authorize_override(
                 credit_override=data.credit_override,
                 credit_override_reason=data.credit_override_reason,
@@ -196,6 +211,8 @@ class TillOrchestrator:
             )
             await self.credit.assert_not_held(customer, credit_override=data.credit_override)
         sale_date = datetime.date.today()
+        if data.due_date is not None and data.due_date < sale_date:
+            raise ValidationError("Due date cannot be before the issue date")
         await assert_date_postable(self.db, sale_date)
 
         line_inputs: list[tuple[Sku, TillPriceLine]] = []
@@ -325,17 +342,16 @@ class TillOrchestrator:
         if subtotal <= 0:
             raise ValidationError("Sale total must be positive")
 
-        if not self.credit.is_walk_in(customer):
+        if credit_checked:
             await self.credit.assert_within_limit(
                 customer, total_inc, credit_override=data.credit_override
             )
 
         team_settings = await settings_crud.get_or_create_for_team(team.id)
-        due_date = compute_due_date(sale_date, customer, team_settings)
+        due_date = data.due_date or compute_due_date(sale_date, customer, team_settings)
 
         async with unit_of_work(self.db):
             invoice_number = await self.invoice_crud.get_next_invoice_number()
-            payment_number = await self.payment_crud.get_next_payment_number()
 
             invoice = TaxInvoice(
                 invoice_number=invoice_number,
@@ -347,24 +363,15 @@ class TillOrchestrator:
                 total_inc_vat=total_inc,
                 amount_paid=Decimal(0),
                 prices_include_vat=preview.prices_include_vat,
+                on_account=on_account,
+                note_printed=data.note_printed,
+                note_internal=data.note_internal,
+                sales_staff_id=data.sales_staff_id,
+                source="till",
                 lines=invoice_line_models,
             )
 
-            payment = Payment(
-                payment_number=payment_number,
-                direction=PaymentDirection.IN,
-                invoice_id=None,
-                amount=total_inc,
-                currency="ZAR",
-                fx_to_zar=Decimal("1"),
-                amount_zar=total_inc,
-                fx_gain_loss_zar=Decimal(0),
-                paid_on=sale_date,
-                tender=data.tender,
-            )
-
             await self.invoice_crud.add_and_flush(invoice)
-            payment.invoice_id = invoice.id
 
             await self.posting.post(
                 JournalDocumentType.INVOICE,
@@ -380,17 +387,31 @@ class TillOrchestrator:
                 entry_date=sale_date,
             )
 
-            await self.payment_crud.add_and_flush(payment)
-            await self.posting.post(
-                JournalDocumentType.PAYMENT,
-                payment.id,
-                f"Till payment {payment_number} ({data.tender})",
-                [
-                    (CODE_BANK, total_inc, Decimal(0)),
-                    (CODE_AR, Decimal(0), total_inc),
-                ],
-                entry_date=sale_date,
-            )
+            payment: Optional[Payment] = None
+            if not on_account:
+                payment = Payment(
+                    payment_number=await self.payment_crud.get_next_payment_number(),
+                    direction=PaymentDirection.IN,
+                    invoice_id=invoice.id,
+                    amount=total_inc,
+                    currency="ZAR",
+                    fx_to_zar=Decimal("1"),
+                    amount_zar=total_inc,
+                    fx_gain_loss_zar=Decimal(0),
+                    paid_on=sale_date,
+                    tender=data.tender,
+                )
+                await self.payment_crud.add_and_flush(payment)
+                await self.posting.post(
+                    JournalDocumentType.PAYMENT,
+                    payment.id,
+                    f"Till payment {payment.payment_number} ({data.tender})",
+                    [
+                        (CODE_BANK, total_inc, Decimal(0)),
+                        (CODE_AR, Decimal(0), total_inc),
+                    ],
+                    entry_date=sale_date,
+                )
 
             if total_cogs > 0:
                 await self.posting.post(
@@ -416,7 +437,12 @@ class TillOrchestrator:
             for pick in picks_to_link:
                 pick.invoice_id = invoice.id
 
-            invoice.amount_paid = total_inc
+            if quote is not None:
+                quote.status = QuoteStatus.CONVERTED
+                quote.converted_invoice_id = invoice.id
+
+            if payment is not None:
+                invoice.amount_paid = total_inc
             if basket is not None:
                 # Releases the basket's reservations in the transaction that deducts stock.
                 await baskets.set_contents(basket)
@@ -437,12 +463,13 @@ class TillOrchestrator:
                 actor_user_id=user_id,
                 note=override_note,
             )
-            await self.events.record(
-                BooksDocumentType.PAYMENT,
-                payment.id,
-                BooksEventAction.CREATED,
-                actor_user_id=user_id,
-            )
+            if payment is not None:
+                await self.events.record(
+                    BooksDocumentType.PAYMENT,
+                    payment.id,
+                    BooksEventAction.CREATED,
+                    actor_user_id=user_id,
+                )
             await self.invoice_crud.commit_refresh(invoice)
 
         if user_id is not None:
@@ -465,10 +492,13 @@ class TillOrchestrator:
             invoice_id=reloaded.id,
             pick_id=pick_id,
             invoice_number=reloaded.invoice_number,
-            payment_id=payment.id,
-            payment_number=payment.payment_number,
+            payment_id=payment.id if payment is not None else None,
+            payment_number=payment.payment_number if payment is not None else None,
             tender=data.tender,
             issue_date=reloaded.issue_date,
+            due_date=reloaded.due_date,
+            on_account=reloaded.on_account,
+            quote_number=quote_number,
             subtotal_ex_vat=reloaded.subtotal_ex_vat,
             vat_amount=reloaded.vat_amount.quantize(CENT),
             total_inc_vat=reloaded.total_inc_vat.quantize(CENT),

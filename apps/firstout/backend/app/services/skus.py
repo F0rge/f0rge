@@ -191,6 +191,11 @@ class SkuService:
                 raise ConflictError("Kits require stock at the till")
             sku.till_no_stock_required = data.till_no_stock_required
 
+        if "exclude_from_commission" in fields_set:
+            if data.exclude_from_commission is None:
+                raise ValidationError("exclude_from_commission must not be null")
+            sku.exclude_from_commission = data.exclude_from_commission
+
         if "our_ref" in fields_set:
             assert data.our_ref is not None
             if await self.crud.get_by_our_ref(data.our_ref, exclude_id=sku.id) is not None:
@@ -355,6 +360,7 @@ class SkuService:
         sku = Sku(
             is_sellable=data.is_sellable,
             till_no_stock_required=data.till_no_stock_required,
+            exclude_from_commission=data.exclude_from_commission,
             our_ref=data.our_ref,
             our_barcode=barcode,
             name=data.name,
@@ -496,6 +502,7 @@ class SkuService:
         return SkuResponse(
             is_sellable=sku.is_sellable,
             till_no_stock_required=sku.till_no_stock_required,
+            exclude_from_commission=sku.exclude_from_commission,
             is_archived=sku.is_archived,
             archived_at=sku.archived_at,
             archived_by_id=sku.archived_by_id,

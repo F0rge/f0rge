@@ -5,12 +5,8 @@ import { StaffImage } from "@/components/staff-image";
 import {
   Button,
   Checkbox,
-  ClickableTile,
-  ComboBox,
   InlineNotification,
   Modal,
-  NumberInput,
-  Pagination,
   RadioButton,
   RadioButtonGroup,
   Select,
@@ -36,18 +32,16 @@ import {
   Bookmark,
   Building,
   Currency,
-  Image as ImageIcon,
   Location as LocationIcon,
-  Locked,
   Money,
   Purchase,
+  Receipt,
   Scan,
-  TrashCan,
   Undo,
-  UserFollow,
 } from "@carbon/icons-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -56,17 +50,25 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { CustomerPicker } from "@/components/customer-picker";
+import {
+  CartEditor,
+  mergeCartBySku,
+  clampDiscount,
+  unitExVat,
+  type CartLine,
+} from "@/components/cart-editor";
 import { TillScanner } from "@/components/till-scanner";
 import {
   getMobileScanServerSnapshot,
   getMobileScanSnapshot,
   subscribeMobileScan,
 } from "@/lib/mobile-scan";
-import styles from "./page.module.css";
+import styles from "@/components/cart-editor.module.css";
 import { TillLoading } from "./loading-layout";
 import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
 import { TillPickList } from "./till-pick-list";
+import { localIsoDate, statementDueDate } from "@/lib/till-statement";
+import { rememberedColleague } from "@/lib/sales-staff";
 
 import {
   ApiError,
@@ -79,6 +81,7 @@ import {
   createPick,
   createTillSale,
   downloadInvoicePdf,
+  getQuote,
   getSettings,
   getSku,
   getTillBasket,
@@ -94,12 +97,12 @@ import {
   listInventory,
   listLocations,
   listPriceLists,
+  listSalesStaffOptions,
   listSkus,
   listTillReservations,
   parsePriceInput,
   previewTillPrices,
   settingsLogoUrl,
-  skuPhotoUrl,
   updateTillBasket,
   type AppSettings,
   type CustomerCrm,
@@ -107,8 +110,10 @@ import {
   type HeldSale,
   type Location,
   type PriceList,
+  type SalesStaffOption,
   type Sku,
   type PickDocument,
+  type Quote,
   type TillBasket,
   type TillPricePreview,
   type TillPriceRequest,
@@ -122,15 +127,6 @@ import {
   isPendingTillPick,
   restoreTillCartSkus,
 } from "@/lib/till-archive";
-import {
-  classificationOf,
-  displayUnitAmount,
-  isCin7GeneratedPriceList,
-  pricesIncludeVat,
-  quoteLineSuspectWarning,
-  quoteSkuUnitExVat,
-  vatBasisLabel,
-} from "@/lib/quote-sku-price";
 import { isCreditBlockMessage } from "@/lib/customer-crm";
 import {
   nextTillStateAfterKitConfirm,
@@ -194,98 +190,12 @@ const TENDER_OPTIONS: {
   label: string;
   icon: typeof Purchase;
 }[] = [
+  { value: "statement", label: "Pay on statement", icon: Receipt },
   { value: "card", label: "Card", icon: Purchase },
   { value: "cash", label: "Cash", icon: Money },
   { value: "eft", label: "EFT", icon: Building },
   { value: "deposit", label: "Layby Deposit", icon: Bookmark },
 ];
-
-/** A search result; reserved SKUs stay listed but cannot be chosen. */
-type SkuOption = Sku & { disabled?: boolean; reason?: string };
-
-type CartLine = {
-  key: string;
-  sku: Sku;
-  qty: number;
-  discountPercent: number;
-};
-
-function unitExVat(
-  sku: Sku,
-  customer: CustomerCrm | null,
-  priceLists: PriceList[],
-): number {
-  return quoteSkuUnitExVat(sku, customer, priceLists).unitExVat ?? 0;
-}
-
-function clampDiscount(value: number): number {
-  if (value < 0) {
-    return 0;
-  }
-  if (value > 100) {
-    return 100;
-  }
-  return value;
-}
-
-function skuItemToString(item: Sku | null): string {
-  return item ? `${item.our_ref} — ${item.name}` : "";
-}
-
-function filterSkuItem({
-  item,
-  inputValue,
-}: {
-  item: Sku;
-  inputValue: string | null;
-}): boolean {
-  const query = (inputValue ?? "").trim().toLowerCase();
-  if (!query) {
-    return true;
-  }
-  return (
-    item.name.toLowerCase().includes(query) ||
-    item.our_ref.toLowerCase().includes(query) ||
-    item.our_barcode.toLowerCase().includes(query)
-  );
-}
-
-function mergeCartBySku(
-  current: CartLine[],
-  sku: Sku,
-  addQty: number,
-): CartLine[] {
-  if (sku.is_archived) return current;
-  const existing = current.find((line) => line.sku.id === sku.id);
-  if (existing) {
-    return current.map((line) =>
-      line.sku.id === sku.id ? { ...line, qty: line.qty + addQty } : line,
-    );
-  }
-  return [...current, { key: sku.id, sku, qty: addQty, discountPercent: 0 }];
-}
-
-function SkuThumb({ sku }: { sku: Sku }) {
-  if (!sku.photo_storage_key) {
-    return (
-      <div
-        className="firstout-till-thumb firstout-till-thumb--placeholder"
-        aria-hidden
-      >
-        <ImageIcon size={20} />
-      </div>
-    );
-  }
-  return (
-    <StaffImage
-      className="firstout-till-thumb"
-      src={skuPhotoUrl(sku.id)}
-      alt=""
-      width={48}
-      height={48}
-    />
-  );
-}
 
 type RestoredCart = { lines: CartLine[]; customer: CustomerCrm | null };
 
@@ -314,19 +224,22 @@ async function hydrateCart(
 
 export default function TillPage() {
   const { user } = useAuth();
-  return <TillWorkspace key={workspaceIdentity(user)} />;
+  return (
+    <Suspense fallback={<TillLoading paymentOptions={TENDER_OPTIONS} tender="statement" />}>
+      <TillWorkspace key={workspaceIdentity(user)} />
+    </Suspense>
+  );
 }
 
 function TillWorkspace() {
   const router = useRouter();
+  // "Open in till" on a quote: /till?quote=<id>.
+  const quoteParam = useSearchParams().get("quote") ?? "";
   const mobileScan = useSyncExternalStore(
     subscribeMobileScan,
     getMobileScanSnapshot,
     getMobileScanServerSnapshot,
   );
-  const [productQuery, setProductQuery] = useState("");
-  const [productPage, setProductPage] = useState(1);
-  const [productPageSize, setProductPageSize] = useState(12);
   const { user } = useAuth();
   const canSell = canUseTill(user);
   const canDiscount = can(user, "till.discount");
@@ -345,6 +258,18 @@ function TillWorkspace() {
   const [resumedSale, setResumedSale] = useState(false);
   const [view, setView] = useState(0);
   const [heldNote, setHeldNote] = useState("");
+  // The sale's invoice notes: printed on the invoice, and staff only.
+  const [notePrinted, setNotePrinted] = useState("");
+  const [noteInternal, setNoteInternal] = useState("");
+  // Who made the sale (commission); defaults to this device's last choice.
+  const [salesStaffId, setSalesStaffId] = useState("");
+  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
+  const [colleaguesError, setColleaguesError] = useState(false);
+  // The open quote this sale converts; kept with the basket like the colleague.
+  const [quoteId, setQuoteId] = useState("");
+  const [quoteNumbers, setQuoteNumbers] = useState<Record<string, string>>({});
+  // A quote fetched from the URL, waiting for an empty, ready cart.
+  const [incomingQuote, setIncomingQuote] = useState<Quote | null>(null);
   const [heldNotice, setHeldNotice] = useState<{ title: string; subtitle?: string } | null>(null);
   const [heldFocus, setHeldFocus] = useState("");
   const [resumeDraft, setResumeDraft] = useState<HeldSale | null>(null);
@@ -369,7 +294,9 @@ function TillWorkspace() {
     error?: string;
   } | null>(null);
   const [pricingAttempt, setPricingAttempt] = useState(0);
-  const [tender, setTender] = useState<TillTender>("cash");
+  const [tender, setTender] = useState<TillTender>("statement");
+  // A typed due date belongs to the customer it was typed for; a new customer gets their terms.
+  const [dueDateEdit, setDueDateEdit] = useState<{ customerId: string; value: string } | null>(null);
   const [amountTendered, setAmountTendered] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadSucceeded, setLoadSucceeded] = useState(false);
@@ -444,10 +371,14 @@ function TillWorkspace() {
   const currentSnapshot = useMemo<TillCartSnapshot>(() => ({
     locationId, customerId, pickId, linkedPickIds,
     ...(heldNote ? { note: heldNote } : {}),
+    ...(notePrinted ? { notePrinted } : {}),
+    ...(noteInternal ? { noteInternal } : {}),
+    ...(salesStaffId ? { salesStaffId } : {}),
+    ...(quoteId ? { quoteId } : {}),
     lines: cart.map((line) => ({
       skuId: line.sku.id, qty: line.qty, discountPercent: line.discountPercent,
     })),
-  }), [locationId, customerId, pickId, linkedPickIds, heldNote, cart]);
+  }), [locationId, customerId, pickId, linkedPickIds, heldNote, notePrinted, noteInternal, salesStaffId, quoteId, cart]);
 
   const applySnapshot = useCallback((snapshot: TillCartSnapshot, restored: RestoredCart) => {
     setCart(restored.lines);
@@ -457,8 +388,21 @@ function TillWorkspace() {
     setPickId(snapshot.pickId);
     setLinkedPickIds(snapshot.linkedPickIds);
     setHeldNote(snapshot.note ?? "");
+    setNotePrinted(snapshot.notePrinted ?? "");
+    setNoteInternal(snapshot.noteInternal ?? "");
+    setSalesStaffId(snapshot.salesStaffId || rememberedColleague());
+    setQuoteId(snapshot.quoteId ?? "");
     setCartReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!canSell) return;
+    let live = true;
+    listSalesStaffOptions()
+      .then((rows) => { if (live) setColleagues(rows); })
+      .catch(() => { if (live) setColleaguesError(true); });
+    return () => { live = false; };
+  }, [canSell]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -526,9 +470,6 @@ function TillWorkspace() {
   );
   const vatRateLabel = `${companySettings?.vat_percent ?? "15"}%`;
 
-  const selectedSku = skus.find((sku) => sku.id === skuId);
-  const selectedNeedsFloorStock = selectedSku && requiresTillFloorStock(selectedSku);
-
   const selectedCustomer =
     customers.find((customer) => customer.id === customerId) ??
     (commitmentCustomer?.id === customerId ? commitmentCustomer : null);
@@ -546,20 +487,6 @@ function TillWorkspace() {
     );
   });
 
-  const browserProducts = skuOptions.filter(
-    (sku) =>
-      filterSkuItem({ item: sku, inputValue: productQuery }) ||
-      skuItemToString(sku).toLowerCase().includes(productQuery.toLowerCase()),
-  );
-  const browserPage = Math.min(
-    productPage,
-    Math.max(1, Math.ceil(browserProducts.length / productPageSize)),
-  );
-  const visibleProducts = browserProducts.slice(
-    (browserPage - 1) * productPageSize,
-    browserPage * productPageSize,
-  );
-
   const pendingTillPicks = tillPicks.filter(isPendingTillPick);
 
   useEffect(() => {
@@ -567,8 +494,6 @@ function TillWorkspace() {
     setCreditOverrideReason("");
     setCreditBlock(null);
   }, [customerId]);
-
-  const numericQty = typeof qty === "number" ? qty : 0;
 
   const cartQtyBySku = useMemo(() => {
     const totals = new Map<string, number>();
@@ -606,15 +531,8 @@ function TillWorkspace() {
       : sku.till_no_stock_required
         ? "No stock needed"
         : resultStockState(stockFor(sku.id), availabilityFor(sku.id));
-  const selectedAvailability = availabilityFor(skuId);
-  const selectedRemaining = selectedAvailability.addable;
   const reservedReason = (sku: Sku) =>
     requiresTillFloorStock(sku) ? availabilityFor(sku.id).reason : null;
-  const comboOptions: SkuOption[] = skuOptions.map((sku) => {
-    const reason = reservedReason(sku);
-    return reason ? { ...sku, disabled: true, reason } : sku;
-  });
-  const selectedSkuOption = comboOptions.find((sku) => sku.id === skuId) ?? null;
 
   const cartKits = useMemo(
     () => cart.filter((line) => line.sku.is_kit),
@@ -753,40 +671,35 @@ function TillWorkspace() {
     return () => controller.abort();
   }, [canSell, cartReady, priceRequest, pricingAttempt]);
 
-  const showInclusive = pricePreview?.prices_include_vat ?? pricesIncludeVat(selectedCustomer);
-  const classification = pricePreview?.classification ?? classificationOf(selectedCustomer);
-  const assignedPriceList = priceLists.find((list) => list.id === selectedCustomer?.price_list_id);
-  const priceListName = pricePreview
-    ? pricePreview.price_list_name
-    : assignedPriceList && !isCin7GeneratedPriceList(assignedPriceList.name) ? assignedPriceList.name : null;
   const totalInc = Number(pricePreview?.total_inc_vat ?? 0);
   const totalIncLabel = pricePreview || !cart.length ? formatPriceAmount(totalInc) : "";
-  const money = (amount: string | number | undefined) =>
-    amount === undefined ? (cart.length ? "—" : formatZarAmount("0.00")) : formatZarAmount(formatPriceAmount(Number(amount)));
-  const beforeDiscount = pricePreview
-    ? Number(showInclusive ? pricePreview.before_discount_inc_vat : pricePreview.before_discount_ex_vat)
-    : undefined;
-  const discount = beforeDiscount === undefined || !pricePreview
-    ? undefined
-    : beforeDiscount - Number(showInclusive ? pricePreview.total_inc_vat : pricePreview.subtotal_ex_vat);
 
   useEffect(() => {
     setAmountTendered(totalIncLabel);
   }, [totalIncLabel]);
 
+  const onStatement = tender === "statement";
+  const saleDate = localIsoDate();
+  const dueDate =
+    dueDateEdit?.customerId === customerId
+      ? dueDateEdit.value
+      : statementDueDate(
+          saleDate,
+          selectedCustomer?.payment_terms_days,
+          companySettings?.payment_terms_days,
+        );
+  const dueDateError = !onStatement
+    ? null
+    : !dueDate
+      ? "Enter a due date."
+      : dueDate < saleDate
+        ? "The due date can't be before the issue date."
+        : null;
+  const creditOverrideActive = !onStatement && canOverrideCredit && creditOverride;
+
   const tenderedAmount = parsePriceInput(amountTendered) ?? totalInc;
   const changeAmount = Math.max(0, tenderedAmount - totalInc);
   const showChange = Boolean(pricePreview) && (tender === "cash" || tender === "eft");
-
-  const addValid =
-    canSell &&
-    locationId &&
-    skuId &&
-    selectedSku?.is_sellable &&
-    !selectedSku.is_archived &&
-    numericQty > 0 &&
-    (!selectedNeedsFloorStock || numericQty <= selectedRemaining) &&
-    unitExVat(selectedSku ?? ({} as Sku), selectedCustomer, priceLists) > 0;
 
   const focusScanField = useCallback(() => {
     if (!isDesktopPointer()) {
@@ -877,13 +790,17 @@ function TillWorkspace() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [applyScan]);
 
-  const unavailableStock = resumedSale ? cart.filter((line) =>
+  const unavailableStock = resumedSale || quoteId ? cart.filter((line) =>
     requiresTillFloorStock(line.sku) &&
     (cartQtyBySku.get(line.sku.id) ?? 0) > availabilityFor(line.sku.id).limit
   ) : [];
 
+  const colleague = colleagues?.find((item) => item.id === salesStaffId);
+  // Required once the business lists any active colleague; the server checks too.
+  const colleagueChosen = !colleagues?.length || !!colleague;
   const saleValid =
     canSell &&
+    colleagueChosen &&
     locationId &&
     !!pricePreview &&
     totalInc > 0 &&
@@ -937,18 +854,6 @@ function TillWorkspace() {
     });
     if (!sku.is_kit) focusScanField();
     return true;
-  }
-
-  function handleAddToCart() {
-    if (!addValid || !selectedSku) return;
-    if (addKnownProduct(selectedSku, numericQty)) {
-      setSkuId("");
-      setQty(1);
-    }
-  }
-
-  function addProductFromBrowser(sku: Sku) {
-    addKnownProduct(sku, 1);
   }
 
   function updateCartLine(
@@ -1037,6 +942,78 @@ function TillWorkspace() {
     }
   }
 
+  useEffect(() => {
+    if (!quoteParam || !canSell) return;
+    // ponytail: no cancel flag; the URL param is dropped only once the quote is loaded or declined.
+    getQuote(quoteParam)
+      .then((quote) => {
+        if (quote.status === "converted" || quote.status === "accepted" || quote.status === "cancelled") {
+          throw new Error(`${quote.quote_number} is ${quote.status} and cannot be sold again.`);
+        }
+        setIncomingQuote(quote);
+      })
+      .catch((failure: unknown) => {
+        setError(failure instanceof Error ? failure.message : "Could not load the quote.");
+        router.replace("/till");
+      });
+  }, [canSell, quoteParam, router]);
+
+  useEffect(() => {
+    if (!quoteId || quoteNumbers[quoteId]) return;
+    let live = true;
+    getQuote(quoteId)
+      .then((quote) => { if (live) setQuoteNumbers((current) => ({ ...current, [quote.id]: quote.quote_number })); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [quoteId, quoteNumbers]);
+
+  /** Put an open quote's customer, lines, notes and colleague into the empty cart. */
+  const loadQuote = useCallback(async (quote: Quote) => {
+    setIncomingQuote(null);
+    router.replace("/till");
+    try {
+      const missing: string[] = [];
+      const lines: CartLine[] = [];
+      for (const line of quote.lines) {
+        const sku = skus.find((item) => item.id === line.sku_id) ?? await getSku(line.sku_id).catch(() => null);
+        if (!sku || sku.is_archived || !sku.is_sellable) {
+          missing.push(line.our_ref);
+          continue;
+        }
+        lines.push({ key: sku.id, sku, qty: line.qty, discountPercent: Number(line.discount_percent) });
+      }
+      const customer = customers.find((item) => item.id === quote.customer_id) ?? await getCustomer(quote.customer_id);
+      if (customer.is_archived) throw new Error(`${customer.name} is archived. Restore the customer to sell this quote.`);
+      const walkIn = customer.name === WALK_IN_CUSTOMER_NAME;
+      setCommitmentCustomer(walkIn ? null : customer);
+      setCustomerId(walkIn ? "" : customer.id);
+      setCart(lines);
+      setNotePrinted(quote.notes ?? "");
+      setNoteInternal(quote.internal_note ?? "");
+      if (quote.sales_staff_id && colleagues?.some((item) => item.id === quote.sales_staff_id)) {
+        setSalesStaffId(quote.sales_staff_id);
+      }
+      setQuoteId(quote.id);
+      setQuoteNumbers((current) => ({ ...current, [quote.id]: quote.quote_number }));
+      setLastSale(null);
+      setView(0);
+      setError(missing.length
+        ? `${missing.join(", ")} could not be added: the product is archived or not for sale.`
+        : null);
+      setHeldNotice({ title: `${quote.quote_number} is in the till`, subtitle: "Check the payment method, prices and available stock before completing the sale." });
+    } catch (failure: unknown) {
+      setError(failure instanceof Error ? failure.message : "Could not load the quote.");
+    }
+  }, [colleagues, customers, router, skus]);
+
+  useEffect(() => {
+    // Waits for the colleague list so the quote's colleague carries over.
+    if (incomingQuote && cartReady && !heldLocked && !submitting && cart.length === 0 &&
+        (colleagues !== null || colleaguesError)) {
+      void loadQuote(incomingQuote);
+    }
+  }, [cart.length, cartReady, colleagues, colleaguesError, heldLocked, incomingQuote, loadQuote, submitting]);
+
   async function changeShowroom(next: string) {
     setPendingShowroom(null);
     if (heldLock.current) return;
@@ -1063,6 +1040,9 @@ function TillWorkspace() {
     setKitBlocks([]);
     setCreditBlock(null);
     setHeldNote("");
+    setNotePrinted("");
+    setNoteInternal("");
+    setQuoteId("");
     setHeldNotice(null);
     setBasketNotice(null);
     setHeldFocus("");
@@ -1117,7 +1097,7 @@ function TillWorkspace() {
         refreshReservations();
         applySnapshot(snapshot, restored);
         setResumedSale(true);
-        setTender("cash");
+        setTender("statement");
         setCreditOverride(false);
         setCreditOverrideReason("");
         refreshPrices();
@@ -1233,8 +1213,12 @@ function TillWorkspace() {
     if (!saleValid || !pricePreview || !cartReady || heldLocked || heldLock.current || submitting) {
       return;
     }
-    if (creditOverride && canOverrideCredit && !creditOverrideReason.trim()) {
+    if (creditOverrideActive && !creditOverrideReason.trim()) {
       setError("Override reason is required.");
+      return;
+    }
+    if (dueDateError) {
+      setError(dueDateError);
       return;
     }
     setSubmitting(true);
@@ -1252,9 +1236,14 @@ function TillWorkspace() {
         ...priceRequest,
         price_revision: pricePreview.price_revision,
         tender,
+        ...(onStatement ? { due_date: dueDate } : {}),
+        ...(notePrinted.trim() ? { note_printed: notePrinted.trim() } : {}),
+        ...(noteInternal.trim() ? { note_internal: noteInternal.trim() } : {}),
+        ...(colleague ? { sales_staff_id: colleague.id } : {}),
+        ...(quoteId ? { quote_id: quoteId } : {}),
         ...(pickId ? { pick_id: pickId } : {}),
         ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
-        ...(canOverrideCredit && creditOverride
+        ...(creditOverrideActive
           ? {
               credit_override: true,
               credit_override_reason: creditOverrideReason.trim(),
@@ -1267,10 +1256,14 @@ function TillWorkspace() {
       setResumedSale(false);
       setSkuId("");
       setCustomerId("");
+      setDueDateEdit(null);
       setPickId("");
       setLinkedPickIds({});
       setKitBlocks([]);
       setHeldNote("");
+      setNotePrinted("");
+      setNoteInternal("");
+      setQuoteId("");
       setHeldNotice(null);
       setBasketNotice(null);
       // The server emptied the basket with the sale.
@@ -1554,6 +1547,21 @@ function TillWorkspace() {
           title="Could not resume the held sale" subtitle={error} />}
         <p>The current basket will go into Held sales. The selected basket will become the current sale.</p>
       </Modal>
+      <Modal open={incomingQuote !== null && cartReady && cart.length > 0}
+        modalHeading="The till already has a sale" modalLabel={incomingQuote?.quote_number}
+        primaryButtonText={heldBusy ? "Holding…" : "Hold it and load quote"} primaryButtonDisabled={heldLocked}
+        secondaryButtonText="Cancel" preventCloseOnClickOutside
+        onRequestClose={() => {
+          if (heldBusy) return;
+          setIncomingQuote(null);
+          router.replace("/till");
+        }}
+        onRequestSubmit={() => void startHeldOperation()}>
+        <p>
+          The current sale has {cart.length} product {cart.length === 1 ? "line" : "lines"}. Loading
+          the quote puts that sale on hold so you can resume it later.
+        </p>
+      </Modal>
 
       <Tabs selectedIndex={view} onChange={({ selectedIndex }) => showView(selectedIndex)}>
         <TabList aria-label="Till views">
@@ -1565,6 +1573,13 @@ function TillWorkspace() {
         <TabPanels>
           <TabPanel className="held-sales-panel">
             <div className="held-sales-content" inert={heldLocked} aria-busy={heldBusy || undefined}>
+      {quoteId && <div>
+        <InlineNotification kind="info" lowContrast hideCloseButton
+          title={`Loaded from ${quoteNumbers[quoteId] ?? "a quote"}.`}
+          subtitle="Completing this sale marks the quote Converted and links it to the new invoice." />
+        <Button kind="ghost" size="sm" href={`/quotes/${quoteId}`}>Open quote</Button>
+        <Button kind="ghost" size="sm" onClick={() => setQuoteId("")}>Unlink quote</Button>
+      </div>}
       {resumedSale && cart.length > 0 && (
         <InlineNotification kind="info" lowContrast hideCloseButton title="Resumed sale"
           subtitle="Check the payment method, prices and available stock before completing the sale." />
@@ -1610,20 +1625,63 @@ function TillWorkspace() {
       {loading ? (
         <TillLoading mobileScan={mobileScan} paymentOptions={TENDER_OPTIONS} tender={tender} />
       ) : (
-        <div className={styles.layout}>
-          <div
-            className={`firstout-section-accent firstout-tone-info ${styles.productBrowser}`}
-          >
-            <Stack gap={5}>
-              <Tile>
-                <Stack gap={5}>
-                  <div className={styles.sectionHeading}>
-                    <div>
-                      <p className="cds--type-label-01">SHOWROOM PRODUCTS</p>
-                      <h2 className="cds--type-heading-03">Find a product</h2>
-                    </div>
-                    <Tag type="blue">{vatBasisLabel(showInclusive)}</Tag>
-                  </div>
+        <CartEditor
+          mode="till"
+          products={skuOptions}
+          cart={cart}
+          onAdd={addKnownProduct}
+          onUpdateLine={updateCartLine}
+          onRemoveLine={removeCartLine}
+          skuId={skuId}
+          onSkuIdChange={setSkuId}
+          qty={qty}
+          onQtyChange={setQty}
+          customers={
+            commitmentCustomer?.id === customerId &&
+            !customers.some((item) => item.id === customerId)
+              ? [...customers, commitmentCustomer]
+              : customers
+          }
+          customerId={customerId}
+          onCustomerChange={setCustomerId}
+          selectedCustomer={selectedCustomer}
+          onAddCustomer={() => router.push("/customers")}
+          onBrowseCatalogue={() => router.push("/catalogue")}
+          priceLists={priceLists}
+          preview={pricePreview}
+          pricingError={pricingError}
+          onRetryPricing={refreshPrices}
+          vatRateLabel={vatRateLabel}
+          canDiscount={canDiscount}
+          canViewCost={canViewCost}
+          colleagues={colleagues}
+          colleaguesError={colleaguesError}
+          salesStaffId={salesStaffId}
+          onSalesStaffChange={setSalesStaffId}
+          notePrinted={notePrinted}
+          onNotePrintedChange={setNotePrinted}
+          noteInternal={noteInternal}
+          onNoteInternalChange={setNoteInternal}
+          searchDisabled={!locationId}
+          addDisabled={!cartReady || !locationId}
+          qtyMax={(sku) => sku.till_no_stock_required ? undefined : availabilityFor(sku.id).addable || undefined}
+          lineQtyMax={(sku) => requiresTillFloorStock(sku) ? availabilityFor(sku.id).limit : undefined}
+          canAddQty={(sku, quantity) => !requiresTillFloorStock(sku) || quantity <= availabilityFor(sku.id).addable}
+          blockedReason={reservedReason}
+          stockState={stockState}
+          tileDisabled={(sku) => requiresTillFloorStock(sku) && availabilityFor(sku.id).addable <= 0}
+          lineNote={(line) => {
+            const stockNote = requiresTillFloorStock(line.sku)
+              ? basketStockNote(stockFor(line.sku.id))
+              : null;
+            return stockNote && (
+              <p className={`cds--type-helper-text-01 ${styles.reserved} ${styles.stockState}`}>
+                <LocationIcon size={16} aria-hidden />
+                {stockNote}
+              </p>
+            );
+          }}
+          finderTop={<>
                   <Select
                     id="till-location"
                     labelText="Showroom"
@@ -1670,177 +1728,8 @@ function TillWorkspace() {
                       </Button>
                     )}
                   </div>
-
-                  <div className="firstout-till-picker-row">
-                    <ComboBox
-                      id="till-sku"
-                      titleText="Find by product, SKU or barcode"
-                      placeholder="Search by SKU, barcode, or name..."
-                      items={comboOptions}
-                      itemToString={skuItemToString}
-                      itemToElement={(item) => item.reason ? (
-                        <span className={styles.reserved}>
-                          <Locked size={16} aria-hidden />
-                          <span>{skuItemToString(item)} · {item.reason}</span>
-                        </span>
-                      ) : (
-                        <span>
-                          {skuItemToString(item)}
-                          <span className={styles.stockState}> · {stockState(item)}</span>
-                        </span>
-                      )}
-                      selectedItem={selectedSkuOption}
-                      shouldFilterItem={filterSkuItem}
-                      onChange={({ selectedItem }) =>
-                        setSkuId(selectedItem?.id ?? "")
-                      }
-                      disabled={!locationId}
-                      onInputChange={(value) => {
-                        setProductQuery(value);
-                        setProductPage(1);
-                      }}
-                    />
-                    <Button
-                      kind="tertiary"
-                      onClick={() => router.push("/catalogue")}
-                    >
-                      Browse Catalogue
-                    </Button>
-                  </div>
-
-                  <NumberInput
-                    id="till-qty"
-                    label="Quantity"
-                    min={1}
-                    max={
-                      selectedSku?.till_no_stock_required
-                        ? undefined
-                        : selectedRemaining || undefined
-                    }
-                    value={qty}
-                    onChange={(_, { value }) => {
-                      if (value === "") {
-                        setQty("");
-                      } else {
-                        setQty(
-                          typeof value === "number" ? value : Number(value),
-                        );
-                      }
-                    }}
-                    helperText={
-                      selectedSku && locationId
-                        ? stockState(selectedSku)
-                        : undefined
-                    }
-                    disabled={!skuId}
-                  />
-
-                  <Button
-                    kind="secondary"
-                    disabled={!addValid}
-                    onClick={handleAddToCart}
-                  >
-                    Add to cart
-                  </Button>
-                  <div className={styles.productGrid}>
-                    {visibleProducts.map((sku) => {
-                      const remaining = availabilityFor(sku.id).addable;
-                      const reason = reservedReason(sku);
-                      const priced = quoteSkuUnitExVat(
-                        sku,
-                        selectedCustomer,
-                        priceLists,
-                      );
-                      return (
-                        <ClickableTile
-                          role="button"
-                          key={sku.id}
-                          aria-label={`Add ${sku.name} to sale${reason ? `. ${reason}` : ""}`}
-                          onClick={() => addProductFromBrowser(sku)}
-                          disabled={
-                            !cartReady ||
-                            !canSell ||
-                            !locationId ||
-                            priced.unitExVat === null ||
-                            priced.unitExVat <= 0 ||
-                            (requiresTillFloorStock(sku) && remaining <= 0)
-                          }
-                        >
-                          <div className={styles.productCard}>
-                            <div className={styles.productPhoto}>
-                              {sku.photo_storage_key ? (
-                                <StaffImage
-                                  src={skuPhotoUrl(sku.id)}
-                                  alt=""
-                                  className={styles.productImage}
-                                />
-                              ) : (
-                                <ImageIcon size={32} aria-hidden />
-                              )}
-                            </div>
-                            <h3 className="cds--type-heading-compact-01">
-                              {sku.name}
-                            </h3>
-                            <p className="cds--type-label-01">{sku.our_ref}</p>
-                            <div className={styles.priceRow}>
-                              <p className="cds--type-body-01">
-                                {priced.unitExVat === null
-                                  ? "Price unavailable"
-                                  : formatZarAmount(
-                                      formatPriceAmount(
-                                        displayUnitAmount(
-                                          priced.unitExVat,
-                                          showInclusive,
-                                        ),
-                                      ),
-                                    )}
-                              </p>
-                              <Purchase size={20} aria-hidden />
-                            </div>
-                            {reason ? (
-                              <p className={`cds--type-label-01 ${styles.reserved}`}>
-                                <Locked size={16} aria-hidden />
-                                {reason}
-                              </p>
-                            ) : (
-                              <p className={`cds--type-label-01 ${styles.stockState}`}>
-                                {stockState(sku)}
-                              </p>
-                            )}
-                            {priced.warning && (
-                              <p className="cds--type-label-01">
-                                {priced.warning}
-                              </p>
-                            )}
-                          </div>
-                        </ClickableTile>
-                      );
-                    })}
-                  </div>
-                  {!browserProducts.length && (
-                    <div className={styles.empty}>
-                      <h3 className="cds--type-heading-03">
-                        No matching products
-                      </h3>
-                      <p className="cds--type-body-01">
-                        Try another product name or SKU, or choose a showroom
-                        with available stock.
-                      </p>
-                    </div>
-                  )}
-                  <Pagination
-                    page={browserPage}
-                    pageSize={productPageSize}
-                    pageSizes={[12, 24, 48]}
-                    totalItems={browserProducts.length}
-                    itemsPerPageText="Products per page:"
-                    backwardText="Previous page"
-                    forwardText="Next page"
-                    onChange={({ page, pageSize }) => {
-                      setProductPage(page);
-                      setProductPageSize(pageSize);
-                    }}
-                  />
+          </>}
+          finderBottom={<>
                   {pendingTillPicks.length > 0 && (
                     <Stack gap={3}>
                       <Select
@@ -1881,267 +1770,17 @@ function TillWorkspace() {
                       </Button>
                     </Stack>
                   )}
-                </Stack>
-              </Tile>
-            </Stack>
-          </div>
-
-          <div
-            className={`firstout-section-accent firstout-tone-info ${styles.sale}`}
-          >
-            <Tile>
-              <Stack gap={5}>
-                <div className={styles.sectionHeading}>
-                  <h2 className="cds--type-heading-03">Current sale</h2>
-                  <Tag type="gray">
-                    {cart.length} product {cart.length === 1 ? "line" : "lines"}
-                  </Tag>
-                </div>
-                {saleExpiry && (
-                  <InlineNotification kind={saleExpiry.kind} lowContrast hideCloseButton
-                    title={saleExpiry.title} subtitle={saleExpiry.subtitle} />
-                )}
-                <div className="firstout-till-picker-row">
-                  <CustomerPicker
-                    id="till-customer"
-                    titleText="Customer (optional)"
-                    customers={
-                      commitmentCustomer?.id === customerId &&
-                      !customers.some((item) => item.id === customerId)
-                        ? [...customers, commitmentCustomer]
-                        : customers
-                    }
-                    selectedId={customerId}
-                    onChange={setCustomerId}
-                  />
-                  <Button
-                    kind="ghost"
-                    hasIconOnly
-                    renderIcon={UserFollow}
-                    iconDescription="Add customer"
-                    onClick={() => router.push("/customers")}
-                  />
-                </div>
-
-                <div>
-                  <p className="cds--type-label-01">Pricing for this sale</p>
-                  <p className="cds--type-body-01">
-                    {classification} · {priceListName ?? "Catalogue tier"} · Unit prices {vatBasisLabel(showInclusive)}
-                  </p>
-                </div>
-                {pricingError ? (
-                  <Stack gap={3}>
-                    <InlineNotification kind="error" title="Could not confirm sale prices" subtitle={pricingError} lowContrast hideCloseButton />
-                    <div><Button kind="tertiary" size="sm" onClick={refreshPrices}>Check prices again</Button></div>
-                  </Stack>
-                ) : cart.length > 0 && !pricePreview ? (
-                  <p role="status" className="cds--type-body-01">Checking sale prices…</p>
-                ) : null}
-
-                {selectedCustomer?.on_hold ? (
-                  <InlineNotification
-                    kind="warning"
-                    title="Customer is on hold"
-                    subtitle={
-                      selectedCustomer.on_hold_reason ||
-                      "This customer cannot be sold to until the hold is lifted."
-                    }
-                    hideCloseButton
-                    lowContrast
-                  />
-                ) : null}
-
-                <section
-                  aria-label="Products in current sale"
-                  className={styles.cart}
-                >
-                  {cart.length === 0 ? (
-                    <div className={styles.empty}>
-                      <h3 className="cds--type-heading-compact-01">
-                        Start a new sale
-                      </h3>
-                      <p className="cds--type-body-01">
-                        Choose a product to add it here.
-                      </p>
-                    </div>
-                  ) : (
-                    cart.map((line, index) => {
-                      const linePricing = pricePreview?.lines[index];
-                      const priced = quoteSkuUnitExVat(
-                        line.sku,
-                        selectedCustomer,
-                        priceLists,
-                      );
-                      const stockNote = requiresTillFloorStock(line.sku)
-                        ? basketStockNote(stockFor(line.sku.id))
-                        : null;
-                      const suspect = quoteLineSuspectWarning(
-                        linePricing?.unit_ex_vat ?? "",
-                        line.sku,
-                        priced,
-                        canViewCost,
-                        showInclusive,
-                      );
-                      return (
-                        <div className={styles.cartLine} key={line.key}>
-                          <div className={styles.cartProduct}>
-                            <SkuThumb sku={line.sku} />
-                            <div>
-                              <h3 className="cds--type-heading-compact-01">
-                                {line.sku.name}
-                              </h3>
-                              <p className="cds--type-label-01">
-                                {line.sku.our_ref}
-                              </p>
-                              {stockNote && (
-                                <p className={`cds--type-helper-text-01 ${styles.reserved} ${styles.stockState}`}>
-                                  <LocationIcon size={16} aria-hidden />
-                                  {stockNote}
-                                </p>
-                              )}
-                            </div>
-                            <Button
-                              kind="ghost"
-                              size="sm"
-                              hasIconOnly
-                              renderIcon={TrashCan}
-                              iconDescription={`Remove ${line.sku.name}`}
-                              onClick={() => removeCartLine(line.key)}
-                            />
-                          </div>
-                          {line.sku.is_archived && (
-                            <p className="cds--type-label-01">
-                              Archived kit: locked to its original pick
-                              quantity. Remove the line to cancel this checkout.
-                            </p>
-                          )}
-                          {!line.sku.is_sellable && (
-                            <InlineNotification
-                              kind="warning"
-                              title="Not for sale"
-                              subtitle="Remove this item to complete the sale."
-                              lowContrast
-                              hideCloseButton
-                            />
-                          )}
-                          <div className={styles.cartControls}>
-                            <NumberInput
-                              id={`cart-qty-${line.key}`}
-                              disabled={line.sku.is_archived}
-                              label="Quantity"
-                              size="sm"
-                              min={1}
-                              max={
-                                requiresTillFloorStock(line.sku)
-                                  ? availabilityFor(line.sku.id).limit || undefined
-                                  : undefined
-                              }
-                              value={line.qty}
-                              onChange={(_, { value }) => {
-                                const next =
-                                  value === ""
-                                    ? 1
-                                    : typeof value === "number"
-                                      ? value
-                                      : Number(value);
-                                updateCartLine(line.key, {
-                                  qty: Math.max(1, next),
-                                });
-                              }}
-                            />
-                            {canDiscount && (
-                              <NumberInput
-                                id={`cart-discount-${line.key}`}
-                                label="Discount (%)"
-                                size="sm"
-                                min={0}
-                                max={100}
-                                value={line.discountPercent}
-                                onChange={(_, { value }) => {
-                                  const next =
-                                    value === ""
-                                      ? 0
-                                      : typeof value === "number"
-                                        ? value
-                                        : Number(value);
-                                  updateCartLine(line.key, {
-                                    discountPercent: clampDiscount(next),
-                                  });
-                                }}
-                              />
-                            )}
-                          </div>
-                          <div className={styles.priceRow}>
-                            <p className="cds--type-label-01">
-                              Unit ({vatBasisLabel(showInclusive)})
-                            </p>
-                            <p className="cds--type-body-01">
-                              {money(linePricing && displayUnitAmount(Number(linePricing.unit_ex_vat), showInclusive))}
-                            </p>
-                          </div>
-                          <div className={styles.priceRow}>
-                            <p className="cds--type-label-01">
-                              Line total incl. VAT
-                            </p>
-                            <p className="cds--type-heading-compact-01">
-                              {money(linePricing?.inc_vat)}
-                            </p>
-                          </div>
-                          {linePricing?.price_warning && (
-                            <InlineNotification
-                              kind="warning"
-                              lowContrast
-                              hideCloseButton
-                              title="Price list or tier fallback"
-                              subtitle={linePricing.price_warning}
-                            />
-                          )}
-                          {suspect && (
-                            <InlineNotification
-                              kind="warning"
-                              lowContrast
-                              hideCloseButton
-                              title="Check this price"
-                              subtitle={suspect}
-                            />
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                  {cart.some((line) => requiresTillFloorStock(line.sku)) && (
-                    <p className={`cds--type-helper-text-01 ${styles.stockState}`}>
-                      Stock notes are for staff only and are not printed on the invoice.
-                    </p>
-                  )}
-                </section>
-                <h3 className="cds--type-heading-compact-01">Sale summary</h3>
-
-                <dl className="firstout-sale-summary">
-                  <div className="firstout-sale-summary__row">
-                    <dt>{showInclusive ? "Subtotal (before discount, incl. VAT)" : "Subtotal (before discount, excl. VAT)"}</dt>
-                    <dd>{money(beforeDiscount)}</dd>
-                  </div>
-                  <div className="firstout-sale-summary__row firstout-sale-summary__row--discount">
-                    <dt>{showInclusive ? "Line discounts" : "Line discounts excl. VAT"}</dt>
-                    <dd>{discount && discount > 0 ? "- " : ""}{money(discount)}</dd>
-                  </div>
-                  {!showInclusive && (
-                    <div className="firstout-sale-summary__row">
-                      <dt>Subtotal after discount excl. VAT</dt>
-                      <dd>{money(pricePreview?.subtotal_ex_vat)}</dd>
-                    </div>
-                  )}
-                  <div className="firstout-sale-summary__row">
-                    <dt>VAT ({vatRateLabel}){showInclusive ? " included" : ""}</dt>
-                    <dd>{money(pricePreview?.vat_amount)}</dd>
-                  </div>
-                  <div className="firstout-sale-summary__row firstout-sale-summary__row--total">
-                    <dt>Total incl. VAT</dt>
-                    <dd>{money(pricePreview?.total_inc_vat)}</dd>
-                  </div>
-                </dl>
-
+          </>}
+          cartNotice={saleExpiry && (
+            <InlineNotification kind={saleExpiry.kind} lowContrast hideCloseButton
+              title={saleExpiry.title} subtitle={saleExpiry.subtitle} />
+          )}
+          afterLines={cart.some((line) => requiresTillFloorStock(line.sku)) && (
+            <p className={`cds--type-helper-text-01 ${styles.stockState}`}>
+              Stock notes are for staff only and are not printed on the invoice.
+            </p>
+          )}
+        >
                 {confirmedPicks.length > 0 ? (
                   <Select
                     id="till-pick"
@@ -2160,7 +1799,8 @@ function TillWorkspace() {
                   </Select>
                 ) : null}
 
-                {canOverrideCredit &&
+                {!onStatement &&
+                canOverrideCredit &&
                 (selectedCustomer?.on_hold || creditBlock) ? (
                   <>
                     <Checkbox
@@ -2199,12 +1839,41 @@ function TillWorkspace() {
                   ))}
                 </RadioButtonGroup>
 
-                <TextInput
-                  id="till-amount-tendered"
-                  labelText="Amount Tendered"
-                  value={amountTendered}
-                  onChange={(event) => setAmountTendered(event.target.value)}
-                />
+                {onStatement ? (
+                  <>
+                    <TextInput
+                      id="till-due-date"
+                      labelText="Due date"
+                      type="date"
+                      min={saleDate}
+                      value={dueDate}
+                      onChange={(event) =>
+                        setDueDateEdit({ customerId, value: event.target.value })
+                      }
+                      invalid={Boolean(dueDateError)}
+                      invalidText={dueDateError ?? undefined}
+                      helperText={
+                        selectedCustomer?.payment_terms_days != null
+                          ? `${selectedCustomer.name} has ${selectedCustomer.payment_terms_days}-day terms.`
+                          : `${companySettings?.payment_terms_days ?? 30} days, the company's payment terms.`
+                      }
+                    />
+                    <InlineNotification
+                      kind="info"
+                      lowContrast
+                      hideCloseButton
+                      title="No payment is recorded now."
+                      subtitle="The invoice shows as On statement until someone records a payment on it."
+                    />
+                  </>
+                ) : (
+                  <TextInput
+                    id="till-amount-tendered"
+                    labelText="Amount Tendered"
+                    value={amountTendered}
+                    onChange={(event) => setAmountTendered(event.target.value)}
+                  />
+                )}
 
                 {showChange ? (
                   <p className="firstout-muted-text">
@@ -2219,18 +1888,14 @@ function TillWorkspace() {
                     !cartReady ||
                     heldLocked ||
                     submitting ||
-                    (creditOverride &&
-                      canOverrideCredit &&
-                      !creditOverrideReason.trim())
+                    Boolean(dueDateError) ||
+                    (creditOverrideActive && !creditOverrideReason.trim())
                   }
                   onClick={() => void handleCompleteSale()}
                 >
                   Complete Sale
                 </Button>
-              </Stack>
-            </Tile>
-          </div>
-        </div>
+        </CartEditor>
       )}
 
       {scannerOpen && mobileScan ? (
@@ -2246,9 +1911,20 @@ function TillWorkspace() {
           <Stack gap={5}>
             <div className="firstout-tax-invoice__header">
               <h2>Tax invoice {lastSale.invoice_number}</h2>
-              <p>
-                Payment {lastSale.payment_number} — {lastSale.tender}
-              </p>
+              {lastSale.quote_number ? <p>{lastSale.quote_number} converted</p> : null}
+              {lastSale.payment_number ? (
+                <p>
+                  Payment {lastSale.payment_number} — {lastSale.tender}
+                </p>
+              ) : (
+                <p>
+                  <Tag type="purple" size="sm">
+                    On statement
+                  </Tag>{" "}
+                  {formatZarAmount(lastSale.total_inc_vat)} owing
+                  {lastSale.due_date ? `, due ${lastSale.due_date}` : ""}
+                </p>
+              )}
             </div>
 
             <div className="firstout-tax-invoice__parties">
@@ -2346,6 +2022,12 @@ function TillWorkspace() {
                 </p>
               )}
             </div>
+
+            {lastSale.on_account ? (
+              <p className="cds--type-helper-text-01">
+                When the customer pays, open the invoice and choose Record payment.
+              </p>
+            ) : null}
 
             <div className="firstout-catalogue-actions">
               <Button

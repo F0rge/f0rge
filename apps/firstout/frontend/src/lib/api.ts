@@ -790,65 +790,6 @@ export function suggestIntakeSku(payload: {
   });
 }
 
-export type PurchaseOrderMatch = {
-  purchase_order_id: string;
-  po_number: string;
-  status: string;
-  supplier_id: string;
-  supplier_name: string;
-};
-
-export type ProcessedSupplierBill = {
-  bill_id: string;
-  bill_number: string;
-  auto: boolean;
-  purchase_order_id: string;
-  po_number: string;
-};
-
-export type InvoiceReview = ProformaReview & {
-  po_reference: string | null;
-  proforma_number: string | null;
-  purchase_order: PurchaseOrderMatch | null;
-  purchase_order_candidates: PurchaseOrderMatch[];
-  exact: boolean;
-  differences: string[];
-  auto_process_enabled: boolean;
-  needs_fx: boolean;
-  processed: ProcessedSupplierBill | null;
-};
-
-export type InvoiceProcessPayload = {
-  supplier_id?: string | null;
-  create_supplier?: ProformaConfirmPayload["create_supplier"];
-  purchase_order_id: string;
-  document_number: string;
-  document_date: string;
-  currency: string;
-  fx_to_zar?: string | null;
-  accept_differences: boolean;
-  vat_total?: string | null;
-  total?: string | null;
-  charges: { description: string; amount: string }[];
-  lines: ProformaConfirmLine[];
-};
-
-export function extractSupplierInvoice(file: File): Promise<InvoiceReview> {
-  const formData = new FormData();
-  formData.append("file", file);
-  return apiUpload<InvoiceReview>("/document-intake/invoices/extract", formData);
-}
-
-export function processSupplierInvoice(
-  file: File,
-  payload: InvoiceProcessPayload,
-): Promise<ProcessedSupplierBill> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("payload", JSON.stringify(payload));
-  return apiUpload<ProcessedSupplierBill>("/document-intake/invoices/process", formData);
-}
-
 export function createIntakeSku(payload: {
   our_ref: string;
   our_barcode: string;
@@ -907,6 +848,8 @@ export type Sku = {
   is_kit: boolean;
   is_sellable: boolean;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -937,6 +880,8 @@ export type UpdateSkuPricePayload = {
   carton_count?: number;
   is_sellable?: boolean;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -991,6 +936,8 @@ export type CreateSkuPayload = {
   carton_count?: number;
   is_sellable?: boolean;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
 };
 
 export type SkuListParams = {
@@ -1310,7 +1257,7 @@ export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   received: "Received",
 };
 
-export type TillTender = "cash" | "card" | "deposit" | "eft";
+export type TillTender = "statement" | "cash" | "card" | "deposit" | "eft";
 
 export type TillSaleLinePayload = {
   sku_id: string;
@@ -1326,6 +1273,11 @@ export type HeldSaleCreate = {
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   note?: string | null;
+  note_printed?: string | null;
+  note_internal?: string | null;
+  sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   basket_id?: string;
 };
 
@@ -1335,6 +1287,12 @@ export type TillBasket = {
   location_id: string;
   customer_id: string | null;
   note: string | null;
+  /** The sale's invoice notes, kept with the cart until it is sold. */
+  note_printed?: string | null;
+  note_internal?: string | null;
+  sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
   lines: { sku_id: string; qty: number; discount_percent: string }[];
@@ -1371,6 +1329,11 @@ export type TillBasketUpdate = {
   operation_id: string;
   customer_id?: string;
   note?: string | null;
+  note_printed?: string | null;
+  note_internal?: string | null;
+  sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   lines: TillSaleLinePayload[];
@@ -1396,6 +1359,11 @@ export type HeldSale = {
   expires_at: string;
   version: number;
   note: string | null;
+  note_printed?: string | null;
+  note_internal?: string | null;
+  sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   estimated_total_inc_vat: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
@@ -1480,6 +1448,8 @@ export type TillPricePreview = {
 export type TillSalePayload = TillPriceRequest & {
   location_id: string;
   tender: TillTender;
+  /** Statement sales only; defaults to issue date + payment terms. */
+  due_date?: string;
   price_revision?: string;
   pick_id?: string;
   pick_ids?: string[];
@@ -1487,6 +1457,14 @@ export type TillSalePayload = TillPriceRequest & {
   credit_override_reason?: string;
   basket_id?: string;
   basket_version?: number;
+  /** Printed on the tax invoice. */
+  note_printed?: string;
+  /** Staff only; never printed. */
+  note_internal?: string;
+  /** Required when the business has an active sales colleague. */
+  sales_staff_id?: string;
+  /** The open quote this sale converts; marked converted with the sale. */
+  quote_id?: string;
 };
 
 export type TillSaleResult = {
@@ -1494,10 +1472,15 @@ export type TillSaleResult = {
   /** Draft till pick for the units reserved against the invoice; null when the showroom had them all. */
   pick_id: string | null;
   invoice_number: string;
-  payment_id: string;
-  payment_number: string;
+  /** Null for a statement sale: no payment is recorded at the till. */
+  payment_id: string | null;
+  payment_number: string | null;
   tender: TillTender;
   issue_date: string;
+  due_date: string | null;
+  on_account: boolean;
+  /** The quote this sale converted. */
+  quote_number?: string | null;
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
@@ -2147,6 +2130,8 @@ export type InvoiceLine = {
   price_warning?: string | null;
   suspect_price_warning?: string | null;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
 };
 
 export type InvoiceListItem = {
@@ -2163,11 +2148,30 @@ export type InvoiceListItem = {
   amount_paid: string;
   balance: string;
   payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
+  /** Issued unpaid on account; reads "On statement" until a payment is recorded. */
+  on_account: boolean;
+  source: InvoiceSource;
+  status: InvoiceStatus;
+  /** Hidden from the default list by staff; still in the books, VAT and reports. */
+  is_archived: boolean;
+  archived_at: string | null;
+  /** The colleague credited with the sale. */
+  sales_staff_id?: string | null;
+  sales_staff_name?: string | null;
   created_at: string;
   updated_at: string;
 };
 
+/** Where an invoice was made; Cin7 history is "imported". */
+export type InvoiceSource = "till" | "manual" | "imported";
+/** Settlement as filtered in the list; "unknown" for Cin7 history. */
+export type InvoiceStatus = "paid" | "partially_paid" | "unpaid" | "on_statement" | "overdue" | "unknown";
+
 export type Invoice = InvoiceListItem & {
+  /** Printed on the tax invoice. */
+  note_printed?: string | null;
+  /** Staff only; never printed. */
+  note_internal?: string | null;
   prices_include_vat: boolean;
   lines: InvoiceLine[];
 };
@@ -2177,13 +2181,59 @@ export type CreateInvoiceLinePayload = {
   qty: number;
   unit_ex_vat?: string;
   sku_id?: string;
+  /** Percent off the line, priced like the till. */
+  discount_percent?: string;
 };
 
 export type CreateInvoicePayload = {
   customer_id: string;
   issue_date: string;
   lines: CreateInvoiceLinePayload[];
+  note_printed?: string | null;
+  note_internal?: string | null;
+  /** Defaults to the issue date plus the customer's terms. */
+  due_date?: string;
+  sales_staff_id?: string | null;
+  /** Already paid: records one payment of the total. Absent means on account. */
+  payment?: { tender: PaymentMethod; reference?: string; paid_on: string } | null;
 };
+
+export type InvoiceSummary = {
+  outstanding_zar: string;
+  outstanding_count: number;
+  overdue_zar: string;
+  overdue_count: number;
+  on_statement_zar: string;
+  on_statement_count: number;
+  paid_this_month_zar: string;
+  paid_this_month_count: number;
+};
+
+export function getInvoiceSummary(): Promise<InvoiceSummary> {
+  return apiFetch<InvoiceSummary>("/invoices/summary");
+}
+
+/** The invoice cart priced as creating it would; `lines` lists only the SKU lines, in order. */
+export function previewInvoicePrices(
+  payload: { customer_id: string; lines: CreateInvoiceLinePayload[] },
+  signal: AbortSignal,
+): Promise<TillPricePreview> {
+  return apiFetch<TillPricePreview>("/invoices/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
+/** The invoices list for one customer, archived invoices included. */
+export function customerInvoicesHref(customerName: string): string {
+  const filters = [{ field: "customer_name", operator: "eq", value: customerName }];
+  return `/invoices?lifecycle=all&filters=${encodeURIComponent(JSON.stringify(filters))}`;
+}
+
+export function invoiceAction(id: string, action: "archive" | "restore"): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}/${action}`, { method: "POST" });
+}
 
 export function listInvoices(params?: ListParams): Promise<Page<InvoiceListItem>> {
   return apiFetch<Page<InvoiceListItem>>(`/invoices?${buildListQuery(params)}`);
@@ -2198,6 +2248,114 @@ export function createInvoice(payload: CreateInvoicePayload): Promise<Invoice> {
 
 export function getInvoice(id: string): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`);
+}
+
+/** Longest printed or internal note the API accepts. */
+export const INVOICE_NOTE_MAX = 2000;
+
+/** Only the internal note changes after issue; blank clears it. */
+export function updateInvoiceNote(id: string, noteInternal: string): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ note_internal: noteInternal }),
+  });
+}
+
+/** Credit the sale to a colleague (commission); null removes the colleague. */
+export function updateInvoiceSalesStaff(id: string, salesStaffId: string | null): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ sales_staff_id: salesStaffId }),
+  });
+}
+
+export type SalesStaff = {
+  id: string;
+  name: string;
+  short_name: string | null;
+  /** Percent, e.g. "2.50". */
+  commission_rate: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SalesStaffOption = Pick<SalesStaff, "id" | "name" | "short_name">;
+
+export type SalesStaffPayload = {
+  name?: string;
+  short_name?: string | null;
+  commission_rate?: string;
+  is_active?: boolean;
+};
+
+export function listSalesStaff(status: "active" | "inactive" | "all" = "all"): Promise<SalesStaff[]> {
+  return apiFetch<SalesStaff[]>(`/sales-staff?status=${status}`);
+}
+
+/** Active colleagues' names for the till and invoices (no rates). */
+export function listSalesStaffOptions(): Promise<SalesStaffOption[]> {
+  return apiFetch<SalesStaffOption[]>("/sales-staff/options");
+}
+
+export function createSalesStaff(payload: SalesStaffPayload): Promise<SalesStaff> {
+  return apiFetch<SalesStaff>("/sales-staff", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateSalesStaff(id: string, payload: SalesStaffPayload): Promise<SalesStaff> {
+  return apiFetch<SalesStaff>(`/sales-staff/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+/** Only for a colleague no invoice or quote names (409 otherwise). */
+export function deleteSalesStaff(id: string): Promise<void> {
+  return apiFetch<void>(`/sales-staff/${id}`, { method: "DELETE" });
+}
+
+export type CommissionDocument = {
+  kind: "invoice" | "credit_note";
+  id: string;
+  number: string;
+  invoice_id: string;
+  invoice_number: string;
+  issue_date: string;
+  customer_name: string;
+  commissionable_ex_vat: string;
+  excluded_ex_vat: string;
+};
+
+export type CommissionRow = {
+  /** null: the unattributed bucket. */
+  sales_staff_id: string | null;
+  name: string;
+  short_name: string | null;
+  is_active: boolean;
+  commission_rate: string;
+  invoice_count: number;
+  commissionable_ex_vat: string;
+  excluded_ex_vat: string;
+  credit_deductions: string;
+  net_commissionable: string;
+  commission: string;
+  documents: CommissionDocument[];
+};
+
+export type CommissionReport = {
+  month: string;
+  from_date: string;
+  to_date: string;
+  rows: CommissionRow[];
+  unattributed: CommissionRow;
+  invoice_count: number;
+  commissionable_ex_vat: string;
+  excluded_ex_vat: string;
+  credit_deductions: string;
+  net_commissionable: string;
+  commission: string;
+};
+
+/** month: YYYY-MM. */
+export function getCommissionReport(month: string): Promise<CommissionReport> {
+  return apiFetch<CommissionReport>(`/reports/commission?month=${encodeURIComponent(month)}`);
 }
 
 
@@ -2306,7 +2464,29 @@ export type BillLine = {
   sort_order: number;
 };
 
-export type Bill = {
+export type BillApprovalStatus = "draft" | "awaiting_approval" | "approved";
+
+/** Approval first, then settlement. Imported Cin7 bills are "unknown". */
+export type BillStatus =
+  | "draft"
+  | "awaiting_approval"
+  | "unpaid"
+  | "partially_paid"
+  | "overdue"
+  | "paid"
+  | "unknown";
+
+export type BillAttachment = {
+  id: string;
+  filename: string;
+  content_type: string;
+  uploaded_at: string;
+  uploaded_by_id: string | null;
+  /** The previous release's single file: download only. */
+  read_only: boolean;
+};
+
+export type BillListItem = {
   id: string;
   is_archive: boolean;
   bill_number: string;
@@ -2314,6 +2494,7 @@ export type Bill = {
   supplier_name: string;
   supplier_ref: string;
   issue_date: string;
+  due_date: string | null;
   currency: string;
   fx_to_zar: string;
   fx_rate_known: boolean;
@@ -2324,11 +2505,31 @@ export type Bill = {
   balance_zar: string;
   balance_foreign: string;
   payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
-  pdf_storage_key: string | null;
+  approval_status: BillApprovalStatus;
+  status: BillStatus;
+  is_archived: boolean;
+  archived_at: string | null;
+  notes: string | null;
+  attachment_count: number;
   purchase_order_id: string | null;
-  lines: BillLine[];
   created_at: string;
   updated_at: string;
+};
+
+export type Bill = BillListItem & {
+  lines: BillLine[];
+  attachments: BillAttachment[];
+};
+
+export type BillSummary = {
+  owing_zar: string;
+  owing_count: number;
+  overdue_zar: string;
+  overdue_count: number;
+  due_soon_zar: string;
+  due_soon_count: number;
+  awaiting_approval_count: number;
+  draft_count: number;
 };
 
 export type CreateBillLinePayload = {
@@ -2341,16 +2542,13 @@ export type CreateBillPayload = {
   supplier_id: string;
   supplier_ref: string;
   issue_date: string;
+  due_date?: string;
   currency: string;
   fx_to_zar?: string;
+  notes?: string;
+  approval_status: BillApprovalStatus;
   lines: CreateBillLinePayload[];
 };
-
-export type BillListItem = Omit<Bill, "lines">;
-
-export function listBills(params?: ListParams): Promise<Page<BillListItem>> {
-  return apiFetch<Page<BillListItem>>(`/bills?${buildListQuery(params)}`);
-}
 
 export function createBill(payload: CreateBillPayload): Promise<Bill> {
   return apiFetch<Bill>("/bills", {
@@ -2363,17 +2561,50 @@ export function getBill(id: string): Promise<Bill> {
   return apiFetch<Bill>(`/bills/${id}`);
 }
 
+export function getBillSummary(): Promise<BillSummary> {
+  return apiFetch<BillSummary>("/bills/summary");
+}
+
+export function updateBill(
+  id: string,
+  payload: { due_date?: string; notes?: string | null },
+): Promise<Bill> {
+  return apiFetch<Bill>(`/bills/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function billAction(
+  id: string,
+  action: "submit" | "approve" | "archive" | "restore",
+): Promise<Bill> {
+  return apiFetch<Bill>(`/bills/${id}/${action}`, { method: "POST" });
+}
+
 export function uploadBillAttachment(id: string, file: File): Promise<Bill> {
   const formData = new FormData();
   formData.append("file", file);
-  return apiUpload<Bill>(`/bills/${id}/attachment`, formData);
+  return apiUpload<Bill>(`/bills/${id}/attachments`, formData);
 }
 
-export async function downloadBillAttachment(id: string, billNumber: string): Promise<void> {
-  await downloadApiFile(`/api/v1/bills/${id}/attachment`, `${billNumber}.pdf`);
+export async function downloadBillAttachment(
+  billId: string,
+  attachment: BillAttachment,
+): Promise<void> {
+  await downloadApiFile(
+    `/api/v1/bills/${billId}/attachments/${attachment.id}`,
+    attachment.filename,
+  );
+}
+
+export function deleteBillAttachment(billId: string, attachmentId: string): Promise<Bill> {
+  return apiFetch<Bill>(`/bills/${billId}/attachments/${attachmentId}`, { method: "DELETE" });
 }
 
 export type PaymentDirection = "in" | "out";
+
+export type PaymentMethod = "eft" | "card" | "cash" | "other";
 
 export type Payment = {
   id: string;
@@ -2387,13 +2618,26 @@ export type Payment = {
   amount_zar: string;
   fx_gain_loss_zar: string;
   paid_on: string;
+  /** Payment method; till payments may also be "deposit". */
+  tender: PaymentMethod | "deposit" | null;
+  reference: string | null;
+  party_name: string | null;
+  document_number: string | null;
   is_reconciled: boolean;
   reconciled_at: string | null;
+  is_voided: boolean;
+  voided_at: string | null;
+  void_reason: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type CreatePaymentInPayload = {
+type PaymentMethodPayload = {
+  tender?: PaymentMethod;
+  reference?: string;
+};
+
+export type CreatePaymentInPayload = PaymentMethodPayload & {
   direction: "in";
   invoice_id: string;
   amount: string;
@@ -2401,7 +2645,7 @@ export type CreatePaymentInPayload = {
   paid_on: string;
 };
 
-export type CreatePaymentOutPayload = {
+export type CreatePaymentOutPayload = PaymentMethodPayload & {
   direction: "out";
   bill_id: string;
   amount: string;
@@ -2409,6 +2653,44 @@ export type CreatePaymentOutPayload = {
   fx_to_zar?: string;
   paid_on: string;
 };
+
+export type PaymentOpenDocument = {
+  kind: "invoice" | "bill";
+  document_id: string;
+  number: string;
+  contact_name: string;
+  issue_date: string;
+  currency: string;
+  fx_to_zar: string;
+  outstanding_foreign: string;
+  outstanding_zar: string;
+};
+
+export type PaymentSummary = {
+  received_this_month_zar: string;
+  received_this_month_count: number;
+  paid_this_month_zar: string;
+  paid_this_month_count: number;
+  unreconciled_count: number;
+  unreconciled_net_zar: string;
+};
+
+export function listOpenPaymentDocuments(
+  direction: PaymentDirection,
+): Promise<PaymentOpenDocument[]> {
+  return apiFetch<PaymentOpenDocument[]>(`/payments/open-documents?direction=${direction}`);
+}
+
+export function getPaymentSummary(): Promise<PaymentSummary> {
+  return apiFetch<PaymentSummary>("/payments/summary");
+}
+
+export function voidPayment(id: string, reason: string): Promise<Payment> {
+  return apiFetch<Payment>(`/payments/${id}/void`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
 
 export type CreatePaymentPayload = CreatePaymentInPayload | CreatePaymentOutPayload;
 
@@ -2418,7 +2700,7 @@ export function listPayments(params?: ListParams): Promise<Page<Payment>> {
 
 export type BooksDocumentType = "invoice" | "bill" | "payment" | "journal";
 
-export type BooksEventAction = "created" | "posted" | "voided";
+export type BooksEventAction = "created" | "posted" | "voided" | "updated";
 
 export type BooksEvent = {
   id: string;
@@ -3528,7 +3810,6 @@ export type AppSettings = import("./label-settings").LabelSettings & {
   has_logo: boolean;
   max_till_discount_percent: string | null;
   po_approval_threshold_zar: string | null;
-  auto_process_exact_supplier_invoices: boolean;
   /** Historical read-only value; session duration is managed by Clerk. */
   session_ttl_hours: number;
   payment_terms_days: number;
@@ -3593,7 +3874,6 @@ export function updateSettings(payload: Partial<import("./label-settings").Label
   has_logo?: boolean;
   max_till_discount_percent?: string | null;
   po_approval_threshold_zar?: string | null;
-  auto_process_exact_supplier_invoices?: boolean;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
@@ -3614,6 +3894,52 @@ export function uploadCompanyLogo(file: File): Promise<AppSettings> {
 
 export function settingsLogoUrl(): string {
   return "/api/v1/settings/logo";
+}
+
+export type {
+  DocumentKind,
+  DocumentSectionKey,
+  DocumentTemplate,
+  DocumentTemplateResponse,
+} from "./document-template";
+
+export function getDocumentTemplate(): Promise<import("./document-template").DocumentTemplateResponse> {
+  return apiFetch("/settings/document-template");
+}
+
+export function saveDocumentTemplate(
+  template: import("./document-template").DocumentTemplate,
+): Promise<import("./document-template").DocumentTemplateResponse> {
+  return apiFetch("/settings/document-template", {
+    method: "PUT",
+    body: JSON.stringify(template),
+  });
+}
+
+/** The draft template printed as a real PDF; sample data unless a document id is given. */
+export async function previewDocumentTemplate(
+  payload: {
+    template: import("./document-template").DocumentTemplate;
+    kind: import("./document-template").DocumentKind;
+    sample_id: string | null;
+  },
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const path = "/api/v1/settings/document-template/preview";
+  const response = await staffFetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      formatHttpError(callName("POST", path), response.status, response.statusText, await parseErrorMessage(response)),
+    );
+  }
+  return response.blob();
 }
 
 export type BooksPeriodStatus = "open" | "locked";
@@ -3926,7 +4252,9 @@ export function cancelLayby(id: string): Promise<Layby> {
   return apiFetch<Layby>(`/laybys/${id}/cancel`, { method: "POST" });
 }
 
-export type QuoteStatus = "draft" | "sent" | "accepted" | "expired" | "cancelled";
+export type QuoteStatus = "draft" | "sent" | "accepted" | "expired" | "cancelled" | "converted";
+/** What staff see: open quotes past their date read as expired. */
+export type QuoteState = "open" | "expired" | "converted" | "accepted" | "cancelled";
 
 export type QuoteLine = {
   id: string;
@@ -3942,7 +4270,7 @@ export type QuoteLine = {
   suspect_price_warning?: string | null;
 };
 
-export type QuoteListItem = {
+type QuoteFields = {
   id: string;
   quote_number: string;
   customer_id: string;
@@ -3951,27 +4279,48 @@ export type QuoteListItem = {
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
+  /** Printed on the quote. */
   notes: string | null;
-  items_label: string;
+  sales_staff_id: string | null;
+  issue_date: string;
+  valid_until: string | null;
+  converted_invoice_id: string | null;
+  converted_invoice_number: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type Quote = QuoteListItem & {
+export type QuoteListItem = QuoteFields & {
+  sales_staff_name: string | null;
+  /** Converted at the till or accepted as an order: read-only. */
+  is_converted: boolean;
+  state: QuoteState;
+  item_count: number;
+  items_label: string;
+};
+
+export type Quote = QuoteFields & {
+  /** Staff only. Never printed. */
+  internal_note: string | null;
   prices_include_vat: boolean;
   lines: QuoteLine[];
 };
 
+export type QuoteLinePayload = {
+  sku_id: string;
+  qty: number;
+  notes?: string;
+  unit_ex_vat?: string;
+  discount_percent?: string | number;
+};
+
 export type CreateQuotePayload = {
   customer_id: string;
-  lines: {
-    sku_id: string;
-    qty: number;
-    notes?: string;
-    unit_ex_vat?: string;
-    discount_percent?: string;
-  }[];
-  notes?: string;
+  lines: QuoteLinePayload[];
+  notes?: string | null;
+  internal_note?: string | null;
+  valid_until?: string | null;
+  sales_staff_id?: string | null;
 };
 
 export type AcceptQuotePayload = {
@@ -4047,23 +4396,51 @@ export function createQuote(payload: CreateQuotePayload): Promise<Quote> {
   return apiFetch<Quote>("/quotes", { method: "POST", body: JSON.stringify(payload) });
 }
 
-export function markQuoteSent(id: string): Promise<Quote> {
-  return apiFetch<Quote>(`/quotes/${id}/mark-sent`, { method: "POST" });
-}
-
-export function acceptQuote(id: string, payload: AcceptQuotePayload): Promise<SalesOrder> {
-  return apiFetch<SalesOrder>(`/quotes/${id}/accept`, {
-    method: "POST",
-    body: JSON.stringify(payload),
+/** A fresh open quote with the same customer, lines, notes and colleague, at today's dates. */
+export async function duplicateQuote(id: string): Promise<Quote> {
+  const quote = await getQuote(id);
+  return createQuote({
+    customer_id: quote.customer_id,
+    lines: quote.lines.map((line) => ({
+      sku_id: line.sku_id,
+      qty: line.qty,
+      discount_percent: line.discount_percent,
+    })),
+    notes: quote.notes,
+    internal_note: quote.internal_note,
+    sales_staff_id: quote.sales_staff_id,
   });
 }
 
-export function cancelQuote(id: string): Promise<Quote> {
-  return apiFetch<Quote>(`/quotes/${id}/cancel`, { method: "POST" });
+/** Replaces the whole quote; omitted notes, validity or colleague are cleared. */
+export function replaceQuote(id: string, payload: CreateQuotePayload): Promise<Quote> {
+  return apiFetch<Quote>(`/quotes/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** Only quotes that were never converted. */
+export function deleteQuote(id: string): Promise<void> {
+  return apiFetch<void>(`/quotes/${id}`, { method: "DELETE" });
+}
+
+/** The quote cart priced exactly as saving it would; an edited quote keeps its saved prices. */
+export function previewQuotePrices(
+  payload: { customer_id: string; lines: QuoteLinePayload[]; quote_id?: string },
+  signal: AbortSignal,
+): Promise<TillPricePreview> {
+  return apiFetch<TillPricePreview>("/quotes/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
 }
 
 export async function downloadQuotePdf(id: string, quoteNumber: string): Promise<void> {
   await downloadApiFile(`/api/v1/quotes/${id}/pdf`, `${quoteNumber}.pdf`);
+}
+
+/** Opens the saved quote's PDF in a new tab. */
+export async function previewQuotePdf(id: string, quoteNumber: string): Promise<void> {
+  await downloadApiFile(`/api/v1/quotes/${id}/pdf`, `${quoteNumber}.pdf`, "open");
 }
 
 export function listSalesOrders(params?: ListParams): Promise<Page<SalesOrderListItem>> {

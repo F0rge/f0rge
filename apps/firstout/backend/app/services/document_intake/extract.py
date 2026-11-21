@@ -51,14 +51,24 @@ class PreparedDocument:
     filename: str = "document"
 
 
-def sniff_content_type(data: bytes, filename: str, content_type: Optional[str]) -> str:
-    stated = (content_type or "").split(";")[0].strip().lower()
-    if data.startswith(b"%PDF"):
+def magic_content_type(data: bytes) -> Optional[str]:
+    """The PDF, PNG or JPEG type the file's own leading bytes prove, else None."""
+    if data.startswith(b"%PDF-"):
         return "application/pdf"
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
     if data.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
+    return None
+
+
+def sniff_content_type(data: bytes, filename: str, content_type: Optional[str]) -> str:
+    stated = (content_type or "").split(";")[0].strip().lower()
+    if data.startswith(b"%PDF"):
+        return "application/pdf"
+    magic = magic_content_type(data)
+    if magic is not None:
+        return magic
     if stated in {"application/pdf", "image/png", "image/jpeg", "image/jpg"}:
         return "image/jpeg" if stated == "image/jpg" else stated
     lower = filename.lower()

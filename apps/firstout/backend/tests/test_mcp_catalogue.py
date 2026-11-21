@@ -326,7 +326,7 @@ def test_search_finds_route_actions_and_ranks_hand_written_actions_first_on_a_ti
     assert found("post journal")[0] == "post_journal"
     assert "create_sku" in found("create sku")
     # Equal scores: the hand-written read comes first, then route actions by name.
-    assert found("payment") == ["payments_find", "create_payment", "list_payments"]
+    assert found("payment") == ["payments_find", "create_payment", "list_open_payment_documents"]
     # A route's synthesised description repeats its name and earns nothing on top.
     assert found("create transfer")[:2] == ["transfers_create_draft", "create_transfer"]
     assert "create_sku" not in found("create sku", "Books")

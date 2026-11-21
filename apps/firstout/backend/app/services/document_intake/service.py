@@ -96,12 +96,8 @@ class DocumentIntakeService:
         self,
         extracted: ExtractedDocument,
         usage: ModelUsage,
-        *,
-        record_proforma_duplicate: bool = True,
-        number_noun: str = "proforma",
-        include_archived_suppliers: bool = False,
     ) -> ProformaReview:
-        suppliers = await self._supplier_records(include_archived=include_archived_suppliers)
+        suppliers = await self._supplier_records()
         skus = await self._sku_records()
         prices = await self._price_records()
         chosen, candidates = match_supplier(
@@ -111,11 +107,7 @@ class DocumentIntakeService:
             suppliers,
         )
         duplicate = False
-        if (
-            record_proforma_duplicate
-            and chosen.supplier_id is not None
-            and extracted.document_number.strip()
-        ):
+        if chosen.supplier_id is not None and extracted.document_number.strip():
             duplicate = await self._proforma_exists(chosen.supplier_id, extracted.document_number)
 
         reviewed: list[ReviewedLine] = []
@@ -176,7 +168,7 @@ class DocumentIntakeService:
                     CENT,
                 )
             ),
-            flags=document_flags(extracted, computed_ex, duplicate, number_noun=number_noun),
+            flags=document_flags(extracted, computed_ex, duplicate),
             usage=usage,
         )
 
@@ -440,10 +432,8 @@ class DocumentIntakeService:
             suffix += 1
         return candidate
 
-    async def _supplier_records(self, *, include_archived: bool = False) -> list[SupplierRecord]:
+    async def _supplier_records(self) -> list[SupplierRecord]:
         rows = await self.supplier_crud.list_all()
-        if include_archived:
-            rows.extend(await self.supplier_crud.list_all(archived=True))
         return [
             SupplierRecord(
                 id=row.id,

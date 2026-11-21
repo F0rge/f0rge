@@ -45,9 +45,17 @@ describe("application breadcrumbs", () => {
     expect(breadcrumbsForPath("/catalogue/new").at(-1)?.label).toBe(
       "Create product",
     );
-    expect(breadcrumbsForPath("/bills/read").at(-1)?.label).toBe(
+    expect(breadcrumbsForPath("/quotes/new").at(-1)?.label).toBe("New quote");
+    expect(breadcrumbsForPath("/quotes/opaque-id")).toEqual([
+      { label: "Sales" },
+      { label: "Quotes", href: "/quotes" },
+      { label: "Quote" },
+    ]);
+    expect(breadcrumbsForPath("/proformas/read").at(-1)?.label).toBe(
       "Read document",
     );
+    expect(breadcrumbsForPath("/bills/new").at(-1)?.label).toBe("Create bill");
+    expect(breadcrumbsForPath("/invoices/new").at(-1)?.label).toBe("Create invoice");
     expect(breadcrumbsForPath("/catalogue-wrong")).toEqual([]);
   });
 });
