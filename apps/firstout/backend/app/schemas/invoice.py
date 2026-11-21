@@ -40,12 +40,16 @@ class InvoiceCreate(BaseModel):
     note_internal: DocumentNote = None
 
 
-class InvoiceNoteUpdate(BaseModel):
-    """Only the internal note changes after issue; the printed note is part of the document."""
+class InvoiceUpdate(BaseModel):
+    """After issue only staff-facing fields change; the printed note is part of the document.
+
+    Only the fields sent are changed.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    note_internal: DocumentNote
+    note_internal: DocumentNote = None
+    sales_staff_id: Optional[uuid.UUID] = None
 
 
 class InvoiceLineResponse(BaseModel):
@@ -60,6 +64,7 @@ class InvoiceLineResponse(BaseModel):
     sku_id: Optional[uuid.UUID] = None
     price_warning: Optional[str] = None
     till_no_stock_required: bool = False
+    exclude_from_commission: bool = False
     # Computed on read. Not stored, and not printed on the customer PDF.
     suspect_price_warning: Optional[str] = None
 
@@ -104,6 +109,8 @@ class InvoiceResponse(BaseModel):
     on_account: bool = False
     note_printed: Optional[str] = None
     note_internal: Optional[str] = None
+    sales_staff_id: Optional[uuid.UUID] = None
+    sales_staff_name: Optional[str] = None
     prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     created_at: datetime.datetime

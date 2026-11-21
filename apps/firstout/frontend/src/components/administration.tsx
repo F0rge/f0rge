@@ -2,7 +2,7 @@
 
 import { Breadcrumb, BreadcrumbItem } from "@carbon/react";
 import {
-  ArrowRight, Building, ChevronDown, Document, Identification,
+  ArrowRight, Badge, Building, ChevronDown, Document, Identification,
   ImportExport, Location, Locked, Printer, Security, Settings, User, UserAdmin, UserMultiple,
 } from "@carbon/icons-react";
 import Link from "next/link";
@@ -17,7 +17,7 @@ import { resetMainScroll } from "@/lib/reset-main-scroll";
 import styles from "./administration.module.css";
 
 const icons = {
-  organisation: Building, settings: Settings, team: UserMultiple, roles: UserAdmin,
+  organisation: Building, settings: Settings, team: UserMultiple, salesStaff: Badge, roles: UserAdmin,
   company: Identification, documents: Document, locations: Location, operations: Settings,
   labels: Printer, integrations: ImportExport,
   mcp: Locked, audit: Security, profile: User,

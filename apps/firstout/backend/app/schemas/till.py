@@ -69,6 +69,8 @@ class TillSaleCreate(TillPriceRequest):
     basket_version: Optional[int] = Field(default=None, ge=1)
     note_printed: DocumentNote = None
     note_internal: DocumentNote = None
+    # Required when the business has an active sales colleague.
+    sales_staff_id: Optional[uuid.UUID] = None
 
 
 class TillSaleLocationStock(BaseModel):

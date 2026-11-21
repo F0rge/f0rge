@@ -25,6 +25,7 @@ class BooksEventAction(str, enum.Enum):
     CREATED = "created"
     POSTED = "posted"
     VOIDED = "voided"
+    UPDATED = "updated"
 
 
 class BooksEvent(TenantOwnedMixin, UUIDPkMixin, Base):
@@ -74,7 +75,7 @@ class BooksEvent(TenantOwnedMixin, UUIDPkMixin, Base):
             name="ck_books_events_document_type",
         ),
         CheckConstraint(
-            "action IN ('created', 'posted', 'voided')",
+            "action IN ('created', 'posted', 'voided', 'updated')",
             name="ck_books_events_action",
         ),
     )

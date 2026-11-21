@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
+from app.services.sales_staff import SalesStaffService
 from app.services.party_archive import assert_customer_active
 from app.services.sellability import assert_sku_sellable
 from app.services.sku_archive import SkuArchiveService
@@ -169,6 +170,7 @@ class TillOrchestrator:
             raise ConflictError("Cannot sell from archived location")
         if location.type != LocationType.SHOWROOM:
             raise ConflictError("Till sales are only allowed at showroom locations")
+        await SalesStaffService(self.db).check_sale_colleague(data.sales_staff_id)
 
         from app.services.till_basket import TillBasketService
 
@@ -354,6 +356,7 @@ class TillOrchestrator:
                 on_account=on_account,
                 note_printed=data.note_printed,
                 note_internal=data.note_internal,
+                sales_staff_id=data.sales_staff_id,
                 lines=invoice_line_models,
             )
 

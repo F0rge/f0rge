@@ -74,6 +74,7 @@ class TillBasketCRUD(BaseCRUD):
                 note=None,
                 note_printed=None,
                 note_internal=None,
+                sales_staff_id=None,
                 pick_id=None,
                 linked_pick_ids={},
                 last_operation_id=None,

@@ -43,6 +43,8 @@ class HeldSale(TenantOwnedMixin, UUIDPkMixin, Base):
     # The sale's invoice notes, kept with the cart until the sale is completed.
     note_printed: Mapped[Optional[str]] = mapped_column(Text)
     note_internal: Mapped[Optional[str]] = mapped_column(Text)
+    # The sales colleague, checked when the sale is completed.
+    sales_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     estimated_total_inc_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 2))
     pick_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     # Selections and display snapshots survive later catalogue/customer changes.

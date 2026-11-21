@@ -7,14 +7,21 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
-from app.dependencies.auth import get_current_user_id, get_reports_service
+from app.dependencies.auth import (
+    get_current_user_id,
+    get_reports_service,
+    get_sales_staff_service,
+    require_commission_view,
+)
 from app.schemas.bank_import import (
     AgedReport,
     BalanceSheetReport,
     ProfitLossReport,
     Vat201Draft,
 )
+from app.schemas.sales_staff import CommissionReport
 from app.services.reports import ReportsService
+from app.services.sales_staff import SalesStaffService
 from app.services.reports_export import (
     build_aged_stock_csv,
     build_cash_summary_csv,
@@ -43,6 +50,15 @@ from app.schemas.reports_stock import (
 )
 
 reports_router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+
+
+@reports_router.get("/commission", response_model=CommissionReport)
+async def commission_report(
+    month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    _: uuid.UUID = Depends(require_commission_view),
+    service: SalesStaffService = Depends(get_sales_staff_service),
+):
+    return await service.commission_report(month)
 
 
 @reports_router.get("/aged-ar", response_model=AgedReport)

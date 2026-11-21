@@ -10,6 +10,8 @@ from sqlalchemy import (
     CheckConstraint,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     Integer,
     Numeric,
     Text,
@@ -69,6 +71,9 @@ class Quote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         index=True,
     )
 
+    # The colleague credited with the quote.
+    sales_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+
     customer: Mapped["Customer"] = relationship()
     created_by: Mapped["User"] = relationship()
     lines: Mapped[list["QuoteLine"]] = relationship(
@@ -78,6 +83,13 @@ class Quote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("quote_number", name="uq_quotes_quote_number"),
+        ForeignKeyConstraint(
+            ["team_id", "sales_staff_id"],
+            ["sales_staff.team_id", "sales_staff.id"],
+            name="fk_quotes_sales_staff_tenant",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_quotes_sales_staff", "team_id", "sales_staff_id"),
         CheckConstraint(
             "status IN ('draft', 'sent', 'accepted', 'expired', 'cancelled')",
             name="ck_quotes_status",

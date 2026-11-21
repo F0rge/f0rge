@@ -64,6 +64,10 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     till_no_stock_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Delivery, installation and similar lines earn no sales commission.
+    exclude_from_commission: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     storefront_published: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

@@ -76,6 +76,7 @@ from app.routers import (
     storefront_orders,
     reports,
     roles,
+    sales_staff,
     search,
     settings as settings_router,
     skus,
@@ -259,6 +260,7 @@ app.include_router(users.users_router)
 app.include_router(users.profile_router)
 app.include_router(mcp_tokens.router)
 app.include_router(roles.roles_router)
+app.include_router(sales_staff.sales_staff_router)
 app.include_router(record_workspace.record_workspace_router)
 app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)

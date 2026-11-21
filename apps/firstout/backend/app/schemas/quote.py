@@ -70,6 +70,7 @@ class QuoteListItem(BaseModel):
     vat_amount: Decimal
     total_inc_vat: Decimal
     notes: Optional[str]
+    sales_staff_id: Optional[uuid.UUID] = None
     items_label: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -87,6 +88,7 @@ class QuoteResponse(BaseModel):
     vat_amount: Decimal
     total_inc_vat: Decimal
     notes: Optional[str]
+    sales_staff_id: Optional[uuid.UUID] = None
     prices_include_vat: bool
     lines: list[QuoteLineResponse]
     created_at: datetime.datetime

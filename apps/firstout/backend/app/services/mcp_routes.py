@@ -66,6 +66,7 @@ TABS: dict[str, str | dict[str, str]] = {
     "reports": "Books / Reports",
     "returns": "Sales / Returns",
     "sales-orders": "Sales / Orders",
+    "sales-staff": "Admin / Sales staff",
     "search": "Home",
     "settings": "Admin / Settings directory",
     "skus": "Catalogue / Catalogue",

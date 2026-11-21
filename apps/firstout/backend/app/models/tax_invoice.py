@@ -10,12 +10,15 @@ from sqlalchemy import (
     Date,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     event,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -72,6 +75,8 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     note_printed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Staff only; never printed.
     note_internal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # The colleague credited with the sale (commission).
+    sales_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
         JSONB(none_as_null=True), nullable=True
     )
@@ -88,7 +93,16 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         uselist=False,
     )
 
-    __table_args__ = (UniqueConstraint("invoice_number", name="uq_tax_invoices_invoice_number"),)
+    __table_args__ = (
+        UniqueConstraint("invoice_number", name="uq_tax_invoices_invoice_number"),
+        ForeignKeyConstraint(
+            ["team_id", "sales_staff_id"],
+            ["sales_staff.team_id", "sales_staff.id"],
+            name="fk_tax_invoices_sales_staff_tenant",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_tax_invoices_sales_staff", "team_id", "sales_staff_id"),
+    )
 
 
 class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
@@ -117,8 +131,25 @@ class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
     till_no_stock_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Snapshot of the SKU's flag at sale time, so later SKU edits leave past commission alone.
+    exclude_from_commission: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     invoice: Mapped[TaxInvoice] = relationship(back_populates="lines")
+
+
+@event.listens_for(InvoiceLine, "before_insert")
+def _snapshot_commission_exclusion(_mapper, connection, target: InvoiceLine) -> None:
+    """Every invoice path (till, manual, laybys, orders) snapshots the SKU flag here."""
+    # ponytail: one PK lookup per SKU line; batch it if bulk invoice imports ever matter.
+    if target.sku_id is None:
+        return
+    from app.models.sku import Sku
+
+    target.exclude_from_commission = bool(
+        connection.scalar(select(Sku.exclude_from_commission).where(Sku.id == target.sku_id))
+    )
 
 
 @event.listens_for(TaxInvoice, "before_insert")

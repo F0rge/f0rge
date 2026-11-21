@@ -413,6 +413,7 @@ class QuotesService:
             vat_amount=quote.vat_amount,
             total_inc_vat=quote.total_inc_vat,
             notes=quote.notes,
+            sales_staff_id=quote.sales_staff_id,
             items_label=self._items_label(quote),
             created_at=quote.created_at,
             updated_at=quote.updated_at,
@@ -433,6 +434,7 @@ class QuotesService:
             vat_amount=quote.vat_amount,
             total_inc_vat=quote.total_inc_vat,
             notes=quote.notes,
+            sales_staff_id=quote.sales_staff_id,
             prices_include_vat=quote.prices_include_vat,
             lines=[
                 QuoteLineResponse(

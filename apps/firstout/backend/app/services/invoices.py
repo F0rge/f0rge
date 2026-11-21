@@ -5,6 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
@@ -14,12 +15,13 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
+from app.models.sales_staff import SalesStaff
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import (
     InvoiceCreate,
     InvoiceLineResponse,
     InvoiceListItem,
-    InvoiceNoteUpdate,
+    InvoiceUpdate,
     InvoiceResponse,
 )
 from app.schemas.page import Page, PageParams
@@ -45,6 +47,7 @@ from app.services.pricing import (
     shows_prices_including_vat,
 )
 from app.services.suspect_price import annotate_line_warnings
+from app.services.sales_staff import SalesStaffService
 from app.services.settings import SettingsService
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
@@ -83,15 +86,34 @@ class InvoiceService:
             raise NotFoundError("Invoice not found")
         return await self._to_response(invoice, viewer_user_id)
 
-    async def update_note(
-        self, invoice_id: uuid.UUID, data: InvoiceNoteUpdate, user_id: uuid.UUID
+    async def _staff_name(self, staff_id: Optional[uuid.UUID]) -> str:
+        staff = await self.db.get(SalesStaff, staff_id) if staff_id else None
+        return staff.name if staff else "none"
+
+    async def update(
+        self, invoice_id: uuid.UUID, data: InvoiceUpdate, user_id: uuid.UUID
     ) -> InvoiceResponse:
         async with unit_of_work(self.db):
             invoice = await self.crud.get_by_id(invoice_id, for_update=True)
             if invoice is None:
                 raise NotFoundError("Invoice not found")
             assert_operational_document(invoice)
-            invoice.note_internal = data.note_internal
+            if "note_internal" in data.model_fields_set:
+                invoice.note_internal = data.note_internal
+            if "sales_staff_id" in data.model_fields_set:
+                if data.sales_staff_id is not None:
+                    await SalesStaffService(self.db).assert_assignable(data.sales_staff_id)
+                if data.sales_staff_id != invoice.sales_staff_id:
+                    before = await self._staff_name(invoice.sales_staff_id)
+                    after = await self._staff_name(data.sales_staff_id)
+                    await self.events.record(
+                        BooksDocumentType.INVOICE,
+                        invoice.id,
+                        BooksEventAction.UPDATED,
+                        actor_user_id=user_id,
+                        note=f"Sales colleague: {before} → {after}",
+                    )
+                invoice.sales_staff_id = data.sales_staff_id
             await self.crud.commit_refresh(invoice)
         return await self.get(invoice_id, user_id)
 
@@ -307,6 +329,12 @@ class InvoiceService:
             on_account=invoice.on_account,
             note_printed=invoice.note_printed,
             note_internal=invoice.note_internal,
+            sales_staff_id=invoice.sales_staff_id,
+            sales_staff_name=await self.db.scalar(
+                select(SalesStaff.name).where(SalesStaff.id == invoice.sales_staff_id)
+            )
+            if invoice.sales_staff_id
+            else None,
             prices_include_vat=invoice.prices_include_vat,
             lines=[
                 InvoiceLineResponse(
@@ -321,6 +349,7 @@ class InvoiceService:
                     sku_id=line.sku_id,
                     price_warning=line.price_warning,
                     till_no_stock_required=line.till_no_stock_required,
+                    exclude_from_commission=line.exclude_from_commission,
                 )
                 for line in invoice.lines
             ],

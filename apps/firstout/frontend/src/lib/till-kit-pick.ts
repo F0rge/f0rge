@@ -21,6 +21,7 @@ export type TillCartSnapshot = {
   note?: string;
   notePrinted?: string;
   noteInternal?: string;
+  salesStaffId?: string;
   lines: { skuId: string; qty: number; discountPercent: number }[];
 };
 

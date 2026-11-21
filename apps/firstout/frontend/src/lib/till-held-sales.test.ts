@@ -36,6 +36,13 @@ describe("held sale resume recovery", () => {
     expect(heldSaleRequest(cartSnapshot(held))).not.toHaveProperty("note_printed");
   });
 
+  it("keeps the sales colleague through a hold", () => {
+    expect(heldSaleRequest(cartSnapshot({ ...held, sales_staff_id: "staff-1" }))).toMatchObject({
+      sales_staff_id: "staff-1",
+    });
+    expect(heldSaleRequest(cartSnapshot(held))).not.toHaveProperty("sales_staff_id");
+  });
+
   it("drops links from removed products without removing links from retained kits", () => {
     const cart = {
       ...cartSnapshot(held),

@@ -22,6 +22,7 @@ cancel_sales_order
 cancel_stocktake
 cancel_transfer
 cash_summary
+commission_report
 complete_adjustment
 complete_delivery
 complete_layby
@@ -56,6 +57,7 @@ create_quote
 create_reorder_draft_po
 create_repeating_invoice
 create_return
+create_sales_staff
 create_sku
 create_sku_for_purchase_order_line
 create_supplier
@@ -67,6 +69,7 @@ delete_bank_rule
 delete_held_sales
 delete_price_list
 delete_price_list_item
+delete_sales_staff
 delete_sku
 dispatch_transfer
 edit_held_sale_note
@@ -136,6 +139,8 @@ list_repeating_invoices
 list_returns
 list_sales_history
 list_sales_orders
+list_sales_staff
+list_sales_staff_options
 list_sku_unit_costs
 list_skus
 list_stock_by_bin
@@ -191,7 +196,7 @@ update_account
 update_adjustment_line
 update_bank_rule
 update_customer
-update_invoice_note
+update_invoice
 update_location
 update_location_bin
 update_pending_purchase_order
@@ -199,6 +204,7 @@ update_pick
 update_price_list
 update_quote
 update_repeating_invoice
+update_sales_staff
 update_settings
 update_sku
 update_stocktake_line

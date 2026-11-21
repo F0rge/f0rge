@@ -7,6 +7,8 @@ import {
   Button,
   InlineNotification,
   Modal,
+  Select,
+  SelectItem,
   SkeletonText,
   Stack,
   Tag,
@@ -39,12 +41,15 @@ import {
   settingsLogoUrl,
   listCreditNotes,
   updateInvoiceNote,
+  updateInvoiceSalesStaff,
   listPayments,
+  listSalesStaffOptions,
   type AppSettings,
   type CreditNote,
   type CustomerCrm,
   type Invoice,
   type Payment,
+  type SalesStaffOption,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
@@ -80,6 +85,8 @@ export default function InvoiceDetailPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
+  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
+  const [colleagueSaving, setColleagueSaving] = useState(false);
 
   const loadInvoice = useCallback(async () => {
     setLoading(true);
@@ -178,6 +185,29 @@ export default function InvoiceDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to record payment.");
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (canMutate) listSalesStaffOptions().then(setColleagues).catch(() => setColleagues(null));
+  }, [canMutate]);
+
+  async function handleSalesColleague(staffId: string) {
+    if (!invoice) return;
+    setColleagueSaving(true);
+    setError(null);
+    try {
+      const saved = await updateInvoiceSalesStaff(invoice.id, staffId || null);
+      setInvoice(saved);
+      setSuccess(
+        saved.sales_staff_name
+          ? `Commission on ${saved.invoice_number} now goes to ${saved.sales_staff_name}.`
+          : `${saved.invoice_number} no longer has a sales colleague.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change the sales colleague.");
+    } finally {
+      setColleagueSaving(false);
     }
   }
 
@@ -467,6 +497,30 @@ export default function InvoiceDetailPage() {
         ) : null}
       </section>
 
+      {canEditNote && colleagues ? (
+        <div style={{ maxWidth: "20rem" }}>
+          <Select
+            id="invoice-sales-colleague"
+            labelText="Sales colleague"
+            helperText="Who made this sale. Their commission counts it."
+            value={invoice.sales_staff_id ?? ""}
+            disabled={colleagueSaving}
+            onChange={(event) => void handleSalesColleague(event.target.value)}
+          >
+            <SelectItem value="" text="No colleague (unattributed)" />
+            {invoice.sales_staff_id && !colleagues.some((item) => item.id === invoice.sales_staff_id) ? (
+              <SelectItem value={invoice.sales_staff_id} text={`${invoice.sales_staff_name ?? "Colleague"} (inactive)`} />
+            ) : null}
+            {colleagues.map((item) => <SelectItem key={item.id} value={item.id} text={item.name} />)}
+          </Select>
+        </div>
+      ) : invoice.sales_staff_name ? (
+        <div>
+          <p className="cds--type-label-01">Sales colleague</p>
+          <p className="cds--type-body-01">{invoice.sales_staff_name}</p>
+        </div>
+      ) : null}
+
       {canEditNote ? (
         <Stack gap={3}>
           <TextArea
@@ -532,7 +586,7 @@ export default function InvoiceDetailPage() {
         </Table>
       </TableContainer>}
 
-      <BooksHistory documentType="invoice" documentId={invoice.id} />
+      <BooksHistory key={invoice.sales_staff_id ?? ""} documentType="invoice" documentId={invoice.id} />
 
       {!invoice.is_archive ? <Modal
         open={paymentOpen}

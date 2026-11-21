@@ -37,6 +37,8 @@ class TillBasket(TenantOwnedMixin, UUIDPkMixin, Base):
     # The sale's invoice notes, kept with the cart until the sale is completed.
     note_printed: Mapped[Optional[str]] = mapped_column(Text)
     note_internal: Mapped[Optional[str]] = mapped_column(Text)
+    # The sales colleague, checked when the sale is completed.
+    sales_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     pick_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     linked_pick_ids: Mapped[dict[str, str]] = mapped_column(JSONB)
     lines: Mapped[list[dict]] = mapped_column(JSONB)

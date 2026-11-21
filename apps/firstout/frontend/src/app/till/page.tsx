@@ -72,6 +72,7 @@ import { TillLoading } from "./loading-layout";
 import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
 import { TillPickList } from "./till-pick-list";
 import { localIsoDate, statementDueDate } from "@/lib/till-statement";
+import { commissionBase, rememberColleague, rememberedColleague, zar } from "@/lib/sales-staff";
 
 import {
   ApiError,
@@ -100,6 +101,7 @@ import {
   listInventory,
   listLocations,
   listPriceLists,
+  listSalesStaffOptions,
   listSkus,
   listTillReservations,
   parsePriceInput,
@@ -113,6 +115,7 @@ import {
   type HeldSale,
   type Location,
   type PriceList,
+  type SalesStaffOption,
   type Sku,
   type PickDocument,
   type TillBasket,
@@ -355,6 +358,10 @@ function TillWorkspace() {
   // The sale's invoice notes: printed on the invoice, and staff only.
   const [notePrinted, setNotePrinted] = useState("");
   const [noteInternal, setNoteInternal] = useState("");
+  // Who made the sale (commission); defaults to this device's last choice.
+  const [salesStaffId, setSalesStaffId] = useState("");
+  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
+  const [colleaguesError, setColleaguesError] = useState(false);
   const [heldNotice, setHeldNotice] = useState<{ title: string; subtitle?: string } | null>(null);
   const [heldFocus, setHeldFocus] = useState("");
   const [resumeDraft, setResumeDraft] = useState<HeldSale | null>(null);
@@ -458,10 +465,11 @@ function TillWorkspace() {
     ...(heldNote ? { note: heldNote } : {}),
     ...(notePrinted ? { notePrinted } : {}),
     ...(noteInternal ? { noteInternal } : {}),
+    ...(salesStaffId ? { salesStaffId } : {}),
     lines: cart.map((line) => ({
       skuId: line.sku.id, qty: line.qty, discountPercent: line.discountPercent,
     })),
-  }), [locationId, customerId, pickId, linkedPickIds, heldNote, notePrinted, noteInternal, cart]);
+  }), [locationId, customerId, pickId, linkedPickIds, heldNote, notePrinted, noteInternal, salesStaffId, cart]);
 
   const applySnapshot = useCallback((snapshot: TillCartSnapshot, restored: RestoredCart) => {
     setCart(restored.lines);
@@ -473,8 +481,18 @@ function TillWorkspace() {
     setHeldNote(snapshot.note ?? "");
     setNotePrinted(snapshot.notePrinted ?? "");
     setNoteInternal(snapshot.noteInternal ?? "");
+    setSalesStaffId(snapshot.salesStaffId || rememberedColleague());
     setCartReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!canSell) return;
+    let live = true;
+    listSalesStaffOptions()
+      .then((rows) => { if (live) setColleagues(rows); })
+      .catch(() => { if (live) setColleaguesError(true); });
+    return () => { live = false; };
+  }, [canSell]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -917,8 +935,12 @@ function TillWorkspace() {
     (cartQtyBySku.get(line.sku.id) ?? 0) > availabilityFor(line.sku.id).limit
   ) : [];
 
+  const colleague = colleagues?.find((item) => item.id === salesStaffId);
+  // Required once the business lists any active colleague; the server checks too.
+  const colleagueChosen = !colleagues?.length || !!colleague;
   const saleValid =
     canSell &&
+    colleagueChosen &&
     locationId &&
     !!pricePreview &&
     totalInc > 0 &&
@@ -1296,6 +1318,7 @@ function TillWorkspace() {
         ...(onStatement ? { due_date: dueDate } : {}),
         ...(notePrinted.trim() ? { note_printed: notePrinted.trim() } : {}),
         ...(noteInternal.trim() ? { note_internal: noteInternal.trim() } : {}),
+        ...(colleague ? { sales_staff_id: colleague.id } : {}),
         ...(pickId ? { pick_id: pickId } : {}),
         ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
         ...(creditOverrideActive
@@ -1976,6 +1999,37 @@ function TillWorkspace() {
                     {classification} · {priceListName ?? "Catalogue tier"} · Unit prices {vatBasisLabel(showInclusive)}
                   </p>
                 </div>
+                {colleagues?.length ? (
+                  <Select
+                    id="till-sales-colleague"
+                    labelText="Sales colleague"
+                    value={colleague?.id ?? ""}
+                    invalid={cart.length > 0 && !colleague}
+                    invalidText="Choose who made this sale"
+                    helperText={colleague ? `Counts towards ${colleague.short_name || colleague.name.split(/\s+/)[0]}'s commission: ${zar(commissionBase(cart.map((line, index) => ({
+                      excluded: !!line.sku.exclude_from_commission,
+                      exVat: pricePreview?.lines[index]?.ex_vat,
+                    }))))} excl. VAT` : undefined}
+                    onChange={(event) => {
+                      setSalesStaffId(event.target.value);
+                      rememberColleague(event.target.value);
+                    }}
+                  >
+                    <SelectItem value="" text="Who made this sale?" disabled />
+                    {colleagues.map((item) => (
+                      <SelectItem key={item.id} value={item.id} text={item.name} />
+                    ))}
+                  </Select>
+                ) : colleaguesError ? (
+                  <InlineNotification
+                    kind="warning"
+                    title="Sales colleagues could not be loaded"
+                    subtitle="Reload the till to choose who made this sale."
+                    hideCloseButton
+                    lowContrast
+                  />
+                ) : null}
+
                 {pricingError ? (
                   <Stack gap={3}>
                     <InlineNotification kind="error" title="Could not confirm sale prices" subtitle={pricingError} lowContrast hideCloseButton />

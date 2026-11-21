@@ -150,6 +150,7 @@ class TillBasketService:
                     note=data.note,
                     note_printed=data.note_printed,
                     note_internal=data.note_internal,
+                    sales_staff_id=data.sales_staff_id,
                     pick_id=data.pick_id,
                     linked_pick_ids=data.linked_pick_ids,
                     lines=[line.model_dump(mode="json") for line in data.lines],
@@ -184,6 +185,7 @@ class TillBasketService:
         note: Optional[str] = None,
         note_printed: Optional[str] = None,
         note_internal: Optional[str] = None,
+        sales_staff_id: Optional[uuid.UUID] = None,
         pick_id: Optional[uuid.UUID] = None,
         linked_pick_ids: Optional[dict[Any, Any]] = None,
         lines: Optional[list[dict]] = None,
@@ -233,6 +235,7 @@ class TillBasketService:
         row.note = note
         row.note_printed = note_printed
         row.note_internal = note_internal
+        row.sales_staff_id = sales_staff_id
         row.pick_id = pick_id
         row.linked_pick_ids = {str(k): str(v) for k, v in (linked_pick_ids or {}).items()}
         row.lines = stored

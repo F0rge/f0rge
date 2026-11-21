@@ -907,6 +907,8 @@ export type Sku = {
   is_kit: boolean;
   is_sellable: boolean;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -937,6 +939,8 @@ export type UpdateSkuPricePayload = {
   carton_count?: number;
   is_sellable?: boolean;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -991,6 +995,8 @@ export type CreateSkuPayload = {
   carton_count?: number;
   is_sellable?: boolean;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
 };
 
 export type SkuListParams = {
@@ -1328,6 +1334,7 @@ export type HeldSaleCreate = {
   note?: string | null;
   note_printed?: string | null;
   note_internal?: string | null;
+  sales_staff_id?: string | null;
   basket_id?: string;
 };
 
@@ -1340,6 +1347,7 @@ export type TillBasket = {
   /** The sale's invoice notes, kept with the cart until it is sold. */
   note_printed?: string | null;
   note_internal?: string | null;
+  sales_staff_id?: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
   lines: { sku_id: string; qty: number; discount_percent: string }[];
@@ -1378,6 +1386,7 @@ export type TillBasketUpdate = {
   note?: string | null;
   note_printed?: string | null;
   note_internal?: string | null;
+  sales_staff_id?: string | null;
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   lines: TillSaleLinePayload[];
@@ -1405,6 +1414,7 @@ export type HeldSale = {
   note: string | null;
   note_printed?: string | null;
   note_internal?: string | null;
+  sales_staff_id?: string | null;
   estimated_total_inc_vat: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
@@ -1502,6 +1512,8 @@ export type TillSalePayload = TillPriceRequest & {
   note_printed?: string;
   /** Staff only; never printed. */
   note_internal?: string;
+  /** Required when the business has an active sales colleague. */
+  sales_staff_id?: string;
 };
 
 export type TillSaleResult = {
@@ -2165,6 +2177,8 @@ export type InvoiceLine = {
   price_warning?: string | null;
   suspect_price_warning?: string | null;
   till_no_stock_required?: boolean;
+  /** Delivery, installation and similar: no sales commission. */
+  exclude_from_commission?: boolean;
 };
 
 export type InvoiceListItem = {
@@ -2188,6 +2202,9 @@ export type InvoiceListItem = {
 };
 
 export type Invoice = InvoiceListItem & {
+  /** The colleague credited with the sale. */
+  sales_staff_id?: string | null;
+  sales_staff_name?: string | null;
   /** Printed on the tax invoice. */
   note_printed?: string | null;
   /** Staff only; never printed. */
@@ -2235,6 +2252,103 @@ export function updateInvoiceNote(id: string, noteInternal: string): Promise<Inv
     method: "PATCH",
     body: JSON.stringify({ note_internal: noteInternal }),
   });
+}
+
+/** Credit the sale to a colleague (commission); null removes the colleague. */
+export function updateInvoiceSalesStaff(id: string, salesStaffId: string | null): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ sales_staff_id: salesStaffId }),
+  });
+}
+
+export type SalesStaff = {
+  id: string;
+  name: string;
+  short_name: string | null;
+  /** Percent, e.g. "2.50". */
+  commission_rate: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SalesStaffOption = Pick<SalesStaff, "id" | "name" | "short_name">;
+
+export type SalesStaffPayload = {
+  name?: string;
+  short_name?: string | null;
+  commission_rate?: string;
+  is_active?: boolean;
+};
+
+export function listSalesStaff(status: "active" | "inactive" | "all" = "all"): Promise<SalesStaff[]> {
+  return apiFetch<SalesStaff[]>(`/sales-staff?status=${status}`);
+}
+
+/** Active colleagues' names for the till and invoices (no rates). */
+export function listSalesStaffOptions(): Promise<SalesStaffOption[]> {
+  return apiFetch<SalesStaffOption[]>("/sales-staff/options");
+}
+
+export function createSalesStaff(payload: SalesStaffPayload): Promise<SalesStaff> {
+  return apiFetch<SalesStaff>("/sales-staff", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateSalesStaff(id: string, payload: SalesStaffPayload): Promise<SalesStaff> {
+  return apiFetch<SalesStaff>(`/sales-staff/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+/** Only for a colleague no invoice or quote names (409 otherwise). */
+export function deleteSalesStaff(id: string): Promise<void> {
+  return apiFetch<void>(`/sales-staff/${id}`, { method: "DELETE" });
+}
+
+export type CommissionDocument = {
+  kind: "invoice" | "credit_note";
+  id: string;
+  number: string;
+  invoice_id: string;
+  invoice_number: string;
+  issue_date: string;
+  customer_name: string;
+  commissionable_ex_vat: string;
+  excluded_ex_vat: string;
+};
+
+export type CommissionRow = {
+  /** null: the unattributed bucket. */
+  sales_staff_id: string | null;
+  name: string;
+  short_name: string | null;
+  is_active: boolean;
+  commission_rate: string;
+  invoice_count: number;
+  commissionable_ex_vat: string;
+  excluded_ex_vat: string;
+  credit_deductions: string;
+  net_commissionable: string;
+  commission: string;
+  documents: CommissionDocument[];
+};
+
+export type CommissionReport = {
+  month: string;
+  from_date: string;
+  to_date: string;
+  rows: CommissionRow[];
+  unattributed: CommissionRow;
+  invoice_count: number;
+  commissionable_ex_vat: string;
+  excluded_ex_vat: string;
+  credit_deductions: string;
+  net_commissionable: string;
+  commission: string;
+};
+
+/** month: YYYY-MM. */
+export function getCommissionReport(month: string): Promise<CommissionReport> {
+  return apiFetch<CommissionReport>(`/reports/commission?month=${encodeURIComponent(month)}`);
 }
 
 
@@ -2455,7 +2569,7 @@ export function listPayments(params?: ListParams): Promise<Page<Payment>> {
 
 export type BooksDocumentType = "invoice" | "bill" | "payment" | "journal";
 
-export type BooksEventAction = "created" | "posted" | "voided";
+export type BooksEventAction = "created" | "posted" | "voided" | "updated";
 
 export type BooksEvent = {
   id: string;
