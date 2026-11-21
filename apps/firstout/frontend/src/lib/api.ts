@@ -850,6 +850,7 @@ export type Sku = {
   till_no_stock_required?: boolean;
   /** Delivery, installation and similar: no sales commission. */
   exclude_from_commission?: boolean;
+  storefront_hidden?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -882,6 +883,7 @@ export type UpdateSkuPricePayload = {
   till_no_stock_required?: boolean;
   /** Delivery, installation and similar: no sales commission. */
   exclude_from_commission?: boolean;
+  storefront_hidden?: boolean;
 };
 
 const VAT_MULTIPLIER = 1.15;
