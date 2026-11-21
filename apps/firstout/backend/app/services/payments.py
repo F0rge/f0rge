@@ -14,6 +14,7 @@ from app.crud.payment import PaymentCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.models.bill import BillApprovalStatus
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.payment import Payment, PaymentDirection
@@ -167,6 +168,10 @@ class PaymentService:
         if bill is None:
             raise NotFoundError("Bill not found")
         assert_operational_document(bill)
+        if bill.approval_status != BillApprovalStatus.APPROVED:
+            raise ValidationError("Approve this bill before recording a payment against it.")
+        if bill.archived_at is not None:
+            raise ValidationError("Restore this bill before recording a payment against it.")
 
         currency = SupplierService.normalize_currency(data.currency)
         if currency != bill.currency:

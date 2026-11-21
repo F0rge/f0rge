@@ -26,7 +26,7 @@ const detailLabels: Record<string, string> = {
   "/bills": "Bill",
   "/quotes": "Quote",
 };
-const newLabels: Record<string, string> = { "/quotes": "New quote" };
+const newLabels: Record<string, string> = { "/quotes": "New quote", "/bills": "Create bill" };
 
 /** Groups are labels, not invented links. Only ancestors with real routes link. */
 export function breadcrumbsForPath(pathname: string): AppCrumb[] {

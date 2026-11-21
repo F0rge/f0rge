@@ -790,65 +790,6 @@ export function suggestIntakeSku(payload: {
   });
 }
 
-export type PurchaseOrderMatch = {
-  purchase_order_id: string;
-  po_number: string;
-  status: string;
-  supplier_id: string;
-  supplier_name: string;
-};
-
-export type ProcessedSupplierBill = {
-  bill_id: string;
-  bill_number: string;
-  auto: boolean;
-  purchase_order_id: string;
-  po_number: string;
-};
-
-export type InvoiceReview = ProformaReview & {
-  po_reference: string | null;
-  proforma_number: string | null;
-  purchase_order: PurchaseOrderMatch | null;
-  purchase_order_candidates: PurchaseOrderMatch[];
-  exact: boolean;
-  differences: string[];
-  auto_process_enabled: boolean;
-  needs_fx: boolean;
-  processed: ProcessedSupplierBill | null;
-};
-
-export type InvoiceProcessPayload = {
-  supplier_id?: string | null;
-  create_supplier?: ProformaConfirmPayload["create_supplier"];
-  purchase_order_id: string;
-  document_number: string;
-  document_date: string;
-  currency: string;
-  fx_to_zar?: string | null;
-  accept_differences: boolean;
-  vat_total?: string | null;
-  total?: string | null;
-  charges: { description: string; amount: string }[];
-  lines: ProformaConfirmLine[];
-};
-
-export function extractSupplierInvoice(file: File): Promise<InvoiceReview> {
-  const formData = new FormData();
-  formData.append("file", file);
-  return apiUpload<InvoiceReview>("/document-intake/invoices/extract", formData);
-}
-
-export function processSupplierInvoice(
-  file: File,
-  payload: InvoiceProcessPayload,
-): Promise<ProcessedSupplierBill> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("payload", JSON.stringify(payload));
-  return apiUpload<ProcessedSupplierBill>("/document-intake/invoices/process", formData);
-}
-
 export function createIntakeSku(payload: {
   our_ref: string;
   our_barcode: string;
@@ -2469,7 +2410,29 @@ export type BillLine = {
   sort_order: number;
 };
 
-export type Bill = {
+export type BillApprovalStatus = "draft" | "awaiting_approval" | "approved";
+
+/** Approval first, then settlement. Imported Cin7 bills are "unknown". */
+export type BillStatus =
+  | "draft"
+  | "awaiting_approval"
+  | "unpaid"
+  | "partially_paid"
+  | "overdue"
+  | "paid"
+  | "unknown";
+
+export type BillAttachment = {
+  id: string;
+  filename: string;
+  content_type: string;
+  uploaded_at: string;
+  uploaded_by_id: string | null;
+  /** The previous release's single file: download only. */
+  read_only: boolean;
+};
+
+export type BillListItem = {
   id: string;
   is_archive: boolean;
   bill_number: string;
@@ -2477,6 +2440,7 @@ export type Bill = {
   supplier_name: string;
   supplier_ref: string;
   issue_date: string;
+  due_date: string | null;
   currency: string;
   fx_to_zar: string;
   fx_rate_known: boolean;
@@ -2487,11 +2451,31 @@ export type Bill = {
   balance_zar: string;
   balance_foreign: string;
   payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
-  pdf_storage_key: string | null;
+  approval_status: BillApprovalStatus;
+  status: BillStatus;
+  is_archived: boolean;
+  archived_at: string | null;
+  notes: string | null;
+  attachment_count: number;
   purchase_order_id: string | null;
-  lines: BillLine[];
   created_at: string;
   updated_at: string;
+};
+
+export type Bill = BillListItem & {
+  lines: BillLine[];
+  attachments: BillAttachment[];
+};
+
+export type BillSummary = {
+  owing_zar: string;
+  owing_count: number;
+  overdue_zar: string;
+  overdue_count: number;
+  due_soon_zar: string;
+  due_soon_count: number;
+  awaiting_approval_count: number;
+  draft_count: number;
 };
 
 export type CreateBillLinePayload = {
@@ -2504,16 +2488,13 @@ export type CreateBillPayload = {
   supplier_id: string;
   supplier_ref: string;
   issue_date: string;
+  due_date?: string;
   currency: string;
   fx_to_zar?: string;
+  notes?: string;
+  approval_status: BillApprovalStatus;
   lines: CreateBillLinePayload[];
 };
-
-export type BillListItem = Omit<Bill, "lines">;
-
-export function listBills(params?: ListParams): Promise<Page<BillListItem>> {
-  return apiFetch<Page<BillListItem>>(`/bills?${buildListQuery(params)}`);
-}
 
 export function createBill(payload: CreateBillPayload): Promise<Bill> {
   return apiFetch<Bill>("/bills", {
@@ -2526,14 +2507,45 @@ export function getBill(id: string): Promise<Bill> {
   return apiFetch<Bill>(`/bills/${id}`);
 }
 
+export function getBillSummary(): Promise<BillSummary> {
+  return apiFetch<BillSummary>("/bills/summary");
+}
+
+export function updateBill(
+  id: string,
+  payload: { due_date?: string; notes?: string | null },
+): Promise<Bill> {
+  return apiFetch<Bill>(`/bills/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function billAction(
+  id: string,
+  action: "submit" | "approve" | "archive" | "restore",
+): Promise<Bill> {
+  return apiFetch<Bill>(`/bills/${id}/${action}`, { method: "POST" });
+}
+
 export function uploadBillAttachment(id: string, file: File): Promise<Bill> {
   const formData = new FormData();
   formData.append("file", file);
-  return apiUpload<Bill>(`/bills/${id}/attachment`, formData);
+  return apiUpload<Bill>(`/bills/${id}/attachments`, formData);
 }
 
-export async function downloadBillAttachment(id: string, billNumber: string): Promise<void> {
-  await downloadApiFile(`/api/v1/bills/${id}/attachment`, `${billNumber}.pdf`);
+export async function downloadBillAttachment(
+  billId: string,
+  attachment: BillAttachment,
+): Promise<void> {
+  await downloadApiFile(
+    `/api/v1/bills/${billId}/attachments/${attachment.id}`,
+    attachment.filename,
+  );
+}
+
+export function deleteBillAttachment(billId: string, attachmentId: string): Promise<Bill> {
+  return apiFetch<Bill>(`/bills/${billId}/attachments/${attachmentId}`, { method: "DELETE" });
 }
 
 export type PaymentDirection = "in" | "out";
@@ -3744,7 +3756,6 @@ export type AppSettings = import("./label-settings").LabelSettings & {
   has_logo: boolean;
   max_till_discount_percent: string | null;
   po_approval_threshold_zar: string | null;
-  auto_process_exact_supplier_invoices: boolean;
   /** Historical read-only value; session duration is managed by Clerk. */
   session_ttl_hours: number;
   payment_terms_days: number;
@@ -3809,7 +3820,6 @@ export function updateSettings(payload: Partial<import("./label-settings").Label
   has_logo?: boolean;
   max_till_discount_percent?: string | null;
   po_approval_threshold_zar?: string | null;
-  auto_process_exact_supplier_invoices?: boolean;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;

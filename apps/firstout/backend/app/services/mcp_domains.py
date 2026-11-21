@@ -480,10 +480,17 @@ READ_ACTIONS: tuple[Action, ...] = (
     _documents(
         "bills_find",
         "Books / Bills",
-        "Find supplier bills and payment status.",
+        "Find supplier bills, their approval and payment status.",
         Bill,
         Bill.bill_number,
-        (Bill.issue_date, Bill.currency, Bill.payment_status, Bill.is_archive),
+        (
+            Bill.issue_date,
+            Bill.due_date,
+            Bill.currency,
+            Bill.approval_status,
+            Bill.payment_status,
+            Bill.is_archive,
+        ),
     ),
     _documents(
         "payments_find",

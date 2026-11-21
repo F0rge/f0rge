@@ -1,3 +1,5 @@
+import type { BillStatus } from "./api";
+
 export type SettlementStatus = "unpaid" | "partially_paid" | "paid" | "unknown";
 
 export function settlementStatusLabel(status: SettlementStatus): string {
@@ -91,3 +93,16 @@ export function partialPaymentError(input: {
   }
   return null;
 }
+
+export const BILL_STATUS: Record<
+  BillStatus,
+  { label: string; tag: "gray" | "purple" | "blue" | "teal" | "red" | "green" }
+> = {
+  draft: { label: "Draft", tag: "gray" },
+  awaiting_approval: { label: "Awaiting approval", tag: "purple" },
+  unpaid: { label: "Unpaid", tag: "blue" },
+  partially_paid: { label: "Partially paid", tag: "teal" },
+  overdue: { label: "Overdue", tag: "red" },
+  paid: { label: "Paid", tag: "green" },
+  unknown: { label: "Not imported", tag: "gray" },
+};

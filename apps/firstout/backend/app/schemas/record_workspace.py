@@ -6,6 +6,7 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from app.schemas.account import AccountResponse
+from app.schemas.bill import BillListItem
 from app.schemas.customer_crm import CustomerCrmResponse
 from app.schemas.location import LocationResponse
 from app.schemas.payment import PaymentResponse
@@ -31,6 +32,7 @@ WorkspaceResource = Literal[
     "proformas",
     "quotes",
     "payments",
+    "bills",
 ]
 WorkspaceAction = Literal[
     "edit",
@@ -55,6 +57,7 @@ WorkspaceRow = Union[
     ProformaResponse,
     QuoteListItem,
     PaymentResponse,
+    BillListItem,
 ]
 
 

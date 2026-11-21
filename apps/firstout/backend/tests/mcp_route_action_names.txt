@@ -6,12 +6,15 @@ aged_ap
 aged_ar
 aged_stock
 apply_bank_rule
+approve_bill
 approve_purchase_order
+archive_bill
 archive_customer
 archive_price_list
 archive_proforma
 archive_supplier
 balance_sheet
+bill_summary
 cancel_adjustment
 cancel_delivery
 cancel_layby
@@ -66,6 +69,7 @@ create_transfer
 customer_archive_counts
 delete_adjustment_line
 delete_bank_rule
+delete_bill_attachment
 delete_held_sales
 delete_price_list
 delete_price_list_item
@@ -183,6 +187,7 @@ replace_quote
 replace_sku_bom
 replace_till_basket
 reprice_customer_drafts
+restore_bill
 resume_held_sale
 run_repeating_invoice
 sales_by_sku
@@ -193,6 +198,7 @@ sku_lead_times
 split_bank_line
 start_stocktake
 stock_valuation
+submit_bill
 suggest_sku
 supplier_archive_counts
 supplier_lead_times
@@ -200,6 +206,7 @@ trial_balance
 update_account
 update_adjustment_line
 update_bank_rule
+update_bill
 update_customer
 update_invoice
 update_location

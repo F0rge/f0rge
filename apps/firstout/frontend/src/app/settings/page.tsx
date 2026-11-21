@@ -95,8 +95,6 @@ function SettingsForm({ section }: { section: SettingsSection }) {
   const [selectedDocumentType, setSelectedDocumentType] = useState("invoice");
   const activeSequence = documentSequences.find((row) => row.doc_type === selectedDocumentType) ?? documentSequences[0];
   const [preferWarehouse, setPreferWarehouse] = useState(true);
-  const [autoProcessExactInvoices, setAutoProcessExactInvoices] =
-    useState(false);
   const [pickPriority, setPickPriority] = useState<string[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [addLocationId, setAddLocationId] = useState("");
@@ -140,7 +138,6 @@ function SettingsForm({ section }: { section: SettingsSection }) {
     ));
     if (draft?.sequence) setSelectedDocumentType(draft.sequence.doc_type);
     setPreferWarehouse(data.always_prefer_warehouse);
-    setAutoProcessExactInvoices(data.auto_process_exact_supplier_invoices);
     setPickPriority(data.pick_priority);
   }
 
@@ -208,7 +205,6 @@ function SettingsForm({ section }: { section: SettingsSection }) {
             default_till_location_id: defaultTillLocationId || null,
             till_hold_hours: holdHours,
             always_prefer_warehouse: preferWarehouse,
-            auto_process_exact_supplier_invoices: autoProcessExactInvoices,
             pick_priority: pickPriority,
           };
           break;
@@ -387,7 +383,6 @@ function SettingsForm({ section }: { section: SettingsSection }) {
         default_till_location_id: defaultTillLocationId || null,
         till_hold_hours: holdHours,
         always_prefer_warehouse: preferWarehouse,
-        auto_process_exact_supplier_invoices: autoProcessExactInvoices,
         pick_priority: pickPriority,
       };
       break;
@@ -694,23 +689,6 @@ function SettingsForm({ section }: { section: SettingsSection }) {
                     onToggle={(checked) => setPreferWarehouse(checked)}
                     disabled={!canMutate || saving}
                   />
-                  <Toggle
-                    id="auto-process-exact-invoices"
-                    labelText="Auto-process exact supplier invoices"
-                    labelA="Off"
-                    labelB="On"
-                    toggled={autoProcessExactInvoices}
-                    onToggle={(checked) =>
-                      setAutoProcessExactInvoices(checked)
-                    }
-                    disabled={!canMutate || saving}
-                  />
-                  <p className="cds--type-helper-text-01">
-                    Off by default. When on, an invoice that matches its
-                    purchase order exactly is posted like a typed-in bill,
-                    without a second click. Anything that differs still
-                    waits for you. A posted bill is reversed with a journal.
-                  </p>
                   {pickPrioritySection}
                 </>
               ) : null}

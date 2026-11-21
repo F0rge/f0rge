@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "106_payment_reference_void",
+  "target_revision": "107_bill_approval_attachments",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -429,6 +429,10 @@
     },
     "106_payment_reference_void": {
       "sha256": "e8bfaa322ee70ea267331412f039f0d2eb0b64db70e8007dd46da6f955e576ab",
+      "automatic": true
+    },
+    "107_bill_approval_attachments": {
+      "sha256": "3bae5b4410aa9998d46d28d25800aa9c38a26ead5946ccef24b19fe6079e8333",
       "automatic": true
     }
   }

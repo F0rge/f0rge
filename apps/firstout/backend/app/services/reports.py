@@ -16,7 +16,7 @@ from app.crud.purchase_order import PurchaseOrderCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.models.account import AccountType
-from app.models.bill import Bill
+from app.models.bill import Bill, BillApprovalStatus
 from app.models.credit_note import CreditNote
 from app.models.customer import Customer
 from app.models.inventory import LocationStock
@@ -164,6 +164,8 @@ class ReportsService:
             select(Bill, Supplier.name)
             .join(Supplier, Bill.supplier_id == Supplier.id)
             .where(Bill.is_archive.is_(False))
+            # Drafts are not posted to accounts payable yet.
+            .where(Bill.approval_status == BillApprovalStatus.APPROVED)
             .where(Bill.amount_zar > Bill.amount_paid_zar)
             .order_by(Bill.issue_date)
         )

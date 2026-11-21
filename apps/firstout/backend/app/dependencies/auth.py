@@ -51,7 +51,6 @@ from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
 from app.services.settings import SettingsService
-from app.services.document_intake.invoice_flow import InvoiceIntakeService
 from app.services.document_intake.service import DocumentIntakeService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
@@ -121,10 +120,6 @@ def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
 
 def get_document_intake_service(db: AsyncSession = Depends(get_db)) -> DocumentIntakeService:
     return DocumentIntakeService(db)
-
-
-def get_invoice_intake_service(db: AsyncSession = Depends(get_db)) -> InvoiceIntakeService:
-    return InvoiceIntakeService(db)
 
 
 def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:

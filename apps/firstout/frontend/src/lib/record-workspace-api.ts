@@ -12,7 +12,8 @@ export type WorkspaceResource =
   | "repeating-invoices"
   | "proformas"
   | "quotes"
-  | "payments";
+  | "payments"
+  | "bills";
 export type WorkspaceValue = string | number | boolean | null;
 export type WorkspaceOperator =
   | "eq"

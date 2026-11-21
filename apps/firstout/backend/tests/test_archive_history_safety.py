@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
-from app.models.bill import Bill, BillLine
+from app.models.bill import Bill, BillAttachment, BillLine
 from app.models.journal import JournalEntry
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.services.object_storage import save_bytes
@@ -159,16 +159,30 @@ async def test_archive_api_history_readable_but_live_debt_and_reconstructed_pdf_
 
     assert (
         await owner_client.post(
-            f"/api/v1/bills/{bills[0].id}/attachment",
+            f"/api/v1/bills/{bills[0].id}/attachments",
             files={"file": ("new.pdf", MINIMAL_PDF, "application/pdf")},
         )
     ).status_code == 409
-    assert (await owner_client.get(f"/api/v1/bills/{bills[0].id}/attachment")).status_code == 404
+    imported = await owner_client.get(f"/api/v1/bills/{bills[0].id}")
+    assert imported.json()["attachments"] == []
     # A retained original attachment is still available without reconstructing it.
-    bills[0].pdf_storage_key = save_bytes("synthetic/source-original.pdf", MINIMAL_PDF)
+    original_attachment = BillAttachment(
+        bill_id=bills[0].id,
+        storage_key=save_bytes("synthetic/source-original.pdf", MINIMAL_PDF),
+        filename="source-original.pdf",
+        content_type="application/pdf",
+        uploaded_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+    async_db.add(original_attachment)
     await async_db.flush()
-    original = await owner_client.get(f"/api/v1/bills/{bills[0].id}/attachment")
+    original = await owner_client.get(
+        f"/api/v1/bills/{bills[0].id}/attachments/{original_attachment.id}"
+    )
     assert original.status_code == 200 and original.content == MINIMAL_PDF
+    removed = await owner_client.delete(
+        f"/api/v1/bills/{bills[0].id}/attachments/{original_attachment.id}"
+    )
+    assert removed.status_code == 409
 
     # Archive references do not participate in the live invoice uniqueness rule.
     followup = await owner_client.post(

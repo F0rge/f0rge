@@ -17,7 +17,7 @@ from app.crud.payment import PaymentCRUD
 from app.models.account import Account
 from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.bank_rule import BankRule
-from app.models.bill import Bill
+from app.models.bill import Bill, BillApprovalStatus
 from app.models.tax_invoice import TaxInvoice
 from app.models.journal import JournalDocumentType, JournalStatus
 from app.schemas.bank_import import (
@@ -692,6 +692,9 @@ class BankImportService:
                     select(Bill)
                     .options(selectinload(Bill.supplier))
                     .where(Bill.is_archive.is_(False))
+                    # Only approved, active bills can be paid.
+                    .where(Bill.approval_status == BillApprovalStatus.APPROVED)
+                    .where(Bill.archived_at.is_(None))
                     .where(Bill.amount_zar > Bill.amount_paid_zar)
                 )
             )

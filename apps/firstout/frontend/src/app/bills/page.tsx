@@ -1,471 +1,285 @@
 "use client";
 
-import { PageLoading } from "@/components/page-loading";
-import {
-  Button,
-  DataTable,
-  InlineNotification,
-  Modal,
-  NumberInput,
-  Pagination,
-  Select,
-  SelectItem,
-  Stack,
-  Tag,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TextInput,
-} from "@carbon/react";
+import { Button, InlineNotification, Stack, Tag } from "@carbon/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { BillPaymentModal } from "@/components/bill-payment-modal";
+import { KpiStrip } from "@/components/kpi-strip";
 import {
+  RecordDetail,
+  RecordDetails,
+  RecordWorkspace,
+  type RecordWorkspaceAdapter,
+} from "@/components/record-workspace";
+import {
+  billAction,
   canMutateBooks,
-  createBill,
   formatZarAmount,
-  listBills,
+  getBillSummary,
   listSuppliers,
   type BillListItem,
-  type CreateBillLinePayload,
+  type BillSummary,
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatSettlementAmount } from "@/lib/source-history";
-import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
+import { BILL_STATUS } from "@/lib/payment-status";
+import { workspaceIdentity } from "@/lib/record-workspace";
 
-const TABLE_HEADERS = [
-  { key: "bill_number", header: "Number" },
-  { key: "supplier_name", header: "Supplier" },
-  { key: "issue_date", header: "Issue date" },
-  { key: "currency", header: "Currency" },
-  { key: "amount_foreign", header: "Amount" },
-  { key: "amount_zar", header: "ZAR" },
-  { key: "balance_zar", header: "Balance owing" },
-  { key: "payment_status", header: "Status" },
-  { key: "actions", header: "" },
-] as const;
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
 
-type BillRow = {
-  id: string;
-  bill_number: string;
-  supplier_name: string;
-  issue_date: string;
-  currency: string;
-  amount_foreign: string;
-  amount_zar: string;
-  balance_zar: string;
-  payment_status: string;
-  actions: string;
-};
+function BillStatusTag({ bill }: { bill: BillListItem }) {
+  const status = BILL_STATUS[bill.status];
+  return <Tag type={status.tag} size="sm">{status.label}</Tag>;
+}
 
-type BillLineForm = {
-  description: string;
-  qty: number | "";
-  unit_amount: string;
-};
+function payable(bill: BillListItem): boolean {
+  return bill.approval_status === "approved" && !bill.is_archived && Number(bill.balance_foreign) > 0;
+}
 
-const emptyLine = (): BillLineForm => ({
-  description: "",
-  qty: 1,
-  unit_amount: "",
-});
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+function billsAdapter(suppliers: readonly Supplier[]) {
+  const currencies = [...new Set(["ZAR", ...suppliers.map((supplier) => supplier.default_currency)])].sort();
+  return {
+    resource: "bills",
+    title: "Bills",
+    singular: "bill",
+    breadcrumb: "Books",
+    description: "Supplier bills in foreign currency with ZAR conversion.",
+    defaultSort: "due_date",
+    columns: [
+      { key: "bill_number", label: "Number", sortable: true, render: (item) => item.bill_number },
+      { key: "supplier_name", label: "Supplier", sortable: true, render: (item) => item.supplier_name },
+      { key: "supplier_ref", label: "Supplier ref", sortable: true, render: (item) => item.supplier_ref || "—" },
+      { key: "issue_date", label: "Issue date", sortable: true, render: (item) => item.issue_date },
+      { key: "due_date", label: "Due date", sortable: true, render: (item) => item.due_date ?? "—" },
+      { key: "currency", label: "Currency", render: (item) => item.currency },
+      {
+        key: "amount_foreign",
+        label: "Amount",
+        numeric: true,
+        sortable: true,
+        render: (item) => `${item.currency} ${item.amount_foreign}`,
+      },
+      { key: "amount_zar", label: "ZAR", numeric: true, sortable: true, render: (item) => formatZarAmount(item.amount_zar) },
+      {
+        key: "balance_zar",
+        label: "Balance owing",
+        numeric: true,
+        sortable: true,
+        render: (item) => formatZarAmount(item.balance_zar),
+      },
+      { key: "status", label: "Status", sortable: true, render: (item) => <BillStatusTag bill={item} /> },
+      {
+        key: "attachment_count",
+        label: "Attachments",
+        numeric: true,
+        render: (item) => (item.attachment_count ? String(item.attachment_count) : "—"),
+      },
+    ],
+    filters: [
+      {
+        key: "status",
+        label: "Status",
+        type: "enum",
+        quick: true,
+        allLabel: "All statuses",
+        options: (["draft", "awaiting_approval", "unpaid", "partially_paid", "overdue", "paid"] as const).map(
+          (value) => ({ value, label: BILL_STATUS[value].label }),
+        ),
+      },
+      {
+        key: "supplier_id",
+        label: "Supplier",
+        type: "enum",
+        quick: true,
+        allLabel: "All suppliers",
+        options: suppliers.map((supplier) => ({ value: supplier.id, label: supplier.name })),
+      },
+      {
+        key: "currency",
+        label: "Currency",
+        type: "enum",
+        quick: true,
+        allLabel: "All currencies",
+        options: currencies.map((value) => ({ value, label: value })),
+      },
+      { key: "supplier_ref", label: "Supplier ref", type: "text" },
+      { key: "issue_date", label: "Issue date", type: "date" },
+      { key: "due_date", label: "Due date", type: "date" },
+      { key: "balance_zar", label: "Balance owing", type: "number" },
+    ],
+    actions: [
+      { key: "archive", label: "Archive" },
+      { key: "restore", label: "Restore" },
+    ],
+    getTitle: (item) => item.bill_number,
+    getSubtitle: (item) => [item.supplier_name, item.supplier_ref].filter(Boolean).join(" · "),
+  } satisfies RecordWorkspaceAdapter<BillListItem>;
 }
 
 export default function BillsPage() {
+  const { user } = useAuth();
+  return <BillsContent key={workspaceIdentity(user)} />;
+}
+
+function BillsContent() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [bills, setBills] = useState<BillListItem[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<BillSummary | null | undefined>();
+  const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
-  const [supplierId, setSupplierId] = useState("");
-  const [supplierRef, setSupplierRef] = useState("");
-  const [issueDate, setIssueDate] = useState(todayIso());
-  const [currency, setCurrency] = useState("USD");
-  const [fxToZar, setFxToZar] = useState("");
-  const [lines, setLines] = useState<BillLineForm[]>([emptyLine()]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [paying, setPaying] = useState<BillListItem | null>(null);
+  const adapter = useMemo(() => billsAdapter(suppliers), [suppliers]);
 
-  const loadBills = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listBills({
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    // Archived suppliers still have bills to filter by.
+    Promise.all([getBillSummary(), listSuppliers(), listSuppliers({ archived: true })])
+      .then(([totals, active, archived]) => {
+        if (cancelled) return;
+        setSummary(totals);
+        // Keep the adapter stable after the first load.
+        setSuppliers((current) =>
+          current.length ? current : [...active, ...archived].sort((a, b) => a.name.localeCompare(b.name)),
+        );
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setSummary(null);
+        setError(err instanceof Error ? err.message : "Failed to load bill totals.");
       });
-      setBills(data.items);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load bills.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, refreshKey]);
 
-  const loadCreateData = useCallback(async () => {
-    try {
-      const supplierData = await listSuppliers();
-      setSuppliers(supplierData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load suppliers.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadBills();
-    }
-  }, [user, loadBills]);
-
-  useEffect(() => {
-    if (createOpen && canMutate) {
-      void loadCreateData();
-    }
-  }, [createOpen, canMutate, loadCreateData]);
-
-  useEffect(() => {
-    const supplier = suppliers.find((entry) => entry.id === supplierId);
-    if (supplier) {
-      setCurrency(supplier.default_currency || "USD");
-    }
-  }, [supplierId, suppliers]);
-
-  const linesValid = lines.every(
-    (line) =>
-      line.description.trim() &&
-      typeof line.qty === "number" &&
-      line.qty > 0 &&
-      line.unit_amount.trim(),
-  );
-  const fxRequired = currency !== "ZAR";
-  const formValid =
-    supplierId &&
-    supplierRef.trim() &&
-    issueDate &&
-    lines.length >= 1 &&
-    linesValid &&
-    (!fxRequired || fxToZar.trim());
-
-  function resetCreateForm() {
-    setSupplierId("");
-    setSupplierRef("");
-    setIssueDate(todayIso());
-    setCurrency("USD");
-    setFxToZar("");
-    setLines([emptyLine()]);
+  function changed(message: string) {
+    setNotice(message);
+    setRefreshKey((value) => value + 1);
   }
 
-  function updateLine(index: number, patch: Partial<BillLineForm>) {
-    setLines((current) =>
-      current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)),
-    );
-  }
-
-  function addLine() {
-    setLines((current) => [...current, emptyLine()]);
-  }
-
-  function removeLine(index: number) {
-    setLines((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : current));
-  }
-
-  async function handleCreate() {
-    if (!formValid) {
-      return;
-    }
-    setSaving(true);
+  async function approve(bill: BillListItem) {
+    setBusy(true);
     setError(null);
     try {
-      const payload = {
-        supplier_id: supplierId,
-        supplier_ref: supplierRef.trim(),
-        issue_date: issueDate,
-        currency: currency.trim(),
-        fx_to_zar: fxRequired ? fxToZar.trim() : undefined,
-        lines: lines.map(
-          (line): CreateBillLinePayload => ({
-            description: line.description.trim(),
-            qty: line.qty as number,
-            unit_amount: line.unit_amount.trim(),
-          }),
-        ),
-      };
-      const created = await createBill(payload);
-      setCreateOpen(false);
-      resetCreateForm();
-      router.push(`/bills/${created.id}`);
+      await billAction(bill.id, "approve");
+      changed(`${bill.bill_number} approved and posted. It's ready to pay.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create bill.");
+      setError(err instanceof Error ? err.message : "Failed to approve bill.");
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
-
-  const rows: BillRow[] = bills.map((entry) => ({
-    id: entry.id,
-    bill_number: entry.bill_number,
-    supplier_name: entry.supplier_name,
-    issue_date: entry.issue_date,
-    currency: entry.currency,
-    amount_foreign: `${entry.currency} ${entry.amount_foreign}`,
-    amount_zar: entry.fx_rate_known ? formatZarAmount(entry.amount_zar) : "Not provided in source",
-    balance_zar: formatSettlementAmount(entry.balance_zar, entry.is_archive),
-    payment_status: settlementStatusLabel(entry.payment_status),
-    actions: entry.id,
-  }));
 
   return (
     <Stack gap={6}>
-      <div className="firstout-page-header">
-        <div>
-          <h1 className="cds--type-productive-heading-04">Bills</h1>
-          <p className="cds--type-body-01">Supplier bills in foreign currency with ZAR conversion.</p>
-        </div>
-        {canMutate ? (
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <Button kind="secondary" href="/bills/read">
-              Read a supplier invoice
-            </Button>
-            <Button
-              onClick={() => {
-                resetCreateForm();
-                setCreateOpen(true);
-              }}
-            >
-              Create bill
-            </Button>
-          </div>
-        ) : null}
-      </div>
-
       {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
+        <InlineNotification kind="error" title="Error" subtitle={error} onCloseButtonClick={() => setError(null)} lowContrast />
+      ) : null}
+      {notice ? (
+        <InlineNotification kind="success" title="Done" subtitle={notice} onCloseButtonClick={() => setNotice(null)} lowContrast />
       ) : null}
 
-      {loading ? (
-        <PageLoading
-          label="Loading bills…"
-          title="Bills"
-          description="All Firstout supplier bills"
-          columns={TABLE_HEADERS.map(({ header }) => header)}
-          pagination
-        />
-      ) : total === 0 ? (
-        <>
-        <InlineNotification
-          kind="info"
-          title="No bills"
-          subtitle="No supplier bills have been recorded yet."
-          hideCloseButton
-          lowContrast
-        />
+      <RecordWorkspace<BillListItem>
+        adapter={adapter}
+        refreshKey={refreshKey}
+        onCreate={canMutate ? () => router.push("/bills/new") : undefined}
+        createLabel="Create bill"
+        summary={
+          <KpiStrip
+            label="Bill totals"
+            count={4}
+            items={
+              summary && [
+                {
+                  label: "Owing (ZAR)",
+                  value: formatZarAmount(summary.owing_zar),
+                  sub: "Approved and awaiting approval",
+                },
+                {
+                  label: "Overdue",
+                  value: formatZarAmount(summary.overdue_zar),
+                  sub: plural(summary.overdue_count, "bill"),
+                  warn: summary.overdue_count > 0,
+                },
+                {
+                  label: "Due in 7 days",
+                  value: formatZarAmount(summary.due_soon_zar),
+                  sub: plural(summary.due_soon_count, "bill"),
+                },
+                {
+                  label: "Awaiting approval",
+                  value: String(summary.awaiting_approval_count),
+                  sub: `${plural(summary.draft_count, "draft")} not yet submitted`,
+                },
+              ]
+            }
+          />
+        }
+        renderDetails={(item, { archived }) => (
+          <Stack gap={5}>
+            <RecordDetails>
+              <RecordDetail label="Supplier">{item.supplier_name}</RecordDetail>
+              <RecordDetail label="Supplier ref">{item.supplier_ref}</RecordDetail>
+              <RecordDetail label="Issue date">{item.issue_date}</RecordDetail>
+              <RecordDetail label="Due date">{item.due_date}</RecordDetail>
+              <RecordDetail label="Amount">
+                {item.currency} {item.amount_foreign}
+                {item.currency !== "ZAR" ? ` (${formatZarAmount(item.amount_zar)} at ${item.fx_to_zar})` : ""}
+              </RecordDetail>
+              <RecordDetail label="Balance owing">
+                {item.currency !== "ZAR" ? `${item.currency} ${item.balance_foreign} · ` : ""}
+                {formatZarAmount(item.balance_zar)}
+              </RecordDetail>
+              <RecordDetail label="Status"><BillStatusTag bill={item} /></RecordDetail>
+              <RecordDetail label="Attachments">{item.attachment_count || null}</RecordDetail>
+            </RecordDetails>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              <Button kind="tertiary" size="sm" href={`/bills/${item.id}`}>
+                Open
+              </Button>
+              {canMutate && !archived && item.approval_status !== "approved" ? (
+                <Button kind="primary" size="sm" disabled={busy} onClick={() => void approve(item)}>
+                  Approve
+                </Button>
+              ) : null}
+              {canMutate && payable(item) ? (
+                <Button kind="primary" size="sm" onClick={() => setPaying(item)}>
+                  Record payment
+                </Button>
+              ) : null}
+              {canMutate ? (
+                <Button kind="ghost" size="sm" href={`/bills/new?from=${item.id}`}>
+                  Duplicate
+                </Button>
+              ) : null}
+            </div>
+          </Stack>
+        )}
+      >
         <p className="cds--type-body-01">
-          Imported records are available in <a className="cds--link" href="/history">Searchable history</a>.
+          Imported records are available in <Link className="cds--link" href="/history">Searchable history</Link>.
         </p>
-        </>
-      ) : (
-        <>
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Bills" description="All Firstout supplier bills">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => (
-                    <TableRow
-                      {...getRowProps({ row })}
-                      key={row.id}
-                      onClick={() => router.push(`/bills/${row.id}`)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      {row.cells.map((cell) => {
-                        if (cell.info.header === "payment_status") {
-                          const bill = bills.find((entry) => entry.id === row.id);
-                          return (
-                            <TableCell key={cell.id}>
-                              {bill ? (
-                                <Tag type={settlementTagType(bill.payment_status)} size="sm">
-                                  {settlementStatusLabel(bill.payment_status)}
-                                </Tag>
-                              ) : (
-                                cell.value
-                              )}
-                            </TableCell>
-                          );
-                        }
-                        if (cell.info.header === "actions") {
-                          return (
-                            <TableCell key={cell.id}>
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  router.push(`/bills/${row.id}`);
-                                }}
-                              >
-                                Open
-                              </Button>
-                            </TableCell>
-                          );
-                        }
-                        return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                      })}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-        <Pagination
-          page={page}
-          pageSize={pageSize}
-          pageSizes={[10, 25, 50]}
-          totalItems={total}
-          onChange={({ page: nextPage, pageSize: nextSize }) => {
-            setPage(nextPage);
-            setPageSize(nextSize);
+      </RecordWorkspace>
+
+      {paying ? (
+        <BillPaymentModal
+          bill={paying}
+          onClose={() => setPaying(null)}
+          onRecorded={(payment) => {
+            setPaying(null);
+            changed(`Payment ${payment.payment_number} recorded against ${paying.bill_number}.`);
           }}
         />
-        </>
-      )}
-
-      <Modal
-        open={createOpen}
-        modalHeading="Create bill"
-        primaryButtonText={saving ? "Creating…" : "Create"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !formValid}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
-        size="lg"
-      >
-        <Stack gap={5}>
-          <Select
-            id="bill-supplier"
-            labelText="Supplier"
-            value={supplierId}
-            onChange={(event) => setSupplierId(event.target.value)}
-          >
-            <SelectItem value="" text="Select a supplier" />
-            {suppliers.map((supplier) => (
-              <SelectItem key={supplier.id} value={supplier.id} text={supplier.name} />
-            ))}
-          </Select>
-          <TextInput
-            id="bill-supplier-ref"
-            labelText="Supplier reference"
-            value={supplierRef}
-            onChange={(event) => setSupplierRef(event.target.value)}
-            required
-          />
-          <TextInput
-            id="bill-issue-date"
-            labelText="Issue date"
-            type="date"
-            value={issueDate}
-            onChange={(event) => setIssueDate(event.target.value)}
-            required
-          />
-          <TextInput
-            id="bill-currency"
-            labelText="Currency"
-            value={currency}
-            onChange={(event) => setCurrency(event.target.value)}
-            required
-          />
-          {currency !== "ZAR" ? (
-            <TextInput
-              id="bill-fx"
-              labelText="FX to ZAR"
-              helperText="ZAR per 1 unit of foreign currency"
-              value={fxToZar}
-              onChange={(event) => setFxToZar(event.target.value)}
-              required
-            />
-          ) : null}
-          <div>
-            <p className="cds--label">Lines</p>
-            <Stack gap={4}>
-              {lines.map((line, index) => (
-                <div
-                  key={`line-${index}`}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr auto",
-                    gap: "0.5rem",
-                    alignItems: "end",
-                  }}
-                >
-                  <TextInput
-                    id={`bill-line-desc-${index}`}
-                    labelText={index === 0 ? "Description" : ""}
-                    hideLabel={index > 0}
-                    value={line.description}
-                    onChange={(event) => updateLine(index, { description: event.target.value })}
-                  />
-                  <NumberInput
-                    id={`bill-line-qty-${index}`}
-                    label={index === 0 ? "Qty" : ""}
-                    hideLabel={index > 0}
-                    min={1}
-                    value={line.qty}
-                    onChange={(_, { value }) =>
-                      updateLine(index, { qty: value === "" ? "" : Number(value) })
-                    }
-                  />
-                  <TextInput
-                    id={`bill-line-unit-${index}`}
-                    labelText={index === 0 ? "Unit amount" : ""}
-                    hideLabel={index > 0}
-                    value={line.unit_amount}
-                    onChange={(event) => updateLine(index, { unit_amount: event.target.value })}
-                  />
-                  {lines.length > 1 ? (
-                    <Button kind="ghost" size="sm" onClick={() => removeLine(index)}>
-                      Remove
-                    </Button>
-                  ) : (
-                    <span />
-                  )}
-                </div>
-              ))}
-            </Stack>
-            <Button kind="ghost" size="sm" onClick={addLine} style={{ marginTop: "0.5rem" }}>
-              Add line
-            </Button>
-          </div>
-        </Stack>
-      </Modal>
+      ) : null}
     </Stack>
   );
 }

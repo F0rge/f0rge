@@ -51,9 +51,10 @@ describe("application breadcrumbs", () => {
       { label: "Quotes", href: "/quotes" },
       { label: "Quote" },
     ]);
-    expect(breadcrumbsForPath("/bills/read").at(-1)?.label).toBe(
+    expect(breadcrumbsForPath("/proformas/read").at(-1)?.label).toBe(
       "Read document",
     );
+    expect(breadcrumbsForPath("/bills/new").at(-1)?.label).toBe("Create bill");
     expect(breadcrumbsForPath("/catalogue-wrong")).toEqual([]);
   });
 });

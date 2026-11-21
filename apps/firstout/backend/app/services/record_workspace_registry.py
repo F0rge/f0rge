@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.models.account import Account
+from app.models.bill import Bill
 from app.models.customer import Customer
 from app.models.location import Location
 from app.models.payment import Payment
@@ -231,5 +232,26 @@ DEFINITIONS = {
         frozenset(),
         BOOKS_MUTATE,
         archive_field="is_voided",
+    ),
+    "bills": WorkspaceDefinition(
+        Bill,
+        {
+            **COMMON,
+            "bill_number": "text",
+            "supplier_id": "text",
+            "supplier_name": "text",
+            "supplier_ref": "text",
+            "issue_date": "date",
+            "due_date": "date",
+            "currency": "text",
+            "amount_foreign": "number",
+            "amount_zar": "number",
+            "balance_zar": "number",
+            "status": "text",
+            "attachment_count": "number",
+        },
+        frozenset(),
+        ARCHIVE,
+        BOOKS_MUTATE,
     ),
 }

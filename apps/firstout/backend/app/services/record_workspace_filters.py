@@ -49,6 +49,7 @@ def label(row: BaseModel) -> str:
         or getattr(row, "display_name", None)
         or getattr(row, "invoice_number", None)
         or getattr(row, "quote_number", None)
+        or getattr(row, "bill_number", None)
         or getattr(row, "email", None)
         or row.id
     )

@@ -135,10 +135,6 @@ class SettingsService:
                 ):
                     raise ValidationError("po_approval_threshold_zar must be >= 0")
                 settings.po_approval_threshold_zar = data.po_approval_threshold_zar
-            if data.auto_process_exact_supplier_invoices is not None:
-                settings.auto_process_exact_supplier_invoices = (
-                    data.auto_process_exact_supplier_invoices
-                )
             if data.till_hold_hours is not None:
                 settings.till_hold_hours = data.till_hold_hours
             if data.document_sequences is not None:
@@ -299,9 +295,6 @@ class SettingsService:
             default_till_location_id=settings.default_till_location_id,
             max_till_discount_percent=settings.max_till_discount_percent,
             po_approval_threshold_zar=settings.po_approval_threshold_zar,
-            auto_process_exact_supplier_invoices=bool(
-                settings.auto_process_exact_supplier_invoices
-            ),
             session_ttl_hours=int(settings.session_ttl_hours),
             till_hold_hours=int(settings.till_hold_hours),
             has_logo=bool(settings.logo_storage_key),

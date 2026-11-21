@@ -22,6 +22,7 @@ from app.schemas.repeating_invoice import RepeatingInvoiceUpdate
 from app.schemas.supplier import SupplierUpdate
 from app.schemas.user import UserUpdate
 from app.services.accounts import AccountService
+from app.services.bills import BillService
 from app.services.customers_crm import CustomersCrmService
 from app.services.locations import LocationService
 from app.services.price_lists import PriceListService
@@ -161,6 +162,8 @@ async def apply_action(
         await ProformaService(db).set_archived(record_id, action == "archive")
     elif resource == "quotes":
         await QuotesService(db).delete(record_id)
+    elif resource == "bills":
+        await BillService(db).set_archived(record_id, action == "archive", actor)
     elif resource == "locations":
         data = patch if action == "edit" else {"is_archived": action == "archive"}
         await LocationService(db).update(record_id, LocationUpdate.model_validate(data))

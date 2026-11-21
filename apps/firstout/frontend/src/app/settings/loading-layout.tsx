@@ -46,10 +46,6 @@ export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents"
             <LoadingField label="Default receive location" helperText="Warehouse locations only." />
             <LoadingField label="Default till location" helperText="Showroom locations only." />
             <ToggleLoading label="Always prefer warehouse" />
-            <ToggleLoading label="Auto-process exact supplier invoices" />
-            <p className="cds--type-helper-text-01">
-              Off by default. When on, an invoice that matches its purchase order exactly is posted like a typed-in bill, without a second click. Anything that differs still waits for you. A posted bill is reversed with a journal.
-            </p>
             <p className="cds--type-body-01">Pick priority</p>
             <SkeletonText paragraph lineCount={2} width="60%" aria-hidden="true" />
           </>
