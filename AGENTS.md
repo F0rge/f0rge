@@ -71,7 +71,7 @@ Do not open a `develop` branch workflow. A remote `develop` ref may still exist;
 
 Two workflows, read top to bottom. Terms (Project, App, Host, Artifact, Release) are defined in [the Delivery glossary](.github/CONTEXT.md).
 
-- **CI** ([`ci.yml`](.github/workflows/ci.yml)): a plan job asks Nx what is affected. Language jobs (Python, TypeScript, Rust) run only when their language is affected. After the language jobs pass, one image job per affected App builds each deployable Project's Artifact, starts it and calls its health endpoint. `merge-gate` is the single required check. No browser e2e in CI.
+- **CI** ([`ci.yml`](.github/workflows/ci.yml)): a plan job asks Nx what is affected. Language jobs (Python, TypeScript, Rust) run only when their language is affected. After the language jobs pass, one image job per affected App builds each deployable Project's Artifact, starts it and calls its health endpoint. `merge-gate` is the single required check; when it passes it marks the tested tree, and `main` skips the language jobs when every new commit's tree is already marked. No browser e2e in CI.
 - **CD** ([`cd.yml`](.github/workflows/cd.yml)): the last job of CI on `main`. One job per affected App releases that commit's Artifacts to its Host, migrations first. A failed Release puts each service back on the image it ran before and fails the run.
 - **Per Project**: a deploy block in `project.json` (`metadata.deploy`) names the Host and its services. `node .github/deploy/deployables.mjs` lists every App.
 - **By hand**: `gh workflow run cd.yml -f app=<app> -f commit=<sha>`. Details and accepted ceilings: [`.github/deploy/README.md`](.github/deploy/README.md).

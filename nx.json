@@ -71,6 +71,11 @@
       }
     }
   },
+  "pluginsConfig": {
+    "@nx/js": {
+      "projectsAffectedByDependencyUpdates": "auto"
+    }
+  },
   "sync": {
     "globalGenerators": ["@nxlv/python:pkg-sync"]
   },

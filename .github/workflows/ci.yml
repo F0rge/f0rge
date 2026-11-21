@@ -11,11 +11,14 @@ name: CI
 #               endpoint to answer. Read-only: it cannot push.
 #   image-push  main only: the same build and check, then push to GHCR. The only job that can
 #               write packages, so a pull request can never overwrite an image a release pulls.
-#   merge-gate  the single required check (the branch ruleset requires this exact name)
+#   merge-gate  the single required check (the branch ruleset requires this exact name). When it
+#               passes it records the tested tree, so main does not test the same tree twice.
 #   cd          main only, after `merge-gate`: release the affected Apps with the images just pushed (cd.yml)
 #
 # On main, "affected" is measured from the last fully successful run, release included.
 # An App whose release failed is therefore built and released again by the next push.
+# On main the language jobs are skipped when every commit since then has a tree that already
+# passed merge-gate (usually in its pull request); the images are still built.
 
 on:
   pull_request:
@@ -46,6 +49,8 @@ jobs:
       ts: ${{ steps.plan.outputs.ts }}
       rust: ${{ steps.plan.outputs.rust }}
       apps: ${{ steps.plan.outputs.apps }} # [{ app, host, projects }] for the affected Apps
+      tree: ${{ steps.plan.outputs.tree }} # the tree merge-gate marks as tested
+      tested: ${{ steps.plan.outputs.tested }} # push only: every commit's tree already passed merge-gate
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,11 +71,13 @@ jobs:
       - name: Plan
         id: plan
         shell: bash # pipefail: a failing plan must not be hidden by tee
+        env:
+          GH_TOKEN: ${{ github.event_name == 'push' && github.token || '' }} # looks up tested-tree markers on main
         run: node .github/scripts/plan.mjs | tee -a "$GITHUB_OUTPUT"
 
   python:
     needs: plan
-    if: needs.plan.outputs.py == 'true'
+    if: needs.plan.outputs.py == 'true' && needs.plan.outputs.tested != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -87,7 +94,7 @@ jobs:
 
   typescript:
     needs: plan
-    if: needs.plan.outputs.ts == 'true'
+    if: needs.plan.outputs.ts == 'true' && needs.plan.outputs.tested != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -107,7 +114,7 @@ jobs:
 
   rust:
     needs: plan
-    if: needs.plan.outputs.rust == 'true'
+    if: needs.plan.outputs.rust == 'true' && needs.plan.outputs.tested != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -127,7 +134,8 @@ jobs:
   image:
     name: image (${{ matrix.app }})
     # Only after the tests: a language job that ran must have passed. One that was skipped
-    # (its language not affected) does not block; hence the status check is written out.
+    # (its language not affected, or its tree already tested) does not block; hence the status
+    # check is written out.
     needs: [plan, python, typescript, rust]
     if: ${{ github.event_name == 'pull_request' && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.apps != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     strategy:
@@ -185,6 +193,18 @@ jobs:
       # A skipped job is one the plan did not need. Anything failed or cancelled fails the gate.
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
+      # Passed: mark this tree as tested, so main can skip the language jobs for it. An explicit
+      # if replaces the implicit success(), so both steps state it.
+      # Ceiling: when main does run the tests over several commits, only the head tree is marked.
+      - if: ${{ success() && !cancelled() }}
+        run: echo "$GITHUB_SHA" > tested
+      - if: ${{ success() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        continue-on-error: true # an artifact outage only costs a re-test on main
+        with:
+          name: tested-${{ needs.plan.outputs.tree }}
+          path: tested
+          overwrite: true # a re-run of the same run
 
   cd:
     needs: [plan, merge-gate]

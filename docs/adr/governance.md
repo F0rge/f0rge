@@ -48,7 +48,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Category:** Governance
 - **Decision:** ADR compliance is not enforced by CI/CD. The reviewer decides, even where an ADR is broken. The pipeline contains no code whose only purpose is to prove an ADR was followed. Cheap guards that catch real breakage stay.
 - **Amendment (20 November 2026):** Leo requested that CI/CD stop enforcing ADR compliance. This replaces "deterministic automated architecture checks block merge and release where enforceable". The ADR Check in PR descriptions (P-003) stays, as information for the reviewer.
-- **Enforcement:** `merge-gate` is the single required check. It runs lint, format, typecheck, tests, builds, the Artifact health check and the guards for real breakage: Nx project registration, the libs-to-apps boundary, OpenAPI drift, dependency audits and the agent-profile checks.
+- **Enforcement:** `merge-gate` is the single required check. It runs lint, format, typecheck, tests and builds (on `main`, skipped for trees that already passed it), the Artifact health check and the guards for real breakage: Nx project registration, the libs-to-apps boundary, OpenAPI drift, dependency audits and the agent-profile checks.
 - **Approved exception:** None.
 
 ## P-005

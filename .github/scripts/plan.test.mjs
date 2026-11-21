@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { plan } from './plan.mjs';
+import { plan, tested } from './plan.mjs';
 
 const node = (...tags) => ({ data: { tags } });
 const graph = {
@@ -41,4 +41,12 @@ test('several Apps are each listed once', () => {
   const result = plan(['shop-api', 'shop-web', 'sensor-api'], graph, apps);
   assert.equal(result.py, true);
   assert.deepEqual(result.apps.map(({ app, host }) => `${app}@${host}`), ['sensor@pi', 'shop@railway']);
+});
+
+test('main skips the tests only when every tree in the range is marked', () => {
+  const marked = (tree) => ['a', 'b'].includes(tree);
+  assert.equal(tested(['a', 'b'], marked), true);
+  assert.equal(tested(['a', 'c'], marked), false);
+  assert.equal(tested([], marked), false);
+  assert.equal(tested(['a'], () => { throw new Error('API down'); }), false);
 });
