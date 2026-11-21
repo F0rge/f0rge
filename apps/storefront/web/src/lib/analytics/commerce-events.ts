@@ -19,9 +19,6 @@ export type StorefrontCommerceBrowserEvent =
   | { name: "storefront_shipping_method_selected"; properties: { cart_id: string; method_id: ShippingMethodId } }
   | { name: "storefront_account_signed_in"; properties: { method: "passwordless"; anonymous_id: string } }
   | { name: "storefront_account_created"; properties: { method: "passwordless"; anonymous_id: string } }
-  | { name: "storefront_study_entered"; properties: { study_id: "sola-chair-editorial" } }
-  | { name: "storefront_study_progress"; properties: { study_id: "sola-chair-editorial"; milestone: 25 | 50 | 75 | 100 } }
-  | { name: "storefront_study_finished"; properties: { study_id: "sola-chair-editorial" } }
   | { name: "storefront_friction_noted"; properties: { surface: FrictionSurface; kind: FrictionKind } };
 
 export type StorefrontServerEvent =
@@ -37,7 +34,6 @@ const reasons = new Set<PaymentReasonFamily>(["declined", "cancelled", "unknown"
 const frictionSurfaces = new Set<FrictionSurface>(["bag", "checkout", "payment", "account"]);
 const frictionKinds = new Set<FrictionKind>(["payment_declined", "payment_cancelled", "payment_unknown", "reservation_expired", "checkout_unavailable"]);
 const customerTypes = new Set<AnalyticsCustomerType>(["guest", "new", "returning"]);
-const STUDY_ID = "sola-chair-editorial";
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -116,15 +112,6 @@ export function sanitizeCommerceBrowserEvent(input: unknown): SanitizedAnalytics
       const anonymousId = opaqueAnalyticsId(properties.anonymous_id);
       if (properties.method !== "passwordless" || !anonymousId) return null;
       return { name: event.name, properties: withSchema({ method: "passwordless", anonymous_id: anonymousId }) };
-    }
-    case "storefront_study_entered":
-    case "storefront_study_finished": {
-      if (properties.study_id !== STUDY_ID) return null;
-      return { name: event.name, properties: withSchema({ study_id: STUDY_ID }) };
-    }
-    case "storefront_study_progress": {
-      if (properties.study_id !== STUDY_ID || ![25, 50, 75, 100].includes(properties.milestone as number)) return null;
-      return { name: event.name, properties: withSchema({ study_id: STUDY_ID, milestone: properties.milestone as number }) };
     }
     case "storefront_friction_noted": {
       if (!frictionSurfaces.has(properties.surface as FrictionSurface) || !frictionKinds.has(properties.kind as FrictionKind)) return null;

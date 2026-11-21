@@ -163,8 +163,8 @@ exactly one free unit. Set `STOREFRONT_TEST_MEDUSA_PUBLISHABLE_KEY` to the local
 public key to test direct cart denial. Run `npx nx run daskasas-web:e2e`
 against the disposable live stack. See `docs/746-live-walkthrough.md`.
 
-DasKasas uses published Medusa Store API products. Home and
-collections lead to `/shop`, where search, category, collection, availability,
+DasKasas uses published Medusa Store API products. The home page
+leads to `/shop`, where search, category, collection, availability,
 price and sort state live in the URL. Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
 Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
@@ -189,19 +189,23 @@ DasKasas customizes the repository's `@f0rge/ui` components, built
 with [shadcn/ui](https://ui.shadcn.com/) and [Base UI](https://base-ui.com/).
 Both are free under the MIT license ([shadcn/ui license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md),
 [Base UI license](https://github.com/mui/base-ui/blob/master/LICENSE)); the mobile
-menu uses the shared Dialog and purchase actions use the shared Button. New app-local
+menu uses the shared Sheet and purchase actions use the shared Button. New app-local
 primitive copies or a second component engine are unnecessary.
 
-`web/src/app/style.css` defines the white, near-black and vivid violet visual skin
-and imports the shared semantic token map. Tailwind generates the shared kit's
+`web/src/app/style.css` defines the neutral palette of the approved mockup
+(`docs/mockup-2026-11-21`, F0rge/f0rge#1000) and imports the shared semantic token
+map plus the animation CSS (`tw-animate-css`, `shadcn/tailwind.css`) the shared
+primitives use. Rebuilt pages use Tailwind utilities only; the remaining legacy rules
+apply to pages wrapped in `.content` until each is rebuilt. Tailwind generates the shared kit's
 utilities through `web/postcss.config.mjs`; `tailwindcss` and `@tailwindcss/postcss`
 are declared at the existing locked 4.3.2 versions in this workspace.
 Typography uses a local system sans-serif stack, without a remote font
-request. The homepage hero and collection covers use published Medusa catalogue
-imagery, with a neutral branded fallback when an image is unavailable. The local
-demo assets are not substituted for live merchandise. The optional illustrative
-chair study is collapsed beneath shoppable content and remains clearly separate
-from product finish choices or manufacturing claims.
+request. The wordmark uses the bundled Instrument Serif. The home page hero uses
+`web/public/hero-sofas.jpg`; its selected pieces are the first published Medusa
+products, with a tile naming the piece when it has no photo. The local demo assets
+are not substituted for live merchandise. Showroom facts in the footer and on the
+home page come from `web/src/lib/showroom.ts`, not the owner policy document.
+`/collections` and `/support` permanently redirect to `/shop` and `/help`.
 
 A translucent sticky header keeps navigation available while scrolling. One-time
 section reveals, a short gallery fade and gentle card lift add feedback without a

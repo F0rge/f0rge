@@ -20,7 +20,8 @@ describe("storefront indexing", () => {
   it("allows catalogue paths only when production indexing is on", () => {
     expect(catalogueIndexable("/shop", production)).toBe(true);
     expect(catalogueIndexable("/product/chair", production)).toBe(true);
-    expect(catalogueIndexable("/collections", production)).toBe(true);
+    expect(catalogueIndexable("/collections", production)).toBe(false);
+    expect(catalogueIndexable("/support", production)).toBe(false);
     expect(catalogueIndexable("/policies/privacy", production)).toBe(true);
     expect(catalogueIndexable("/policies/terms", production)).toBe(true);
     expect(catalogueIndexable("/policies/refunds", production)).toBe(true);
@@ -44,7 +45,8 @@ describe("storefront indexing", () => {
     });
     expect(paths).toContain("/");
     expect(paths).toContain("/shop");
-    expect(paths).toContain("/collections");
+    expect(paths).not.toContain("/collections");
+    expect(paths).not.toContain("/support");
     expect(paths).toContain("/product/chair");
     expect(paths).toContain("/shop?collection=seating");
     expect(paths).toContain("/policies/privacy");

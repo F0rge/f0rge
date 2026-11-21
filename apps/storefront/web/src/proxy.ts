@@ -4,6 +4,8 @@ import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server
 import { robotsHeader } from "./lib/launch-indexing";
 
 const ROBOTS_HEADER = "noindex, nofollow, noarchive";
+// Old routes kept working for bookmarks and search results (F0rge/f0rge#1000).
+const PERMANENT_REDIRECTS: Record<string, string> = { "/collections": "/shop", "/support": "/help" };
 
 function withRobotsHeader(response: NextResponse): NextResponse {
   response.headers.set("X-Robots-Tag", ROBOTS_HEADER);
@@ -106,6 +108,8 @@ export function proxy(request: NextRequest, event: NextFetchEvent) {
   // requests before invoking its callback, which must never bypass this gate.
   const denied = privatePreviewGate(request);
   if (denied) return denied;
+  const moved = PERMANENT_REDIRECTS[request.nextUrl.pathname];
+  if (moved) return withNoIndex(NextResponse.redirect(new URL(moved, request.url), 308), request.nextUrl.pathname);
   if (!clerkConfigured) return withNoIndex(NextResponse.next(), request.nextUrl.pathname);
   return Promise.resolve(clerkProxy(request, event)).then((result) => withNoIndex(result, request.nextUrl.pathname));
 }

@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import type { AnalyticsConsentChoice } from "@/lib/analytics/consent";
 import styles from "./analytics-consent.module.css";
 
 const analyticsConfigured = Boolean(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN?.trim());
 
-export function AnalyticsConsentPanel({ choice, ready, choose }: {
+export function AnalyticsConsentPanel({ choice, ready, choose, settingsOpen, setSettingsOpen }: {
   choice: AnalyticsConsentChoice | null;
   ready: boolean;
   choose(choice: AnalyticsConsentChoice): void;
+  settingsOpen: boolean;
+  setSettingsOpen(open: boolean): void;
 }) {
-  const [settingsOpen, setSettingsOpen] = useState(false);
   if (!ready) return null;
 
   if (choice && !settingsOpen) {
