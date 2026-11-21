@@ -52,14 +52,14 @@ test('gallery selection remains visible and announces its image with reduced mot
   test.skip(!sku, 'A published SKU with multiple catalogue images is required')
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(`/product/${sku}`)
-  const image = page.locator('.gallery-image')
+  const image = page.locator('[data-main-image] img')
   const original = await image.getAttribute('src')
   if (!original) throw new Error('Product gallery source is missing')
   await page.getByRole('button', { name: /Show image 2 of/ }).click()
   await expect(image).not.toHaveAttribute('src', original)
   await expectReadable(image)
   expect(await image.evaluate((element) => element.getAnimations().length)).toBe(0)
-  await expect(page.locator('.gallery [aria-live=polite]')).toContainText(/Image 2 of/)
+  await expect(page.getByRole('article').locator('[aria-live=polite]', { hasText: /Image \d of/ })).toContainText(/Image 2 of/)
 })
 
 test('focusing a shopping card ends its reveal and scrolling back does not replay it', async ({ page }) => {

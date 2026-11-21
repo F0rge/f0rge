@@ -80,7 +80,7 @@ test('product attention excludes hidden and idle time and sends one visit summar
   await page.clock.install()
   await page.goto(productUrl)
   await expect(page.getByRole('heading', { name: /Test chair/ })).toBeVisible()
-  await expect(page.locator('.hero-study')).toBeInViewport({ ratio: 0.5 })
+  await expect(page.locator('[data-main-image]')).toBeInViewport({ ratio: 0.5 })
   await expect(page.locator('.product-attention-region')).toBeInViewport({ ratio: 0.5 })
   await page.evaluate(() => document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })))
   await page.clock.runFor(5_000)
@@ -102,7 +102,7 @@ test('product attention excludes hidden and idle time and sends one visit summar
     document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
   })
   await page.clock.runFor(5_000)
-  await page.getByRole('link', { name: /All pieces/ }).click()
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Shop all' }).click()
   await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
   await expect.poll(() => captured.filter((event) => event.event === 'storefront_product_attention_summary').length).toBe(1)
   const summary = captured.find((event) => event.event === 'storefront_product_attention_summary')
@@ -131,7 +131,7 @@ test('shop impressions and reports stay on the consented allowlist', async ({ pa
     product_id: 'prod_test_chair',
     event_count: 1,
   })
-  await page.getByRole('link', { name: /All pieces/ }).click()
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Shop all' }).click()
   await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
   await expect.poll(() => captured.filter((event) => event.event === 'storefront_search_results_viewed').length).toBe(2)
 })

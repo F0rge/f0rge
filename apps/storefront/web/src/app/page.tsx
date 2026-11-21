@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge, Button, cn } from "@f0rge/ui";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge, Button } from "@f0rge/ui";
 import { StorefrontMotion } from "@/components/storefront-motion";
+import { PieceImage } from "@/components/piece-image";
 import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
-import { listStoreProducts, lowestPricedVariant, priceLabel, productPath, type StoreProduct } from "@/lib/medusa";
+import { fromPrice, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
 import { SHOWROOM } from "@/lib/showroom";
 
 export const dynamic = "force-dynamic";
@@ -40,29 +41,6 @@ const faqs: { question: string; answer: string; returnPolicy?: true }[] = [
     answer: `Call ${SHOWROOM.phones.map((phone) => phone.number).join(" or ")}, or email ${SHOWROOM.email}.`,
   },
 ];
-
-function productImage(product: StoreProduct) {
-  return product.thumbnail || product.images?.[0]?.url;
-}
-
-function stockLabel(product: StoreProduct) {
-  const stock = product.variants.reduce((total, variant) => total + Math.max(variant.inventory_quantity ?? 0, 0), 0);
-  if (stock > 0) return `${stock} in stock`;
-  return product.variants.some((variant) => variant.metadata?.made_to_order_offer) ? "Made to order" : null;
-}
-
-function fromPrice(product: StoreProduct) {
-  const prices = product.variants.map((variant) => variant.calculated_price?.calculated_amount).filter((price): price is number => price != null);
-  return `${new Set(prices).size > 1 ? "From " : ""}${priceLabel(lowestPricedVariant(product.variants))}`;
-}
-
-// A neat named tile wherever a piece has no photograph yet.
-function PieceImage({ product, className }: { product: StoreProduct; className?: string }) {
-  const image = productImage(product);
-  return image
-    ? <img src={image} alt="" width={800} height={800} loading="lazy" className={cn("size-full object-cover transition-transform group-hover:scale-105", className)} />
-    : <div aria-hidden="true" data-placeholder className={cn("flex size-full min-h-24 items-center justify-center bg-muted p-4 text-center", className)}><span className="text-xs text-muted-foreground">{product.title}</span></div>;
-}
 
 function SelectedPieces({ products }: { products: StoreProduct[] }) {
   // ponytail: the first five pieces in Medusa's order; add a merchandised selection if the owner wants to choose.

@@ -171,3 +171,14 @@ export function priceLabel(variant?: MedusaVariant): string {
   if (amount == null) return "Price unavailable";
   return formatCustomerPrice(amount, variant?.calculated_price?.currency_code);
 }
+
+export function fromPrice(product: StoreProduct): string {
+  const prices = product.variants.map((variant) => variant.calculated_price?.calculated_amount).filter((price): price is number => price != null);
+  return `${new Set(prices).size > 1 ? "From " : ""}${priceLabel(lowestPricedVariant(product.variants))}`;
+}
+
+export function stockLabel(product: StoreProduct): string | null {
+  const stock = product.variants.reduce((total, variant) => total + Math.max(variant.inventory_quantity ?? 0, 0), 0);
+  if (stock > 0) return `${stock} in stock`;
+  return product.variants.some((variant) => variant.metadata?.made_to_order_offer) ? "Made to order" : null;
+}
