@@ -8,6 +8,7 @@ import {
   ClickableTile,
   ComboBox,
   InlineNotification,
+  Link,
   Modal,
   NumberInput,
   Pagination,
@@ -37,6 +38,7 @@ import {
   Building,
   Currency,
   Image as ImageIcon,
+  Launch,
   Location as LocationIcon,
   Locked,
   Money,
@@ -2020,9 +2022,16 @@ function TillWorkspace() {
                               <h3 className="cds--type-heading-compact-01">
                                 {line.sku.name}
                               </h3>
-                              <p className="cds--type-label-01">
+                              <Link
+                                className="cds--type-label-01"
+                                href={`/catalogue/${line.sku.id}`}
+                                target="_blank"
+                                rel="noopener"
+                                renderIcon={Launch}
+                                aria-label={`Open ${line.sku.our_ref} in a new tab`}
+                              >
                                 {line.sku.our_ref}
-                              </p>
+                              </Link>
                               {stockNote && (
                                 <p className={`cds--type-helper-text-01 ${styles.reserved} ${styles.stockState}`}>
                                   <LocationIcon size={16} aria-hidden />
