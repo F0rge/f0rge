@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.customer import CustomerCRUD
 from app.crud.sku import SkuCRUD
@@ -19,12 +21,19 @@ from app.models.sales_staff import SalesStaff
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import (
     InvoiceCreate,
+    InvoiceLineCreate,
     InvoiceLineResponse,
     InvoiceListItem,
+    InvoicePaymentCreate,
+    InvoicePreviewRequest,
+    InvoiceSummary,
     InvoiceUpdate,
     InvoiceResponse,
+    ManualInvoiceCreate,
 )
 from app.schemas.page import Page, PageParams
+from app.schemas.payment import PaymentCreate
+from app.schemas.till import TillPriceLine, TillPricePreview, TillSaleLineCreate
 from app.services.books_events import BooksEventService
 from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
@@ -40,15 +49,18 @@ from app.services.party_archive import require_active_customer
 from app.services.sellability import assert_sku_sellable
 from app.services.sku_archive import SkuArchiveService
 from app.services.archive_documents import assert_operational_document
+from app.services.payments import PaymentService
 from app.services.pricing import (
+    classification_of,
     format_pdf_unit,
     pdf_unit_basis_note,
-    resolve_unit_price,
     shows_prices_including_vat,
 )
 from app.services.suspect_price import annotate_line_warnings
 from app.services.sales_staff import SalesStaffService
 from app.services.settings import SettingsService
+from app.services.settlement import SettlementStatus, cents
+from app.services.till_pricing import TillPricing
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -71,10 +83,87 @@ class InvoiceService:
             offset=params.offset,
             q=params.q,
         )
+        names = await self._staff_names()
         return Page(
-            items=[self._to_list_item(invoice) for invoice in invoices],
+            items=[self._to_list_item(invoice, names) for invoice in invoices],
             total=total,
         )
+
+    async def list_all(self) -> list[InvoiceListItem]:
+        """Every invoice for the workspace, Cin7 imports and archived ones included."""
+        invoices = (
+            await self.db.execute(
+                select(TaxInvoice)
+                .options(selectinload(TaxInvoice.customer))
+                .order_by(TaxInvoice.invoice_number)
+            )
+        ).scalars()
+        names = await self._staff_names()
+        return [self._to_list_item(invoice, names) for invoice in invoices]
+
+    async def get_list_item(self, invoice_id: uuid.UUID) -> InvoiceListItem:
+        invoice = await self.crud.get_by_id(invoice_id)
+        if invoice is None:
+            raise NotFoundError("Invoice not found")
+        return self._to_list_item(invoice, await self._staff_names())
+
+    async def summary(self) -> InvoiceSummary:
+        # The statuses of _lifecycle_fields, in SQL. Archived invoices are still owed;
+        # only Cin7 imports carry no balance.
+        balance = func.round(TaxInvoice.total_inc_vat - TaxInvoice.amount_paid, 2)
+        overdue = and_(
+            TaxInvoice.payment_status != SettlementStatus.PAID,
+            TaxInvoice.due_date < datetime.date.today(),
+        )
+        statement = and_(
+            TaxInvoice.payment_status == SettlementStatus.UNPAID,
+            TaxInvoice.on_account,
+            or_(TaxInvoice.due_date.is_(None), TaxInvoice.due_date >= datetime.date.today()),
+        )
+
+        def bucket(condition):
+            return func.coalesce(func.sum(balance).filter(condition), 0), func.count().filter(
+                condition
+            )
+
+        owing_zar, owing_count, overdue_zar, overdue_count, statement_zar, statement_count = (
+            await self.db.execute(
+                select(*bucket(balance > 0), *bucket(overdue), *bucket(statement)).where(
+                    TaxInvoice.is_archive.is_(False)
+                )
+            )
+        ).one()
+        payments = await PaymentService(self.db).summary()
+        return InvoiceSummary(
+            outstanding_zar=cents(owing_zar),
+            outstanding_count=owing_count,
+            overdue_zar=cents(overdue_zar),
+            overdue_count=overdue_count,
+            on_statement_zar=cents(statement_zar),
+            on_statement_count=statement_count,
+            paid_this_month_zar=payments.received_this_month_zar,
+            paid_this_month_count=payments.received_this_month_count,
+        )
+
+    async def set_archived(
+        self, invoice_id: uuid.UUID, archived: bool, user_id: Optional[uuid.UUID] = None
+    ) -> InvoiceResponse:
+        """Hide an invoice from the active list. It stays in the books, VAT and reports."""
+        async with unit_of_work(self.db):
+            invoice = await self.crud.get_by_id(invoice_id, for_update=True)
+            if invoice is None:
+                raise NotFoundError("Invoice not found")
+            assert_operational_document(invoice)
+            if (invoice.archived_at is not None) == archived:
+                raise ValidationError(
+                    "This invoice is already archived"
+                    if archived
+                    else "This invoice is not archived"
+                )
+            invoice.archived_at = datetime.datetime.now(datetime.timezone.utc) if archived else None
+            invoice.archived_by_id = user_id if archived else None
+            await self.crud.commit_refresh(invoice)
+        return await self.get(invoice_id, user_id)
 
     async def get(
         self,
@@ -117,56 +206,42 @@ class InvoiceService:
             await self.crud.commit_refresh(invoice)
         return await self.get(invoice_id, user_id)
 
+    async def preview(self, data: InvoicePreviewRequest, user_id: uuid.UUID) -> TillPricePreview:
+        """The cart's prices and totals exactly as creating the invoice would store them."""
+        await self._require_discounts(data.lines, user_id, await self._team_settings())
+        customer = await require_active_customer(self.db, data.customer_id)
+        _, preview = await self._price_lines(customer, data.lines)
+        return preview
+
+    async def create_manual(self, data: ManualInvoiceCreate, user_id: uuid.UUID) -> InvoiceResponse:
+        """A back-office invoice: a colleague as at the till, on account or already paid."""
+        await SalesStaffService(self.db).check_sale_colleague(data.sales_staff_id)
+        return await self.create(
+            data, user_id, on_account=data.payment is None, payment=data.payment
+        )
+
     async def create(
-        self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
+        self,
+        data: InvoiceCreate,
+        user_id: Optional[uuid.UUID] = None,
+        *,
+        on_account: bool = False,
+        payment: Optional[InvoicePaymentCreate] = None,
     ) -> InvoiceResponse:
         # First-use settings initialization commits. Do it before catalogue locks
         # so active-SKU validation stays locked through the invoice write.
         team_settings = await self._team_settings()
+        await self._require_discounts(data.lines, user_id, team_settings)
         await SkuArchiveService(self.db).lock_skus(
             [line.sku_id for line in data.lines if line.sku_id is not None]
         )
         customer = await require_active_customer(self.db, data.customer_id)
         await assert_date_postable(self.db, data.issue_date)
 
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
-        total_inc = Decimal(0)
-        line_models: list[InvoiceLine] = []
-
-        for index, line in enumerate(data.lines):
-            unit_ex_vat = line.unit_ex_vat
-            sku_id = line.sku_id
-            price_warning = None
-            if sku_id is not None:
-                sku = await self.sku_crud.get_by_id(sku_id)
-                if sku is None:
-                    raise NotFoundError("SKU not found")
-                assert_sku_sellable(sku)
-            if unit_ex_vat is None:
-                resolved = await resolve_unit_price(self.db, sku, customer)
-                unit_ex_vat = resolved.unit_ex_vat
-                price_warning = resolved.warning
-            ex_vat = (Decimal(line.qty) * unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
-            subtotal += ex_vat
-            vat_total += line_vat
-            total_inc += inc_vat
-            line_models.append(
-                InvoiceLine(
-                    description=line.description,
-                    qty=line.qty,
-                    unit_ex_vat=unit_ex_vat,
-                    ex_vat=ex_vat,
-                    inc_vat=inc_vat,
-                    vat_amount=line_vat,
-                    sort_order=index,
-                    sku_id=sku_id,
-                    price_warning=price_warning,
-                )
-            )
-
+        line_models, priced = await self._price_lines(customer, data.lines)
+        subtotal = priced.subtotal_ex_vat
+        vat_total = priced.vat_amount
+        total_inc = priced.total_inc_vat
         if subtotal <= 0:
             raise ValidationError("Invoice total must be positive")
 
@@ -178,7 +253,7 @@ class InvoiceService:
             user_id=user_id,
         )
 
-        due_date = compute_due_date(data.issue_date, customer, team_settings)
+        due_date = data.due_date or compute_due_date(data.issue_date, customer, team_settings)
 
         async with unit_of_work(self.db):
             invoice_number = await self.crud.get_next_invoice_number()
@@ -192,8 +267,10 @@ class InvoiceService:
                 total_inc_vat=total_inc,
                 amount_paid=Decimal(0),
                 prices_include_vat=shows_prices_including_vat(customer),
+                on_account=on_account,
                 note_printed=data.note_printed,
                 note_internal=data.note_internal,
+                sales_staff_id=data.sales_staff_id,
                 lines=line_models,
             )
             await self.crud.add_and_flush(invoice)
@@ -224,6 +301,20 @@ class InvoiceService:
                 actor_user_id=user_id,
                 note=override_note,
             )
+            if payment is not None:
+                # Same transaction: a refused payment leaves no invoice behind.
+                await PaymentService(self.db).stage_payment_in(
+                    PaymentCreate(
+                        direction="in",
+                        invoice_id=invoice.id,
+                        amount=total_inc,
+                        currency="ZAR",
+                        paid_on=payment.paid_on,
+                        tender=payment.tender,
+                        reference=payment.reference,
+                    ),
+                    user_id,
+                )
             await self.crud.commit_refresh(invoice)
 
         reloaded = await self.crud.get_by_id(invoice.id)
@@ -278,6 +369,101 @@ class InvoiceService:
         pdf_bytes, _, _ = await self.build_pdf_bytes(invoice_id)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
+    async def _price_lines(
+        self, customer, lines: list[InvoiceLineCreate]
+    ) -> tuple[list[InvoiceLine], TillPricePreview]:
+        """Catalogue lines are priced as the till prices them; free-text lines use their unit.
+
+        The preview lists only the SKU lines, in order; its totals include every line.
+        """
+        # Only catalogue-priced lines need the customer's price policy.
+        pricing: Optional[TillPricing] = None
+        models: list[InvoiceLine] = []
+        sku_lines: list[TillPriceLine] = []
+        before_ex = before_inc = Decimal(0)
+        for index, line in enumerate(lines):
+            sku = None
+            if line.sku_id is not None:
+                sku = await self.sku_crud.get_by_id(line.sku_id)
+                if sku is None:
+                    raise NotFoundError("SKU not found")
+                assert_sku_sellable(sku)
+            if line.unit_ex_vat is None:
+                assert sku is not None  # the schema requires a unit or a SKU
+                pricing = pricing or await TillPricing.for_customer(self.db, customer)
+                priced = await pricing.line(
+                    sku,
+                    TillSaleLineCreate(
+                        sku_id=sku.id, qty=line.qty, discount_percent=line.discount_percent
+                    ),
+                )
+            else:
+                # A free-text line, or a SKU line at a unit price typed by staff.
+                before = line.unit_ex_vat * line.qty
+                net = (before * (100 - line.discount_percent) / 100).quantize(
+                    CENT, rounding=ROUND_HALF_UP
+                )
+                gross = ex_to_inc(net)
+                priced = TillPriceLine.model_construct(
+                    sku_id=line.sku_id,
+                    qty=line.qty,
+                    discount_percent=line.discount_percent,
+                    unit_ex_vat=line.unit_ex_vat,
+                    before_discount_ex_vat=before,
+                    ex_vat=net,
+                    vat_amount=gross - net,
+                    inc_vat=gross,
+                    source="manual",
+                    price_warning=None,
+                )
+            if sku is not None:
+                sku_lines.append(priced)
+            before_ex += priced.before_discount_ex_vat
+            before_inc += ex_to_inc(priced.before_discount_ex_vat)
+            models.append(
+                InvoiceLine(
+                    description=line.description,
+                    qty=line.qty,
+                    # As at the till: the stored unit is after the line discount.
+                    unit_ex_vat=(priced.ex_vat / line.qty).quantize(CENT, rounding=ROUND_HALF_UP),
+                    ex_vat=priced.ex_vat,
+                    inc_vat=priced.inc_vat,
+                    vat_amount=priced.vat_amount,
+                    sort_order=index,
+                    sku_id=line.sku_id,
+                    price_warning=priced.price_warning,
+                )
+            )
+        subtotal = sum((model.ex_vat for model in models), Decimal(0))
+        vat = sum((model.vat_amount for model in models), Decimal(0))
+        return models, TillPricePreview(
+            classification=classification_of(customer),
+            price_list_name=pricing.price_list_name if pricing else None,
+            prices_include_vat=shows_prices_including_vat(customer),
+            before_discount_ex_vat=before_ex,
+            before_discount_inc_vat=before_inc,
+            subtotal_ex_vat=subtotal,
+            vat_amount=vat,
+            total_inc_vat=subtotal + vat,
+            lines=sku_lines,
+            price_revision="",
+        )
+
+    async def _require_discounts(
+        self, lines: list[InvoiceLineCreate], user_id: Optional[uuid.UUID], team_settings
+    ) -> None:
+        # Imported here: the till imports invoice models and services at load time.
+        from app.services.till_orchestrator import TillOrchestrator
+
+        await TillOrchestrator(self.db).require_discounts(
+            InvoicePreviewRequest.model_construct(lines=lines),
+            user_id,
+            team_settings.max_till_discount_percent,
+        )
+
+    async def _staff_names(self) -> dict[uuid.UUID, str]:
+        return dict((await self.db.execute(select(SalesStaff.id, SalesStaff.name))).tuples().all())
+
     async def _team_settings(self):
         team = await TeamCRUD(self.db).get_first()
         if team is None:
@@ -285,7 +471,9 @@ class InvoiceService:
         return await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
 
     @staticmethod
-    def _to_list_item(invoice: TaxInvoice) -> InvoiceListItem:
+    def _to_list_item(
+        invoice: TaxInvoice, staff_names: Optional[dict[uuid.UUID, str]] = None
+    ) -> InvoiceListItem:
         balance = invoice.total_inc_vat - invoice.amount_paid
         return InvoiceListItem(
             is_archive=invoice.is_archive,
@@ -301,7 +489,11 @@ class InvoiceService:
             amount_paid=invoice.amount_paid,
             balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
-            on_account=invoice.on_account,
+            **_lifecycle_fields(invoice),
+            sales_staff_id=invoice.sales_staff_id,
+            sales_staff_name=(staff_names or {}).get(invoice.sales_staff_id)
+            if invoice.sales_staff_id
+            else None,
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
         )
@@ -326,7 +518,7 @@ class InvoiceService:
             amount_paid=invoice.amount_paid,
             balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
-            on_account=invoice.on_account,
+            **_lifecycle_fields(invoice),
             note_printed=invoice.note_printed,
             note_internal=invoice.note_internal,
             sales_staff_id=invoice.sales_staff_id,
@@ -363,6 +555,27 @@ class InvoiceService:
             prices_include_vat=invoice.prices_include_vat,
         )
         return response
+
+
+def _lifecycle_fields(invoice: TaxInvoice) -> dict[str, object]:
+    """Source, settlement status and staff archiving, shared by the list and detail."""
+    if invoice.is_archive:
+        status = "unknown"
+    elif invoice.payment_status == SettlementStatus.PAID:
+        status = "paid"
+    elif invoice.due_date is not None and invoice.due_date < datetime.date.today():
+        status = "overdue"
+    elif invoice.payment_status == SettlementStatus.PARTIALLY_PAID:
+        status = "partially_paid"
+    else:
+        status = "on_statement" if invoice.on_account else "unpaid"
+    return {
+        "on_account": invoice.on_account,
+        "source": "imported" if invoice.is_archive else invoice.source,
+        "status": status,
+        "is_archived": invoice.archived_at is not None,
+        "archived_at": invoice.archived_at,
+    }
 
 
 def _response_money(invoice: TaxInvoice, value: Decimal) -> Decimal:

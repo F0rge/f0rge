@@ -90,6 +90,21 @@ class PaymentService:
         data: PaymentCreate,
         user_id: Optional[uuid.UUID] = None,
     ) -> PaymentResponse:
+        async with unit_of_work(self.db):
+            payment = await self.stage_payment_in(data, user_id)
+            await self.crud.commit_refresh(payment)
+
+        reloaded = await self.crud.get_by_id(payment.id)
+        assert reloaded is not None
+        return self._to_response(reloaded)
+
+    async def stage_payment_in(
+        self,
+        data: PaymentCreate,
+        user_id: Optional[uuid.UUID] = None,
+    ) -> Payment:
+        """Validate and flush a payment in without committing, so a caller can make it
+        part of a larger transaction (an invoice issued already paid)."""
         if data.invoice_id is None:
             raise ValidationError("invoice_id is required for payment in")
         if data.bill_id is not None:
@@ -128,31 +143,26 @@ class PaymentService:
             reference=data.reference,
         )
 
-        async with unit_of_work(self.db):
-            payment.payment_number = await self.crud.get_next_payment_number()
-            await self.crud.add_and_flush(payment)
-            await self.posting.post(
-                JournalDocumentType.PAYMENT,
-                payment.id,
-                f"Payment {payment.payment_number} received",
-                [
-                    (CODE_BANK, amount, Decimal(0)),
-                    (CODE_AR, Decimal(0), amount),
-                ],
-                entry_date=payment.paid_on,
-            )
-            invoice.amount_paid = cents(invoice.amount_paid + amount)
-            await self.events.record(
-                BooksDocumentType.PAYMENT,
-                payment.id,
-                BooksEventAction.CREATED,
-                actor_user_id=user_id,
-            )
-            await self.crud.commit_refresh(payment)
-
-        reloaded = await self.crud.get_by_id(payment.id)
-        assert reloaded is not None
-        return self._to_response(reloaded)
+        payment.payment_number = await self.crud.get_next_payment_number()
+        await self.crud.add_and_flush(payment)
+        await self.posting.post(
+            JournalDocumentType.PAYMENT,
+            payment.id,
+            f"Payment {payment.payment_number} received",
+            [
+                (CODE_BANK, amount, Decimal(0)),
+                (CODE_AR, Decimal(0), amount),
+            ],
+            entry_date=payment.paid_on,
+        )
+        invoice.amount_paid = cents(invoice.amount_paid + amount)
+        await self.events.record(
+            BooksDocumentType.PAYMENT,
+            payment.id,
+            BooksEventAction.CREATED,
+            actor_user_id=user_id,
+        )
+        return payment
 
     async def _create_payment_out(
         self,

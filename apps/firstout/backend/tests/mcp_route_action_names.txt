@@ -10,6 +10,7 @@ approve_bill
 approve_purchase_order
 archive_bill
 archive_customer
+archive_invoice
 archive_price_list
 archive_proforma
 archive_supplier
@@ -107,6 +108,7 @@ get_supplier
 get_till_basket
 get_transfer
 home_home_summary
+invoice_summary
 journal_report
 list_accounts
 list_adjustments
@@ -172,6 +174,7 @@ patch_delivery_tracking
 payment_summary
 post_journal
 preview_auto_match
+preview_invoice_prices
 preview_pick
 preview_quote_prices
 preview_till_prices
@@ -188,6 +191,7 @@ replace_sku_bom
 replace_till_basket
 reprice_customer_drafts
 restore_bill
+restore_invoice
 resume_held_sale
 run_repeating_invoice
 sales_by_sku

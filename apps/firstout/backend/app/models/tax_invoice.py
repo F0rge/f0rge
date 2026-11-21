@@ -8,6 +8,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     Date,
+    DateTime,
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
@@ -77,6 +78,19 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     note_internal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # The colleague credited with the sale (commission).
     sales_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    # "till" or "manual". Cin7 imports are told apart by is_archive, not by this.
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="manual", server_default="manual"
+    )
+    # Staff archiving only hides the invoice from the default list; it stays in the books.
+    archived_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archived_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL", name="fk_tax_invoices_archived_by_id_users"),
+        nullable=True,
+    )
     cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
         JSONB(none_as_null=True), nullable=True
     )

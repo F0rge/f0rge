@@ -93,9 +93,10 @@ class TillOrchestrator:
         self.bom_crud = SkuBomLineCRUD(db)
         self.pick_crud = PickCRUD(db)
 
-    async def _require_discounts(
+    async def require_discounts(
         self, request: TillPriceRequest, user_id: uuid.UUID | None, max_discount: Decimal | None
     ) -> None:
+        """Line discounts need till.discount; above the team maximum, users.manage too."""
         if user_id is None or not any(line.discount_percent > 0 for line in request.lines):
             return
         permissions = PermissionService(self.db)
@@ -140,7 +141,7 @@ class TillOrchestrator:
         if team is None:
             raise NotFoundError("Team not found")
         settings = await TeamSettingsCRUD(self.db).get_by_team_id(team.id)
-        await self._require_discounts(
+        await self.require_discounts(
             request, user_id, settings.max_till_discount_percent if settings else None
         )
         customer = await self._active_customer(request)
@@ -157,7 +158,7 @@ class TillOrchestrator:
             raise NotFoundError("Team not found")
         settings_crud = TeamSettingsCRUD(self.db)
         settings = await settings_crud.get_by_team_id(team.id)
-        await self._require_discounts(
+        await self.require_discounts(
             data, user_id, settings.max_till_discount_percent if settings else None
         )
 
@@ -366,6 +367,7 @@ class TillOrchestrator:
                 note_printed=data.note_printed,
                 note_internal=data.note_internal,
                 sales_staff_id=data.sales_staff_id,
+                source="till",
                 lines=invoice_line_models,
             )
 

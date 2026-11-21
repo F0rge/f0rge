@@ -73,7 +73,7 @@ async def test_nonsale_sku_rejected_by_new_sales_even_with_valid_price(
         return
     if document == "invoices":
         payload.update(issue_date=datetime.date.today().isoformat())
-        payload["lines"][0].update(description="Explicit-price bypass attempt", unit_ex_vat="100")
+        payload["lines"][0].update(description="Non-sale product")
     if document in ("till/sales", "laybys"):
         payload.update(location_id=location_id, tender="cash")
     if document == "laybys":

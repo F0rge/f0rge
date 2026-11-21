@@ -32,6 +32,11 @@ describe("invoiceStatusTag", () => {
     expect(invoiceStatusTag({ ...invoice, on_account: false }).label).toBe("Unpaid");
     expect(invoiceStatusTag({ ...invoice, is_archive: true }).label).toBe("Not imported");
   });
+
+  it("shows a past-due balance as Overdue", () => {
+    expect(invoiceStatusTag({ ...invoice, status: "overdue" })).toEqual({ label: "Overdue", type: "red" });
+    expect(invoiceStatusTag({ ...invoice, status: "on_statement" }).label).toBe("On statement");
+  });
 });
 
 describe("partialPaymentError", () => {

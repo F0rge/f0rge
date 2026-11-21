@@ -24,6 +24,7 @@ from app.schemas.user import UserUpdate
 from app.services.accounts import AccountService
 from app.services.bills import BillService
 from app.services.customers_crm import CustomersCrmService
+from app.services.invoices import InvoiceService
 from app.services.locations import LocationService
 from app.services.price_lists import PriceListService
 from app.services.proformas import ProformaService
@@ -90,6 +91,8 @@ async def blocked_reason(
             return "Names must be changed individually to preserve unique record identities"
     if resource == "roles":
         return await RoleService(db).deletion_block_reason(row)
+    if resource == "invoices" and row.source == "imported":
+        return "Imported invoices are read-only history"
     if resource == "quotes" and row.is_converted:
         return "Converted quotes are kept; duplicate one to quote again"
     if resource == "users" and action == "disable":
@@ -164,6 +167,8 @@ async def apply_action(
         await QuotesService(db).delete(record_id)
     elif resource == "bills":
         await BillService(db).set_archived(record_id, action == "archive", actor)
+    elif resource == "invoices":
+        await InvoiceService(db).set_archived(record_id, action == "archive", actor)
     elif resource == "locations":
         data = patch if action == "edit" else {"is_archived": action == "archive"}
         await LocationService(db).update(record_id, LocationUpdate.model_validate(data))

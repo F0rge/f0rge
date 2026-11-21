@@ -55,6 +55,7 @@ describe("application breadcrumbs", () => {
       "Read document",
     );
     expect(breadcrumbsForPath("/bills/new").at(-1)?.label).toBe("Create bill");
+    expect(breadcrumbsForPath("/invoices/new").at(-1)?.label).toBe("Create invoice");
     expect(breadcrumbsForPath("/catalogue-wrong")).toEqual([]);
   });
 });

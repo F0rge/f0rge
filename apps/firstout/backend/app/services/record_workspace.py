@@ -23,6 +23,7 @@ from app.services.accounts import AccountService
 from app.services.bills import BillService
 from app.services.customers_crm import CustomersCrmService
 from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
+from app.services.invoices import InvoiceService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.permissions import PermissionService
@@ -93,6 +94,8 @@ class RecordWorkspaceService:
             return await PaymentService(self.db).list_all()
         if resource == "bills":
             return await BillService(self.db).list_all()
+        if resource == "invoices":
+            return await InvoiceService(self.db).list_all()
         return await RepeatingInvoiceService(self.db).list()
 
     async def row(
@@ -119,6 +122,8 @@ class RecordWorkspaceService:
             return await AccountService(self.db).get(record_id)
         if resource == "bills":
             return await BillService(self.db).get_list_item(record_id)
+        if resource == "invoices":
+            return await InvoiceService(self.db).get_list_item(record_id)
         service = RoleService(self.db) if resource == "roles" else LocationService(self.db)
         record = await service.crud.get_by_id(record_id)
         if record is None:

@@ -13,7 +13,8 @@ export type WorkspaceResource =
   | "proformas"
   | "quotes"
   | "payments"
-  | "bills";
+  | "bills"
+  | "invoices";
 export type WorkspaceValue = string | number | boolean | null;
 export type WorkspaceOperator =
   | "eq"

@@ -218,7 +218,6 @@ async def test_restricted_role_sees_the_warning_without_the_cost(
                     "description": "Hidden cost",
                     "qty": 1,
                     "sku_id": sku["id"],
-                    "unit_ex_vat": "400.00",
                 }
             ],
         },

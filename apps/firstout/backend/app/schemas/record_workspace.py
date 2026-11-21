@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from app.schemas.account import AccountResponse
 from app.schemas.bill import BillListItem
 from app.schemas.customer_crm import CustomerCrmResponse
+from app.schemas.invoice import InvoiceListItem
 from app.schemas.location import LocationResponse
 from app.schemas.payment import PaymentResponse
 from app.schemas.price_list import PriceListResponse
@@ -33,6 +34,7 @@ WorkspaceResource = Literal[
     "quotes",
     "payments",
     "bills",
+    "invoices",
 ]
 WorkspaceAction = Literal[
     "edit",
@@ -58,6 +60,7 @@ WorkspaceRow = Union[
     QuoteListItem,
     PaymentResponse,
     BillListItem,
+    InvoiceListItem,
 ]
 
 

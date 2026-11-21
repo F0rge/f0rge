@@ -1,4 +1,4 @@
-import type { BillStatus } from "./api";
+import type { BillStatus, InvoiceStatus } from "./api";
 
 export type SettlementStatus = "unpaid" | "partially_paid" | "paid" | "unknown";
 
@@ -28,12 +28,16 @@ export function settlementTagType(status: SettlementStatus): "gray" | "blue" | "
   }
 }
 
-/** Invoice status tag: an unpaid invoice issued on account reads "On statement". */
+/** Invoice status tag: an unpaid invoice issued on account reads "On statement"; past due, "Overdue". */
 export function invoiceStatusTag(invoice: {
   payment_status: SettlementStatus;
   on_account: boolean;
   is_archive: boolean;
-}): { label: string; type: "gray" | "blue" | "green" | "purple" } {
+  status?: InvoiceStatus;
+}): { label: string; type: "gray" | "blue" | "green" | "purple" | "red" } {
+  if (invoice.status === "overdue") {
+    return { label: "Overdue", type: "red" };
+  }
   const status = invoice.is_archive ? "unknown" : invoice.payment_status;
   if (status === "unpaid" && invoice.on_account) {
     return { label: "On statement", type: "purple" };

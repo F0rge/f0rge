@@ -15,6 +15,7 @@ from app.models.quote import Quote
 from app.models.repeating_invoice import RepeatingInvoice
 from app.models.role import Role
 from app.models.supplier import Supplier
+from app.models.tax_invoice import TaxInvoice
 from app.models.user import User
 from app.models.sku import Sku
 from app.permissions import (
@@ -251,6 +252,30 @@ DEFINITIONS = {
             "attachment_count": "number",
         },
         frozenset(),
+        ARCHIVE,
+        BOOKS_MUTATE,
+    ),
+    "invoices": WorkspaceDefinition(
+        TaxInvoice,
+        {
+            **COMMON,
+            "invoice_number": "text",
+            "customer_id": "text",
+            "customer_name": "text",
+            "issue_date": "date",
+            "due_date": "date",
+            "subtotal_ex_vat": "number",
+            "vat_amount": "number",
+            "total_inc_vat": "number",
+            "amount_paid": "number",
+            "balance": "number",
+            "status": "text",
+            "sales_staff_id": "text",
+            "sales_staff_name": "text",
+            "source": "text",
+        },
+        frozenset(),
+        # No delete: invoices are archived, and reversed with a credit note.
         ARCHIVE,
         BOOKS_MUTATE,
     ),

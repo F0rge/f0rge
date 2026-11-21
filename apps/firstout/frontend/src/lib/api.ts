@@ -2150,14 +2150,24 @@ export type InvoiceListItem = {
   payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
   /** Issued unpaid on account; reads "On statement" until a payment is recorded. */
   on_account: boolean;
+  source: InvoiceSource;
+  status: InvoiceStatus;
+  /** Hidden from the default list by staff; still in the books, VAT and reports. */
+  is_archived: boolean;
+  archived_at: string | null;
+  /** The colleague credited with the sale. */
+  sales_staff_id?: string | null;
+  sales_staff_name?: string | null;
   created_at: string;
   updated_at: string;
 };
 
+/** Where an invoice was made; Cin7 history is "imported". */
+export type InvoiceSource = "till" | "manual" | "imported";
+/** Settlement as filtered in the list; "unknown" for Cin7 history. */
+export type InvoiceStatus = "paid" | "partially_paid" | "unpaid" | "on_statement" | "overdue" | "unknown";
+
 export type Invoice = InvoiceListItem & {
-  /** The colleague credited with the sale. */
-  sales_staff_id?: string | null;
-  sales_staff_name?: string | null;
   /** Printed on the tax invoice. */
   note_printed?: string | null;
   /** Staff only; never printed. */
@@ -2171,15 +2181,59 @@ export type CreateInvoiceLinePayload = {
   qty: number;
   unit_ex_vat?: string;
   sku_id?: string;
+  /** Percent off the line, priced like the till. */
+  discount_percent?: string;
 };
 
 export type CreateInvoicePayload = {
   customer_id: string;
   issue_date: string;
   lines: CreateInvoiceLinePayload[];
-  note_printed?: string;
-  note_internal?: string;
+  note_printed?: string | null;
+  note_internal?: string | null;
+  /** Defaults to the issue date plus the customer's terms. */
+  due_date?: string;
+  sales_staff_id?: string | null;
+  /** Already paid: records one payment of the total. Absent means on account. */
+  payment?: { tender: PaymentMethod; reference?: string; paid_on: string } | null;
 };
+
+export type InvoiceSummary = {
+  outstanding_zar: string;
+  outstanding_count: number;
+  overdue_zar: string;
+  overdue_count: number;
+  on_statement_zar: string;
+  on_statement_count: number;
+  paid_this_month_zar: string;
+  paid_this_month_count: number;
+};
+
+export function getInvoiceSummary(): Promise<InvoiceSummary> {
+  return apiFetch<InvoiceSummary>("/invoices/summary");
+}
+
+/** The invoice cart priced as creating it would; `lines` lists only the SKU lines, in order. */
+export function previewInvoicePrices(
+  payload: { customer_id: string; lines: CreateInvoiceLinePayload[] },
+  signal: AbortSignal,
+): Promise<TillPricePreview> {
+  return apiFetch<TillPricePreview>("/invoices/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
+/** The invoices list for one customer, archived invoices included. */
+export function customerInvoicesHref(customerName: string): string {
+  const filters = [{ field: "customer_name", operator: "eq", value: customerName }];
+  return `/invoices?lifecycle=all&filters=${encodeURIComponent(JSON.stringify(filters))}`;
+}
+
+export function invoiceAction(id: string, action: "archive" | "restore"): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}/${action}`, { method: "POST" });
+}
 
 export function listInvoices(params?: ListParams): Promise<Page<InvoiceListItem>> {
   return apiFetch<Page<InvoiceListItem>>(`/invoices?${buildListQuery(params)}`);

@@ -229,7 +229,7 @@ async def test_books_invoice_resolves_price_list(
     assert Decimal(invoice.json()["lines"][0]["unit_ex_vat"]) == Decimal("900.00")
 
 
-async def test_books_invoice_explicit_unit_wins_over_list(
+async def test_books_invoice_prices_product_lines_from_the_list(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
@@ -256,23 +256,17 @@ async def test_books_invoice_explicit_unit_wins_over_list(
     )
     assert customer.status_code == 201
 
-    invoice = await owner_client.post(
+    line = {"description": "List price", "qty": 1, "sku_id": sku_id}
+    body = {"customer_id": customer.json()["id"], "issue_date": "2026-09-01", "lines": [line]}
+    # A typed unit on a product line would bypass till.discount, so it is refused.
+    typed = await owner_client.post(
         "/api/v1/invoices",
-        json={
-            "customer_id": customer.json()["id"],
-            "issue_date": "2026-09-01",
-            "lines": [
-                {
-                    "description": "Manual price",
-                    "qty": 1,
-                    "sku_id": sku_id,
-                    "unit_ex_vat": "650.00",
-                }
-            ],
-        },
+        json={**body, "lines": [{**line, "unit_ex_vat": "650.00"}]},
     )
-    assert invoice.status_code == 201
-    assert Decimal(invoice.json()["lines"][0]["unit_ex_vat"]) == Decimal("650.00")
+    assert typed.status_code == 422, typed.text
+    invoice = await owner_client.post("/api/v1/invoices", json=body)
+    assert invoice.status_code == 201, invoice.text
+    assert Decimal(invoice.json()["lines"][0]["unit_ex_vat"]) == Decimal("900.00")
 
 
 async def test_buyer_can_post_price_lists_till_cannot(

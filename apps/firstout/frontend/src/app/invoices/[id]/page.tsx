@@ -7,6 +7,8 @@ import {
   Button,
   InlineNotification,
   Modal,
+  OverflowMenu,
+  OverflowMenuItem,
   Select,
   SelectItem,
   SkeletonText,
@@ -22,9 +24,10 @@ import {
   TextArea,
   TextInput,
 } from "@carbon/react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { ArchiveInvoiceModal } from "@/components/archive-invoice-modal";
 import { BooksHistory } from "@/components/books-history";
 import { PaymentMethodFields, paymentMethodLabel } from "@/components/payment-method-fields";
 import {
@@ -39,6 +42,7 @@ import {
   getCustomer,
   getInvoice,
   getSettings,
+  invoiceAction,
   settingsLogoUrl,
   listCreditNotes,
   updateInvoiceNote,
@@ -68,6 +72,8 @@ function hasPositiveBalance(balance: string): boolean {
 export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  // The invoices list opens Record payment or Issue credit note here with ?action=.
+  const requestedAction = useSearchParams().get("action");
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -91,6 +97,8 @@ export default function InvoiceDetailPage() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
   const [colleagueSaving, setColleagueSaving] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [actionHandled, setActionHandled] = useState(false);
 
   const loadInvoice = useCallback(async () => {
     setLoading(true);
@@ -190,6 +198,39 @@ export default function InvoiceDetailPage() {
       await loadInvoice();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to record payment.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (actionHandled || !invoice || invoice.is_archive || !canMutate) return;
+    setActionHandled(true);
+    if (requestedAction === "pay" && hasPositiveBalance(invoice.balance)) {
+      setPaymentAmount(invoice.balance);
+      setPaymentDate(todayIso());
+      setPaymentReference("");
+      setPaymentOpen(true);
+    } else if (requestedAction === "credit" && !creditNote) {
+      setCreditOpen(true);
+    }
+  }, [actionHandled, canMutate, creditNote, invoice, requestedAction]);
+
+  async function handleArchive(archived: boolean) {
+    if (!invoice) return;
+    setArchiveOpen(false);
+    setActionLoading(true);
+    setError(null);
+    try {
+      const saved = await invoiceAction(invoice.id, archived ? "archive" : "restore");
+      setInvoice(saved);
+      setSuccess(
+        archived
+          ? `${saved.invoice_number} archived. It still counts in the books, VAT and reports.`
+          : `${saved.invoice_number} restored to the active list.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change the invoice.");
     } finally {
       setActionLoading(false);
     }
@@ -339,7 +380,22 @@ export default function InvoiceDetailPage() {
         <Tag type={statusTag.type} size="sm">
           {statusTag.label}
         </Tag>
+        {invoice.is_archived ? (
+          <Tag type="outline" size="sm">
+            Archived
+          </Tag>
+        ) : null}
       </div>
+
+      {invoice.is_archived ? (
+        <InlineNotification
+          kind="info"
+          title="Archived"
+          subtitle="Hidden from the default list. It still counts in the books, VAT and reports."
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
 
       {invoice.is_archive ? (
         <InlineNotification
@@ -385,7 +441,22 @@ export default function InvoiceDetailPage() {
             Issue credit note
           </Button>
         ) : null}
+        {canMutate ? (
+          <OverflowMenu aria-label="More invoice actions" iconDescription="More invoice actions" flipped size="lg">
+            {invoice.is_archived ? (
+              <OverflowMenuItem itemText="Restore" disabled={actionLoading} onClick={() => void handleArchive(false)} />
+            ) : (
+              <OverflowMenuItem itemText="Archive" disabled={actionLoading} onClick={() => setArchiveOpen(true)} />
+            )}
+          </OverflowMenu>
+        ) : null}
       </Stack> : null}
+
+      <ArchiveInvoiceModal
+        invoiceNumber={archiveOpen ? invoice.invoice_number : null}
+        onClose={() => setArchiveOpen(false)}
+        onConfirm={() => void handleArchive(true)}
+      />
 
       {!invoice.is_archive && creditNote ? (
         <Stack gap={3}>
