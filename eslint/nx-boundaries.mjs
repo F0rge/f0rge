@@ -28,10 +28,6 @@ const boundaryRule = {
           onlyDependOnLibsWithTags: ["scope:shared", "scope:firstout"],
         },
         {
-          sourceTag: "scope:buycycle",
-          onlyDependOnLibsWithTags: ["scope:shared", "scope:buycycle"],
-        },
-        {
           sourceTag: "scope:daskasas",
           onlyDependOnLibsWithTags: ["scope:shared", "scope:daskasas"],
         },

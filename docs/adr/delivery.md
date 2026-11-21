@@ -40,7 +40,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Temporary ID:** P-048
 - **Category:** Delivery
 - **Decision:** Coolify is the Pi's managed puller: it pulls the commit-tagged Artifact and runs it. There is no custom release agent and no routine agent SSH for Releases.
-- **Amendment (20 November 2026):** Leo requested Coolify as the puller and deletion of the custom Buycycle release agent.
+- **Amendment (20 November 2026):** Leo requested Coolify as the puller and deletion of the custom release agent.
 - **Implementation:** Each Pi service is a Coolify "Docker image" application named after its Nx project. `.github/deploy/deploy.mjs` sets its image tag and triggers a deployment through Coolify's API, using `COOLIFY_URL` and `COOLIFY_TOKEN` from the App's GitHub environment. Coolify's own Healthcheck stays off; the image's Docker `HEALTHCHECK` decides health (P-051).
 - **Gate and limit:** On the Pi a bad Release causes downtime until the rollback completes.
 - **Approved exception:** None.
