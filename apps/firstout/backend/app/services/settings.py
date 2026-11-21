@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import UploadFile
+from pydantic import ValidationError as PydanticValidationError
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,12 +20,18 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.models.location import LocationType
 from app.models.team_settings import DEFAULT_HOME_CURRENCY, DEFAULT_VAT_RATE, TeamSettings
+from app.schemas.document_template import (
+    DocumentTemplate,
+    DocumentTemplatePreview,
+    DocumentTemplateResponse,
+)
 from app.schemas.settings import (
     DocumentSequenceResponse,
     SettingsResponse,
     SettingsUpdate,
 )
 from app.services.document_numbering import DocumentNumberingService
+from app.services.document_pdf import DocumentData, render_document_pdf, sample_document
 from app.services.invoice_pdf import SellerDetails, seller_details_from_settings
 from app.services.object_storage import (
     delete_object,
@@ -193,15 +200,52 @@ class SettingsService:
         except FileNotFoundError:
             return None
 
-    async def build_seller_details(self) -> SellerDetails:
+    async def _team_settings(self) -> TeamSettings:
         from app.crud.user import TeamCRUD
 
         team = await TeamCRUD(self.db).get_first()
         if team is None:
             raise NotFoundError("Team not found")
-        settings = await self.crud.get_or_create_for_team(team.id)
+        return await self.crud.get_or_create_for_team(team.id)
+
+    async def build_seller_details(self) -> SellerDetails:
+        settings = await self._team_settings()
         logo_bytes = await self.load_logo_bytes(settings)
         return seller_details_from_settings(settings, logo_bytes=logo_bytes)
+
+    async def render_document(
+        self, data: DocumentData, template: Optional[DocumentTemplate] = None
+    ) -> bytes:
+        """Print a customer document with the team's saved template, or a draft one."""
+        if template is None:
+            template = _saved_template(await self._team_settings())
+        seller = await self.build_seller_details()
+        # ReportLab is CPU-bound: keep it off the event loop. All DB reads happen above.
+        return await asyncio.to_thread(render_document_pdf, data, template, seller)
+
+    async def get_document_template(self) -> DocumentTemplateResponse:
+        settings = await self._team_settings()
+        return DocumentTemplateResponse(
+            template=_saved_template(settings),
+            defaults=DocumentTemplate(),
+            is_default=settings.document_template is None,
+        )
+
+    async def update_document_template(
+        self, template: DocumentTemplate
+    ) -> DocumentTemplateResponse:
+        settings = await self._team_settings()
+        async with unit_of_work(self.db):
+            settings.document_template = template.model_dump(mode="json")
+        return await self.get_document_template()
+
+    async def preview_document_template(self, body: DocumentTemplatePreview) -> Response:
+        """A draft template printed on a real document, or on sample data for a new team."""
+        data = sample_document(body.kind)
+        if body.sample_id is not None:
+            data = await _document_data(self.db, body.kind, body.sample_id)
+        pdf = await self.render_document(data, body.template)
+        return Response(content=pdf, media_type="application/pdf")
 
     async def _validate_default_location(
         self,
@@ -300,6 +344,38 @@ class SettingsService:
             has_logo=bool(settings.logo_storage_key),
             document_sequences=sequence_rows,
         )
+
+
+def _saved_template(settings: TeamSettings) -> DocumentTemplate:
+    """The stored template, read leniently: a bad one must never stop a PDF printing."""
+    if settings.document_template is None:
+        return DocumentTemplate()
+    try:
+        # Keys from another release are ignored; saving via PUT stays strict.
+        return DocumentTemplate.model_validate(settings.document_template, extra="ignore")
+    except PydanticValidationError as exc:
+        logger.warning(
+            "Stored document template for team %s is invalid (%d errors); using defaults",
+            settings.team_id,
+            exc.error_count(),
+        )
+        return DocumentTemplate()
+
+
+async def _document_data(db: AsyncSession, kind: str, document_id: uuid.UUID) -> DocumentData:
+    # Each service reads its own records through the tenant-scoped session.
+    from app.services.credit_notes import CreditNoteService
+    from app.services.invoices import InvoiceService
+    from app.services.payments import PaymentService
+    from app.services.quotes import QuotesService
+
+    service = {
+        "invoice": InvoiceService,
+        "quote": QuotesService,
+        "credit_note": CreditNoteService,
+        "receipt": PaymentService,
+    }[kind]
+    return await service(db).document_data(document_id)
 
 
 def parse_pick_priority(raw: object) -> list[uuid.UUID]:

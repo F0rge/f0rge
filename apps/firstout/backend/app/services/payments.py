@@ -36,7 +36,7 @@ from app.services.chart_of_accounts import (
 from app.services.packing_sheet import convert_bill_to_zar
 from app.services.books_periods import assert_date_postable
 from app.services.settings import SettingsService
-from app.services.payment_pdf import build_payment_receipt_pdf
+from app.services.document_pdf import DocumentData, DocumentParty
 from app.services.settlement import (
     assert_payment_cents,
     booked_portion,
@@ -48,6 +48,15 @@ from app.services.archive_documents import assert_operational_document, bill_dis
 from app.services.journals import JournalService
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+
+
+TENDER_LABELS = {
+    "eft": "EFT",
+    "card": "Card",
+    "cash": "Cash",
+    "deposit": "Deposit",
+    "other": "Other",
+}
 
 
 class PaymentService:
@@ -348,27 +357,63 @@ class PaymentService:
             unreconciled_net_zar=cents(unreconciled_net),
         )
 
-    async def serve_pdf(self, payment_id: uuid.UUID) -> Response:
+    async def document_data(self, payment_id: uuid.UUID) -> DocumentData:
         payment = await self.crud.get_by_id(payment_id)
         if payment is None:
             raise NotFoundError("Payment not found")
-        direction_label = "Received" if payment.direction == PaymentDirection.IN else "Paid"
-        linked_document: Optional[str] = None
+        received = payment.direction == PaymentDirection.IN
+        amount = f"{payment.amount:.2f} {payment.currency}"
+        details: list[tuple[str, str]] = []
+        if payment.tender:
+            details.append(("Method", TENDER_LABELS.get(payment.tender, payment.tender)))
+        if payment.reference:
+            details.append(("Reference", payment.reference))
+        party = DocumentParty(label="Received from" if received else "Paid to", name="-")
+        against = "payment"
+        payments: list[tuple[str, str]] = []
         if payment.invoice is not None:
-            linked_document = f"Invoice: {payment.invoice.invoice_number}"
+            invoice = payment.invoice
+            against = f"invoice {invoice.invoice_number}"
+            customer = invoice.customer
+            party = DocumentParty(party.label, customer.name, customer.billing_address)
+            payments = [
+                ("Invoice total", f"{invoice.total_inc_vat:.2f}"),
+                ("Paid to date", f"{invoice.amount_paid:.2f}"),
+                ("Balance owing", f"{invoice.total_inc_vat - invoice.amount_paid:.2f}"),
+            ]
         elif payment.bill is not None:
-            linked_document = f"Bill: {payment.bill.bill_number}"
-        pdf_bytes = build_payment_receipt_pdf(
-            payment_number=payment.payment_number,
-            direction_label=direction_label,
-            paid_on=payment.paid_on.isoformat(),
-            amount=f"{payment.amount:.2f}",
-            currency=payment.currency,
-            amount_zar=f"{payment.amount_zar:.2f}",
-            tender=payment.tender,
-            linked_document=linked_document,
-            seller=await SettingsService(self.db).build_seller_details(),
+            bill = payment.bill
+            against = f"bill {bill_display_number(bill)}"
+            party = DocumentParty(party.label, bill.supplier.name)
+            payments = [
+                ("Bill total", f"{bill.amount_foreign:.2f} {bill.currency}"),
+                ("Paid to date", f"{bill.amount_paid_foreign:.2f} {bill.currency}"),
+                (
+                    "Balance owing",
+                    f"{bill.amount_foreign - bill.amount_paid_foreign:.2f} {bill.currency}",
+                ),
+            ]
+        if against != "payment":
+            details.append(("Against", against[0].upper() + against[1:]))
+        rows = [(f"Payment against {against}", amount)]
+        if payment.currency != "ZAR":
+            rows.append(("ZAR equivalent", f"{payment.amount_zar:.2f} ZAR"))
+        return DocumentData(
+            kind="receipt",
+            number=payment.payment_number,
+            issue_date=payment.paid_on.isoformat(),
+            details=details,
+            party=party,
+            amount_rows=rows,
+            total=amount,
+            total_label="Amount received" if received else "Amount paid",
+            payments=payments,
+            status="void" if payment.voided_at else "paid",
         )
+
+    async def serve_pdf(self, payment_id: uuid.UUID) -> Response:
+        data = await self.document_data(payment_id)
+        pdf_bytes = await SettingsService(self.db).render_document(data)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def _team_settings(self):

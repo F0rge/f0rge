@@ -72,7 +72,7 @@ async def test_create_invoice_posts_journal_and_pdf(
     assert "INV-0001" in text
     assert "150.00" in text
     assert "1150.00" in text
-    assert "Tax Invoice" in text
+    assert "Tax invoice" in text
 
 
 async def test_books_can_create_invoice(

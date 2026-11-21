@@ -56,6 +56,13 @@ class SalesStaffService:
             stmt = stmt.where(SalesStaff.is_active.is_(active))
         return list((await self.db.scalars(stmt)).all())
 
+    async def served_by(self, staff_id: Optional[uuid.UUID]) -> Optional[str]:
+        """The name a printed document shows: the short name, else the first name."""
+        staff = await self.db.get(SalesStaff, staff_id) if staff_id else None
+        if staff is None:
+            return None
+        return staff.short_name or staff.name.split()[0]
+
     async def _get(self, staff_id: uuid.UUID, *, for_update: bool = False) -> SalesStaff:
         stmt = select(SalesStaff).where(SalesStaff.id == staff_id)
         if for_update:

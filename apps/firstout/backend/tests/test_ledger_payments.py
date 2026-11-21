@@ -104,7 +104,7 @@ async def test_payment_in_pdf(owner_client: AsyncClient) -> None:
     assert pdf_resp.headers["content-type"] == "application/pdf"
     assert_pdf_openable(pdf_resp.content)
     text = _pdf_text(pdf_resp.content)
-    assert "Payment Receipt" in text
+    assert "Payment receipt" in text
     assert "PAY-0001" in text
     assert "1150.00" in text
     assert invoice["invoice_number"] in text

@@ -87,6 +87,7 @@ get_books_period
 get_credit_note
 get_customer
 get_delivery
+get_document_template
 get_invoice
 get_journal
 get_layby
@@ -212,6 +213,7 @@ update_adjustment_line
 update_bank_rule
 update_bill
 update_customer
+update_document_template
 update_invoice
 update_location
 update_location_bin

@@ -3896,6 +3896,52 @@ export function settingsLogoUrl(): string {
   return "/api/v1/settings/logo";
 }
 
+export type {
+  DocumentKind,
+  DocumentSectionKey,
+  DocumentTemplate,
+  DocumentTemplateResponse,
+} from "./document-template";
+
+export function getDocumentTemplate(): Promise<import("./document-template").DocumentTemplateResponse> {
+  return apiFetch("/settings/document-template");
+}
+
+export function saveDocumentTemplate(
+  template: import("./document-template").DocumentTemplate,
+): Promise<import("./document-template").DocumentTemplateResponse> {
+  return apiFetch("/settings/document-template", {
+    method: "PUT",
+    body: JSON.stringify(template),
+  });
+}
+
+/** The draft template printed as a real PDF; sample data unless a document id is given. */
+export async function previewDocumentTemplate(
+  payload: {
+    template: import("./document-template").DocumentTemplate;
+    kind: import("./document-template").DocumentKind;
+    sample_id: string | null;
+  },
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const path = "/api/v1/settings/document-template/preview";
+  const response = await staffFetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      formatHttpError(callName("POST", path), response.status, response.statusText, await parseErrorMessage(response)),
+    );
+  }
+  return response.blob();
+}
+
 export type BooksPeriodStatus = "open" | "locked";
 
 export type BooksPeriod = {

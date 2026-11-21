@@ -25,8 +25,9 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
-from app.services.invoice_pdf import build_tax_invoice_pdf
-from app.services.pricing import format_pdf_unit, pdf_unit_basis_note
+from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
+from app.services.sales_staff import SalesStaffService
+from app.services.pricing import format_pdf_unit, pdf_unit_basis_note, pdf_unit_header
 from app.services.books_periods import assert_date_postable
 from app.services.settings import SettingsService
 from f0rge_core.exceptions import ConflictError, NotFoundError
@@ -88,7 +89,7 @@ class CreditNoteService:
         assert reloaded is not None
         return self._to_response(reloaded)
 
-    async def build_pdf_bytes(self, credit_note_id: uuid.UUID) -> tuple[bytes, str, CreditNote]:
+    async def document_data(self, credit_note_id: uuid.UUID) -> DocumentData:
         credit_note = await self.crud.get_by_id(credit_note_id)
         if credit_note is None:
             raise NotFoundError("Credit note not found")
@@ -99,36 +100,44 @@ class CreditNoteService:
             description = line.description
             if line.price_warning:
                 description = f"{description} — {line.price_warning}"
+            sku = await self.sku_crud.get_by_id(line.sku_id) if line.sku_id else None
             lines.append(
-                (
-                    description,
-                    line.qty,
-                    format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
-                    f"{line.ex_vat:.2f}",
-                    f"{line.vat_amount:.2f}",
-                    f"{line.inc_vat:.2f}",
+                DocumentLine(
+                    description=description,
+                    qty=str(line.qty),
+                    unit=format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
+                    ex_vat=f"{line.ex_vat:.2f}",
+                    vat=f"{line.vat_amount:.2f}",
+                    inc_vat=f"{line.inc_vat:.2f}",
+                    sku_ref=sku.our_ref if sku is not None else None,
                 )
             )
-        pdf_bytes = build_tax_invoice_pdf(
-            invoice_number=credit_note.credit_note_number,
+        details = [("Against invoice", invoice.invoice_number)]
+        if credit_note.reason:
+            details.append(("Reason", credit_note.reason))
+        return DocumentData(
+            kind="credit_note",
+            number=credit_note.credit_note_number,
             issue_date=credit_note.issue_date.isoformat(),
-            customer_name=customer.name if customer else "",
-            customer_vat=customer.vat_number if customer else None,
-            customer_address=customer.billing_address if customer else None,
+            details=details,
+            served_by=await SalesStaffService(self.db).served_by(invoice.sales_staff_id),
+            party=DocumentParty(
+                label="Buyer",
+                name=customer.name if customer else "",
+                address=customer.billing_address if customer else None,
+                vat_number=customer.vat_number if customer else None,
+            ),
             lines=lines,
             subtotal_ex_vat=f"{credit_note.subtotal_ex_vat:.2f}",
             vat_amount=f"{credit_note.vat_amount:.2f}",
-            total_inc_vat=f"{credit_note.total_inc_vat:.2f}",
-            title="Credit Note",
-            original_invoice_number=invoice.invoice_number,
-            credit_reason=credit_note.reason,
-            seller=await SettingsService(self.db).build_seller_details(),
+            total=f"{credit_note.total_inc_vat:.2f}",
             unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
+            unit_header=pdf_unit_header(invoice.prices_include_vat),
         )
-        return pdf_bytes, f"{credit_note.credit_note_number}.pdf", credit_note
 
     async def serve_pdf(self, credit_note_id: uuid.UUID) -> Response:
-        pdf_bytes, _, _ = await self.build_pdf_bytes(credit_note_id)
+        data = await self.document_data(credit_note_id)
+        pdf_bytes = await SettingsService(self.db).render_document(data)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def _team_settings(self):

@@ -10,6 +10,11 @@ import {
   Select,
   SelectItem,
   Stack,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   TextArea,
   TextInput,
   Tile,
@@ -33,6 +38,7 @@ import {
   type Location,
 } from "@/lib/api";
 import { LabelSettings } from "@/app/settings/label-settings";
+import { DocumentTemplateSettings } from "@/app/settings/document-template";
 import { useAuth } from "@/lib/auth";
 import { AdminDirectoryLinks, AdminPageHeader } from "@/components/administration";
 import { PageLoading } from "@/components/page-loading";
@@ -760,13 +766,34 @@ function SettingsForm({ section }: { section: SettingsSection }) {
   );
 }
 
+/** Design (the printed layout) first; Numbering is the sequence form as it was. */
+function DocumentSettings() {
+  const { user } = useAuth();
+  return (
+    <Tabs>
+      <TabList aria-label="Document settings">
+        <Tab>Design</Tab>
+        <Tab>Numbering</Tab>
+      </TabList>
+      <TabPanels>
+        <TabPanel className={styles.tabPanel}>
+          <DocumentTemplateSettings canMutate={canMutateSettings(user)} />
+        </TabPanel>
+        <TabPanel className={styles.tabPanel}>
+          <SettingsForm section="documents" />
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
+  );
+}
+
 function SettingsContent() {
   const section = findSettingsSection(useSearchParams().get("tab"));
   if (section) {
     return (
       <Stack gap={6}>
         <AdminPageHeader title={section.label} description={section.description} />
-        <SettingsForm key={section.id} section={section.id} />
+        {section.id === "documents" ? <DocumentSettings /> : <SettingsForm key={section.id} section={section.id} />}
       </Stack>
     );
   }

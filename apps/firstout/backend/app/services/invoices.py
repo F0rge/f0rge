@@ -43,7 +43,7 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
-from app.services.invoice_pdf import build_tax_invoice_pdf
+from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
 from app.services.payment_terms import compute_due_date
 from app.services.party_archive import require_active_customer
 from app.services.sellability import assert_sku_sellable
@@ -54,6 +54,7 @@ from app.services.pricing import (
     classification_of,
     format_pdf_unit,
     pdf_unit_basis_note,
+    pdf_unit_header,
     shows_prices_including_vat,
 )
 from app.services.suspect_price import annotate_line_warnings
@@ -321,7 +322,7 @@ class InvoiceService:
         assert reloaded is not None
         return await self._to_response(reloaded, user_id)
 
-    async def build_pdf_bytes(self, invoice_id: uuid.UUID) -> tuple[bytes, str, TaxInvoice]:
+    async def document_data(self, invoice_id: uuid.UUID) -> DocumentData:
         invoice = await self.crud.get_by_id(invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
@@ -330,43 +331,58 @@ class InvoiceService:
         lines = []
         for line in invoice.lines:
             description = line.description
-            if line.sku_id is not None:
-                sku = await self.sku_crud.get_by_id(line.sku_id)
-                if sku is not None and sku.carton_count > 1:
-                    cartons = line.qty * sku.carton_count
-                    description = f"{description} - Ships in {cartons} cartons"
+            sku = await self.sku_crud.get_by_id(line.sku_id) if line.sku_id else None
+            if sku is not None and sku.carton_count > 1:
+                cartons = line.qty * sku.carton_count
+                description = f"{description} - Ships in {cartons} cartons"
             if line.price_warning:
                 description = f"{description} — {line.price_warning}"
             lines.append(
-                (
-                    description,
-                    line.qty,
-                    format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
-                    f"{line.ex_vat:.2f}",
-                    f"{line.vat_amount:.2f}",
-                    f"{line.inc_vat:.2f}",
+                DocumentLine(
+                    description=description,
+                    qty=str(line.qty),
+                    unit=format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
+                    ex_vat=f"{line.ex_vat:.2f}",
+                    vat=f"{line.vat_amount:.2f}",
+                    inc_vat=f"{line.inc_vat:.2f}",
+                    sku_ref=sku.our_ref if sku is not None else None,
                 )
             )
-        pdf_bytes = build_tax_invoice_pdf(
-            invoice_number=invoice.invoice_number,
+        customer = invoice.customer
+        balance = invoice.total_inc_vat - invoice.amount_paid
+        status = None
+        if invoice.total_inc_vat > 0 and balance <= 0:
+            status = "paid"
+        elif invoice.on_account:
+            status = "on_statement"
+        return DocumentData(
+            kind="invoice",
+            number=invoice.invoice_number,
             issue_date=invoice.issue_date.isoformat(),
-            due_date=invoice.due_date.isoformat() if invoice.due_date else None,
-            customer_name=invoice.customer.name,
-            customer_vat=invoice.customer.vat_number,
-            customer_address=invoice.customer.billing_address,
+            details=[("Due date", invoice.due_date.isoformat())] if invoice.due_date else [],
+            served_by=await SalesStaffService(self.db).served_by(invoice.sales_staff_id),
+            party=DocumentParty(
+                label="Buyer",
+                name=customer.name,
+                address=customer.billing_address,
+                vat_number=customer.vat_number,
+            ),
             lines=lines,
             subtotal_ex_vat=f"{invoice.subtotal_ex_vat:.2f}",
             vat_amount=f"{invoice.vat_amount:.2f}",
-            total_inc_vat=f"{invoice.total_inc_vat:.2f}",
-            seller=await SettingsService(self.db).build_seller_details(),
+            total=f"{invoice.total_inc_vat:.2f}",
+            payments=[("Paid", f"{invoice.amount_paid:.2f}"), ("Balance owing", f"{balance:.2f}")],
             unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
+            unit_header=pdf_unit_header(invoice.prices_include_vat),
             # Only the printed note; the internal note never reaches the document.
             note=invoice.note_printed,
+            status=status,
+            payment_reference=True,
         )
-        return pdf_bytes, f"{invoice.invoice_number}.pdf", invoice
 
     async def serve_pdf(self, invoice_id: uuid.UUID) -> Response:
-        pdf_bytes, _, _ = await self.build_pdf_bytes(invoice_id)
+        data = await self.document_data(invoice_id)
+        pdf_bytes = await SettingsService(self.db).render_document(data)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def _price_lines(

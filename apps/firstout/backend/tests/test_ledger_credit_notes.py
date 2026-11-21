@@ -108,7 +108,7 @@ async def test_credit_note_pdf(owner_client: AsyncClient) -> None:
     assert pdf_resp.headers["content-type"] == "application/pdf"
     assert_pdf_openable(pdf_resp.content)
     text = _pdf_text(pdf_resp.content)
-    assert "Credit Note" in text
+    assert "Credit note" in text
     assert "CN-0001" in text
     assert invoice["invoice_number"] in text
     assert "Returned" in text

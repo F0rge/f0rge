@@ -37,12 +37,13 @@ from app.schemas.quote import (
     QuoteUpdate,
 )
 from app.schemas.till import TillPriceLine, TillPricePreview
-from app.services.invoice_pdf import build_tax_invoice_pdf
+from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
 from app.services.pricing import (
     classification_of,
     format_pdf_unit,
     is_cin7_generated_price_list,
     pdf_unit_basis_note,
+    pdf_unit_header,
     resolve_unit_price,
     shows_prices_including_vat,
 )
@@ -363,44 +364,54 @@ class QuotesService:
                 f"{quote.quote_number} is {quote.status.value}; it cannot be {verb}"
             )
 
-    async def serve_pdf(self, quote_id: uuid.UUID) -> Response:
+    async def document_data(self, quote_id: uuid.UUID) -> DocumentData:
         quote = await self._get_or_404(quote_id)
-        seller = await SettingsService(self.db).build_seller_details()
         lines = []
         for line in quote.lines:
             ex_vat, inc_vat = _line_amounts(line.qty, line.unit_ex_vat, line.discount_percent)
-            line_vat = inc_vat - ex_vat
             description = line.description
-            if line.discount_percent > 0:
-                description = f"{description} ({line.discount_percent:.2f}% discount)"
             if line.price_warning:
                 description = f"{description} — {line.price_warning}"
+            sku = await self.sku_crud.get_by_id(line.sku_id)
             lines.append(
-                (
-                    description,
-                    line.qty,
-                    format_pdf_unit(line.unit_ex_vat, quote.prices_include_vat),
-                    f"{ex_vat:.2f}",
-                    f"{line_vat:.2f}",
-                    f"{inc_vat:.2f}",
+                DocumentLine(
+                    description=description,
+                    qty=str(line.qty),
+                    unit=format_pdf_unit(line.unit_ex_vat, quote.prices_include_vat),
+                    ex_vat=f"{ex_vat:.2f}",
+                    vat=f"{inc_vat - ex_vat:.2f}",
+                    inc_vat=f"{inc_vat:.2f}",
+                    discount=f"{line.discount_percent:.2f}%" if line.discount_percent > 0 else None,
+                    sku_ref=sku.our_ref if sku is not None else None,
                 )
             )
-        pdf_bytes = build_tax_invoice_pdf(
-            quote.quote_number,
-            quote.created_at.date().isoformat(),
-            quote.customer.name,
-            quote.customer.vat_number,
-            quote.customer.billing_address,
-            lines,
-            f"{quote.subtotal_ex_vat:.2f}",
-            f"{quote.vat_amount:.2f}",
-            f"{quote.total_inc_vat:.2f}",
-            title="Quote",
-            number_label="Quote No",
-            seller=seller,
+        customer = quote.customer
+        return DocumentData(
+            kind="quote",
+            number=quote.quote_number,
+            issue_date=quote.created_at.date().isoformat(),
+            details=[("Valid until", quote.valid_until.isoformat())] if quote.valid_until else [],
+            served_by=await SalesStaffService(self.db).served_by(quote.sales_staff_id),
+            party=DocumentParty(
+                label="Prepared for",
+                name=customer.name,
+                address=customer.billing_address,
+                vat_number=customer.vat_number,
+            ),
+            lines=lines,
+            subtotal_ex_vat=f"{quote.subtotal_ex_vat:.2f}",
+            vat_amount=f"{quote.vat_amount:.2f}",
+            total=f"{quote.total_inc_vat:.2f}",
             unit_basis_note=pdf_unit_basis_note(quote.prices_include_vat),
+            unit_header=pdf_unit_header(quote.prices_include_vat),
+            # The printed note only; internal_note stays with staff.
             note=quote.notes,
+            payment_reference=True,
         )
+
+    async def serve_pdf(self, quote_id: uuid.UUID) -> Response:
+        data = await self.document_data(quote_id)
+        pdf_bytes = await SettingsService(self.db).render_document(data)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def accept(self, quote_id: uuid.UUID, data: QuoteAccept, user_id: uuid.UUID):

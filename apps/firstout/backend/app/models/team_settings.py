@@ -120,6 +120,8 @@ class TeamSettings(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
     )
     logo_storage_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Validated by app.schemas.document_template.DocumentTemplate; null prints the default.
+    document_template: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     max_till_discount_percent: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(5, 2),
         nullable=True,
