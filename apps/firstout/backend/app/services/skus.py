@@ -196,6 +196,11 @@ class SkuService:
                 raise ValidationError("exclude_from_commission must not be null")
             sku.exclude_from_commission = data.exclude_from_commission
 
+        if "storefront_hidden" in fields_set:
+            if data.storefront_hidden is None:
+                raise ValidationError("storefront_hidden must not be null")
+            sku.storefront_hidden = data.storefront_hidden
+
         if "our_ref" in fields_set:
             assert data.our_ref is not None
             if await self.crud.get_by_our_ref(data.our_ref, exclude_id=sku.id) is not None:
@@ -503,6 +508,7 @@ class SkuService:
             is_sellable=sku.is_sellable,
             till_no_stock_required=sku.till_no_stock_required,
             exclude_from_commission=sku.exclude_from_commission,
+            storefront_hidden=sku.storefront_hidden,
             is_archived=sku.is_archived,
             archived_at=sku.archived_at,
             archived_by_id=sku.archived_by_id,

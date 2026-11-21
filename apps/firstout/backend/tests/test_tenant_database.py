@@ -501,6 +501,7 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
                 fabric="plain",
                 retail_ex_vat=100,
                 storefront_published=True,
+                category="Sofas",
             )
             sku.photo_storage_key = object_storage.save_bytes(
                 "http/photo.jpg", b"synthetic-image-" + str(team).encode()
@@ -633,6 +634,14 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
             assert own_photo.content == b"synthetic-image-" + str(a).encode()
             foreign_photo = await client.get(photo.format(skus[b]), headers=headers)
             assert foreign_photo.status_code == 404, foreign_photo.text
+            monkeypatch.setattr(settings, "ops_commerce_auto_publish_enabled", True)
+            auto = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
+            assert auto.status_code == 200, auto.text
+            assert [
+                (row["source_sku_id"], row["shop_category"]) for row in auto.json()["products"]
+            ] == [(str(skus[a]), "sofas-armchairs")]
+            assert (await client.get(photo.format(skus[a]), headers=headers)).status_code == 200
+            assert (await client.get(photo.format(skus[b]), headers=headers)).status_code == 404
             headers["x-ops-company-id"] = str(b)
             rejected = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
             assert rejected.status_code == 403, rejected.text

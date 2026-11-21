@@ -17,6 +17,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models.inventory import LocationStock
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
+from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.sku import Sku
 from app.models.team import Team
 
@@ -379,3 +380,87 @@ async def test_service_credential_cannot_select_another_database_backed_instance
 
     app.dependency_overrides.clear()
     await second_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_auto_publish_feeds_photographed_unhidden_shop_category_skus(
+    async_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    company_id = (await async_db.execute(select(Team.id))).scalar_one()
+    monkeypatch.setattr(settings, "ops_commerce_company_id", str(company_id))
+    monkeypatch.setattr(settings, "ops_commerce_token", "test-ops-token")
+    monkeypatch.setattr(settings, "ops_commerce_allowed_host", "test")
+    headers = {"Authorization": "Bearer test-ops-token", "X-Ops-Company-ID": str(company_id)}
+
+    def sku(ref: str, category: str | None, photo: bool, **fields: object) -> Sku:
+        return Sku(
+            our_ref=ref,
+            our_barcode=ref,
+            name=f"{ref} name",
+            design=ref,
+            fabric="plain",
+            retail_ex_vat=1000,
+            category=category,
+            photo_storage_key=f"photos/{ref}.jpg" if photo else None,
+            **fields,
+        )
+
+    skus = {
+        "AP-SOFA": sku("AP-SOFA", "  sofas ", True),
+        # Published by hand today but has no photo: drops off when the setting turns on.
+        "AP-OLD": sku("AP-OLD", "Bedroom", False, storefront_published=True),
+        "AP-HIDDEN": sku("AP-HIDDEN", "Dining Room", True, storefront_hidden=True),
+        "AP-RUG": sku("AP-RUG", "Rugs", True),
+        # One group whose members disagree: the first qualifying SKU code names its category.
+        "AP-G-1": sku("AP-G-1", "Coffee and Lamp Tables", True),
+        "AP-G-2": sku("AP-G-2", "Bedroom", True),
+        "AP-G-3": sku("AP-G-3", "Consoles and TV Units", False),
+        "AP-G-4": sku("AP-G-4", "Bedroom", True, storefront_hidden=True),
+        # A group with no qualifying member stays off the shop.
+        "AP-H-1": sku("AP-H-1", "Bedroom", False),
+        "AP-H-2": sku("AP-H-2", "Rugs", True),
+    }
+    async_db.add_all(skus.values())
+    shown = ProductGroup(title="Side table", options={"Finish": ["1", "2", "3", "4"]})
+    unshown = ProductGroup(title="Bed", options={"Finish": ["1", "2"]})
+    async_db.add_all([shown, unshown])
+    await async_db.flush()
+    for group, refs in (
+        (shown, ["AP-G-1", "AP-G-2", "AP-G-3", "AP-G-4"]),
+        (unshown, ["AP-H-1", "AP-H-2"]),
+    ):
+        for index, ref in enumerate(refs, start=1):
+            async_db.add(
+                ProductGroupVariant(
+                    product_group_id=group.id,
+                    source_sku_id=skus[ref].id,
+                    options={"Finish": str(index)},
+                    option_signature=f'{{"Finish":"{index}"}}',
+                )
+            )
+    await async_db.flush()
+    route = "/api/v1/ops-commerce/v1/products"
+
+    # Off: today's feed, selected by storefront_published, with no new keys.
+    off = (await async_client.get(route, headers=headers)).json()["products"]
+    assert [row["sku"] for row in off] == ["AP-OLD"]
+    assert "shop_category" not in off[0] and "photo_token" not in off[0]
+
+    monkeypatch.setattr(settings, "ops_commerce_auto_publish_enabled", True)
+    on = (await async_client.get(route, headers=headers)).json()["products"]
+    assert {row["sku"]: row["shop_category"] for row in on} == {
+        "AP-G-1": "coffee-console-tables",
+        "AP-G-2": "coffee-console-tables",
+        "AP-G-3": "coffee-console-tables",
+        "AP-SOFA": "sofas-armchairs",
+    }
+    # Auto-publish sends photo tokens even with the photo-token setting off.
+    assert all("photo_token" in row for row in on)
+    assert next(row for row in on if row["sku"] == "AP-G-3")["photo_token"] is None
+
+    skus["AP-SOFA"].storefront_hidden = True
+    await async_db.flush()
+    hidden = (await async_client.get(route, headers=headers)).json()["products"]
+    assert "AP-SOFA" not in {row["sku"] for row in hidden}

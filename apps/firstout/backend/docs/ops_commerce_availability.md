@@ -12,10 +12,20 @@ Commerce computes effective available stock by subtracting only paid channel com
 
 The commerce adapter reads pending commitments from each Medusa variant's `pending_paid_commitments` metadata on every sync, including when the source revision is unchanged. The paid-order importer in a later phase owns writing this durable list and immediately projecting its own commitment under the inventory lock. Missing metadata means no paid commitments yet; malformed or duplicate entries fail the sync instead of silently raising sellable stock.
 
+## Which SKUs are in the feed
+
+With `OPS_COMMERCE_AUTO_PUBLISH_ENABLED` off (the default), the feed is selected by the hand-set `storefront_published` flags, as before, and carries no `shop_category`.
+
+With it on, a SKU is in the feed when its category maps to a shop category, it has a photo (`photo_storage_key` set) and `storefront_hidden` is false; it must still be sellable, unarchived and priced. `storefront_published` is ignored. Categories match trimmed and in any case: Sofas and Armchairs → `sofas-armchairs`; Dining Room → `dining-room`; Bedroom → `bedroom`; Coffee and Lamp Tables and Consoles and TV Units → `coffee-console-tables`. The mapping is `SHOP_CATEGORIES` in `app/crud/ops_commerce.py`. Each product carries `shop_category`, one of those four handles. A product group is in the feed while any member meets the rule, and still only while no member is archived, unsellable or unpriced. Its hidden members drop out, and its other members come along whatever their photo or category. Every member carries the category of the group's first qualifying member by SKU code. Whether a piece is then on sale (stock or a live made-to-order offer) is decided in commerce.
+
+Staff hide a SKU with `PATCH /api/v1/skus/{id}` `{"storefront_hidden": true}`, which needs `catalogue.mutate`; `storefront_hidden` is on every SKU response.
+
+Go-live: the key is omitted while the setting is off because the commerce contract is strict. Once both the Firstout and DasKasas releases carrying auto-publish are live, set `OPS_COMMERCE_AUTO_PUBLISH_ENABLED=true` on `firstout-api` and redeploy it. Auto-publish needs photos, so with it on the feed also sends `photo_token`, whatever `OPS_COMMERCE_PHOTO_TOKENS_ENABLED` says. Pieces published by hand that fail the rule leave the feed and commerce withdraws them.
+
 ## Product photos
 
 `photo_token` is in the feed only when `OPS_COMMERCE_PHOTO_TOKENS_ENABLED=true` (default off). When off, the key is omitted, not null, because a storefront commerce release older than the photo sync has a strict contract that rejects unknown keys and would stop its sync. Go-live: once both the Firstout and DasKasas releases carrying the photo sync are live, set `OPS_COMMERCE_PHOTO_TOKENS_ENABLED=true` on the `firstout-api` service in Firstout's Railway project and redeploy that service. The photo route below is available either way.
 
 When enabled, each product carries `photo_token`: the SHA-256 of the SKU's photo storage key, or null when the SKU has no photo. A SKU photo is write-once (upload refuses to overwrite its key and nothing clears it), so the key identifies the bytes and the token changes only when the photo does. The feed never reads photo bytes. A future replace action must store the new photo under a new key so the token changes.
 
-`GET /api/v1/ops-commerce/v1/products/{source_sku_id}/photo` returns that photo as `image/jpeg`. It uses the same bearer token, allowed host and `X-Ops-Company-ID` checks as the feed, so it is tenant-scoped. It returns 404 for a SKU that is not in the published feed, belongs to another company, or has no photo. There is no public route and no presigned URL; the bucket stays private.
+`GET /api/v1/ops-commerce/v1/products/{source_sku_id}/photo` returns that photo as `image/jpeg`. It uses the same bearer token, allowed host and `X-Ops-Company-ID` checks as the feed, so it is tenant-scoped. It returns 404 for a SKU that is not in the feed, belongs to another company, or has no photo. There is no public route and no presigned URL; the bucket stays private.

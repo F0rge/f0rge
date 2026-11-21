@@ -21,15 +21,59 @@ Room (`dining-room`), Bedroom (`bedroom`) and Coffee & Console Tables
 (`coffee-console-tables`). The bootstrap creates any that are missing, active
 and public, on every release. It never edits a category that already exists.
 
-Staff choose a piece's category in Medusa Admin:
+Which pieces are on the shop, and in which category, comes from Firstout
+(owner decision, 21 Nov 2026). With `OPS_COMMERCE_AUTO_PUBLISH_ENABLED=true` on
+`firstout-api`, the feed holds every SKU that:
 
-1. Open **Products** and the piece.
-2. Under **Organize**, choose **Edit**, pick one of the four categories, and save.
-3. The shop reads categories from Medusa directly. No Firstout change or sync is needed.
+- is in a mapped Firstout category (matched trimmed and in any case):
 
-The Firstout sync never writes or clears product categories, so a staff choice
-stays across syncs. A published piece with no category appears only under
-**Shop all**.
+  | Firstout category | Shop category |
+  |---|---|
+  | Sofas, Armchairs | `sofas-armchairs` |
+  | Dining Room | `dining-room` |
+  | Bedroom | `bedroom` |
+  | Coffee and Lamp Tables, Consoles and TV Units | `coffee-console-tables` |
+
+- has a Firstout photo, and
+- is not switched to **Hide from shop** on its Firstout SKU page.
+
+It also needs to be sellable, unarchived and priced, as before. Only pieces in
+stock or with a live made-to-order offer reach On Sale; the rest stay drafts.
+This replaces the hand-set Firstout publish flag. A product group is in the feed
+while any member meets the rule; its hidden members drop out, and members
+without a photo or a mapped category come along as variants. A group takes the
+shop category of its first qualifying member by SKU code, so every variant of
+one product shares one category. The mapping lives in Firstout
+(`SHOP_CATEGORIES` in `apps/firstout/backend/app/crud/ops_commerce.py`).
+
+Each product carries `shop_category`. The sync puts the product in that Medusa
+category and takes it out of the other three. It never adds or removes any other
+category, so a staff-made category stays. Staff no longer assign the four
+categories in Medusa Admin: a change there is put back on the next sync run.
+A piece that leaves the feed is withdrawn to draft as before and keeps its
+category.
+
+Names: the sync creates a product with its Firstout name and records that name
+in product metadata `firstout_title`. A later Firstout rename updates the title
+only while the title still equals `firstout_title`; once staff edit the title in
+Medusa Admin, the sync never overwrites it. A product created before names were
+recorded is adopted while its title still equals the Firstout name, and is
+treated as staff-edited otherwise. Variant titles come from option values, as
+before. Names and categories run after the stock sync, outside the inventory
+lock; a failure there is logged and retried next run.
+
+Go-live: Firstout sends `shop_category` only when
+`OPS_COMMERCE_AUTO_PUBLISH_ENABLED` is on, and it is off by default, because a
+commerce release older than this one rejects the unknown key and pauses
+checkout. With it off, the feed is selected by the publish flag as before and
+the sync leaves categories alone. After both the Firstout and DasKasas releases
+are live, set `OPS_COMMERCE_AUTO_PUBLISH_ENABLED=true` on `firstout-api` and
+redeploy it. Turning it on also sends `photo_token`, whatever
+`OPS_COMMERCE_PHOTO_TOKENS_ENABLED` says. Pieces published by hand that fail the
+rule, such as the ones without a photo, drop out of the feed and are withdrawn.
+About 300 photos at about 1 MB each fit the 1 GB photo volume.
+
+A published piece with no category appears only under **Shop all**.
 
 The four category names and handles are also written in the web code,
 `web/src/lib/shop-categories.ts`, which drives the header, footer, category

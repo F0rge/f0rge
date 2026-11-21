@@ -29,6 +29,7 @@ class OpsProductResponse(BaseModel):
     acknowledged_commitment_ids: list[str]
     made_to_order_offer: Optional[OpsMadeToOrderOfferResponse] = None
     photo_token: Optional[str] = None
+    shop_category: Optional[str] = None
 
 
 class OpsProductsResponse(BaseModel):

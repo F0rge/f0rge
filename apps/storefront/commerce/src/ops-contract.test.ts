@@ -55,6 +55,21 @@ test("rejects duplicate option combinations and inconsistent group definitions",
   expect(() => parseOpsProducts({ ...contract, products: [{ ...contract.products[0], product_group_id: null }] }, contract.company_id)).toThrow();
 });
 
+test("accepts an optional shop category from the four, consistent across a group", () => {
+  const product = contract.products[0];
+  expect(parseOpsProducts({ ...contract, products: [{ ...product, shop_category: "dining-room" }] }, contract.company_id)
+    .products[0].shop_category).toBe("dining-room");
+  expect(parseOpsProducts(contract, contract.company_id).products[0].shop_category).toBeUndefined();
+  for (const unknown of ["featured", "Dining Room", "", null]) {
+    expect(() => parseOpsProducts({ ...contract, products: [{ ...product, shop_category: unknown }] }, contract.company_id)).toThrow();
+  }
+  const second = { ...product, source_sku_id: "da9cdb14-9126-408d-a3bd-ab8352d2d810", sku: "ARC-002", options: { Colour: "Charcoal" } };
+  expect(() => parseOpsProducts({ ...contract, products: [
+    { ...product, shop_category: "bedroom" }, { ...second, shop_category: "dining-room" },
+  ] }, contract.company_id)).toThrow("inconsistent shop categories");
+  expect(() => parseOpsProducts({ ...contract, products: [{ ...product, shop_category: "bedroom" }, second] }, contract.company_id)).toThrow();
+});
+
 test("converts exact ZAR cents to Medusa v2 major units", () => {
   expect(medusaPrice(1150000)).toBe(11500);
   expect(medusaPrice(115001)).toBe(1150.01);

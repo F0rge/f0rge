@@ -10,6 +10,7 @@ jest.mock("@medusajs/medusa/core-flows", () => Object.fromEntries([
   "createCollectionsWorkflow", "createInventoryLevelsWorkflow", "createProductCategoriesWorkflow", "createProductsWorkflow",
   "createProductVariantsWorkflow", "deleteProductVariantsWorkflow", "updateCollectionsWorkflow", "updateInventoryLevelsWorkflow",
   "updateProductVariantsWorkflow", "updateProductsWorkflow", "uploadFilesWorkflow", "batchVariantImagesWorkflow", "deleteFilesWorkflow",
+  "batchLinkProductsToCategoryWorkflow",
 ].map((name) => [name, jest.fn()])));
 
 const base: OpsProduct = {
@@ -87,6 +88,12 @@ type FakeProduct = Record<string, unknown> & {
   id: string; external_id: string; thumbnail?: string | null; images?: FakeImage[]; variants?: FakeVariant[];
 };
 type WorkflowInput = Record<string, unknown>;
+// The four shop categories and one staff category the sync must never touch.
+const CATEGORIES = [
+  { id: "pcat_sofas", handle: "sofas-armchairs" }, { id: "pcat_dining", handle: "dining-room" },
+  { id: "pcat_bedroom", handle: "bedroom" }, { id: "pcat_tables", handle: "coffee-console-tables" },
+  { id: "pcat_featured", handle: "featured" },
+];
 const jpeg = (bytes = new Uint8Array([0xff, 0xd8, 0xff])) => new Response(bytes, { headers: { "content-type": "image/jpeg" } });
 const [TOKEN_SOFA_1, TOKEN_TABLE_1, TOKEN_TABLE_2] = ["a", "b", "c"].map((digit) => digit.repeat(64));
 
@@ -115,14 +122,24 @@ function fakeMedusa(products: FakeProduct[], feed: OpsProduct[]) {
       return { id: `file_${sequence}`, url: `https://commerce.example.com/static/${sequence}-${file.filename}` };
     }),
     updateProductsWorkflow: (input) => {
-      const update = input.update as { images?: Partial<FakeImage>[]; thumbnail?: string };
+      const update = input.update as { images?: Partial<FakeImage>[]; thumbnail?: string; title?: string; metadata?: Record<string, unknown> };
       for (const product of byIds(input.selector as { id: string })) {
+        if (update.title) product.title = update.title;
+        if (update.metadata) product.metadata = { ...(product.metadata as Record<string, unknown>), ...update.metadata };
         if (update.images) {
           product.images = update.images.map((image) => image.id
             ? product.images!.find((current) => current.id === image.id)!
             : { ...image, id: `img_${(sequence += 1)}` } as FakeImage);
         }
         if (update.thumbnail) product.thumbnail = update.thumbnail;
+      }
+      return [];
+    },
+    batchLinkProductsToCategoryWorkflow: (input) => {
+      for (const product of byIds({ id: [...input.add as string[], ...input.remove as string[]] })) {
+        const current = (product.categories || []) as { id: string }[];
+        product.categories = (input.remove as string[]).includes(product.id)
+          ? current.filter((category) => category.id !== input.id) : [...current, { id: input.id }];
       }
       return [];
     },
@@ -151,7 +168,8 @@ function fakeMedusa(products: FakeProduct[], feed: OpsProduct[]) {
     sales_channel: [{ id: "sc_1" }], stock_location: [{ id: "sloc_1" }], shipping_profile: [{ id: "sp_1" }],
     inventory_level: [], product_collection: [{ id: "pcol_sale", handle: "on-sale", title: "On Sale" }],
   };
-  const graph = jest.fn(async ({ entity, filters }: { entity: string; filters?: { id?: string } }) => {
+  const graph = jest.fn(async ({ entity, filters }: { entity: string; filters?: { id?: string; handle?: string[] } }) => {
+    if (entity === "product_category") return { data: CATEGORIES.filter((category) => filters?.handle?.includes(category.handle)) };
     if (entity === "product_variant") return { data: [{ id: filters?.id, inventory_items: [{ inventory_item_id: `iitem_${filters?.id}` }] }] };
     if (entity === "product") return { data: filters?.id ? byIds({ id: filters.id }) : products };
     return { data: rows[entity] };
@@ -176,7 +194,7 @@ function fakeMedusa(products: FakeProduct[], feed: OpsProduct[]) {
   return { calls, logger, state, photoFetches, container: { resolve: (key: string) => services[key] } as unknown as MedusaContainer };
 }
 
-test("a sync run writes no room metadata and never sends categories", async () => {
+test("without a shop category in the feed, a sync run writes no room metadata and never sends categories", async () => {
   const existing: FakeProduct = {
     id: "prod_table", external_id: `firstout-${table.source_sku_id}`, status: "published", collection_id: "pcol_sale",
     metadata: { storefront_room_collections: ["sofas"] }, categories: [{ id: "pcat_staff" }], options: [{ title: "Item" }],
@@ -188,7 +206,7 @@ test("a sync run writes no room metadata and never sends categories", async () =
   await syncFirstout(container);
 
   const created = calls.find((call) => call.workflow === "createProductsWorkflow")?.input as { products: { metadata: unknown }[] };
-  expect(created.products[0].metadata).toEqual({ source_product_group_id: base.product_group_id });
+  expect(created.products[0].metadata).toEqual({ source_product_group_id: base.product_group_id, firstout_title: "Arc sofa" });
   expect(calls.map((call) => call.workflow)).not.toContain("createProductCategoriesWorkflow");
   const written = JSON.stringify(calls.map((call) => call.input));
   expect(written).not.toContain("storefront_room_collections");
@@ -345,4 +363,74 @@ test("Ops requests refuse redirects", async () => {
   const { container } = fakeMedusa([], [base]);
   await syncFirstout(container);
   for (const [, init] of (global.fetch as jest.Mock).mock.calls) expect(init).toMatchObject({ redirect: "error" });
+});
+
+const categoryIds = (product: FakeProduct) => ((product.categories || []) as { id: string }[]).map((category) => category.id).sort();
+const linkCalls = (calls: { workflow: string; input: WorkflowInput }[]) => calls.filter((call) => call.workflow === "batchLinkProductsToCategoryWorkflow");
+
+test("the shop category moves a product between the four only and leaves other categories alone", async () => {
+  const existing: FakeProduct = { ...stagedTable(), categories: [{ id: "pcat_featured" }, { id: "pcat_bedroom" }] };
+  const { calls, state, container } = fakeMedusa([existing], [
+    { ...base, shop_category: "sofas-armchairs" }, { ...table, shop_category: "dining-room" },
+  ]);
+
+  await syncFirstout(container);
+  expect(categoryIds(existing)).toEqual(["pcat_dining", "pcat_featured"]);
+  const sofa = (await (container.resolve(ContainerRegistrationKeys.QUERY) as { graph: (q: object) => Promise<{ data: FakeProduct[] }> })
+    .graph({ entity: "product" })).data.find((product) => product.external_id === `firstout-group-${base.product_group_id}`)!;
+  expect(categoryIds(sofa)).toEqual(["pcat_sofas"]);
+  expect(linkCalls(calls).map((call) => call.input)).toEqual(expect.arrayContaining([
+    { id: "pcat_dining", add: ["prod_table"], remove: [] },
+    { id: "pcat_bedroom", add: [], remove: ["prod_table"] },
+  ]));
+  expect(linkCalls(calls).map((call) => call.input.id)).not.toContain("pcat_featured");
+
+  // Already placed: nothing is written again.
+  const written = linkCalls(calls).length;
+  await syncFirstout(container);
+  expect(linkCalls(calls)).toHaveLength(written);
+
+  // No shop category in the feed: categories are left exactly as they are.
+  state.feed = [base, table];
+  await syncFirstout(container);
+  expect(linkCalls(calls)).toHaveLength(written);
+  expect(categoryIds(existing)).toEqual(["pcat_dining", "pcat_featured"]);
+});
+
+test("a Firstout rename reaches the title only while staff have not edited it", async () => {
+  const existing: FakeProduct = { ...stagedTable(), title: table.name };
+  const { state, container } = fakeMedusa([existing], [table]);
+
+  // Synced before names were recorded, still showing the Firstout name: adopted.
+  await syncFirstout(container);
+  expect(existing.title).toBe(table.name);
+  expect(existing.metadata).toMatchObject({ firstout_title: table.name });
+
+  state.feed = [{ ...table, name: "Carrara coffee table" }];
+  await syncFirstout(container);
+  expect(existing.title).toBe("Carrara coffee table");
+  expect(existing.metadata).toMatchObject({ firstout_title: "Carrara coffee table" });
+
+  existing.title = "Carrara marble table, honed";
+  state.feed = [{ ...table, name: "Carrara table" }];
+  await syncFirstout(container);
+  expect(existing.title).toBe("Carrara marble table, honed");
+  expect(existing.metadata).toMatchObject({ firstout_title: "Carrara coffee table" });
+
+  // A product with an unrecorded name that differs from Firstout's is treated as edited.
+  const legacy: FakeProduct = { ...stagedTable(), title: "Staff name", metadata: {} };
+  const second = fakeMedusa([legacy], [table]);
+  await syncFirstout(second.container);
+  expect(legacy.title).toBe("Staff name");
+  expect(legacy.metadata).toEqual({});
+});
+
+test("a published piece that leaves the feed is withdrawn", async () => {
+  const existing = stagedTable();
+  const { calls, container } = fakeMedusa([existing], [base]);
+
+  await syncFirstout(container);
+  expect(calls).toContainEqual({ workflow: "updateProductsWorkflow", input: {
+    selector: { id: ["prod_table"] }, update: { status: "draft", collection_id: null },
+  } });
 });

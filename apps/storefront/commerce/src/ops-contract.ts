@@ -1,5 +1,8 @@
 import { z } from "@medusajs/framework/zod";
 import { MedusaError } from "@medusajs/framework/utils";
+import { STOREFRONT_CATEGORIES } from "./catalogue-collections";
+
+const shopCategoryHandles = STOREFRONT_CATEGORIES.map((category) => category.handle) as [string, ...string[]];
 
 const madeToOrderOfferSchema = z.object({
   id: z.string().uuid(),
@@ -27,6 +30,9 @@ const productSchema = z.object({
   // Opaque; changes only when the SKU's Firstout photo changes. Null when it has none.
   // Absent (a Firstout release older than this commerce) means no photo info: photos are left alone.
   photo_token: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional(),
+  // One of the four shop categories, from Firstout's mapping. Absent (auto-publish off, or an
+  // older Firstout) means categories are left alone.
+  shop_category: z.enum(shopCategoryHandles).optional(),
 }).strict();
 
 const responseSchema = z.object({
@@ -50,6 +56,7 @@ export function parseOpsProducts(value: unknown, expectedCompanyId: string): Ops
   }
   const combinations = new Set<string>();
   const groupTitles = new Map<string, string>();
+  const groupCategories = new Map<string, string | undefined>();
   const groupOptionKeys = new Map<string, string>();
   for (const product of parsed.products) {
     if (!product.product_group_id) {
@@ -73,6 +80,10 @@ export function parseOpsProducts(value: unknown, expectedCompanyId: string): Ops
       throw new MedusaError(MedusaError.Types.INVALID_DATA, "Group variants have inconsistent titles");
     }
     groupTitles.set(product.product_group_id, product.product_title);
+    if (groupCategories.has(product.product_group_id) && groupCategories.get(product.product_group_id) !== product.shop_category) {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Group variants have inconsistent shop categories");
+    }
+    groupCategories.set(product.product_group_id, product.shop_category);
     const combination = `${product.product_group_id}:${JSON.stringify(Object.entries(product.options).sort())}`;
     if (combinations.has(combination)) {
       throw new MedusaError(MedusaError.Types.INVALID_DATA, "Group variants have duplicate option combinations");

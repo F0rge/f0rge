@@ -168,6 +168,11 @@ leads to `/shop` and its category pages, `/shop/<handle>`. The availability
 filter and the sort order are page state and do not change the URL. Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
 Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
+Firstout decides which pieces are on the shop and in which category: with
+`OPS_COMMERCE_AUTO_PUBLISH_ENABLED=true` on `firstout-api`, every photographed
+SKU in a mapped Firstout category that staff have not hidden ("Hide from shop")
+is synced, and the sync assigns its category. The rule, the mapping and the
+go-live order are in `commerce/MERCHANDISING.md`.
 Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
 before launch; canonical links use it. Page metadata permits indexing only
 when `STOREFRONT_INDEXING_ENABLED=true` on a production Railway environment

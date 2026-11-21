@@ -31,8 +31,10 @@ const allowedFields = [
   "price_minor_zar", "available_quantity", "revision", "observed_at",
   "acknowledged_commitment_ids", "made_to_order_offer",
 ]
-// photo_token appears only once Firstout's OPS_COMMERCE_PHOTO_TOKENS_ENABLED is on.
-if (Object.keys(snapshot).filter((key) => key !== "photo_token").sort().join() !== allowedFields.sort().join()) {
+// photo_token appears only once Firstout's OPS_COMMERCE_PHOTO_TOKENS_ENABLED is on, and
+// shop_category only once OPS_COMMERCE_AUTO_PUBLISH_ENABLED is on.
+const optionalFields = ["photo_token", "shop_category"]
+if (Object.keys(snapshot).filter((key) => !optionalFields.includes(key)).sort().join() !== allowedFields.sort().join()) {
   throw new Error("Ops API exposed an unexpected field")
 }
 
