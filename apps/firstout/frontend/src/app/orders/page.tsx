@@ -647,7 +647,7 @@ export default function OrdersPage() {
             <div aria-live="polite">
               {refundStatus.items.map((item) => <p key={item.id}>
                 {formatZarAmount((item.amount_minor / 100).toFixed(2))} · {item.status}
-                {item.provider_result_code ? ` · Peach ${item.provider_result_code}` : ""}
+                {item.provider_result_code ? ` · Paystack ${item.provider_result_code}` : ""}
               </p>)}
             </div>
           </> : null}

@@ -2,7 +2,7 @@ import { loadEnv, defineConfig } from '@medusajs/framework/utils'
 import { assertHostedCommerceConfig } from './src/hosted-commerce-config'
 import { hostedLocalFileOptions } from './src/file-storage-url'
 import { testPaymentEnabled } from './src/test-payment-config'
-import { peachPaymentEnabled } from './src/peach-payment-config'
+import { paystackPaymentEnabled } from './src/paystack-payment-config'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 // Compilation opens no runtime services and needs no deployment credentials.
@@ -63,9 +63,9 @@ const paymentProviders: Record<string, unknown>[] = []
 if (!compileOnly && testPaymentEnabled()) {
   paymentProviders.push({ resolve: "./src/modules/storefront-test-payment", id: "local" })
 }
-if (!compileOnly && peachPaymentEnabled()) {
-  modules.push({ resolve: "./src/modules/storefront-peach" })
-  paymentProviders.push({ resolve: "./src/modules/storefront-peach-payment-provider", id: "sandbox" })
+if (!compileOnly && paystackPaymentEnabled()) {
+  modules.push({ resolve: "./src/modules/storefront-paystack" })
+  paymentProviders.push({ resolve: "./src/modules/storefront-paystack-payment-provider", id: "checkout" })
 }
 if (paymentProviders.length) {
   modules.push({

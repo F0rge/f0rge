@@ -44,7 +44,7 @@ The first hero image and the product gallery image request high priority and res
 
 ## Rollback
 
-If a pack file fails validation, leave indexing disabled and leave the private preview gate on. Do not add a live Peach key and do not start new payment attempts. Redeploy the last verified git release. Do not restore by overwriting paid-order tables or integration state. The loader's rejected path does not change the shelf it was given.
+If a pack file fails validation, leave indexing disabled and leave the private preview gate on. Do not add a live Paystack key and do not start new payment attempts. Redeploy the last verified git release. Do not restore by overwriting paid-order tables or integration state. The loader's rejected path does not change the shelf it was given.
 
 ## Local walkthrough (2026-10-05)
 

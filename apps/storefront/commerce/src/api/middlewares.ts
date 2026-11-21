@@ -177,10 +177,10 @@ export async function requireStorefrontBff(req: MedusaRequest, res: MedusaRespon
   await guardStorefrontCustomerRoutes(req, res, next, path);
 }
 
-export function blockNativePeachWebhook(req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction): void {
+export function blockNativePaystackWebhook(req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction): void {
   const path = normalizedPath(req);
   const providerSegment = path?.split("/")[3];
-  if (!providerSegment || providerSegment.toLowerCase() === "peach_sandbox") {
+  if (!providerSegment || providerSegment.toLowerCase() === "paystack_checkout") {
     res.status(404).json({ message: "Not found" });
     return;
   }
@@ -188,13 +188,13 @@ export function blockNativePeachWebhook(req: MedusaRequest, res: MedusaResponse,
 }
 
 export default defineMiddlewares({ routes: [{
-  matcher: "/hooks/peach",
+  matcher: "/hooks/paystack",
   methods: ["POST"],
   bodyParser: { preserveRawBody: true, sizeLimit: "64kb" },
 }, {
   matcher: "/hooks/payment/*",
   methods: ["POST"],
-  middlewares: [blockNativePeachWebhook],
+  middlewares: [blockNativePaystackWebhook],
 }, {
   // The normalizer cheaply passes unrelated paths. A broad string wildcard
   // catches case-insensitive and encoded Store/Auth prefixes before native

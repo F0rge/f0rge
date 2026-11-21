@@ -109,9 +109,9 @@ export default function CheckoutPage() {
         capture({ name: "storefront_shipping_method_selected", properties: { cart_id: bag.id, method_id: fulfillment } });
         capture({ name: "storefront_checkout_step_completed", properties: { cart_id: bag.id, step: "fulfillment", checkout_type: checkoutType } });
       }
-      if (payload.checkout.provider_id === "pp_peach_sandbox" && payload.checkout.redirect_url) {
+      if (payload.checkout.provider_id === "pp_paystack_checkout" && payload.checkout.redirect_url) {
         const redirect = new URL(payload.checkout.redirect_url);
-        if (redirect.origin !== "https://testsecure.peachpayments.com") throw new Error("The hosted payment destination could not be verified");
+        if (redirect.origin !== "https://checkout.paystack.com") throw new Error("The hosted payment destination could not be verified");
         setSensitiveOverlay(true);
         window.location.assign(redirect.toString());
         return;
@@ -164,25 +164,23 @@ export default function CheckoutPage() {
         {!bag && !error && <p role="status">Loading your bag…</p>}
         {bag && bag.items.length === 0 && <p>Your bag is empty. <Link href="/shop" className="text-link">Explore all pieces ↗</Link></p>}
         {feedback && <p ref={errorRef} id="checkout-error" role={feedback.role} tabIndex={feedback.tabIndex} className="bag-error">{feedback.message}</p>}
-        {checkout ? <div className="checkout-payment" data-testid={checkout.provider_id === "pp_peach_sandbox" ? "peach-payment-panel" : "test-payment-panel"}>
-          <p className="eyebrow">{checkout.provider_id === "pp_peach_sandbox" ? "Secure hosted payment" : "Test payment only"}</p>
+        {checkout ? <div className="checkout-payment" data-testid={checkout.provider_id === "pp_paystack_checkout" ? "paystack-payment-panel" : "test-payment-panel"}>
+          <p className="eyebrow">{checkout.provider_id === "pp_paystack_checkout" ? "Secure hosted payment" : "Test payment only"}</p>
           <h2>{money(total, checkout.currency_code)}</h2>
-          <p>{checkout.provider_id === "pp_peach_sandbox"
-            ? "Continue to Peach Payments to complete your secure payment. Return here to check your order status."
+          <p>{checkout.provider_id === "pp_paystack_checkout"
+            ? "Continue to Paystack to complete your secure payment. Return here to check your order status."
             : "No real payment is taken. Choose an outcome to exercise the local simulator."} You can return to your private order status page to check for updates.</p>
           <p role="status" data-testid="payment-status">Payment status: {paymentStatus || "pending"}</p>
-          {paymentStatus === "declined" && <p role="alert">{checkout.provider_id === "pp_peach_sandbox"
-            ? "Peach declined this payment. Do not reuse this checkout session; contact the store before trying another payment."
+          {paymentStatus === "declined" && <p role="alert">{checkout.provider_id === "pp_paystack_checkout"
+            ? "Paystack declined this payment. Do not reuse this checkout session; contact the store before trying another payment."
             : "The test payment was declined. Your bag and reservation remain available until the hold expires."}</p>}
-          {paymentStatus === "cancelled" && <p role="status">{checkout.provider_id === "pp_peach_sandbox"
-            ? "The Peach checkout was cancelled. Contact the store before starting another payment for this bag."
-            : "The test payment was cancelled. You can retry while the reservation is active."}</p>}
+          {paymentStatus === "cancelled" && <p role="status">The test payment was cancelled. You can retry while the reservation is active.</p>}
           {paymentStatus === "pending" && <p role="status">The payment is pending. You can close this page and return to the private order confirmation later.</p>}
-          {paymentStatus === "unknown" && <p role="alert">{checkout.provider_id === "pp_peach_sandbox"
-            ? "Peach has not confirmed this payment yet. Do not pay again; wait for the status check or contact the store before retrying."
+          {paymentStatus === "unknown" && <p role="alert">{checkout.provider_id === "pp_paystack_checkout"
+            ? "Paystack has not confirmed this payment yet. Do not pay again; wait for the status check or contact the store before retrying."
             : "The payment result is unknown. Your private confirmation page can check again without creating a second order."}</p>}
           {paymentStatus === "paid_exception" && <p role="alert">Payment succeeded, but your order needs attention from the store. Keep your private confirmation page to check for updates.</p>}
-          {checkout.provider_id !== "pp_peach_sandbox" && <div className="test-payment-actions">
+          {checkout.provider_id !== "pp_paystack_checkout" && <div className="test-payment-actions">
             <Button type="button" disabled={busy} onClick={() => void simulate("success")}>Simulate success</Button>
             <Button type="button" disabled={busy} onClick={() => void simulate("pending")}>Simulate pending</Button>
             <Button type="button" disabled={busy} onClick={() => void simulate("declined")}>Simulate decline</Button>

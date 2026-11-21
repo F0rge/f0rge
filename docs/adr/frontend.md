@@ -82,7 +82,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Decision:** Share reusable UI bricks repo-wide, not app-specific screens/business rules.
 - **Proposed enforcement (not installed):** UI package dependency boundaries prohibit app-domain imports; package exports define supported components; app screens compose those bricks locally.
 - **Gate and limit:** Static + review: import graph and shared-API review. Do not force every app-specific composite into the shared library.
-- **Static evidence at `f155a2ba` (not normative, not a live check):** Nx module boundaries for five scope tags, plus restricted engine imports. scope:buycycle and scope:envmon are not in the depConstraints list. The boundary check is static imports only.
+- **Static evidence at `f155a2ba` (not normative, not a live check):** Nx module boundaries for five scope tags, plus restricted engine imports. scope:envmon is not in the depConstraints list. The boundary check is static imports only.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).
 - **Risk noted in that assessment:** medium.

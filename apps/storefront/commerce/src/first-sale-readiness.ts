@@ -324,7 +324,7 @@ function providerFindings(value: unknown): string[] {
   const absentProviders = "Provider credentials, callbacks, allowed origins, and sender records are absent.";
   if (value === undefined) return [absentProviders];
   const providers = record(value);
-  if (!providers || providers.clerk_callback_recorded !== true || providers.peach_callback_recorded !== true ||
+  if (!providers || providers.clerk_callback_recorded !== true || providers.paystack_webhook_recorded !== true ||
       providers.email_sender_recorded !== true || providers.posthog_eu_recorded !== true ||
       providers.allowed_origins_recorded !== true) {
     return [absentProviders];

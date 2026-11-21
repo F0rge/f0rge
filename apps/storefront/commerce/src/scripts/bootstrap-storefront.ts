@@ -21,7 +21,7 @@ import {
 } from "@medusajs/medusa/core-flows";
 import { deliveryZones } from "../delivery-zones";
 import { testPaymentEnabled } from "../test-payment-config";
-import { peachPaymentEnabled, PEACH_PAYMENT_PROVIDER_ID } from "../peach-payment-config";
+import { paystackPaymentEnabled, PAYSTACK_PAYMENT_PROVIDER_ID } from "../paystack-payment-config";
 import { southAfricaVatRate } from "../vat-config";
 
 // Adapted from Medusa DTC starter e3a237c initial-data-seed.ts; no demo apparel.
@@ -32,7 +32,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   const paymentProviders = [
     "pp_system_default",
     ...(enableTestPayment ? ["pp_storefront-test_local"] : []),
-    ...(peachPaymentEnabled() ? [PEACH_PAYMENT_PROVIDER_ID] : []),
+    ...(paystackPaymentEnabled() ? [PAYSTACK_PAYMENT_PROVIDER_ID] : []),
   ];
 
   const { data: salesChannels } = await query.graph({

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Stages shared by the per-App switch wizards in this directory. Not run directly:
-# dk.sh, envmon.sh, buycycle.sh, daskasas.sh, marrow.sh and firstout.sh set a few
+# dk.sh, envmon.sh, daskasas.sh, marrow.sh and firstout.sh set a few
 # variables, source this file, then call switch_pi or switch_railway.
 #
 # _wizard.sh is the wizard skill's library, copied unchanged from

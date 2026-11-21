@@ -5,7 +5,7 @@ import type { AnalyticsProperties, SanitizedAnalyticsEvent } from "./events";
 export type CheckoutType = "guest" | "account";
 export type CheckoutStep = "contact" | "fulfillment" | "payment";
 export type ShippingMethodId = "delivery" | "collection";
-export type PaymentProviderId = "test_simulator" | "peach";
+export type PaymentProviderId = "test_simulator" | "paystack";
 export type PaymentReasonFamily = "declined" | "cancelled" | "unknown";
 export type FrictionSurface = "bag" | "checkout" | "payment" | "account";
 export type FrictionKind = "payment_declined" | "payment_cancelled" | "payment_unknown" | "reservation_expired" | "checkout_unavailable";
@@ -32,7 +32,7 @@ export type StorefrontServerEvent =
 const checkoutTypes = new Set<CheckoutType>(["guest", "account"]);
 const checkoutSteps = new Set<CheckoutStep>(["contact", "fulfillment", "payment"]);
 const shippingMethods = new Set<ShippingMethodId>(["delivery", "collection"]);
-const providers = new Set<PaymentProviderId>(["test_simulator", "peach"]);
+const providers = new Set<PaymentProviderId>(["test_simulator", "paystack"]);
 const reasons = new Set<PaymentReasonFamily>(["declined", "cancelled", "unknown"]);
 const frictionSurfaces = new Set<FrictionSurface>(["bag", "checkout", "payment", "account"]);
 const frictionKinds = new Set<FrictionKind>(["payment_declined", "payment_cancelled", "payment_unknown", "reservation_expired", "checkout_unavailable"]);

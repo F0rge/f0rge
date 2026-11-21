@@ -139,7 +139,7 @@ async def _paid_order_payload(
                 "total_minor_zar": 115000,
             },
             "payment": {
-                "provider": "peach",
+                "provider": "pp_paystack_checkout",
                 "reference": f"gateway-ref-{fixture_tag}-001",
                 "captured_at": "2026-09-28T18:00:00Z",
                 "amount_minor_zar": 115000,

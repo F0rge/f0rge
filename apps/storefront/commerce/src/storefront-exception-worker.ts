@@ -6,10 +6,10 @@ import { expireCheckoutHolds } from "./checkout-holds";
 import { syncFirstout } from "./sync-firstout";
 import { retryStorefrontOrderHandoff } from "./storefront-order-handoff";
 import { syncStorefrontFulfillmentEvents } from "./storefront-fulfillment-events";
-import { reconcilePeachCheckoutStatuses } from "./peach-webhook-processing";
-import { completePeachWebhook, PEACH_INBOX_TABLE, type PeachInboxEvent } from "./peach-payment-store";
-import { processClaimedPeachRefundWebhook, reconcileVerifiedMedusaRefunds } from "./storefront-peach-refunds";
-import { collectStorefrontExceptionSources, EXCEPTION_ACTIONS, opsExceptionConnection, peachSourceRows, sourceRecord, type ExceptionScan } from "./storefront-exception-sources";
+import { reconcilePaystackCheckoutStatuses } from "./paystack-webhook-processing";
+import { completePaystackObservation, PAYSTACK_INBOX_TABLE, type PaystackInboxEvent } from "./paystack-payment-store";
+import { processClaimedPaystackRefund, reconcileVerifiedMedusaRefunds } from "./storefront-paystack-refunds";
+import { collectStorefrontExceptionSources, EXCEPTION_ACTIONS, opsExceptionConnection, paystackSourceRows, sourceRecord, type ExceptionScan } from "./storefront-exception-sources";
 import type { StorefrontExceptionKind } from "./storefront-commerce-exceptions";
 
 export type ExceptionCommand = { id: string; correlation_id: string; kind: StorefrontExceptionKind; action: string; idempotency_key: string };
@@ -38,27 +38,27 @@ async function publish(scan: ExceptionScan, fetcher: typeof fetch): Promise<void
 }
 async function repairRefund(container: MedusaContainer, sourceId: string, fetcher: typeof fetch): Promise<void> {
   const db = container.resolve<Knex>(ContainerRegistrationKeys.PG_CONNECTION);
-  const sources = await peachSourceRows(db);
+  const sources = await paystackSourceRows(db);
   const dispatch = sources.refunds.find((row) => row.request_id === sourceId);
-  const event = sources.inbox.find((row) => row.payment_type === "RF" && (row.id === sourceId ||
-    row.refund_request_id === sourceId || (dispatch?.provider_refund_id && row.transaction_id === dispatch.provider_refund_id)) &&
-    (row.source === "refund-response" || (row.source === "webhook" && !!row.signature_sha256)));
+  // Every inbox row is an authenticated Paystack API read, so any matching refund row is verified.
+  const event = sources.inbox.find((row) => row.kind === "refund" && (row.id === sourceId ||
+    row.refund_request_id === sourceId || (dispatch?.provider_refund_id && row.provider_refund_id === dispatch.provider_refund_id)));
   if (event) {
     // Re-lease a retained verified observation; no new provider refund is dispatched.
-    const claimed: PeachInboxEvent | undefined = await db.transaction(async (trx) => {
-      const row = await trx<PeachInboxEvent>(PEACH_INBOX_TABLE).where({ id: event.id }).whereNull("deleted_at").forUpdate().first();
+    const claimed: PaystackInboxEvent | undefined = await db.transaction(async (trx) => {
+      const row = await trx<PaystackInboxEvent>(PAYSTACK_INBOX_TABLE).where({ id: event.id }).whereNull("deleted_at").forUpdate().first();
       if (!row || (row.status === "processing" && row.lease_until && new Date(row.lease_until) > new Date())) return undefined;
       const token = randomUUID();
       const updated = { ...row, status: "processing", lease_token: token, lease_until: new Date(Date.now() + 120000) };
-      await trx(PEACH_INBOX_TABLE).where({ id: row.id }).update({ status: updated.status, lease_token: token, lease_until: updated.lease_until, updated_at: new Date() });
+      await trx(PAYSTACK_INBOX_TABLE).where({ id: row.id }).update({ status: updated.status, lease_token: token, lease_until: updated.lease_until, updated_at: new Date() });
       return updated;
     });
     if (!claimed) throw new Error("refund_recovery_lease_active");
     try {
-      const outcome = await processClaimedPeachRefundWebhook(container, db, claimed, fetcher);
-      await completePeachWebhook(db, claimed.id, claimed.lease_token, outcome === "needs_review" ? "needs_review" : "processed");
+      const outcome = await processClaimedPaystackRefund(container, db, claimed, fetcher);
+      await completePaystackObservation(db, claimed.id, claimed.lease_token, outcome === "needs_review" ? "needs_review" : "processed");
     } catch (error) {
-      await completePeachWebhook(db, claimed.id, claimed.lease_token, "needs_review");
+      await completePaystackObservation(db, claimed.id, claimed.lease_token, "needs_review");
       throw error;
     }
   } else if (dispatch?.canonical_sha256 && dispatch.provider_refund_id && ["verified", "recording_medusa_refund"].includes(String(dispatch.status))) {
@@ -76,9 +76,9 @@ async function executeRepair(container: MedusaContainer, command: ExceptionComma
       await retryStorefrontOrderHandoff(container, sourceId, true); return;
     case "unknown_payment": {
       const db = container.resolve<Knex>(ContainerRegistrationKeys.PG_CONNECTION);
-      const row = (await peachSourceRows(db)).attempts.find((row) => row.id === sourceId);
+      const row = (await paystackSourceRows(db)).attempts.find((row) => row.id === sourceId);
       if (typeof row?.payment_session_id !== "string") throw new Error("payment_recovery_source_missing");
-      await reconcilePeachCheckoutStatuses(container, row.payment_session_id); return;
+      await reconcilePaystackCheckoutStatuses(container, row.payment_session_id); return;
     }
     case "refund_mismatch": await repairRefund(container, sourceId, fetcher); return;
     case "fulfilment_drift":

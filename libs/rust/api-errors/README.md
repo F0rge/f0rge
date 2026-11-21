@@ -2,8 +2,8 @@
 
 Small response plumbing for future Actix apps (P-015/P-022). This crate contains
 no app business rules, permissions, identity adapter, database or collector.
-Buycycle and every existing Python/frontend consumer remain unchanged. The
-holiday-explorer pilot in P-010 still gates broader app adoption.
+No app consumes it yet besides `f0rge-identity`; existing Python/frontend apps
+are unchanged.
 
 ## Response contract
 
@@ -89,7 +89,7 @@ The 409 mapping represents an edit conflict; app services still detect it.
 
 P-021 and the full P-022 remain incomplete. These tests do not certify an app,
 database, ARM64 image, release pipeline or deployed runtime. No production
-deployment or Buycycle cutover is part of this library.
+deployment is part of this library.
 
 Dependencies are locked to the tested graph. The selected Actix Web 4.19.0 and
 Actix HTTP 3.21.0 are above the fixes listed in

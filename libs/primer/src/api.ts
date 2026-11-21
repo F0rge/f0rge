@@ -35,9 +35,9 @@ export function apiFailure(status: number, body: unknown): ApiFailure {
       : status === 409
         ? "Your saved data changed. Reload before trying again."
         : status === 401
-          ? "Sign in to access Buycycle."
+          ? "Sign in to continue."
           : status === 403
-            ? "This account is not approved for Buycycle."
+            ? "This account does not have access."
             : "The request could not be completed. Try again.";
   const fields = Array.isArray(error?.field_errors)
     ? error.field_errors.filter(
