@@ -3,17 +3,20 @@ import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { createOrderCreditLinesWorkflow } from "@medusajs/core-flows";
 import type { Knex } from "knex";
-import { medusaAmountToMinor, minorToMajor, type PeachWebhookEvent } from "./peach-checkout";
-import { peachPaymentConfig, peachRefundEnabled } from "./peach-payment-config";
-import { peachRefundOutcome, peachRefundPayment, type PeachRefundObservation } from "./peach-refunds";
+import {
+  createPaystackRefund, isPaystackReference, listPaystackRefunds, medusaAmountToMinor, minorToMajor, parsePaystackRefund,
+  paystackRefundOutcome, paystackRefundReference, type PaystackObservation,
+} from "./paystack-checkout";
+import { PAYSTACK_PAYMENT_PROVIDER_ID, paystackPaymentConfig, type PaystackPaymentConfig } from "./paystack-payment-config";
 import { enqueueRefundStatusNotification } from "./storefront-notifications";
 import { withStorefrontOrderHandoffLock } from "./storefront-order-handoff";
 import {
-  claimPeachRefundForMedusa, claimPeachRefundDispatchForDispatch, createPeachRefundDispatch, findPeachAttemptByCapturedTransactionId,
-  findPeachRefundByProviderId, findPeachRefundDispatch, markPeachRefundDispatchUnknownIfUnresolved,
-  PEACH_REFUNDS_TABLE, type PeachInboxEvent, type PeachRefundCommand, type PeachRefundDispatch,
-  updatePeachRefundDispatch, receivePeachWebhook, claimPeachWebhook, completePeachWebhook, retryPeachWebhook,
-} from "./peach-payment-store";
+  claimPaystackObservation, claimPaystackRefundDispatchForDispatch, completePaystackObservation, createPaystackRefundDispatch,
+  findPaystackAttemptByReference, findPaystackRefundByProviderId, findPaystackRefundDispatch, findPaystackRefundsForCapture,
+  listPaystackCapturesWithOpenRefunds, markPaystackRefundDispatchUnknownIfUnresolved, PAYSTACK_REFUNDS_TABLE,
+  receivePaystackObservation, retryPaystackObservation, updatePaystackRefundDispatch,
+  type PaystackInboxSource, type PaystackRefundCommand, type PaystackRefundDispatch,
+} from "./paystack-payment-store";
 
 type JsonRecord = Record<string, any>;
 type ResolutionStatus = "succeeded" | "pending" | "failed" | "needs_review";
@@ -29,6 +32,8 @@ type RefundResolution = {
   currency_code: string;
   provider_refund_id: string;
 };
+const OPEN_REFUND_STATES = ["unknown", "pending", "needs_attention"];
+type RefundFact = Pick<PaystackObservation, "provider_refund_id" | "amount_minor" | "currency_code">;
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
@@ -60,12 +65,12 @@ function safeCode(value: unknown): string {
   return typeof value === "string" && /^[A-Za-z0-9_.-]{1,80}$/.test(value) ? value : "refund_processing_failed";
 }
 
-function validCommand(value: unknown): value is PeachRefundCommand {
+function validCommand(value: unknown): value is PaystackRefundCommand {
   const item = record(value);
-  return typeof item.request_id === "string" && item.request_id.length > 0 &&
+  return typeof item.request_id === "string" && /^[0-9a-f-]{32,36}$/i.test(item.request_id) &&
     typeof item.handoff_id === "string" && item.handoff_id.length > 0 &&
     typeof item.external_order_id === "string" && item.external_order_id.length > 0 &&
-    typeof item.original_transaction_id === "string" && /^[a-f0-9]{32}$/i.test(item.original_transaction_id) &&
+    isPaystackReference(item.original_transaction_id) &&
     Number.isSafeInteger(item.amount_minor) && item.amount_minor > 0 &&
     item.currency_code === "ZAR" && typeof item.cancel_order === "boolean" && typeof item.status === "string";
 }
@@ -75,7 +80,7 @@ async function postCommandOutcome(
   status: "dispatching" | "unknown" | "pending",
   fetcher: typeof fetch,
   failureCode?: string,
-  dispatchCommand?: PeachRefundCommand,
+  dispatchCommand?: PaystackRefundCommand,
 ): Promise<boolean> {
   const response = await fetcher(endpoint(`refund-commands/${encodeURIComponent(commandId)}/outcome`), {
     method: "POST",
@@ -89,10 +94,10 @@ async function postCommandOutcome(
   return confirmsRefundDispatchingResponse(response, dispatchCommand);
 }
 
-/** A 2xx alone is not permission to contact Peach: Firstout may return an
+/** A 2xx alone is not permission to contact Paystack: Firstout may return an
  * unchanged terminal refund. Confirm the exact immutable intent transitioned
  * to dispatching before making the external money-moving request. */
-export function confirmsRefundDispatchingBarrier(value: unknown, command: PeachRefundCommand): boolean {
+export function confirmsRefundDispatchingBarrier(value: unknown, command: PaystackRefundCommand): boolean {
   const body = record(value);
   return body.id === command.request_id && body.status === "dispatching" &&
     body.amount_minor === command.amount_minor && body.currency_code === command.currency_code;
@@ -100,40 +105,14 @@ export function confirmsRefundDispatchingBarrier(value: unknown, command: PeachR
 
 export async function confirmsRefundDispatchingResponse(
   response: Response,
-  command: PeachRefundCommand,
+  command: PaystackRefundCommand,
 ): Promise<boolean> {
   if (!response.ok) return false;
   try { return confirmsRefundDispatchingBarrier(await response.json(), command); }
   catch { return false; }
 }
 
-function eventFromObservation(
-  observation: PeachRefundObservation,
-  requestId: string | null,
-  webhookId: string | null,
-): PeachWebhookEvent {
-  return {
-    webhook_id: webhookId,
-    checkout_id: "",
-    merchant_reference: "",
-    amount_minor: observation.amount_minor,
-    currency_code: observation.currency_code,
-    payment_type: "RF",
-    result_code: observation.result_code,
-    transaction_id: observation.provider_refund_id,
-    referenced_transaction_id: observation.referenced_capture_id,
-    refund_request_id: requestId,
-    event_timestamp: observation.event_timestamp,
-    raw_sha256: observation.canonical_sha256,
-    canonical_sha256: observation.canonical_sha256,
-  };
-}
-
-async function sendRefundEventToFirstout(
-  event: PeachWebhookEvent,
-  eventSource: "webhook" | "response",
-  fetcher: typeof fetch,
-): Promise<RefundResolution> {
+async function sendRefundEventToFirstout(event: PaystackObservation, fetcher: typeof fetch): Promise<RefundResolution> {
   const amountMinor = Number(event.amount_minor);
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) throw new Error("refund_event_amount_invalid");
   const response = await fetcher(endpoint("refund-events"), {
@@ -141,14 +120,15 @@ async function sendRefundEventToFirstout(
     headers: opsHeaders(),
     body: JSON.stringify({
       ...(event.refund_request_id ? { request_id: event.refund_request_id } : {}),
-      provider_refund_id: event.transaction_id,
-      ...(event.webhook_id ? { webhook_id: event.webhook_id } : {}),
-      event_source: eventSource,
-      referenced_capture_id: event.referenced_transaction_id,
+      provider_refund_id: event.provider_refund_id,
+      // Every refund fact is read from Paystack's authenticated API, never
+      // taken from a webhook body, so it is delivered as a response event.
+      event_source: "response",
+      referenced_capture_id: event.reference,
       amount_minor: amountMinor,
       currency_code: event.currency_code,
-      result_code: event.result_code,
-      outcome: peachRefundOutcome(event.result_code),
+      result_code: event.provider_status,
+      outcome: paystackRefundOutcome(event.provider_status),
       event_timestamp: event.event_timestamp,
       canonical_sha256: event.canonical_sha256,
       signature_verified: true,
@@ -170,7 +150,7 @@ async function sendRefundEventToFirstout(
     (status !== "needs_review" && (typeof resolution.request_id !== "string" || !resolution.request_id ||
     typeof resolution.external_order_id !== "string" || !resolution.external_order_id)) ||
     !Number.isSafeInteger(resolution.amount_minor) || resolution.amount_minor !== amountMinor ||
-    resolution.currency_code !== event.currency_code || resolution.provider_refund_id !== event.transaction_id) {
+    resolution.currency_code !== event.currency_code || resolution.provider_refund_id !== event.provider_refund_id) {
     throw new Error("refund_event_resolution_mismatch");
   }
   return resolution;
@@ -182,28 +162,29 @@ async function markUnknown(
   fetcher: typeof fetch,
   failureCode: string,
 ): Promise<void> {
-  if (!await markPeachRefundDispatchUnknownIfUnresolved(db, requestId)) return;
+  if (!await markPaystackRefundDispatchUnknownIfUnresolved(db, requestId)) return;
   try { await postCommandOutcome(requestId, "unknown", fetcher, safeCode(failureCode)); }
   catch { /* The local unknown state prevents a blind provider resend. */ }
 }
 
 /**
- * Pulls authorized commands from Firstout. Peach credentials are fetched before
- * setting dispatching; after dispatching is durable, every ambiguous result is
- * recorded unknown and the provider POST is never automatically repeated.
+ * Pulls authorized commands from Firstout. After dispatching is durable, every
+ * ambiguous result is recorded unknown and the refund POST is never
+ * automatically repeated; read-only reconciliation by our refund reference
+ * resolves it once Paystack reports the refund.
  */
-export async function syncStorefrontPeachRefundCommands(
+export async function syncStorefrontPaystackRefundCommands(
   container: MedusaContainer,
   fetcher: typeof fetch = fetch,
 ): Promise<{ received: number; dispatched: number }> {
-  const config = peachPaymentConfig();
+  const config = paystackPaymentConfig();
   if (!config) return { received: 0, dispatched: 0 };
   const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
   let commands: unknown[] = [];
   let dispatched = 0;
-  // Removing the signing secret disables new provider requests, but verified
-  // money already returned must still converge into Medusa and customer state.
-  if (peachRefundEnabled()) {
+  // Pausing refunds stops new provider requests, but verified money already
+  // returned must still converge into Medusa and customer state.
+  if (!config.refundsPaused) {
     try {
       const feed = await fetcher(endpoint("refund-commands?limit=100"), {
         headers: opsHeaders(), cache: "no-store", signal: AbortSignal.timeout(10_000),
@@ -217,7 +198,7 @@ export async function syncStorefrontPeachRefundCommands(
           await processRefundCommand(container, db, config, item, fetcher);
           dispatched += 1;
         } catch (error) {
-          console.warn("Storefront Peach refund command remains pending", {
+          console.warn("Storefront Paystack refund command remains pending", {
             request_id: item.request_id,
             failure: safeCode(error instanceof Error ? error.message : ""),
           });
@@ -225,11 +206,15 @@ export async function syncStorefrontPeachRefundCommands(
       }
     } catch (error) {
       // A remote queue outage must not block local convergence of already
-      // verified money or the independently durable Peach inbox.
-      console.warn("Storefront Peach refund command feed unavailable", {
+      // verified money or the independently durable Paystack inbox.
+      console.warn("Storefront Paystack refund command feed unavailable", {
         failure: safeCode(error instanceof Error ? error.message : ""),
       });
     }
+  }
+  for (const capture of await listPaystackCapturesWithOpenRefunds(db)) {
+    try { await reconcilePaystackRefundsForCapture(container, capture, "status", fetcher); }
+    catch { /* Each open refund is re-read on the next run. */ }
   }
   await reconcileVerifiedMedusaRefunds(container, db);
   return { received: commands.length, dispatched };
@@ -238,15 +223,15 @@ export async function syncStorefrontPeachRefundCommands(
 async function processRefundCommand(
   container: MedusaContainer,
   db: Knex,
-  config: NonNullable<ReturnType<typeof peachPaymentConfig>>,
-  command: PeachRefundCommand,
+  config: PaystackPaymentConfig,
+  command: PaystackRefundCommand,
   fetcher: typeof fetch,
 ): Promise<void> {
   await withRefundLock(container, command.request_id, async () => {
-    const { dispatch } = await createPeachRefundDispatch(db, command);
+    const { dispatch } = await createPaystackRefundDispatch(db, command);
     // A remote dispatching status means a previous worker crossed Firstout's
     // durable barrier. Its provider POST may have happened even if no response
-    // was persisted, so recovery can only mark unknown; it must never resend.
+    // was persisted, so recovery marks unknown and reconciles by reference.
     if (command.status === "dispatching" || dispatch.status === "dispatching") {
       if (!["received", "dispatching", "unknown"].includes(dispatch.status)) return;
       await markUnknown(db, command.request_id, fetcher, "recovered_dispatch_without_result");
@@ -254,9 +239,15 @@ async function processRefundCommand(
     }
     if (dispatch.status !== "received") return;
 
-    // Checkout V1 refund authorization uses its dedicated HMAC signing secret;
-    // the OAuth token belongs to the separate Hosted Checkout V2 API.
-    if (!await claimPeachRefundDispatchForDispatch(db, command.request_id)) return;
+    // Only a charge we captured for this exact order may be refunded. No
+    // request reaches Paystack otherwise; staff see the unknown command.
+    const attempt = await findPaystackAttemptByReference(db, command.original_transaction_id);
+    if (attempt?.status !== "captured" || attempt.captured_order_id !== command.external_order_id) {
+      await markUnknown(db, command.request_id, fetcher, "paystack_capture_not_verified_no_request_sent");
+      return;
+    }
+
+    if (!await claimPaystackRefundDispatchForDispatch(db, command.request_id)) return;
     let outcomeSent = false;
     try { outcomeSent = await postCommandOutcome(command.request_id, "dispatching", fetcher, undefined, command); }
     catch { /* No refund POST unless Firstout durably accepts dispatching. */ }
@@ -265,87 +256,119 @@ async function processRefundCommand(
       return;
     }
 
-    let observation: PeachRefundObservation | null;
-    try {
-      observation = await peachRefundPayment(config, {
-        referencedCaptureId: command.original_transaction_id,
-        amountMinor: command.amount_minor,
-        currencyCode: command.currency_code,
-      }, fetcher);
-    } catch (error) {
-      await markUnknown(db, command.request_id, fetcher, safeCode(error instanceof Error ? error.message : ""));
+    const result = await createPaystackRefund(config, {
+      transactionReference: command.original_transaction_id,
+      transactionId: attempt.transaction_id || null,
+      amountMinor: command.amount_minor,
+      currencyCode: command.currency_code,
+      requestId: command.request_id,
+    }, fetcher);
+    if (result.kind === "duplicate") {
+      // Our reference already exists at Paystack. Read it back; never post again.
+      await markUnknown(db, command.request_id, fetcher, "paystack_refund_reference_exists");
+      await reconcilePaystackRefundsForCapture(container, command.original_transaction_id, "status", fetcher);
       return;
     }
-    if (!observation) {
-      await markUnknown(db, command.request_id, fetcher, "refund_response_unverified");
+    if (result.kind !== "observed") {
+      await markUnknown(db, command.request_id, fetcher,
+        result.kind === "rejected" ? `paystack_refund_rejected_http_${result.status}` : result.code);
       return;
     }
 
-    const event = eventFromObservation(observation, command.request_id, null);
-    const persisted = await receivePeachWebhook(db, event, null, "refund-response");
-    const claimed = await claimPeachWebhook(db, persisted.id);
+    const persisted = await receivePaystackObservation(db, result.observation, "refund-response");
+    const claimed = await claimPaystackObservation(db, persisted.id);
     if (!claimed) return;
-    let result: "processed" | "needs_review" | "pending";
+    let outcome: "processed" | "needs_review" | "pending";
     try {
-      result = await processClaimedPeachRefundWebhook(container, db, claimed, fetcher);
+      outcome = await processClaimedPaystackRefund(container, db, claimed, fetcher);
     } catch (error) {
-      await retryPeachWebhook(db, claimed.id, claimed.lease_token, safeCode(error instanceof Error ? error.message : ""));
+      await retryPaystackObservation(db, claimed.id, claimed.lease_token, safeCode(error instanceof Error ? error.message : ""));
       throw error;
     }
-    await completePeachWebhook(db, claimed.id, claimed.lease_token, result === "needs_review" ? "needs_review" : "processed");
-    if (result === "pending") {
+    await completePaystackObservation(db, claimed.id, claimed.lease_token, outcome === "needs_review" ? "needs_review" : "processed");
+    if (outcome === "pending") {
       await postCommandOutcome(command.request_id, "pending", fetcher);
     }
   });
 }
 
-export async function processClaimedPeachRefundWebhook(
+/**
+ * Reads every refund Paystack holds for one of our charges and runs each
+ * through the durable inbox. Refunds carrying our deterministic reference
+ * bind to their Firstout request; any other refund (for example one created
+ * in the Paystack dashboard) is delivered unbound so Firstout records it for
+ * review instead of guessing.
+ */
+export async function reconcilePaystackRefundsForCapture(
   container: MedusaContainer,
-  db: Knex,
-  event: PeachInboxEvent,
+  captureReference: string,
+  source: PaystackInboxSource,
   fetcher: typeof fetch = fetch,
-): Promise<"processed" | "needs_review" | "pending"> {
-  if (event.payment_type !== "RF" || !event.referenced_transaction_id || !event.transaction_id) {
-    throw new Error("peach_refund_event_invalid");
+  signature: string | null = null,
+): Promise<number> {
+  const config = paystackPaymentConfig();
+  if (!config) return 0;
+  const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
+  const attempt = await findPaystackAttemptByReference(db, captureReference);
+  if (!attempt) return 0;
+  const dispatches = await findPaystackRefundsForCapture(db, captureReference);
+  const requestByReference = new Map(dispatches.map((row) => [paystackRefundReference(row.request_id), row.request_id]));
+  // Normally list every refund on the charge. Without Paystack's numeric
+  // charge ID, fall back to reading each open request by our own reference.
+  const items = attempt.transaction_id
+    ? await listPaystackRefunds(config, { transactionId: attempt.transaction_id }, fetcher)
+    : (await Promise.all(dispatches.filter((row) => OPEN_REFUND_STATES.includes(row.status)).map((row) =>
+      listPaystackRefunds(config, { refundReference: paystackRefundReference(row.request_id) }, fetcher)))).flat();
+  let processed = 0;
+  for (const item of items) {
+    const reference = typeof item.reference === "string" ? item.reference.toLowerCase() : "";
+    const refundRequestId = requestByReference.get(reference) || null;
+    const observation = parsePaystackRefund(item, {
+      reference: captureReference, transactionId: attempt.transaction_id,
+      refundRequestId, refundReference: refundRequestId ? reference : null,
+    });
+    if (!observation) continue;
+    const persisted = await receivePaystackObservation(db, observation, source, signature);
+    const claimed = await claimPaystackObservation(db, persisted.id);
+    if (!claimed) continue;
+    try {
+      const outcome = await withRefundLock(container, `capture:${captureReference}`,
+        () => processClaimedPaystackRefund(container, db, claimed, fetcher));
+      await completePaystackObservation(db, claimed.id, claimed.lease_token, outcome === "needs_review" ? "needs_review" : "processed");
+      processed += 1;
+    } catch (error) {
+      await retryPaystackObservation(db, claimed.id, claimed.lease_token, safeCode(error instanceof Error ? error.message : ""));
+      throw error;
+    }
   }
-  const observation: PeachRefundObservation = {
-    provider_refund_id: event.transaction_id,
-    referenced_capture_id: event.referenced_transaction_id,
-    amount_minor: Number(event.amount_minor),
-    currency_code: event.currency_code,
-    result_code: event.result_code,
-    outcome: peachRefundOutcome(event.result_code),
-    event_timestamp: event.event_timestamp,
-    canonical_sha256: event.canonical_sha256,
-  };
-  const normalizedEvent = eventFromObservation(observation, event.refund_request_id, event.webhook_id);
-  return persistAndProcessRefundObservation(container, db, normalizedEvent,
-    event.source === "refund-response" ? "refund-response" : "webhook", fetcher);
+  return processed;
 }
 
-export async function persistAndProcessRefundObservation(
+export async function processClaimedPaystackRefund(
   container: MedusaContainer,
   db: Knex,
-  event: PeachWebhookEvent,
-  source: "webhook" | "refund-response",
-  fetcher: typeof fetch,
+  event: PaystackObservation,
+  fetcher: typeof fetch = fetch,
 ): Promise<"processed" | "needs_review" | "pending"> {
-  const localByProviderId = await findPeachRefundByProviderId(db, event.transaction_id || "");
-  let localByRequest = event.refund_request_id
-    ? await findPeachRefundDispatch(db, event.refund_request_id)
+  if (event.kind !== "refund" || !event.provider_refund_id || !event.reference) {
+    throw new Error("paystack_refund_event_invalid");
+  }
+  const localByProviderId = await findPaystackRefundByProviderId(db, event.provider_refund_id);
+  const localByRequest = event.refund_request_id
+    ? await findPaystackRefundDispatch(db, event.refund_request_id)
     : undefined;
   // A matching capture and amount do not prove the event belongs to our
-  // request. Staff can create refunds in Peach independently while an
+  // request. Staff can create refunds in Paystack independently while an
   // equally-sized local intent remains unresolved, so never guess here.
   const localIdentityConflict = Boolean(
     localByProviderId && localByRequest && localByProviderId.request_id !== localByRequest.request_id,
   );
   const known = localByProviderId || localByRequest;
-  const knownConflict = Boolean(known && (known.original_transaction_id.toLowerCase() !== event.referenced_transaction_id?.toLowerCase() ||
+  const knownConflict = Boolean(known && (known.original_transaction_id !== event.reference ||
     Number(known.amount_minor) !== Number(event.amount_minor) || known.currency_code !== event.currency_code ||
-    (known.provider_refund_id && known.provider_refund_id !== event.transaction_id)));
-  const resolution = await sendRefundEventToFirstout(event, source === "webhook" ? "webhook" : "response", fetcher);
-  // Firstout records this immutable signed event separately. Never copy its
+    (known.provider_refund_id && known.provider_refund_id !== event.provider_refund_id)));
+  const resolution = await sendRefundEventToFirstout(event, fetcher);
+  // Firstout records this immutable observation separately. Never copy its
   // conflicting provider ID, amount, status, or digest onto a different local
   // dispatch, even when the previous dispatch already consumed the capability
   // and created a native Medusa refund. The durable inbox row is the review
@@ -355,31 +378,34 @@ export async function persistAndProcessRefundObservation(
   }
 
   if (!resolution.request_id || !resolution.external_order_id) {
-    // An ambiguous out-of-band event is durably recorded by Firstout, but has
+    // An ambiguous out-of-band refund is durably recorded by Firstout, but has
     // no safe Medusa order or refund association yet.
     return "needs_review";
   }
-  const command: PeachRefundCommand = {
+  const command: PaystackRefundCommand = {
     request_id: resolution.request_id,
     handoff_id: resolution.handoff_id || known?.handoff_id || "external",
     external_order_id: resolution.external_order_id,
-    original_transaction_id: event.referenced_transaction_id || "",
+    original_transaction_id: event.reference,
     amount_minor: Number(event.amount_minor),
     currency_code: event.currency_code,
     cancel_order: known?.cancel_order || false,
     allocation: known?.allocation || {},
     status: "resolved",
   };
-  const { dispatch } = await createPeachRefundDispatch(db, command);
+  const { dispatch } = await createPaystackRefundDispatch(db, command);
   const successfulDispatchIsAlreadyFinal = dispatch.status === "succeeded" && resolution.provider_outcome === "succeeded";
-  await updatePeachRefundDispatch(db, dispatch.request_id, {
+  // needs-attention: Paystack needs the customer's bank details. Staff finish
+  // it in the Paystack dashboard; this code never submits bank details.
+  const unresolvedStatus = event.provider_status === "needs-attention" ? "needs_attention" : "needs_review";
+  await updatePaystackRefundDispatch(db, dispatch.request_id, {
     ...(!successfulDispatchIsAlreadyFinal ? {
       status: resolution.provider_outcome === "succeeded" ? "verified" : resolution.provider_outcome === "unknown"
-        ? "needs_review" : resolution.provider_outcome,
+        ? unresolvedStatus : resolution.provider_outcome,
     } : {}),
     firstout_status: resolution.status,
-    provider_refund_id: event.transaction_id,
-    provider_result_code: event.result_code,
+    provider_refund_id: event.provider_refund_id,
+    provider_result_code: event.provider_status,
     canonical_sha256: event.canonical_sha256,
   });
   if (successfulDispatchIsAlreadyFinal) return "processed";
@@ -390,29 +416,27 @@ export async function persistAndProcessRefundObservation(
     return resolution.provider_outcome === "pending" ? "pending" : "processed";
   }
 
-  const orderId = resolution.external_order_id || (event.referenced_transaction_id
-    ? (await findPeachAttemptByCapturedTransactionId(db, event.referenced_transaction_id))?.captured_order_id || ""
-    : "");
-  const paymentId = await findMedusaPaymentForRefund(container, orderId, event.referenced_transaction_id || "");
+  const orderId = resolution.external_order_id;
+  const paymentId = await findMedusaPaymentForRefund(container, orderId, event.reference);
   if (!paymentId) {
-    await updatePeachRefundDispatch(db, dispatch.request_id, { status: "needs_review" });
+    await updatePaystackRefundDispatch(db, dispatch.request_id, { status: "needs_review" });
     return "needs_review";
   }
-  await updatePeachRefundDispatch(db, dispatch.request_id, { status: "verified", medusa_payment_id: paymentId });
+  await updatePaystackRefundDispatch(db, dispatch.request_id, { status: "verified", medusa_payment_id: paymentId });
   const applied = await ensureNativeMedusaRefund(container, db, dispatch.request_id, paymentId);
   if (!applied) return "needs_review";
   await recordCustomerRefundStatus(container, orderId, event, "succeeded");
-  await updatePeachRefundDispatch(db, dispatch.request_id, { status: "succeeded" });
+  await updatePaystackRefundDispatch(db, dispatch.request_id, { status: "succeeded" });
   return "processed";
 }
 
 export function customerRefundStatusProjection(
   metadataValue: unknown,
   order: { email: unknown; display_id: unknown },
-  event: PeachWebhookEvent,
+  event: RefundFact,
   status: "pending" | "succeeded" | "failed",
 ): JsonRecord | null {
-  const providerRefundId = event.transaction_id;
+  const providerRefundId = event.provider_refund_id;
   const amountMinor = Number(event.amount_minor);
   if (!providerRefundId || !Number.isSafeInteger(amountMinor) || amountMinor <= 0) return null;
   const metadata = record(metadataValue);
@@ -445,10 +469,10 @@ export function customerRefundStatusProjection(
 export async function recordCustomerRefundStatus(
   container: MedusaContainer,
   orderId: string,
-  event: PeachWebhookEvent,
+  event: RefundFact,
   status: "pending" | "succeeded" | "failed",
 ): Promise<void> {
-  const providerRefundId = event.transaction_id;
+  const providerRefundId = event.provider_refund_id;
   if (!orderId || !providerRefundId || !Number.isSafeInteger(event.amount_minor)) return;
   await withStorefrontOrderHandoffLock(container, orderId, async () => {
     const query = container.resolve(ContainerRegistrationKeys.QUERY);
@@ -483,7 +507,7 @@ async function findMedusaPaymentForRefund(
   const order = record(data[0]);
   const collections: JsonRecord[] = Array.isArray(order.payment_collections) ? order.payment_collections.map(record) : [];
   const payments = collections.flatMap((collection) => Array.isArray(collection.payments) ? collection.payments.map(record) : []);
-  const match = payments.find((payment) => payment.provider_id === "pp_peach_sandbox" &&
+  const match = payments.find((payment) => payment.provider_id === PAYSTACK_PAYMENT_PROVIDER_ID &&
     record(payment.data).transaction_id === captureId && typeof payment.id === "string");
   return typeof match?.id === "string" ? match.id : null;
 }
@@ -498,12 +522,12 @@ async function ensureNativeMedusaRefund(
   requestId: string,
   paymentId: string,
 ): Promise<boolean> {
-  const dispatch = await findPeachRefundDispatch(db, requestId);
+  const dispatch = await findPaystackRefundDispatch(db, requestId);
   if (!dispatch || !dispatch.provider_refund_id || Number(dispatch.amount_minor) <= 0) return false;
   // Every refund on one order changes the same native Order summary. Serialize
   // those local convergence steps while allowing unrelated orders to proceed.
   return withRefundLock(container, `medusa-order:${dispatch.external_order_id}`, async () => {
-    const fresh = await findPeachRefundDispatch(db, requestId);
+    const fresh = await findPaystackRefundDispatch(db, requestId);
     if (!fresh || !fresh.provider_refund_id) return false;
     if (fresh.medusa_refund_id) {
       const row = await existingRefundRow(db, fresh.medusa_refund_id);
@@ -519,21 +543,21 @@ async function ensureNativeMedusaRefund(
           return false;
         }
         await db("refund").where({ id: fresh.medusa_refund_id }).update({
-          metadata: { storefront_peach_refund: { request_id: requestId, provider_refund_id: fresh.provider_refund_id } },
+          metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: fresh.provider_refund_id } },
           updated_at: new Date(),
         });
         return true;
       }
       // A failed Medusa bookkeeping transaction may have removed the draft
-      // Refund after the provider gate claimed it. Peach already succeeded, so
+      // Refund after the provider gate claimed it. Paystack already succeeded, so
       // only retry the local record creation; never repeat the gateway POST.
-      await updatePeachRefundDispatch(db, requestId, {
+      await updatePaystackRefundDispatch(db, requestId, {
         status: "verified", medusa_refund_id: null, authorization_key: null,
       });
     }
 
     const capability = randomUUID();
-    await updatePeachRefundDispatch(db, requestId, {
+    await updatePaystackRefundDispatch(db, requestId, {
       status: "verified", authorization_key: capability, medusa_payment_id: paymentId,
     });
     const paymentModule = container.resolve(Modules.PAYMENT) as unknown as {
@@ -544,9 +568,9 @@ async function ensureNativeMedusaRefund(
         payment_id: paymentId,
         amount: minorToMajor(Number(fresh.amount_minor)),
         created_by: "storefront-refund-reconciler",
-        note: `Peach refund ${fresh.provider_refund_id}`,
+        note: `Paystack refund ${fresh.provider_refund_id}`,
         metadata: {
-          storefront_peach_refund: {
+          storefront_paystack_refund: {
             request_id: requestId,
             provider_refund_id: fresh.provider_refund_id,
             authorization_key: capability,
@@ -554,7 +578,7 @@ async function ensureNativeMedusaRefund(
         },
       });
     } catch {
-      const after = await findPeachRefundDispatch(db, requestId);
+      const after = await findPaystackRefundDispatch(db, requestId);
       if (after?.medusa_refund_id) {
         const row = await existingRefundRow(db, after.medusa_refund_id);
         if (row) {
@@ -567,22 +591,22 @@ async function ensureNativeMedusaRefund(
             return false;
           }
           await db("refund").where({ id: after.medusa_refund_id }).update({
-            metadata: { storefront_peach_refund: { request_id: requestId, provider_refund_id: fresh.provider_refund_id } },
+            metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: fresh.provider_refund_id } },
             updated_at: new Date(),
           });
           return true;
         }
-        await updatePeachRefundDispatch(db, requestId, {
+        await updatePaystackRefundDispatch(db, requestId, {
           status: "verified", medusa_refund_id: null, authorization_key: null,
         });
       }
       return false;
     }
-    const after = await findPeachRefundDispatch(db, requestId);
+    const after = await findPaystackRefundDispatch(db, requestId);
     if (!after?.medusa_refund_id) return false;
     const row = await existingRefundRow(db, after.medusa_refund_id);
     if (!row) {
-      await updatePeachRefundDispatch(db, requestId, {
+      await updatePaystackRefundDispatch(db, requestId, {
         status: "verified", medusa_refund_id: null, authorization_key: null,
       });
       return false;
@@ -596,14 +620,14 @@ async function ensureNativeMedusaRefund(
       return false;
     }
     await db("refund").where({ id: after.medusa_refund_id }).update({
-      metadata: { storefront_peach_refund: { request_id: requestId, provider_refund_id: after.provider_refund_id } },
+      metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: after.provider_refund_id } },
       updated_at: new Date(),
     });
     return true;
   });
 }
 
-function orderIdFromDispatch(dispatch: PeachRefundDispatch): string {
+function orderIdFromDispatch(dispatch: PaystackRefundDispatch): string {
   return dispatch.external_order_id;
 }
 
@@ -687,7 +711,7 @@ async function ensureNativeOrderRefundAccounting(
 }
 
 export async function reconcileVerifiedMedusaRefunds(container: MedusaContainer, db: Knex, requestId?: string): Promise<void> {
-  const query = db<PeachRefundDispatch>(PEACH_REFUNDS_TABLE).whereNull("deleted_at")
+  const query = db<PaystackRefundDispatch>(PAYSTACK_REFUNDS_TABLE).whereNull("deleted_at")
     .whereIn("status", ["verified", "recording_medusa_refund"]);
   if (requestId) query.where({ request_id: requestId });
   const rows = await query.limit(25);
@@ -697,11 +721,11 @@ export async function reconcileVerifiedMedusaRefunds(container: MedusaContainer,
       const applied = await ensureNativeMedusaRefund(container, db, row.request_id, row.medusa_payment_id);
       if (applied && row.provider_refund_id) {
         await recordCustomerRefundStatus(container, row.external_order_id, {
-          transaction_id: row.provider_refund_id,
+          provider_refund_id: row.provider_refund_id,
           amount_minor: Number(row.amount_minor),
           currency_code: row.currency_code,
-        } as PeachWebhookEvent, "succeeded");
-        await updatePeachRefundDispatch(db, row.request_id, { status: "succeeded" });
+        } as RefundFact, "succeeded");
+        await updatePaystackRefundDispatch(db, row.request_id, { status: "succeeded" });
       }
     }
     catch { /* A verified refund remains durable and is retried locally. */ }
@@ -710,5 +734,5 @@ export async function reconcileVerifiedMedusaRefunds(container: MedusaContainer,
 
 async function withRefundLock<T>(container: MedusaContainer, key: string, operation: () => Promise<T>): Promise<T> {
   const locking = container.resolve(Modules.LOCKING) as unknown as { execute<T>(key: string, operation: () => Promise<T>): Promise<T> };
-  return locking.execute(`storefront:peach-refund:${key}`, operation);
+  return locking.execute(`storefront:paystack-refund:${key}`, operation);
 }

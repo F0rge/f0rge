@@ -2,7 +2,7 @@
 
 This check records whether a private DasKasas rehearsal is ready for an owner decision. It does not turn public selling on, does not spend money, and does not invent a catalogue, policy text, or provider credential.
 
-`assessFirstSaleReadiness` in `apps/storefront/commerce/src/first-sale-readiness.ts` reads a recorded evidence file. With no file, the result is `decision: "no_go"`, `public_selling: false`, `public_selling_changed: false`, and `release_gate: "open"`. A passing file can report `decision: "go"` and `release_gate: "closed"`. That report still leaves `public_selling` false. Closing the evidence gate does not change Railway, Peach, Clerk, indexing, or the payment simulator.
+`assessFirstSaleReadiness` in `apps/storefront/commerce/src/first-sale-readiness.ts` reads a recorded evidence file. With no file, the result is `decision: "no_go"`, `public_selling: false`, `public_selling_changed: false`, and `release_gate: "open"`. A passing file can report `decision: "go"` and `release_gate: "closed"`. That report still leaves `public_selling` false. Closing the evidence gate does not change Railway, Paystack, Clerk, indexing, or the payment simulator.
 
 The fictional Northwind pack inside the unit test only proves the checker. Do not pass that fixture to the script.
 
@@ -32,6 +32,7 @@ The file may contain a launch pack, hosted purchase records, operator recovery r
 - A private hosted capacity run: 20 concurrent shoppers, 30 minutes, five simulator completions a minute, stock sync on, first-party cart/checkout p95 at or under 1 second, unexpected errors under 1 percent, no out-of-memory stop, no growing backlog, and no duplicate effect. The in-process probe refuses a publicly reachable simulator and cannot close this gate.
 - Measured monthly DasKasas cost for compute, staging, media, backups, and SaaS, with the usage assumptions written down. The total must be at most USD 50. Payment fees, carrier charges, and existing Firstout hosting are disclosed beside that total and are not counted inside it. A total above USD 50 stays a no-go pending an owner decision.
 - Environment identity for a private, non-indexable DasKasas project, with public selling off. The Marrow project and the Firstout project do not qualify. Callbacks, allowed origins, sender records, backup evidence, restore evidence, at least two alerts, reviewed policies inside the launch pack, and a named operator are required.
+- Provider records with `clerk_callback_recorded`, `paystack_webhook_recorded`, `email_sender_recorded`, `posthog_eu_recorded`, and `allowed_origins_recorded` all `true`, and a launch-pack provisioning checklist whose channels are `clerk`, `paystack`, `email`, `posthog`, `railway`, and `temporary_hostname`. On 21 November 2026 `peach_callback_recorded` became `paystack_webhook_recorded` and the `peach` channel became `paystack`; an evidence file written before then must be updated, or it is reported as missing provider records.
 - An explicit owner decision for public selling and for any real-money rehearsal. Five real orders across at least 14 days are a follow-up after an authorized launch, not a prelaunch requirement.
 
 ## Rollback
@@ -40,4 +41,4 @@ If this check fails, leave DasKasas private and non-indexable, and do not start 
 
 ## Still missing before a hosted rehearsal
 
-No owner catalogue pack, reviewed policies, provider credentials, callback configuration, sender records, named operator handover, or measured hosted cost is in this repository. The 30-minute private capacity run was not executed here. Hosted guest and Clerk purchases, Peach, and Firstout financial results were not exercised against a live stack. Public selling stays off.
+No owner catalogue pack, reviewed policies, provider credentials, callback configuration, sender records, named operator handover, or measured hosted cost is in this repository. The 30-minute private capacity run was not executed here. Hosted guest and Clerk purchases, Paystack, and Firstout financial results were not exercised against a live stack. Public selling stays off.

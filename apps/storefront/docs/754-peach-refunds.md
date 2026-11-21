@@ -1,5 +1,7 @@
 # DasKasas refunds
 
+> **Superseded (21 November 2026).** Peach never went live and its code was removed. Paystack replaced it; see [`paystack-checkout.md`](paystack-checkout.md). This page is kept as a historical record.
+
 Refunds start as an authorized Firstout staff request. Firstout reserves the
 remaining refundable amount and returns a durable command to Medusa. Before
 Medusa sends the Checkout Classic refund request, it records the local intent

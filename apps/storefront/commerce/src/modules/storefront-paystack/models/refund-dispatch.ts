@@ -1,6 +1,6 @@
 import { model } from "@medusajs/framework/utils";
 
-const PeachRefundDispatch = model.define("storefront_peach_refund_dispatch", {
+const PaystackRefundDispatch = model.define("storefront_paystack_refund_dispatch", {
   id: model.id({ prefix: "srefund" }).primaryKey(),
   request_id: model.text().unique(),
   handoff_id: model.text().nullable(),
@@ -18,6 +18,9 @@ const PeachRefundDispatch = model.define("storefront_peach_refund_dispatch", {
   medusa_payment_id: model.text().nullable(),
   medusa_refund_id: model.text().nullable(),
   authorization_key: model.text().nullable(),
-});
+}).indexes([
+  { name: "IDX_storefront_paystack_refund_dispatch_capture", on: ["original_transaction_id"] },
+  { name: "IDX_storefront_paystack_refund_dispatch_status", on: ["status"] },
+]);
 
-export default PeachRefundDispatch;
+export default PaystackRefundDispatch;

@@ -10,7 +10,7 @@ import {
 import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils";
 import { checkoutHoldForCart, withCheckoutInventoryLock } from "../../../../../checkout-holds";
 import { deliveryZoneForAddress, deliveryZones } from "../../../../../delivery-zones";
-import { peachPaymentEnabled, PEACH_PAYMENT_PROVIDER_ID } from "../../../../../peach-payment-config";
+import { paystackPaymentEnabled, PAYSTACK_PAYMENT_PROVIDER_ID } from "../../../../../paystack-payment-config";
 import { updateStorefrontCheckoutContact } from "../../../../../storefront-checkout-contact";
 import { testPaymentEnabled } from "../../../../../test-payment-config";
 
@@ -74,19 +74,17 @@ async function existingPaymentSession(container: MedusaContainer, cartId: string
 }
 
 function checkoutSessionStatus(session: Record<string, unknown>): string {
-  const peachStatus = (session.data as Record<string, unknown> | undefined)?.peach_status;
-  if (peachStatus === "initiation_unknown" || peachStatus === "unknown") return "unknown";
-  if (peachStatus === "declined") return "declined";
-  if (peachStatus === "cancelled") return "cancelled";
-  if (peachStatus === "paid" || peachStatus === "captured") return "captured";
+  const paystackStatus = (session.data as Record<string, unknown> | undefined)?.paystack_status;
+  if (paystackStatus === "initiation_unknown" || paystackStatus === "unknown") return "unknown";
+  if (paystackStatus === "declined") return "declined";
+  if (paystackStatus === "paid" || paystackStatus === "captured") return "captured";
   return typeof session.status === "string" ? session.status : "unknown";
 }
 
 export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<void> {
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   try {
-    const peachEnabled = peachPaymentEnabled();
-    const providerId = peachEnabled ? PEACH_PAYMENT_PROVIDER_ID
+    const providerId = paystackPaymentEnabled() ? PAYSTACK_PAYMENT_PROVIDER_ID
       : testPaymentEnabled() ? "pp_storefront-test_local" : "";
     if (!providerId) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Checkout is not available here");
     const input = checkoutInput(req.body);
@@ -216,6 +214,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       const { result: createdSession } = await createPaymentSessionsWorkflow(req.scope).run({
         input: { payment_collection_id: collectionId, provider_id: providerId, data: {
           storefront_cart_id: cartId, storefront_checkout_snapshot: checkoutCarts[0],
+          // Paystack requires the customer's email to initialize a transaction.
+          storefront_customer_email: input.email,
         } },
       });
       const session = createdSession as unknown as Record<string, unknown>;
