@@ -78,7 +78,7 @@ const TITLES: Record<PolicySection, string> = {
 
 const LINKS: Record<PolicySection, PolicyLink[]> = {
   support: [
-    { href: "/contact", label: "Contact" },
+    { href: "/help#contact", label: "Contact" },
     { href: "/policies/returns", label: "Returns" },
     { href: "/policies/refunds", label: "Refunds" },
   ],
@@ -90,27 +90,27 @@ const LINKS: Record<PolicySection, PolicyLink[]> = {
   delivery: [
     { href: "/policies/returns", label: "Returns" },
     { href: "/policies/refunds", label: "Refunds" },
-    { href: "/contact", label: "Contact" },
+    { href: "/help#contact", label: "Contact" },
   ],
   returns: [
     { href: "/policies/refunds", label: "Refunds" },
     { href: "/policies/terms", label: "Terms" },
-    { href: "/contact", label: "Contact" },
+    { href: "/help#contact", label: "Contact" },
   ],
   refunds: [
     { href: "/policies/returns", label: "Returns" },
     { href: "/policies/terms", label: "Terms" },
-    { href: "/contact", label: "Contact" },
+    { href: "/help#contact", label: "Contact" },
   ],
   terms: [
     { href: "/policies/returns", label: "Return policy" },
     { href: "/policies/refunds", label: "Refund policy" },
     { href: "/policies/delivery", label: "Delivery" },
     { href: "/policies/privacy", label: "Privacy" },
-    { href: "/contact", label: "Contact" },
+    { href: "/help#contact", label: "Contact" },
   ],
   privacy: [
-    { href: "/contact", label: "Contact" },
+    { href: "/help#contact", label: "Contact" },
     { href: "/policies/terms", label: "Terms" },
   ],
 };

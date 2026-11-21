@@ -6,7 +6,9 @@ import { SHOP_CATEGORIES } from "./lib/shop-categories";
 
 const ROBOTS_HEADER = "noindex, nofollow, noarchive";
 // Old routes kept working for bookmarks and search results (F0rge/f0rge#1000).
-const PERMANENT_REDIRECTS: Record<string, string> = { "/collections": "/shop", "/support": "/help" };
+const PERMANENT_REDIRECTS: Record<string, string> = {
+  "/collections": "/shop", "/support": "/help", "/contact": "/help#contact",
+};
 
 // The old /shop?category= and ?collection= forms move to the category path; "sofas" was the guessed room.
 function movedPath(url: URL): string | undefined {

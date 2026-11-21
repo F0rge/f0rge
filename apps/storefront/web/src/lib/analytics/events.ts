@@ -1,7 +1,7 @@
 import { SHOP_CATEGORIES } from "../shop-categories";
 import { sanitizeCommerceBrowserEvent, type StorefrontCommerceBrowserEvent } from "./commerce-events";
 
-export type AnalyticsPageKey = "home" | "shop" | "category" | "product";
+export type AnalyticsPageKey = "home" | "shop" | "category" | "product" | "help";
 export type AnalyticsSurface = "home" | "shop" | "category";
 export type SearchAvailability = "all" | "in_stock" | "made_to_order";
 export type SearchSortOrder = "default" | "price_asc" | "price_desc";
@@ -28,7 +28,7 @@ export interface AnalyticsProvider<Event> {
 export type BrowserAnalyticsProvider = AnalyticsProvider<StorefrontBrowserEvent>;
 export type ServerAnalyticsProvider<Event> = AnalyticsProvider<Event>;
 
-const pageKeys = new Set<AnalyticsPageKey>(["home", "shop", "category", "product"]);
+const pageKeys = new Set<AnalyticsPageKey>(["home", "shop", "category", "product", "help"]);
 const surfaces = new Set<AnalyticsSurface>(["home", "shop", "category"]);
 const sortOrders = new Set<SearchSortOrder>(["default", "price_asc", "price_desc"]);
 
@@ -149,6 +149,7 @@ const isCategoryPath = (pathname: string) => SHOP_CATEGORIES.some((category) => 
 export function analyticsPageForPathname(pathname: string): { pageKey: AnalyticsPageKey; productId?: string } | null {
   if (pathname === "/") return { pageKey: "home" };
   if (pathname === "/shop") return { pageKey: "shop" };
+  if (pathname === "/help") return { pageKey: "help" };
   if (isCategoryPath(pathname)) return { pageKey: "category" };
   const match = /^\/product\/(group-)?([0-9a-f-]{36})\/?$/i.exec(pathname);
   return match ? { pageKey: "product", productId: `${match[1] || ""}${match[2].toLowerCase()}` } : null;

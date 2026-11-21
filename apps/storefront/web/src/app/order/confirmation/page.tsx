@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@f0rge/ui";
+import { Button, Card, CardContent } from "@f0rge/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
@@ -113,49 +113,57 @@ export default function OrderConfirmationPage() {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  return <div className="content confirmation-page" data-storefront-no-capture="">
-    <p className="eyebrow">DasKasas / private order confirmation</p>
+  const line = "flex justify-between gap-4 border-t py-3";
+  const link = "inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4";
+  // Mantine's unlayered button reset makes buttons inherit their font, so the wrappers carry it.
+  return <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-10 md:px-6" data-storefront-no-capture="">
     {!result && !unavailable && <p role="status">Checking your order…</p>}
-    {unavailable && <div role="alert"><h1>Confirmation temporarily unavailable</h1><p>Refresh this page to check again. Open your private confirmation link or return in the browser you used at checkout.</p><Button type="button" onClick={() => void load()}>Check again</Button></div>}
+    {unavailable && <div role="alert" className="space-y-3"><h1 className="text-2xl font-semibold">Confirmation temporarily unavailable</h1><p className="text-muted-foreground">Refresh this page to check again. Open your private confirmation link or return in the browser you used at checkout.</p><div className="text-sm font-medium"><Button type="button" className="h-11 px-4" onClick={() => void load()}>Check again</Button></div></div>}
     {result?.status === "captured" && result.order && <>
-      <h1>Thank you. Your order is confirmed.</h1>
-      <p role="status">Private order reference {result.order.reference} · contact email {result.order.email}</p>
-      <div className="confirmation-card">
-        <section aria-live="polite">
-          <h2>Fulfilment status</h2>
-          <p role="status">{fulfillmentStatusLabel(result.order.fulfillment_status || "confirmed")}</p>
-          {result.order.fulfillment_promise?.estimated_from && result.order.fulfillment_promise.estimated_by && <p>
-            {result.order.fulfillment_promise.estimated_from === result.order.fulfillment_promise.estimated_by
-              ? `Estimated ready ${result.order.fulfillment_promise.estimated_by}`
-              : `Estimated ready ${result.order.fulfillment_promise.estimated_from} – ${result.order.fulfillment_promise.estimated_by}`}
-          </p>}
-        </section>
-        <h2>Order summary</h2>
-        {result.order.items.map((item, index) => <div className="checkout-summary-line" key={item.title + "-" + index}>
-          <span>{item.title} × {item.quantity}{item.fulfillment_promise?.estimated_from && item.fulfillment_promise.estimated_by && <small className="block">
-            {item.fulfillment_promise.estimated_from === item.fulfillment_promise.estimated_by
-              ? `Ready ${item.fulfillment_promise.estimated_by}`
-              : `Ready ${item.fulfillment_promise.estimated_from} – ${item.fulfillment_promise.estimated_by}`}
-          </small>}</span>
-          <strong>{money(item.total, result.order!.currency_code)}</strong>
-        </div>)}
-        {result.order.shipping.map((method, index) => <div className="checkout-summary-line" key={method.name + "-" + index}><span>{method.name}</span><strong>{money(method.total, result.order!.currency_code)}</strong></div>)}
-        <dl><dt>Subtotal</dt><dd>{money(result.order.subtotal, result.order.currency_code)}</dd><dt>VAT included</dt><dd>{money(result.order.tax_total, result.order.currency_code)}</dd><dt>Total paid</dt><dd>{money(result.order.total, result.order.currency_code)}</dd></dl>
-        {result.order.refund_status?.items.length ? <section aria-live="polite">
-          <h2>Refund status</h2>
-          {result.order.refund_status.items.map((refund, index) => <p key={`${refund.status}-${refund.amount_minor}-${index}`} role="status">
-            {refundLabels[refund.status] || "Refund status updated"} · {money(refund.amount_minor / 100, refund.currency_code)}
-          </p>)}
-        </section> : null}
-        {result.order.address && <section><h3>{result.order.fulfillment_type === "collection" ? "Collection" : "Delivery"}</h3><p>{result.order.address.first_name} {result.order.address.last_name}<br />{result.order.address.address_1}{result.order.address.address_2 ? ", " + result.order.address.address_2 : ""}<br />{result.order.address.city}, {result.order.address.province} {result.order.address.postal_code}</p></section>}
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold">Thank you. Your order is confirmed.</h1>
+        <p role="status" className="text-muted-foreground">Private order reference {result.order.reference} · contact email {result.order.email}</p>
       </div>
+      <Card>
+        <CardContent className="space-y-6">
+          <section aria-live="polite" className="space-y-1">
+            <h2 className="text-lg font-medium">Fulfilment status</h2>
+            <p role="status">{fulfillmentStatusLabel(result.order.fulfillment_status || "confirmed")}</p>
+            {result.order.fulfillment_promise?.estimated_from && result.order.fulfillment_promise.estimated_by && <p className="text-muted-foreground">
+              {result.order.fulfillment_promise.estimated_from === result.order.fulfillment_promise.estimated_by
+                ? `Estimated ready ${result.order.fulfillment_promise.estimated_by}`
+                : `Estimated ready ${result.order.fulfillment_promise.estimated_from} – ${result.order.fulfillment_promise.estimated_by}`}
+            </p>}
+          </section>
+          <section>
+            <h2 className="mb-2 text-lg font-medium">Order summary</h2>
+            {result.order.items.map((item, index) => <div className={line} key={item.title + "-" + index}>
+              <span>{item.title} × {item.quantity}{item.fulfillment_promise?.estimated_from && item.fulfillment_promise.estimated_by && <small className="block text-muted-foreground">
+                {item.fulfillment_promise.estimated_from === item.fulfillment_promise.estimated_by
+                  ? `Ready ${item.fulfillment_promise.estimated_by}`
+                  : `Ready ${item.fulfillment_promise.estimated_from} – ${item.fulfillment_promise.estimated_by}`}
+              </small>}</span>
+              <strong className="font-medium whitespace-nowrap">{money(item.total, result.order!.currency_code)}</strong>
+            </div>)}
+            {result.order.shipping.map((method, index) => <div className={line} key={method.name + "-" + index}><span>{method.name}</span><strong className="font-medium whitespace-nowrap">{money(method.total, result.order!.currency_code)}</strong></div>)}
+            <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t pt-3"><dt className="text-muted-foreground">Subtotal</dt><dd className="text-right">{money(result.order.subtotal, result.order.currency_code)}</dd><dt className="text-muted-foreground">VAT included</dt><dd className="text-right">{money(result.order.tax_total, result.order.currency_code)}</dd><dt className="font-medium">Total paid</dt><dd className="text-right font-medium">{money(result.order.total, result.order.currency_code)}</dd></dl>
+          </section>
+          {result.order.refund_status?.items.length ? <section aria-live="polite" className="space-y-1">
+            <h2 className="text-lg font-medium">Refund status</h2>
+            {result.order.refund_status.items.map((refund, index) => <p key={`${refund.status}-${refund.amount_minor}-${index}`} role="status">
+              {refundLabels[refund.status] || "Refund status updated"} · {money(refund.amount_minor / 100, refund.currency_code)}
+            </p>)}
+          </section> : null}
+          {result.order.address && <section className="space-y-1"><h3 className="font-medium">{result.order.fulfillment_type === "collection" ? "Collection" : "Delivery"}</h3><p className="text-muted-foreground">{result.order.address.first_name} {result.order.address.last_name}<br />{result.order.address.address_1}{result.order.address.address_2 ? ", " + result.order.address.address_2 : ""}<br />{result.order.address.city}, {result.order.address.province} {result.order.address.postal_code}</p></section>}
+        </CardContent>
+      </Card>
     </>}
-    {result?.status === "pending" && <div role="status"><h1>Payment is pending</h1><p>This private page will update when the payment result arrives. You can close the browser and return to this page later.</p></div>}
-    {result?.status === "unknown" && <div role="alert"><h1>Payment result is unknown</h1><p>We could not confirm the result yet. Keep this private page open or return later to check again; another order will not be created by checking.</p><Button type="button" onClick={() => void load()}>Check again</Button></div>}
-    {result?.status === "processing" && <div role="status"><h1>Payment received</h1><p>Your order is being committed. This page will update automatically.</p></div>}
-    {result?.status === "declined" && <div role="alert"><h1>Payment was declined</h1><p>No paid order was created. Return to your bag and try again while your reservation is active.</p><Link href="/bag" className="text-link">Return to your bag ↗</Link></div>}
-    {result?.status === "cancelled" && <div role="status"><h1>Payment was cancelled</h1><p>No paid order was created. You can return to your bag to retry before the reservation expires.</p><Link href="/bag" className="text-link">Return to your bag ↗</Link></div>}
-    {result?.status === "paid_exception" && <div role="alert"><h1>Payment succeeded; inventory review is underway</h1><p>Your payment is recorded, but the order reservation needs recovery. This status is retained for follow-up.</p></div>}
-    <Link href="/shop" className="text-link">Continue browsing ↗</Link>
+    {result?.status === "pending" && <div role="status" className="space-y-2"><h1 className="text-2xl font-semibold">Payment is pending</h1><p className="text-muted-foreground">This private page will update when the payment result arrives. You can close the browser and return to this page later.</p></div>}
+    {result?.status === "unknown" && <div role="alert" className="space-y-3"><h1 className="text-2xl font-semibold">Payment result is unknown</h1><p className="text-muted-foreground">We could not confirm the result yet. Keep this private page open or return later to check again; another order will not be created by checking.</p><div className="text-sm font-medium"><Button type="button" className="h-11 px-4" onClick={() => void load()}>Check again</Button></div></div>}
+    {result?.status === "processing" && <div role="status" className="space-y-2"><h1 className="text-2xl font-semibold">Payment received</h1><p className="text-muted-foreground">Your order is being committed. This page will update automatically.</p></div>}
+    {result?.status === "declined" && <div role="alert" className="space-y-2"><h1 className="text-2xl font-semibold">Payment was declined</h1><p className="text-muted-foreground">No paid order was created. Return to your bag and try again while your reservation is active.</p><Link href="/bag" className={link}>Return to your bag</Link></div>}
+    {result?.status === "cancelled" && <div role="status" className="space-y-2"><h1 className="text-2xl font-semibold">Payment was cancelled</h1><p className="text-muted-foreground">No paid order was created. You can return to your bag to retry before the reservation expires.</p><Link href="/bag" className={link}>Return to your bag</Link></div>}
+    {result?.status === "paid_exception" && <div role="alert" className="space-y-2"><h1 className="text-2xl font-semibold">Payment succeeded; inventory review is underway</h1><p className="text-muted-foreground">Your payment is recorded, but the order reservation needs recovery. This status is retained for follow-up.</p></div>}
+    <Link href="/shop" className={link}>Continue browsing</Link>
   </div>;
 }

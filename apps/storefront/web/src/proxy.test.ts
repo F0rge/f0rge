@@ -127,7 +127,7 @@ describe("Clerk and private-preview proxy composition", () => {
     const { proxy } = await import("./proxy");
     expect((await proxy(new NextRequest("https://storefront.example/collections"), {} as never)).status).toBe(401);
     const authorization = `Basic ${Buffer.from("preview-user:test-preview-password-that-is-long-enough").toString("base64")}`;
-    for (const [from, to] of [["/collections", "/shop"], ["/support", "/help"], ["/shop?category=bedroom", "/shop/bedroom"],
+    for (const [from, to] of [["/collections", "/shop"], ["/support", "/help"], ["/contact", "/help#contact"], ["/shop?category=bedroom", "/shop/bedroom"],
       ["/shop?collection=sofas", "/shop/sofas-armchairs"], ["/shop?collection=on-sale&sort=price-asc", "/shop"]]) {
       const response = await proxy(new NextRequest(`https://storefront.example${from}`, { headers: { authorization } }), {} as never);
       expect(response.status).toBe(308);

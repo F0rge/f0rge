@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Button } from "@f0rge/ui";
+import { Button, Card, CardContent, CardHeader, CardTitle } from "@f0rge/ui";
 import { fulfillmentStatusLabel } from "@/lib/order-fulfillment";
 import { orderMoney as money } from "@/lib/order-money";
 
@@ -69,23 +69,27 @@ export function OrderHistory() {
     catch (reason) { setError(reason instanceof Error ? reason.message : "Your orders are unavailable"); }
   }
 
-  return <section className="account-panel account-orders" aria-labelledby="order-history-heading">
-    <h2 id="order-history-heading">Your orders</h2>
-    {loading ? <p role="status">Loading your orders…</p> : error && !orders.length && !claimable.length
-      ? <p role="alert" className="account-error">{error}</p>
-      : orders.length ? <ul className="account-order-list">{orders.map((order) => <li key={order.id}>
-        <div><strong>{orderLabel(order)}</strong><p>{orderHistoryLine(order)}</p></div>
-        <div className="account-order-actions"><strong>{money(order.total, order.currency_code)}</strong><Link href={`/account/orders/${encodeURIComponent(order.id)}`} className="text-link">View order ↗</Link></div>
-      </li>)}</ul> : !claimable.length && <p>Orders placed while signed in will appear here.</p>}
-    {claimable.length > 0 && <div className="account-claimable">
-      <h3>Link a recent guest order</h3>
-      <p>These new guest orders match your verified sign-in email. Linking adds them to your account without changing the original order details.</p>
-      <ul className="account-order-list">{claimable.map((order) => <li key={order.id}>
-        <div><strong>{orderLabel(order)}</strong><p>{orderHistoryLine(order)}</p></div>
-        <Button type="button" className="account-secondary" disabled={Boolean(busyId)} onClick={() => void claim(order.id)}>{busyId === order.id ? "Linking…" : "Link order"}</Button>
-      </li>)}</ul>
-    </div>}
-    {!loading && hasMore && <div className="account-actions"><Button type="button" className="account-secondary" disabled={Boolean(busyId)} onClick={() => void loadMore()}>Load more orders</Button></div>}
-    {error && (orders.length > 0 || claimable.length > 0) && <p role="alert" className="account-error">{error}</p>}
-  </section>;
+  const row = "flex flex-col gap-3 border-t py-4 sm:flex-row sm:items-center sm:justify-between";
+  const alert = "rounded-lg border border-destructive p-4 text-sm text-destructive";
+  return <Card className="mt-6" role="region" aria-labelledby="order-history-heading">
+    <CardHeader><CardTitle><h2 id="order-history-heading" className="text-xl">Your orders</h2></CardTitle></CardHeader>
+    <CardContent className="space-y-4">
+      {loading ? <p role="status">Loading your orders…</p> : error && !orders.length && !claimable.length
+        ? <p role="alert" className={alert}>{error}</p>
+        : orders.length ? <ul>{orders.map((order) => <li key={order.id} className={row}>
+          <div><p className="font-medium">{orderLabel(order)}</p><p className="text-muted-foreground">{orderHistoryLine(order)}</p></div>
+          <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end sm:gap-1"><p className="font-medium">{money(order.total, order.currency_code)}</p><Link href={`/account/orders/${encodeURIComponent(order.id)}`} className="inline-flex min-h-11 items-center font-medium underline underline-offset-4 sm:min-h-0">View order</Link></div>
+        </li>)}</ul> : !claimable.length && <p className="text-muted-foreground">Orders placed while signed in will appear here.</p>}
+      {claimable.length > 0 && <div className="space-y-2">
+        <h3 className="font-medium">Link a recent guest order</h3>
+        <p className="text-muted-foreground">These new guest orders match your verified sign-in email. Linking adds them to your account without changing the original order details.</p>
+        <ul>{claimable.map((order) => <li key={order.id} className={row}>
+          <div><p className="font-medium">{orderLabel(order)}</p><p className="text-muted-foreground">{orderHistoryLine(order)}</p></div>
+          <div className="text-sm font-medium"><Button type="button" variant="outline" className="h-11 px-4" disabled={Boolean(busyId)} onClick={() => void claim(order.id)}>{busyId === order.id ? "Linking…" : "Link order"}</Button></div>
+        </li>)}</ul>
+      </div>}
+      {!loading && hasMore && <div className="text-sm font-medium"><Button type="button" variant="outline" className="h-11 px-4" disabled={Boolean(busyId)} onClick={() => void loadMore()}>Load more orders</Button></div>}
+      {error && (orders.length > 0 || claimable.length > 0) && <p role="alert" className={alert}>{error}</p>}
+    </CardContent>
+  </Card>;
 }

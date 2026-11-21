@@ -37,7 +37,7 @@ export function HeaderAuth() {
       <Show when="signed-in">
         <Button type="button" className="header-auth" disabled={busy} onClick={() => void logout()}>Sign out</Button>
       </Show>
-      {error && <p role="alert" className="account-error">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </>
   );
 }

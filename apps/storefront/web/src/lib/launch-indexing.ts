@@ -24,7 +24,7 @@ function isPrivatePath(path: string): boolean {
 }
 
 export const PUBLIC_INFO_PATHS = [
-  "/contact",
+  "/help",
   "/policies/delivery",
   "/policies/returns",
   "/policies/refunds",
@@ -38,7 +38,7 @@ export function catalogueIndexable(pathname: string, env: IndexingEnv = process.
   if (!storefrontIndexable(env)) return false;
   const path = pathOnly(pathname);
   if (isPrivatePath(path)) return false;
-  return path === "/" || path === "/shop" || path === "/contact" || CATEGORY_PATHS.includes(path) ||
+  return path === "/" || path === "/shop" || path === "/help" || CATEGORY_PATHS.includes(path) ||
     path.startsWith("/product/") || path.startsWith("/policies/");
 }
 

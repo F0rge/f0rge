@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Card, CardContent, CardHeader, CardTitle } from "@f0rge/ui";
 import { customerMedusaFetch, getCustomerContext } from "@/lib/customer-auth";
 import { fulfillmentStatusLabel, storefrontOrderFulfillment } from "@/lib/order-fulfillment";
 import { orderMoney as money } from "@/lib/order-money";
@@ -51,45 +52,52 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
     }
   } catch { /* Keep account order errors private and generic. */ }
 
-  if (!order) return <div className="content account-page account-order-detail">
-    <p className="eyebrow">DasKasas / customer account</p>
-    <h1>{signedIn ? "Order not found" : "Sign in to view this order"}</h1>
-    <p className="account-error">{signedIn ? "This order is unavailable in your account." : "Order details are shown only to the signed-in customer."}</p>
-    <Link href={signedIn ? "/account" : "/account/sign-in"} className="text-link">{signedIn ? "Back to your account ↗" : "Continue with email ↗"}</Link>
-  </div>;
+  if (!order) return <OrderUnavailable heading={signedIn ? "Order not found" : "Sign in to view this order"}
+    message={signedIn ? "This order is unavailable in your account." : "Order details are shown only to the signed-in customer."}
+    href={signedIn ? "/account" : "/account/sign-in"} label={signedIn ? "Back to your account" : "Continue with email"} />;
 
   const currency = order.currency_code || "ZAR";
-  return <div className="content account-page account-order-detail">
-    <p className="eyebrow">DasKasas / customer account</p>
-    <h1>Order {order.display_id ?? order.id}</h1>
-    {order.fulfillment_status || order.fulfillment_type ? <section className="account-panel" aria-label="Fulfilment status">
-      <h2>Fulfilment</h2>
-      {order.fulfillment_status ? <p role="status">{fulfillmentStatusLabel(order.fulfillment_status)}</p> : null}
-      {order.fulfillment_type === "collection" ? <p>Showroom collection</p> : null}
-      {order.fulfillment_type === "delivery" ? <p>Delivery</p> : null}
-    </section> : null}
-    {order.refund_status && <section className="account-panel" aria-label="Refund status">
-      <h2>Refunds</h2>
-      <p>Returned to your payment method: {money(order.refund_status.refunded_amount_minor / 100, currency)}</p>
-      {order.refund_status.items.map((refund, index) => <p key={index}>
-        {money(refund.amount_minor / 100, refund.currency_code)} — {refund.status === "succeeded" ? "Refunded" : refund.status === "pending" ? "Pending confirmation" : "Refund failed"}
-      </p>)}
-    </section>}
-    <section className="account-panel" aria-label="Order details">
-      <h2>Items</h2>
-      {(order.items || []).map((item, index) => <div className="checkout-summary-line" key={`${item.title || "item"}-${index}`}>
-        <span>{item.title || "Item"} × {item.quantity || 0}</span><strong>{money(item.total, currency)}</strong>
-      </div>)}
-      {(order.shipping_methods || []).map((method, index) => <div className="checkout-summary-line" key={`${method.name || "shipping"}-${index}`}>
-        <span>{method.name || "Shipping"}</span><strong>{money(method.total, currency)}</strong>
-      </div>)}
-      <dl><dt>Subtotal</dt><dd>{money(order.subtotal, currency)}</dd><dt>Shipping</dt><dd>{money(order.shipping_total, currency)}</dd>
-        <dt>VAT included</dt><dd>{money(order.tax_total, currency)}</dd><dt>Total paid</dt><dd>{money(order.total, currency)}</dd></dl>
-    </section>
-    <Link href="/account" className="text-link">Back to your orders ↗</Link>
+  const line = "flex justify-between gap-4 border-t py-3";
+  return <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-10 md:px-6">
+    <h1 className="text-2xl font-semibold">Order {order.display_id ?? order.id}</h1>
+    {order.fulfillment_status || order.fulfillment_type ? <Card role="region" aria-label="Fulfilment status">
+      <CardHeader><CardTitle><h2 className="text-xl">Fulfilment</h2></CardTitle></CardHeader>
+      <CardContent className="space-y-1">
+        {order.fulfillment_status ? <p role="status">{fulfillmentStatusLabel(order.fulfillment_status)}</p> : null}
+        {order.fulfillment_type === "collection" ? <p className="text-muted-foreground">Showroom collection</p> : null}
+        {order.fulfillment_type === "delivery" ? <p className="text-muted-foreground">Delivery</p> : null}
+      </CardContent>
+    </Card> : null}
+    {order.refund_status && <Card role="region" aria-label="Refund status">
+      <CardHeader><CardTitle><h2 className="text-xl">Refunds</h2></CardTitle></CardHeader>
+      <CardContent className="space-y-1">
+        <p>Returned to your payment method: {money(order.refund_status.refunded_amount_minor / 100, currency)}</p>
+        {order.refund_status.items.map((refund, index) => <p key={index} className="text-muted-foreground">
+          {money(refund.amount_minor / 100, refund.currency_code)} — {refund.status === "succeeded" ? "Refunded" : refund.status === "pending" ? "Pending confirmation" : "Refund failed"}
+        </p>)}
+      </CardContent>
+    </Card>}
+    <Card role="region" aria-label="Order details">
+      <CardHeader><CardTitle><h2 className="text-xl">Items</h2></CardTitle></CardHeader>
+      <CardContent>
+        {(order.items || []).map((item, index) => <div className={line} key={`${item.title || "item"}-${index}`}>
+          <span>{item.title || "Item"} × {item.quantity || 0}</span><strong className="font-medium whitespace-nowrap">{money(item.total, currency)}</strong>
+        </div>)}
+        {(order.shipping_methods || []).map((method, index) => <div className={line} key={`${method.name || "shipping"}-${index}`}>
+          <span>{method.name || "Shipping"}</span><strong className="font-medium whitespace-nowrap">{money(method.total, currency)}</strong>
+        </div>)}
+        <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t pt-3"><dt className="text-muted-foreground">Subtotal</dt><dd className="text-right">{money(order.subtotal, currency)}</dd><dt className="text-muted-foreground">Shipping</dt><dd className="text-right">{money(order.shipping_total, currency)}</dd>
+          <dt className="text-muted-foreground">VAT included</dt><dd className="text-right">{money(order.tax_total, currency)}</dd><dt className="font-medium">Total paid</dt><dd className="text-right font-medium">{money(order.total, currency)}</dd></dl>
+      </CardContent>
+    </Card>
+    <Link href="/account" className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">Back to your orders</Link>
   </div>;
 }
 
-function OrderUnavailable() {
-  return <div className="content account-page account-order-detail"><h1>Order not found</h1><p>This order is unavailable in your account.</p><Link href="/account" className="text-link">Back to your account ↗</Link></div>;
+function OrderUnavailable({ heading = "Order not found", message = "This order is unavailable in your account.", href = "/account", label = "Back to your account" }) {
+  return <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-10 md:px-6">
+    <h1 className="text-2xl font-semibold">{heading}</h1>
+    <p className="text-muted-foreground">{message}</p>
+    <Link href={href} className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{label}</Link>
+  </div>;
 }

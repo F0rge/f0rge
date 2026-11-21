@@ -19,7 +19,7 @@ export async function Listing({ category }: { category?: ShopCategory }) {
         </div>
         <div className="mt-8 flex flex-wrap gap-3 lg:mt-0 lg:ml-4 lg:shrink-0">
           <Button size="lg" variant="secondary" nativeButton={false} role="link" render={<Link href="/#visit" />}>Visit the showroom</Button>
-          <Button size="lg" variant="ghost" className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground" nativeButton={false} role="link" render={<Link href="/policies/delivery" />}>Delivery and returns</Button>
+          <Button size="lg" variant="ghost" className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground" nativeButton={false} role="link" render={<Link href="/help" />}>Delivery and returns</Button>
         </div>
       </div>
     </section>

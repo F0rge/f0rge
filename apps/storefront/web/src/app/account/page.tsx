@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@f0rge/ui";
 import { getCustomerContext } from "@/lib/customer-auth";
 import { AccountClient } from "./account-client";
 
@@ -14,15 +15,18 @@ export default async function AccountPage() {
     if (context) customer = { email: context.email, first_name: context.first_name, last_name: context.last_name };
   } catch { unavailable = true; }
 
-  return <div className="content account-page" data-storefront-no-capture="">
-    <p className="eyebrow">DasKasas / customer account</p>
-    <h1>Your account</h1>
-    {unavailable ? <p role="alert" className="account-error">Customer sign-in is temporarily unavailable. Please try again later or continue shopping as a guest.</p>
+  return <div className="mx-auto w-full max-w-7xl px-4 py-10 md:px-6" data-storefront-no-capture="">
+    <h1 className="text-2xl font-semibold">Your account</h1>
+    {unavailable ? <p role="alert" className="mt-6 rounded-lg border border-destructive p-4 text-sm text-destructive">Customer sign-in is temporarily unavailable. Please try again later or continue shopping as a guest.</p>
       : customer ? <AccountClient customer={customer} />
-        : <section className="account-panel">
-          <h2>Sign in to your account</h2>
-          <p>Use a one-time email code to manage your saved delivery addresses. You can always shop and check out as a guest.</p>
-          <Link className="account-primary" href="/account/sign-in">Continue with email ↗</Link>
-        </section>}
+        : <Card className="mt-6 max-w-xl">
+          <CardHeader>
+            <CardTitle><h2 className="text-xl">Sign in to your account</h2></CardTitle>
+            <CardDescription>Use a one-time email code to manage your saved delivery addresses. You can always shop and check out as a guest.</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm font-medium">
+            <Button className="h-11 px-4" nativeButton={false} role="link" render={<Link href="/account/sign-in" />}>Continue with email</Button>
+          </CardContent>
+        </Card>}
   </div>;
 }

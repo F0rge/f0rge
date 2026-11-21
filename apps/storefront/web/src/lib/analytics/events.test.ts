@@ -48,6 +48,7 @@ describe("storefront analytics event allowlist", () => {
     expect(analyticsPageForPathname("/shop/bedroom")).toEqual({ pageKey: "category" });
     expect(analyticsSurfaceForPathname("/shop/sofas-armchairs")).toBe("category");
     expect(analyticsPageForPathname("/shop/not-a-category")).toBeNull();
+    expect(analyticsPageForPathname("/help")).toEqual({ pageKey: "help" });
     expect(sanitizeAnalyticsEvent({ name: "storefront_product_impressed", properties: { product_id: "prod_1", surface: "category" } }))
       .toEqual({ name: "storefront_product_impressed", properties: { product_id: "prod_1", surface: "category" } });
     expect(sanitizeAnalyticsEvent({ name: "storefront_search_results_viewed", properties: { query_present: false, result_count: 1, availability: "made_to_order" } })?.properties.availability)

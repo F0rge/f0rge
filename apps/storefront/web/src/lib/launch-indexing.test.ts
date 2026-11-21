@@ -28,7 +28,8 @@ describe("storefront indexing", () => {
     expect(catalogueIndexable("/policies/terms", production)).toBe(true);
     expect(catalogueIndexable("/policies/refunds", production)).toBe(true);
     expect(catalogueIndexable("/policies/returns", production)).toBe(true);
-    expect(catalogueIndexable("/contact", production)).toBe(true);
+    expect(catalogueIndexable("/help", production)).toBe(true);
+    expect(catalogueIndexable("/contact", production)).toBe(false);
     expect(catalogueIndexable("/account", production)).toBe(false);
     expect(catalogueIndexable("/account/orders/1", production)).toBe(false);
     expect(catalogueIndexable("/checkout", production)).toBe(false);
@@ -56,7 +57,8 @@ describe("storefront indexing", () => {
     expect(paths).toContain("/policies/refunds");
     expect(paths).toContain("/policies/returns");
     expect(paths).toContain("/policies/delivery");
-    expect(paths).toContain("/contact");
+    expect(paths).toContain("/help");
+    expect(paths).not.toContain("/contact");
     expect(paths.some((path) => path.startsWith("/account") || path.startsWith("/checkout") || path.startsWith("/order"))).toBe(false);
   });
 

@@ -48,7 +48,7 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--site-header-height); }
 body { margin: 0; overflow-x: clip; background: var(--background); color: var(--foreground); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 
-/* Legacy pages (shop, product, bag, checkout, account, policies) until their rebuild tickets land.
+/* Legacy pages (error, not found) until their rebuild tickets land.
    Element rules are scoped to their .content wrapper so they never reach Tailwind-styled markup. */
 :where(.content) :is(button, input, select) { font: inherit; }
 :where(.content) :focus-visible { outline: 2px solid var(--primary); outline-offset: 5px; }
@@ -68,50 +68,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 .text-link:hover { text-decoration: underline; text-underline-offset: 4px; }
 
 .product-attention-region { position: sticky; top: 0; height: 50dvh; margin-bottom: -50dvh; pointer-events: none; }
-.error-state button, .account-actions button, .account-primary { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; height: auto; border: 1px solid var(--primary); border-radius: 999px; background: var(--primary); color: #fff; padding: .9rem 1.4rem; font: 13px var(--sans); text-decoration: none; cursor: pointer; }
-.account-actions button:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-
-.confirmation-card dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem; margin-block: 1rem; padding: 1.4rem 0; border-top: 1px solid var(--line); font-size: 13px; }
-.confirmation-card dd { margin: 0; text-align: right; }
-.account-error { border: 1px solid #d70015; background: #fff5f5; color: #a41020; padding: 1rem; margin: 1rem 0; font-size: 13px; line-height: 1.7; }
-.confirmation-card, .account-panel { border: 1px solid var(--line); border-radius: 24px; padding: clamp(1.25rem, 3vw, 2.25rem); background: #fff; min-width: 0; }
-.confirmation-card h2, .account-panel h2 { font-size: 1.7rem; margin: 2rem 0 1.25rem; }
-.account-panel h2 { margin-top: 0; }
-.account-panel label { display: block; margin: .8rem 0; font-size: 12px; }
-.account-panel input { display: block; width: 100%; min-height: 48px; margin-top: .5rem; border: 1px solid #8a8a8f; background: var(--background); padding: .7rem .8rem; color: var(--foreground); font: 14px var(--sans); border-radius: 10px; }
-.checkout-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
-.checkout-summary-line { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--line); font-size: 12px; }
-.checkout-summary-line strong { white-space: nowrap; }
-.confirmation-card { max-width: 45rem; margin: 2rem 0; }
-.confirmation-card h3 { font: 500 13px var(--sans); }
-.confirmation-page { min-height: 50vh; padding-bottom: 5rem; }
-.confirmation-page > div[role="status"], .confirmation-page > div[role="alert"] { margin: 2rem 0; }
-.confirmation-page button { min-height: 44px; height: auto; border: 1px solid var(--foreground); border-radius: 999px; padding: .7rem 1rem; background: transparent; color: var(--foreground); cursor: pointer; }
-.account-page { min-height: 55vh; padding-bottom: 5rem; }
-.account-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); gap: 2rem; margin-top: 2rem; align-items: start; }
-.account-panel p { color: var(--muted-foreground); line-height: 1.8; }
-.account-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }
-.account-actions .account-secondary { color: var(--foreground); background: transparent; }
-.account-address { border-top: 1px solid var(--line); padding: 1rem 0; }
-.account-address p { margin: .25rem 0; font-size: 13px; }
-.account-error { color: #a41020 !important; }
-.account-orders { margin-top: 2rem; }
-.account-order-list { list-style: none; margin: 0; padding: 0; }
-.account-order-list li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-top: 1px solid var(--line); padding: 1rem 0; }
-.account-order-list p { margin: .3rem 0 0; font-size: 12px; }
-.account-order-actions { display: flex; align-items: flex-end; flex-direction: column; gap: .45rem; }
-.account-claimable { border-top: 1px solid var(--line); margin-top: 1.2rem; padding-top: 1rem; }
-.account-claimable h3 { font-size: 1.15rem; margin: .2rem 0 .5rem; }
-.account-order-detail { max-width: 760px; }
-
-.policy-page { max-width: 52rem; }
-.policy-page h1 { font-size: clamp(2.6rem, 5vw, 4.4rem); }
-.policy-page h2 { font-size: 1.45rem; line-height: 1.3; margin: 2.25rem 0 0; }
-.policy-page p:not(.eyebrow) { color: var(--muted-foreground); line-height: 1.9; margin-block: 1.5rem; }
-.policy-page p.policy-draft-notice { color: var(--foreground); border: 1px solid var(--line); padding: 1rem 1.1rem; }
-.policy-placeholder { background: #fff4d6; color: var(--foreground); padding: 0 .15rem; }
-.policy-related { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; margin-top: 2rem; }
-.policy-related a { display: inline-flex; align-items: center; min-height: 44px; color: var(--foreground); font-size: 13px; }
+.error-state button { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; height: auto; border: 1px solid var(--primary); border-radius: 999px; background: var(--primary); color: #fff; padding: .9rem 1.4rem; font: 13px var(--sans); text-decoration: none; cursor: pointer; }
 .error-state { min-height: 55vh; }
 .error-state h1 { max-width: 14ch; }
 .error-state > p:not(.eyebrow) { color: var(--muted-foreground); }
@@ -119,16 +76,6 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 
 @media (max-width: 1050px) {
   .product-attention-region { height: 100dvh; margin-bottom: -100dvh; }
-  .account-layout { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 700px) {
-  .checkout-fields { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .account-panel input { font-size: 16px; }
-  .account-order-list li { align-items: flex-start; flex-direction: column; }
-  .account-order-actions { align-items: flex-start; }
-}
-@media (max-width: 768px) {
-  .account-panel input { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
