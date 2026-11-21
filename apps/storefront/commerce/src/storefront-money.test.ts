@@ -22,7 +22,7 @@ function nativePaidOrder(quantities: number[], delivery = 0, discount = 0) {
   return {
     ...order, ...decorated,
     payment_collections: [{ payments: [{
-      id: "payment-money", provider_id: "peach", amount: decorated.total,
+      id: "payment-money", provider_id: "paystack", amount: decorated.total,
       currency_code: "zar", captured_at: order.created_at, data: {},
     }] }],
   };

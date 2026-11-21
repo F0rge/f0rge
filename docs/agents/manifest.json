@@ -77,25 +77,6 @@
   "primaryRules": [
     {
       "patterns": [
-        "apps/buycycle/backend/src/persistence.rs",
-        "apps/buycycle/backend/src/import.rs",
-        "apps/buycycle/migration/**",
-        "apps/buycycle/backend/src/bin/migrate.rs",
-        "apps/buycycle/backend/src/bin/import-legacy.rs",
-        "apps/buycycle/backend/src/bin/seed.rs"
-      ],
-      "owner": "f0rge-data",
-      "reason": "Buycycle lossless legacy import, PostgreSQL persistence and reconciliation."
-    },
-    {
-      "patterns": [
-        "apps/buycycle/ops/**"
-      ],
-      "owner": "f0rge-devops",
-      "reason": "Buycycle private runtime and backup/restore operations."
-    },
-    {
-      "patterns": [
         "docs/adr/backend.md",
         "docs/adr/api.md"
       ],
@@ -231,7 +212,6 @@
         "**/compose.yml",
         "**/compose.yaml",
         "**/docker-entrypoint.sh",
-        "apps/buycycle/entrypoint.sh",
         "**/nginx.conf",
         "**/.env.example",
         "apps/airflow/scripts/**",
@@ -315,8 +295,6 @@
         "apps/marrow/backend/data/**",
         "apps/firstout/backend/app/commands/import_clerk_staff.py",
         "apps/firstout/backend/app/commands/tenant_cutover.py",
-        "apps/buycycle/tracker/**",
-        "apps/buycycle/tests/**",
         "apps/environment-monitor/backend/migrate_to_sqlite.py",
         "apps/environment-monitor/restore-all-historical-data.py"
       ],
@@ -330,7 +308,6 @@
         "apps/dk/tag-printer/frontend/**",
         "apps/storefront/web/**",
         "apps/marrow/ios/**",
-        "apps/buycycle/dashboard/**",
         "apps/firstout/.superdesign/**",
         "libs/primer/**"
       ],
@@ -355,8 +332,7 @@
         "libs/backend/storage/**",
         "apps/*/backend/**",
         "apps/dk/tag-printer/backend/**",
-        "apps/storefront/commerce/**",
-        "apps/buycycle/run-tracker.sh"
+        "apps/storefront/commerce/**"
       ],
       "owner": "f0rge-backend",
       "reason": "Application services, API behavior tests and shared backend plumbing."
@@ -432,8 +408,7 @@
         "apps/*/frontend/**",
         "apps/dk/tag-printer/frontend/**",
         "apps/storefront/web/**",
-        "apps/marrow/ios/**",
-        "apps/buycycle/dashboard/**"
+        "apps/marrow/ios/**"
       ],
       "reviewers": [
         "f0rge-frontend"
@@ -694,22 +669,7 @@
     },
     {
       "patterns": [
-        "apps/buycycle/backend/**",
-        "apps/buycycle/migration/**",
-        "apps/buycycle/ops/**"
-      ],
-      "reviewers": [
-        "f0rge-backend",
-        "f0rge-data",
-        "f0rge-security",
-        "f0rge-devops",
-        "f0rge-delivery"
-      ]
-    },
-    {
-      "patterns": [
-        "libs/primer/**",
-        "apps/buycycle/frontend/**"
+        "libs/primer/**"
       ],
       "reviewers": [
         "f0rge-frontend",

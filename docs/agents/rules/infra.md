@@ -23,7 +23,6 @@ Overview and App table: [root `AGENTS.md`](../../../AGENTS.md#cicd). Programs, d
 | firstout | **Own** Railway project `Firstout`; hosts `firstout.co.za` / `api.firstout.co.za`. |
 | daskasas | Own Railway project `DasKasas`; services `storefront` and `storefront-commerce`. |
 | dk | Pi, Coolify. Stateless. Host ports 8002 (backend) and 3002 (frontend). |
-| buycycle | Pi, Coolify, internal only (host ports 8095/8096, no domain). Data on the `/data` volume; the tracker is a Coolify scheduled task. |
 | envmon | Pi, Coolify, internal only (backend 5001, frontend 5000). SQLite `/app/data/readings.db` on volume `environment-monitor_sensor_data`. |
 
 # Marrow Infrastructure (Railway)

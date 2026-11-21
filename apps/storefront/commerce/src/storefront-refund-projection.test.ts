@@ -1,49 +1,23 @@
-import { createHmac, randomUUID } from "node:crypto";
-import { parsePeachWebhook, verifyPeachWebhookSignature, type PeachWebhookEvent } from "./peach-checkout";
-import { peachRefundOutcome } from "./peach-refunds";
-import { customerRefundStatusProjection } from "./storefront-peach-refunds";
+import { parsePaystackRefund, paystackRefundOutcome } from "./paystack-checkout";
+import { customerRefundStatusProjection } from "./storefront-paystack-refunds";
 
-test("pure customer refund projection upgrades a decline and ignores stale or duplicate callbacks", () => {
+test("pure customer refund projection upgrades a decline and ignores stale or duplicate observations", () => {
   const order = { email: "refund-fixture@example.invalid", display_id: 754 };
   let metadata: Record<string, unknown> = {};
-  const webhookUrl = "https://storefront.example.invalid/hooks/peach";
-  const webhookSecret = "test-webhook-signing-secret";
-  const providerRefundId = "8ac7a49f8af08e94018af09246760e30";
-  const captureId = "8ac7a4a284c684140184c7a8f19a5530";
-  const signedEvent = (resultCode: string): PeachWebhookEvent => {
-    const timestamp = new Date().toISOString();
-    const webhookId = `refund-projection-${randomUUID()}`;
-    const rawBody = new URLSearchParams({
-      amount: "5.00",
-      currency: "ZAR",
-      id: providerRefundId,
-      referencedId: captureId,
-      paymentType: "RF",
-      result_code: resultCode,
-      timestamp,
-    }).toString();
-    const signature = createHmac("sha256", webhookSecret)
-      .update(`${timestamp}.${webhookId}.${webhookUrl}.${rawBody}`)
-      .digest("hex");
-    expect(verifyPeachWebhookSignature({
-      secret: webhookSecret,
-      configuredUrl: webhookUrl,
-      timestamp,
-      webhookId,
-      signature,
-      algorithm: "HMAC-SHA256",
-      rawBody,
-    })).toBe(true);
-    const event = parsePeachWebhook(rawBody, webhookId);
-    if (!event) throw new Error("Signed refund projection fixture did not parse");
+  const observed = (status: string) => {
+    const event = parsePaystackRefund({
+      id: 3018284, transaction: 4099260516, reference: "dkr_00000000000000000000000000000754",
+      amount: 500, currency: "ZAR", status, createdAt: "2026-10-01T12:30:00.000Z",
+    }, { reference: "dk_capture754", transactionId: "4099260516", refundRequestId: null });
+    if (!event) throw new Error("Refund projection fixture did not parse");
     return event;
   };
-  const failure = signedEvent("100.550.701");
-  const success = signedEvent("000.100.110");
-  const failureStatus = peachRefundOutcome(failure.result_code);
-  const successStatus = peachRefundOutcome(success.result_code);
+  const failure = observed("failed");
+  const success = observed("processed");
+  const failureStatus = paystackRefundOutcome(failure.provider_status);
+  const successStatus = paystackRefundOutcome(success.provider_status);
   if (failureStatus !== "failed" || successStatus !== "succeeded") {
-    throw new Error("Refund status fixture uses an unexpected Peach outcome");
+    throw new Error("Refund status fixture uses an unexpected Paystack outcome");
   }
 
   metadata = customerRefundStatusProjection(metadata, order, failure, failureStatus) || metadata;
@@ -61,7 +35,7 @@ test("pure customer refund projection upgrades a decline and ignores stale or du
     id: string; data: { refund: { status: string } };
   }[];
   expect(projectedRefunds).toEqual([{
-    provider_refund_id: providerRefundId,
+    provider_refund_id: "3018284",
     amount_minor: 500,
     currency_code: "ZAR",
     status: "succeeded",

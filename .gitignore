@@ -59,23 +59,6 @@ target/
 libs/ui/dist/
 libs/ui/storybook-static/
 
-# Buycycle (public repo: never commit DBs, scraped data or the feed key)
-apps/buycycle/**/*.db
-apps/buycycle/**/*.db-*
-apps/buycycle/**/*.sqlite*
-apps/buycycle/**/*.json.gz
-apps/buycycle/**/data.json
-apps/buycycle/**/top.json
-apps/buycycle/**/details.json
-apps/buycycle/**/models.json
-apps/buycycle/**/alerts*.json
-apps/buycycle/**/*.csv
-apps/buycycle/**/*.env
-apps/buycycle/**/*-tracker.lock
-apps/buycycle/**/*-tracker-safety.json*
-apps/buycycle/data/
-apps/buycycle/site/
-
 # Environment monitor (public repo: never commit the sensor DB, exports, or env)
 apps/environment-monitor/**/*.db
 apps/environment-monitor/**/*.db-*

@@ -2,7 +2,7 @@
 
 This is the repository entry point for Codex and Claude Code. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
 
-Personal Nx monorepo for Marrow, Firstout, DasKasas storefront and tag printer, Buycycle, Environment Monitor, and Airflow.
+Personal Nx monorepo for Marrow, Firstout, DasKasas storefront and tag printer, Environment Monitor, and Airflow.
 
 ## Canonical decisions
 
@@ -37,10 +37,6 @@ Marrow uses Railway project **Marrow** (`a633a271-…`; older records call it `z
 | Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
 Service names, health paths, the migration command and start commands live in the deploy blocks of `apps/marrow/backend/project.json` and `apps/marrow/frontend/project.json`. See [CI/CD](#cicd), [`docs/agents/rules/infra.md`](docs/agents/rules/infra.md), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
-
-## apps/buycycle
-
-Private Buycycle deal finder on the Pi (Coolify, ports 8095/8096). The pipeline releases the legacy Python service, Nx project `buycycle`. The Rust/PostgreSQL/React rewrite is unreleased and has no deploy block. Read [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md) for source boundaries and safe local checks. Public repo: never commit its DBs, data or feed key.
 
 ## apps/environment-monitor
 
@@ -103,7 +99,6 @@ Two workflows, read top to bottom. Terms (Project, App, Host, Artifact, Release)
 | `daskasas` | Railway | `daskasas-commerce`, `daskasas-web` |
 | `dk` | Pi (Coolify) | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 | `envmon` | Pi (Coolify) | `environment-monitor-backend`, `environment-monitor-frontend` |
-| `buycycle` | Pi (Coolify) | `buycycle` |
 
 Airflow runs on the Pi outside this pipeline.
 
@@ -160,7 +155,7 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 Always-on agent policy: [`docs/agents/rules/nx.md`](docs/agents/rules/nx.md). Agent review checklist: [`docs/agents/review-checklist.md`](docs/agents/review-checklist.md). New apps/libs need `project.json` + `platform:` tags; CI's plan job turns `nx affected` into language booleans and the affected-Apps matrix; OpenAPI via `marrow-frontend:codegen:check`; Playwright locally via `nx run …:e2e`.
 
-Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. Build/test plumbing alone does not prove app or release compliance. P-010 now sequences the authorized Buycycle migration before the later holiday-explorer pilot.
+Before adding a Rust crate, follow [Rust/Nx registration](.github/rust/README.md): Cargo projects need `platform:rust`, checked targets and dependency mappings. Build/test plumbing alone does not prove app or release compliance.
 
 ## Project rules
 

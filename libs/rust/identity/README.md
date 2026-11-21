@@ -15,9 +15,12 @@ precondition on mutations; it is compared against the verified identity and gran
 no identity or permissions by itself. App-owned persistence still scopes every
 state operation to the verified subject.
 
-Production configuration requires HTTPS Cloudflare team/JWKS origins. Explicit
-local mode permits only loopback HTTP fixtures for tests; production deployment
-preflight rejects local mode. Test fixtures never contact Cloudflare or send email.
+`Auth::from_env` reads `ACCESS_ISSUER`, `ACCESS_AUDIENCE`, `ACCESS_ALLOWED_EMAILS`
+and optional `ACCESS_JWKS_URL`. It always builds production mode, which requires
+HTTPS Cloudflare team/JWKS origins. No environment variable enables local mode:
+only an explicit `Auth::new(.., local: true)` call permits loopback HTTP fixtures
+and disables the Cloudflare origin/path pinning, so it is for tests only; the crate's tests are its only such caller. Test fixtures never contact
+Cloudflare or send email.
 
 Run `npx nx run-many -t=format-check,lint,test,build --projects=f0rge-identity`.
 The committed standalone lock, fixed Rust/Nx targets and shared dependency edge

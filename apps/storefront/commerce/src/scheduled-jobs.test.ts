@@ -23,7 +23,7 @@ test("discovered jobs retain commerce processing without the retired Firstout ex
     "sync-firstout-products",
     "expire-storefront-checkout-holds",
     "retry-storefront-order-handoffs",
-    "process-storefront-peach-webhooks",
+    "process-storefront-paystack-webhooks",
     "sync-storefront-fulfillment-events",
     "retry-storefront-notifications",
   ]));

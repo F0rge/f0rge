@@ -5,9 +5,8 @@ import { updateProductVariantsWorkflow } from "@medusajs/medusa/core-flows";
 import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { availableCapacity, consumeCapacity, mergeCapacityState, reserveCapacity } from "./made-to-order-capacity";
-import { recordCustomerRefundStatus } from "./storefront-peach-refunds";
+import { recordCustomerRefundStatus } from "./storefront-paystack-refunds";
 import { syncStorefrontFulfillmentEvents, type StorefrontFulfillmentEvent } from "./storefront-fulfillment-events";
-import type { PeachWebhookEvent } from "./peach-checkout";
 
 type JsonRecord = Record<string, any>;
 
@@ -40,15 +39,10 @@ const liveTestEnabled = liveTestRequested;
 const testCompanyId = randomUUID();
 const testServiceToken = "synthetic-cancellation-ops-token";
 const testOpsUrl = "http://firstout-cancellation.fixture.test/api/v1/ops-commerce/v1";
-const testPeachEnvironment = {
-  PEACH_ENVIRONMENT: "sandbox",
-  PEACH_CLIENT_ID: "synthetic-cancellation-client",
-  PEACH_CLIENT_SECRET: "synthetic-cancellation-client-secret",
-  PEACH_MERCHANT_ID: "synthetic-cancellation-merchant",
-  PEACH_ENTITY_ID: "synthetic-cancellation-entity",
-  PEACH_WEBHOOK_SECRET: "synthetic-cancellation-webhook-secret",
-  PEACH_CHECKOUT_SECRET: "synthetic-cancellation-checkout-secret",
-  PEACH_WEBHOOK_URL: "https://localhost:9000/hooks/peach",
+const testPaystackEnvironment = {
+  PAYSTACK_SECRET_KEY: "sk_test_syntheticcancellation",
+  PAYSTACK_WEBHOOK_SECRET: "whsec_synthetic_cancellation",
+  PAYSTACK_HOSTED_TEST_MODE: "true",
   STOREFRONT_PUBLIC_URL: "https://localhost:3004",
   FIRSTOUT_OPS_URL: testOpsUrl,
   FIRSTOUT_OPS_TOKEN: testServiceToken,
@@ -66,12 +60,12 @@ function response(value: unknown): Response {
 }
 
 if (liveTestEnabled) {
-  Object.assign(process.env, testPeachEnvironment);
+  Object.assign(process.env, testPaystackEnvironment);
   // The runner's scheduled work is allowed to use local fixtures only. In
   // particular, this cancellation proof never sends an external provider call.
   globalThis.fetch = async (input, init) => {
     const url = requestUrl(input);
-    if (url.hostname.endsWith("peachpayments.com")) {
+    if (url.hostname.endsWith("paystack.co")) {
       throw new Error("native cancellation test blocks provider requests");
     }
     if (url.hostname === "firstout-cancellation.fixture.test") {
@@ -86,7 +80,7 @@ if (liveTestEnabled) {
     moduleName: `storefront-cancellation-native-${randomUUID().replaceAll("-", "").slice(0, 10)}`,
     cwd: appPath,
     medusaConfigFile: appPath,
-    env: { NODE_ENV: "test", ...testPeachEnvironment },
+    env: { NODE_ENV: "test", ...testPaystackEnvironment },
     testSuite: ({ getContainer }) => {
       describe("accepted Firstout cancellation against native Medusa PostgreSQL", () => {
         let container: MedusaContainer;
@@ -344,20 +338,10 @@ if (liveTestEnabled) {
             initialMto.metadata.storefront_made_to_order_capacity.allocations[offerId], Date.now(),
           )).toBe(0);
 
-          const providerRefund: PeachWebhookEvent = {
-            webhook_id: "synthetic-verified-refund",
-            checkout_id: "",
-            merchant_reference: "",
+          const providerRefund = {
+            provider_refund_id: String(Date.now()),
             amount_minor: 100,
             currency_code: "ZAR",
-            payment_type: "RF",
-            result_code: "000.100.110",
-            transaction_id: randomUUID().replaceAll("-", ""),
-            referenced_transaction_id: randomUUID().replaceAll("-", ""),
-            refund_request_id: null,
-            event_timestamp: new Date().toISOString(),
-            raw_sha256: "a".repeat(64),
-            canonical_sha256: "b".repeat(64),
           };
           await recordCustomerRefundStatus(container, orderId, providerRefund, "succeeded");
           const afterRefundVariants = await getVariants();

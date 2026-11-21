@@ -35,7 +35,7 @@ def main() -> None:
     ):
         parser.error("environment JSON must map names to strings")
     external = (
-        "PEACH_",
+        "PAYSTACK_",
         "CLERK_",
         "NEXT_PUBLIC_CLERK_",
         "STOREFRONT_CLERK_",

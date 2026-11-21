@@ -8,11 +8,9 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { collectStorefrontExceptionSources, type ExceptionScan } from "./storefront-exception-sources";
 import { syncStorefrontExceptions, type ExceptionCommand } from "./storefront-exception-worker";
 import { recordOpsCheckoutHealth } from "./storefront-commerce-exceptions";
-import { createPeachAttempt, createPeachRefundDispatch, PEACH_ATTEMPTS_TABLE, updatePeachAttempt } from "./peach-payment-store";
+import { createPaystackAttempt, createPaystackRefundDispatch, PAYSTACK_ATTEMPTS_TABLE, updatePaystackAttempt } from "./paystack-payment-store";
 import { ensureStorefrontOrderOutbox } from "./storefront-order-handoff";
-import { Migration20260930180331 } from "./modules/storefront-peach/migrations/Migration20260930180331";
-import { Migration20261001090000 } from "./modules/storefront-peach/migrations/Migration20261001090000";
-import { Migration20261009120000 } from "./modules/storefront-peach/migrations/Migration20261009120000";
+import { Migration20261121123916 } from "./modules/storefront-paystack/migrations/Migration20261121123916";
 
 jest.setTimeout(180000);
 const enabled = process.env.STOREFRONT_NATIVE_EXCEPTIONS_LIVE_TEST === "1";
@@ -80,7 +78,7 @@ if (enabled) {
         inventory = container.resolve(Modules.INVENTORY); orders = container.resolve(Modules.ORDER);
         globalThis.fetch = boundary;
         const sql: string[] = [];
-        for (const Type of [Migration20260930180331, Migration20261001090000, Migration20261009120000]) {
+        for (const Type of [Migration20261121123916]) {
           const migration = Object.create(Type.prototype);
           Reflect.set(migration, "addSql", (statement: string) => sql.push(statement));
           await migration.up();
@@ -123,22 +121,22 @@ if (enabled) {
         const outbox = await ensureStorefrontOrderOutbox(container, order.id);
         expect(outbox?.payload).toBeTruthy();
         await orders.updateOrders([{ id: order.id, metadata: { ...order.metadata, storefront_handoff_outbox: { ...outbox, status: "failed", failure_code: "ops_rejected_handoff" } } }]);
-        const unknown = await createPeachAttempt(db, { paymentSessionId: "unknown-session", amountMinor: 1200, currencyCode: "ZAR" });
+        const unknown = await createPaystackAttempt(db, { paymentSessionId: "unknown-session", amountMinor: 1200, currencyCode: "ZAR" });
         unknownId = unknown.attempt.id;
-        await updatePeachAttempt(db, unknownId, { status: "unknown" });
-        const stored = await db(PEACH_ATTEMPTS_TABLE).where({ id: unknownId }).first();
-        await db(PEACH_ATTEMPTS_TABLE).insert(Array.from({ length: 500 }, (_, i) => ({ ...stored,
-          id: `spay_paged_${String(i).padStart(4, "0")}`, payment_session_id: `paged_session_${i}`, merchant_reference: `paged_reference_${i}`, nonce: `paged_nonce_${i}` })));
-        const captured = await createPeachAttempt(db, { paymentSessionId: "deleted-native-session", cartId: "deleted-cart", checkoutSnapshot: { retained: true }, amountMinor: 999, currencyCode: "ZAR" });
+        await updatePaystackAttempt(db, unknownId, { status: "unknown" });
+        const stored = await db(PAYSTACK_ATTEMPTS_TABLE).where({ id: unknownId }).first();
+        await db(PAYSTACK_ATTEMPTS_TABLE).insert(Array.from({ length: 500 }, (_, i) => ({ ...stored,
+          id: `spay_paged_${String(i).padStart(4, "0")}`, payment_session_id: `paged_session_${i}`, reference: `dk_paged_reference_${i}` })));
+        const captured = await createPaystackAttempt(db, { paymentSessionId: "deleted-native-session", cartId: "deleted-cart", checkoutSnapshot: { retained: true }, amountMinor: 999, currencyCode: "ZAR" });
         capturedId = captured.attempt.id;
-        await updatePeachAttempt(db, capturedId, { status: "captured", captured_transaction_id: "verified-provider-charge" });
-        const refund = await createPeachRefundDispatch(db, { request_id: "unknown-refund", handoff_id: "handoff", external_order_id: orderId,
+        await updatePaystackAttempt(db, capturedId, { status: "captured", transaction_id: "4099260516" });
+        const refund = await createPaystackRefundDispatch(db, { request_id: "unknown-refund", handoff_id: "handoff", external_order_id: orderId,
           original_transaction_id: "original-capture", amount_minor: 500, currency_code: "ZAR", cancel_order: false, status: "authorized" });
-        await db("storefront_peach_refund_dispatch").where({ id: refund.dispatch.id }).update({ status: "unknown" });
+        await db("storefront_paystack_refund_dispatch").where({ id: refund.dispatch.id }).update({ status: "unknown" });
       });
       afterAll(() => { globalThis.fetch = originalFetch; });
       beforeEach(() => { scans.length = 0; calls.length = 0; results.length = 0; pending = []; feedFailure = false; });
-      test("observes all seven real condition kinds and every durable unknown row while disabled Peach money remains visible", async () => {
+      test("observes all seven real condition kinds and every durable unknown row while disabled Paystack money remains visible", async () => {
         const scan = await collectStorefrontExceptionSources(container, boundary);
         expect(new Set(scan.observations.map((row) => row.kind))).toEqual(new Set(["aged_hold", "stale_sync", "missing_operational_paid_order", "unknown_payment", "refund_mismatch", "fulfilment_drift", "capacity_conflict"]));
         expect(scan.observations.filter((row) => row.kind === "unknown_payment")).toHaveLength(501);
@@ -189,7 +187,7 @@ if (enabled) {
         pending = [command("unknown_payment", unknownId, "verify_with_provider"), command("missing_operational_paid_order", capturedId, "retry_handoff"), command("refund_mismatch", "unknown-refund", "reproject_verified_refund")];
         await syncStorefrontExceptions(container, boundary);
         expect(results.map((row) => row.outcome)).toEqual(["not_repaired", "not_repaired", "not_repaired"]);
-        expect(calls.every((call) => !call.includes("peachpayments.com"))).toBe(true);
+        expect(calls.every((call) => !call.includes("api.paystack.co"))).toBe(true);
         scans.length = 0; calls.length = 0;
         feedFailure = true;
         await expect(syncStorefrontExceptions(container, boundary)).rejects.toThrow("exception_fulfillment_feed_http_503");
