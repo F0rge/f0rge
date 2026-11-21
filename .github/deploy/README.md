@@ -2,7 +2,7 @@
 
 A reviewed merge to `main` with CI passing releases every App the change affects ([P-006](../../docs/adr/governance.md#p-006)). Terms (Project, App, Host, Artifact, Release): [glossary](../CONTEXT.md).
 
-[`ci.yml`](../workflows/ci.yml) builds and health-checks one Artifact per deployable Project and, on `main`, pushes it as `ghcr.io/f0rge/<nx project>:<commit sha>`. Its last job calls [`cd.yml`](../workflows/cd.yml), which runs one job per affected App in the GitHub environment named after the App. That job runs `deploy.mjs`.
+[`ci.yml`](../workflows/ci.yml) builds and health-checks one Artifact per deployable Project and, on `main`, pushes it as `ghcr.io/f0rge/<nx project>:<commit sha>`. On `main` the language tests are skipped when every new commit's tree already passed `merge-gate`, usually in its pull request; the images are always built. Its last job calls [`cd.yml`](../workflows/cd.yml), which runs one job per affected App in the GitHub environment named after the App. That job runs `deploy.mjs`.
 
 ## The two programs
 
@@ -65,3 +65,5 @@ Switch Environment Monitor first, followed by the DasKasas storefront, Marrow an
 - A migration that is not backward compatible can make the automatic rollback fail.
 - A commit tag can in principle be overwritten; only `main` CI pushes.
 - On the Pi a bad Release causes downtime until the rollback completes.
+- A tree that passed `merge-gate` in its pull request is not tested again on `main`, so a flaky or environment-only failure, or a Python advisory published in between, is not caught there.
+- A marker can be uploaded by any run of this repository; it only skips tests, not review, the image check or the Release health check.

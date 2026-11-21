@@ -19,9 +19,28 @@ export function plan(affected, graph, apps) {
   };
 }
 
+// trees: the tree of every commit in the range. Tested only when each one already passed
+// merge-gate; an empty range or a failed lookup means test.
+export function tested(trees, hasMarker) {
+  try {
+    return trees.length > 0 && trees.every(hasMarker);
+  } catch {
+    return false;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // Nx reads the comparison range from NX_BASE / NX_HEAD (set by nrwl/nx-set-shas).
   const nx = (...args) => JSON.parse(execFileSync('npx', ['nx', ...args], { encoding: 'utf8', maxBuffer: 2 ** 28 }));
+  const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+  // A marker counts only when a run of this repository, not a fork's, uploaded it.
+  const marked = (tree) => execFileSync('gh', ['api', `repos/${process.env.GITHUB_REPOSITORY}/actions/artifacts?name=tested-${tree}`, '--jq',
+    '[.artifacts[] | select(.workflow_run.repository_id != null and .workflow_run.head_repository_id == .workflow_run.repository_id)] | length'],
+    { encoding: 'utf8' }).trim() !== '0';
   const result = plan(nx('show', 'projects', '--affected', '--json'), nx('graph', '--print').graph, listApps());
+  result.tested = process.env.GITHUB_EVENT_NAME === 'push'
+    && tested(git('log', '--format=%T', `${process.env.NX_BASE}..${process.env.NX_HEAD}`).split('\n').filter(Boolean), marked);
   for (const [key, value] of Object.entries(result)) console.log(`${key}=${JSON.stringify(value)}`);
+  // On a pull request this is the merge ref's tree: what a squash merge produces if main has not moved.
+  console.log(`tree=${git('rev-parse', 'HEAD^{tree}')}`);
 }
