@@ -45,6 +45,7 @@ class TillBasketUpdate(BaseModel):
     note_printed: DocumentNote = None
     note_internal: DocumentNote = None
     sales_staff_id: Optional[uuid.UUID] = None
+    quote_id: Optional[uuid.UUID] = None
     pick_id: Optional[uuid.UUID] = None
     linked_pick_ids: dict[uuid.UUID, uuid.UUID] = Field(
         default_factory=dict, max_length=MAX_HELD_LINES
@@ -70,6 +71,7 @@ class TillBasket(BaseModel):
     note_printed: Optional[str] = None
     note_internal: Optional[str] = None
     sales_staff_id: Optional[uuid.UUID] = None
+    quote_id: Optional[uuid.UUID] = None
     pick_id: Optional[uuid.UUID]
     linked_pick_ids: dict[uuid.UUID, uuid.UUID]
     lines: list[HeldSaleLineCreate]
@@ -96,6 +98,7 @@ class HeldSaleCreate(BaseModel):
     note_printed: DocumentNote = None
     note_internal: DocumentNote = None
     sales_staff_id: Optional[uuid.UUID] = None
+    quote_id: Optional[uuid.UUID] = None
     # When set, the caller's server basket is emptied in the same transaction.
     basket_id: Optional[uuid.UUID] = None
 
@@ -181,6 +184,7 @@ class HeldSale(BaseModel):
     note_printed: Optional[str] = None
     note_internal: Optional[str] = None
     sales_staff_id: Optional[uuid.UUID] = None
+    quote_id: Optional[uuid.UUID] = None
     estimated_total_inc_vat: Optional[Decimal]
     pick_id: Optional[uuid.UUID]
     linked_pick_ids: dict[uuid.UUID, uuid.UUID]

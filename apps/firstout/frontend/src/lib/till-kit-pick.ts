@@ -22,6 +22,8 @@ export type TillCartSnapshot = {
   notePrinted?: string;
   noteInternal?: string;
   salesStaffId?: string;
+  /** The open quote this sale converts. */
+  quoteId?: string;
   lines: { skuId: string; qty: number; discountPercent: number }[];
 };
 

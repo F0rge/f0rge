@@ -95,6 +95,8 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("invoice_number", name="uq_tax_invoices_invoice_number"),
+        # Target of tenant FKs; existing databases carry it as 080's tenant_ref_* key.
+        UniqueConstraint("team_id", "id", name="uq_tax_invoices_team_id_id"),
         ForeignKeyConstraint(
             ["team_id", "sales_staff_id"],
             ["sales_staff.team_id", "sales_staff.id"],

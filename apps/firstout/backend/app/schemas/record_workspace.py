@@ -10,6 +10,7 @@ from app.schemas.customer_crm import CustomerCrmResponse
 from app.schemas.location import LocationResponse
 from app.schemas.price_list import PriceListResponse
 from app.schemas.proforma import ProformaResponse
+from app.schemas.quote import QuoteListItem
 from app.schemas.repeating_invoice import RepeatingInvoiceResponse
 from app.schemas.role import RoleResponse
 from app.schemas.supplier import SupplierResponse
@@ -27,6 +28,7 @@ WorkspaceResource = Literal[
     "accounts",
     "repeating-invoices",
     "proformas",
+    "quotes",
 ]
 WorkspaceAction = Literal[
     "edit",
@@ -49,6 +51,7 @@ WorkspaceRow = Union[
     AccountResponse,
     RepeatingInvoiceResponse,
     ProformaResponse,
+    QuoteListItem,
 ]
 
 

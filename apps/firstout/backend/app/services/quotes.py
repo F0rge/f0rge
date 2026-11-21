@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from app.services.staff_identity import staff_identity_ctx
 
+import datetime
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
@@ -17,7 +19,10 @@ from app.crud.quote import QuoteCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.user import UserCRUD
 from app.exceptions import ForbiddenError
-from app.models.quote import Quote, QuoteLine, QuoteStatus
+from app.crud.price_list import PriceListCRUD
+from app.models.quote import OPEN_QUOTE_STATUSES, Quote, QuoteLine, QuoteStatus
+from app.models.sales_staff import SalesStaff
+from app.models.tax_invoice import TaxInvoice
 from app.models.user import UserRole
 from app.schemas.page import Page, PageParams
 from app.schemas.quote import (
@@ -26,16 +31,22 @@ from app.schemas.quote import (
     QuoteLineCreate,
     QuoteLineResponse,
     QuoteListItem,
+    QuotePreviewRequest,
+    QuoteReplace,
     QuoteResponse,
     QuoteUpdate,
 )
+from app.schemas.till import TillPriceLine, TillPricePreview
 from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.pricing import (
+    classification_of,
     format_pdf_unit,
+    is_cin7_generated_price_list,
     pdf_unit_basis_note,
     resolve_unit_price,
     shows_prices_including_vat,
 )
+from app.services.sales_staff import SalesStaffService
 from app.services.settings import SettingsService
 from app.services.suspect_price import annotate_line_warnings
 from app.services.vat import CENT, discounted_unit_ex, ex_to_inc, inc_to_ex
@@ -43,6 +54,23 @@ from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 _DISCOUNT_ROLES = frozenset({UserRole.OWNER.value, UserRole.TILL.value, UserRole.WAREHOUSE.value})
+QUOTE_VALID_DAYS = 14
+
+
+def _line_amounts(qty: int, unit_ex_vat: Decimal, discount: Decimal) -> tuple[Decimal, Decimal]:
+    """A quote line's ex- and inc-VAT totals after its discount."""
+    charged_unit = discounted_unit_ex(unit_ex_vat, discount)
+    ex_vat = (Decimal(qty) * charged_unit).quantize(CENT, rounding=ROUND_HALF_UP)
+    return ex_vat, ex_to_inc(ex_vat)
+
+
+def quote_state(quote: Quote, today: datetime.date) -> str:
+    if quote.status in OPEN_QUOTE_STATUSES:
+        expired = quote.status == QuoteStatus.EXPIRED or (
+            quote.valid_until is not None and quote.valid_until < today
+        )
+        return "expired" if expired else "open"
+    return quote.status.value
 
 
 class QuotesService:
@@ -64,7 +92,14 @@ class QuotesService:
             q=params.q,
             status=status,
         )
-        return Page(items=[self._to_list_item(row) for row in rows], total=total)
+        return Page(items=await self._items(rows), total=total)
+
+    async def get_item(self, quote_id: uuid.UUID) -> QuoteListItem:
+        return (await self._items([await self._get_or_404(quote_id)]))[0]
+
+    async def list_all(self) -> list[QuoteListItem]:
+        """Every quote, for the record workspace."""
+        return await self._items(await self.crud.list_all())
 
     async def get(
         self,
@@ -82,6 +117,8 @@ class QuotesService:
     async def prepare_draft(self, data: QuoteCreate, user_id: uuid.UUID) -> Quote:
         customer = await self._require_customer(data.customer_id)
         assert_customer_active(customer)
+        if data.sales_staff_id is not None:
+            await SalesStaffService(self.db).check_sale_colleague(data.sales_staff_id)
         role = await self._actor_role(user_id)
         line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
             customer,
@@ -97,6 +134,10 @@ class QuotesService:
             vat_amount=vat_amount,
             total_inc_vat=total_inc,
             notes=data.notes,
+            internal_note=data.internal_note,
+            valid_until=data.valid_until
+            or datetime.date.today() + datetime.timedelta(days=QUOTE_VALID_DAYS),
+            sales_staff_id=data.sales_staff_id,
             prices_include_vat=shows_prices_including_vat(customer),
             created_by_user_id=user_id,
             lines=line_models,
@@ -167,8 +208,23 @@ class QuotesService:
     ) -> QuoteResponse:
         await SkuArchiveService(self.db).lock_skus([])
         quote = await self._get_or_404(quote_id)
-        if quote.status != QuoteStatus.DRAFT:
-            raise ConflictError("Quote is not a draft")
+        self._assert_open(quote, "edited")
+        # PUT replaces the editor's fields; PATCH changes only those it sends.
+        fields = (
+            set(QuoteUpdate.model_fields)
+            if isinstance(data, QuoteReplace)
+            else data.model_fields_set
+        )
+        if "internal_note" in fields:
+            quote.internal_note = data.internal_note
+        if "valid_until" in fields:
+            quote.valid_until = data.valid_until
+        if "sales_staff_id" in fields and data.sales_staff_id != quote.sales_staff_id:
+            if data.sales_staff_id is not None:
+                await SalesStaffService(self.db).check_sale_colleague(data.sales_staff_id)
+            quote.sales_staff_id = data.sales_staff_id
+        if isinstance(data, QuoteReplace):
+            quote.notes = data.notes
         customer = quote.customer
         if data.customer_id is not None:
             customer = await self._require_customer(data.customer_id)
@@ -226,14 +282,93 @@ class QuotesService:
             quote.status = QuoteStatus.CANCELLED
         return await self._to_response(await self._get_or_404(quote.id), viewer_user_id)
 
+    async def delete(self, quote_id: uuid.UUID) -> None:
+        quote = await self._get_or_404(quote_id)
+        if quote.status not in OPEN_QUOTE_STATUSES | {QuoteStatus.CANCELLED}:
+            raise ConflictError(
+                f"{quote.quote_number} is {quote.status.value}; it cannot be deleted"
+            )
+        async with unit_of_work(self.db):
+            await self.db.delete(quote)
+
+    async def preview(self, data: QuotePreviewRequest, user_id: uuid.UUID) -> TillPricePreview:
+        """The cart's prices and totals exactly as saving it would store them."""
+        customer = await self._require_customer(data.customer_id)
+        previous: list[QuoteLine] = []
+        if data.quote_id is not None:
+            quote = await self._get_or_404(data.quote_id)
+            previous = list(quote.lines)
+        role = await self._actor_role(user_id)
+        models, subtotal, vat_amount, total_inc = await self._build_line_models(
+            customer,
+            data.lines,
+            allow_price_override=role == UserRole.OWNER.value,
+            allow_discount=role in _DISCOUNT_ROLES,
+            previous_lines=previous,
+        )
+        lines = []
+        for model in models:
+            ex_vat, inc_vat = _line_amounts(model.qty, model.unit_ex_vat, model.discount_percent)
+            lines.append(
+                TillPriceLine(
+                    sku_id=model.sku_id,
+                    qty=model.qty,
+                    discount_percent=model.discount_percent,
+                    unit_ex_vat=model.unit_ex_vat,
+                    before_discount_ex_vat=model.unit_ex_vat * model.qty,
+                    ex_vat=ex_vat,
+                    vat_amount=inc_vat - ex_vat,
+                    inc_vat=inc_vat,
+                    source="quote",
+                    price_warning=model.price_warning,
+                )
+            )
+        price_list_name = None
+        if customer.price_list_id is not None:
+            policy = await PriceListCRUD(self.db).get_till_policy(customer.price_list_id)
+            if policy is not None and not is_cin7_generated_price_list(policy[0]):
+                price_list_name = policy[0]
+        return TillPricePreview(
+            classification=classification_of(customer),
+            price_list_name=price_list_name,
+            prices_include_vat=shows_prices_including_vat(customer),
+            before_discount_ex_vat=sum((line.before_discount_ex_vat for line in lines), Decimal(0)),
+            before_discount_inc_vat=sum(
+                (ex_to_inc(line.before_discount_ex_vat) for line in lines), Decimal(0)
+            ),
+            subtotal_ex_vat=subtotal,
+            vat_amount=vat_amount,
+            total_inc_vat=total_inc,
+            lines=lines,
+            price_revision="",
+        )
+
+    async def lock_for_conversion(self, quote_id: uuid.UUID) -> Quote:
+        """The open quote a till sale converts, locked until that sale commits."""
+        quote = await self.db.scalar(
+            select(Quote)
+            .where(Quote.id == quote_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if quote is None:
+            raise NotFoundError("Quote not found")
+        self._assert_open(quote, "sold")
+        return quote
+
+    @staticmethod
+    def _assert_open(quote: Quote, verb: str) -> None:
+        if quote.status not in OPEN_QUOTE_STATUSES:
+            raise ConflictError(
+                f"{quote.quote_number} is {quote.status.value}; it cannot be {verb}"
+            )
+
     async def serve_pdf(self, quote_id: uuid.UUID) -> Response:
         quote = await self._get_or_404(quote_id)
         seller = await SettingsService(self.db).build_seller_details()
         lines = []
         for line in quote.lines:
-            charged_unit = discounted_unit_ex(line.unit_ex_vat, line.discount_percent)
-            ex_vat = (Decimal(line.qty) * charged_unit).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
+            ex_vat, inc_vat = _line_amounts(line.qty, line.unit_ex_vat, line.discount_percent)
             line_vat = inc_vat - ex_vat
             description = line.description
             if line.discount_percent > 0:
@@ -264,6 +399,7 @@ class QuotesService:
             number_label="Quote No",
             seller=seller,
             unit_basis_note=pdf_unit_basis_note(quote.prices_include_vat),
+            note=quote.notes,
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 
@@ -366,9 +502,7 @@ class QuotesService:
                 prior.discount_percent if prior is not None else Decimal(0),
                 allow_discount,
             )
-            charged_unit = discounted_unit_ex(unit_ex, discount)
-            ex_vat = (Decimal(line.qty) * charged_unit).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
+            ex_vat, inc_vat = _line_amounts(line.qty, unit_ex, discount)
             line_vat = inc_vat - ex_vat
             subtotal += ex_vat
             vat_total += line_vat
@@ -402,7 +536,50 @@ class QuotesService:
             return base
         return f"{base} +{len(quote.lines) - 1}"
 
-    def _to_list_item(self, quote: Quote) -> QuoteListItem:
+    async def _labels(
+        self, quotes: list[Quote]
+    ) -> tuple[dict[uuid.UUID, str], dict[uuid.UUID, str]]:
+        """Colleague names and converted invoice numbers for these quotes."""
+        staff_ids = {quote.sales_staff_id for quote in quotes if quote.sales_staff_id}
+        invoice_ids = {quote.converted_invoice_id for quote in quotes if quote.converted_invoice_id}
+        staff = (
+            dict(
+                (
+                    await self.db.execute(
+                        select(SalesStaff.id, SalesStaff.name).where(SalesStaff.id.in_(staff_ids))
+                    )
+                ).all()
+            )
+            if staff_ids
+            else {}
+        )
+        invoices = (
+            dict(
+                (
+                    await self.db.execute(
+                        select(TaxInvoice.id, TaxInvoice.invoice_number).where(
+                            TaxInvoice.id.in_(invoice_ids)
+                        )
+                    )
+                ).all()
+            )
+            if invoice_ids
+            else {}
+        )
+        return staff, invoices
+
+    async def _items(self, quotes: list[Quote]) -> list[QuoteListItem]:
+        staff, invoices = await self._labels(quotes)
+        today = datetime.date.today()
+        return [self._to_list_item(quote, staff, invoices, today) for quote in quotes]
+
+    def _to_list_item(
+        self,
+        quote: Quote,
+        staff: dict[uuid.UUID, str],
+        invoices: dict[uuid.UUID, str],
+        today: datetime.date,
+    ) -> QuoteListItem:
         return QuoteListItem(
             id=quote.id,
             quote_number=quote.quote_number,
@@ -414,6 +591,16 @@ class QuotesService:
             total_inc_vat=quote.total_inc_vat,
             notes=quote.notes,
             sales_staff_id=quote.sales_staff_id,
+            sales_staff_name=staff.get(quote.sales_staff_id) if quote.sales_staff_id else None,
+            valid_until=quote.valid_until,
+            issue_date=quote.created_at.date(),
+            converted_invoice_id=quote.converted_invoice_id,
+            converted_invoice_number=invoices.get(quote.converted_invoice_id)
+            if quote.converted_invoice_id
+            else None,
+            is_converted=quote.status in (QuoteStatus.CONVERTED, QuoteStatus.ACCEPTED),
+            state=quote_state(quote, today),
+            item_count=sum(line.qty for line in quote.lines),
             items_label=self._items_label(quote),
             created_at=quote.created_at,
             updated_at=quote.updated_at,
@@ -424,6 +611,7 @@ class QuotesService:
         quote: Quote,
         viewer_user_id: Optional[uuid.UUID] = None,
     ) -> QuoteResponse:
+        _, invoices = await self._labels([quote])
         response = QuoteResponse(
             id=quote.id,
             quote_number=quote.quote_number,
@@ -434,7 +622,14 @@ class QuotesService:
             vat_amount=quote.vat_amount,
             total_inc_vat=quote.total_inc_vat,
             notes=quote.notes,
+            internal_note=quote.internal_note,
             sales_staff_id=quote.sales_staff_id,
+            valid_until=quote.valid_until,
+            issue_date=quote.created_at.date(),
+            converted_invoice_id=quote.converted_invoice_id,
+            converted_invoice_number=invoices.get(quote.converted_invoice_id)
+            if quote.converted_invoice_id
+            else None,
             prices_include_vat=quote.prices_include_vat,
             lines=[
                 QuoteLineResponse(

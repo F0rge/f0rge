@@ -71,6 +71,8 @@ class TillSaleCreate(TillPriceRequest):
     note_internal: DocumentNote = None
     # Required when the business has an active sales colleague.
     sales_staff_id: Optional[uuid.UUID] = None
+    # The open quote this sale converts; it is marked converted with the sale.
+    quote_id: Optional[uuid.UUID] = None
 
 
 class TillSaleLocationStock(BaseModel):
@@ -91,6 +93,8 @@ class TillSaleResponse(BaseModel):
     issue_date: datetime.date
     due_date: Optional[datetime.date] = None
     on_account: bool = False
+    # The quote the sale converted.
+    quote_number: Optional[str] = None
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal

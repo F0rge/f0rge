@@ -1335,6 +1335,8 @@ export type HeldSaleCreate = {
   note_printed?: string | null;
   note_internal?: string | null;
   sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   basket_id?: string;
 };
 
@@ -1348,6 +1350,8 @@ export type TillBasket = {
   note_printed?: string | null;
   note_internal?: string | null;
   sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
   lines: { sku_id: string; qty: number; discount_percent: string }[];
@@ -1387,6 +1391,8 @@ export type TillBasketUpdate = {
   note_printed?: string | null;
   note_internal?: string | null;
   sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   lines: TillSaleLinePayload[];
@@ -1415,6 +1421,8 @@ export type HeldSale = {
   note_printed?: string | null;
   note_internal?: string | null;
   sales_staff_id?: string | null;
+  /** The open quote this sale converts. */
+  quote_id?: string | null;
   estimated_total_inc_vat: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
@@ -1514,6 +1522,8 @@ export type TillSalePayload = TillPriceRequest & {
   note_internal?: string;
   /** Required when the business has an active sales colleague. */
   sales_staff_id?: string;
+  /** The open quote this sale converts; marked converted with the sale. */
+  quote_id?: string;
 };
 
 export type TillSaleResult = {
@@ -1528,6 +1538,8 @@ export type TillSaleResult = {
   issue_date: string;
   due_date: string | null;
   on_account: boolean;
+  /** The quote this sale converted. */
+  quote_number?: string | null;
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
@@ -4077,7 +4089,9 @@ export function cancelLayby(id: string): Promise<Layby> {
   return apiFetch<Layby>(`/laybys/${id}/cancel`, { method: "POST" });
 }
 
-export type QuoteStatus = "draft" | "sent" | "accepted" | "expired" | "cancelled";
+export type QuoteStatus = "draft" | "sent" | "accepted" | "expired" | "cancelled" | "converted";
+/** What staff see: open quotes past their date read as expired. */
+export type QuoteState = "open" | "expired" | "converted" | "accepted" | "cancelled";
 
 export type QuoteLine = {
   id: string;
@@ -4093,7 +4107,7 @@ export type QuoteLine = {
   suspect_price_warning?: string | null;
 };
 
-export type QuoteListItem = {
+type QuoteFields = {
   id: string;
   quote_number: string;
   customer_id: string;
@@ -4102,27 +4116,48 @@ export type QuoteListItem = {
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
+  /** Printed on the quote. */
   notes: string | null;
-  items_label: string;
+  sales_staff_id: string | null;
+  issue_date: string;
+  valid_until: string | null;
+  converted_invoice_id: string | null;
+  converted_invoice_number: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type Quote = QuoteListItem & {
+export type QuoteListItem = QuoteFields & {
+  sales_staff_name: string | null;
+  /** Converted at the till or accepted as an order: read-only. */
+  is_converted: boolean;
+  state: QuoteState;
+  item_count: number;
+  items_label: string;
+};
+
+export type Quote = QuoteFields & {
+  /** Staff only. Never printed. */
+  internal_note: string | null;
   prices_include_vat: boolean;
   lines: QuoteLine[];
 };
 
+export type QuoteLinePayload = {
+  sku_id: string;
+  qty: number;
+  notes?: string;
+  unit_ex_vat?: string;
+  discount_percent?: string | number;
+};
+
 export type CreateQuotePayload = {
   customer_id: string;
-  lines: {
-    sku_id: string;
-    qty: number;
-    notes?: string;
-    unit_ex_vat?: string;
-    discount_percent?: string;
-  }[];
-  notes?: string;
+  lines: QuoteLinePayload[];
+  notes?: string | null;
+  internal_note?: string | null;
+  valid_until?: string | null;
+  sales_staff_id?: string | null;
 };
 
 export type AcceptQuotePayload = {
@@ -4198,23 +4233,51 @@ export function createQuote(payload: CreateQuotePayload): Promise<Quote> {
   return apiFetch<Quote>("/quotes", { method: "POST", body: JSON.stringify(payload) });
 }
 
-export function markQuoteSent(id: string): Promise<Quote> {
-  return apiFetch<Quote>(`/quotes/${id}/mark-sent`, { method: "POST" });
-}
-
-export function acceptQuote(id: string, payload: AcceptQuotePayload): Promise<SalesOrder> {
-  return apiFetch<SalesOrder>(`/quotes/${id}/accept`, {
-    method: "POST",
-    body: JSON.stringify(payload),
+/** A fresh open quote with the same customer, lines, notes and colleague, at today's dates. */
+export async function duplicateQuote(id: string): Promise<Quote> {
+  const quote = await getQuote(id);
+  return createQuote({
+    customer_id: quote.customer_id,
+    lines: quote.lines.map((line) => ({
+      sku_id: line.sku_id,
+      qty: line.qty,
+      discount_percent: line.discount_percent,
+    })),
+    notes: quote.notes,
+    internal_note: quote.internal_note,
+    sales_staff_id: quote.sales_staff_id,
   });
 }
 
-export function cancelQuote(id: string): Promise<Quote> {
-  return apiFetch<Quote>(`/quotes/${id}/cancel`, { method: "POST" });
+/** Replaces the whole quote; omitted notes, validity or colleague are cleared. */
+export function replaceQuote(id: string, payload: CreateQuotePayload): Promise<Quote> {
+  return apiFetch<Quote>(`/quotes/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** Only quotes that were never converted. */
+export function deleteQuote(id: string): Promise<void> {
+  return apiFetch<void>(`/quotes/${id}`, { method: "DELETE" });
+}
+
+/** The quote cart priced exactly as saving it would; an edited quote keeps its saved prices. */
+export function previewQuotePrices(
+  payload: { customer_id: string; lines: QuoteLinePayload[]; quote_id?: string },
+  signal: AbortSignal,
+): Promise<TillPricePreview> {
+  return apiFetch<TillPricePreview>("/quotes/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
 }
 
 export async function downloadQuotePdf(id: string, quoteNumber: string): Promise<void> {
   await downloadApiFile(`/api/v1/quotes/${id}/pdf`, `${quoteNumber}.pdf`);
+}
+
+/** Opens the saved quote's PDF in a new tab. */
+export async function previewQuotePdf(id: string, quoteNumber: string): Promise<void> {
+  await downloadApiFile(`/api/v1/quotes/${id}/pdf`, `${quoteNumber}.pdf`, "open");
 }
 
 export function listSalesOrders(params?: ListParams): Promise<Page<SalesOrderListItem>> {

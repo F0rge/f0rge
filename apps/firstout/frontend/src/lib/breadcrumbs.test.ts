@@ -45,6 +45,12 @@ describe("application breadcrumbs", () => {
     expect(breadcrumbsForPath("/catalogue/new").at(-1)?.label).toBe(
       "Create product",
     );
+    expect(breadcrumbsForPath("/quotes/new").at(-1)?.label).toBe("New quote");
+    expect(breadcrumbsForPath("/quotes/opaque-id")).toEqual([
+      { label: "Sales" },
+      { label: "Quotes", href: "/quotes" },
+      { label: "Quote" },
+    ]);
     expect(breadcrumbsForPath("/bills/read").at(-1)?.label).toBe(
       "Read document",
     );

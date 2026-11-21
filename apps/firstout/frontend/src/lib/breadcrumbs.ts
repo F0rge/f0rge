@@ -24,7 +24,9 @@ const detailLabels: Record<string, string> = {
   "/picks": "Pick",
   "/invoices": "Invoice",
   "/bills": "Bill",
+  "/quotes": "Quote",
 };
+const newLabels: Record<string, string> = { "/quotes": "New quote" };
 
 /** Groups are labels, not invented links. Only ancestors with real routes link. */
 export function breadcrumbsForPath(pathname: string): AppCrumb[] {
@@ -39,7 +41,7 @@ export function breadcrumbsForPath(pathname: string): AppCrumb[] {
     const tail = path.slice(item.href.length + 1);
     const current =
       tail === "new"
-        ? "Create product"
+        ? (newLabels[item.href] ?? "Create product")
         : tail === "read"
           ? "Read document"
           : (detailLabels[item.href] ?? "Details");

@@ -45,6 +45,8 @@ class HeldSale(TenantOwnedMixin, UUIDPkMixin, Base):
     note_internal: Mapped[Optional[str]] = mapped_column(Text)
     # The sales colleague, checked when the sale is completed.
     sales_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    # The quote this sale converts, checked when the sale is completed.
+    quote_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     estimated_total_inc_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 2))
     pick_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     # Selections and display snapshots survive later catalogue/customer changes.

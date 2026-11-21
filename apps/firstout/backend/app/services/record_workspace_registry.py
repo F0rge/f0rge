@@ -9,6 +9,7 @@ from app.models.customer import Customer
 from app.models.location import Location
 from app.models.price_list import PriceList
 from app.models.proforma import Proforma
+from app.models.quote import Quote
 from app.models.repeating_invoice import RepeatingInvoice
 from app.models.role import Role
 from app.models.supplier import Supplier
@@ -18,6 +19,7 @@ from app.permissions import (
     BOOKS_MUTATE,
     CATALOGUE_MUTATE,
     SALES_CUSTOMERS,
+    SALES_QUOTES,
     STOCK_RECEIVE,
     USERS_MANAGE,
 )
@@ -185,5 +187,25 @@ DEFINITIONS = {
         frozenset(),
         ARCHIVE,
         CATALOGUE_MUTATE,
+    ),
+    "quotes": WorkspaceDefinition(
+        Quote,
+        {
+            **COMMON,
+            "quote_number": "text",
+            "customer_name": "text",
+            "sales_staff_id": "text",
+            "sales_staff_name": "text",
+            "state": "text",
+            "issue_date": "date",
+            "valid_until": "date",
+            "item_count": "number",
+            "total_inc_vat": "number",
+        },
+        frozenset(),
+        frozenset({"delete"}),
+        SALES_QUOTES,
+        # Lifecycle Open / Converted: converted and accepted quotes are read-only.
+        archive_field="is_converted",
     ),
 }

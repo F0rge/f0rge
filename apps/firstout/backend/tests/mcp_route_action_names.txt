@@ -69,6 +69,7 @@ delete_bank_rule
 delete_held_sales
 delete_price_list
 delete_price_list_item
+delete_quote
 delete_sales_staff
 delete_sku
 dispatch_transfer
@@ -166,6 +167,7 @@ patch_delivery_tracking
 post_journal
 preview_auto_match
 preview_pick
+preview_quote_prices
 preview_till_prices
 profit_loss
 receive_purchase_order
@@ -175,6 +177,7 @@ reject_purchase_order
 remainder_invoice
 reopen_books_period
 reopen_period
+replace_quote
 replace_sku_bom
 replace_till_basket
 reprice_customer_drafts

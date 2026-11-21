@@ -26,6 +26,7 @@ from app.services.locations import LocationService
 from app.services.permissions import PermissionService
 from app.services.price_lists import PriceListService
 from app.services.proformas import ProformaService
+from app.services.quotes import QuotesService
 from app.services.record_workspace_actions import blocked_reason, validate_patch
 from app.services.record_workspace_filters import archived, filter_rows, label, revision
 from app.services.record_workspace_registry import DEFINITIONS
@@ -73,6 +74,8 @@ class RecordWorkspaceService:
             return await PriceListService(self.db).list(archived=None)
         if resource == "proformas":
             return await ProformaService(self.db).list(archived=None)
+        if resource == "quotes":
+            return await QuotesService(self.db).list_all()
         if resource == "locations":
             return [
                 LocationResponse.model_validate(row)
@@ -100,6 +103,8 @@ class RecordWorkspaceService:
             return await PriceListService(self.db).get(record_id)
         if resource == "proformas":
             return await ProformaService(self.db).get(record_id)
+        if resource == "quotes":
+            return await QuotesService(self.db).get_item(record_id)
         if resource == "repeating-invoices":
             return await RepeatingInvoiceService(self.db).get(record_id)
         if resource == "users":

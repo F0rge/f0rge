@@ -39,6 +39,8 @@ class TillBasket(TenantOwnedMixin, UUIDPkMixin, Base):
     note_internal: Mapped[Optional[str]] = mapped_column(Text)
     # The sales colleague, checked when the sale is completed.
     sales_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    # The quote this sale converts, checked when the sale is completed.
+    quote_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     pick_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     linked_pick_ids: Mapped[dict[str, str]] = mapped_column(JSONB)
     lines: Mapped[list[dict]] = mapped_column(JSONB)

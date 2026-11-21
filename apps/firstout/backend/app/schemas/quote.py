@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.quote import QuoteStatus
+from app.schemas.invoice import DocumentNote
 
 
 class QuoteLineCreate(BaseModel):
@@ -23,13 +24,37 @@ class QuoteLineCreate(BaseModel):
 class QuoteCreate(BaseModel):
     customer_id: uuid.UUID
     lines: list[QuoteLineCreate] = Field(min_length=1)
+    # Printed on the quote.
     notes: Optional[str] = None
+    internal_note: DocumentNote = None
+    # Defaults to 14 days after the quote is created.
+    valid_until: Optional[datetime.date] = None
+    sales_staff_id: Optional[uuid.UUID] = None
 
 
 class QuoteUpdate(BaseModel):
     customer_id: Optional[uuid.UUID] = None
     lines: Optional[list[QuoteLineCreate]] = Field(default=None, min_length=1)
     notes: Optional[str] = None
+    internal_note: DocumentNote = None
+    valid_until: Optional[datetime.date] = None
+    sales_staff_id: Optional[uuid.UUID] = None
+
+
+class QuoteReplace(QuoteUpdate):
+    """PUT: the editor's whole quote; omitted notes, validity or colleague are cleared."""
+
+    customer_id: uuid.UUID
+    lines: list[QuoteLineCreate] = Field(min_length=1)
+
+
+class QuotePreviewRequest(BaseModel):
+    """Price a quote cart exactly as saving it would, without saving."""
+
+    customer_id: uuid.UUID
+    lines: list[QuoteLineCreate] = Field(min_length=1)
+    # The quote being edited: its lines keep their saved prices.
+    quote_id: Optional[uuid.UUID] = None
 
 
 class QuoteDeposit(BaseModel):
@@ -71,6 +96,16 @@ class QuoteListItem(BaseModel):
     total_inc_vat: Decimal
     notes: Optional[str]
     sales_staff_id: Optional[uuid.UUID] = None
+    sales_staff_name: Optional[str] = None
+    valid_until: Optional[datetime.date] = None
+    issue_date: datetime.date
+    converted_invoice_id: Optional[uuid.UUID] = None
+    converted_invoice_number: Optional[str] = None
+    # Converted (till) or accepted (sales order): read-only. The workspace lifecycle field.
+    is_converted: bool = False
+    # Open, Expired (past valid_until), Converted, Accepted or Cancelled.
+    state: str
+    item_count: int
     items_label: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -88,7 +123,12 @@ class QuoteResponse(BaseModel):
     vat_amount: Decimal
     total_inc_vat: Decimal
     notes: Optional[str]
+    internal_note: Optional[str] = None
     sales_staff_id: Optional[uuid.UUID] = None
+    valid_until: Optional[datetime.date] = None
+    issue_date: datetime.date
+    converted_invoice_id: Optional[uuid.UUID] = None
+    converted_invoice_number: Optional[str] = None
     prices_include_vat: bool
     lines: list[QuoteLineResponse]
     created_at: datetime.datetime

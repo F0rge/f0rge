@@ -349,4 +349,4 @@ require_picks_mutate = _require(STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES)
 # Commission amounts are pay information: books or staff managers only.
 require_commission_view = _require(BOOKS_MUTATE, USERS_MANAGE)
 # Names of active sales colleagues for the till and invoice screens.
-require_sales_staff_options = _require(TILL_SELL, BOOKS_MUTATE, USERS_MANAGE)
+require_sales_staff_options = _require(TILL_SELL, SALES_QUOTES, BOOKS_MUTATE, USERS_MANAGE)

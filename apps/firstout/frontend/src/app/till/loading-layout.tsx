@@ -13,7 +13,7 @@ import {
 } from "@carbon/react";
 import { Scan, UserFollow } from "@carbon/icons-react";
 import { LoadingField, LoadingRegion } from "@/components/page-loading";
-import styles from "./page.module.css";
+import styles from "@/components/cart-editor.module.css";
 
 export function TillLoading({
   mobileScan = false,

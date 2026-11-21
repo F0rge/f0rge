@@ -24,6 +24,7 @@ export function cartSnapshot(source: HeldSale | TillBasket): TillCartSnapshot {
     notePrinted: source.note_printed ?? "",
     noteInternal: source.note_internal ?? "",
     salesStaffId: source.sales_staff_id ?? "",
+    quoteId: source.quote_id ?? "",
     lines: source.lines.map((line) => ({
       skuId: line.sku_id, qty: line.qty, discountPercent: Number(line.discount_percent),
     })),
@@ -44,6 +45,7 @@ export function basketContents(cart: TillCartSnapshot, picks: PickDocument[] = [
     ...(cart.notePrinted ? { note_printed: cart.notePrinted } : {}),
     ...(cart.noteInternal ? { note_internal: cart.noteInternal } : {}),
     ...(cart.salesStaffId ? { sales_staff_id: cart.salesStaffId } : {}),
+    ...(cart.quoteId ? { quote_id: cart.quoteId } : {}),
     lines: cart.lines.map((line) => ({
       sku_id: line.skuId, qty: line.qty,
       ...(line.discountPercent ? { discount_percent: line.discountPercent } : {}),

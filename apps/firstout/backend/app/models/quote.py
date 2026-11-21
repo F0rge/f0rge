@@ -3,11 +3,13 @@ from __future__ import annotations
 import enum
 import uuid
 from decimal import Decimal
+import datetime
 from typing import Optional
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
@@ -32,6 +34,12 @@ class QuoteStatus(str, enum.Enum):
     ACCEPTED = "accepted"
     EXPIRED = "expired"
     CANCELLED = "cancelled"
+    # Sold at the till; read-only and linked to its tax invoice.
+    CONVERTED = "converted"
+
+
+# Statuses a quote can still be edited, opened in the till, or deleted from.
+OPEN_QUOTE_STATUSES = frozenset({QuoteStatus.DRAFT, QuoteStatus.SENT, QuoteStatus.EXPIRED})
 
 
 class Quote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
@@ -57,7 +65,12 @@ class Quote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # Printed on the quote.
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Staff only. Never printed.
+    internal_note: Mapped[Optional[str]] = mapped_column(Text)
+    valid_until: Mapped[Optional[datetime.date]] = mapped_column(Date)
+    converted_invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     prices_include_vat: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -90,8 +103,14 @@ class Quote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
             ondelete="RESTRICT",
         ),
         Index("ix_quotes_sales_staff", "team_id", "sales_staff_id"),
+        ForeignKeyConstraint(
+            ["team_id", "converted_invoice_id"],
+            ["tax_invoices.team_id", "tax_invoices.id"],
+            name="fk_quotes_converted_invoice_tenant",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
-            "status IN ('draft', 'sent', 'accepted', 'expired', 'cancelled')",
+            "status IN ('draft', 'sent', 'accepted', 'expired', 'cancelled', 'converted')",
             name="ck_quotes_status",
         ),
     )

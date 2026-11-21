@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "104_sales_staff_commission",
+  "target_revision": "105_quote_conversion",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -421,6 +421,10 @@
     },
     "104_sales_staff_commission": {
       "sha256": "d81f14d809ea8f3954c416a169971e77fe8a73c82f38428bd451d38623b52a2c",
+      "automatic": true
+    },
+    "105_quote_conversion": {
+      "sha256": "39956d9039038cc49dfad094ef776ed3810cb4af04d46147bc8d68e19f20b3b5",
       "automatic": true
     }
   }

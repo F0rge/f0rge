@@ -27,6 +27,7 @@ from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
 from app.models.payment import Payment, PaymentDirection
+from app.models.quote import QuoteStatus
 from app.models.customer import Customer
 from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
@@ -171,6 +172,14 @@ class TillOrchestrator:
         if location.type != LocationType.SHOWROOM:
             raise ConflictError("Till sales are only allowed at showroom locations")
         await SalesStaffService(self.db).check_sale_colleague(data.sales_staff_id)
+        quote = None
+        quote_number: Optional[str] = None
+        if data.quote_id is not None:
+            from app.services.quotes import QuotesService
+
+            # Locked until the sale commits: a quote converts into exactly one invoice.
+            quote = await QuotesService(self.db).lock_for_conversion(data.quote_id)
+            quote_number = quote.quote_number
 
         from app.services.till_basket import TillBasketService
 
@@ -426,6 +435,10 @@ class TillOrchestrator:
             for pick in picks_to_link:
                 pick.invoice_id = invoice.id
 
+            if quote is not None:
+                quote.status = QuoteStatus.CONVERTED
+                quote.converted_invoice_id = invoice.id
+
             if payment is not None:
                 invoice.amount_paid = total_inc
             if basket is not None:
@@ -483,6 +496,7 @@ class TillOrchestrator:
             issue_date=reloaded.issue_date,
             due_date=reloaded.due_date,
             on_account=reloaded.on_account,
+            quote_number=quote_number,
             subtotal_ex_vat=reloaded.subtotal_ex_vat,
             vat_amount=reloaded.vat_amount.quantize(CENT),
             total_inc_vat=reloaded.total_inc_vat.quantize(CENT),
