@@ -19,6 +19,7 @@ import {
   updateSalesChannelsWorkflow,
   updateStoresWorkflow,
 } from "@medusajs/medusa/core-flows";
+import { ensureStorefrontCategories } from "../catalogue-collections";
 import { deliveryZones } from "../delivery-zones";
 import { testPaymentEnabled } from "../test-payment-config";
 import { paystackPaymentEnabled, PAYSTACK_PAYMENT_PROVIDER_ID } from "../paystack-payment-config";
@@ -232,6 +233,9 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
     data: { fulfillment_type: option.fulfillment_type },
   }));
   if (newOptions.length) await createShippingOptionsWorkflow(container).run({ input: newOptions });
+
+  const createdCategories = await ensureStorefrontCategories(container);
+  if (createdCategories) logger.info(`Created ${createdCategories} storefront product categories`);
 
   logger.info("DasKasas bootstrap complete. Set the public API key from Medusa Admin.");
 }

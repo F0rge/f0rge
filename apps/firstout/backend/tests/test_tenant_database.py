@@ -627,6 +627,12 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
             public = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
             assert public.status_code == 200, public.text
             assert {row["source_sku_id"] for row in public.json()["products"]} == {str(skus[a])}
+            photo = "/api/v1/ops-commerce/v1/products/{}/photo"
+            own_photo = await client.get(photo.format(skus[a]), headers=headers)
+            assert own_photo.status_code == 200, own_photo.text
+            assert own_photo.content == b"synthetic-image-" + str(a).encode()
+            foreign_photo = await client.get(photo.format(skus[b]), headers=headers)
+            assert foreign_photo.status_code == 404, foreign_photo.text
             headers["x-ops-company-id"] = str(b)
             rejected = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
             assert rejected.status_code == 403, rejected.text

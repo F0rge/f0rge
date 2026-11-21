@@ -24,6 +24,9 @@ const productSchema = z.object({
   observed_at: z.string().min(1),
   acknowledged_commitment_ids: z.array(z.string().min(1)),
   made_to_order_offer: madeToOrderOfferSchema.nullable(),
+  // Opaque; changes only when the SKU's Firstout photo changes. Null when it has none.
+  // Absent (a Firstout release older than this commerce) means no photo info: photos are left alone.
+  photo_token: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional(),
 }).strict();
 
 const responseSchema = z.object({

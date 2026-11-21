@@ -4,7 +4,7 @@ import { PolicyArticle } from "@/components/policy-article";
 import { currentCustomerPolicies, policyPage, type PolicySection } from "@/lib/customer-policies";
 import { storefrontIndexable } from "@/lib/launch-indexing";
 
-const SECTIONS = new Set<PolicySection>(["delivery", "returns", "refunds", "terms", "privacy"]);
+const SECTIONS = new Set<PolicySection>(["delivery", "returns", "refunds", "terms", "privacy", "paia"]);
 
 type PolicyPageProps = { params: Promise<{ section: string }> };
 

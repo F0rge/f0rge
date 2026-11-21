@@ -12,6 +12,12 @@ vi.mock("@clerk/nextjs/server", () => ({
   },
 }));
 
+const ownerFacts = vi.hoisted(() => ({ document: null as object | null }));
+vi.mock("./lib/customer-policies", async (original) => ({
+  ...await original<typeof import("./lib/customer-policies")>(),
+  currentCustomerPolicies: () => ownerFacts.document,
+}));
+
 describe("Clerk and private-preview proxy composition", () => {
   const envNames = [
     "STOREFRONT_RUNTIME_KIND", "STOREFRONT_PRIVATE_PREVIEW",
@@ -32,6 +38,7 @@ describe("Clerk and private-preview proxy composition", () => {
     process.env.STOREFRONT_CLERK_JWT_TEMPLATE = "storefront_medusa";
     clerkState.configured.mockClear();
     clerkState.invoked.mockClear();
+    ownerFacts.document = null;
     vi.resetModules();
   });
 
@@ -113,12 +120,30 @@ describe("Clerk and private-preview proxy composition", () => {
     delete process.env.STOREFRONT_PREVIEW_USERNAME;
     delete process.env.STOREFRONT_PREVIEW_PASSWORD;
     const { proxy } = await import("./proxy");
+    expect((await proxy(new NextRequest("https://daskasas.example/shop"), {} as never)).headers.get("x-robots-tag")).toContain("noindex");
+    ownerFacts.document = {};
     const shop = await proxy(new NextRequest("https://daskasas.example/shop"), {} as never);
+    const category = await proxy(new NextRequest("https://daskasas.example/shop/dining-room"), {} as never);
+    expect(category.headers.get("x-robots-tag")).toBeNull();
     const account = await proxy(new NextRequest("https://daskasas.example/account"), {} as never);
     const checkout = await proxy(new NextRequest("https://daskasas.example/checkout"), {} as never);
     expect(shop.headers.get("x-robots-tag")).toBeNull();
     expect(account.headers.get("x-robots-tag")).toContain("noindex");
     expect(checkout.headers.get("x-robots-tag")).toContain("noindex");
+  });
+
+  it("permanently redirects old routes behind the preview gate, without indexing", async () => {
+    const { proxy } = await import("./proxy");
+    expect((await proxy(new NextRequest("https://storefront.example/collections"), {} as never)).status).toBe(401);
+    const authorization = `Basic ${Buffer.from("preview-user:test-preview-password-that-is-long-enough").toString("base64")}`;
+    for (const [from, to] of [["/collections", "/shop"], ["/support", "/help"], ["/contact", "/help#contact"], ["/shop?category=bedroom", "/shop/bedroom"],
+      ["/shop?collection=sofas", "/shop/sofas-armchairs"], ["/shop?collection=on-sale&sort=price-asc", "/shop"]]) {
+      const response = await proxy(new NextRequest(`https://storefront.example${from}`, { headers: { authorization } }), {} as never);
+      expect(response.status).toBe(308);
+      expect(response.headers.get("location")).toBe(`https://storefront.example${to}`);
+      expect(response.headers.get("x-robots-tag")).toContain("noindex");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
   });
 
   it("marks account and order-confirmation pages private and non-indexable", async () => {

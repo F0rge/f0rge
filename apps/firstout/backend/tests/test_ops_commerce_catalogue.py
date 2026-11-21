@@ -95,6 +95,11 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
         "acknowledged_commitment_ids",
         "made_to_order_offer",
     }
+    # Off by default the key is absent, not null: older strict storefront contracts reject it.
+    monkeypatch.setattr(settings, "ops_commerce_photo_tokens_enabled", True)
+    enabled = (await owner_client.get(route, headers=headers)).json()["products"][0]
+    assert set(enabled) == set(product) | {"photo_token"}
+    assert enabled["photo_token"] is None
     assert product["acknowledged_commitment_ids"] == []
     assert product["product_group_id"] is None
     assert product["product_title"] is None
@@ -218,6 +223,102 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
     assert acknowledged["available_quantity"] == 1
     assert acknowledged["acknowledged_commitment_ids"] == ["channel:order-1:line-1"]
     assert acknowledged["revision"] > newer.json()["products"][0]["revision"]
+
+
+# 1x1 PNG; the upload route resizes it to the stored JPEG.
+TINY_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+@pytest.mark.asyncio
+async def test_machine_photo_route_serves_only_published_photos_and_token_tracks_the_photo(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    company_id = (await async_db.execute(select(Team.id))).scalar_one()
+    monkeypatch.setattr(settings, "ops_commerce_company_id", str(company_id), raising=False)
+    monkeypatch.setattr(settings, "ops_commerce_token", "test-ops-token", raising=False)
+    monkeypatch.setattr(settings, "ops_commerce_allowed_host", "test", raising=False)
+    monkeypatch.setattr(settings, "ops_commerce_photo_tokens_enabled", True)
+    headers = {"Authorization": "Bearer test-ops-token", "X-Ops-Company-ID": str(company_id)}
+
+    created = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "OPS-PHOTO-001",
+            "our_barcode": "OPS-PHOTO-BAR",
+            "name": "Arc sofa",
+            "design": "Arc",
+            "fabric": "Sand linen",
+        },
+    )
+    assert created.status_code == 201
+    sku_id = created.json()["id"]
+    assert (
+        await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"retail_inc_vat": "11500.00"})
+    ).status_code == 200
+    photo_route = f"/api/v1/ops-commerce/v1/products/{sku_id}/photo"
+    feed_route = "/api/v1/ops-commerce/v1/products"
+
+    # Unpublished with no photo, then unpublished with a photo: both are not found.
+    assert (await owner_client.get(photo_route, headers=headers)).status_code == 404
+    uploaded = await owner_client.post(
+        f"/api/v1/skus/{sku_id}/photo", files={"photo": ("sku.png", TINY_PNG, "image/png")}
+    )
+    assert uploaded.status_code == 200
+    assert (await owner_client.get(photo_route, headers=headers)).status_code == 404
+
+    sku = await async_db.get(Sku, UUID(sku_id))
+    assert sku is not None
+    sku.storefront_published = True
+    await async_db.flush()
+
+    served = await owner_client.get(photo_route, headers=headers)
+    assert served.status_code == 200
+    assert served.headers["content-type"] == "image/jpeg"
+    assert served.headers["cache-control"] == "no-store"
+    assert served.content[:3] == b"\xff\xd8\xff"
+    staff_copy = await owner_client.get(f"/api/v1/skus/{sku_id}/photo")
+    assert served.content == staff_copy.content
+
+    assert (await owner_client.get(photo_route)).status_code == 401
+    assert (
+        await owner_client.get(photo_route, headers={**headers, "Authorization": "Bearer other"})
+    ).status_code == 401
+    assert (
+        await owner_client.get(
+            photo_route, headers={**headers, "X-Ops-Company-ID": str(UUID(int=1))}
+        )
+    ).status_code == 403
+    assert (
+        await owner_client.get(photo_route, headers={**headers, "Host": "other-instance.example"})
+    ).status_code == 403
+    unknown = f"/api/v1/ops-commerce/v1/products/{UUID(int=7)}/photo"
+    assert (await owner_client.get(unknown, headers=headers)).status_code == 404
+
+    first = (await owner_client.get(feed_route, headers=headers)).json()["products"][0]
+    assert first["photo_token"] and len(first["photo_token"]) == 64
+    # A price edit moves the revision but not the photo token.
+    assert (
+        await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"retail_inc_vat": "12000.00"})
+    ).status_code == 200
+    second = (await owner_client.get(feed_route, headers=headers)).json()["products"][0]
+    assert second["revision"] > first["revision"]
+    assert second["photo_token"] == first["photo_token"]
+
+    # A photo stored under another key is a different photo.
+    sku.photo_storage_key = sku.photo_storage_key + ".v2"
+    await async_db.flush()
+    third = (await owner_client.get(feed_route, headers=headers)).json()["products"][0]
+    assert third["photo_token"] not in (None, first["photo_token"])
+
+    sku.storefront_published = False
+    await async_db.flush()
+    assert (await owner_client.get(photo_route, headers=headers)).status_code == 404
 
 
 @pytest.mark.asyncio

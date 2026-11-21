@@ -1,45 +1,27 @@
 "use client";
 
-import { Button } from "@f0rge/ui";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { RotateCcw, Store, Truck, UserRound } from "lucide-react";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@f0rge/ui";
+import { BagLine, BagTotals, DELIVERY_NOTE, isHeld, itemCount, promiseDates, useBag } from "@/components/bag";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
-import { formatCustomerPrice } from "@/lib/order-money";
+import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { purchaseFeedback } from "@/lib/purchase-feedback";
-import type { Bag } from "@/lib/bag-server";
 
-const money = (value: number, currency?: string) => formatCustomerPrice(value, currency);
-const promiseDates = (from: string, by: string) => {
-  const format = (value: string) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
-  return from === by ? format(from) : `${format(from)} – ${format(by)}`;
-};
-
-async function bagRequest(method: string, path = "/api/bag", body?: unknown): Promise<Bag> {
-  const response = await fetch(path, {
-    method, headers: body === undefined ? undefined : { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store",
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.message || "The bag could not be updated");
-  return result as Bag;
-}
+const assurances = [
+  { icon: Truck, title: "Delivery", description: "Selected Gauteng areas. The charge is confirmed before payment." },
+  { icon: Store, title: "Collection", description: "From our showroom at Bedford Square, Bedfordview." },
+  { icon: RotateCcw, title: "Returns", description: [RETURNS_SUMMARY.coolingOff, RETURNS_SUMMARY.changeOfMind, currentCustomerPolicies() ? "" : POLICY_DRAFT_NOTICE].join(" ").trim() },
+  { icon: UserRound, title: "Guest checkout", description: "No account needed." },
+];
 
 export default function BagPage() {
-  const router = useRouter();
+  const { bag, error, busy, update, reload, beginCheckout } = useBag();
   const { capture } = useStorefrontAnalytics();
   const viewedCart = useRef("");
-  const [bag, setBag] = useState<Bag | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const errorRef = useRef<HTMLParagraphElement>(null);
-  const loadBag = useCallback(async () => {
-    setError("");
-    try { setBag(await bagRequest("GET")); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again"); }
-  }, []);
-  useEffect(() => { void loadBag(); }, [loadBag]);
   useEffect(() => {
     if (!bag?.id || bag.items.length === 0 || viewedCart.current === bag.id) return;
     const valueMinor = zarMinorUnits(bag.total);
@@ -49,61 +31,66 @@ export default function BagPage() {
   }, [bag, capture]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
-  async function update(method: string, path: string, body?: unknown) {
-    setBusy(true); setError("");
-    try { setBag(await bagRequest(method, path, body)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again"); }
-    finally { setBusy(false); }
-  }
-
-  async function beginCheckout() {
-    setBusy(true); setError("");
-    try {
-      const nextBag = await bagRequest("POST", "/api/bag/checkout");
-      setBag(nextBag);
-      if (nextBag.hold?.status === "active") router.push("/checkout");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again"); }
-    finally { setBusy(false); }
-  }
-
-  const held = bag?.hold?.status === "active" && Date.parse(bag.hold.expires_at) > Date.now();
+  const held = isHeld(bag);
+  const count = itemCount(bag);
   const feedback = error ? purchaseFeedback(error, true) : null;
-  return <div className="content bag-page">
-    <p className="eyebrow">DasKasas / your selection</p>
-    <h1>Your bag</h1>
-    {feedback && <p ref={errorRef} id="bag-error" role={feedback.role} tabIndex={feedback.tabIndex} className="bag-error">{feedback.message}</p>}
-    {!bag && error && <Button type="button" className="bag-retry" onClick={() => void loadBag()}>Retry loading bag</Button>}
-    {!bag && !error && <p role="status">Loading your bag…</p>}
-    {bag && bag.items.length === 0 && <div className="bag-empty"><p>Your bag is empty.</p><Link className="text-link" href="/shop">Explore all pieces ↗</Link></div>}
-    {bag && bag.items.length > 0 && <div className="bag-layout">
-      <div className="bag-lines">{bag.items.map((item) => <div className="bag-line" key={item.id}>
-        <div className="bag-line-image">{item.thumbnail && <img src={item.thumbnail} alt="" />}</div>
-        <div><h2>{item.title}</h2><p>{money(item.unit_price, bag.currency_code)} each</p>
-          {item.fulfillment_promise?.kind === "made_to_order" && <p className="line-fulfillment-promise" data-testid="line-fulfillment-promise">Made to order · estimated ready {promiseDates(item.fulfillment_promise.estimated_from, item.fulfillment_promise.estimated_by)}</p>}
-          {item.fulfillment_promise?.kind === "stocked" && <p className="line-fulfillment-promise">In stock and reserved</p>}
-          <label htmlFor={`quantity-${item.id}`}>Quantity for {item.title}</label>
-          <input id={`quantity-${item.id}`} type="number" min="1" max="99" step="1" defaultValue={item.quantity} key={`${item.id}-${item.quantity}`} disabled={busy || held} onBlur={(event) => {
-            const quantity = Number(event.target.value);
-            if (quantity !== item.quantity) void update("PATCH", "/api/bag", { item_id: item.id, quantity });
-          }} />
-          <Button type="button" className="bag-remove" disabled={busy || held} onClick={() => {
-            const valueMinor = zarMinorUnits(item.total);
-            if (valueMinor !== null) capture({ name: "storefront_cart_item_removed", properties: { variant_id: item.variant_id, quantity: item.quantity, value_minor: valueMinor, ...(bag.id ? { cart_id: bag.id } : {}) } });
-            void update("DELETE", `/api/bag?item_id=${encodeURIComponent(item.id)}`);
-          }}>Remove</Button>
-        </div><strong>{money(item.total, bag.currency_code)}</strong>
-      </div>)}</div>
-      <aside className="bag-summary"><p className="eyebrow">Order summary</p><dl><dt>Subtotal</dt><dd>{money(bag.subtotal, bag.currency_code)}</dd><dt>Total incl. VAT</dt><dd data-testid="bag-total">{money(bag.total, bag.currency_code)}</dd></dl>
-        {bag.hold?.status === "review" && <div className="bag-review" role="status"><h2>Review changes</h2><p>Price or availability changed. Review your bag before continuing.</p>{bag.hold.changes?.map((change) => <p key={change}>{change}</p>)}</div>}
-        {bag.hold?.fulfillment_promise && <div className="bag-fulfillment-promise" role="status" data-testid="fulfillment-promise-summary">
-          <h2>One fulfillment promise for the whole order</h2>
-          <p>{bag.hold.fulfillment_promise.kind === "mixed" ? "Your stocked and made-to-order pieces will be fulfilled together." : bag.hold.fulfillment_promise.kind === "made_to_order" ? "Your order is made to order." : "Your pieces are in stock."}</p>
-          <p>Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
-        </div>}
-        {held ? <><p role="status">Reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}</p><Link className="bag-checkout" href="/checkout">Continue checkout</Link><Button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Change bag</Button><Button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Cancel reservation</Button></>
-          : <Button type="button" className="bag-checkout" disabled={busy} onClick={() => void beginCheckout()}>{bag.hold?.status === "review" ? "Accept changes and continue" : "Continue to checkout"}</Button>}
-        <p className="bag-note">Availability is confirmed when you continue to checkout. No payment is taken here.</p>
-      </aside>
-    </div>}
+  return <div className="mx-auto w-full max-w-7xl px-4 py-10 md:px-6">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+      <div className="min-w-0 space-y-6 lg:col-span-2">
+        <div>
+          <h1 className="text-2xl font-semibold">Your bag</h1>
+          {bag && <p className="text-muted-foreground">{count} {count === 1 ? "item" : "items"} in your bag</p>}
+        </div>
+        {feedback && <p ref={errorRef} id="bag-error" role={feedback.role} tabIndex={feedback.tabIndex} className="rounded-lg border border-destructive p-4 text-sm text-destructive outline-none">{feedback.message}</p>}
+        {!bag && error && <div className="text-sm font-medium"><Button type="button" variant="outline" onClick={() => void reload()}>Retry loading bag</Button></div>}
+        {!bag && !error && <p role="status">Loading your bag…</p>}
+        {bag && bag.items.length === 0 && <Card><CardContent className="space-y-4">
+          <p className="text-muted-foreground">Your bag is empty.</p>
+          <div className="text-sm font-medium"><Button variant="outline" nativeButton={false} role="link" render={<Link href="/shop" />}>Continue shopping</Button></div>
+        </CardContent></Card>}
+        {bag && bag.items.length > 0 && <ul className="space-y-4">{bag.items.map((item) => <BagLine key={item.id} item={item} />)}</ul>}
+      </div>
+
+      {bag && bag.items.length > 0 && <Card className="self-start">
+        <CardHeader>
+          <CardTitle>Order summary</CardTitle>
+          <CardDescription>Prices in rand, VAT included.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Delivery or collection</p>
+            <p className="text-sm text-muted-foreground">{DELIVERY_NOTE}</p>
+          </div>
+          <div className="space-y-2">
+            <BagTotals bag={bag} />
+            <p className="text-xs text-muted-foreground">Plus delivery, if you choose it. VAT included.</p>
+          </div>
+          {bag.hold?.status === "review" && <div className="space-y-1 rounded-lg border border-destructive p-4 text-sm" role="status">
+            <h2 className="font-medium">Review changes</h2>
+            <p>Price or availability changed. Review your bag before continuing.</p>
+            {bag.hold.changes?.map((change) => <p key={change}>{change}</p>)}
+          </div>}
+          {bag.hold?.fulfillment_promise && <div className="space-y-1 text-sm" role="status" data-testid="fulfillment-promise-summary">
+            <h2 className="font-medium">One fulfillment promise for the whole order</h2>
+            <p className="text-muted-foreground">{bag.hold.fulfillment_promise.kind === "mixed" ? "Your stocked and made-to-order pieces will be fulfilled together." : bag.hold.fulfillment_promise.kind === "made_to_order" ? "Your order is made to order." : "Your pieces are in stock."}</p>
+            <p className="text-muted-foreground">Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
+          </div>}
+          {/* Mantine's unlayered button reset makes buttons inherit their font, so the wrapper carries it. */}
+          <div className="grid gap-2 text-sm font-medium">
+            {held ? <>
+              <p role="status" className="font-normal">Reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}</p>
+              <Button className="h-11 w-full" nativeButton={false} role="link" render={<Link href="/checkout" />}>Continue checkout</Button>
+              <Button type="button" variant="outline" className="h-11 w-full" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Change bag</Button>
+            </> : <Button type="button" className="h-11 w-full" disabled={busy} onClick={() => void beginCheckout()}>{bag.hold?.status === "review" ? "Accept changes and continue" : "Continue to checkout"}</Button>}
+          </div>
+          <p className="text-xs text-muted-foreground">Availability is confirmed when you continue to checkout. No payment is taken here.</p>
+        </CardContent>
+      </Card>}
+    </div>
+
+    <ul className="mt-12 grid grid-cols-1 gap-6 border-t pt-8 sm:grid-cols-2 lg:grid-cols-4">{assurances.map(({ icon: Icon, title, description }) => <li key={title} className="flex gap-3">
+      <Icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+      <div><h2 className="text-sm font-medium">{title}</h2><p className="text-sm text-muted-foreground">{description}</p></div>
+    </li>)}</ul>
   </div>;
 }

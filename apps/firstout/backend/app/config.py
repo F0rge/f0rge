@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     ops_commerce_token: str = ""
     ops_commerce_company_id: str = ""
     ops_commerce_allowed_host: str = ""
+    # Off until the storefront's commerce release accepts photo_token; older strict
+    # contracts reject unknown keys. Off omits the key from the feed entirely.
+    ops_commerce_photo_tokens_enabled: bool = False
 
     @field_validator("record_workspace_signing_key")
     @classmethod

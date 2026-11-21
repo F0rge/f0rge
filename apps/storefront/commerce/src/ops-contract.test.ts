@@ -15,6 +15,7 @@ const contract = {
     observed_at: "2026-09-22T09:14:32.000001",
     acknowledged_commitment_ids: [],
     made_to_order_offer: null,
+    photo_token: null,
   }],
 };
 
@@ -23,6 +24,13 @@ test("validates a provider-neutral private product snapshot", () => {
   expect(() => parseOpsProducts(contract, "912f8c83-777f-4485-9ddd-f1d709db18f6")).toThrow();
   expect(() => parseOpsProducts({ ...contract, products: [...contract.products, contract.products[0]] }, contract.company_id)).toThrow();
   expect(() => parseOpsProducts({ ...contract, products: [{ ...contract.products[0], supplier_ref: "private" }] }, contract.company_id)).toThrow();
+  expect(parseOpsProducts({ ...contract, products: [{ ...contract.products[0], photo_token: "a".repeat(64) }] }, contract.company_id)
+    .products[0].photo_token).toBe("a".repeat(64));
+  const { photo_token: _omitted, ...withoutPhotoToken } = contract.products[0];
+  expect(parseOpsProducts({ ...contract, products: [withoutPhotoToken] }, contract.company_id).products[0].photo_token).toBeUndefined();
+  for (const malformed of ["", "A".repeat(64), "a".repeat(65), "../photo"]) {
+    expect(() => parseOpsProducts({ ...contract, products: [{ ...contract.products[0], photo_token: malformed }] }, contract.company_id)).toThrow();
+  }
 });
 
 test("validates finite made-to-order offers and rejects an inverted promise range", () => {

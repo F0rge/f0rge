@@ -2,8 +2,22 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { robotsHeader } from "./lib/launch-indexing";
+import { SHOP_CATEGORIES } from "./lib/shop-categories";
 
 const ROBOTS_HEADER = "noindex, nofollow, noarchive";
+// Old routes kept working for bookmarks and search results (F0rge/f0rge#1000).
+const PERMANENT_REDIRECTS: Record<string, string> = {
+  "/collections": "/shop", "/support": "/help", "/contact": "/help#contact",
+};
+
+// The old /shop?category= and ?collection= forms move to the category path; "sofas" was the guessed room.
+function movedPath(url: URL): string | undefined {
+  if (url.pathname !== "/shop") return PERMANENT_REDIRECTS[url.pathname];
+  const handle = url.searchParams.get("category") ?? url.searchParams.get("collection");
+  if (handle === null) return undefined;
+  const target = handle === "sofas" ? "sofas-armchairs" : handle;
+  return SHOP_CATEGORIES.some((category) => category.handle === target) ? `/shop/${target}` : "/shop";
+}
 
 function withRobotsHeader(response: NextResponse): NextResponse {
   response.headers.set("X-Robots-Tag", ROBOTS_HEADER);
@@ -106,6 +120,8 @@ export function proxy(request: NextRequest, event: NextFetchEvent) {
   // requests before invoking its callback, which must never bypass this gate.
   const denied = privatePreviewGate(request);
   if (denied) return denied;
+  const moved = movedPath(request.nextUrl);
+  if (moved) return withNoIndex(NextResponse.redirect(new URL(moved, request.url), 308), request.nextUrl.pathname);
   if (!clerkConfigured) return withNoIndex(NextResponse.next(), request.nextUrl.pathname);
   return Promise.resolve(clerkProxy(request, event)).then((result) => withNoIndex(result, request.nextUrl.pathname));
 }

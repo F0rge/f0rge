@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useClerk, useUser } from "@clerk/nextjs";
-import { Button } from "@f0rge/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@f0rge/ui";
 import { TextInput } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
@@ -103,35 +103,45 @@ export function AccountClient({ customer }: AccountClientProps) {
     setDraft({ ...blankAddress, ...fields }); setEditingId(address.id); setError("");
   }
 
+  // Mantine's unlayered button reset makes buttons inherit their font, so the action rows carry it.
   return <>
-    <div className="account-layout">
-      <section className="account-panel">
-        <p className="eyebrow">Signed in</p>
-        <h2>{customer.first_name || customer.email}</h2>
-        <p>{customer.email}</p>
-        <p>Your bag remains attached to this account while you are signed in. Signing out clears this browser’s bag access.</p>
-        <div className="account-actions"><Button type="button" className="account-secondary" disabled={busy} onClick={() => void logout()}>Sign out</Button></div>
-      </section>
-      <section className="account-panel">
-        <h2>{editingId ? "Edit saved address" : "Save a delivery address"}</h2>
-        <form onSubmit={(event) => void saveAddress(event)}>
-          <div className="checkout-fields"><TextInput label="First name" required maxLength={100} autoComplete="given-name" value={draft.first_name || ""} onChange={(event) => setDraft({ ...draft, first_name: event.target.value })} /><TextInput label="Last name" required maxLength={100} autoComplete="family-name" value={draft.last_name || ""} onChange={(event) => setDraft({ ...draft, last_name: event.target.value })} /></div>
-          <TextInput label="Street address" required maxLength={250} autoComplete="address-line1" value={draft.address_1 || ""} onChange={(event) => setDraft({ ...draft, address_1: event.target.value })} />
-          <TextInput label="Suburb" maxLength={150} autoComplete="address-line2" value={draft.address_2 || ""} onChange={(event) => setDraft({ ...draft, address_2: event.target.value })} />
-          <div className="checkout-fields"><TextInput label="City" required maxLength={100} autoComplete="address-level2" value={draft.city || ""} onChange={(event) => setDraft({ ...draft, city: event.target.value })} /><TextInput label="Province" required maxLength={100} autoComplete="address-level1" value={draft.province || ""} onChange={(event) => setDraft({ ...draft, province: event.target.value })} /></div>
-          <div className="checkout-fields"><TextInput label="Postal code" required inputMode="numeric" pattern="[0-9]{4}" autoComplete="postal-code" value={draft.postal_code || ""} onChange={(event) => setDraft({ ...draft, postal_code: event.target.value })} /><TextInput label="Phone" maxLength={40} autoComplete="tel" value={draft.phone || ""} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></div>
-          <div className="account-actions"><Button type="submit" disabled={busy}>{busy ? "Saving…" : editingId ? "Update address" : "Save address"}</Button>{editingId && <Button type="button" className="account-secondary" disabled={busy} onClick={() => { setDraft(blankAddress); setEditingId(null); }}>Cancel</Button>}</div>
-        </form>
-      </section>
-      <section className="account-panel">
-        <h2>Saved addresses</h2>
-        {addresses.length === 0 ? <p>No saved addresses yet.</p> : addresses.map((address) => <article className="account-address" key={address.id}>
-          <p><strong>{address.first_name} {address.last_name}</strong></p><p>{address.address_1}{address.address_2 ? `, ${address.address_2}` : ""}</p><p>{address.city}, {address.province} {address.postal_code}</p>
-          <div className="account-actions"><Button type="button" className="account-secondary" disabled={busy} onClick={() => edit(address)}>Edit</Button><Button type="button" className="account-secondary" disabled={busy} onClick={() => void removeAddress(address.id)}>Remove</Button></div>
-        </article>)}
-      </section>
+    <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
+      <Card>
+        <CardHeader>
+          <CardDescription>Signed in</CardDescription>
+          <CardTitle><h2 className="text-xl">{customer.first_name || customer.email}</h2></CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>{customer.email}</p>
+          <p>Your bag remains attached to this account while you are signed in. Signing out clears this browser’s bag access.</p>
+          <div className="text-sm font-medium text-foreground"><Button type="button" variant="outline" className="h-11 px-4" disabled={busy} onClick={() => void logout()}>Sign out</Button></div>
+        </CardContent>
+      </Card>
+      <Card className="lg:row-span-2">
+        <CardHeader><CardTitle><h2 className="text-xl">{editingId ? "Edit saved address" : "Save a delivery address"}</h2></CardTitle></CardHeader>
+        <CardContent>
+          {/* 16px inputs on phones so iOS does not zoom (Mantine reads --input-fz). */}
+          <form className="grid gap-4 max-md:[--input-fz:1rem]" onSubmit={(event) => void saveAddress(event)}>
+            <div className="grid gap-4 sm:grid-cols-2"><TextInput label="First name" required maxLength={100} autoComplete="given-name" value={draft.first_name || ""} onChange={(event) => setDraft({ ...draft, first_name: event.target.value })} /><TextInput label="Last name" required maxLength={100} autoComplete="family-name" value={draft.last_name || ""} onChange={(event) => setDraft({ ...draft, last_name: event.target.value })} /></div>
+            <TextInput label="Street address" required maxLength={250} autoComplete="address-line1" value={draft.address_1 || ""} onChange={(event) => setDraft({ ...draft, address_1: event.target.value })} />
+            <TextInput label="Suburb" maxLength={150} autoComplete="address-line2" value={draft.address_2 || ""} onChange={(event) => setDraft({ ...draft, address_2: event.target.value })} />
+            <div className="grid gap-4 sm:grid-cols-2"><TextInput label="City" required maxLength={100} autoComplete="address-level2" value={draft.city || ""} onChange={(event) => setDraft({ ...draft, city: event.target.value })} /><TextInput label="Province" required maxLength={100} autoComplete="address-level1" value={draft.province || ""} onChange={(event) => setDraft({ ...draft, province: event.target.value })} /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><TextInput label="Postal code" required inputMode="numeric" pattern="[0-9]{4}" autoComplete="postal-code" value={draft.postal_code || ""} onChange={(event) => setDraft({ ...draft, postal_code: event.target.value })} /><TextInput label="Phone" maxLength={40} autoComplete="tel" value={draft.phone || ""} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></div>
+            <div className="flex flex-wrap gap-2 text-sm font-medium"><Button type="submit" className="h-11 px-4" disabled={busy}>{busy ? "Saving…" : editingId ? "Update address" : "Save address"}</Button>{editingId && <Button type="button" variant="outline" className="h-11 px-4" disabled={busy} onClick={() => { setDraft(blankAddress); setEditingId(null); }}>Cancel</Button>}</div>
+          </form>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle><h2 className="text-xl">Saved addresses</h2></CardTitle></CardHeader>
+        <CardContent>
+          {addresses.length === 0 ? <p className="text-muted-foreground">No saved addresses yet.</p> : <ul className="divide-y">{addresses.map((address) => <li className="space-y-1 py-4 first:pt-0" key={address.id}>
+            <p className="font-medium">{address.first_name} {address.last_name}</p><p className="text-muted-foreground">{address.address_1}{address.address_2 ? `, ${address.address_2}` : ""}</p><p className="text-muted-foreground">{address.city}, {address.province} {address.postal_code}</p>
+            <div className="flex flex-wrap gap-2 pt-2 text-sm font-medium"><Button type="button" variant="outline" className="h-11 px-4" disabled={busy} onClick={() => edit(address)}>Edit</Button><Button type="button" variant="outline" className="h-11 px-4" disabled={busy} onClick={() => void removeAddress(address.id)}>Remove</Button></div>
+          </li>)}</ul>}
+        </CardContent>
+      </Card>
     </div>
     <OrderHistory />
-    {error && <p role="alert" className="account-error">{error}</p>}
+    {error && <p role="alert" className="mt-6 rounded-lg border border-destructive p-4 text-sm text-destructive">{error}</p>}
   </>;
 }

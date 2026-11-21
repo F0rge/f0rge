@@ -52,7 +52,7 @@ export type ReplayDecision = {
 };
 
 const blockedRoute = /^\/(?:sign-in|sign-up|account|checkout|order)(?:\/|$)/;
-const allowedRoute = /^\/(?:$|shop(?:\/|$)|collections(?:\/|$)|product(?:\/|$)|bag(?:\/|$))/;
+const allowedRoute = /^\/(?:$|shop(?:\/|$)|product(?:\/|$)|bag(?:\/|$))/;
 
 export function replaySampleBucket(sessionKey: string): number {
   let hash = 2166136261;

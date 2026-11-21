@@ -40,6 +40,7 @@ class PublishedSkuSnapshot:
     options: dict[str, str]
     acknowledged_commitment_ids: list[str]
     made_to_order_offer: Optional[dict[str, object]]
+    photo_storage_key: Optional[str]
 
 
 class OpsCommerceCRUD:
@@ -93,6 +94,7 @@ class OpsCommerceCRUD:
                 Sku.made_to_order_lead_time_max_days,
                 Sku.made_to_order_expires_at,
                 Sku.made_to_order_offer_id,
+                Sku.photo_storage_key,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
             .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
@@ -190,6 +192,7 @@ class OpsCommerceCRUD:
                     if row[14] is not None
                     else None
                 ),
+                photo_storage_key=row[15],
             )
             for row in rows
         ]

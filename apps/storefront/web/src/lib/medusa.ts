@@ -1,6 +1,6 @@
 import "server-only";
-import { roomCollectionHandles } from "./catalogue-collections";
 import { formatCustomerPrice } from "./order-money";
+import { offerLive } from "./made-to-order";
 
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
@@ -58,7 +58,6 @@ export type StoreProduct = {
     dimension_unit?: "cm" | "mm";
     seo_title?: string;
     seo_description?: string;
-    storefront_room_collections?: string[];
   } | null;
   material?: string | null;
   length?: number | null;
@@ -66,13 +65,12 @@ export type StoreProduct = {
   height?: number | null;
   variants: MedusaVariant[];
   categories?: { id: string; name: string; handle: string }[];
-  collection?: { id: string; title: string; handle: string } | null;
   status?: string;
 };
 
 const baseUrl = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000";
 const publishableKey = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY;
-const productFields = "id,handle,title,description,thumbnail,material,length,width,height,metadata,*images,*options,*options.values,*categories,*collection,*variants,*variants.images,*variants.options,+variants.inventory_quantity,*variants.calculated_price,+variants.material,+variants.length,+variants.width,+variants.height,+variants.metadata";
+const productFields = "id,handle,title,description,thumbnail,material,length,width,height,metadata,*images,*options,*options.values,*categories,*variants,*variants.images,*variants.options,+variants.inventory_quantity,*variants.calculated_price,+variants.material,+variants.length,+variants.width,+variants.height,+variants.metadata";
 
 async function storeFetch<T>(path: string): Promise<T> {
   if (!publishableKey) throw new Error("Medusa publishable key is missing");
@@ -106,10 +104,8 @@ function publicProduct(product: StoreProduct): StoreProduct {
       dimension_unit: product.metadata?.dimension_unit,
       seo_title: product.metadata?.seo_title,
       seo_description: product.metadata?.seo_description,
-      storefront_room_collections: roomCollectionHandles(product.metadata?.storefront_room_collections),
     },
     categories: (product.categories || []).map(({ id, name, handle }) => ({ id, name, handle })),
-    collection: product.collection ? { id: product.collection.id, title: product.collection.title, handle: product.collection.handle } : null,
     variants: (product.variants || []).map((variant) => ({
       id: variant.id, sku: variant.sku, title: variant.title, thumbnail: variant.thumbnail,
       images: (variant.images || []).map(({ id, url }) => ({ id, url })),
@@ -153,12 +149,22 @@ export async function getStoreProduct(slug: string): Promise<StoreProduct | null
   return products[0] && isPublicProduct(products[0]) ? publicProduct(products[0]) : null;
 }
 
-export function productPath(product: StoreProduct): string {
-  return `/product/${product.handle.replace(/^firstout-(?!group-)/, "")}`;
+// The most of each variant a shopper can put in the bag: its stock, or the made-to-order places left, at most 99.
+// ponytail: ignores offer freshness and expiry; the checkout hold re-checks availability before payment.
+export async function variantQuantityCaps(productIds: string[]): Promise<Map<string, number>> {
+  if (!productIds.length) return new Map();
+  const query = new URLSearchParams({ fields: "id,*variants,+variants.inventory_quantity,+variants.metadata" });
+  for (const id of new Set(productIds)) query.append("id", id);
+  const { products } = await storeFetch<{ products: StoreProduct[] }>(`/store/products?${query}`);
+  return new Map(products.flatMap((product) => product.variants.map((variant) => {
+    const stock = variant.inventory_quantity ?? 0;
+    const offer = variant.metadata?.storefront_made_to_order_offer;
+    return [variant.id, Math.min(99, stock > 0 ? stock : Math.max(offer?.remaining_capacity ?? 0, 0))] as const;
+  })));
 }
 
-export function publicCollections(products: StoreProduct[]): NonNullable<StoreProduct["collection"]>[] {
-  return [...new Map(products.flatMap((product) => product.collection ? [[product.collection.handle, product.collection] as const] : [])).values()];
+export function productPath(product: StoreProduct): string {
+  return `/product/${product.handle.replace(/^firstout-(?!group-)/, "")}`;
 }
 
 export function lowestPricedVariant(variants: MedusaVariant[]): MedusaVariant | undefined {
@@ -170,4 +176,37 @@ export function priceLabel(variant?: MedusaVariant): string {
   const amount = variant?.calculated_price?.calculated_amount;
   if (amount == null) return "Price unavailable";
   return formatCustomerPrice(amount, variant?.calculated_price?.currency_code);
+}
+
+export function fromPrice(product: StoreProduct): string {
+  const prices = product.variants.map((variant) => variant.calculated_price?.calculated_amount).filter((price): price is number => price != null);
+  return `${new Set(prices).size > 1 ? "From " : ""}${priceLabel(lowestPricedVariant(product.variants))}`;
+}
+
+export function stockLabel(product: StoreProduct): string | null {
+  const stock = product.variants.reduce((total, variant) => total + Math.max(variant.inventory_quantity ?? 0, 0), 0);
+  if (stock > 0) return `${stock} in stock`;
+  return product.variants.some((variant) => offerLive(variant.metadata?.made_to_order_offer)) ? "Made to order" : null;
+}
+
+export type Availability = "in-stock" | "made-to-order";
+// What a listing card, its filter and its sort read; computed once so the counts and the grid agree.
+export type ListedPiece = Pick<StoreProduct, "id" | "title" | "thumbnail" | "images"> & {
+  href: string;
+  price: number | null;
+  priceLabel: string;
+  stockLabel: string | null;
+  availability: Availability[];
+};
+
+export function listedPiece(product: StoreProduct): ListedPiece {
+  const availability: Availability[] = [];
+  if (product.variants.some((variant) => (variant.inventory_quantity ?? 0) > 0)) availability.push("in-stock");
+  if (product.variants.some((variant) => offerLive(variant.metadata?.made_to_order_offer))) availability.push("made-to-order");
+  return {
+    id: product.id, title: product.title, thumbnail: product.thumbnail, images: product.images?.slice(0, 1),
+    href: productPath(product),
+    price: lowestPricedVariant(product.variants)?.calculated_price?.calculated_amount ?? null,
+    priceLabel: fromPrice(product), stockLabel: stockLabel(product), availability,
+  };
 }

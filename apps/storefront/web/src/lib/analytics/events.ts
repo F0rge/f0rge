@@ -1,7 +1,9 @@
+import { SHOP_CATEGORIES } from "../shop-categories";
 import { sanitizeCommerceBrowserEvent, type StorefrontCommerceBrowserEvent } from "./commerce-events";
 
-export type AnalyticsPageKey = "home" | "shop" | "collections" | "product";
-export type AnalyticsSurface = "home" | "shop" | "collections";
+export type AnalyticsPageKey = "home" | "shop" | "category" | "product" | "help";
+export type AnalyticsSurface = "home" | "shop" | "category";
+export type SearchAvailability = "all" | "in_stock" | "made_to_order";
 export type SearchSortOrder = "default" | "price_asc" | "price_desc";
 
 export type StorefrontBrowserEvent =
@@ -11,7 +13,7 @@ export type StorefrontBrowserEvent =
   | { name: "storefront_product_viewed"; properties: { product_id: string } }
   | { name: "storefront_product_media_selected"; properties: { product_id: string; media_index: number } }
   | { name: "storefront_product_variant_selected"; properties: { product_id: string; option_id: string; value_index: number; variant_id?: string } }
-  | { name: "storefront_search_results_viewed"; properties: { query_present: boolean; category_id?: string; collection_id?: string; availability: "all" | "in_stock"; price_filter_active: boolean; sort_order: SearchSortOrder; result_count: number } }
+  | { name: "storefront_search_results_viewed"; properties: { query_present: boolean; category_id?: string; collection_id?: string; availability: SearchAvailability; price_filter_active: boolean; sort_order: SearchSortOrder; result_count: number } }
   | { name: "storefront_product_attention_summary"; properties: { product_id: string; active_seconds: number; visibility_threshold: "half_visible" } }
   | StorefrontCommerceBrowserEvent;
 
@@ -26,8 +28,8 @@ export interface AnalyticsProvider<Event> {
 export type BrowserAnalyticsProvider = AnalyticsProvider<StorefrontBrowserEvent>;
 export type ServerAnalyticsProvider<Event> = AnalyticsProvider<Event>;
 
-const pageKeys = new Set<AnalyticsPageKey>(["home", "shop", "collections", "product"]);
-const surfaces = new Set<AnalyticsSurface>(["home", "shop", "collections"]);
+const pageKeys = new Set<AnalyticsPageKey>(["home", "shop", "category", "product", "help"]);
+const surfaces = new Set<AnalyticsSurface>(["home", "shop", "category"]);
 const sortOrders = new Set<SearchSortOrder>(["default", "price_asc", "price_desc"]);
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -121,7 +123,7 @@ export function sanitizeAnalyticsEvent(input: unknown): SanitizedAnalyticsEvent 
       if (resultCount === null) return null;
       const safe: AnalyticsProperties = {
         query_present: properties.query_present,
-        availability: properties.availability === "in_stock" ? "in_stock" : "all",
+        availability: properties.availability === "in_stock" || properties.availability === "made_to_order" ? properties.availability : "all",
         price_filter_active: properties.price_filter_active === true,
         sort_order: sortOrders.has(properties.sort_order as SearchSortOrder) ? properties.sort_order as string : "default",
         result_count: resultCount,
@@ -141,10 +143,14 @@ export function sanitizeAnalyticsEvent(input: unknown): SanitizedAnalyticsEvent 
   }
 }
 
+// The four category listings (/shop/<handle>); unknown handles are 404 pages and stay untracked.
+const isCategoryPath = (pathname: string) => SHOP_CATEGORIES.some((category) => category.href === pathname);
+
 export function analyticsPageForPathname(pathname: string): { pageKey: AnalyticsPageKey; productId?: string } | null {
   if (pathname === "/") return { pageKey: "home" };
   if (pathname === "/shop") return { pageKey: "shop" };
-  if (pathname === "/collections") return { pageKey: "collections" };
+  if (pathname === "/help") return { pageKey: "help" };
+  if (isCategoryPath(pathname)) return { pageKey: "category" };
   const match = /^\/product\/(group-)?([0-9a-f-]{36})\/?$/i.exec(pathname);
   return match ? { pageKey: "product", productId: `${match[1] || ""}${match[2].toLowerCase()}` } : null;
 }
@@ -152,7 +158,7 @@ export function analyticsPageForPathname(pathname: string): { pageKey: Analytics
 export function analyticsSurfaceForPathname(pathname: string): AnalyticsSurface | null {
   if (pathname === "/") return "home";
   if (pathname === "/shop") return "shop";
-  if (pathname === "/collections") return "collections";
+  if (isCategoryPath(pathname)) return "category";
   return null;
 }
 

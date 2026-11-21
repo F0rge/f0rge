@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BagError, currentCartId, getCart, medusaResponse, type Bag } from "@/lib/bag-server";
+import { BagError, currentCartId, getCart, medusaResponse, withStock, type Bag } from "@/lib/bag-server";
 import { isSameOrigin } from "@/lib/same-origin";
 
 type Hold = NonNullable<Bag["hold"]>;
@@ -18,7 +18,7 @@ async function changeHold(request: NextRequest, method: "POST" | "DELETE"): Prom
     if ((status < 200 || status >= 300) && !(status === 409 && payload.hold?.status === "review")) {
       throw new BagError(status, payload.message || "Checkout is temporarily unavailable");
     }
-    return NextResponse.json({ ...await getCart(cartId), hold: payload.hold || null });
+    return NextResponse.json({ ...await withStock(await getCart(cartId)), hold: payload.hold || null });
   } catch (error) {
     const status = error instanceof BagError && error.status < 500 ? error.status : 503;
     return NextResponse.json({ message: error instanceof Error ? error.message : "Checkout is temporarily unavailable" }, { status });

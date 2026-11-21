@@ -4,7 +4,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -34,7 +34,7 @@ def get_ops_commerce_service(db: AsyncSession = Depends(get_db)) -> OpsCommerceS
     return OpsCommerceService(db)
 
 
-@router.get("/products", response_model=OpsProductsResponse)
+@router.get("/products", response_model=OpsProductsResponse, response_model_exclude_unset=True)
 async def list_products(
     request: Request,
     authorization: Optional[str] = Header(default=None),
@@ -46,6 +46,23 @@ async def list_products(
         requested_company=x_ops_company_id,
         request_host=request.url.hostname or "",
     )
+
+
+@router.get("/products/{source_sku_id}/photo", response_model=None)
+async def product_photo(
+    source_sku_id: uuid.UUID,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_ops_company_id: Optional[str] = Header(default=None),
+    service: OpsCommerceService = Depends(get_ops_commerce_service),
+) -> Response:
+    data = await service.product_photo(
+        source_sku_id,
+        authorization=authorization,
+        requested_company=x_ops_company_id,
+        request_host=request.url.hostname or "",
+    )
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/checkout-safety", response_model=StorefrontCheckoutSafetyResponse)

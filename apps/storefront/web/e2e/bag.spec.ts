@@ -15,12 +15,13 @@ test('direct Medusa cart access requires the server-only credential', async ({ r
 test('a shopper can restore, edit, and remove a server-backed bag across navigation', async ({ page }) => {
   test.skip(!sourceSkuId, 'Set STOREFRONT_TEST_SKU_ID to a published SKU with at least two units')
 
+  const main = page.getByRole('main')
+  const quantity = (value: number) => main.getByLabel(new RegExp(`^Quantity of .+: ${value}$`))
   await page.goto(`/product/${sourceSkuId}`)
   await page.getByRole('button', { name: 'Add to bag' }).click()
-  await expect(page.getByText('Added to bag. Review your bag when ready.')).toBeVisible()
-  await page.getByRole('link', { name: 'View bag' }).click()
+  await page.getByRole('dialog', { name: 'Your bag' }).getByRole('link', { name: 'View bag' }).click()
   await expect(page).toHaveURL(/\/bag$/)
-  await expect(page.getByRole('spinbutton')).toHaveValue('1')
+  await expect(quantity(1)).toBeVisible()
   const initialTotal = await page.locator('[data-testid="bag-total"]').innerText()
   const bag = await (await page.request.get('/api/bag')).json() as { items: { id: string }[] }
   for (const invalidQuantity of [0, -1, 1.5, 100]) {
@@ -32,27 +33,26 @@ test('a shopper can restore, edit, and remove a server-backed bag across navigat
   expect((await (await page.request.get('/api/bag')).json()).items[0].quantity).toBe(1)
 
   await page.reload()
-  await expect(page.getByRole('spinbutton')).toHaveValue('1')
+  await expect(quantity(1)).toBeVisible()
   await page.getByRole('link', { name: /Shop/i }).first().click()
-  await page.getByRole('link', { name: 'Bag' }).click()
-  await expect(page.getByRole('spinbutton')).toHaveValue('1')
+  await page.getByRole('banner').getByRole('button', { name: /^Bag, / }).click()
+  await page.getByRole('dialog', { name: 'Your bag' }).getByRole('link', { name: 'View bag' }).click()
+  await expect(quantity(1)).toBeVisible()
 
-  await page.getByRole('spinbutton').fill('2')
-  await page.getByRole('spinbutton').press('Tab')
-  await expect(page.getByRole('spinbutton')).toHaveValue('2')
+  await main.getByRole('button', { name: /^Increase Quantity of / }).click()
+  await expect(quantity(2)).toBeVisible()
   await expect(page.locator('[data-testid="bag-total"]')).not.toHaveText(initialTotal)
   await page.reload()
-  await expect(page.getByRole('spinbutton')).toHaveValue('2')
+  await expect(quantity(2)).toBeVisible()
 
   await page.getByRole('button', { name: 'Continue to checkout' }).click()
   await expect(page.getByText(/reserved until/i)).toBeVisible()
   await page.getByRole('button', { name: 'Change bag' }).click()
   await expect(page.getByRole('button', { name: 'Continue to checkout' })).toBeVisible()
-  await page.getByRole('spinbutton').fill('1')
-  await page.getByRole('spinbutton').press('Tab')
+  await main.getByRole('button', { name: /^Decrease Quantity of / }).click()
   await expect(page.locator('[data-testid="bag-total"]')).toHaveText(initialTotal)
 
-  await page.getByRole('button', { name: 'Remove' }).click()
+  await main.getByRole('button', { name: /^Remove / }).click()
   await expect(page.getByText(/your bag is empty/i)).toBeVisible()
   await page.reload()
   await expect(page.getByText(/your bag is empty/i)).toBeVisible()
@@ -72,8 +72,8 @@ test('two independent shoppers cannot both reserve the final unit', async ({ bro
       secondPage.getByRole('button', { name: 'Add to bag' }).click(),
     ])
     await Promise.all([
-      expect(firstPage.getByText('Added to bag. Review your bag when ready.')).toBeVisible(),
-      expect(secondPage.getByText('Added to bag. Review your bag when ready.')).toBeVisible(),
+      expect(firstPage.getByRole('dialog', { name: 'Your bag' })).toBeVisible(),
+      expect(secondPage.getByRole('dialog', { name: 'Your bag' })).toBeVisible(),
     ])
     await Promise.all([firstPage.goto('/bag'), secondPage.goto('/bag')])
     await Promise.all([
@@ -81,14 +81,14 @@ test('two independent shoppers cannot both reserve the final unit', async ({ bro
       secondPage.getByRole('button', { name: 'Continue to checkout' }).click(),
     ])
     await Promise.all([
-      expect(firstPage.locator('.bag-summary [role="status"]')).toBeVisible(),
-      expect(secondPage.locator('.bag-summary [role="status"]')).toBeVisible(),
+      expect(firstPage.getByText(/reserved until|review changes/i)).toBeVisible(),
+      expect(secondPage.getByText(/reserved until|review changes/i)).toBeVisible(),
     ])
     const firstReserved = await firstPage.getByText(/reserved until/i).isVisible()
     const secondReserved = await secondPage.getByText(/reserved until/i).isVisible()
     expect(Number(firstReserved) + Number(secondReserved)).toBe(1)
-    await expect(firstPage.getByRole('spinbutton')).toHaveValue('1')
-    await expect(secondPage.getByRole('spinbutton')).toHaveValue('1')
+    await expect(firstPage.getByRole('main').getByLabel(/^Quantity of .+: 1$/)).toBeVisible()
+    await expect(secondPage.getByRole('main').getByLabel(/^Quantity of .+: 1$/)).toBeVisible()
   } finally {
     await Promise.allSettled([
       first.request.delete('/api/bag/checkout'),
@@ -110,7 +110,7 @@ test('one shopper cannot edit a different shopper’s bag line by its ID', async
     for (const page of [firstPage, secondPage]) {
       await page.goto(`/product/${sourceSkuId}`)
       await page.getByRole('button', { name: 'Add to bag' }).click()
-      await expect(page.getByText('Added to bag. Review your bag when ready.')).toBeVisible()
+      await expect(page.getByRole('dialog', { name: 'Your bag' })).toBeVisible()
     }
     const firstBag = await (await first.request.get('/api/bag')).json() as { id: string; items: { id: string; quantity: number }[] }
     const secondBag = await (await second.request.get('/api/bag')).json() as { id: string; items: { id: string; quantity: number }[] }

@@ -25,13 +25,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   catch { return reply({ message: "Enter your checkout details" }, 400); }
   const token = await currentOrderAccessToken(cartId) || newOrderAccessToken();
   try {
-    const { status, payload } = await medusaResponse<{ checkout?: Record<string, unknown>; message?: string; changes?: string[] }>(
+    const { status, payload } = await medusaResponse<{ checkout?: Record<string, unknown>; message?: string; code?: string; changes?: string[] }>(
       "/store/carts/" + encodeURIComponent(cartId) + "/storefront-checkout", "POST", {
         ...(body && typeof body === "object" ? body as Record<string, unknown> : {}),
         confirmation_token: token,
       },
     );
-    const result = reply(status >= 200 && status < 300 ? { checkout: payload.checkout } : { message: payload.message || "Checkout could not be prepared", changes: payload.changes }, status);
+    const result = reply(status >= 200 && status < 300 ? { checkout: payload.checkout } : { message: payload.message || "Checkout could not be prepared", code: payload.code, changes: payload.changes }, status);
     result.cookies.set(orderAccessCookie, signedOrderAccess(cartId, token), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

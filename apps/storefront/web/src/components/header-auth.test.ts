@@ -25,7 +25,14 @@ vi.mock("@clerk/nextjs", () => ({
   useClerk: () => ({ signOut: state.signOut }),
   useUser: () => ({ user: null, isLoaded: false }),
 }));
-vi.mock("@f0rge/ui", () => ({ Button: (props: ButtonProps) => button(props) }));
+function passthrough({ children }: { children?: ReactNode }) {
+  return createElement("div", null, children);
+}
+
+vi.mock("@f0rge/ui", () => ({
+  Button: (props: ButtonProps) => button(props),
+  Card: passthrough, CardContent: passthrough, CardDescription: passthrough, CardHeader: passthrough, CardTitle: passthrough,
+}));
 vi.mock("@f0rge/ui/forms", () => ({ TextInput: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: state.refresh }) }));
 vi.mock("@/components/analytics/analytics-provider", () => ({ useStorefrontAnalytics: () => ({ resetIdentity: state.resetIdentity, identify: vi.fn() }) }));

@@ -1,6 +1,7 @@
 import { ProductStatus } from "@medusajs/framework/utils";
 import { assertPublishedProductComplete, assertVariantsPurchasable, publicationProblems, type PublicationProduct, type PublicationVariant } from "./publication";
 import type { MedusaContainer } from "@medusajs/framework/types";
+import { publicFileBackendUrl } from "./file-storage-url";
 
 const photos = ["https://images.example.com/sand-1.jpg", "https://images.example.com/sand-2.jpg", "https://images.example.com/sand-3.jpg"];
 const product: PublicationProduct = {
@@ -117,4 +118,13 @@ test("cart completion rejects a variant that was removed from its sales channel"
   const graph = jest.fn().mockResolvedValue({ data: [{ ...variant, product }] });
   const container = { resolve: () => ({ graph }) } as unknown as MedusaContainer;
   await expect(assertVariantsPurchasable(container, [variant.id], "sc_removed")).rejects.toThrow("sales channel");
+});
+
+test("a Firstout photo the sync stores on the hosted volume passes the public-image check", () => {
+  const url = `${publicFileBackendUrl({ RAILWAY_PUBLIC_DOMAIN: "storefront-commerce-production.up.railway.app" })}/1763700000000-firstout-${variant.metadata?.source_sku_id}.jpg`;
+  expect(publicationProblems(
+    { ...product, images: [{ url }] },
+    { ...variant, images: [{ url }], metadata: { ...variant.metadata, suitable_image_urls: [url] } },
+    "sc_1",
+  )).toEqual([]);
 });

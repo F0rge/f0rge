@@ -163,23 +163,24 @@ exactly one free unit. Set `STOREFRONT_TEST_MEDUSA_PUBLISHABLE_KEY` to the local
 public key to test direct cart denial. Run `npx nx run daskasas-web:e2e`
 against the disposable live stack. See `docs/746-live-walkthrough.md`.
 
-DasKasas uses published Medusa Store API products. Home and
-collections lead to `/shop`, where search, category, collection, availability,
-price and sort state live in the URL. Product pages show the selected variant's
+DasKasas uses published Medusa Store API products. The home page
+leads to `/shop` and its category pages, `/shop/<handle>`. The availability
+filter and the sort order are page state and do not change the URL. Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
 Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
 Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
 before launch; canonical links use it. Page metadata permits indexing only
 when `STOREFRONT_INDEXING_ENABLED=true` on a production Railway environment
-with an HTTPS origin. The private preview keeps that flag false, requires
+with an HTTPS origin, and only once the reviewed owner policy document exists
+(`currentCustomerPolicies()` in `web/src/lib/customer-policies.ts`). The private preview keeps that flag false, requires
 Basic Auth, and adds a no-index response header to every route. A public launch
 needs a reviewed change to the preview gate and response header. Account and
 checkout pages remain excluded from indexing.
 
-For discovery browser coverage, publish two representative SKUs, a draft SKU,
+For discovery browser coverage, publish a representative SKU, a draft SKU,
 and a two-variant group in a disposable local environment. Set
-`STOREFRONT_TEST_SKU_ID`, `STOREFRONT_TEST_OTHER_SKU_ID`,
-`STOREFRONT_TEST_DRAFT_SKU_ID`, and `STOREFRONT_TEST_GROUP_HANDLE`, then run
+`STOREFRONT_TEST_SKU_ID`, `STOREFRONT_TEST_DRAFT_SKU_ID`, and
+`STOREFRONT_TEST_GROUP_HANDLE`, then run
 `npx nx run daskasas-web:e2e`. The tests skip fixture-dependent cases when
 their corresponding IDs are absent.
 
@@ -189,19 +190,23 @@ DasKasas customizes the repository's `@f0rge/ui` components, built
 with [shadcn/ui](https://ui.shadcn.com/) and [Base UI](https://base-ui.com/).
 Both are free under the MIT license ([shadcn/ui license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md),
 [Base UI license](https://github.com/mui/base-ui/blob/master/LICENSE)); the mobile
-menu uses the shared Dialog and purchase actions use the shared Button. New app-local
+menu uses the shared Sheet and purchase actions use the shared Button. New app-local
 primitive copies or a second component engine are unnecessary.
 
-`web/src/app/style.css` defines the white, near-black and vivid violet visual skin
-and imports the shared semantic token map. Tailwind generates the shared kit's
+`web/src/app/style.css` defines the neutral palette of the approved mockup
+(`docs/mockup-2026-11-21`, F0rge/f0rge#1000) and imports the shared semantic token
+map plus the animation CSS (`tw-animate-css`, `shadcn/tailwind.css`) the shared
+primitives use. Rebuilt pages use Tailwind utilities only; the remaining legacy rules
+apply to pages wrapped in `.content` until each is rebuilt. Tailwind generates the shared kit's
 utilities through `web/postcss.config.mjs`; `tailwindcss` and `@tailwindcss/postcss`
 are declared at the existing locked 4.3.2 versions in this workspace.
 Typography uses a local system sans-serif stack, without a remote font
-request. The homepage hero and collection covers use published Medusa catalogue
-imagery, with a neutral branded fallback when an image is unavailable. The local
-demo assets are not substituted for live merchandise. The optional illustrative
-chair study is collapsed beneath shoppable content and remains clearly separate
-from product finish choices or manufacturing claims.
+request. The wordmark uses the bundled Instrument Serif. The home page hero uses
+`web/public/hero-sofas.jpg`; its selected pieces are the first published Medusa
+products, with a tile naming the piece when it has no photo. The local demo assets
+are not substituted for live merchandise. Showroom facts in the footer and on the
+home page come from `web/src/lib/showroom.ts`, not the owner policy document.
+`/collections` and `/support` permanently redirect to `/shop` and `/help`.
 
 A translucent sticky header keeps navigation available while scrolling. One-time
 section reveals, a short gallery fade and gentle card lift add feedback without a
@@ -239,7 +244,10 @@ the synthetic Medusa catalogue at `web/e2e/analytics-medusa-fixture.mjs`, and a
 test-only public token while intercepting all EU ingestion requests in Playwright.
 Start the fixture from `apps/storefront/web` with
 `node e2e/analytics-medusa-fixture.mjs`. In a second terminal, start the app with
-`MEDUSA_BACKEND_URL=http://127.0.0.1:9011 NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_test_fixture NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_test_fixture NEXT_PUBLIC_BASE_URL=http://localhost:3004 npm run dev -- --webpack`.
+`MEDUSA_BACKEND_URL=http://127.0.0.1:9011 NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_test_fixture NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_test_fixture NEXT_PUBLIC_BASE_URL=http://localhost:3004 STOREFRONT_BFF_SECRET=<any 32+ characters> npm run dev -- --webpack`.
+The fixture also keeps in-memory carts (no stock check), so `e2e/product.spec.ts`
+can add to the bag; `navigation.spec.ts`, `product.spec.ts` and `listing.spec.ts`
+(categories, availability filter, sort, counts) run against it without further opt-in.
 Then run `STOREFRONT_ANALYTICS_E2E=true npx playwright test --config playwright.config.ts e2e/analytics.spec.ts`.
 The test-only token is safe only because the browser test intercepts ingestion;
 do not use it for live browsing or a production PostHog project. The tests verify

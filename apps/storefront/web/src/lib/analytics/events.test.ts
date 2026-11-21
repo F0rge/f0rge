@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeAnalyticsEvent } from "./events";
+import { analyticsPageForPathname, analyticsSurfaceForPathname, sanitizeAnalyticsEvent } from "./events";
 
 describe("storefront analytics event allowlist", () => {
   it("keeps only safe page and campaign fields", () => {
@@ -42,5 +42,16 @@ describe("storefront analytics event allowlist", () => {
       name: "storefront_page_viewed",
       properties: { page_key: "home", email: "person@example.com", token: "secret", utm_source: "bad source" },
     })).toEqual({ name: "storefront_page_viewed", properties: { page_key: "home" } });
+  });
+
+  it("tracks the four category listings and keeps the made-to-order filter", () => {
+    expect(analyticsPageForPathname("/shop/bedroom")).toEqual({ pageKey: "category" });
+    expect(analyticsSurfaceForPathname("/shop/sofas-armchairs")).toBe("category");
+    expect(analyticsPageForPathname("/shop/not-a-category")).toBeNull();
+    expect(analyticsPageForPathname("/help")).toEqual({ pageKey: "help" });
+    expect(sanitizeAnalyticsEvent({ name: "storefront_product_impressed", properties: { product_id: "prod_1", surface: "category" } }))
+      .toEqual({ name: "storefront_product_impressed", properties: { product_id: "prod_1", surface: "category" } });
+    expect(sanitizeAnalyticsEvent({ name: "storefront_search_results_viewed", properties: { query_present: false, result_count: 1, availability: "made_to_order" } })?.properties.availability)
+      .toBe("made_to_order");
   });
 });

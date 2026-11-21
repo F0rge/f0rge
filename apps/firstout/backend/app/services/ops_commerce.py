@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -57,6 +58,7 @@ from app.services.chart_of_accounts import (
     CODE_STOREFRONT_CLEARING,
     LedgerPostingService,
 )
+from app.services.object_storage import read_bytes
 from app.services.sales_orders import SalesOrdersService
 from app.services.storefront_system_actor import StorefrontSystemActorService
 from app.services.vat import ex_to_inc
@@ -104,10 +106,42 @@ class OpsCommerceService:
                     options=sku.options,
                     acknowledged_commitment_ids=sku.acknowledged_commitment_ids,
                     made_to_order_offer=sku.made_to_order_offer,
+                    # Unset (not None) when disabled: the route drops unset fields.
+                    **(
+                        {"photo_token": self._photo_token(sku.photo_storage_key)}
+                        if settings.ops_commerce_photo_tokens_enabled
+                        else {}
+                    ),
                 )
                 for sku in snapshots
             ],
         )
+
+    async def product_photo(
+        self,
+        source_sku_id: uuid.UUID,
+        *,
+        authorization: Optional[str],
+        requested_company: Optional[str],
+        request_host: str,
+    ) -> bytes:
+        await self._authorize(
+            authorization=authorization,
+            requested_company=requested_company,
+            request_host=request_host,
+        )
+        # ponytail: reuses the whole feed query so "published" means exactly what the feed
+        # means; one query per download, and downloads happen only when a photo changes.
+        snapshot = next(
+            (sku for sku in await self.crud.published_products() if sku.id == source_sku_id),
+            None,
+        )
+        if snapshot is None or not snapshot.photo_storage_key:
+            raise NotFoundError("SKU photo not found")
+        try:
+            return await asyncio.to_thread(read_bytes, snapshot.photo_storage_key)
+        except FileNotFoundError as exc:
+            raise NotFoundError("SKU photo not found") from exc
 
     async def order_statuses(
         self,
@@ -654,6 +688,14 @@ class OpsCommerceService:
             raise HTTPException(
                 status_code=503, detail="Invalid Ops Commerce configuration"
             ) from exc
+
+    @staticmethod
+    def _photo_token(storage_key: Optional[str]) -> Optional[str]:
+        # A SKU photo is write-once: upload refuses to overwrite its key and nothing clears it,
+        # so the key identifies the bytes. A future replace must write a new key.
+        if not storage_key:
+            return None
+        return hashlib.sha256(storage_key.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _money(minor: int) -> Decimal:

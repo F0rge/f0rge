@@ -1,36 +1,118 @@
 import { createServer } from 'node:http'
 
 const port = Number(process.env.STOREFRONT_ANALYTICS_MEDUSA_PORT || 9011)
-const sku = '11111111-1111-4111-8111-111111111111'
-const product = {
-  id: 'prod_test_chair',
-  handle: `firstout-${sku}`,
-  title: 'Test chair',
-  description: 'Local analytics browser fixture.',
-  status: 'published',
-  thumbnail: '/demo/arc-front.jpg',
-  images: [{ id: 'img_test', url: '/demo/arc-front.jpg' }],
-  variants: [{
-    id: 'var_test_chair',
-    sku: 'TEST-CHAIR',
-    title: 'Default',
-    inventory_quantity: 1,
-    calculated_price: { calculated_amount: 2400, currency_code: 'zar' },
-    options: [],
-  }],
-  categories: [{ id: 'cat_test', name: 'Chairs', handle: 'chairs' }],
-  collection: { id: 'col_test', title: 'Living', handle: 'living' },
+const category = (handle, name) => [{ id: `cat_${handle}`, name, handle }]
+const variant = (id, sku, amount, inventory, metadata = null) => ({
+  id, sku, title: 'Default', inventory_quantity: inventory, options: [], metadata,
+  calculated_price: { calculated_amount: amount, currency_code: 'zar' },
+})
+const piece = ({ uuid, id, title, image, extraImages = [], categories = [], variants, ...details }) => ({
+  ...details, id, handle: `firstout-${uuid}`, title, description: `${title}, local browser fixture.`, status: 'published',
+  thumbnail: image ?? null, images: [image, ...extraImages].filter(Boolean).map((url, index) => ({ id: `img_${id}_${index}`, url })),
+  categories, collection: { id: 'col_on_sale', title: 'On Sale', handle: 'on-sale' }, variants,
+})
+
+// Titles sort after "Test chair" so the analytics spec still opens it first on /shop.
+function products() {
+  const now = Date.now()
+  const madeToOrder = {
+    storefront_made_to_order_offer: {
+      id: 'mto_fixture', capacity: 4, remaining_capacity: 3, min_lead_time_days: 42, max_lead_time_days: 56,
+      expires_at: new Date(now + 30 * 86_400_000).toISOString(), observed_at: new Date(now).toISOString(),
+    },
+  }
+  return [
+    piece({ uuid: '11111111-1111-4111-8111-111111111111', id: 'prod_test_chair', title: 'Test chair', image: '/demo/arc-front.jpg', extraImages: ['/demo/arc-angle.jpg'], categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_test_chair', 'TEST-CHAIR', 2400, 1)] }),
+    piece({ uuid: '22222222-2222-4222-8222-222222222222', id: 'prod_tilda_sofa', title: 'Tilda Sofa', image: '/hero-sofas.jpg', material: 'Bouclé', length: 220, width: 95, height: 80, metadata: { dimension_unit: 'cm' }, categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_tilda_sofa', 'TILDA-SOFA', 18999, 2)] }),
+    piece({ uuid: '33333333-3333-4333-8333-333333333333', id: 'prod_umbra_table', title: 'Umbra Dining Table', image: '/demo/arc-angle.jpg', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_umbra_table', 'UMBRA-TABLE', 34773.92, 1)] }),
+    piece({ uuid: '44444444-4444-4444-8444-444444444444', id: 'prod_vale_bedside', title: 'Vale Bedside Table', categories: category('bedroom', 'Bedroom'), variants: [variant('variant_vale_bedside', 'VALE-BEDSIDE', 6877.39, 1)] }),
+    piece({ uuid: '55555555-5555-4555-8555-555555555555', id: 'prod_wren_coffee', title: 'Wren Coffee Table', image: '/demo/arc-detail.jpg', categories: category('coffee-console-tables', 'Coffee & Console Tables'), variants: [variant('variant_wren_coffee', 'WREN-COFFEE', 7817.39, 0, madeToOrder)] }),
+    piece({ uuid: '66666666-6666-4666-8666-666666666666', id: 'prod_yara_lamp', title: 'Yara Floor Lamp', image: '/demo/arc-front.jpg', variants: [variant('variant_yara_lamp', 'YARA-LAMP', 1999, 3)] }),
+  ]
 }
 
-createServer((request, response) => {
+// In-memory carts so the bag route works against the fixture.
+// ponytail: no stock check here; the web caps quantity and real Medusa enforces inventory.
+const carts = new Map()
+function addLine(cart, { variant_id, quantity }) {
+  const product = products().find((candidate) => candidate.variants.some((item) => item.id === variant_id))
+  const unit = product?.variants.find((item) => item.id === variant_id)
+  if (!unit) return false
+  const line = cart.items.find((item) => item.variant_id === variant_id)
+  if (line) line.quantity += quantity
+  else cart.items.push({ id: `cali_${variant_id}`, variant_id, product_id: product.id, title: product.title, thumbnail: product.thumbnail, quantity, unit_price: unit.calculated_price.calculated_amount })
+  totals(cart)
+  return true
+}
+function totals(cart) {
+  for (const item of cart.items) item.total = item.unit_price * item.quantity
+  cart.subtotal = cart.total = cart.items.reduce((sum, item) => sum + item.total, 0)
+}
+const readJson = async (request) => {
+  let body = ''
+  for await (const chunk of request) body += chunk
+  return body ? JSON.parse(body) : {}
+}
+
+createServer(async (request, response) => {
   const url = new URL(request.url || '/', `http://127.0.0.1:${port}`)
   response.setHeader('content-type', 'application/json')
+  if (url.pathname === '/store/carts' && request.method === 'POST') {
+    const cart = { id: `cart_fixture_${carts.size + 1}`, items: [], subtotal: 0, total: 0, currency_code: 'zar' }
+    carts.set(cart.id, cart)
+    response.end(JSON.stringify({ cart }))
+    return
+  }
+  const cartPath = /^\/store\/carts\/([^/]+)(?:\/(line-items|checkout-hold|storefront-checkout)(?:\/([^/]+))?)?$/.exec(url.pathname)
+  const cart = cartPath && carts.get(cartPath[1])
+  const [, , action, itemId] = cartPath || []
+  if (cart && !action && request.method === 'GET') {
+    response.end(JSON.stringify({ cart }))
+    return
+  }
+  if (cart && action === 'line-items' && !itemId && request.method === 'POST') {
+    if (addLine(cart, await readJson(request))) {
+      response.end(JSON.stringify({ cart }))
+      return
+    }
+  }
+  const line = cart && itemId && cart.items.find((item) => item.id === itemId)
+  if (line && request.method === 'POST') {
+    line.quantity = (await readJson(request)).quantity
+    totals(cart)
+    response.end(JSON.stringify({ cart }))
+    return
+  }
+  if (line && request.method === 'DELETE') {
+    cart.items = cart.items.filter((item) => item !== line)
+    totals(cart)
+    response.end(JSON.stringify({ parent: cart }))
+    return
+  }
+  // A hold is just a flag here; real Medusa reserves stock for 20 minutes.
+  if (cart && action === 'checkout-hold') {
+    const hold = request.method === 'POST'
+      ? { status: 'active', expires_at: new Date(Date.now() + 20 * 60_000).toISOString() }
+      : { status: 'cancelled' }
+    cart.metadata = { storefront_hold: hold }
+    response.end(JSON.stringify({ hold }))
+    return
+  }
+  // No card provider is configured in the fixture: commerce answers before it creates any order.
+  if (cart && action === 'storefront-checkout') {
+    response.statusCode = 404
+    response.end(JSON.stringify({ code: 'payment_unavailable', message: 'Checkout is not available here' }))
+    return
+  }
   if (url.pathname === '/store/regions') {
     response.end(JSON.stringify({ regions: [{ id: 'reg_test', currency_code: 'zar' }] }))
     return
   }
   if (url.pathname === '/store/products') {
-    response.end(JSON.stringify({ products: [product], count: 1 }))
+    const handles = url.searchParams.getAll('handle')
+    const ids = url.searchParams.getAll('id')
+    const matching = products().filter((product) => (!handles.length || handles.includes(product.handle)) && (!ids.length || ids.includes(product.id)))
+    response.end(JSON.stringify({ products: matching, count: matching.length }))
     return
   }
   response.statusCode = 404

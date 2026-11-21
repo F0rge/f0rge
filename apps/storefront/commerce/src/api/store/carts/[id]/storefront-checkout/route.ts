@@ -86,7 +86,11 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
   try {
     const providerId = paystackPaymentEnabled() ? PAYSTACK_PAYMENT_PROVIDER_ID
       : testPaymentEnabled() ? "pp_storefront-test_local" : "";
-    if (!providerId) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Checkout is not available here");
+    if (!providerId) {
+      // Stable code for the storefront: it releases the checkout hold and offers the showroom instead.
+      res.status(404).json({ code: "payment_unavailable", message: "Checkout is not available here" });
+      return;
+    }
     const input = checkoutInput(req.body);
     const accessToken = (req.body as Record<string, unknown>).confirmation_token;
     if (typeof accessToken !== "string" || !/^[A-Za-z0-9_-]{40,100}$/.test(accessToken)) {

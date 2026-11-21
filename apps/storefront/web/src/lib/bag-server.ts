@@ -3,6 +3,7 @@ import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { getCustomerContext } from "@/lib/customer-auth";
+import { variantQuantityCaps } from "@/lib/medusa";
 
 export const cartCookie = "collector_cart";
 export const orderAccessCookie = "collector_order_access";
@@ -102,7 +103,7 @@ export type BagFulfillmentSummary = {
   estimated_from: string;
   estimated_by: string;
 };
-export type BagItem = { id: string; variant_id: string; title: string; thumbnail?: string | null; quantity: number; unit_price: number; total: number; fulfillment_promise?: BagFulfillmentPromise | null };
+export type BagItem = { id: string; variant_id: string; product_id?: string | null; title: string; thumbnail?: string | null; quantity: number; max_quantity?: number; unit_price: number; total: number; fulfillment_promise?: BagFulfillmentPromise | null };
 export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[]; fulfillment_promise?: BagFulfillmentSummary } | null };
 type MedusaCart = Omit<Bag, "id" | "items"> & {
   id: string;
@@ -191,13 +192,19 @@ export function publicBag(cart?: MedusaCart | null): Bag {
   if (!cart) return { id: null, items: [], subtotal: 0, total: 0, currency_code: "zar" };
   return {
     id: cart.id,
-    items: (cart.items || []).map(({ id, variant_id, title, thumbnail, quantity, unit_price, total, metadata }) => ({
-      id, variant_id, title, thumbnail, quantity, unit_price, total: total ?? unit_price * quantity,
+    items: (cart.items || []).map(({ id, variant_id, product_id, title, thumbnail, quantity, unit_price, total, metadata }) => ({
+      id, variant_id, product_id, title, thumbnail, quantity, unit_price, total: total ?? unit_price * quantity,
       fulfillment_promise: metadata?.fulfillment_promise || null,
     })),
     subtotal: cart.subtotal || 0, total: cart.total || 0, currency_code: cart.currency_code || "zar",
     hold: cart.metadata?.storefront_hold || null,
   };
+}
+
+// Adds each line's quantity cap; a piece no longer for sale keeps its current quantity as the cap.
+export async function withStock(bag: Bag): Promise<Bag> {
+  const caps = await variantQuantityCaps(bag.items.flatMap((item) => item.product_id ? [item.product_id] : []));
+  return { ...bag, items: bag.items.map((item) => ({ ...item, max_quantity: caps.get(item.variant_id) ?? item.quantity })) };
 }
 
 export async function getCart(id: string): Promise<Bag> {

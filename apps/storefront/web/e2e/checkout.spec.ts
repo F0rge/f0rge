@@ -28,10 +28,9 @@ async function browserGet<T>(page: import("@playwright/test").Page, path: string
 async function openHeldCheckout(page: import("@playwright/test").Page) {
   await page.goto("/product/" + skuId);
   await page.getByRole("button", { name: "Add to bag" }).click();
-  await page.getByRole("link", { name: "View bag" }).click();
-  await page.getByRole("button", { name: "Continue to checkout" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).getByRole("button", { name: "Checkout" }).click();
   await expect(page).toHaveURL(/\/checkout$/);
-  await expect(page.getByRole("heading", { name: "Review your order" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Checkout", level: 1 })).toBeVisible();
 }
 
 test("a guest collection checkout resolves after the browser closes and duplicate callbacks persist one order", async ({ browser, request, page }) => {
@@ -50,7 +49,7 @@ test("a guest collection checkout resolves after the browser closes and duplicat
     await page.getByLabel("Collection", { exact: true }).check();
 
     const preparedResponse = page.waitForResponse((response) => response.url().includes("/api/checkout/prepare"));
-    await page.getByRole("button", { name: "Review total and continue" }).click();
+    await page.getByRole("button", { name: "Continue to payment" }).click();
     const prepared = await (await preparedResponse).json() as { checkout: { session_id: string; amount: number } };
     await expect(page.getByTestId("test-payment-panel")).toBeVisible();
     await expect(page.getByTestId("checkout-total")).toContainText("R");
@@ -205,7 +204,7 @@ test("declined, cancelled, pending, and unknown results remain recoverable witho
     await page.getByLabel("Last name").fill("Guest");
     await page.getByLabel("Phone").fill("+27110000003");
     await page.getByLabel("Collection", { exact: true }).check();
-    await page.getByRole("button", { name: "Review total and continue" }).click();
+    await page.getByRole("button", { name: "Continue to payment" }).click();
     await expect(page.getByTestId("test-payment-panel")).toBeVisible();
     const bag = (await browserGet<{ id: string }>(page, "/api/bag")).body;
 
@@ -248,7 +247,7 @@ test("a configured Gauteng delivery rate is paid and saved in the order", async 
   await page.getByLabel("Postal code").fill(process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE!);
   const bagBefore = (await browserGet<{ total: number }>(page, "/api/bag")).body;
   const preparedResponse = page.waitForResponse((response) => response.url().includes("/api/checkout/prepare"));
-  await page.getByRole("button", { name: "Review total and continue" }).click();
+  await page.getByRole("button", { name: "Continue to payment" }).click();
   const prepared = await (await preparedResponse).json() as { checkout: { amount: number } };
   await expect(page.getByTestId("test-payment-panel")).toBeVisible();
   const after = await page.getByTestId("checkout-total").textContent();

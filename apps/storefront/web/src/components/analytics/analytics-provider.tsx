@@ -9,7 +9,6 @@ import { acquisitionProperties, analyticsPageForPathname, type StorefrontBrowser
 import { configuredPostHogBrowserProvider, type PostHogBrowserProvider } from "@/lib/analytics/posthog-browser";
 import { decideReplay } from "@/lib/analytics/replay";
 import { applyReplayDecision, type MaskedReplayHandle } from "@/lib/analytics/replay-recorder";
-import { subscribeToStudyEvents } from "@/app/study/study-events";
 
 type AnalyticsContextValue = {
   choice: AnalyticsConsentChoice | null;
@@ -20,6 +19,7 @@ type AnalyticsContextValue = {
   identify(customerId: string, options?: { created?: boolean }): void;
   attributionHeaders(): Record<string, string>;
   setSensitiveOverlay(active: boolean): void;
+  openPrivacySettings(): void;
 };
 
 const AnalyticsContext = createContext<AnalyticsContextValue | null>(null);
@@ -74,6 +74,7 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
   const providerRef = useRef<PostHogBrowserProvider | null>(null);
   const replayRef = useRef<MaskedReplayHandle | null>(null);
   const [overlay, setOverlay] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [attributionVersion, setAttributionVersion] = useState(0);
   const pathname = usePathname() || "/";
 
@@ -136,13 +137,7 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
     setOverlay(active);
   }, []);
 
-  useEffect(() => {
-    return subscribeToStudyEvents((detail) => {
-      if (detail.type === "entry") capture({ name: "storefront_study_entered", properties: { study_id: detail.studyId } });
-      if (detail.type === "progress") capture({ name: "storefront_study_progress", properties: { study_id: detail.studyId, milestone: detail.milestone } });
-      if (detail.type === "finish") capture({ name: "storefront_study_finished", properties: { study_id: detail.studyId } });
-    });
-  }, [capture]);
+  const openPrivacySettings = useCallback(() => setSettingsOpen(true), []);
 
   useEffect(() => {
     const decision = decideReplay({
@@ -159,10 +154,10 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
     replayRef.current = null;
   }, []);
 
-  const value = useMemo(() => ({ choice, ready, capture, choose, resetIdentity, identify, attributionHeaders, setSensitiveOverlay }), [attributionHeaders, capture, choice, choose, identify, ready, resetIdentity, setSensitiveOverlay]);
+  const value = useMemo(() => ({ choice, ready, capture, choose, resetIdentity, identify, attributionHeaders, setSensitiveOverlay, openPrivacySettings }), [attributionHeaders, capture, choice, choose, identify, openPrivacySettings, ready, resetIdentity, setSensitiveOverlay]);
   return <AnalyticsContext.Provider value={value}>
     {children}
     <PageViewTracker enabled={choice === "accepted"} capture={capture} />
-    <AnalyticsConsentPanel choice={choice} ready={ready} choose={choose} />
+    <AnalyticsConsentPanel choice={choice} ready={ready} choose={choose} settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
   </AnalyticsContext.Provider>;
 }

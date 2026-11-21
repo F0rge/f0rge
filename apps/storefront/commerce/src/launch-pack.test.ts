@@ -3,6 +3,10 @@ import { assessLaunchPack } from "./launch-pack";
 const confirmedBusiness = {
   legal_name: "Northwind Furnishings (Pty) Ltd",
   trading_name: "Northwind",
+  legal_status: "Private company registered in South Africa",
+  office_bearers: ["Naledi Dlamini"],
+  legal_service_address: "12 Commerce Road, Kramerville, Johannesburg, 2090",
+  codes_of_conduct: "None",
   contact_address: "12 Commerce Road, Kramerville, Johannesburg, 2090",
   phone: "011 555 0100",
   company_registration_number: "2020/123456/07",
@@ -172,44 +176,38 @@ test("made-to-order allowances must be finite and unexpired, and the mixed-cart 
   });
 });
 
-const goodsLine = "Standard made to order pieces keep the confirmed lead time on the order and, once delivered, follow the same unused-return rules as stocked pieces. Bespoke commissions are not offered on the storefront, use a separate agreement, and are not refunded for a change of mind.";
-
 const reviewedPolicies = {
   reviewed_by: "Naledi Dlamini",
   reviewed_on: "2026-10-05",
   delivery: "Delivery is available in the approved Gauteng zones at the stated VAT-inclusive rate. Collection from the showroom is the alternative.",
-  terms: "Customer prices are in South African Rand and include VAT. Delivery, returns, and refunds are the reviewed pages in this pack.",
-  refund_policy: goodsLine,
-  return_policy: goodsLine,
-  privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
-  data_collected: "We collect the name, email, phone, delivery address, and order details needed to fulfil a purchase.",
-  processors: "Clerk handles sign-in, PostHog handles optional analytics, Paystack handles card payments, SendGrid sends email, and Railway hosts the store.",
-  retention: "Order records are kept for as long as tax law and open disputes require, and analytics stay off until accepted.",
   information_officer_name: "Naledi Dlamini",
-  information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
-  paia_baseline: "The information officer publishes the PAIA manual and acknowledges requests received at the support mailbox.",
+  information_officer_email: "privacy@northwind.co.za",
+  postal_address: "PO Box 100, Kramerville, Johannesburg, 2090",
+  fax_number: "None",
   collector_skin: "Oxblood / citron",
 };
 
-test("policy text must distinguish made to order from bespoke and name one DasKasas skin", () => {
+test("policies need the Information Officer's contact facts and one DasKasas skin", () => {
   expect(codes({ policies: {} })).toContain("policies_unreviewed");
+  expect(assessLaunchPack({ policies: reviewedPolicies }).findings.map((finding) => finding.section)).not.toContain("policies_and_skin");
   expect(assessLaunchPack({ policies: { ...reviewedPolicies, collector_skin: "development default" } }).findings).toContainEqual({
     section: "policies_and_skin",
     code: "policies_unreviewed",
     detail: "The final DasKasas font and palette is not selected.",
   });
-  const undifferentiated = reviewedPolicies.return_policy.replace("Bespoke commissions", "Custom work");
-  expect(assessLaunchPack({ policies: { ...reviewedPolicies, return_policy: undifferentiated } }).findings).toContainEqual({
-    section: "policies_and_skin",
-    code: "policies_unreviewed",
-    detail: "Return terms do not distinguish standard made to order from bespoke goods.",
-  });
-  const undifferentiatedRefund = reviewedPolicies.refund_policy.replace("Bespoke commissions", "Custom work");
-  expect(assessLaunchPack({ policies: { ...reviewedPolicies, refund_policy: undifferentiatedRefund } }).findings).toContainEqual({
-    section: "policies_and_skin",
-    code: "policies_unreviewed",
-    detail: "Refund terms do not distinguish standard made to order from bespoke goods.",
-  });
+  for (const patch of [{ information_officer_email: "privacy@shop.test" }, { postal_address: "" }, { fax_number: "" }]) {
+    expect(assessLaunchPack({ policies: { ...reviewedPolicies, ...patch } }).findings).toContainEqual({
+      section: "policies_and_skin",
+      code: "policies_unreviewed",
+      detail: "The Information Officer name, email, postal address, or fax number is missing.",
+    });
+  }
+});
+
+test("the ECTA business facts are part of the confirmed identity", () => {
+  for (const patch of [{ legal_status: "" }, { office_bearers: [] }, { legal_service_address: "" }, { codes_of_conduct: "" }]) {
+    expect(codes({ business: { ...confirmedBusiness, ...patch } })).toContain("business_identity_unconfirmed");
+  }
 });
 
 const provisioningChannels = ["clerk", "paystack", "email", "posthog", "railway", "temporary_hostname"].map((channel) => ({

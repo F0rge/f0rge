@@ -35,9 +35,14 @@ export type LoadResult = {
   findings: LaunchPackFinding[];
 };
 
+// Mirrors CustomerPolicyDocument in apps/storefront/web/src/lib/customer-policies.ts: facts only, the wording lives in the web.
 export type CustomerPolicies = {
   legal_name: string;
   trading_name: string;
+  legal_status: string;
+  office_bearers: string[];
+  legal_service_address: string;
+  codes_of_conduct: string;
   contact_address: string;
   support_mailbox: string;
   phone: string;
@@ -48,16 +53,10 @@ export type CustomerPolicies = {
   collection_location: string;
   collection_instructions: string;
   gauteng_zones: { name: string; rate_zar_incl_vat: string }[];
-  terms: string;
-  refund_policy: string;
-  return_policy: string;
-  privacy: string;
-  data_collected: string;
-  processors: string;
-  retention: string;
   information_officer_name: string;
-  information_officer_responsibilities: string;
-  paia_baseline: string;
+  information_officer_email: string;
+  postal_address: string;
+  fax_number: string;
   collector_skin: string;
   distinguishes_standard_made_to_order_from_bespoke: true;
 };
@@ -191,6 +190,10 @@ export function publishedCustomerPolicies(pack: unknown, now: Date = new Date())
   return {
     legal_name: String(business.legal_name),
     trading_name: String(business.trading_name),
+    legal_status: String(business.legal_status),
+    office_bearers: (business.office_bearers as unknown[]).map(String),
+    legal_service_address: String(business.legal_service_address),
+    codes_of_conduct: String(business.codes_of_conduct),
     contact_address: String(business.contact_address),
     support_mailbox: String(business.support_mailbox),
     phone: String(business.phone),
@@ -205,16 +208,10 @@ export function publishedCustomerPolicies(pack: unknown, now: Date = new Date())
       if (!item) return [];
       return [{ name: String(item.name), rate_zar_incl_vat: String(item.rate_zar_incl_vat) }];
     }),
-    terms: String(policies.terms),
-    refund_policy: String(policies.refund_policy),
-    return_policy: String(policies.return_policy),
-    privacy: String(policies.privacy),
-    data_collected: String(policies.data_collected),
-    processors: String(policies.processors),
-    retention: String(policies.retention),
     information_officer_name: String(policies.information_officer_name),
-    information_officer_responsibilities: String(policies.information_officer_responsibilities),
-    paia_baseline: String(policies.paia_baseline),
+    information_officer_email: String(policies.information_officer_email),
+    postal_address: String(policies.postal_address),
+    fax_number: String(policies.fax_number),
     collector_skin: String(policies.collector_skin),
     distinguishes_standard_made_to_order_from_bespoke: true,
   };
