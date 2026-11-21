@@ -10,8 +10,7 @@ import {
 } from "@medusajs/medusa/core-flows";
 
 import {
-  CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE, ROOM_COLLECTIONS,
-  ROOM_COLLECTIONS_METADATA_KEY, collectionEnsurePlan, roomCollectionHandles, withRoomCollections,
+  CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE, collectionEnsurePlan,
   type CollectionRecord,
 } from "./catalogue-collections";
 import { medusaPrice, parseOpsProducts, pendingCommitments, projectAvailableQuantity, shouldApplyRevision, type OpsProduct } from "./ops-contract";
@@ -233,7 +232,6 @@ async function ensureStorefrontCollections(container: MedusaContainer): Promise<
   const saleId = await ensureCollection(
     container, rows, CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE,
   );
-  for (const room of ROOM_COLLECTIONS) await ensureCollection(container, rows, room.handle, room.title);
   return saleId;
 }
 
@@ -279,22 +277,6 @@ async function publishCatalogue(container: MedusaContainer, readyIds: Set<string
   if (publish.length) await publishCatalogueProducts(container, publish, collectionId);
   if (withdraw.length) {
     await setCatalogueMembership(container, withdraw, { status: ProductStatus.DRAFT, collection_id: null });
-  }
-}
-
-type RoomTarget = { id: string; metadata: Record<string, unknown> | null };
-
-async function assignRoomCollections(
-  container: MedusaContainer, groups: SourceGroup[], products: Map<string, RoomTarget>,
-) {
-  for (const group of groups) {
-    const product = products.get(group.externalId);
-    if (!product) continue;
-    const metadata = withRoomCollections(product.metadata, roomCollectionHandles(group.title, group.rows.map((row) => row.sku)));
-    if (!metadata) continue;
-    await updateProductsWorkflow(container).run({
-      input: { selector: { id: [product.id] }, update: { metadata } },
-    });
   }
 }
 
@@ -362,19 +344,10 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
     product.variants = (product.variants || []).filter((variant) => !moved.includes(variant));
   }
 
-  const roomTargets = new Map<string, RoomTarget>();
-  for (const product of existing) {
-    if (product.external_id) roomTargets.set(product.external_id, { id: product.id, metadata: product.metadata });
-  }
-
   for (const group of groups) {
     const product = bySourceId.get(group.externalId);
     const options = productOptions(group);
     if (!product) {
-      const roomMetadata = {
-        ...(group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {}),
-        [ROOM_COLLECTIONS_METADATA_KEY]: roomCollectionHandles(group.title, group.rows.map((row) => row.sku)),
-      };
       const { result } = await createProductsWorkflow(container).run({ input: { products: [{
         title: group.title, handle: group.externalId, external_id: group.externalId,
         status: ProductStatus.DRAFT, shipping_profile_id: profiles[0].id,
@@ -384,11 +357,10 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
           options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
           metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null) },
         })),
-        metadata: roomMetadata,
+        metadata: group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {},
       }] } });
       const createdId = result[0]?.id;
       if (!createdId) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Medusa did not create product ${group.externalId}`);
-      roomTargets.set(group.externalId, { id: createdId, metadata: roomMetadata });
       const createdVariants = result[0]?.variants || [];
       for (const row of group.rows) {
         const variant = createdVariants.find((item) => item.sku === row.sku);
@@ -470,5 +442,4 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
   }
 
   await publishCatalogue(container, new Set(catalogueExternalIds(sourceProducts)));
-  await assignRoomCollections(container, groups, roomTargets);
 }

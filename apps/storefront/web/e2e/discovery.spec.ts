@@ -1,53 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const sourceSkuId = process.env.STOREFRONT_TEST_SKU_ID
-const otherSkuId = process.env.STOREFRONT_TEST_OTHER_SKU_ID
 const draftSkuId = process.env.STOREFRONT_TEST_DRAFT_SKU_ID
-const groupHandle = process.env.STOREFRONT_TEST_GROUP_HANDLE
-
-function parseRandAmount(label: string): number {
-  return Number(label.replace(/[^\d,]/g, '').replace(',', '.'))
-}
-
-test('published catalogue filters compose and price sorting orders real products', async ({ page }) => {
-  test.skip(!sourceSkuId || !otherSkuId, 'Set published STOREFRONT_TEST_SKU_ID and STOREFRONT_TEST_OTHER_SKU_ID')
-
-  await page.goto('/shop?sort=price-desc')
-  await expect(page.locator('.product-card:visible').nth(1)).toBeVisible()
-  const prices = await page.locator('.product-card:visible .product-meta span').allTextContents()
-  const amounts = prices.map(parseRandAmount)
-  expect(amounts.length).toBeGreaterThanOrEqual(2)
-  expect(amounts.every(Number.isFinite)).toBe(true)
-  expect(amounts).toEqual([...amounts].sort((a, b) => b - a))
-
-  await page.goto('/shop?category=sofas&collection=living-room&availability=in-stock&min=1&max=100000&sort=price-desc')
-  await expect(page.locator(`a:visible[href="/product/${sourceSkuId}"]`)).toBeVisible()
-  await expect(page.locator(`a:visible[href="/product/${otherSkuId}"]`)).toHaveCount(0)
-  await expect(page.locator('.catalogue-filters:visible').getByLabel('Category')).toHaveValue('sofas')
-  await expect(page.locator('.catalogue-filters:visible').getByLabel('Collection')).toHaveValue('living-room')
-  await expect(page.locator('.catalogue-filters:visible').getByLabel('Availability')).toHaveValue('in-stock')
-  await page.reload()
-  await expect(page.locator(`a:visible[href="/product/${sourceSkuId}"]`)).toBeVisible()
-})
-
-test('a price-filtered card shows the qualifying group variant price', async ({ page }) => {
-  test.skip(!groupHandle, 'Set STOREFRONT_TEST_GROUP_HANDLE to a published group with distinct variant prices')
-
-  await page.goto(`/product/${groupHandle}`)
-  const option = page.getByRole('article').getByRole('combobox').first()
-  await option.selectOption({ index: 0 })
-  const first = parseRandAmount(await page.locator('#product-price').innerText())
-  await option.selectOption({ index: 1 })
-  const second = parseRandAmount(await page.locator('#product-price').innerText())
-  expect(first).not.toBe(second)
-
-  const minimum = Math.max(first, second)
-  await page.goto(`/shop?min=${minimum}&sort=price-asc`)
-  const card = page.locator(`a:visible[href="/product/${groupHandle}"]`)
-  await expect(card).toBeVisible()
-  const shownPrice = parseRandAmount(await card.locator('.product-meta span').innerText())
-  expect(shownPrice).toBeGreaterThanOrEqual(minimum)
-})
 
 test('draft product is absent from discovery and direct navigation', async ({ page }) => {
   test.skip(!draftSkuId, 'Set STOREFRONT_TEST_DRAFT_SKU_ID to a Medusa draft source SKU ID')
@@ -74,7 +28,7 @@ test('catalogue metadata and non-production robots policy describe public routes
   }
 })
 
-test('mobile keyboard path reaches filters and gallery without horizontal overflow', async ({ page }) => {
+test('mobile keyboard path reaches a piece and its gallery without horizontal overflow', async ({ page }) => {
   test.skip(!sourceSkuId, 'Set STOREFRONT_TEST_SKU_ID to a published product with a gallery')
 
   await page.setViewportSize({ width: 390, height: 844 })
@@ -83,10 +37,6 @@ test('mobile keyboard path reaches filters and gallery without horizontal overfl
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.locator('#main-content')).toBeInViewport()
-  await page.locator('.catalogue-filters:visible').getByLabel('Search furniture').focus()
-  await page.keyboard.type('Arc')
-  await page.getByRole('button', { name: 'Show pieces' }).focus()
-  await page.keyboard.press('Enter')
   await expect(page.locator(`a:visible[href="/product/${sourceSkuId}"]`)).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 

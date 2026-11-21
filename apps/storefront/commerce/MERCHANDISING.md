@@ -15,12 +15,34 @@ when it is no longer in the Ops feed or none of its variants has positive stock
 or a live made-to-order offer. Publish and withdraw set status and
 `collection_id` only, so gallery images and other product metadata stay.
 
-Sofas (`sofas`) and Dining Room (`dining-room`) are separate collections. Medusa
-keeps one `collection_id` per product, and that field is On Sale for every
-priced in-stock product. Room membership is `storefront_room_collections` on
-product metadata. The sync writes that key by copying the rest of the product
-metadata, and it does not clear the key when it publishes or withdraws. A
-product is a sofa or a dining-room piece from its title and SKUs, never both.
+On Sale is the internal publication gate, not a menu item. Shoppers browse by
+four Medusa product categories: Sofas & Armchairs (`sofas-armchairs`), Dining
+Room (`dining-room`), Bedroom (`bedroom`) and Coffee & Console Tables
+(`coffee-console-tables`). The bootstrap creates any that are missing, active
+and public, on every release. It never edits a category that already exists.
+
+Staff choose a piece's category in Medusa Admin:
+
+1. Open **Products** and the piece.
+2. Under **Organize**, choose **Edit**, pick one of the four categories, and save.
+3. The shop reads categories from Medusa directly. No Firstout change or sync is needed.
+
+The Firstout sync never writes or clears product categories, so a staff choice
+stays across syncs. A published piece with no category appears only under
+**Shop all**.
+
+The four category names and handles are also written in the web code,
+`web/src/lib/shop-categories.ts`, which drives the header, footer, category
+pages, sitemap and old-link redirects. Renaming a category, changing its handle
+or deactivating it in Admin therefore needs a matching code change. Deleting one
+does not stick: the bootstrap recreates a missing category on the next release.
+
+Earlier syncs guessed rooms from titles and SKU prefixes, wrote
+`storefront_room_collections` on product metadata, and created the collections
+`sofas` and `dining-room`. That guessing is gone. Those collections and the
+metadata key stay in the database unused; the shop no longer reads them.
+Deleting the two collections needs the owner's approval.
+
 Later sync runs update source-owned variant fields. A group has the stable
 handle `firstout-group-<group UUID>`.
 

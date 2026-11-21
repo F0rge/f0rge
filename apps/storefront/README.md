@@ -164,8 +164,8 @@ public key to test direct cart denial. Run `npx nx run daskasas-web:e2e`
 against the disposable live stack. See `docs/746-live-walkthrough.md`.
 
 DasKasas uses published Medusa Store API products. The home page
-leads to `/shop`, where search, category, collection, availability,
-price and sort state live in the URL. Product pages show the selected variant's
+leads to `/shop` and its category pages, `/shop/<handle>`. The availability
+filter and the sort order are page state and do not change the URL. Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
 Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
 Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
@@ -176,10 +176,10 @@ Basic Auth, and adds a no-index response header to every route. A public launch
 needs a reviewed change to the preview gate and response header. Account and
 checkout pages remain excluded from indexing.
 
-For discovery browser coverage, publish two representative SKUs, a draft SKU,
+For discovery browser coverage, publish a representative SKU, a draft SKU,
 and a two-variant group in a disposable local environment. Set
-`STOREFRONT_TEST_SKU_ID`, `STOREFRONT_TEST_OTHER_SKU_ID`,
-`STOREFRONT_TEST_DRAFT_SKU_ID`, and `STOREFRONT_TEST_GROUP_HANDLE`, then run
+`STOREFRONT_TEST_SKU_ID`, `STOREFRONT_TEST_DRAFT_SKU_ID`, and
+`STOREFRONT_TEST_GROUP_HANDLE`, then run
 `npx nx run daskasas-web:e2e`. The tests skip fixture-dependent cases when
 their corresponding IDs are absent.
 
@@ -245,8 +245,8 @@ Start the fixture from `apps/storefront/web` with
 `node e2e/analytics-medusa-fixture.mjs`. In a second terminal, start the app with
 `MEDUSA_BACKEND_URL=http://127.0.0.1:9011 NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_test_fixture NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_test_fixture NEXT_PUBLIC_BASE_URL=http://localhost:3004 STOREFRONT_BFF_SECRET=<any 32+ characters> npm run dev -- --webpack`.
 The fixture also keeps in-memory carts (no stock check), so `e2e/product.spec.ts`
-can add to the bag; `navigation.spec.ts` and `product.spec.ts` run against it without
-further opt-in.
+can add to the bag; `navigation.spec.ts`, `product.spec.ts` and `listing.spec.ts`
+(categories, availability filter, sort, counts) run against it without further opt-in.
 Then run `STOREFRONT_ANALYTICS_E2E=true npx playwright test --config playwright.config.ts e2e/analytics.spec.ts`.
 The test-only token is safe only because the browser test intercepts ingestion;
 do not use it for live browsing or a production PostHog project. The tests verify

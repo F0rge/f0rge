@@ -1,3 +1,5 @@
+import { SHOP_CATEGORIES } from "./shop-categories";
+
 const PRIVATE_PREFIXES = ["/account", "/checkout", "/bag", "/sign-in", "/sign-up", "/order", "/api", "/study"];
 
 type IndexingEnv = Record<string, string | undefined>;
@@ -30,11 +32,13 @@ export const PUBLIC_INFO_PATHS = [
   "/policies/privacy",
 ] as const;
 
+const CATEGORY_PATHS: string[] = SHOP_CATEGORIES.map((category) => category.href);
+
 export function catalogueIndexable(pathname: string, env: IndexingEnv = process.env): boolean {
   if (!storefrontIndexable(env)) return false;
   const path = pathOnly(pathname);
   if (isPrivatePath(path)) return false;
-  return path === "/" || path === "/shop" || path === "/contact" ||
+  return path === "/" || path === "/shop" || path === "/contact" || CATEGORY_PATHS.includes(path) ||
     path.startsWith("/product/") || path.startsWith("/policies/");
 }
 
@@ -45,13 +49,9 @@ export function robotsHeader(pathname: string, env: IndexingEnv = process.env): 
 export function sitemapPaths(input: {
   indexable: boolean;
   products: { path: string }[];
-  collections: { handle: string }[];
 }): string[] {
   if (!input.indexable) return [];
-  const paths = ["/", "/shop", ...PUBLIC_INFO_PATHS];
-  input.collections.forEach((collection) => {
-    paths.push(`/shop?collection=${encodeURIComponent(collection.handle)}`);
-  });
+  const paths = ["/", "/shop", ...CATEGORY_PATHS, ...PUBLIC_INFO_PATHS];
   input.products.forEach((product) => {
     if (product.path.startsWith("/product/")) paths.push(product.path);
   });

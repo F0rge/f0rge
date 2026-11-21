@@ -1,5 +1,16 @@
-import { allowsFiniteBackorder, catalogueExternalIds, groupOpsProducts, isCatalogueRow, missingTaxInclusiveZarPrice } from "./sync-firstout";
+import type { MedusaContainer } from "@medusajs/framework/types";
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import * as flows from "@medusajs/medusa/core-flows";
+import { allowsFiniteBackorder, catalogueExternalIds, groupOpsProducts, isCatalogueRow, missingTaxInclusiveZarPrice, syncFirstout } from "./sync-firstout";
 import type { OpsProduct } from "./ops-contract";
+
+jest.mock("./storefront-order-handoff", () => ({ reconcileStorefrontHandoffs: jest.fn() }));
+jest.mock("./storefront-commerce-exceptions", () => ({ recordOpsCheckoutHealth: jest.fn(), refreshOpsCheckoutHealth: jest.fn() }));
+jest.mock("@medusajs/medusa/core-flows", () => Object.fromEntries([
+  "createCollectionsWorkflow", "createInventoryLevelsWorkflow", "createProductCategoriesWorkflow", "createProductsWorkflow",
+  "createProductVariantsWorkflow", "deleteProductVariantsWorkflow", "updateCollectionsWorkflow", "updateInventoryLevelsWorkflow",
+  "updateProductVariantsWorkflow", "updateProductsWorkflow",
+].map((name) => [name, jest.fn()])));
 
 const base: OpsProduct = {
   source_sku_id: "e4653558-60c7-4be7-a416-76fc2c055b8f",
@@ -66,4 +77,60 @@ test("Medusa backorder is available only while a finite source offer is live", (
   expect(allowsFiniteBackorder({ ...base, available_quantity: 0, made_to_order_offer: {
     ...offer, expires_at: new Date(Date.now() - 1_000).toISOString(),
   } })).toBe(false);
+});
+
+type FakeProduct = Record<string, unknown> & { id: string; external_id: string };
+
+/** A Medusa stand-in: every workflow call is recorded, and product creation is reflected in the catalogue. */
+function fakeMedusa(products: FakeProduct[], feed: OpsProduct[]) {
+  const calls: { workflow: string; input: unknown }[] = [];
+  for (const [name, mock] of Object.entries(flows).filter(([, value]) => jest.isMockFunction(value))) {
+    (mock as jest.Mock).mockImplementation(() => ({ run: async ({ input }: { input: Record<string, unknown> }) => {
+      calls.push({ workflow: name, input });
+      if (name !== "createProductsWorkflow") return { result: [] };
+      const [product] = input.products as { external_id: string; variants: { sku: string }[] }[];
+      const created = { ...product, id: `prod_${products.length}`, variants: product.variants.map((variant) => ({ ...variant, id: `variant_${variant.sku}` })) };
+      products.push(created as unknown as FakeProduct);
+      return { result: [created] };
+    } }));
+  }
+  const rows: Record<string, unknown[]> = {
+    product: products, sales_channel: [{ id: "sc_1" }], stock_location: [{ id: "sloc_1" }], shipping_profile: [{ id: "sp_1" }],
+    inventory_level: [], product_collection: [{ id: "pcol_sale", handle: "on-sale", title: "On Sale" }],
+  };
+  const graph = jest.fn(async ({ entity, filters }: { entity: string; filters?: { id?: string } }) => entity === "product_variant"
+    ? { data: [{ id: filters?.id, inventory_items: [{ inventory_item_id: `iitem_${filters?.id}` }] }] }
+    : { data: rows[entity] });
+  const services: Record<string, unknown> = {
+    [ContainerRegistrationKeys.QUERY]: { graph },
+    [ContainerRegistrationKeys.LOGGER]: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+    [Modules.LOCKING]: { execute: async (_key: string, job: () => Promise<unknown>) => job() },
+    [Modules.INVENTORY]: { listReservationItems: async () => [] },
+  };
+  process.env.FIRSTOUT_OPS_URL = "https://firstout.test/api/v1/ops-commerce/v1";
+  process.env.FIRSTOUT_OPS_TOKEN = "ops-token";
+  process.env.FIRSTOUT_OPS_COMPANY_ID = "5b2f8c3e-4a1d-4c55-9a7e-0d1c2b3a4f5e";
+  global.fetch = jest.fn(async () => new Response(JSON.stringify({ company_id: process.env.FIRSTOUT_OPS_COMPANY_ID, products: feed })));
+  return { calls, container: { resolve: (key: string) => services[key] } as unknown as MedusaContainer };
+}
+
+test("a sync run writes no room metadata and never sends categories", async () => {
+  const table = { ...base, source_sku_id: "627a41f1-9892-4bbc-bcfb-b4149474235d", product_group_id: null, product_title: null, options: {}, sku: "TABLE-1", name: "Carrara marble coffee table" };
+  const existing: FakeProduct = {
+    id: "prod_table", external_id: `firstout-${table.source_sku_id}`, status: "published", collection_id: "pcol_sale",
+    metadata: { storefront_room_collections: ["sofas"] }, categories: [{ id: "pcat_staff" }], options: [{ title: "Item" }],
+    variants: [{ id: "variant_table", sku: "TABLE-1", allow_backorder: false, options: [{ value: "Standard", option: { title: "Item" } }],
+      metadata: { source_sku_id: table.source_sku_id, source_revision: "2026-09-01T00:00:00.000000Z" } }],
+  };
+  const { calls, container } = fakeMedusa([existing], [base, table]);
+
+  await syncFirstout(container);
+
+  const created = calls.find((call) => call.workflow === "createProductsWorkflow")?.input as { products: { metadata: unknown }[] };
+  expect(created.products[0].metadata).toEqual({ source_product_group_id: base.product_group_id });
+  expect(calls.map((call) => call.workflow)).not.toContain("createProductCategoriesWorkflow");
+  const written = JSON.stringify(calls.map((call) => call.input));
+  expect(written).not.toContain("storefront_room_collections");
+  expect(written).not.toMatch(/categor/);
+  expect(calls.filter((call) => call.workflow === "updateProductVariantsWorkflow")).toHaveLength(1);
 });

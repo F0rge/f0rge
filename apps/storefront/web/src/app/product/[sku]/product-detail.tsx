@@ -9,6 +9,7 @@ import { useProductAttention } from "@/components/analytics/use-product-attentio
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
 import { formatCustomerPrice } from "@/lib/order-money";
+import { offerFresh, offerLive } from "@/lib/made-to-order";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 
 const assurances = [
@@ -55,9 +56,8 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const imagePosition = image ? gallery.indexOf(image) + 1 : 0;
   const quantity = variant?.inventory_quantity ?? 0;
   const offer = variant?.metadata?.made_to_order_offer;
-  const offerObservedAt = offer?.observed_at ? Date.parse(offer.observed_at) : NaN;
-  const offerFresh = Number.isFinite(offerObservedAt) && Date.now() - offerObservedAt <= 5 * 60_000 && offerObservedAt <= Date.now() + 60_000;
-  const offerAvailable = !!offer && offerFresh && offer.remaining_capacity > 0 && Date.parse(offer.expires_at) > Date.now();
+  const fresh = offerFresh(offer);
+  const offerAvailable = offerLive(offer);
   const promisedWindow = offerAvailable ? (() => {
     const start = new Date();
     const end = new Date();
@@ -66,7 +66,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     const date = (value: Date) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(value);
     return `${date(start)} – ${date(end)}`;
   })() : null;
-  const availability = !variant ? "This combination is unavailable" : quantity > 0 ? `${quantity} in stock` : offerAvailable ? `Made to order · ${offer!.min_lead_time_days}–${offer!.max_lead_time_days} days` : offer && !offerFresh ? "Made-to-order availability needs refreshing" : offer ? "Made-to-order allowance exhausted or expired" : "Currently unavailable";
+  const availability = !variant ? "This combination is unavailable" : quantity > 0 ? `${quantity} in stock` : offerAvailable ? `Made to order · ${offer!.min_lead_time_days}–${offer!.max_lead_time_days} days` : offer && !fresh ? "Made-to-order availability needs refreshing" : offer ? "Made-to-order allowance exhausted or expired" : "Currently unavailable";
   // Quantity is capped at stock, or at the made-to-order places left; the bag API takes at most 99.
   const maxQuantity = Math.min(99, quantity > 0 ? quantity : offerAvailable ? offer!.remaining_capacity : 0);
   const chosenQuantity = Math.max(1, Math.min(requested, maxQuantity));

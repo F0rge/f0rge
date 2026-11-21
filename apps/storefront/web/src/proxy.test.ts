@@ -114,6 +114,8 @@ describe("Clerk and private-preview proxy composition", () => {
     delete process.env.STOREFRONT_PREVIEW_PASSWORD;
     const { proxy } = await import("./proxy");
     const shop = await proxy(new NextRequest("https://daskasas.example/shop"), {} as never);
+    const category = await proxy(new NextRequest("https://daskasas.example/shop/dining-room"), {} as never);
+    expect(category.headers.get("x-robots-tag")).toBeNull();
     const account = await proxy(new NextRequest("https://daskasas.example/account"), {} as never);
     const checkout = await proxy(new NextRequest("https://daskasas.example/checkout"), {} as never);
     expect(shop.headers.get("x-robots-tag")).toBeNull();
@@ -125,7 +127,8 @@ describe("Clerk and private-preview proxy composition", () => {
     const { proxy } = await import("./proxy");
     expect((await proxy(new NextRequest("https://storefront.example/collections"), {} as never)).status).toBe(401);
     const authorization = `Basic ${Buffer.from("preview-user:test-preview-password-that-is-long-enough").toString("base64")}`;
-    for (const [from, to] of [["/collections", "/shop"], ["/support", "/help"]]) {
+    for (const [from, to] of [["/collections", "/shop"], ["/support", "/help"], ["/shop?category=bedroom", "/shop/bedroom"],
+      ["/shop?collection=sofas", "/shop/sofas-armchairs"], ["/shop?collection=on-sale&sort=price-asc", "/shop"]]) {
       const response = await proxy(new NextRequest(`https://storefront.example${from}`, { headers: { authorization } }), {} as never);
       expect(response.status).toBe(308);
       expect(response.headers.get("location")).toBe(`https://storefront.example${to}`);

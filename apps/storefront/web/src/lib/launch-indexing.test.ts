@@ -20,6 +20,8 @@ describe("storefront indexing", () => {
   it("allows catalogue paths only when production indexing is on", () => {
     expect(catalogueIndexable("/shop", production)).toBe(true);
     expect(catalogueIndexable("/product/chair", production)).toBe(true);
+    expect(catalogueIndexable("/shop/bedroom", production)).toBe(true);
+    expect(catalogueIndexable("/shop/not-a-category", production)).toBe(false);
     expect(catalogueIndexable("/collections", production)).toBe(false);
     expect(catalogueIndexable("/support", production)).toBe(false);
     expect(catalogueIndexable("/policies/privacy", production)).toBe(true);
@@ -37,18 +39,18 @@ describe("storefront indexing", () => {
   });
 
   it("builds a sitemap of public catalogue urls and omits account and checkout", () => {
-    expect(sitemapPaths({ indexable: false, products: [{ path: "/product/chair" }], collections: [{ handle: "seating" }] })).toEqual([]);
+    expect(sitemapPaths({ indexable: false, products: [{ path: "/product/chair" }] })).toEqual([]);
     const paths = sitemapPaths({
       indexable: true,
       products: [{ path: "/product/chair" }, { path: "/account" }],
-      collections: [{ handle: "seating" }],
     });
     expect(paths).toContain("/");
     expect(paths).toContain("/shop");
     expect(paths).not.toContain("/collections");
     expect(paths).not.toContain("/support");
     expect(paths).toContain("/product/chair");
-    expect(paths).toContain("/shop?collection=seating");
+    expect(paths).toEqual(expect.arrayContaining(["/shop/sofas-armchairs", "/shop/dining-room", "/shop/bedroom", "/shop/coffee-console-tables"]));
+    expect(paths.some((path) => path.includes("?"))).toBe(false);
     expect(paths).toContain("/policies/privacy");
     expect(paths).toContain("/policies/terms");
     expect(paths).toContain("/policies/refunds");
@@ -60,6 +62,6 @@ describe("storefront indexing", () => {
 
   it("uses the configured public origin for canonical urls", () => {
     expect(canonicalUrl("https://daskasas.example", "/product/chair")).toBe("https://daskasas.example/product/chair");
-    expect(canonicalUrl("https://daskasas.example/", "/shop?collection=seating")).toBe("https://daskasas.example/shop?collection=seating");
+    expect(canonicalUrl("https://daskasas.example/", "/shop/bedroom")).toBe("https://daskasas.example/shop/bedroom");
   });
 });

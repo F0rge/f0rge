@@ -3,6 +3,7 @@ import { Clock, Mail, MapPin, Phone } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge, Button } from "@f0rge/ui";
 import { StorefrontMotion } from "@/components/storefront-motion";
 import { PieceImage } from "@/components/piece-image";
+import { CategoryTiles } from "@/components/category-tiles";
 import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
 import { fromPrice, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
 import { SHOWROOM } from "@/lib/showroom";
@@ -157,6 +158,7 @@ export default async function HomePage() {
     </section>
 
     <SelectedPieces products={products} />
+    <CategoryTiles products={products} title="Shop by category" description="Every piece in the showroom, by room." />
     <VisitShowroom />
 
     <section data-reveal aria-labelledby="faq-title" className="mx-auto max-w-[1400px] px-4 py-24 md:px-6 lg:py-32">

@@ -33,7 +33,7 @@ test('rejected visitors send nothing; later acceptance sends sanitized acquisiti
     localStorage.removeItem(key)
   }, { key: consentKey })
   await page.goto('/shop?q=alice%40example.com&utm_source=Spring_News&utm_campaign=bedroom-sale&token=private-token-value')
-  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Shop all' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Reject optional analytics' })).toBeVisible()
   await page.getByRole('button', { name: 'Reject optional analytics' }).click()
   await expect(page.getByRole('button', { name: 'Privacy settings' })).toBeVisible()
@@ -58,14 +58,14 @@ test('rejected visitors send nothing; later acceptance sends sanitized acquisiti
 test('withdrawal revokes an accepted visitor and leaves no persisted analytics identity or attribution', async ({ page }) => {
   await chooseStoredConsent(page, 'accepted')
   await page.goto('/shop?utm_source=first-campaign&q=private-search')
-  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Shop all' })).toBeVisible()
   await expect.poll(() => captured.length).toBeGreaterThan(0)
   await page.getByRole('button', { name: 'Privacy settings' }).click()
   await page.getByRole('button', { name: 'Withdraw optional analytics' }).click()
   await expect(page.getByRole('button', { name: 'Privacy settings' })).toBeVisible()
   const requestsBeforeNextPage = captured.length
   await page.goto('/shop?utm_source=after-withdrawal&q=next-private-search')
-  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Shop all' })).toBeVisible()
   await page.waitForTimeout(250)
   expect(captured).toHaveLength(requestsBeforeNextPage)
   expect(await page.evaluate((key) => localStorage.getItem(key), consentKey)).toBe('rejected')
@@ -82,6 +82,8 @@ test('product attention excludes hidden and idle time and sends one visit summar
   await expect(page.getByRole('heading', { name: /Test chair/ })).toBeVisible()
   await expect(page.locator('[data-main-image]')).toBeInViewport({ ratio: 0.5 })
   await expect(page.locator('.product-attention-region')).toBeInViewport({ ratio: 0.5 })
+  // Stop real time so hydration delays can't add or remove a second; only runFor moves the clock until we leave.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100))
   await page.evaluate(() => document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })))
   await page.clock.runFor(5_000)
   await page.evaluate(() => {
@@ -102,8 +104,9 @@ test('product attention excludes hidden and idle time and sends one visit summar
     document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
   })
   await page.clock.runFor(5_000)
+  await page.clock.resume()
   await page.getByRole('contentinfo').getByRole('link', { name: 'Shop all' }).click()
-  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Shop all' })).toBeVisible()
   await expect.poll(() => captured.filter((event) => event.event === 'storefront_product_attention_summary').length).toBe(1)
   const summary = captured.find((event) => event.event === 'storefront_product_attention_summary')
   expect(summary?.properties).toMatchObject({ product_id: 'prod_test_chair', active_seconds: 10, visibility_threshold: 'half_visible' })
@@ -112,10 +115,10 @@ test('product attention excludes hidden and idle time and sends one visit summar
 test('shop impressions and reports stay on the consented allowlist', async ({ page }) => {
   await chooseStoredConsent(page, 'accepted')
   await page.goto('/shop?utm_source=spring_news&utm_campaign=bedroom-sale')
-  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
-  await page.locator('a.product-card').first().scrollIntoViewIfNeeded()
+  await expect(page.getByRole('heading', { level: 1, name: 'Shop all' })).toBeVisible()
+  await page.getByRole('list', { name: 'Pieces' }).getByRole('link').first().scrollIntoViewIfNeeded()
   await expect.poll(() => captured.some((event) => event.event === 'storefront_product_impressed')).toBe(true)
-  await page.locator('a.product-card').first().click()
+  await page.getByRole('list', { name: 'Pieces' }).getByRole('link').first().click()
   await expect(page.getByRole('heading', { name: /Test chair/ })).toBeVisible()
   await expect(page.locator('.product-attention-region')).toBeVisible()
   const names = captured.map((event) => event.event)
@@ -124,7 +127,7 @@ test('shop impressions and reports stay on the consented allowlist', async ({ pa
   const reports = consentedBrowsingReports(captured.map((event) => ({ name: event.event, properties: event.properties })))
   expect(reports.acquisition.disclaimer).toBe(CONSENTED_MEASUREMENT_DISCLAIMER)
   expect(reports.product.scope).toBe('consented_visitors')
-  expect(reports.search.rows[0]).toMatchObject({ result_count: 1, query_present: false })
+  expect(reports.search.rows[0]).toMatchObject({ result_count: 6, query_present: false })
   expect(reports.product.rows).toContainEqual({
     event: 'storefront_product_selected',
     surface: 'shop',
@@ -132,7 +135,7 @@ test('shop impressions and reports stay on the consented allowlist', async ({ pa
     event_count: 1,
   })
   await page.getByRole('contentinfo').getByRole('link', { name: 'Shop all' }).click()
-  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Shop all' })).toBeVisible()
   await expect.poll(() => captured.filter((event) => event.event === 'storefront_search_results_viewed').length).toBe(2)
 })
 
@@ -143,7 +146,7 @@ test('analytics transport failure does not block browsing', async ({ page }) => 
   })
   await chooseStoredConsent(page, 'accepted')
   await page.goto('/shop')
-  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Shop all' })).toBeVisible()
   await page.getByRole('link', { name: /Test chair/ }).first().click()
   await expect(page.getByRole('heading', { name: /Test chair/ })).toBeVisible()
 })
