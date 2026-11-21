@@ -6,7 +6,7 @@ from decimal import Decimal
 import uuid
 from typing import Optional
 
-from sqlalchemy import ColumnElement, exists, false, func, select
+from sqlalchemy import ColumnElement, case, exists, false, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -32,17 +32,15 @@ SHOP_CATEGORIES = {
 }
 
 
-def _shop_category(category: Optional[str]) -> Optional[str]:
-    return SHOP_CATEGORIES.get((category or "").strip().lower())
+# The only category matcher: the feed selects and labels rows with this one SQL expression.
+SHOP_CATEGORY = case(SHOP_CATEGORIES, value=func.lower(func.trim(Sku.category)))
 
-
-def _on_shop(sku: type[Sku]) -> ColumnElement[bool]:
-    """The auto-publish rule: a shop category, a Firstout photo, and not hidden."""
-    return (
-        func.lower(func.trim(sku.category)).in_(list(SHOP_CATEGORIES))
-        & sku.photo_storage_key.is_not(None)
-        & sku.storefront_hidden.is_(False)
-    )
+# The auto-publish rule, per SKU: a shop category, a Firstout photo, and not hidden.
+ON_SHOP = (
+    SHOP_CATEGORY.is_not(None)
+    & Sku.photo_storage_key.is_not(None)
+    & Sku.storefront_hidden.is_(False)
+)
 
 
 def _utc(value: datetime) -> datetime:
@@ -83,20 +81,13 @@ class OpsCommerceCRUD:
         member = aliased(Sku)
         mapped = aliased(ProductGroupVariant)
         selected = Sku.storefront_published.is_(True)
-        standalone = ProductGroupVariant.id.is_(None)
         group_selected: ColumnElement[bool] = ProductGroup.storefront_published.is_(True)
         member_unselected: ColumnElement[bool] = member.storefront_published.is_(False)
         if auto_publish:
-            # A group shows while any member meets the rule; its hidden members drop out.
-            on_shop_member = aliased(Sku)
-            on_shop_mapped = aliased(ProductGroupVariant)
-            selected = Sku.storefront_hidden.is_(False)
-            standalone = standalone & _on_shop(Sku)
-            group_selected = exists(
-                select(on_shop_mapped.id)
-                .join(on_shop_member, on_shop_member.id == on_shop_mapped.source_sku_id)
-                .where(on_shop_mapped.product_group_id == ProductGroup.id, _on_shop(on_shop_member))
-            )
+            # Every row, grouped or not, meets the rule itself; a group shows with the members
+            # that do. Archived, unsellable or unpriced members still keep the whole group off.
+            selected = ON_SHOP
+            group_selected = true()
             member_unselected = false()
         incomplete_group = exists(
             select(mapped.id)
@@ -136,7 +127,7 @@ class OpsCommerceCRUD:
                 Sku.made_to_order_expires_at,
                 Sku.made_to_order_offer_id,
                 Sku.photo_storage_key,
-                Sku.category,
+                SHOP_CATEGORY,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
             .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
@@ -146,19 +137,19 @@ class OpsCommerceCRUD:
                 Sku.is_archived.is_(False),
                 Sku.is_sellable.is_(True),
                 Sku.retail_ex_vat > 0,
-                standalone | (group_selected & ~incomplete_group),
+                ProductGroupVariant.id.is_(None) | (group_selected & ~incomplete_group),
             )
             .group_by(Sku.id, ProductGroup.id, ProductGroupVariant.id)
             .order_by(Sku.our_ref)
         )
         rows = result.all()
-        # A group takes the category of its first member (by SKU code) that meets the rule,
-        # so every variant of one product carries the same shop category.
+        # Members whose categories map to different shop categories take the first member's
+        # (by SKU code), so every variant of one product carries the same shop category.
         group_categories: dict[uuid.UUID, str] = {}
-        for row in rows if auto_publish else []:
-            category = _shop_category(row[16])
-            if row[7] is not None and category and row[15]:
-                group_categories.setdefault(row[7], category)
+        if auto_publish:
+            for row in rows:
+                if row[7] is not None:
+                    group_categories.setdefault(row[7], row[16])
         acknowledgements: dict[uuid.UUID, list[str]] = {}
         acknowledgement_revisions: dict[uuid.UUID, datetime] = {}
         if rows:
@@ -240,7 +231,7 @@ class OpsCommerceCRUD:
                 ),
                 photo_storage_key=row[15],
                 shop_category=(
-                    (group_categories[row[7]] if row[7] is not None else _shop_category(row[16]))
+                    (group_categories[row[7]] if row[7] is not None else row[16])
                     if auto_publish
                     else None
                 ),

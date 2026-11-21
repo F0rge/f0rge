@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
+from app.config import settings
 from app.models.inventory import LocationStock
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
@@ -138,6 +139,20 @@ async def test_online_publication_and_active_offer_block_archive(owner_client, a
     assert prepared["eligible_count"] == 0 and prepared["blocked_count"] == 1
     assert "online shop" in prepared["blocked"][0]["reason"]
     assert not sku.is_archived
+
+
+async def test_publish_flag_blocks_archive_only_while_auto_publish_is_off(
+    owner_client, async_db, monkeypatch
+):
+    row = await _sku(owner_client, "ARCHIVE-AUTO")
+    sku = await async_db.get(Sku, uuid.UUID(row["id"]))
+    sku.storefront_published = True
+    await async_db.flush()
+    blocked = await prepare(owner_client, "skus", ids=[row["id"]], action="archive")
+    assert blocked["blocked_count"] == 1
+    monkeypatch.setattr(settings, "ops_commerce_auto_publish_enabled", True)
+    allowed = await prepare(owner_client, "skus", ids=[row["id"]], action="archive")
+    assert allowed["eligible_count"] == 1 and allowed["blocked_count"] == 0
 
 
 async def test_new_kit_dependency_after_preflight_requires_fresh_preview(owner_client):

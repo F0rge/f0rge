@@ -413,22 +413,26 @@ async def test_auto_publish_feeds_photographed_unhidden_shop_category_skus(
         "AP-OLD": sku("AP-OLD", "Bedroom", False, storefront_published=True),
         "AP-HIDDEN": sku("AP-HIDDEN", "Dining Room", True, storefront_hidden=True),
         "AP-RUG": sku("AP-RUG", "Rugs", True),
-        # One group whose members disagree: the first qualifying SKU code names its category.
+        # Non-ASCII: SQL alone decides the category, so the row maps or drops, never null.
+        "AP-TR": sku("AP-TR", "DİNİNG ROOM", True),
+        # The rule is per SKU: only G-1 and G-2 qualify. They map to different shop
+        # categories, so the first SKU code names the group's category.
         "AP-G-1": sku("AP-G-1", "Coffee and Lamp Tables", True),
         "AP-G-2": sku("AP-G-2", "Bedroom", True),
         "AP-G-3": sku("AP-G-3", "Consoles and TV Units", False),
         "AP-G-4": sku("AP-G-4", "Bedroom", True, storefront_hidden=True),
+        "AP-G-5": sku("AP-G-5", "Rugs", True),
         # A group with no qualifying member stays off the shop.
         "AP-H-1": sku("AP-H-1", "Bedroom", False),
         "AP-H-2": sku("AP-H-2", "Rugs", True),
     }
     async_db.add_all(skus.values())
-    shown = ProductGroup(title="Side table", options={"Finish": ["1", "2", "3", "4"]})
+    shown = ProductGroup(title="Side table", options={"Finish": ["1", "2", "3", "4", "5"]})
     unshown = ProductGroup(title="Bed", options={"Finish": ["1", "2"]})
     async_db.add_all([shown, unshown])
     await async_db.flush()
     for group, refs in (
-        (shown, ["AP-G-1", "AP-G-2", "AP-G-3", "AP-G-4"]),
+        (shown, ["AP-G-1", "AP-G-2", "AP-G-3", "AP-G-4", "AP-G-5"]),
         (unshown, ["AP-H-1", "AP-H-2"]),
     ):
         for index, ref in enumerate(refs, start=1):
@@ -450,15 +454,16 @@ async def test_auto_publish_feeds_photographed_unhidden_shop_category_skus(
 
     monkeypatch.setattr(settings, "ops_commerce_auto_publish_enabled", True)
     on = (await async_client.get(route, headers=headers)).json()["products"]
-    assert {row["sku"]: row["shop_category"] for row in on} == {
+    categories = {row["sku"]: row["shop_category"] for row in on}
+    # How the database lowercases İ depends on its collation; either way it is never null.
+    assert categories.pop("AP-TR", "dining-room") == "dining-room"
+    assert categories == {
         "AP-G-1": "coffee-console-tables",
         "AP-G-2": "coffee-console-tables",
-        "AP-G-3": "coffee-console-tables",
         "AP-SOFA": "sofas-armchairs",
     }
     # Auto-publish sends photo tokens even with the photo-token setting off.
-    assert all("photo_token" in row for row in on)
-    assert next(row for row in on if row["sku"] == "AP-G-3")["photo_token"] is None
+    assert all(len(row["photo_token"]) == 64 for row in on)
 
     skus["AP-SOFA"].storefront_hidden = True
     await async_db.flush()

@@ -2,7 +2,7 @@ import { updateSku, type Sku } from "./api";
 import { canMutateCatalogue, type PermissionHolder } from "./permissions";
 
 export const SHOP_HIDDEN_HELP =
-  "Hidden pieces never appear on daskasas.co.za, even with a photo and stock.";
+  "Hidden pieces never appear on daskasas.co.za once automatic publishing is on, even with a photo and stock.";
 
 // Same gate as other SKU edits: catalogue.mutate, and the API refuses edits to archived SKUs.
 export function canToggleShopVisibility(

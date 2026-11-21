@@ -206,8 +206,10 @@ test("without a shop category in the feed, a sync run writes no room metadata an
   await syncFirstout(container);
 
   const created = calls.find((call) => call.workflow === "createProductsWorkflow")?.input as { products: { metadata: unknown }[] };
-  expect(created.products[0].metadata).toEqual({ source_product_group_id: base.product_group_id, firstout_title: "Arc sofa" });
+  expect(created.products[0].metadata).toEqual({ source_product_group_id: base.product_group_id });
   expect(calls.map((call) => call.workflow)).not.toContain("createProductCategoriesWorkflow");
+  // Without shop_category nothing is renamed either: no update carries a title.
+  expect(calls.filter((call) => call.workflow === "updateProductsWorkflow" && "title" in (call.input.update as object))).toEqual([]);
   const written = JSON.stringify(calls.map((call) => call.input));
   expect(written).not.toContain("storefront_room_collections");
   expect(written).not.toMatch(/categor/);
@@ -398,28 +400,38 @@ test("the shop category moves a product between the four only and leaves other c
 });
 
 test("a Firstout rename reaches the title only while staff have not edited it", async () => {
+  const placed = { ...table, shop_category: "coffee-console-tables" };
   const existing: FakeProduct = { ...stagedTable(), title: table.name };
-  const { state, container } = fakeMedusa([existing], [table]);
+  const { calls, state, container } = fakeMedusa([existing], [{ ...table, name: "Renamed while off" }]);
+
+  // Auto-publish off (no shop_category): names are not touched at all.
+  await syncFirstout(container);
+  expect(existing.title).toBe(table.name);
+  expect(existing.metadata).toEqual({});
 
   // Synced before names were recorded, still showing the Firstout name: adopted.
+  state.feed = [placed, { ...base, shop_category: "sofas-armchairs" }];
   await syncFirstout(container);
   expect(existing.title).toBe(table.name);
   expect(existing.metadata).toMatchObject({ firstout_title: table.name });
+  // A product created from a placed row records its Firstout name at creation.
+  const created = calls.find((call) => call.workflow === "createProductsWorkflow")?.input as { products: { title: string; metadata: unknown }[] };
+  expect(created.products[0]).toMatchObject({ title: "Arc sofa", metadata: { firstout_title: "Arc sofa" } });
 
-  state.feed = [{ ...table, name: "Carrara coffee table" }];
+  state.feed = [{ ...placed, name: "Carrara coffee table" }];
   await syncFirstout(container);
   expect(existing.title).toBe("Carrara coffee table");
   expect(existing.metadata).toMatchObject({ firstout_title: "Carrara coffee table" });
 
   existing.title = "Carrara marble table, honed";
-  state.feed = [{ ...table, name: "Carrara table" }];
+  state.feed = [{ ...placed, name: "Carrara table" }];
   await syncFirstout(container);
   expect(existing.title).toBe("Carrara marble table, honed");
   expect(existing.metadata).toMatchObject({ firstout_title: "Carrara coffee table" });
 
   // A product with an unrecorded name that differs from Firstout's is treated as edited.
   const legacy: FakeProduct = { ...stagedTable(), title: "Staff name", metadata: {} };
-  const second = fakeMedusa([legacy], [table]);
+  const second = fakeMedusa([legacy], [placed]);
   await syncFirstout(second.container);
   expect(legacy.title).toBe("Staff name");
   expect(legacy.metadata).toEqual({});

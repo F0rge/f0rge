@@ -424,18 +424,20 @@ type MerchandisedProduct = {
 /**
  * Puts each product in its Firstout shop category, moving it out of the other three and
  * never touching any other category. Renames a product only while its title is still the
- * Firstout name the sync last set, so a staff edit in Medusa Admin always wins.
+ * Firstout name the sync last set, so a staff edit in Medusa Admin always wins. Only rows
+ * carrying shop_category (Firstout auto-publish on) are touched; otherwise nothing is written.
  */
 export async function syncFirstoutMerchandising(container: MedusaContainer, source: OpsProduct[]): Promise<void> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
-  const groups = groupOpsProducts(source);
+  const groups = groupOpsProducts(source).filter((group) => group.rows[0].shop_category);
+  if (!groups.length) return;
   const { data } = await query.graph({ entity: "product", fields: ["id", "external_id", "title", "metadata", "categories.id"] });
   const products = new Map((data as MerchandisedProduct[])
     .filter((product) => product.external_id?.startsWith(SOURCE_PREFIX))
     .map((product) => [product.external_id!, product]));
 
-  const placed = groups.filter((group) => group.rows[0].shop_category && products.has(group.externalId));
+  const placed = groups.filter((group) => products.has(group.externalId));
   if (placed.length) {
     const { data: categories } = await query.graph({
       entity: "product_category", fields: ["id", "handle"],
@@ -571,7 +573,7 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
         })),
         metadata: {
           ...(group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {}),
-          [FIRSTOUT_TITLE_METADATA_KEY]: group.title,
+          ...(group.rows[0].shop_category ? { [FIRSTOUT_TITLE_METADATA_KEY]: group.title } : {}),
         },
       }] } });
       const createdId = result[0]?.id;

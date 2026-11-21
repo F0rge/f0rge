@@ -39,12 +39,15 @@ Which pieces are on the shop, and in which category, comes from Firstout
 
 It also needs to be sellable, unarchived and priced, as before. Only pieces in
 stock or with a live made-to-order offer reach On Sale; the rest stay drafts.
-This replaces the hand-set Firstout publish flag. A product group is in the feed
-while any member meets the rule; its hidden members drop out, and members
-without a photo or a mapped category come along as variants. A group takes the
-shop category of its first qualifying member by SKU code, so every variant of
-one product shares one category. The mapping lives in Firstout
-(`SHOP_CATEGORIES` in `apps/firstout/backend/app/crud/ops_commerce.py`).
+This replaces the hand-set Firstout publish flag. The rule applies to every
+SKU, grouped or not: a product group shows with only the members that meet it,
+and is left out entirely if none does. A group with an archived, unsellable or
+unpriced member stays off the shop, as before. If a group's qualifying members
+map to different shop categories, the group takes the category of its first
+qualifying member by SKU code, so every variant of one product shares one
+category. The mapping lives in Firstout (`SHOP_CATEGORIES` in
+`apps/firstout/backend/app/crud/ops_commerce.py`), and Firstout's database
+matches the category against it.
 
 Each product carries `shop_category`. The sync puts the product in that Medusa
 category and takes it out of the other three. It never adds or removes any other
@@ -52,6 +55,9 @@ category, so a staff-made category stays. Staff no longer assign the four
 categories in Medusa Admin: a change there is put back on the next sync run.
 A piece that leaves the feed is withdrawn to draft as before and keeps its
 category.
+
+Names and categories are written only for feed rows that carry
+`shop_category`. With the Firstout setting off, the sync changes neither.
 
 Names: the sync creates a product with its Firstout name and records that name
 in product metadata `firstout_title`. A later Firstout rename updates the title
@@ -72,6 +78,11 @@ redeploy it. Turning it on also sends `photo_token`, whatever
 `OPS_COMMERCE_PHOTO_TOKENS_ENABLED` says. Pieces published by hand that fail the
 rule, such as the ones without a photo, drop out of the feed and are withdrawn.
 About 300 photos at about 1 MB each fit the 1 GB photo volume.
+
+Rollback: turn `OPS_COMMERCE_AUTO_PUBLISH_ENABLED` off before rolling commerce
+back to a pre-#1018 image; that image rejects `shop_category` and pauses
+checkout. Turning the setting off returns the feed to the publish flag, so
+pieces not published by hand are withdrawn on the next sync.
 
 A published piece with no category appears only under **Shop all**.
 
