@@ -3,9 +3,18 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+
+NOTE_MAX_LENGTH = 2000
+
+# A sale's printed or internal note; blank means none.
+DocumentNote = Annotated[
+    Optional[str],
+    Field(max_length=NOTE_MAX_LENGTH),
+    AfterValidator(lambda value: (value or "").strip() or None),
+]
 
 
 class InvoiceLineCreate(BaseModel):
@@ -27,6 +36,16 @@ class InvoiceCreate(BaseModel):
     lines: list[InvoiceLineCreate] = Field(min_length=1)
     credit_override: bool = False
     credit_override_reason: Optional[str] = None
+    note_printed: DocumentNote = None
+    note_internal: DocumentNote = None
+
+
+class InvoiceNoteUpdate(BaseModel):
+    """Only the internal note changes after issue; the printed note is part of the document."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note_internal: DocumentNote
 
 
 class InvoiceLineResponse(BaseModel):
@@ -83,6 +102,8 @@ class InvoiceResponse(BaseModel):
     balance: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]
     on_account: bool = False
+    note_printed: Optional[str] = None
+    note_internal: Optional[str] = None
     prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     created_at: datetime.datetime

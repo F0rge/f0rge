@@ -72,6 +72,8 @@ class TillBasketCRUD(BaseCRUD):
                 lines=[],
                 customer_id=None,
                 note=None,
+                note_printed=None,
+                note_internal=None,
                 pick_id=None,
                 linked_pick_ids={},
                 last_operation_id=None,

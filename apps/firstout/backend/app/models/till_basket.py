@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -33,6 +34,9 @@ class TillBasket(TenantOwnedMixin, UUIDPkMixin, Base):
     )
     customer_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     note: Mapped[Optional[str]] = mapped_column(String(500))
+    # The sale's invoice notes, kept with the cart until the sale is completed.
+    note_printed: Mapped[Optional[str]] = mapped_column(Text)
+    note_internal: Mapped[Optional[str]] = mapped_column(Text)
     pick_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     linked_pick_ids: Mapped[dict[str, str]] = mapped_column(JSONB)
     lines: Mapped[list[dict]] = mapped_column(JSONB)

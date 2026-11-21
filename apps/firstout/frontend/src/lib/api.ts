@@ -1326,6 +1326,8 @@ export type HeldSaleCreate = {
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   note?: string | null;
+  note_printed?: string | null;
+  note_internal?: string | null;
   basket_id?: string;
 };
 
@@ -1335,6 +1337,9 @@ export type TillBasket = {
   location_id: string;
   customer_id: string | null;
   note: string | null;
+  /** The sale's invoice notes, kept with the cart until it is sold. */
+  note_printed?: string | null;
+  note_internal?: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
   lines: { sku_id: string; qty: number; discount_percent: string }[];
@@ -1371,6 +1376,8 @@ export type TillBasketUpdate = {
   operation_id: string;
   customer_id?: string;
   note?: string | null;
+  note_printed?: string | null;
+  note_internal?: string | null;
   pick_id?: string;
   linked_pick_ids?: Record<string, string>;
   lines: TillSaleLinePayload[];
@@ -1396,6 +1403,8 @@ export type HeldSale = {
   expires_at: string;
   version: number;
   note: string | null;
+  note_printed?: string | null;
+  note_internal?: string | null;
   estimated_total_inc_vat: string | null;
   pick_id: string | null;
   linked_pick_ids: Record<string, string>;
@@ -1489,6 +1498,10 @@ export type TillSalePayload = TillPriceRequest & {
   credit_override_reason?: string;
   basket_id?: string;
   basket_version?: number;
+  /** Printed on the tax invoice. */
+  note_printed?: string;
+  /** Staff only; never printed. */
+  note_internal?: string;
 };
 
 export type TillSaleResult = {
@@ -2175,6 +2188,10 @@ export type InvoiceListItem = {
 };
 
 export type Invoice = InvoiceListItem & {
+  /** Printed on the tax invoice. */
+  note_printed?: string | null;
+  /** Staff only; never printed. */
+  note_internal?: string | null;
   prices_include_vat: boolean;
   lines: InvoiceLine[];
 };
@@ -2190,6 +2207,8 @@ export type CreateInvoicePayload = {
   customer_id: string;
   issue_date: string;
   lines: CreateInvoiceLinePayload[];
+  note_printed?: string;
+  note_internal?: string;
 };
 
 export function listInvoices(params?: ListParams): Promise<Page<InvoiceListItem>> {
@@ -2205,6 +2224,17 @@ export function createInvoice(payload: CreateInvoicePayload): Promise<Invoice> {
 
 export function getInvoice(id: string): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`);
+}
+
+/** Longest printed or internal note the API accepts. */
+export const INVOICE_NOTE_MAX = 2000;
+
+/** Only the internal note changes after issue; blank clears it. */
+export function updateInvoiceNote(id: string, noteInternal: string): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ note_internal: noteInternal }),
+  });
 }
 
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "102_invoice_on_account",
+  "target_revision": "103_invoice_notes",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -413,6 +413,10 @@
     },
     "102_invoice_on_account": {
       "sha256": "94c126adf67bc40ed98bd33d604996024b6a581314ba7ac3c2879e8f50cdf480",
+      "automatic": true
+    },
+    "103_invoice_notes": {
+      "sha256": "bd5c6b38f4fcbf0cd47eef7307a0977ab992c3745aed9a8920da220742b0c2db",
       "automatic": true
     }
   }

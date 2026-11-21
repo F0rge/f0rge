@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { BooksHistory } from "@/components/books-history";
 import {
+  INVOICE_NOTE_MAX,
   canMutateBooks,
   createCreditNote,
   createPayment,
@@ -37,6 +38,7 @@ import {
   getSettings,
   settingsLogoUrl,
   listCreditNotes,
+  updateInvoiceNote,
   listPayments,
   type AppSettings,
   type CreditNote,
@@ -76,12 +78,15 @@ export default function InvoiceDetailPage() {
   const [creditReason, setCreditReason] = useState("");
   const [lastPayment, setLastPayment] = useState<Payment | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
 
   const loadInvoice = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const invoiceData = await getInvoice(params.id);
+      setNoteDraft(invoiceData.note_internal ?? "");
       if (invoiceData.is_archive) {
         setInvoice(invoiceData);
         setCustomer(null);
@@ -176,6 +181,24 @@ export default function InvoiceDetailPage() {
     }
   }
 
+  async function handleSaveNote() {
+    if (!invoice) {
+      return;
+    }
+    setNoteSaving(true);
+    setError(null);
+    try {
+      const saved = await updateInvoiceNote(invoice.id, noteDraft.trim());
+      setInvoice(saved);
+      setNoteDraft(saved.note_internal ?? "");
+      setSuccess("Internal note saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save the internal note.");
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
   async function handleIssueCreditNote() {
     if (!invoice || invoice.is_archive) {
       return;
@@ -261,6 +284,8 @@ export default function InvoiceDetailPage() {
   const showCreditNote = !invoice.is_archive && canMutate && !creditNote;
   const statusTag = invoiceStatusTag(invoice);
   const formatInvoiceAmount = invoice.is_archive ? formatArchiveCurrency : formatZarAmount;
+  const canEditNote = !invoice.is_archive && canMutate;
+  const noteChanged = noteDraft.trim() !== (invoice.note_internal ?? "");
 
   return (
     <Stack gap={6}>
@@ -434,7 +459,49 @@ export default function InvoiceDetailPage() {
             Balance owing: {formatSettlementAmount(invoice.balance, invoice.is_archive)}
           </p>
         </div>
+        {invoice.note_printed ? (
+          <div>
+            <p className="cds--type-label-01">Note</p>
+            <p className="cds--type-body-01" style={{ whiteSpace: "pre-wrap" }}>{invoice.note_printed}</p>
+          </div>
+        ) : null}
       </section>
+
+      {canEditNote ? (
+        <Stack gap={3}>
+          <TextArea
+            id="invoice-note-internal"
+            labelText="Internal note"
+            helperText="Staff only. Never printed."
+            rows={3}
+            maxCount={INVOICE_NOTE_MAX}
+            enableCounter
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+          />
+          {noteChanged ? (
+            <Stack gap={3} orientation="horizontal">
+              <Button size="sm" disabled={noteSaving} onClick={() => void handleSaveNote()}>
+                {noteSaving ? "Saving…" : "Save note"}
+              </Button>
+              <Button
+                size="sm"
+                kind="ghost"
+                disabled={noteSaving}
+                onClick={() => setNoteDraft(invoice.note_internal ?? "")}
+              >
+                Cancel
+              </Button>
+            </Stack>
+          ) : null}
+        </Stack>
+      ) : invoice.note_internal ? (
+        <div>
+          <p className="cds--type-label-01">Internal note</p>
+          <p className="cds--type-body-01" style={{ whiteSpace: "pre-wrap" }}>{invoice.note_internal}</p>
+          <p className="cds--type-helper-text-01">Staff only. Never printed.</p>
+        </div>
+      ) : null}
 
       {invoice.is_archive ? <p className="cds--type-body-01">Payments: Not imported</p> : <TableContainer title="Payments" description="Money received against this invoice">
         <Table>

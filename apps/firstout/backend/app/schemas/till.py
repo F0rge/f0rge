@@ -7,7 +7,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.invoice import InvoiceLineResponse
+from app.schemas.invoice import DocumentNote, InvoiceLineResponse
 
 
 from app.schemas.quantity import Quantity
@@ -67,6 +67,8 @@ class TillSaleCreate(TillPriceRequest):
     # Complete from the caller's server basket; it is emptied with the sale.
     basket_id: Optional[uuid.UUID] = None
     basket_version: Optional[int] = Field(default=None, ge=1)
+    note_printed: DocumentNote = None
+    note_internal: DocumentNote = None
 
 
 class TillSaleLocationStock(BaseModel):

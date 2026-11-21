@@ -10,7 +10,12 @@ from app.dependencies.auth import (
     get_invoice_service,
     require_books_mutate,
 )
-from app.schemas.invoice import InvoiceCreate, InvoiceListItem, InvoiceResponse
+from app.schemas.invoice import (
+    InvoiceCreate,
+    InvoiceListItem,
+    InvoiceNoteUpdate,
+    InvoiceResponse,
+)
 from app.schemas.page import Page, PageParams, get_page_params
 from app.services.invoices import InvoiceService
 
@@ -42,6 +47,16 @@ async def get_invoice(
     service: InvoiceService = Depends(get_invoice_service),
 ):
     return await service.get(invoice_id, user_id)
+
+
+@invoices_router.patch("/{invoice_id}", response_model=InvoiceResponse)
+async def update_invoice_note(
+    invoice_id: uuid.UUID,
+    body: InvoiceNoteUpdate,
+    user_id: uuid.UUID = Depends(require_books_mutate),
+    service: InvoiceService = Depends(get_invoice_service),
+):
+    return await service.update_note(invoice_id, body, user_id)
 
 
 @invoices_router.get("/{invoice_id}/pdf", response_model=None)

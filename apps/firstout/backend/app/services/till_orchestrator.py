@@ -352,6 +352,8 @@ class TillOrchestrator:
                 amount_paid=Decimal(0),
                 prices_include_vat=preview.prices_include_vat,
                 on_account=on_account,
+                note_printed=data.note_printed,
+                note_internal=data.note_internal,
                 lines=invoice_line_models,
             )
 

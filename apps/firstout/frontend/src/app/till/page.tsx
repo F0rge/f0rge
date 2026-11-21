@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
   Tag,
+  TextArea,
   TextInput,
   Tile,
 } from "@carbon/react";
@@ -74,6 +75,7 @@ import { localIsoDate, statementDueDate } from "@/lib/till-statement";
 
 import {
   ApiError,
+  INVOICE_NOTE_MAX,
   can,
   canManageCustomerCredit,
   canUseTill,
@@ -350,6 +352,9 @@ function TillWorkspace() {
   const [resumedSale, setResumedSale] = useState(false);
   const [view, setView] = useState(0);
   const [heldNote, setHeldNote] = useState("");
+  // The sale's invoice notes: printed on the invoice, and staff only.
+  const [notePrinted, setNotePrinted] = useState("");
+  const [noteInternal, setNoteInternal] = useState("");
   const [heldNotice, setHeldNotice] = useState<{ title: string; subtitle?: string } | null>(null);
   const [heldFocus, setHeldFocus] = useState("");
   const [resumeDraft, setResumeDraft] = useState<HeldSale | null>(null);
@@ -451,10 +456,12 @@ function TillWorkspace() {
   const currentSnapshot = useMemo<TillCartSnapshot>(() => ({
     locationId, customerId, pickId, linkedPickIds,
     ...(heldNote ? { note: heldNote } : {}),
+    ...(notePrinted ? { notePrinted } : {}),
+    ...(noteInternal ? { noteInternal } : {}),
     lines: cart.map((line) => ({
       skuId: line.sku.id, qty: line.qty, discountPercent: line.discountPercent,
     })),
-  }), [locationId, customerId, pickId, linkedPickIds, heldNote, cart]);
+  }), [locationId, customerId, pickId, linkedPickIds, heldNote, notePrinted, noteInternal, cart]);
 
   const applySnapshot = useCallback((snapshot: TillCartSnapshot, restored: RestoredCart) => {
     setCart(restored.lines);
@@ -464,6 +471,8 @@ function TillWorkspace() {
     setPickId(snapshot.pickId);
     setLinkedPickIds(snapshot.linkedPickIds);
     setHeldNote(snapshot.note ?? "");
+    setNotePrinted(snapshot.notePrinted ?? "");
+    setNoteInternal(snapshot.noteInternal ?? "");
     setCartReady(true);
   }, []);
 
@@ -1089,6 +1098,8 @@ function TillWorkspace() {
     setKitBlocks([]);
     setCreditBlock(null);
     setHeldNote("");
+    setNotePrinted("");
+    setNoteInternal("");
     setHeldNotice(null);
     setBasketNotice(null);
     setHeldFocus("");
@@ -1283,6 +1294,8 @@ function TillWorkspace() {
         price_revision: pricePreview.price_revision,
         tender,
         ...(onStatement ? { due_date: dueDate } : {}),
+        ...(notePrinted.trim() ? { note_printed: notePrinted.trim() } : {}),
+        ...(noteInternal.trim() ? { note_internal: noteInternal.trim() } : {}),
         ...(pickId ? { pick_id: pickId } : {}),
         ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
         ...(creditOverrideActive
@@ -1303,6 +1316,8 @@ function TillWorkspace() {
       setLinkedPickIds({});
       setKitBlocks([]);
       setHeldNote("");
+      setNotePrinted("");
+      setNoteInternal("");
       setHeldNotice(null);
       setBasketNotice(null);
       // The server emptied the basket with the sale.
@@ -2180,6 +2195,27 @@ function TillWorkspace() {
                     <dd>{money(pricePreview?.total_inc_vat)}</dd>
                   </div>
                 </dl>
+
+                <TextArea
+                  id="till-note-printed"
+                  labelText="Note on invoice"
+                  helperText="Printed on the invoice the customer receives."
+                  rows={2}
+                  maxCount={INVOICE_NOTE_MAX}
+                  enableCounter
+                  value={notePrinted}
+                  onChange={(event) => setNotePrinted(event.target.value)}
+                />
+                <TextArea
+                  id="till-note-internal"
+                  labelText="Internal note"
+                  helperText="Staff only. Never printed."
+                  rows={2}
+                  maxCount={INVOICE_NOTE_MAX}
+                  enableCounter
+                  value={noteInternal}
+                  onChange={(event) => setNoteInternal(event.target.value)}
+                />
 
                 {confirmedPicks.length > 0 ? (
                   <Select

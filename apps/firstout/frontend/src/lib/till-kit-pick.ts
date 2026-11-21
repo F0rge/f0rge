@@ -19,6 +19,8 @@ export type TillCartSnapshot = {
   pickId: string;
   linkedPickIds: Record<string, string>;
   note?: string;
+  notePrinted?: string;
+  noteInternal?: string;
   lines: { skuId: string; qty: number; discountPercent: number }[];
 };
 

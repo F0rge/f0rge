@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.invoice import DocumentNote
+
 MAX_HELD_LINES = 100
 MAX_HELD_NOTE_LENGTH = 500
 
@@ -40,6 +42,8 @@ class TillBasketUpdate(BaseModel):
     operation_id: uuid.UUID
     customer_id: Optional[uuid.UUID] = None
     note: Optional[str] = Field(default=None, max_length=MAX_HELD_NOTE_LENGTH)
+    note_printed: DocumentNote = None
+    note_internal: DocumentNote = None
     pick_id: Optional[uuid.UUID] = None
     linked_pick_ids: dict[uuid.UUID, uuid.UUID] = Field(
         default_factory=dict, max_length=MAX_HELD_LINES
@@ -62,6 +66,8 @@ class TillBasket(BaseModel):
     location_id: uuid.UUID
     customer_id: Optional[uuid.UUID]
     note: Optional[str]
+    note_printed: Optional[str] = None
+    note_internal: Optional[str] = None
     pick_id: Optional[uuid.UUID]
     linked_pick_ids: dict[uuid.UUID, uuid.UUID]
     lines: list[HeldSaleLineCreate]
@@ -85,6 +91,8 @@ class HeldSaleCreate(BaseModel):
         default_factory=dict, max_length=MAX_HELD_LINES
     )
     note: Optional[str] = Field(default=None, max_length=MAX_HELD_NOTE_LENGTH)
+    note_printed: DocumentNote = None
+    note_internal: DocumentNote = None
     # When set, the caller's server basket is emptied in the same transaction.
     basket_id: Optional[uuid.UUID] = None
 
@@ -167,6 +175,8 @@ class HeldSale(BaseModel):
     expires_at: datetime.datetime
     version: int
     note: Optional[str]
+    note_printed: Optional[str] = None
+    note_internal: Optional[str] = None
     estimated_total_inc_vat: Optional[Decimal]
     pick_id: Optional[uuid.UUID]
     linked_pick_ids: dict[uuid.UUID, uuid.UUID]

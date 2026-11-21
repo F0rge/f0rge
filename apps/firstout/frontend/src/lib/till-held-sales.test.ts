@@ -28,6 +28,14 @@ describe("held sale resume recovery", () => {
     });
   });
 
+  it("keeps the sale's printed and internal notes through a hold", () => {
+    const destination = cartSnapshot({ ...held, note_printed: "Deliver after 10:00", note_internal: "Staff only" });
+    expect(heldSaleRequest(destination)).toMatchObject({
+      note_printed: "Deliver after 10:00", note_internal: "Staff only",
+    });
+    expect(heldSaleRequest(cartSnapshot(held))).not.toHaveProperty("note_printed");
+  });
+
   it("drops links from removed products without removing links from retained kits", () => {
     const cart = {
       ...cartSnapshot(held),

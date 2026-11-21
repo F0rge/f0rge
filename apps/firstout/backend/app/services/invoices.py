@@ -19,6 +19,7 @@ from app.schemas.invoice import (
     InvoiceCreate,
     InvoiceLineResponse,
     InvoiceListItem,
+    InvoiceNoteUpdate,
     InvoiceResponse,
 )
 from app.schemas.page import Page, PageParams
@@ -81,6 +82,18 @@ class InvoiceService:
         if invoice is None:
             raise NotFoundError("Invoice not found")
         return await self._to_response(invoice, viewer_user_id)
+
+    async def update_note(
+        self, invoice_id: uuid.UUID, data: InvoiceNoteUpdate, user_id: uuid.UUID
+    ) -> InvoiceResponse:
+        async with unit_of_work(self.db):
+            invoice = await self.crud.get_by_id(invoice_id, for_update=True)
+            if invoice is None:
+                raise NotFoundError("Invoice not found")
+            assert_operational_document(invoice)
+            invoice.note_internal = data.note_internal
+            await self.crud.commit_refresh(invoice)
+        return await self.get(invoice_id, user_id)
 
     async def create(
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
@@ -157,6 +170,8 @@ class InvoiceService:
                 total_inc_vat=total_inc,
                 amount_paid=Decimal(0),
                 prices_include_vat=shows_prices_including_vat(customer),
+                note_printed=data.note_printed,
+                note_internal=data.note_internal,
                 lines=line_models,
             )
             await self.crud.add_and_flush(invoice)
@@ -232,6 +247,8 @@ class InvoiceService:
             total_inc_vat=f"{invoice.total_inc_vat:.2f}",
             seller=await SettingsService(self.db).build_seller_details(),
             unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
+            # Only the printed note; the internal note never reaches the document.
+            note=invoice.note_printed,
         )
         return pdf_bytes, f"{invoice.invoice_number}.pdf", invoice
 
@@ -288,6 +305,8 @@ class InvoiceService:
             balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
             on_account=invoice.on_account,
+            note_printed=invoice.note_printed,
+            note_internal=invoice.note_internal,
             prices_include_vat=invoice.prices_include_vat,
             lines=[
                 InvoiceLineResponse(

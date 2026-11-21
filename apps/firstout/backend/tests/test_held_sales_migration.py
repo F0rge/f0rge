@@ -40,7 +40,8 @@ async def test_migrated_held_sales_respect_rls_and_serialize_concurrent_consumpt
         async with owner.begin() as conn:
             await conn.execute(sa.text("ALTER TABLE roles ENABLE ROW LEVEL SECURITY"))
             await conn.execute(sa.text("ALTER TABLE roles FORCE ROW LEVEL SECURITY"))
-        migrate(url, "101_stock_reservation_changes")
+        # Head, not the held-sales revision: the service below runs against today's models.
+        migrate(url, "head")
         async with owner.begin() as conn:
             protected = (
                 await conn.execute(

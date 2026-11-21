@@ -191,6 +191,7 @@ update_account
 update_adjustment_line
 update_bank_rule
 update_customer
+update_invoice_note
 update_location
 update_location_bin
 update_pending_purchase_order

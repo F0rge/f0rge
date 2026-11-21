@@ -68,6 +68,10 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     on_account: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Printed on the tax invoice the customer receives.
+    note_printed: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Staff only; never printed.
+    note_internal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
         JSONB(none_as_null=True), nullable=True
     )

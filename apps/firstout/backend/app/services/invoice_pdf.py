@@ -78,6 +78,28 @@ def draw_seller_logo(
         return
 
 
+def _draw_note(pdf: canvas.Canvas, note: str, y: float, width: float, height: float) -> float:
+    """The document's printed note, wrapped to the page and continued on new pages."""
+    from reportlab.lib.utils import simpleSplit
+
+    if y < 35 * mm:
+        pdf.showPage()
+        y = height - 25 * mm
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(25 * mm, y, "Note")
+    y -= 6 * mm
+    pdf.setFont("Helvetica", 9)
+    for paragraph in note.splitlines() or [""]:
+        for line in simpleSplit(paragraph, "Helvetica", 9, width - 50 * mm) or [""]:
+            if y < 25 * mm:
+                pdf.showPage()
+                y = height - 25 * mm
+                pdf.setFont("Helvetica", 9)
+            pdf.drawString(25 * mm, y, line)
+            y -= 5 * mm
+    return y
+
+
 def build_tax_invoice_pdf(
     invoice_number: str,
     issue_date: str,
@@ -95,6 +117,7 @@ def build_tax_invoice_pdf(
     due_date: Optional[str] = None,
     number_label: str = "Invoice No",
     unit_basis_note: Optional[str] = None,
+    note: Optional[str] = None,
 ) -> bytes:
     """Each line: description, qty, unit_ex_vat, ex_vat, vat_amount, inc_vat."""
     from io import BytesIO
@@ -203,6 +226,9 @@ def build_tax_invoice_pdf(
     )
     y -= 6 * mm
     pdf.drawString(110 * mm, y, f"Total inc-VAT: {total_inc_vat}")
+
+    if note:
+        y = _draw_note(pdf, note, y - 12 * mm, width, height)
 
     pdf.save()
     return buffer.getvalue()

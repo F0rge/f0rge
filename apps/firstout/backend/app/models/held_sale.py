@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -39,6 +40,9 @@ class HeldSale(TenantOwnedMixin, UUIDPkMixin, Base):
     )
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
     note: Mapped[Optional[str]] = mapped_column(String(500))
+    # The sale's invoice notes, kept with the cart until the sale is completed.
+    note_printed: Mapped[Optional[str]] = mapped_column(Text)
+    note_internal: Mapped[Optional[str]] = mapped_column(Text)
     estimated_total_inc_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 2))
     pick_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     # Selections and display snapshots survive later catalogue/customer changes.
