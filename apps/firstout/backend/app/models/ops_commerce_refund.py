@@ -91,7 +91,7 @@ class OpsCommerceRefund(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
 
 
 class OpsCommerceRefundEvent(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
-    """Append-only, signature-verified Peach refund observation, including out-of-band events."""
+    """Append-only, verified payment-provider refund observation, including out-of-band events."""
 
     __tablename__ = "ops_commerce_refund_events"
 

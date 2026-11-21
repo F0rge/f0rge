@@ -20,7 +20,7 @@ The decisions were reconstructed from the 7 November 2026 architecture conversat
 
 New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Follow [P-005](governance.md#p-005) for Leo's review and automatic squash merging; a reviewed merge releases the affected Apps ([P-006](governance.md#p-006)). Every PR includes the ADR Check for its touched domains required by P-003, written with the [`pr` skill](../../.agents/skills/pr/SKILL.md). The table below is the decision index, not a compliance assessment. ADR compliance is judged in review, not by CI ([P-004](governance.md#p-004)).
 
-Apps already in the tree — Marrow, Firstout, dk, buycycle, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, Turso, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
+Apps already in the tree — Marrow, Firstout, dk, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
 
 `C-001` (generated Zod from a Rust contract into TanStack Form) and `C-002` (Vitest, Storybook browser tests, Playwright journeys) stay conditional.
 
@@ -56,7 +56,6 @@ Every pull request into `main` includes an ADR Check for the domains it touches 
 | P-007 | Repository agent profiles | Accepted | Codex and Claude Code are the supported repository coding harnesses, with one canonical source generating identical role profiles and skill links. | [P-007](governance.md#p-007) |
 | P-008 | Brief and mockup before substantial work | Accepted | Before an app or substantial feature: agree a short brief, testable outcomes and clickable mockup with Leo. | [P-008](product.md#p-008) |
 | P-009 | Design all user states | Accepted | Design and test loading, empty, error, denied, success and edit-conflict states. | [P-009](product.md#p-009) |
-| P-010 | Buycycle first, pilot later | Accepted | Implement Buycycle first; holiday-explorer pilot follows later. No off-platform deployment. | [P-010](product.md#p-010) |
 | P-011 | Rust backends | Accepted | Rust for new backends; transition existing Python/FastAPI backends gradually. | [P-011](backend.md#p-011) |
 | P-012 | Actix Web HTTP framework | Accepted | Actix Web is the default Rust HTTP framework, not Axum. | [P-012](backend.md#p-012) |
 | P-013 | Diesel PostgreSQL ORM | Accepted | Diesel is the PostgreSQL ORM; asynchronous integration is the planned direction. | [P-013](backend.md#p-013) |

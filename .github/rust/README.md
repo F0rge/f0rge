@@ -1,10 +1,8 @@
 # Rust projects in Nx
 
-This is shared build/test groundwork for the accepted Rust stack. Buycycle now
-has a registered Actix/Diesel backend and shared verified-identity/error crates.
-Its existing Pi service remains unchanged until an approved cutover. P-010
-sequences the authorized Buycycle migration first and the holiday-explorer pilot
-later; temporary crates or green checks do not prove an app migration complete.
+This is shared build/test groundwork for the accepted Rust stack. Today it
+covers the shared verified-identity and error crates under `libs/rust/`; green
+checks do not prove an app migration complete.
 
 ## Run the checks
 
@@ -21,9 +19,9 @@ node .github/rust/guard.mjs
 
 The uncached tooling target tests registration and runs real Cargo/Nx commands
 against disposable, dependency-free fixtures. Failures are intentional negative
-test cases, not production changes. Fixtures never scrape Buycycle or use its
-data. The source guard lives in [guard.mjs](guard.mjs), and all Rust target
-commands use [run-target.mjs](run-target.mjs).
+test cases, not production changes. Fixtures use no real app data. The source
+guard lives in [guard.mjs](guard.mjs), and all Rust target commands use
+[run-target.mjs](run-target.mjs).
 
 CI's Rust job runs only when a Rust project is affected. It validates all
 registered Rust projects with the guard, then runs one `nx affected` line. This
@@ -38,6 +36,8 @@ First resolve the exact paths through the agent manifest. A newly classified
 Cargo manifest does not classify every Rust source file or approve a new app.
 App crates still follow the accepted Actix/Diesel/PostgreSQL architecture;
 shared crates contain small plumbing, with business rules/models kept app-local.
+On toolchain 1.95, a crate using async Diesel needs `CARGO_INCREMENTAL=0` in the
+CI Rust job; incremental builds hit an internal compiler error on its closures.
 
 1. Put the package under `apps/` or `libs/`, with a sibling `project.json`, a
    unique Nx name, `platform:rust` and its existing `scope:` tag. Both tags and
@@ -62,7 +62,7 @@ Registration example only (replace the crate path, name and scope):
 ```json
 {
   "name": "example-api",
-  "tags": ["platform:rust", "scope:buycycle"],
+  "tags": ["platform:rust", "scope:example"],
   "implicitDependencies": [],
   "targets": {
     "format-check": {
@@ -122,7 +122,7 @@ It does not prove Actix/Diesel adoption, database isolation, generated API
 contracts, Primer UI, ARM64 runtime correctness or release compliance. Gate changes still require independent review. No production artifact is
 published or promoted, and no provider credential is used.
 
-Before app adoption, complete its approved brief and the current P-010 sequencing.
+Before app adoption, complete its approved brief.
 Every PR body uses the [`pr` skill](../../.agents/skills/pr/SKILL.md), including
 its ADR Check for the touched domains, with actual gaps. Release authorization follows P-006;
 review and automatic squash merging follow P-005.

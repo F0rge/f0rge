@@ -26,7 +26,7 @@ on:
       app:
         type: choice
         required: true
-        options: [buycycle, daskasas, dk, envmon, firstout, marrow]
+        options: [daskasas, dk, envmon, firstout, marrow]
       commit:
         description: Full commit SHA that CI built on main
         type: string

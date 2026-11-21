@@ -11,7 +11,7 @@ Policy status `Accepted` means the decision was agreed. It does not mean the sof
 - **Category:** Data
 - **Decision:** PostgreSQL is the default database for new apps.
 - **Proposed enforcement (not installed):** App template, service configuration schema and integration harness select PostgreSQL; test fixtures use its actual engine.
-- **Gate and limit:** Static + integration: configured engine and database test report. Existing Turso/other stores are migration inventory items, not silently changed.
+- **Gate and limit:** Static + integration: configured engine and database test report. Existing SQLite/other stores are migration inventory items, not silently changed.
 - **Static evidence at `f155a2ba` (not normative, not a live check):** No template check that a new app selects PostgreSQL. Marrow and Firstout tests can start Postgres via testcontainers.
 - **Implementation:** Partial static evidence only. This record does not claim the decision is built.
 - **Assessment label:** partial (read-only assessment, not a gate).

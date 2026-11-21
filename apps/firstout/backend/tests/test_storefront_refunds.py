@@ -865,7 +865,7 @@ async def test_cancelled_order_keeps_refund_history_readable_and_late_event_does
         canonical="late-webhook-same-refund-754",
     )
     late_event["event_source"] = "webhook"
-    late_event["webhook_id"] = "peach-refund-webhook-late-754"
+    late_event["webhook_id"] = "provider-refund-webhook-late-754"
     late = await owner_client.post(
         "/api/v1/ops-commerce/v1/refund-events",
         json=late_event,

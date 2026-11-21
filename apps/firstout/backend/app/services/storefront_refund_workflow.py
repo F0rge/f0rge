@@ -54,7 +54,7 @@ DISPATCHABLE_STATES = ("requested", "dispatching")
 
 
 class StorefrontRefundWorkflowService:
-    """Own staff refund commands, verified Peach outcomes, and Firstout convergence."""
+    """Own staff refund commands, verified payment-provider outcomes, and Firstout convergence."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -356,9 +356,9 @@ class StorefrontRefundWorkflowService:
         company_id: uuid.UUID,
     ) -> StorefrontRefundProviderEventResponse:
         if not event.signature_verified:
-            raise ValidationError("Peach refund event has not been signature verified")
+            raise ValidationError("Payment provider refund event has not been verified")
         if event.event_source == "webhook" and not event.webhook_id:
-            raise ValidationError("Signed Peach refund webhook ID is required")
+            raise ValidationError("Payment provider refund webhook ID is required")
         event_key = (
             f"webhook:{event.webhook_id}"
             if event.event_source == "webhook"
@@ -369,7 +369,9 @@ class StorefrontRefundWorkflowService:
         )
         if existing_event is not None:
             if existing_event.company_id != company_id:
-                raise ConflictError("Peach refund event ID is already linked to another company")
+                raise ConflictError(
+                    "Payment provider refund event ID is already linked to another company"
+                )
             return await self._event_response(existing_event, duplicate=True)
 
         requested_refund = (
@@ -379,7 +381,7 @@ class StorefrontRefundWorkflowService:
         )
         provider_refund = await self._refund_by_provider_id(event.provider_refund_id)
         if provider_refund is not None and provider_refund.company_id != company_id:
-            raise ConflictError("Peach refund ID is already linked to another company")
+            raise ConflictError("Payment provider refund ID is already linked to another company")
         handoff_id = (
             requested_refund.handoff_id
             if requested_refund is not None
@@ -404,14 +406,16 @@ class StorefrontRefundWorkflowService:
             if existing_event is not None:
                 if existing_event.company_id != company_id:
                     raise ConflictError(
-                        "Peach refund event ID is already linked to another company"
+                        "Payment provider refund event ID is already linked to another company"
                     )
                 return await self._event_response(existing_event, duplicate=True)
             provider_refund = await self._refund_by_provider_id(
                 event.provider_refund_id, for_update=True
             )
             if provider_refund is not None and provider_refund.company_id != company_id:
-                raise ConflictError("Peach refund ID is already linked to another company")
+                raise ConflictError(
+                    "Payment provider refund ID is already linked to another company"
+                )
             order = (
                 await self._sales_order(handoff.sales_order_id, for_update=True)
                 if handoff is not None
@@ -891,7 +895,9 @@ class StorefrontRefundWorkflowService:
     ) -> Optional[OpsCommerceRefundEvent]:
         existing = await self._find_event(event_key, webhook_id)
         if existing is not None and existing.canonical_sha256 != canonical_sha256:
-            raise ConflictError("Peach reused a refund event ID with different transaction data")
+            raise ConflictError(
+                "Payment provider reused a refund event ID with different transaction data"
+            )
         return existing
 
     @staticmethod

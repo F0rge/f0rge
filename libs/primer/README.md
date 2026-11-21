@@ -34,8 +34,8 @@ The catalogue covers actions, loading/denied/conflict/success states, validation
 and a real shared TanStack form. Storybook is development-only and not publicly
 published by these commands. Three pure public-error/validation regressions pass;
 the built catalogue's form was also tested in Chromium for labels, submit and
-keyboard focus. Buycycle's production-build browser tests exercise the actual
-shared adapter through saving and conflict states.
+keyboard focus. No app consumes this library yet, so no production-build browser
+test exercises the shared adapter; the first consuming app must add that coverage.
 
 This uses test tools for this implementation; it does not turn conditional ADRs
 C-001 or C-002 into a repository-wide selection. No generated Zod adoption is

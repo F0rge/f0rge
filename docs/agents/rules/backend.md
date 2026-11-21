@@ -4,7 +4,7 @@
 
 These rules apply to legacy Marrow Python. They are not the new-app backend standard (Rust, Actix, Diesel, PostgreSQL). Current Marrow config files use a Railway `preDeployCommand`. That configuration is not Leo's approval to migrate or deploy.
 
-Target **Python 3.11**. Package manager: **`uv`** (never pip). Lint/format: **`ruff`**. Shared libs stay valid on 3.10 (environment-monitor, buycycle, and airflow).
+Target **Python 3.11**. Package manager: **`uv`** (never pip). Lint/format: **`ruff`**. Shared libs stay valid on 3.10 (environment-monitor and airflow).
 
 ## Architecture: Router → Service/Orchestrator → CRUD
 

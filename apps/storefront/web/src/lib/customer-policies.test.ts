@@ -26,7 +26,7 @@ const reviewed: CustomerPolicyDocument = {
   return_policy: "Owner return text. Standard made to order pieces keep the confirmed lead time. Bespoke commissions use a separate agreement.",
   privacy: "We use contact details to fulfil the order and to provide support.",
   data_collected: "Name, email, phone, and delivery address.",
-  processors: "Clerk, PostHog, Peach, SendGrid, and Railway.",
+  processors: "Clerk, PostHog, Paystack, SendGrid, and Railway.",
   retention: "Order records follow tax law.",
   information_officer_name: "Naledi Dlamini",
   information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
@@ -56,7 +56,7 @@ describe("customer policies", () => {
     expect(textOf(page)).toContain("POPIA");
     expect(textOf(page)).toContain("Clerk");
     expect(textOf(page)).toContain("PostHog");
-    expect(textOf(page)).toContain("Peach");
+    expect(textOf(page)).toContain("Paystack");
     expect(textOf(page)).toContain("SendGrid");
     expect(textOf(page)).toContain("Railway");
     expect(textOf(page)).not.toContain("@");
@@ -79,7 +79,7 @@ describe("customer policies", () => {
     expect(textOf(returns)).toContain("12 months");
     expect(textOf(returns)).toContain("6 months");
     expect(textOf(refunds)).toContain("10 working days");
-    expect(textOf(refunds)).toContain("Peach Payments");
+    expect(textOf(refunds)).toContain("Paystack");
     expect(sectionText(terms, "Returns and refunds")).not.toContain("[PLACEHOLDER:");
     expect(sectionText(terms, "Returns and refunds")).toContain("made-to-order");
     expect(sectionText(terms, "Returns and refunds")).toContain("bespoke");
