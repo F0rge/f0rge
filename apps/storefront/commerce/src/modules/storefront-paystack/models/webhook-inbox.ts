@@ -1,21 +1,21 @@
 import { model } from "@medusajs/framework/utils";
 
-const PeachWebhookInbox = model.define("storefront_peach_webhook_inbox", {
+/** Normalized facts read from Paystack's API, triggered by a signed webhook, a status poll, or a refund response. */
+const PaystackWebhookInbox = model.define("storefront_paystack_webhook_inbox", {
   id: model.id({ prefix: "spwh" }).primaryKey(),
   event_key: model.text().unique(),
   source: model.text(),
-  webhook_id: model.text().unique().nullable(),
-  checkout_id: model.text(),
-  merchant_reference: model.text(),
+  kind: model.text(),
+  reference: model.text(),
+  transaction_id: model.text().nullable(),
+  provider_refund_id: model.text().nullable(),
+  refund_reference: model.text().nullable(),
+  refund_request_id: model.text().nullable(),
   amount_minor: model.bigNumber(),
   currency_code: model.text(),
-  payment_type: model.text(),
-  result_code: model.text(),
-  transaction_id: model.text().nullable(),
-  referenced_transaction_id: model.text().nullable(),
-  refund_request_id: model.text().nullable(),
-  event_timestamp: model.text(),
+  provider_status: model.text(),
   result_state: model.text(),
+  event_timestamp: model.text(),
   raw_sha256: model.text(),
   canonical_sha256: model.text(),
   signature_sha256: model.text().nullable(),
@@ -28,4 +28,4 @@ const PeachWebhookInbox = model.define("storefront_peach_webhook_inbox", {
   processed_at: model.dateTime().nullable(),
 });
 
-export default PeachWebhookInbox;
+export default PaystackWebhookInbox;

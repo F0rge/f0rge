@@ -129,16 +129,16 @@ describe("storefront BFF cart ownership", () => {
   });
 });
 
-describe("Peach webhook route hardening", () => {
-  it("blocks plain and encoded native Peach POSTs but passes other providers", async () => {
+describe("Paystack webhook route hardening", () => {
+  it("blocks plain and encoded native Paystack POSTs but passes other providers", async () => {
     const routes = storefrontMiddlewares.routes ?? [];
     const nativeRoute = routes.find((route) => route.matcher === "/hooks/payment/*");
     expect(nativeRoute?.methods).toEqual(["POST"]);
     expect(nativeRoute?.middlewares).toHaveLength(1);
     const handler = nativeRoute?.middlewares?.[0];
-    if (!handler) throw new Error("Native Peach webhook blocker is not registered");
+    if (!handler) throw new Error("Native Paystack webhook blocker is not registered");
 
-    for (const path of ["/hooks/payment/peach_sandbox", "/hooks/payment/peach%5Fsandbox", "/hooks/payment/Peach_Sandbox"]) {
+    for (const path of ["/hooks/payment/paystack_checkout", "/hooks/payment/paystack%5Fcheckout", "/hooks/payment/Paystack_Checkout"]) {
       const call = setup(path, null);
       await handler(call.req, call.response, call.next);
       expect(call.rawResponse.statusCode).toBe(404);
@@ -150,12 +150,12 @@ describe("Peach webhook route hardening", () => {
     expect(otherProvider.next).toHaveBeenCalledTimes(1);
     expect(otherProvider.rawResponse.statusCode).toBeUndefined();
 
-    const malformed = setup("/hooks/payment/peach%5sandbox", null);
+    const malformed = setup("/hooks/payment/paystack%5zcheckout", null);
     await handler(malformed.req, malformed.response, malformed.next);
     expect(malformed.rawResponse.statusCode).toBe(404);
     expect(malformed.next).not.toHaveBeenCalled();
 
-    const customRoute = routes.find((route) => route.matcher === "/hooks/peach");
+    const customRoute = routes.find((route) => route.matcher === "/hooks/paystack");
     expect(customRoute?.methods).toEqual(["POST"]);
     expect(customRoute?.bodyParser).toMatchObject({ preserveRawBody: true, sizeLimit: "64kb" });
     expect(customRoute?.middlewares).not.toContain(handler);

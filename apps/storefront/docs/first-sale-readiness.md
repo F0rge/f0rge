@@ -2,7 +2,7 @@
 
 This check records whether a private DasKasas rehearsal is ready for an owner decision. It does not turn public selling on, does not spend money, and does not invent a catalogue, policy text, or provider credential.
 
-`assessFirstSaleReadiness` in `apps/storefront/commerce/src/first-sale-readiness.ts` reads a recorded evidence file. With no file, the result is `decision: "no_go"`, `public_selling: false`, `public_selling_changed: false`, and `release_gate: "open"`. A passing file can report `decision: "go"` and `release_gate: "closed"`. That report still leaves `public_selling` false. Closing the evidence gate does not change Railway, Peach, Clerk, indexing, or the payment simulator.
+`assessFirstSaleReadiness` in `apps/storefront/commerce/src/first-sale-readiness.ts` reads a recorded evidence file. With no file, the result is `decision: "no_go"`, `public_selling: false`, `public_selling_changed: false`, and `release_gate: "open"`. A passing file can report `decision: "go"` and `release_gate: "closed"`. That report still leaves `public_selling` false. Closing the evidence gate does not change Railway, Paystack, Clerk, indexing, or the payment simulator.
 
 The fictional Northwind pack inside the unit test only proves the checker. Do not pass that fixture to the script.
 
@@ -40,4 +40,4 @@ If this check fails, leave DasKasas private and non-indexable, and do not start 
 
 ## Still missing before a hosted rehearsal
 
-No owner catalogue pack, reviewed policies, provider credentials, callback configuration, sender records, named operator handover, or measured hosted cost is in this repository. The 30-minute private capacity run was not executed here. Hosted guest and Clerk purchases, Peach, and Firstout financial results were not exercised against a live stack. Public selling stays off.
+No owner catalogue pack, reviewed policies, provider credentials, callback configuration, sender records, named operator handover, or measured hosted cost is in this repository. The 30-minute private capacity run was not executed here. Hosted guest and Clerk purchases, Paystack, and Firstout financial results were not exercised against a live stack. Public selling stays off.

@@ -61,15 +61,17 @@ VAT-inclusive ZAR prices and calculates delivery from server-owned zone/rate
 configuration. No launch delivery rates are checked in. The included payment
 provider is a deterministic local test simulator; no real payment is taken.
 The paid-order handoff to Firstout is implemented, but the dedicated Firstout
-Ops credential and live hosted round-trip are not yet verified. Peach remains
-disabled until its sandbox credentials and signed webhook URL are configured.
+Ops credential and live hosted round-trip are not yet verified.
 
-Peach Classic Hosted Checkout V2 is implemented as an opt-in sandbox provider;
-it stays disabled until its server-side credentials and signed webhook URL are
-configured. The callback route needs a narrowly reachable commerce ingress.
-Sandbox credentials are not available yet, so real provider interoperability
-and the Peach purchase walkthrough remain unverified. See
-[`docs/749-peach-hosted-checkout.md`](docs/749-peach-hosted-checkout.md).
+Card payments and refunds use Paystack hosted checkout through DasKasas's own
+Medusa provider. It stays disabled until `PAYSTACK_SECRET_KEY` and
+`PAYSTACK_WEBHOOK_SECRET` are set; a live key also needs
+`PAYSTACK_LIVE_ENABLED=true`. The `/hooks/paystack` webhook needs a narrowly
+reachable commerce ingress. No Paystack account exists yet, so the integration
+is tested against the documented API with mocked HTTP and the test-mode
+purchase walkthrough remains outstanding. See
+[`docs/paystack-checkout.md`](docs/paystack-checkout.md). The earlier Peach
+integration never went live and has been removed.
 
 For local development, use independent Firstout and Medusa PostgreSQL databases
 and a Redis instance. Copy each `.env.example` to a local `.env`, then set a

@@ -35,7 +35,7 @@ const ABSENT: LaunchPackFinding[] = [
   {
     section: "provisioning",
     code: "provisioning_incomplete",
-    detail: "Secure provisioning checklist for Clerk, Peach, email, PostHog, Railway, and the temporary hostname is incomplete.",
+    detail: "Secure provisioning checklist for Clerk, Paystack, email, PostHog, Railway, and the temporary hostname is incomplete.",
   },
 ];
 
@@ -231,7 +231,7 @@ function distinguishesGoods(value: unknown): boolean {
   return mentions(value, "made to order") && mentions(value, "bespoke");
 }
 
-const PROVISIONING_CHANNELS = ["clerk", "peach", "email", "posthog", "railway", "temporary_hostname"];
+const PROVISIONING_CHANNELS = ["clerk", "paystack", "email", "posthog", "railway", "temporary_hostname"];
 const SECRET_KEY = /password|secret|token|api[_-]?key|private[_-]?key|credential|authorization/i;
 const SECRET_VALUE = /sk_(?:live|test)_|pk_(?:live|test)_|-----BEGIN |whsec_|Bearer /;
 const CUSTOMER_KEY = /^(customers|customer_export|orders)$/;

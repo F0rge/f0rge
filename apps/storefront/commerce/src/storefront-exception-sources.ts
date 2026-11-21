@@ -3,8 +3,8 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import type { Knex } from "knex";
 import { availabilityMaxAgeMs } from "./checkout-holds";
 import { readCapacityState } from "./made-to-order-capacity";
-import { PEACH_ATTEMPTS_TABLE, PEACH_INBOX_TABLE, PEACH_REFUNDS_TABLE } from "./peach-payment-store";
-import { peachPaymentEnabled } from "./peach-payment-config";
+import { PAYSTACK_ATTEMPTS_TABLE, PAYSTACK_INBOX_TABLE, PAYSTACK_REFUNDS_TABLE } from "./paystack-payment-store";
+import { paystackPaymentEnabled } from "./paystack-payment-config";
 import { currentOpsCheckoutHealth, HANDOFF_AGED_THRESHOLD_MS, type StorefrontExceptionKind } from "./storefront-commerce-exceptions";
 
 export const EXCEPTION_ACTIONS: Record<StorefrontExceptionKind, string> = {
@@ -49,15 +49,15 @@ async function graphPages(container: MedusaContainer, entity: string, fields: st
   }
 }
 
-export async function peachSourceRows(db: Knex): Promise<{
+export async function paystackSourceRows(db: Knex): Promise<{
   attempts: Record<string, unknown>[]; inbox: Record<string, unknown>[]; refunds: Record<string, unknown>[];
 }> {
-  const tables = [PEACH_ATTEMPTS_TABLE, PEACH_INBOX_TABLE, PEACH_REFUNDS_TABLE];
+  const tables = [PAYSTACK_ATTEMPTS_TABLE, PAYSTACK_INBOX_TABLE, PAYSTACK_REFUNDS_TABLE];
   const presence = await Promise.all(tables.map((table) => db.schema.hasTable(table)));
   // Disabled credentials cannot erase durable money failures. Only a provider
   // which never installed any tables can legitimately have no local sources.
-  if (presence.every((exists) => !exists) && !peachPaymentEnabled()) return { attempts: [], inbox: [], refunds: [] };
-  if (presence.some((exists) => !exists)) throw new Error("exception_peach_schema_incomplete");
+  if (presence.every((exists) => !exists) && !paystackPaymentEnabled()) return { attempts: [], inbox: [], refunds: [] };
+  if (presence.some((exists) => !exists)) throw new Error("exception_paystack_schema_incomplete");
   const rows: Record<string, unknown>[][] = [];
   for (const table of tables) {
     const result: Record<string, unknown>[] = [];
@@ -164,14 +164,14 @@ export async function collectStorefrontExceptionSources(container: MedusaContain
       { status: "terminal", provider_verified: true, blocks_checkout: true });
   }
   const db = container.resolve<Knex>(ContainerRegistrationKeys.PG_CONNECTION);
-  const peach = await peachSourceRows(db);
-  const attempts = new Map(peach.attempts.map((row) => [row.merchant_reference, row]));
+  const paystack = await paystackSourceRows(db);
+  const attempts = new Map(paystack.attempts.map((row) => [row.reference, row]));
   const money = (row: Record<string, unknown>): Partial<ExceptionObservation> => {
     const amount = Number(row.amount_minor);
     return { ...(Number.isSafeInteger(amount) && amount > 0 ? { amount_minor: amount } : {}),
-      ...(typeof row.merchant_reference === "string" ? { payment_reference: row.merchant_reference.slice(0, 128) } : {}) };
+      ...(typeof row.reference === "string" ? { payment_reference: row.reference.slice(0, 128) } : {}) };
   };
-  for (const row of peach.attempts) {
+  for (const row of paystack.attempts) {
     if (row.status === "captured" && (!row.captured_order_id || !orderIds.has(row.captured_order_id))) {
       add("missing_operational_paid_order", String(row.id), "Verified external payment has no surviving native order; original payment and checkout binding are retained.", row.created_at,
         { status: "terminal", provider_verified: true, blocks_checkout: true, ...money(row) });
@@ -181,19 +181,26 @@ export async function collectStorefrontExceptionSources(container: MedusaContain
         { status: "aged", blocks_checkout: true, ...money(row) });
     }
   }
-  for (const row of peach.inbox) {
-    const attempt = attempts.get(row.merchant_reference);
+  for (const row of paystack.inbox) {
+    const attempt = attempts.get(row.reference);
     if (row.status === "paid_exception" && (!attempt?.captured_order_id || !orderIds.has(attempt.captured_order_id))) {
       if (attempt?.status !== "captured") add("missing_operational_paid_order", String(row.id), "Verified paid callback needs recovery; its original binding may be unavailable.", row.created_at,
         { status: "terminal", provider_verified: true, blocks_checkout: true, ...money(row) });
     }
-    if (row.payment_type === "RF" && ["needs_review", "retry"].includes(String(row.status))) {
-      add("refund_mismatch", String(row.id), "Verified refund callback has not converged into operational and native refund state.", row.created_at,
-        { status: "terminal", provider_verified: row.source !== "webhook" || !!row.signature_sha256, ...money(row) });
+    if (row.kind === "charge" && row.status === "needs_review") {
+      add("unknown_payment", String(row.id), "Paystack verified a charge whose amount or currency differs from the stored attempt; no order was created. Reconcile with Paystack.", row.created_at,
+        { status: "terminal", provider_verified: true, blocks_checkout: true, ...money(row) });
+    }
+    if (row.kind === "refund" && ["needs_review", "retry"].includes(String(row.status))) {
+      add("refund_mismatch", String(row.id), "Verified Paystack refund has not converged into operational and native refund state.", row.created_at,
+        { status: "terminal", provider_verified: true, ...money(row) });
     }
   }
-  for (const row of peach.refunds) {
-    if (["unknown", "needs_review", "verified", "recording_medusa_refund"].includes(String(row.status)) ||
+  for (const row of paystack.refunds) {
+    if (row.status === "needs_attention") {
+      add("refund_mismatch", String(row.request_id), "Paystack needs the customer's bank details to return this refund. A staff member must complete it in the Paystack dashboard.", row.created_at,
+        { status: "terminal", provider_verified: true, ...money(row) });
+    } else if (["unknown", "needs_review", "verified", "recording_medusa_refund"].includes(String(row.status)) ||
         (row.status === "succeeded" && (!row.medusa_refund_id || row.firstout_status !== "succeeded"))) {
       add("refund_mismatch", String(row.request_id), "Durable refund outcome has not converged into both operations and native money state.", row.created_at,
         { status: "terminal", provider_verified: !!row.canonical_sha256 && !!row.provider_refund_id, ...money(row) });

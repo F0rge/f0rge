@@ -14,7 +14,7 @@ No owner pack was supplied on 2026-10-05. Assessing the absent pack returns
 | Catalogue | `catalogue_not_approved` | An owner-approved set of 30–80 sellable variants. Each needs a durable SKU, product group, option combination, VAT-inclusive ZAR price, dimensions, material, care, useful copy, at least three licensed photos of that finish, and an explicit wrong-finish review. |
 | Availability and fulfilment | `availability_unconfirmed` | Finite physical stock or a finite, unexpired made-to-order allowance with a confirmed lead-time range; Gauteng zones and VAT-inclusive rates; collection location and instructions; recorded approval of the single mixed-cart promise (slowest line, no split shipment). |
 | Policies and skin | `policies_unreviewed` | Reviewed delivery, terms, separate refund and return policies, and privacy content (information collected, operators, retention); Information Officer and PAIA baseline; refund and return text that distinguishes standard made-to-order from bespoke goods; one final DasKasas skin. |
-| Provisioning | `provisioning_incomplete` | A checklist for Clerk, Peach, email, PostHog, Railway, and the temporary hostname. Each entry identifies whether access is authorized, whether test and live are separated, and what onboarding remains. No secret values and no customer export. |
+| Provisioning | `provisioning_incomplete` | A checklist for Clerk, Paystack, email, PostHog, Railway, and the temporary hostname. Each entry identifies whether access is authorized, whether test and live are separated, and what onboarding remains. No secret values and no customer export. |
 
 The ten DasKasas skins remain alternatives. None is selected for launch:
 Oxblood / citron, Ultramarine / shell, Forest / bone, Terracotta / chalk,
@@ -29,7 +29,7 @@ API keys, tokens, or customer exports into the pack, this file, or the issue.
 | Channel | Authorized access | Test and live separated | Remaining onboarding |
 | --- | --- | --- | --- |
 | Clerk | not recorded | not recorded | Owner must grant passwordless customer access and keep test and live apps apart. |
-| Peach | not recorded | not recorded | Owner must grant Hosted Checkout access. Test payments stay off any public host. |
+| Paystack | not recorded | not recorded | Owner must create the Paystack account and grant access to its test and live keys and webhook signing secret. Test payments stay off any public host. |
 | Email | not recorded | not recorded | Owner must name the sender and support mailbox control, without recording credentials. |
 | PostHog | not recorded | not recorded | Owner must grant the EU project and keep local or test traffic out of production reports. |
 | Railway | not recorded | not recorded | DasKasas hosting stays in its own project. Do not use the Marrow project. |

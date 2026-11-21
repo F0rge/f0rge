@@ -71,7 +71,7 @@ or replace its data services as part of this runbook.
   Page metadata and X-Robots-Tag keep the preview out of search indexes. Keep
   STOREFRONT_INDEXING_ENABLED=false.
 - Keep hosted test payment disabled and use the hosted runtime kind. Do not
-  configure Peach, real payment providers, Clerk accounts, or public sales for
+  configure Paystack, real payment providers, Clerk accounts, or public sales for
   this preview. The local test payment provider is rejected in production and
   hosted runtimes.
 - Do not change workspace-wide Railway billing caps. If the available plan

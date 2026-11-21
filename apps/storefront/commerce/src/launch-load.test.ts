@@ -69,7 +69,7 @@ function readyPack(patch: Record<string, unknown> = {}) {
       return_policy: goodsLine,
       privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
       data_collected: "We collect the name, email, phone, delivery address, and order details needed to fulfil a purchase.",
-      processors: "Clerk handles sign-in, PostHog handles optional analytics, Peach handles card payments, SendGrid sends email, and Railway hosts the store.",
+      processors: "Clerk handles sign-in, PostHog handles optional analytics, Paystack handles card payments, SendGrid sends email, and Railway hosts the store.",
       retention: "Order records are kept for as long as tax law and open disputes require, and analytics stay off until accepted.",
       information_officer_name: "Naledi Dlamini",
       information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
@@ -79,7 +79,7 @@ function readyPack(patch: Record<string, unknown> = {}) {
     provisioning: {
       checked_by: "Naledi Dlamini",
       checked_on: "2026-10-05",
-      channels: ["clerk", "peach", "email", "posthog", "railway", "temporary_hostname"].map((channel) => ({
+      channels: ["clerk", "paystack", "email", "posthog", "railway", "temporary_hostname"].map((channel) => ({
         channel,
         authorized_access: false,
         test_and_live_separated: true,
@@ -222,7 +222,7 @@ test("reviewed support, delivery, returns and privacy are copied only from an ap
     return_policy: goodsLine,
     privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
     data_collected: "We collect the name, email, phone, delivery address, and order details needed to fulfil a purchase.",
-    processors: "Clerk handles sign-in, PostHog handles optional analytics, Peach handles card payments, SendGrid sends email, and Railway hosts the store.",
+    processors: "Clerk handles sign-in, PostHog handles optional analytics, Paystack handles card payments, SendGrid sends email, and Railway hosts the store.",
     retention: "Order records are kept for as long as tax law and open disputes require, and analytics stay off until accepted.",
     information_officer_name: "Naledi Dlamini",
     information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
@@ -237,7 +237,7 @@ test("reviewed support, delivery, returns and privacy are copied only from an ap
 
 test("the load summary reports an absent pack without echoing a secret", () => {
   const secret = "sk_live_do_not_print_this_value";
-  const summary = summarizeLaunchLoad({ provisioning: { peach_api_key: secret } }, now);
+  const summary = summarizeLaunchLoad({ provisioning: { paystack_api_key: secret } }, now);
   expect(summary).toMatchObject({ loaded: false, public_selling: false, published_variants: 0 });
   expect(JSON.stringify(summary)).not.toContain(secret);
   expect(summary.findings.map((finding) => finding.code)).toEqual(["provisioning_incomplete"]);

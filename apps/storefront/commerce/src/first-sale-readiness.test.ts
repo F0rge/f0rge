@@ -162,7 +162,7 @@ test("measured DasKasas spend of 42.00 dollars fits the 50 dollar envelope and l
         { category: "media", usd_cents: 400, class: "storefront" },
         { category: "backups", usd_cents: 300, class: "storefront" },
         { category: "saas", usd_cents: 1500, class: "storefront" },
-        { category: "peach", usd_cents: 250, class: "payment_fee" },
+        { category: "paystack", usd_cents: 250, class: "payment_fee" },
         { category: "courier", usd_cents: 95000, class: "carrier" },
         { category: "firstout", usd_cents: 2000, class: "firstout_hosting" },
       ],
@@ -285,7 +285,7 @@ test("provider evidence without recorded allowed origins stays open", () => {
   const result = assessFirstSaleReadiness({
     providers: {
       clerk_callback_recorded: true,
-      peach_callback_recorded: true,
+      paystack_webhook_recorded: true,
       email_sender_recorded: true,
       posthog_eu_recorded: true,
     },
@@ -299,7 +299,7 @@ test("a private DasKasas environment, recorded callbacks, and a named operator c
     operator: { name: "Naledi Dlamini" },
     providers: {
       clerk_callback_recorded: true,
-      peach_callback_recorded: true,
+      paystack_webhook_recorded: true,
       email_sender_recorded: true,
       posthog_eu_recorded: true,
       allowed_origins_recorded: true,
@@ -316,7 +316,7 @@ test("Marrow project identity and a pasted secret keep the environment gate open
     environment: {
       ...readyEnvironment(),
       railway_project_id: MARROW_RAILWAY_PROJECT_ID,
-      peach_secret: "sk_live_should_not_print",
+      paystack_secret: "sk_live_should_not_print",
     },
   });
   expect(JSON.stringify(result)).not.toContain("sk_live_should_not_print");
@@ -432,7 +432,7 @@ function readyLaunchPack() {
       return_policy: "Standard made to order pieces keep the confirmed lead time on the order and, once delivered, follow the same unused-return rules as stocked pieces. Bespoke commissions are not offered on the storefront, use a separate agreement, and are not refunded for a change of mind.",
       privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
       data_collected: "We collect the name, email, phone, delivery address, and order details needed to fulfil a purchase.",
-      processors: "Clerk handles sign-in, PostHog handles optional analytics, Peach handles card payments, SendGrid sends email, and Railway hosts the store.",
+      processors: "Clerk handles sign-in, PostHog handles optional analytics, Paystack handles card payments, SendGrid sends email, and Railway hosts the store.",
       retention: "Order records are kept for as long as tax law and open disputes require, and analytics stay off until accepted.",
       information_officer_name: "Naledi Dlamini",
       information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
@@ -442,7 +442,7 @@ function readyLaunchPack() {
     provisioning: {
       checked_by: "Naledi Dlamini",
       checked_on: "2026-10-05",
-      channels: ["clerk", "peach", "email", "posthog", "railway", "temporary_hostname"].map((channel) => ({
+      channels: ["clerk", "paystack", "email", "posthog", "railway", "temporary_hostname"].map((channel) => ({
         channel,
         authorized_access: false,
         test_and_live_separated: true,
@@ -481,7 +481,7 @@ function fittingCost() {
       { category: "media", usd_cents: 400, class: "storefront" },
       { category: "backups", usd_cents: 300, class: "storefront" },
       { category: "saas", usd_cents: 1500, class: "storefront" },
-      { category: "peach", usd_cents: 250, class: "payment_fee" },
+      { category: "paystack", usd_cents: 250, class: "payment_fee" },
     ],
   };
 }
@@ -498,7 +498,7 @@ function completeEvidence(authorization: Record<string, boolean>) {
     operator: { name: "Naledi Dlamini" },
     providers: {
       clerk_callback_recorded: true,
-      peach_callback_recorded: true,
+      paystack_webhook_recorded: true,
       email_sender_recorded: true,
       posthog_eu_recorded: true,
       allowed_origins_recorded: true,

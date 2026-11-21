@@ -3,17 +3,17 @@ import { processPaymentWorkflow, updateCartWorkflow } from "@medusajs/medusa/cor
 import { ContainerRegistrationKeys, Modules, PaymentActions, PaymentSessionStatus } from "@medusajs/framework/utils";
 import type { Knex } from "knex";
 import { checkoutHoldForCart, releaseCheckoutHoldWithinLock, withCheckoutInventoryLock } from "./checkout-holds";
-import { medusaAmountToMinor, peachAccessToken, peachCheckoutStatus, parsePeachStatusResponse } from "./peach-checkout";
-import { PEACH_PAYMENT_PROVIDER_ID, peachPaymentConfig } from "./peach-payment-config";
+import { medusaAmountToMinor, verifyPaystackTransaction } from "./paystack-checkout";
+import { PAYSTACK_PAYMENT_PROVIDER_ID, paystackPaymentConfig } from "./paystack-payment-config";
 import {
-  claimPeachAttemptStatusCheck, claimPeachWebhook, completePeachWebhook, findPeachAttemptByReference,
-  findPeachAttemptBySession, listPeachAttemptsForStatusCheck, peachEventCanAdvance, receivePeachWebhook, retryPeachWebhook, updatePeachAttempt,
-  type PeachInboxEvent,
-} from "./peach-payment-store";
+  claimPaystackAttemptStatusCheck, claimPaystackObservation, completePaystackObservation, findPaystackAttemptByReference,
+  findPaystackAttemptBySession, listPaystackAttemptsForStatusCheck, paystackEventCanAdvance, receivePaystackObservation,
+  retryPaystackObservation, updatePaystackAttempt, type PaystackAttempt, type PaystackInboxEvent, type PaystackInboxSource,
+} from "./paystack-payment-store";
 import { prepareStorefrontOrderHandoff } from "./storefront-order-handoff";
-import { processClaimedPeachRefundWebhook } from "./storefront-peach-refunds";
+import { processClaimedPaystackRefund } from "./storefront-paystack-refunds";
 
-const providerRegistrationId = "peach_sandbox";
+const providerRegistrationId = "paystack_checkout";
 type Container = MedusaContainer;
 type PaymentSession = {
   id: string;
@@ -26,114 +26,117 @@ type PaymentSession = {
   metadata?: Record<string, unknown> | null;
 };
 
-/** Reconciles known checkouts through Peach's read-only V2 status endpoint. */
-export async function reconcilePeachCheckoutStatuses(container: Container, paymentSessionId?: string): Promise<number> {
-  const config = peachPaymentConfig();
-  if (!config) return 0;
+/**
+ * Reads the authoritative charge state from Paystack's verify endpoint and
+ * runs it through the durable inbox. A browser return or webhook body is
+ * never payment proof on its own. Returns "not_found" when Paystack has no
+ * transaction for the reference and "duplicate" when the fact was already handled.
+ */
+export async function verifyAndProcessPaystackCharge(
+  container: Container,
+  attempt: PaystackAttempt,
+  source: PaystackInboxSource,
+  signature: string | null = null,
+  fetcher: typeof fetch = fetch,
+): Promise<"processed" | "ignored" | "paid_exception" | "duplicate" | "not_found"> {
+  const config = paystackPaymentConfig();
+  if (!config) return "ignored";
   const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
-  const targeted = paymentSessionId ? await findPeachAttemptBySession(db, paymentSessionId) : undefined;
-  const attempts = paymentSessionId ? (targeted ? [targeted] : []) : await listPeachAttemptsForStatusCheck(db);
-  if (!attempts.length) return 0;
+  const event = await verifyPaystackTransaction(config, attempt.reference, fetcher);
+  if (!event) return "not_found";
+  const received = await receivePaystackObservation(db, event, source, signature);
+  const claimed = await claimPaystackObservation(db, received.id);
+  if (!claimed) return "duplicate";
+  try {
+    return await processClaimedPaystackObservation(container, db, claimed);
+  } catch (error) {
+    try { await retryPaystackObservation(db, claimed.id, claimed.lease_token, "processing_failed"); }
+    catch { /* The durable inbox row remains recoverable by the scheduled worker. */ }
+    throw error;
+  }
+}
 
-  let token: string;
-  try { token = (await peachAccessToken(config)).token; }
-  catch { return 0; }
-
+/** Reconciles open attempts through Paystack's read-only verify endpoint. */
+export async function reconcilePaystackCheckoutStatuses(container: Container, paymentSessionId?: string, fetcher: typeof fetch = fetch): Promise<number> {
+  if (!paystackPaymentConfig()) return 0;
+  const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
+  const targeted = paymentSessionId ? await findPaystackAttemptBySession(db, paymentSessionId) : undefined;
+  const attempts = paymentSessionId ? (targeted ? [targeted] : []) : await listPaystackAttemptsForStatusCheck(db);
   let observations = 0;
   for (const attempt of attempts) {
-    if (!attempt.checkout_id || !await claimPeachAttemptStatusCheck(db, attempt.id)) continue;
+    if (!await claimPaystackAttemptStatusCheck(db, attempt.id)) continue;
     try {
-      const body = await peachCheckoutStatus(config, attempt.checkout_id, token);
-      const event = parsePeachStatusResponse(body);
-      if (!event || event.checkout_id !== attempt.checkout_id ||
-        event.merchant_reference !== attempt.merchant_reference ||
-        event.amount_minor !== Number(attempt.amount_minor) || event.currency_code !== attempt.currency_code ||
-        event.payment_type !== "DB") continue;
-
-      const received = await receivePeachWebhook(db, event, null, "status");
-      const claimed = await claimPeachWebhook(db, received.id);
-      if (!claimed) continue;
-      try { await processClaimedPeachWebhook(container, db, claimed); }
-      catch {
-        try { await retryPeachWebhook(db, claimed.id, claimed.lease_token, "status_reconciliation_failed"); }
-        catch { /* The durable inbox row remains recoverable by the webhook worker. */ }
-      }
-      observations += 1;
+      const outcome = await verifyAndProcessPaystackCharge(container, attempt, "status", null, fetcher);
+      if (outcome !== "not_found" && outcome !== "duplicate") observations += 1;
     } catch {
-      // Keep pending attempts available for the next scheduled status query.
+      // Keep the attempt available for the next scheduled status query.
     }
   }
   return observations;
 }
 
-export async function processNextPeachWebhook(container: Container): Promise<boolean> {
+export async function processNextPaystackObservation(container: Container): Promise<boolean> {
   const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
-  const event = await claimPeachWebhook(db);
+  const event = await claimPaystackObservation(db);
   if (!event) return false;
-  try { await processClaimedPeachWebhook(container, db, event); }
+  try { await processClaimedPaystackObservation(container, db, event); }
   catch {
-    try { await retryPeachWebhook(db, event.id, event.lease_token, "worker_processing_failed"); }
+    try { await retryPaystackObservation(db, event.id, event.lease_token, "worker_processing_failed"); }
     catch { /* A newer worker owns the lease or the database is temporarily unavailable. */ }
   }
   return true;
 }
 
-export async function processClaimedPeachWebhook(container: Container, db: Knex, event: PeachInboxEvent): Promise<"processed" | "ignored" | "paid_exception"> {
-  if (event.payment_type === "RF") {
-    const outcome = await processClaimedPeachRefundWebhook(container, db, event);
-    if (outcome === "needs_review") {
-      await completePeachWebhook(db, event.id, event.lease_token, "needs_review");
-      return "ignored";
-    }
-    await completePeachWebhook(db, event.id, event.lease_token, "processed");
-    return "processed";
+export async function processClaimedPaystackObservation(container: Container, db: Knex, event: PaystackInboxEvent): Promise<"processed" | "ignored" | "paid_exception"> {
+  if (event.kind === "refund") {
+    const outcome = await processClaimedPaystackRefund(container, db, event);
+    await completePaystackObservation(db, event.id, event.lease_token, outcome === "needs_review" ? "needs_review" : "processed");
+    return outcome === "needs_review" ? "ignored" : "processed";
   }
-  if (event.payment_type !== "DB") {
-    await completePeachWebhook(db, event.id, event.lease_token, "ignored");
+  if (event.kind !== "charge") {
+    await completePaystackObservation(db, event.id, event.lease_token, "ignored");
     return "ignored";
   }
 
   const state = event.result_state;
-  const eventId = event.webhook_id || event.event_key;
+  const eventId = event.event_key;
   return withCheckoutInventoryLock(container, async () => {
-    // Re-read the attempt after acquiring the shared inventory lock. Peach can
-    // deliver success after cancel/uncertain, and older callbacks can race it.
-    const attempt = await findPeachAttemptByReference(db, event.merchant_reference);
-    if (!attempt || Number(attempt.amount_minor) !== Number(event.amount_minor) || attempt.currency_code !== event.currency_code ||
-      (attempt.checkout_id && attempt.checkout_id !== event.checkout_id)) {
-      await completePeachWebhook(db, event.id, event.lease_token, "ignored");
+    // Re-read the attempt after acquiring the shared inventory lock. A success
+    // can race older pending reads and a concurrent webhook.
+    const attempt = await findPaystackAttemptByReference(db, event.reference);
+    if (!attempt || Number(attempt.amount_minor) !== Number(event.amount_minor) || attempt.currency_code !== event.currency_code) {
+      // "If the amount doesn't match, don't deliver value." The inbox row is retained for review.
+      await completePaystackObservation(db, event.id, event.lease_token, attempt && state === "paid" ? "needs_review" : "ignored");
       return "ignored";
     }
-    if (!peachEventCanAdvance(attempt, event)) {
-      await completePeachWebhook(db, event.id, event.lease_token, "ignored");
+    if (!paystackEventCanAdvance(attempt, event)) {
+      await completePaystackObservation(db, event.id, event.lease_token, "ignored");
       return "ignored";
     }
-    if (!attempt.checkout_id) await updatePeachAttempt(db, attempt.id, { checkout_id: event.checkout_id });
+    const capturedFields = {
+      status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
+      ...(event.transaction_id ? { transaction_id: event.transaction_id } : {}),
+    };
 
     const query = container.resolve(ContainerRegistrationKeys.QUERY);
     const { data: sessions } = await query.graph({
       entity: "payment_session",
       fields: ["id", "amount", "currency_code", "status", "provider_id", "payment_collection_id", "data", "metadata"],
-      filters: { id: attempt.payment_session_id, provider_id: PEACH_PAYMENT_PROVIDER_ID },
+      filters: { id: attempt.payment_session_id, provider_id: PAYSTACK_PAYMENT_PROVIDER_ID },
     });
     const session = sessions[0] as unknown as PaymentSession | undefined;
     if (!session || medusaAmountToMinor(session.amount) !== Number(event.amount_minor) ||
       session.currency_code.toUpperCase() !== event.currency_code) {
       if (state !== "paid") {
-        await completePeachWebhook(db, event.id, event.lease_token, "ignored");
+        await completePaystackObservation(db, event.id, event.lease_token, "ignored");
         return "ignored";
       }
       // Native session invalidation cannot revoke an external charge. The
       // attempt and verified inbox, including the original checkout snapshot,
       // remain the operator's recovery source even if no cart survives.
-      await updatePeachAttempt(db, attempt.id, {
-        status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
-        ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
-      });
+      await updatePaystackAttempt(db, attempt.id, capturedFields);
       let originalCartId = attempt.cart_id;
       if (!originalCartId) {
-        // Backfill recovery context for pre-migration attempts when Medusa's
-        // soft-deleted session still retains its original collection link.
         const nativeSession = await db("payment_session").where({ id: attempt.payment_session_id }).first();
         if (nativeSession?.payment_collection_id) {
           const { data: links } = await query.graph({ entity: "cart_payment_collection", fields: ["cart_id"],
@@ -142,7 +145,7 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
         }
       }
       if (originalCartId) await savePaidException(container, query, originalCartId, attempt.captured_order_id, attempt.payment_session_id, eventId);
-      await completePeachWebhook(db, event.id, event.lease_token, "paid_exception");
+      await completePaystackObservation(db, event.id, event.lease_token, "paid_exception");
       return "paid_exception";
     }
 
@@ -151,20 +154,20 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
     });
     const cartId = typeof cartLinks[0]?.cart_id === "string" ? cartLinks[0].cart_id : "";
     if (!cartId) {
-      await completePeachWebhook(db, event.id, event.lease_token, "ignored");
+      await completePaystackObservation(db, event.id, event.lease_token, "ignored");
       return "ignored";
     }
     const payment = container.resolve(Modules.PAYMENT);
     const sessionData = {
-      ...(session.data || {}), peach_status: state, peach_checkout_id: event.checkout_id,
-      ...(event.transaction_id ? { peach_transaction_id: event.transaction_id } : {}),
+      ...(session.data || {}), paystack_status: state,
+      ...(event.transaction_id ? { paystack_transaction_id: event.transaction_id } : {}),
     };
     const sessionMetadata = {
       ...(session.metadata || {}),
-      storefront_peach: {
+      storefront_paystack: {
         source: event.source,
         event_id: eventId,
-        result_code: event.result_code,
+        provider_status: event.provider_status,
         status: state,
         transaction_id: event.transaction_id,
         updated_at: new Date().toISOString(),
@@ -186,23 +189,20 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
         await setSessionStatus(PaymentSessionStatus.CAPTURED);
         try { await prepareStorefrontOrderHandoff(container, orderId); }
         catch { await savePaidException(container, query, cartId, orderId, session.id, eventId); }
-        await updatePeachAttempt(db, attempt.id, {
-          status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
-          ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}), captured_order_id: orderId,
-        });
+        await updatePaystackAttempt(db, attempt.id, { ...capturedFields, captured_order_id: orderId });
       }
-      await completePeachWebhook(db, event.id, event.lease_token, "processed");
+      await completePaystackObservation(db, event.id, event.lease_token, "processed");
       return "processed";
     }
 
     if (state !== "paid") {
-      const status = state === "declined" ? PaymentSessionStatus.ERROR
-        : state === "cancelled" ? PaymentSessionStatus.CANCELED : PaymentSessionStatus.PENDING;
+      const status = state === "declined" ? PaymentSessionStatus.ERROR : PaymentSessionStatus.PENDING;
       await setSessionStatus(status);
-      await updatePeachAttempt(db, attempt.id, {
+      await updatePaystackAttempt(db, attempt.id, {
         status: state, last_event_timestamp: event.event_timestamp, last_event_state: state,
+        ...(event.transaction_id ? { transaction_id: event.transaction_id } : {}),
       });
-      await completePeachWebhook(db, event.id, event.lease_token, state === "unknown" ? "ignored" : "processed");
+      await completePaystackObservation(db, event.id, event.lease_token, state === "unknown" ? "ignored" : "processed");
       return "processed";
     }
 
@@ -210,21 +210,15 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
     if (!hold.ready) {
       await savePaidException(container, query, cartId, null, session.id, eventId);
       await setSessionStatus(PaymentSessionStatus.CAPTURED);
-      await updatePeachAttempt(db, attempt.id, {
-        status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
-        ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
-      });
-      await completePeachWebhook(db, event.id, event.lease_token, "paid_exception");
+      await updatePaystackAttempt(db, attempt.id, capturedFields);
+      await completePaystackObservation(db, event.id, event.lease_token, "paid_exception");
       return "paid_exception";
     }
 
-    // The signed Peach success means the charge is already captured. Persist
-    // that fact before Medusa invokes authorizePayment from the success
-    // workflow, which now requires this durable confirmation.
-    await updatePeachAttempt(db, attempt.id, {
-      status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
-      ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
-    });
+    // A verified Paystack success is already captured. Persist that fact
+    // before Medusa invokes authorizePayment from the success workflow, which
+    // requires this durable confirmation.
+    await updatePaystackAttempt(db, attempt.id, capturedFields);
     await setSessionStatus(PaymentSessionStatus.PENDING);
     await releaseCheckoutHoldWithinLock(container, cartId);
     const processed = await payment.getWebhookActionAndData({
@@ -232,7 +226,7 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
       payload: { data: { ...event, amount_minor: Number(event.amount_minor) }, rawData: JSON.stringify({ ...event }), headers: {} },
     });
     if (processed.action !== PaymentActions.SUCCESSFUL || processed.data?.session_id !== session.id) {
-      throw new Error("Peach provider rejected a verified success event");
+      throw new Error("Paystack provider rejected a verified success observation");
     }
 
     try { await processPaymentWorkflow(container).run({ input: processed }); }
@@ -245,21 +239,15 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
       await setSessionStatus(PaymentSessionStatus.CAPTURED);
       try { await prepareStorefrontOrderHandoff(container, committedOrderId); }
       catch { await savePaidException(container, query, cartId, committedOrderId, session.id, eventId); }
-      await updatePeachAttempt(db, attempt.id, {
-        status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
-        ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}), captured_order_id: committedOrderId,
-      });
-      await completePeachWebhook(db, event.id, event.lease_token, "processed");
+      await updatePaystackAttempt(db, attempt.id, { ...capturedFields, captured_order_id: committedOrderId });
+      await completePaystackObservation(db, event.id, event.lease_token, "processed");
       return "processed";
     }
 
     await savePaidException(container, query, cartId, null, session.id, eventId);
     await setSessionStatus(PaymentSessionStatus.CAPTURED);
-    await updatePeachAttempt(db, attempt.id, {
-      status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
-      ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
-    });
-    await completePeachWebhook(db, event.id, event.lease_token, "paid_exception");
+    await updatePaystackAttempt(db, attempt.id, capturedFields);
+    await completePaystackObservation(db, event.id, event.lease_token, "paid_exception");
     return "paid_exception";
   });
 }

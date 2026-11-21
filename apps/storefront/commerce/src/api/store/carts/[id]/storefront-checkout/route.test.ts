@@ -20,7 +20,7 @@ jest.mock("../../../../../checkout-holds", () => ({
   withCheckoutInventoryLock: jest.fn(),
 }));
 jest.mock("../../../../../delivery-zones", () => ({ deliveryZoneForAddress: jest.fn(), deliveryZones: jest.fn(() => []) }));
-jest.mock("../../../../../peach-payment-config", () => ({ peachPaymentEnabled: jest.fn(() => false), PEACH_PAYMENT_PROVIDER_ID: "pp_peach_sandbox" }));
+jest.mock("../../../../../paystack-payment-config", () => ({ paystackPaymentEnabled: jest.fn(() => false), PAYSTACK_PAYMENT_PROVIDER_ID: "pp_paystack_checkout" }));
 jest.mock("../../../../../test-payment-config", () => ({ testPaymentEnabled: jest.fn(() => true) }));
 
 function fixture(customerId: string | null) {
@@ -113,10 +113,10 @@ test("never leaves the guest claim marker on a checkout already owned by a custo
   expect(metadata.storefront_order_snapshot).toEqual({ financial: { total: 1234 }, contact: { email: "guest@example.test" } });
 });
 
-test("binds the durable payment to the original cart and immutable checkout snapshot before provider initiation", async () => {
+test("binds the durable payment to the original cart, immutable checkout snapshot, and required customer email before provider initiation", async () => {
   const { response, cart, paymentSessionRun } = await runCheckout(null);
   expect(response.statusCode).toBe(200);
   expect(paymentSessionRun).toHaveBeenCalledWith({ input: expect.objectContaining({
-    data: { storefront_cart_id: cart.id, storefront_checkout_snapshot: cart },
+    data: { storefront_cart_id: cart.id, storefront_checkout_snapshot: cart, storefront_customer_email: "guest@example.test" },
   }) });
 });

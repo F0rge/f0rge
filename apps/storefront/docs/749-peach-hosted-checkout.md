@@ -1,5 +1,7 @@
 # Peach Hosted Checkout V2 sandbox
 
+> **Superseded (21 November 2026).** Peach never went live and its code was removed. Paystack replaced it; see [`paystack-checkout.md`](paystack-checkout.md). This page is kept as a historical record.
+
 DasKasas registers `pp_peach_sandbox` only when every Peach setting is
 present and `PEACH_ENVIRONMENT=sandbox`. Live Peach endpoints and credentials
 are deliberately unsupported. The local test provider remains an independent,

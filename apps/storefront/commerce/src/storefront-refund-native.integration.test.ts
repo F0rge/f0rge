@@ -7,12 +7,12 @@ import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import type { Knex } from "knex";
 import { consumeCapacity, mergeCapacityState, reserveCapacity } from "./made-to-order-capacity";
-import { PEACH_PAYMENT_PROVIDER_ID } from "./peach-payment-config";
-import { PEACH_REFUND_URL, parsePeachRefundResponse, peachCheckoutSignature, type PeachRefundObservation } from "./peach-refunds";
-import { createPeachAttempt, updatePeachAttempt } from "./peach-payment-store";
+import { PAYSTACK_PAYMENT_PROVIDER_ID } from "./paystack-payment-config";
+import { parsePaystackRefund, type PaystackObservation } from "./paystack-checkout";
+import { createPaystackAttempt, updatePaystackAttempt } from "./paystack-payment-store";
 import {
-  persistAndProcessRefundObservation, syncStorefrontPeachRefundCommands,
-} from "./storefront-peach-refunds";
+  processClaimedPaystackRefund, syncStorefrontPaystackRefundCommands,
+} from "./storefront-paystack-refunds";
 import { syncStorefrontFulfillmentEvents, type StorefrontFulfillmentEvent } from "./storefront-fulfillment-events";
 
 type JsonRecord = Record<string, unknown>;
@@ -48,20 +48,15 @@ if (liveTestRequested) {
 }
 
 const liveTestEnabled = liveTestRequested;
-const testCheckoutSecret = "local-refund-integration-only-hmac-secret";
 const testBffSecret = "local-refund-integration-only-order-status-secret";
-const testPeachEnvironment = {
-  PEACH_ENVIRONMENT: "sandbox",
-  PEACH_CLIENT_ID: "synthetic-integration-client",
-  PEACH_CLIENT_SECRET: "synthetic-integration-client-secret",
-  PEACH_MERCHANT_ID: "synthetic-integration-merchant",
-  PEACH_ENTITY_ID: "synthetic-integration-entity",
-  PEACH_WEBHOOK_SECRET: "synthetic-integration-webhook-secret",
-  PEACH_CHECKOUT_SECRET: testCheckoutSecret,
+const testPaystackEnvironment = {
+  PAYSTACK_SECRET_KEY: "sk_test_syntheticrefundintegration",
+  PAYSTACK_WEBHOOK_SECRET: "whsec_synthetic_refund_integration",
   STOREFRONT_BFF_SECRET: testBffSecret,
-  PEACH_WEBHOOK_URL: "http://localhost:9000/hooks/peach",
   STOREFRONT_PUBLIC_URL: "http://localhost:3004",
 };
+const syntheticPaystackTransactionId = "4099260516";
+const PAYSTACK_REFUND_URL = "https://api.paystack.co/refund";
 const originalFetch = globalThis.fetch.bind(globalThis);
 jest.setTimeout(180_000);
 
@@ -71,11 +66,11 @@ function requestUrl(input: RequestInfo | URL): URL {
 
 if (liveTestEnabled) {
   // The Medusa integration runner starts scheduled jobs. Their refund feed is
-  // deliberately empty here, and every accidental Peach HTTP call is blocked.
-  Object.assign(process.env, testPeachEnvironment);
+  // deliberately empty here, and every accidental Paystack HTTP call is blocked.
+  Object.assign(process.env, testPaystackEnvironment);
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestUrl(input);
-    if (url.hostname.endsWith("peachpayments.com")) return new Response("sandbox transport disabled in native integration test", { status: 503 });
+    if (url.hostname.endsWith("paystack.co")) return new Response("provider transport disabled in native integration test", { status: 503 });
     if (url.pathname.endsWith("/refund-commands") && url.search === "?limit=100") {
       return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } });
     }
@@ -211,7 +206,7 @@ async function createFirstoutMtoHandoff(
         total_minor_zar: 115000,
       },
       payment: {
-        provider: "peach",
+        provider: PAYSTACK_PAYMENT_PROVIDER_ID,
         reference: captureId,
         captured_at: now.toISOString(),
         amount_minor_zar: 115000,
@@ -235,49 +230,46 @@ async function createFirstoutMtoHandoff(
 
 type RefundSimulator = {
   fetcher: typeof fetch;
-  observations: PeachRefundObservation[];
+  observations: PaystackObservation[];
   eventResponses: JsonRecord[];
   eventRequests: JsonRecord[];
   providerRequests: JsonRecord[];
 };
 
-function peachSimulator(): RefundSimulator {
-  const observations: PeachRefundObservation[] = [];
+function paystackSimulator(): RefundSimulator {
+  const observations: PaystackObservation[] = [];
   const eventResponses: JsonRecord[] = [];
   const eventRequests: JsonRecord[] = [];
   const providerRequests: JsonRecord[] = [];
+  const created: JsonRecord[] = [];
   const fetcher: typeof fetch = async (input, init) => {
     const url = requestUrl(input);
-    if (url.toString() === PEACH_REFUND_URL) {
+    if (url.toString() === PAYSTACK_REFUND_URL && init?.method === "POST") {
       const request = JSON.parse(String(init?.body)) as JsonRecord;
       providerRequests.push(request);
-      const responseBody = {
-        id: randomUUID().replaceAll("-", ""),
-        referencedId: String(request.id),
-        amount: String(request.amount),
+      const data = {
+        id: 3_000_000 + created.length,
+        reference: String(request.reference),
+        amount: Number(request.amount),
         currency: String(request.currency),
-        paymentType: "RF",
-        timestamp: new Date().toISOString(),
-        result: { code: "000.100.110" },
+        status: "processed",
+        createdAt: new Date().toISOString(),
+        transaction: { id: Number(syntheticPaystackTransactionId), reference: String(request.transaction) },
       };
-      const signature = peachCheckoutSignature({
-        id: responseBody.id,
-        referencedId: responseBody.referencedId,
-        amount: responseBody.amount,
-        currency: responseBody.currency,
-        paymentType: responseBody.paymentType,
-        timestamp: responseBody.timestamp,
-        "result.code": responseBody.result.code,
-      }, testCheckoutSecret);
-      const signed = { ...responseBody, signature };
-      const observation = parsePeachRefundResponse(signed, testCheckoutSecret, {
-        referencedCaptureId: responseBody.referencedId,
-        amountMinor: Math.round(Number(responseBody.amount) * 100),
-        currencyCode: responseBody.currency,
+      created.push(data);
+      const observation = parsePaystackRefund(data, {
+        reference: String(request.transaction), transactionId: syntheticPaystackTransactionId, refundRequestId: null,
       });
-      if (!observation) throw new Error("synthetic_peach_response_failed_signature_validation");
+      if (!observation) throw new Error("synthetic_paystack_refund_response_invalid");
       observations.push(observation);
-      return new Response(JSON.stringify(signed), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ status: true, message: "Refund has been queued for processing", data }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.origin === "https://api.paystack.co" && url.pathname === "/refund") {
+      return new Response(JSON.stringify({ status: true, data: created.map((item) => ({
+        ...item, transaction: Number(syntheticPaystackTransactionId),
+      })) }), { status: 200, headers: { "content-type": "application/json" } });
     }
     if (url.pathname.endsWith("/refund-events")) {
       eventRequests.push(record(JSON.parse(String(init?.body))));
@@ -297,24 +289,6 @@ function customerStatusToken(orderId: string, confirmationDigest: string): strin
     .digest("base64url");
 }
 
-function eventFromObservation(observation: PeachRefundObservation, requestId: string) {
-  return {
-    webhook_id: `synthetic-duplicate-${randomUUID()}`,
-    checkout_id: "",
-    merchant_reference: "",
-    amount_minor: observation.amount_minor,
-    currency_code: observation.currency_code,
-    payment_type: "RF",
-    result_code: observation.result_code,
-    transaction_id: observation.provider_refund_id,
-    referenced_transaction_id: observation.referenced_capture_id,
-    refund_request_id: requestId,
-    event_timestamp: observation.event_timestamp,
-    raw_sha256: observation.canonical_sha256,
-    canonical_sha256: observation.canonical_sha256,
-  };
-}
-
 if (liveTestEnabled) {
   const appPath = path.resolve(__dirname, "..");
   medusaIntegrationTestRunner({
@@ -323,7 +297,7 @@ if (liveTestEnabled) {
     medusaConfigFile: appPath,
     env: {
       NODE_ENV: "test",
-      ...testPeachEnvironment,
+      ...testPaystackEnvironment,
       FIRSTOUT_OPS_URL: process.env.FIRSTOUT_OPS_URL!,
       FIRSTOUT_OPS_TOKEN: process.env.FIRSTOUT_OPS_TOKEN!,
       FIRSTOUT_OPS_COMPANY_ID: process.env.FIRSTOUT_OPS_COMPANY_ID!,
@@ -348,7 +322,7 @@ if (liveTestEnabled) {
         beforeAll(async () => {
           container = getContainer();
           db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
-          simulator = peachSimulator();
+          simulator = paystackSimulator();
 
           const apiKeyModule = container.resolve(Modules.API_KEY) as unknown as {
             createApiKeys(input: JsonRecord): Promise<JsonRecord>;
@@ -430,7 +404,6 @@ if (liveTestEnabled) {
           if (!order || typeof order.id !== "string") throw new Error("medusa_native_test_order_create_failed");
           orderId = order.id;
           statusToken = customerStatusToken(orderId, confirmationDigest);
-          captureId = randomUUID().replaceAll("-", "");
           const orderItem = Array.isArray(order.items) ? record(order.items[0]) : {};
           if (typeof orderItem?.id !== "string") throw new Error("medusa_native_test_order_line_create_failed");
           mtoLineId = orderItem.id;
@@ -463,20 +436,20 @@ if (liveTestEnabled) {
           if (!collection?.id) throw new Error("medusa_native_test_payment_collection_create_failed");
           paymentCollectionId = String(collection.id);
           const session = await paymentModule.createPaymentSession_(collection.id, {
-            provider_id: PEACH_PAYMENT_PROVIDER_ID,
+            provider_id: PAYSTACK_PAYMENT_PROVIDER_ID,
             currency_code: "zar",
             amount: 1150,
             data: {},
           });
           if (typeof session.id !== "string") throw new Error("medusa_native_test_payment_session_create_failed");
-          const attempt = await createPeachAttempt(db, {
+          const attempt = await createPaystackAttempt(db, {
             paymentSessionId: session.id,
             amountMinor: 115000,
             currencyCode: "ZAR",
           });
-          await updatePeachAttempt(db, attempt.attempt.id, {
-            checkout_id: "synthetic-captured-checkout",
-            captured_transaction_id: captureId,
+          captureId = attempt.attempt.reference;
+          await updatePaystackAttempt(db, attempt.attempt.id, {
+            transaction_id: syntheticPaystackTransactionId,
             captured_order_id: orderId,
             status: "captured",
             last_event_timestamp: new Date().toISOString(),
@@ -487,11 +460,9 @@ if (liveTestEnabled) {
             amount: 1150,
             currency_code: "zar",
             data: {
-              peach_status: "paid",
-              peach_merchant_reference: attempt.attempt.merchant_reference,
-              peach_amount_minor: 115000,
-              peach_checkout_id: "synthetic-captured-checkout",
-              peach_transaction_id: captureId,
+              paystack_status: "paid",
+              paystack_reference: attempt.attempt.reference,
+              paystack_amount_minor: 115000,
               currency_code: "ZAR",
             },
           });
@@ -591,14 +562,14 @@ if (liveTestEnabled) {
 
           const runOneRefund = async (amountMinor: number) => {
             const request = await submitRefund(amountMinor);
-            const result = await syncStorefrontPeachRefundCommands(container, simulator.fetcher);
+            const result = await syncStorefrontPaystackRefundCommands(container, simulator.fetcher);
             return { request, result };
           };
 
           const first = await runOneRefund(40000);
           expect(first.result.received).toBeGreaterThanOrEqual(1);
           expect(simulator.providerRequests).toHaveLength(1);
-          const firstDispatch = await db("storefront_peach_refund_dispatch").where({ request_id: first.request.id }).first();
+          const firstDispatch = await db("storefront_paystack_refund_dispatch").where({ request_id: first.request.id }).first();
           expect(firstDispatch).toMatchObject({
             status: "succeeded",
             medusa_payment_id: paymentId,
@@ -660,23 +631,9 @@ if (liveTestEnabled) {
             event_source: "response", request_id: first.request.id, signature_verified: true,
           });
 
-          const duplicateWebhook = eventFromObservation(simulator.observations[0]!, String(first.request.id));
-          const firstDuplicateDelivery = await persistAndProcessRefundObservation(
-            container,
-            db,
-            duplicateWebhook,
-            "webhook",
-            simulator.fetcher,
-          );
-          expect(firstDuplicateDelivery).toBe("processed");
-          expect(simulator.eventResponses[simulator.eventResponses.length - 1]).toMatchObject({ duplicate: false, status: "succeeded" });
-          const duplicate = await persistAndProcessRefundObservation(
-            container,
-            db,
-            duplicateWebhook,
-            "webhook",
-            simulator.fetcher,
-          );
+          // A redelivered webhook re-reads the same Paystack fact; Firstout and Medusa see it once.
+          const duplicateObservation = { ...simulator.observations[0]!, refund_request_id: String(first.request.id) };
+          const duplicate = await processClaimedPaystackRefund(container, db, duplicateObservation, simulator.fetcher);
           expect(duplicate).toBe("processed");
           expect(simulator.providerRequests).toHaveLength(1);
           expect(simulator.eventResponses[simulator.eventResponses.length - 1]).toMatchObject({ duplicate: true, status: "succeeded" });
@@ -689,12 +646,12 @@ if (liveTestEnabled) {
           // recovery query ahead of this order's interrupted projection.
           for (let index = 0; index < 30; index += 1) {
             const requestId = randomUUID();
-            await db("storefront_peach_refund_dispatch").insert({
+            await db("storefront_paystack_refund_dispatch").insert({
               id: `srefund_${requestId.replaceAll("-", "")}`,
               request_id: requestId,
               handoff_id: randomUUID(),
               external_order_id: `completed-test-row-${index}`,
-              original_transaction_id: randomUUID().replaceAll("-", ""),
+              original_transaction_id: `dk_${randomUUID().replaceAll("-", "")}`,
               amount_minor: 1,
               raw_amount_minor: { value: "1", precision: 20 },
               currency_code: "ZAR",
@@ -703,7 +660,7 @@ if (liveTestEnabled) {
               status: "succeeded",
               firstout_status: "succeeded",
               provider_refund_id: randomUUID().replaceAll("-", ""),
-              provider_result_code: "000.100.110",
+              provider_result_code: "processed",
               canonical_sha256: randomUUID().replaceAll("-", "").padEnd(64, "a"),
               medusa_payment_id: null,
               medusa_refund_id: null,
@@ -720,10 +677,10 @@ if (liveTestEnabled) {
           await db.raw(`CREATE TRIGGER ${triggerName} BEFORE UPDATE OF metadata ON "order" FOR EACH ROW EXECUTE FUNCTION ${functionName}()`);
           const second = await submitRefund(75000);
           try {
-            const interrupted = await syncStorefrontPeachRefundCommands(container, simulator.fetcher);
+            const interrupted = await syncStorefrontPaystackRefundCommands(container, simulator.fetcher);
             expect(interrupted.received).toBeGreaterThanOrEqual(1);
             expect(simulator.providerRequests).toHaveLength(2);
-            const localDuringInterruption = await db("storefront_peach_refund_dispatch").where({ request_id: second.id }).first();
+            const localDuringInterruption = await db("storefront_paystack_refund_dispatch").where({ request_id: second.id }).first();
             expect(localDuringInterruption?.status).toBe("recording_medusa_refund");
             expect(localDuringInterruption?.medusa_refund_id).toBeTruthy();
           } finally {
@@ -736,10 +693,10 @@ if (liveTestEnabled) {
             if (url.pathname.endsWith("/refund-commands")) return new Response("temporarily unavailable", { status: 503 });
             return simulator.fetcher(input, init);
           };
-          const recovered = await syncStorefrontPeachRefundCommands(container, firstoutUnavailable);
+          const recovered = await syncStorefrontPaystackRefundCommands(container, firstoutUnavailable);
           expect(recovered.received).toBe(0);
           expect(simulator.providerRequests).toHaveLength(2);
-          const secondDispatch = await db("storefront_peach_refund_dispatch").where({ request_id: second.id }).first();
+          const secondDispatch = await db("storefront_paystack_refund_dispatch").where({ request_id: second.id }).first();
           expect(secondDispatch).toMatchObject({
             status: "succeeded",
             medusa_payment_id: paymentId,
@@ -783,7 +740,7 @@ if (liveTestEnabled) {
           expect((metadata.storefront_refunds as JsonRecord[])).toHaveLength(2);
           expect(notificationOutbox.filter((entry) => entry.kind === "refund_status")).toHaveLength(2);
           expect(creditLines.filter((line) => line.reference === "storefront_refund")).toHaveLength(2);
-          expect(simulator.eventRequests.filter((event) => event.event_source === "response")).toHaveLength(2);
+          expect(simulator.eventRequests.filter((event) => event.event_source === "response")).toHaveLength(3);
           expect(simulator.eventResponses[simulator.eventResponses.length - 1]).toMatchObject({ status: "succeeded", provider_outcome: "succeeded" });
 
           const firstoutStatus = await firstoutJson(`/api/v1/storefront/orders/${handoffId}/refunds`, {
