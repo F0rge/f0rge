@@ -31,7 +31,8 @@ const allowedFields = [
   "price_minor_zar", "available_quantity", "revision", "observed_at",
   "acknowledged_commitment_ids", "made_to_order_offer",
 ]
-if (Object.keys(snapshot).sort().join() !== allowedFields.sort().join()) {
+// photo_token appears only once Firstout's OPS_COMMERCE_PHOTO_TOKENS_ENABLED is on.
+if (Object.keys(snapshot).filter((key) => key !== "photo_token").sort().join() !== allowedFields.sort().join()) {
   throw new Error("Ops API exposed an unexpected field")
 }
 

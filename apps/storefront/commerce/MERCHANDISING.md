@@ -55,11 +55,53 @@ What the shop requires before a Firstout product is published:
 - Positive Ops stock, or a finite made-to-order offer with remaining capacity and
   a lead-time window.
 
-What the shop does not require, because Firstout does not store it:
+What the shop does not require:
 
-- A long description. A short description is shown when one exists.
-- A material, care instructions, or dimensions.
-- Photos. The product card uses a placeholder when the gallery is empty.
+- A long description. A short description is shown when one exists. Firstout
+  does not store one.
+- A material, care instructions, or dimensions. Firstout does not store them.
+- Photos. The product card uses a placeholder when the gallery is empty. Photos
+  come from Firstout when it has one (below), but a SKU without a photo still
+  publishes.
+
+## Photos from Firstout
+
+Staff add a SKU's photo in Firstout, not in Medusa Admin. The Ops feed carries a
+`photo_token` for each SKU, or null when it has none. A feed without the field
+(an older Firstout) means no photo information, and the sync leaves photos alone. After each stock sync, and
+outside the inventory lock, the sync downloads a photo only when its token
+differs from the variant's `firstout_photo_token` metadata. It stores the JPEG
+through the Medusa file module (the `commerce-product-photos` volume on Railway,
+served from `/static`), adds it to the product gallery and links it to that
+variant. The image carries `firstout_source_sku_id` and `firstout_photo_token`
+metadata; that marker is how the sync knows an image is its own. Any image
+carrying `metadata.firstout_source_sku_id` is treated as sync-owned, so staff
+must not set that key on their own images.
+
+- The photo becomes the variant thumbnail when the variant has none, and the
+  product thumbnail when the product has none. A thumbnail staff chose stays.
+- The sync never removes or replaces an image without its marker. When a token
+  changes it replaces only its own image for that SKU.
+- If staff delete a synced image in Admin, it stays deleted until the photo
+  changes in Firstout.
+- A failed download or attach is logged and retried on the next run. It never
+  blocks stock or price. A file Medusa refuses to add to the gallery is deleted
+  again. Once a photo is in the gallery, a later failure (linking it to the
+  variant, setting its thumbnail) retries with that same image and never
+  uploads again.
+- A replaced photo's old file stays on the volume. Firstout photos are
+  write-once today, so this happens only if Firstout gains a replace action.
+
+Go-live: Firstout sends `photo_token` only when `OPS_COMMERCE_PHOTO_TOKENS_ENABLED`
+is on, and it is off by default, because a commerce release older than this sync
+rejects the unknown key and pauses checkout. After both the Firstout and DasKasas
+releases with photo sync are live, set `OPS_COMMERCE_PHOTO_TOKENS_ENABLED=true` on
+the `firstout-api` service (Firstout's own Railway project) and redeploy it. The
+next sync run downloads every photo once.
+
+The sync accepts only an `image/jpeg` response of at most 5 MB that starts with
+the JPEG signature, and does not follow redirects. Anything else is logged and
+retried next run, with nothing uploaded.
 
 If a merchant attests photos, set variant metadata `suitable_image_urls` to a
 JSON array of URLs from that product's or variant's Medusa gallery (a JSON array

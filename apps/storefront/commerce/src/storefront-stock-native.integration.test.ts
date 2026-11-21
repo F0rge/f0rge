@@ -34,7 +34,7 @@ if (enabled) {
         const sourceSkuId = randomUUID();
         const row: OpsProduct = { source_sku_id: sourceSkuId, product_group_id: null, product_title: null, options: {},
           sku: "STOCK-SOURCE", name: "Stock integrity chair", price_minor_zar: 10000, available_quantity: 5,
-          revision: "2026-10-09T12:00:00Z", observed_at: "2026-10-09T12:00:00Z", acknowledged_commitment_ids: [], made_to_order_offer: null };
+          revision: "2026-10-09T12:00:00Z", observed_at: "2026-10-09T12:00:00Z", acknowledged_commitment_ids: [], made_to_order_offer: null, photo_token: null };
         const pending = [{ commitment_id: "storefront:paid:line", source_sku_id: sourceSkuId, quantity: 1 }];
         const available = async () => Number(await inventory.retrieveAvailableQuantity(itemId, [locationId]));
         beforeAll(async () => {

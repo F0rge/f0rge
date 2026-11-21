@@ -28,6 +28,7 @@ class OpsProductResponse(BaseModel):
     options: dict[str, str] = Field(default_factory=dict)
     acknowledged_commitment_ids: list[str]
     made_to_order_offer: Optional[OpsMadeToOrderOfferResponse] = None
+    photo_token: Optional[str] = None
 
 
 class OpsProductsResponse(BaseModel):

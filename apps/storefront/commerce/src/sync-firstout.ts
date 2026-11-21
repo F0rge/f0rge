@@ -4,9 +4,9 @@ import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
 import { recordOpsCheckoutHealth, refreshOpsCheckoutHealth } from "./storefront-commerce-exceptions";
 import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation } from "./made-to-order-capacity";
 import {
-  createCollectionsWorkflow, createInventoryLevelsWorkflow, createProductsWorkflow, createProductVariantsWorkflow,
-  deleteProductVariantsWorkflow, updateCollectionsWorkflow, updateInventoryLevelsWorkflow, updateProductVariantsWorkflow,
-  updateProductsWorkflow,
+  batchVariantImagesWorkflow, createCollectionsWorkflow, createInventoryLevelsWorkflow, createProductsWorkflow,
+  createProductVariantsWorkflow, deleteFilesWorkflow, deleteProductVariantsWorkflow, updateCollectionsWorkflow,
+  updateInventoryLevelsWorkflow, updateProductVariantsWorkflow, updateProductsWorkflow, uploadFilesWorkflow,
 } from "@medusajs/medusa/core-flows";
 
 import {
@@ -78,18 +78,24 @@ function productOptions(group: SourceGroup): { title: string; values: string[] }
   }));
 }
 
-async function fetchOpsProducts(): Promise<OpsProduct[]> {
+async function opsGet(path: string): Promise<{ response: Response; companyId: string }> {
   const url = process.env.FIRSTOUT_OPS_URL;
   const token = process.env.FIRSTOUT_OPS_TOKEN;
   const companyId = process.env.FIRSTOUT_OPS_COMPANY_ID;
   if (!url || !token || !companyId) {
     throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Firstout Ops Commerce connection is not configured");
   }
-  const response = await fetch(`${url.replace(/\/$/, "")}/products`, {
+  const response = await fetch(`${url.replace(/\/$/, "")}${path}`, {
     headers: { Authorization: `Bearer ${token}`, "X-Ops-Company-ID": companyId },
     signal: AbortSignal.timeout(10_000),
+    redirect: "error",
   });
   if (!response.ok) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Firstout Ops Commerce returned ${response.status}`);
+  return { response, companyId };
+}
+
+async function fetchOpsProducts(): Promise<OpsProduct[]> {
+  const { response, companyId } = await opsGet("/products");
   return parseOpsProducts(await response.json(), companyId).products;
 }
 
@@ -280,12 +286,147 @@ async function publishCatalogue(container: MedusaContainer, readyIds: Set<string
   }
 }
 
-export async function syncFirstout(container: MedusaContainer): Promise<void> {
-  const locking = container.resolve(Modules.LOCKING);
-  await locking.execute("storefront:inventory", async () => syncFirstoutLocked(container));
+/** Variant metadata: the Firstout photo token last synced, whether or not staff kept the image. */
+const PHOTO_TOKEN_METADATA_KEY = "firstout_photo_token";
+/** Product image metadata marking an image the sync created; any other image belongs to staff. */
+const PHOTO_SOURCE_METADATA_KEY = "firstout_source_sku_id";
+
+type PhotoImage = { id: string; url: string; metadata?: Record<string, unknown> | null };
+type PhotoVariant = {
+  id: string; thumbnail?: string | null; metadata: Record<string, unknown> | null; images?: { id: string }[];
+};
+type PhotoProduct = {
+  id: string; external_id: string | null; thumbnail?: string | null; images?: PhotoImage[]; variants?: PhotoVariant[];
+};
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+/** Reads a JPEG of at most 5 MB; anything else (an HTML error page, an oversized body) is refused. */
+async function readJpeg(response: Response): Promise<Buffer> {
+  const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+  if (type !== "image/jpeg") throw new MedusaError(MedusaError.Types.INVALID_DATA, `photo is ${type || "untyped"}, not image/jpeg`);
+  if (Number(response.headers.get("content-length")) > MAX_PHOTO_BYTES) {
+    throw new MedusaError(MedusaError.Types.INVALID_DATA, "photo is larger than 5 MB");
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = response.body?.getReader();
+  for (let read = await reader?.read(); read && !read.done; read = await reader!.read()) {
+    size += read.value.length;
+    if (size > MAX_PHOTO_BYTES) {
+      await reader!.cancel();
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "photo is larger than 5 MB");
+    }
+    chunks.push(read.value);
+  }
+  const bytes = Buffer.concat(chunks);
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
+    throw new MedusaError(MedusaError.Types.INVALID_DATA, "photo is not a JPEG");
+  }
+  return bytes;
 }
 
-async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
+/** Uploads the photo and adds it to the gallery, replacing only the sync's own image for this SKU. */
+async function addPhotoToGallery(
+  container: MedusaContainer, product: PhotoProduct, sourceSkuId: string, token: string,
+): Promise<PhotoImage> {
+  const { response } = await opsGet(`/products/${sourceSkuId}/photo`);
+  const content = (await readJpeg(response)).toString("base64");
+  const { result: [file] } = await uploadFilesWorkflow(container).run({ input: { files: [{
+    filename: `firstout-${sourceSkuId}.jpg`, mimeType: "image/jpeg", content, access: "public",
+  }] } });
+  const images = product.images || [];
+  const previous = images.filter((image) => image.metadata?.[PHOTO_SOURCE_METADATA_KEY] === sourceSkuId);
+  const replaceable = !product.thumbnail || previous.some((image) => image.url === product.thumbnail);
+  const kept = images.filter((image) => !previous.includes(image));
+  const metadata = { [PHOTO_SOURCE_METADATA_KEY]: sourceSkuId, [PHOTO_TOKEN_METADATA_KEY]: token };
+  // Medusa replaces the image list, so every staff image is passed back unchanged.
+  try {
+    await updateProductsWorkflow(container).run({ input: { selector: { id: product.id }, update: {
+      images: [...kept.map(({ id, url }) => ({ id, url })), { url: file.url, metadata }],
+      ...(replaceable ? { thumbnail: file.url } : {}),
+    } } });
+  } catch (error) {
+    // A rejected update (e.g. the publication hook) would otherwise leave one file per retry on the volume.
+    await deleteFilesWorkflow(container).run({ input: { ids: [file.id] } });
+    throw error;
+  }
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const { data } = await query.graph({ entity: "product", fields: ["images.id", "images.url"], filters: { id: product.id } });
+  let image = ((data[0] as PhotoProduct | undefined)?.images || []).find((candidate) => candidate.url === file.url);
+  if (!image) {
+    await deleteFilesWorkflow(container).run({ input: { ids: [file.id] } });
+    throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Medusa did not keep the photo for ${sourceSkuId}`);
+  }
+  image = { ...image, metadata };
+  product.images = [...kept, image];
+  if (replaceable) product.thumbnail = file.url;
+  return image;
+}
+
+/**
+ * The gallery image carries its token, so a run that failed after the upload
+ * reuses that image and retries only the variant link, never the upload.
+ */
+async function syncVariantPhoto(
+  container: MedusaContainer, product: PhotoProduct, variant: PhotoVariant, sourceSkuId: string, token: string,
+) {
+  const owned = (product.images || []).filter((image) => image.metadata?.[PHOTO_SOURCE_METADATA_KEY] === sourceSkuId);
+  const image = owned.find((candidate) => candidate.metadata?.[PHOTO_TOKEN_METADATA_KEY] === token) ||
+    await addPhotoToGallery(container, product, sourceSkuId, token);
+  if (!variant.images?.some((linked) => linked.id === image.id)) {
+    await batchVariantImagesWorkflow(container).run({ input: { variant_id: variant.id, add: [image.id] } });
+  }
+  const replaceable = !variant.thumbnail || owned.some((candidate) => candidate.url === variant.thumbnail);
+  // Metadata merges in Medusa, so only the token key is written.
+  await updateProductVariantsWorkflow(container).run({ input: { product_variants: [{
+    id: variant.id, ...(replaceable ? { thumbnail: image.url } : {}),
+    metadata: { [PHOTO_TOKEN_METADATA_KEY]: token },
+  }] } });
+}
+
+/**
+ * Downloads a Firstout photo only when its token differs from the one recorded
+ * on the variant. A failed photo is logged and retried next run; it never
+ * affects stock or price. The old file of a replaced photo stays on the volume.
+ */
+export async function syncFirstoutPhotos(container: MedusaContainer, source: OpsProduct[]): Promise<void> {
+  const tokens = new Map(source.flatMap((row) => row.photo_token ? [[row.source_sku_id, row.photo_token] as const] : []));
+  if (!tokens.size) return;
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
+  const { data } = await query.graph({
+    entity: "product",
+    fields: ["id", "external_id", "thumbnail", "images.id", "images.url", "images.metadata", "variants.id", "variants.thumbnail", "variants.metadata", "variants.images.id"],
+  });
+  for (const product of (data as PhotoProduct[]).filter((row) => row.external_id?.startsWith(SOURCE_PREFIX))) {
+    for (const variant of product.variants || []) {
+      const sourceSkuId = variant.metadata?.source_sku_id;
+      const token = typeof sourceSkuId === "string" ? tokens.get(sourceSkuId) : undefined;
+      if (!token || variant.metadata?.[PHOTO_TOKEN_METADATA_KEY] === token) continue;
+      try {
+        await syncVariantPhoto(container, product, variant, sourceSkuId as string, token);
+      } catch (error) {
+        logger.warn(`Firstout photo for SKU ${sourceSkuId} was not synced and will be retried: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+}
+
+export async function syncFirstout(container: MedusaContainer): Promise<void> {
+  const locking = container.resolve(Modules.LOCKING);
+  const source = await locking.execute("storefront:inventory", async () => syncFirstoutLocked(container));
+  // Photos run outside the inventory lock so a slow download never blocks checkout.
+  try {
+    await locking.execute("storefront:photos", async () => syncFirstoutPhotos(container, source));
+  } catch (error) {
+    container.resolve(ContainerRegistrationKeys.LOGGER).warn(
+      `Firstout photo sync skipped this run: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduct[]> {
   let sourceProducts;
   try {
     sourceProducts = await fetchOpsProducts();
@@ -442,4 +583,5 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
   }
 
   await publishCatalogue(container, new Set(catalogueExternalIds(sourceProducts)));
+  return sourceProducts;
 }

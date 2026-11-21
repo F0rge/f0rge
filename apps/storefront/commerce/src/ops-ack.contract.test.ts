@@ -19,6 +19,7 @@ const pending = {
     observed_at: "2026-09-27T08:00:00.000001Z",
     acknowledged_commitment_ids: [],
     made_to_order_offer: null,
+    photo_token: null,
   }],
 };
 
