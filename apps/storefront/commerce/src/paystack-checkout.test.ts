@@ -7,6 +7,11 @@ import {
 import { paystackPaymentConfig } from "./paystack-payment-config";
 import { paystackEventCanAdvance } from "./paystack-payment-store";
 import { paystackPaymentSessionStatus } from "./modules/storefront-paystack-payment-provider/service";
+import { isHostedRuntime } from "./runtime-safety";
+import { paystackAttemptFinding } from "./storefront-exception-sources";
+
+jest.mock("./runtime-safety", () => ({ isHostedRuntime: jest.fn(() => false) }));
+beforeEach(() => jest.mocked(isHostedRuntime).mockReturnValue(false));
 
 const secret = "whsec_test_signing_secret";
 function sign(rawBody: Buffer, t: number, key = secret): string {
@@ -147,9 +152,54 @@ describe("Paystack hosted checkout boundary", () => {
     expect(() => paystackPaymentConfig({ ...base, PAYSTACK_SECRET_KEY: "sk_live_abc123" })).toThrow(/PAYSTACK_LIVE_ENABLED/);
     expect(paystackPaymentConfig({ ...base, PAYSTACK_SECRET_KEY: "sk_live_abc123", PAYSTACK_LIVE_ENABLED: "true" })?.mode).toBe("live");
     expect(() => paystackPaymentConfig({ ...base, PAYSTACK_SECRET_KEY: "sk_live_abc123", PAYSTACK_LIVE_ENABLED: "true",
-      STOREFRONT_PUBLIC_URL: "http://localhost:3004" })).toThrow(/HTTPS/);
+      STOREFRONT_PUBLIC_URL: "http://localhost:3004" })).toThrow(/loopback/);
     expect(() => paystackPaymentConfig({ ...base, STOREFRONT_PUBLIC_URL: "http://shop.example.test" })).toThrow(/HTTPS/);
     expect(() => paystackPaymentConfig({ ...base, STOREFRONT_PUBLIC_URL: "https://shop.example.test/?next=x" })).toThrow(/query/);
     expect(paystackPaymentConfig({ ...base, PAYSTACK_REFUNDS_PAUSED: "true" })?.refundsPaused).toBe(true);
+  });
+
+  test("refuses a test key on a hosted runtime unless hosted test mode is explicitly enabled", () => {
+    const base = { PAYSTACK_SECRET_KEY: "sk_test_abc123", PAYSTACK_WEBHOOK_SECRET: "whsec_abc", STOREFRONT_PUBLIC_URL: "https://shop.example.test" };
+    jest.mocked(isHostedRuntime).mockReturnValue(true);
+    expect(() => paystackPaymentConfig(base)).toThrow(/PAYSTACK_HOSTED_TEST_MODE=true/);
+    expect(() => paystackPaymentConfig({ ...base, PAYSTACK_HOSTED_TEST_MODE: "yes" })).toThrow(/PAYSTACK_HOSTED_TEST_MODE/);
+    expect(paystackPaymentConfig({ ...base, PAYSTACK_HOSTED_TEST_MODE: "true" })?.mode).toBe("test");
+    // The flag never matters for a live key on a hosted runtime.
+    expect(paystackPaymentConfig({ ...base, PAYSTACK_SECRET_KEY: "sk_live_abc123", PAYSTACK_LIVE_ENABLED: "true" })?.mode).toBe("live");
+    jest.mocked(isHostedRuntime).mockReturnValue(false);
+    expect(paystackPaymentConfig(base)?.mode).toBe("test");
+  });
+
+  test("refuses a loopback storefront URL with a live key, even over HTTPS", () => {
+    const live = { PAYSTACK_SECRET_KEY: "sk_live_abc123", PAYSTACK_WEBHOOK_SECRET: "whsec_abc", PAYSTACK_LIVE_ENABLED: "true" };
+    for (const url of ["https://localhost", "https://127.0.0.1:3004", "https://[::1]"]) {
+      expect(() => paystackPaymentConfig({ ...live, STOREFRONT_PUBLIC_URL: url })).toThrow(/loopback/);
+    }
+    expect(() => paystackPaymentConfig({ ...live })).toThrow(/loopback/);
+    expect(paystackPaymentConfig({ ...live, PAYSTACK_SECRET_KEY: "sk_test_abc123", STOREFRONT_PUBLIC_URL: "https://localhost" })?.mode).toBe("test");
+  });
+
+  test("binds a listed refund without a charge ID only through our own refund reference", () => {
+    const listed = { id: 747680, transaction: 627178582, reference: "dkr_abc12345", amount: 10000, currency: "ZAR", status: "processed", created_at: "2026-11-21T10:00:00Z" };
+    expect(parsePaystackRefund(listed, { reference: "dk_ref_charge", transactionId: null, refundRequestId: "r", refundReference: "DKR_ABC12345" }))
+      .toMatchObject({ provider_refund_id: "747680", refund_request_id: "r" });
+    expect(parsePaystackRefund(listed, { reference: "dk_ref_charge", transactionId: null, refundRequestId: "r", refundReference: "dkr_other123" })).toBeNull();
+    expect(parsePaystackRefund(listed, { reference: "dk_ref_charge", transactionId: null, refundRequestId: null })).toBeNull();
+  });
+
+  test("an attempt still uncertain when automatic checks stop becomes a terminal staff exception", () => {
+    const now = Date.parse("2026-11-25T12:00:00Z");
+    const hoursAgo = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
+    expect(paystackAttemptFinding({ status: "initiation_unknown", created_at: hoursAgo(2) }, new Set(), now))
+      .toMatchObject({ kind: "unknown_payment", extra: { status: "aged" } });
+    const expired = paystackAttemptFinding({ status: "initiation_unknown", created_at: hoursAgo(73) }, new Set(), now);
+    expect(expired).toMatchObject({ kind: "unknown_payment", extra: { status: "terminal", blocks_checkout: true } });
+    expect(expired?.explanation).toMatch(/stopped after 72 hours/);
+    expect(paystackAttemptFinding({ status: "checkout_created", created_at: hoursAgo(80) }, new Set(), now))
+      .toMatchObject({ kind: "unknown_payment", extra: { status: "terminal" } });
+    expect(paystackAttemptFinding({ status: "declined", created_at: hoursAgo(80) }, new Set(), now)).toBeNull();
+    expect(paystackAttemptFinding({ status: "captured", captured_order_id: "order_1", created_at: hoursAgo(1) }, new Set(["order_1"]), now)).toBeNull();
+    expect(paystackAttemptFinding({ status: "captured", captured_order_id: null, created_at: hoursAgo(1) }, new Set(), now))
+      .toMatchObject({ kind: "missing_operational_paid_order" });
   });
 });

@@ -70,7 +70,26 @@ export type PaystackRefundDispatch = {
   authorization_key: string | null;
 };
 
-const STATUS_CHECK_STATES = ["initiating", "checkout_created", "initiation_unknown", "pending", "unknown"];
+// Declined stays open: the hosted page lets the shopper retry another card,
+// and a later success must not be lost if its webhook never arrives.
+const STATUS_CHECK_STATES = ["initiating", "checkout_created", "initiation_unknown", "pending", "unknown", "declined"];
+/** Matches Paystack's 72 hour live webhook retry horizon. Older open attempts are left to the exception scan. */
+export const PAYSTACK_STATUS_CHECK_WINDOW_HOURS = 72;
+
+/** Every minute for the first hour, then every 15 minutes, until the window closes. Staff repair bypasses the window. */
+function statusCheckDue(db: Knex, query: Knex.QueryBuilder, targeted = false): Knex.QueryBuilder {
+  query.whereNull("deleted_at").whereIn("status", STATUS_CHECK_STATES);
+  if (targeted) {
+    return query.where((due) => due.whereNull("last_status_checked_at")
+      .orWhere("last_status_checked_at", "<", db.raw("NOW() - INTERVAL '1 minute'")));
+  }
+  return query
+    .where("created_at", ">", db.raw(`NOW() - INTERVAL '${PAYSTACK_STATUS_CHECK_WINDOW_HOURS} hours'`))
+    .where((due) => due.whereNull("last_status_checked_at")
+      .orWhere((recent) => recent.where("created_at", ">", db.raw("NOW() - INTERVAL '1 hour'"))
+        .where("last_status_checked_at", "<", db.raw("NOW() - INTERVAL '1 minute'")))
+      .orWhere("last_status_checked_at", "<", db.raw("NOW() - INTERVAL '15 minutes'")));
+}
 
 export function paystackEventCanAdvance(attempt: Pick<PaystackAttempt, "status" | "last_event_timestamp">,
   event: Pick<PaystackInboxEvent, "event_timestamp" | "result_state">): boolean {
@@ -89,22 +108,23 @@ export async function findPaystackAttemptByReference(db: Knex, reference: string
 }
 
 export async function listPaystackAttemptsForStatusCheck(db: Knex, limit = 50): Promise<PaystackAttempt[]> {
-  return db<PaystackAttempt>(PAYSTACK_ATTEMPTS_TABLE)
-    .whereNull("deleted_at")
-    .whereIn("status", STATUS_CHECK_STATES)
-    .where((query) => query.whereNull("last_status_checked_at")
-      .orWhere("last_status_checked_at", "<", db.raw("NOW() - INTERVAL '1 minute'")))
-    .orderBy("last_status_checked_at", "asc")
+  return statusCheckDue(db, db<PaystackAttempt>(PAYSTACK_ATTEMPTS_TABLE))
+    .orderByRaw("last_status_checked_at ASC NULLS FIRST")
     .limit(Math.max(1, Math.min(limit, 100)));
 }
 
-export async function claimPaystackAttemptStatusCheck(db: Knex, id: string): Promise<boolean> {
-  const changed = await db(PAYSTACK_ATTEMPTS_TABLE).where({ id }).whereNull("deleted_at")
-    .whereIn("status", STATUS_CHECK_STATES)
-    .where((query) => query.whereNull("last_status_checked_at")
-      .orWhere("last_status_checked_at", "<", db.raw("NOW() - INTERVAL '1 minute'")))
+export async function claimPaystackAttemptStatusCheck(db: Knex, id: string, targeted = false): Promise<boolean> {
+  const changed = await statusCheckDue(db, db(PAYSTACK_ATTEMPTS_TABLE).where({ id }), targeted)
     .update({ last_status_checked_at: db.raw("NOW()"), updated_at: db.raw("NOW()") });
   return changed > 0;
+}
+
+/** A charge observation that Paystack's verify endpoint reported as paid, matching the attempt exactly. */
+export async function hasVerifiedPaidObservation(db: Knex, attempt: Pick<PaystackAttempt, "reference" | "amount_minor" | "currency_code">): Promise<boolean> {
+  const row = await db(PAYSTACK_INBOX_TABLE).where({
+    kind: "charge", reference: attempt.reference, result_state: "paid", currency_code: attempt.currency_code,
+  }).where("amount_minor", Number(attempt.amount_minor)).whereNull("deleted_at").first();
+  return Boolean(row);
 }
 
 export async function createPaystackAttempt(db: Knex, input: {

@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { ContainerRegistrationKeys, Modules, PaymentActions, PaymentSessionStatus } from "@medusajs/framework/utils";
 import type { AuthorizePaymentInput, CapturePaymentInput, MedusaContainer, ProviderWebhookPayload } from "@medusajs/framework/types";
 import {
-  claimPaystackObservation, claimPaystackRefundDispatchForDispatch, claimPaystackRefundForMedusa, completePaystackObservation,
-  createPaystackAttempt, createPaystackRefundDispatch, findPaystackAttemptByReference, findPaystackRefundDispatch,
-  paystackEventCanAdvance, receivePaystackObservation, updatePaystackAttempt, updatePaystackRefundDispatch,
+  claimPaystackAttemptStatusCheck, claimPaystackObservation, claimPaystackRefundDispatchForDispatch, claimPaystackRefundForMedusa,
+  completePaystackObservation, createPaystackAttempt, createPaystackRefundDispatch, findPaystackAttemptByReference,
+  findPaystackRefundDispatch, listPaystackAttemptsForStatusCheck, paystackEventCanAdvance, receivePaystackObservation,
+  updatePaystackAttempt, updatePaystackRefundDispatch,
 } from "./paystack-payment-store";
-import { processClaimedPaystackObservation } from "./paystack-webhook-processing";
+import { processClaimedPaystackObservation, reconcilePaystackCheckoutStatuses } from "./paystack-webhook-processing";
 import { parsePaystackRefund, parsePaystackVerifyResponse, paystackRefundReference, type PaystackObservation } from "./paystack-checkout";
 import { StorefrontPaystackPaymentProvider } from "./modules/storefront-paystack-payment-provider/service";
 import { Migration20261121123916 } from "./modules/storefront-paystack/migrations/Migration20261121123916";
@@ -49,7 +50,7 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
   let schema: string;
   const envKeys = [
     "FIRSTOUT_OPS_URL", "FIRSTOUT_OPS_TOKEN", "FIRSTOUT_OPS_COMPANY_ID",
-    "PAYSTACK_SECRET_KEY", "PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_LIVE_ENABLED", "PAYSTACK_REFUNDS_PAUSED", "STOREFRONT_PUBLIC_URL",
+    "PAYSTACK_SECRET_KEY", "PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_LIVE_ENABLED", "PAYSTACK_REFUNDS_PAUSED", "PAYSTACK_HOSTED_TEST_MODE", "STOREFRONT_PUBLIC_URL",
   ] as const;
   const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   const locking = { execute: async (_key: string, operation: () => Promise<unknown>) => operation() };
@@ -70,6 +71,8 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
       PAYSTACK_WEBHOOK_SECRET: "whsec_disposable",
       PAYSTACK_LIVE_ENABLED: "false",
       PAYSTACK_REFUNDS_PAUSED: "false",
+      // Jest is not an explicit local Medusa command, so the runtime counts as hosted.
+      PAYSTACK_HOSTED_TEST_MODE: "true",
       STOREFRONT_PUBLIC_URL: "http://localhost:3004",
     });
     admin = knexFactory({ client: "pg", connection: databaseUrl });
@@ -293,9 +296,10 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
   test("posts one refund with our deterministic reference only after Firstout confirms dispatching", async () => {
     const requestId = randomUUID();
     const { attempt } = await createPaystackAttempt(db, { paymentSessionId: `session-${randomUUID()}`, amountMinor: 5000, currencyCode: "ZAR" });
-    await updatePaystackAttempt(db, attempt.id, { status: "captured", transaction_id: "5000000001" });
+    const externalOrderId = `order-${randomUUID()}`;
+    await updatePaystackAttempt(db, attempt.id, { status: "captured", transaction_id: "5000000001", captured_order_id: externalOrderId });
     const command = {
-      request_id: requestId, handoff_id: randomUUID(), external_order_id: `order-${randomUUID()}`,
+      request_id: requestId, handoff_id: randomUUID(), external_order_id: externalOrderId,
       original_transaction_id: attempt.reference, amount_minor: 2500, currency_code: "ZAR",
       cancel_order: false, allocation: { line_a: 2500 }, status: "requested",
     };
@@ -353,9 +357,10 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
   test("a 409 duplicate reference is read back and bound by reference, and needs-attention is surfaced, never automated", async () => {
     const requestId = randomUUID();
     const { attempt } = await createPaystackAttempt(db, { paymentSessionId: `session-${randomUUID()}`, amountMinor: 5000, currencyCode: "ZAR" });
-    await updatePaystackAttempt(db, attempt.id, { status: "captured", transaction_id: "5000000002" });
+    const externalOrderId = `order-${randomUUID()}`;
+    await updatePaystackAttempt(db, attempt.id, { status: "captured", transaction_id: "5000000002", captured_order_id: externalOrderId });
     const command = {
-      request_id: requestId, handoff_id: randomUUID(), external_order_id: `order-${randomUUID()}`,
+      request_id: requestId, handoff_id: randomUUID(), external_order_id: externalOrderId,
       original_transaction_id: attempt.reference, amount_minor: 1500, currency_code: "ZAR",
       cancel_order: false, allocation: { line_a: 1500 }, status: "requested",
     };
@@ -505,7 +510,7 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
     });
   });
 
-  test("rejects unauthorized capture and accepts a later verified paid observation after decline", async () => {
+  test("the provider reports a capture only from the stored attempt and its verified observation, never from the body", async () => {
     const sessionId = `session-${randomUUID()}`;
     const { attempt } = await createPaystackAttempt(db, { paymentSessionId: sessionId, amountMinor: 1000, currencyCode: "ZAR" });
     await updatePaystackAttempt(db, attempt.id, { status: "declined", last_event_timestamp: "2026-09-30T11:59:00Z", last_event_state: "declined" });
@@ -514,19 +519,36 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
     const authorizeInput: AuthorizePaymentInput = { data: sessionData, context: { idempotency_key: sessionId } };
     await expect(provider.authorizePayment(authorizeInput)).rejects.toThrow(/not verified as captured/i);
 
-    const paid = { ...charge(attempt.reference, "success", "2026-09-30T12:00:00Z"), result_state: "paid" };
-    const payload: ProviderWebhookPayload["payload"] = { data: paid, rawData: JSON.stringify(paid), headers: {} };
-    expect((await provider.getWebhookActionAndData(payload)).action).toBe(PaymentActions.NOT_SUPPORTED);
+    // A forged body claiming paid cannot complete anything while the attempt is not a verified capture.
+    const forged = { reference: attempt.reference, kind: "charge", amount_minor: 1000, currency_code: "ZAR", result_state: "paid" };
+    const forgedPayload: ProviderWebhookPayload["payload"] = { data: forged, rawData: JSON.stringify(forged), headers: {} };
+    expect((await provider.getWebhookActionAndData(forgedPayload)).action).toBe(PaymentActions.NOT_SUPPORTED);
+    const paid = charge(attempt.reference, "success", "2026-09-30T12:00:00Z");
     expect(paystackEventCanAdvance({ status: "declined", last_event_timestamp: "2026-09-30T11:59:00Z" }, {
       event_timestamp: paid.event_timestamp, result_state: "paid",
     })).toBe(true);
 
+    // Captured status alone is not enough either: there must be a verified paid observation.
     await updatePaystackAttempt(db, attempt.id, {
       status: "captured", transaction_id: "4099260516", last_event_timestamp: paid.event_timestamp, last_event_state: "paid",
     });
-    expect((await provider.getWebhookActionAndData(payload)).action).toBe(PaymentActions.SUCCESSFUL);
-    const lateDecline = { ...charge(attempt.reference, "failed", "2026-09-30T12:01:00Z"), result_state: "declined" };
-    expect((await provider.getWebhookActionAndData({ data: lateDecline, rawData: "", headers: {} })).action).toBe(PaymentActions.NOT_SUPPORTED);
+    expect((await provider.getWebhookActionAndData(forgedPayload)).action).toBe(PaymentActions.NOT_SUPPORTED);
+    await expect(provider.authorizePayment(authorizeInput)).rejects.toThrow(/not verified as captured/i);
+    // An observation for a different amount does not count.
+    await receivePaystackObservation(db, charge(attempt.reference, "success", "2026-09-30T12:00:00Z", 999), "status");
+    expect((await provider.getWebhookActionAndData(forgedPayload)).action).toBe(PaymentActions.NOT_SUPPORTED);
+
+    await receivePaystackObservation(db, paid, "webhook");
+    // Body amount and state are ignored; the stored amount is reported.
+    const lying = { ...forged, amount_minor: 1, currency_code: "USD", result_state: "declined" };
+    expect(await provider.getWebhookActionAndData({ data: lying, rawData: "", headers: {} })).toEqual({
+      action: PaymentActions.SUCCESSFUL, data: { session_id: sessionId, amount: 10 },
+    });
+    expect((await provider.getWebhookActionAndData({ data: { reference: "dk_unknown_reference" }, rawData: "", headers: {} })).action)
+      .toBe(PaymentActions.NOT_SUPPORTED);
+    await expect(provider.authorizePayment({ data: sessionData, context: { idempotency_key: "another-session" } })).rejects.toThrow(/not verified/i);
+    await expect(provider.authorizePayment({ data: { ...sessionData, paystack_reference: "dk_other_reference" }, context: { idempotency_key: sessionId } }))
+      .rejects.toThrow(/not verified/i);
     const authorized = await provider.authorizePayment(authorizeInput);
     expect(authorized).toMatchObject({
       status: PaymentSessionStatus.CAPTURED,
@@ -535,6 +557,157 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
     const captureInput: CapturePaymentInput = { data: authorized.data, context: { idempotency_key: `capture-${randomUUID()}` } };
     await expect(provider.capturePayment(captureInput)).rejects.toThrow(/separate Paystack capture is unsupported/i);
     await db("storefront_paystack_payment_attempt").where({ id: attempt.id }).update({ deleted_at: new Date() });
+  });
+
+  test.each([
+    ["amount", { amount: 1001, currency: "ZAR" }],
+    ["currency", { amount: 1000, currency: "USD" }],
+  ])("a verified paid charge with a different %s is kept for review and never captured", async (_label, mismatch) => {
+    const { attempt } = await createPaystackAttempt(db, { paymentSessionId: `session-${randomUUID()}`, amountMinor: 1000, currencyCode: "ZAR" });
+    await updatePaystackAttempt(db, attempt.id, { status: "checkout_created" });
+    const observation = parsePaystackVerifyResponse({ status: true, data: {
+      id: 4099260516, status: "success", reference: attempt.reference, amount: mismatch.amount, currency: mismatch.currency,
+      paid_at: new Date().toISOString(), created_at: new Date().toISOString(),
+    } }, attempt.reference);
+    if (!observation) throw new Error("Mismatch fixture is invalid");
+    const inbox = await receivePaystackObservation(db, observation, "webhook", "signature");
+    const claimed = await claimPaystackObservation(db, inbox.id);
+    if (!claimed) throw new Error("Mismatch observation was not claimable");
+    const container = { resolve(key: string) {
+      if (key === Modules.LOCKING) return locking;
+      throw new Error("A mismatched charge must stop before touching Medusa");
+    } } as unknown as MedusaContainer;
+    expect(await processClaimedPaystackObservation(container, db, claimed)).toBe("ignored");
+    expect(await db("storefront_paystack_webhook_inbox").where({ id: inbox.id }).first()).toMatchObject({
+      status: "needs_review", result_state: "paid", lease_token: null,
+    });
+    expect(await findPaystackAttemptByReference(db, attempt.reference)).toMatchObject({
+      status: "checkout_created", last_event_state: null, captured_order_id: null,
+    });
+    await db("storefront_paystack_payment_attempt").where({ id: attempt.id }).update({ deleted_at: new Date() });
+  });
+
+  test("polls open and declined attempts for 72 hours, backs off after the first hour, and lets staff target an expired one", async () => {
+    await db("storefront_paystack_payment_attempt").whereNull("deleted_at").update({ deleted_at: new Date() });
+    const make = async (status: string, ageHours: number, checkedMinutesAgo: number | null) => {
+      const { attempt } = await createPaystackAttempt(db, { paymentSessionId: `poll-${randomUUID()}`, amountMinor: 1000, currencyCode: "ZAR" });
+      await db("storefront_paystack_payment_attempt").where({ id: attempt.id }).update({
+        status,
+        created_at: db.raw(`NOW() - INTERVAL '${ageHours} hours'`),
+        last_status_checked_at: checkedMinutesAgo === null ? null : db.raw(`NOW() - INTERVAL '${checkedMinutesAgo} minutes'`),
+      });
+      return attempt.id;
+    };
+    const fresh = await make("checkout_created", 0.1, 2);
+    const declined = await make("declined", 2, 20);
+    const backedOff = await make("pending", 2, 5);
+    const expired = await make("initiation_unknown", 73, null);
+    const captured = await make("captured", 0.1, null);
+    const due = (await listPaystackAttemptsForStatusCheck(db)).map((row) => row.id);
+    expect(due.sort()).toEqual([fresh, declined].sort());
+    expect(await claimPaystackAttemptStatusCheck(db, backedOff)).toBe(false);
+    expect(await claimPaystackAttemptStatusCheck(db, expired)).toBe(false);
+    expect(await claimPaystackAttemptStatusCheck(db, captured)).toBe(false);
+    expect(await claimPaystackAttemptStatusCheck(db, declined)).toBe(true);
+    expect(await claimPaystackAttemptStatusCheck(db, declined)).toBe(false);
+    // Staff repair targets the expired uncertain attempt once per minute.
+    expect(await claimPaystackAttemptStatusCheck(db, expired, true)).toBe(true);
+    expect(await claimPaystackAttemptStatusCheck(db, expired, true)).toBe(false);
+    await db("storefront_paystack_payment_attempt").whereNull("deleted_at").update({ deleted_at: new Date() });
+  });
+
+  test("a later success after a declined card is still captured by the status poll", async () => {
+    const { attempt } = await createPaystackAttempt(db, { paymentSessionId: `retry-card-${randomUUID()}`, cartId: `cart-${randomUUID()}`, amountMinor: 1000, currencyCode: "ZAR" });
+    await updatePaystackAttempt(db, attempt.id, { status: "declined", last_event_timestamp: new Date(Date.now() - 60_000).toISOString(), last_event_state: "declined" });
+    const calls: string[] = [];
+    const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return json({ status: true, data: { id: 4099260599, status: "success", reference: attempt.reference, amount: 1000, currency: "ZAR",
+        paid_at: new Date().toISOString(), created_at: new Date(Date.now() - 120_000).toISOString() } });
+    });
+    const container = { resolve(key: string) {
+      if (key === ContainerRegistrationKeys.PG_CONNECTION) return db;
+      if (key === Modules.LOCKING) return locking;
+      if (key === ContainerRegistrationKeys.QUERY) return { graph: async () => ({ data: [] }) };
+      throw new Error(`Unexpected Medusa service ${key}`);
+    } } as unknown as MedusaContainer;
+    expect(await reconcilePaystackCheckoutStatuses(container, undefined, fetcher as typeof fetch)).toBe(1);
+    expect(calls).toEqual([`https://api.paystack.co/transaction/verify/${attempt.reference}`]);
+    // The native session was deleted in this fixture, so the money is kept as a paid exception for staff.
+    expect(await findPaystackAttemptByReference(db, attempt.reference)).toMatchObject({ status: "captured", last_event_state: "paid" });
+    await db("storefront_paystack_payment_attempt").where({ id: attempt.id }).update({ deleted_at: new Date() });
+  });
+
+  test("never posts a refund for a charge that is not our capture for the same order", async () => {
+    const cases = [
+      { label: "missing", attempt: null as null | { status: string; orderMatches: boolean } },
+      { label: "not captured", attempt: { status: "checkout_created", orderMatches: true } },
+      { label: "other order", attempt: { status: "captured", orderMatches: false } },
+    ];
+    for (const item of cases) {
+      const requestId = randomUUID();
+      const externalOrderId = `order-${randomUUID()}`;
+      let capture = `dk_${randomUUID().replaceAll("-", "")}`;
+      if (item.attempt) {
+        const { attempt } = await createPaystackAttempt(db, { paymentSessionId: `guard-${randomUUID()}`, amountMinor: 5000, currencyCode: "ZAR" });
+        await updatePaystackAttempt(db, attempt.id, { status: item.attempt.status, transaction_id: "5000000009",
+          captured_order_id: item.attempt.orderMatches ? externalOrderId : `order-${randomUUID()}` });
+        capture = attempt.reference;
+      }
+      const command = { request_id: requestId, handoff_id: randomUUID(), external_order_id: externalOrderId,
+        original_transaction_id: capture, amount_minor: 1000, currency_code: "ZAR", cancel_order: false, allocation: { a: 1000 }, status: "requested" };
+      const calls: string[] = [];
+      const outcomes: Record<string, unknown>[] = [];
+      const fetcher = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.endsWith("refund-commands?limit=100")) return json({ items: [command] });
+        if (url.endsWith("/outcome")) { outcomes.push(JSON.parse(String(init?.body))); return json({ status: "unknown" }); }
+        if (url.includes("/refund?")) return json({ status: true, data: [] });
+        throw new Error(`Unexpected external request ${url}`);
+      });
+      await syncStorefrontPaystackRefundCommands(dbContainer(), fetcher as typeof fetch);
+      expect(calls.some((url) => url === "https://api.paystack.co/refund")).toBe(false);
+      expect(outcomes).toEqual([{ status: "unknown", failure_code: "paystack_capture_not_verified_no_request_sent" }]);
+      expect((await findPaystackRefundDispatch(db, requestId))?.status).toBe("unknown");
+    }
+  });
+
+  test("an unknown refund on a charge without a Paystack ID is read back by our own reference", async () => {
+    const { attempt } = await createPaystackAttempt(db, { paymentSessionId: `noid-${randomUUID()}`, amountMinor: 5000, currencyCode: "ZAR" });
+    const externalOrderId = `order-${randomUUID()}`;
+    await updatePaystackAttempt(db, attempt.id, { status: "captured", captured_order_id: externalOrderId });
+    const requestId = randomUUID();
+    await createPaystackRefundDispatch(db, { request_id: requestId, handoff_id: randomUUID(), external_order_id: externalOrderId,
+      original_transaction_id: attempt.reference, amount_minor: 1200, currency_code: "ZAR", cancel_order: false, allocation: { a: 1200 }, status: "requested" });
+    await updatePaystackRefundDispatch(db, requestId, { status: "unknown" });
+    const calls: string[] = [];
+    const events: Record<string, unknown>[] = [];
+    const fetcher = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === `https://api.paystack.co/refund?reference=${paystackRefundReference(requestId)}`) {
+        return json({ status: true, data: [{ id: 6100, transaction: 5000000077, reference: paystackRefundReference(requestId).toUpperCase(),
+          amount: 1200, currency: "ZAR", status: "pending", created_at: "2026-11-21T10:00:00Z" }] });
+      }
+      if (url.endsWith("/refund-events")) {
+        events.push(JSON.parse(String(init?.body)));
+        return json({ status: "pending", provider_outcome: "pending", request_id: requestId, external_order_id: externalOrderId,
+          amount_minor: 1200, currency_code: "ZAR", provider_refund_id: "6100" });
+      }
+      throw new Error(`Unexpected external request ${url}`);
+    });
+    const container = { resolve(key: string) {
+      if (key === ContainerRegistrationKeys.PG_CONNECTION) return db;
+      if (key === Modules.LOCKING) return locking;
+      if (key === ContainerRegistrationKeys.QUERY) return { graph: async () => ({ data: [{ id: externalOrderId, display_id: 1, email: "b@example.test", metadata: {} }] }) };
+      if (key === Modules.ORDER) return { updateOrders: async () => [] };
+      throw new Error(`Unexpected Medusa service ${key}`);
+    } } as unknown as MedusaContainer;
+    expect(await reconcilePaystackRefundsForCapture(container, attempt.reference, "status", fetcher as typeof fetch)).toBe(1);
+    expect(calls.some((url) => url.includes("transaction="))).toBe(false);
+    expect(events[0]).toMatchObject({ request_id: requestId, provider_refund_id: "6100", referenced_capture_id: attempt.reference });
+    expect(await findPaystackRefundDispatch(db, requestId)).toMatchObject({ status: "pending", provider_refund_id: "6100" });
   });
 
   test("re-reads captured state after waiting for the shared lock before applying an older observation", async () => {

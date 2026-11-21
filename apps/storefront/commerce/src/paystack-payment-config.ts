@@ -1,3 +1,5 @@
+import { isHostedRuntime } from "./runtime-safety";
+
 export type PaystackPaymentEnvironment = Record<string, string | undefined>;
 
 export const PAYSTACK_PAYMENT_PROVIDER_ID = "pp_paystack_checkout";
@@ -29,6 +31,11 @@ export function paystackPaymentConfig(env: PaystackPaymentEnvironment = process.
   if (mode === "live" && env.PAYSTACK_LIVE_ENABLED !== "true") {
     throw new Error("A live Paystack key needs PAYSTACK_LIVE_ENABLED=true");
   }
+  // Paystack publishes its test cards. A hosted shop on a test key would hand
+  // unpaid orders to Firstout, so hosted test mode needs an explicit opt-in.
+  if (mode === "test" && isHostedRuntime(env) && env.PAYSTACK_HOSTED_TEST_MODE !== "true") {
+    throw new Error("A Paystack test key on a hosted runtime needs PAYSTACK_HOSTED_TEST_MODE=true");
+  }
   const webhookSecret = env.PAYSTACK_WEBHOOK_SECRET!.trim();
   if (!/^whsec_\S+$/.test(webhookSecret)) {
     throw new Error("PAYSTACK_WEBHOOK_SECRET must be the Paystack webhook signing secret (whsec_)");
@@ -58,7 +65,8 @@ function assertAllowedUrl(value: string, env: PaystackPaymentEnvironment, mode: 
   } catch {
     throw new Error("Paystack checkout URLs must be valid absolute URLs");
   }
-  const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  const isLocal = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
+  if (isLocal && mode === "live") throw new Error("A live Paystack key cannot use a loopback storefront URL");
   const localHttp = isLocal && mode === "test" && env.NODE_ENV !== "production" && url.protocol === "http:";
   if (url.protocol !== "https:" && !localHttp) {
     throw new Error("Paystack checkout URLs must use HTTPS outside local test-mode development");

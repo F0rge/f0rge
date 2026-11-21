@@ -56,7 +56,11 @@ export async function verifyAndProcessPaystackCharge(
   }
 }
 
-/** Reconciles open attempts through Paystack's read-only verify endpoint. */
+/**
+ * Reconciles open attempts through Paystack's read-only verify endpoint, with
+ * the window and backoff in listPaystackAttemptsForStatusCheck. A targeted
+ * staff repair (payment session ID) ignores the window.
+ */
 export async function reconcilePaystackCheckoutStatuses(container: Container, paymentSessionId?: string, fetcher: typeof fetch = fetch): Promise<number> {
   if (!paystackPaymentConfig()) return 0;
   const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
@@ -64,7 +68,7 @@ export async function reconcilePaystackCheckoutStatuses(container: Container, pa
   const attempts = paymentSessionId ? (targeted ? [targeted] : []) : await listPaystackAttemptsForStatusCheck(db);
   let observations = 0;
   for (const attempt of attempts) {
-    if (!await claimPaystackAttemptStatusCheck(db, attempt.id)) continue;
+    if (!await claimPaystackAttemptStatusCheck(db, attempt.id, Boolean(paymentSessionId))) continue;
     try {
       const outcome = await verifyAndProcessPaystackCharge(container, attempt, "status", null, fetcher);
       if (outcome !== "not_found" && outcome !== "duplicate") observations += 1;

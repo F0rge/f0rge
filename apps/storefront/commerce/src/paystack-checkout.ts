@@ -196,7 +196,7 @@ export function parsePaystackVerifyResponse(body: unknown, expectedReference: st
 /** Normalize a refund object from POST /refund or GET /refund. */
 export function parsePaystackRefund(
   value: unknown,
-  expected: { reference: string; transactionId: string | null; refundRequestId: string | null },
+  expected: { reference: string; transactionId: string | null; refundRequestId: string | null; refundReference?: string | null },
 ): PaystackObservation | null {
   const data = record(value);
   const transaction = data.transaction && typeof data.transaction === "object" ? record(data.transaction) : null;
@@ -211,7 +211,9 @@ export function parsePaystackRefund(
   if (!refundId || amount === null || amount <= 0 || !/^[A-Z]{3}$/.test(currency) || !/^[a-z-]{1,32}$/.test(status) ||
     !observedAt || (transactionReference !== undefined && transactionReference !== expected.reference) ||
     (expected.transactionId && transactionId !== expected.transactionId) ||
-    (!expected.transactionId && transactionReference === undefined)) return null;
+    // Without either charge identity, only our own unique refund reference binds the refund to the charge.
+    (!expected.transactionId && transactionReference === undefined &&
+      (!expected.refundReference || refundReference?.toLowerCase() !== expected.refundReference.toLowerCase()))) return null;
   const normalized = {
     kind: "refund" as const, reference: expected.reference, transaction_id: transactionId,
     provider_refund_id: refundId, refund_reference: refundReference,

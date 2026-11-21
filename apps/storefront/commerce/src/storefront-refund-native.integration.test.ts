@@ -52,6 +52,7 @@ const testBffSecret = "local-refund-integration-only-order-status-secret";
 const testPaystackEnvironment = {
   PAYSTACK_SECRET_KEY: "sk_test_syntheticrefundintegration",
   PAYSTACK_WEBHOOK_SECRET: "whsec_synthetic_refund_integration",
+  PAYSTACK_HOSTED_TEST_MODE: "true",
   STOREFRONT_BFF_SECRET: testBffSecret,
   STOREFRONT_PUBLIC_URL: "http://localhost:3004",
 };

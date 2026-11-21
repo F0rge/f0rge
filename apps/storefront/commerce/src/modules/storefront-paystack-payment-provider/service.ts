@@ -11,7 +11,7 @@ import { initializePaystackTransaction, medusaAmountToMinor, minorToMajor } from
 import { paystackPaymentConfig } from "../../paystack-payment-config";
 import {
   claimPaystackRefundForMedusa, createPaystackAttempt, findPaystackAttemptByReference, findPaystackAttemptBySession,
-  updatePaystackAttempt, type PaystackAttempt,
+  hasVerifiedPaidObservation, updatePaystackAttempt, type PaystackAttempt,
 } from "../../paystack-payment-store";
 
 const NO_DATA = {};
@@ -160,23 +160,13 @@ export class StorefrontPaystackPaymentProvider extends AbstractPaymentProvider {
   }
 
   async getWebhookActionAndData(input: ProviderWebhookPayload["payload"]): Promise<WebhookActionResult> {
+    // Only the reference is read from the payload; amount, currency and state
+    // come from the stored attempt and its verified Paystack observation, so a
+    // forged body through any ingress cannot complete a cart.
     const event = input.data as Record<string, unknown>;
-    const reference = typeof event.reference === "string" ? event.reference : "";
+    const reference = typeof event?.reference === "string" ? event.reference : "";
     const attempt = reference ? await findPaystackAttemptByReference(this.db(), reference) : undefined;
-    if (!attempt) return { action: PaymentActions.NOT_SUPPORTED };
-
-    const amountMinor = typeof event.amount_minor === "number" ? event.amount_minor : null;
-    const currency = typeof event.currency_code === "string" ? event.currency_code : "";
-    if (event.kind !== "charge" || !Number.isSafeInteger(amountMinor) || amountMinor !== Number(attempt.amount_minor) ||
-      currency !== attempt.currency_code) {
-      return { action: PaymentActions.NOT_SUPPORTED };
-    }
-    // Only our isolated processor, after Paystack's verify endpoint confirmed
-    // the charge, may advance an attempt to captured. The generic webhook
-    // ingress is disabled; this only reports an already-durable paid fact.
-    if (attempt.status !== "captured" || attempt.last_event_state !== "paid" || event.result_state !== "paid") {
-      return { action: PaymentActions.NOT_SUPPORTED };
-    }
+    if (!attempt || !await this.isVerifiedCapture(attempt)) return { action: PaymentActions.NOT_SUPPORTED };
     return {
       action: PaymentActions.SUCCESSFUL,
       data: { session_id: attempt.payment_session_id, amount: minorToMajor(Number(attempt.amount_minor)) },
@@ -187,14 +177,14 @@ export class StorefrontPaystackPaymentProvider extends AbstractPaymentProvider {
     return this.container[ContainerRegistrationKeys.PG_CONNECTION] as Knex;
   }
 
+  private async isVerifiedCapture(attempt: PaystackAttempt): Promise<boolean> {
+    return attempt.status === "captured" && attempt.last_event_state === "paid" &&
+      await hasVerifiedPaidObservation(this.db(), attempt);
+  }
+
   private async requireVerifiedCapturedAttempt(data: Record<string, unknown> | undefined, sessionId: string | undefined): Promise<PaystackAttempt> {
-    const reference = typeof data?.paystack_reference === "string" ? data.paystack_reference : "";
-    const attempt = reference ? await findPaystackAttemptByReference(this.db(), reference) : undefined;
-    const amountMinor = typeof data?.paystack_amount_minor === "number" ? data.paystack_amount_minor : null;
-    const isPaidSessionData = data?.paystack_status === "paid" || data?.paystack_status === "captured";
-    if (!attempt || !sessionId || attempt.payment_session_id !== sessionId || attempt.status !== "captured" ||
-      attempt.last_event_state !== "paid" || !isPaidSessionData || amountMinor !== Number(attempt.amount_minor) ||
-      data?.currency_code !== attempt.currency_code) {
+    const attempt = sessionId ? await findPaystackAttemptBySession(this.db(), sessionId) : undefined;
+    if (!attempt || data?.paystack_reference !== attempt.reference || !await this.isVerifiedCapture(attempt)) {
       throw new Error("Paystack payment is not verified as captured for this payment session");
     }
     return attempt;

@@ -42,6 +42,7 @@ const testOpsUrl = "http://firstout-cancellation.fixture.test/api/v1/ops-commerc
 const testPaystackEnvironment = {
   PAYSTACK_SECRET_KEY: "sk_test_syntheticcancellation",
   PAYSTACK_WEBHOOK_SECRET: "whsec_synthetic_cancellation",
+  PAYSTACK_HOSTED_TEST_MODE: "true",
   STOREFRONT_PUBLIC_URL: "https://localhost:3004",
   FIRSTOUT_OPS_URL: testOpsUrl,
   FIRSTOUT_OPS_TOKEN: testServiceToken,

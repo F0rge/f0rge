@@ -3,7 +3,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import type { Knex } from "knex";
 import { availabilityMaxAgeMs } from "./checkout-holds";
 import { readCapacityState } from "./made-to-order-capacity";
-import { PAYSTACK_ATTEMPTS_TABLE, PAYSTACK_INBOX_TABLE, PAYSTACK_REFUNDS_TABLE } from "./paystack-payment-store";
+import { PAYSTACK_ATTEMPTS_TABLE, PAYSTACK_INBOX_TABLE, PAYSTACK_REFUNDS_TABLE, PAYSTACK_STATUS_CHECK_WINDOW_HOURS } from "./paystack-payment-store";
 import { paystackPaymentEnabled } from "./paystack-payment-config";
 import { currentOpsCheckoutHealth, HANDOFF_AGED_THRESHOLD_MS, type StorefrontExceptionKind } from "./storefront-commerce-exceptions";
 
@@ -73,6 +73,27 @@ export async function paystackSourceRows(db: Knex): Promise<{
     rows.push(result);
   }
   return { attempts: rows[0], inbox: rows[1], refunds: rows[2] };
+}
+
+/** Classifies one stored Paystack attempt for the exception scan. */
+export function paystackAttemptFinding(row: Record<string, unknown>, orderIds: Set<unknown>, now: number): {
+  kind: "missing_operational_paid_order" | "unknown_payment"; explanation: string; extra: Partial<ExceptionObservation>;
+} | null {
+  const age = now - Date.parse(String(row.created_at));
+  if (row.status === "captured" && (!row.captured_order_id || !orderIds.has(row.captured_order_id))) {
+    return { kind: "missing_operational_paid_order",
+      explanation: "Verified external payment has no surviving native order; original payment and checkout binding are retained.",
+      extra: { status: "terminal", provider_verified: true, blocks_checkout: true } };
+  }
+  if (["unknown", "initiation_unknown"].includes(String(row.status)) ||
+      (["initiating", "pending", "checkout_created"].includes(String(row.status)) && age >= HANDOFF_AGED_THRESHOLD_MS)) {
+    const checksStopped = age >= PAYSTACK_STATUS_CHECK_WINDOW_HOURS * 3_600_000;
+    return { kind: "unknown_payment", explanation: checksStopped
+      ? "Automatic Paystack checks stopped after 72 hours with the outcome still uncertain; reconcile in the Paystack dashboard before repeating or repairing it."
+      : "Payment outcome remains unknown; reconcile with the provider before repeating or repairing it.",
+    extra: { status: checksStopped ? "terminal" : "aged", blocks_checkout: true } };
+  }
+  return null;
 }
 
 /** All reads must succeed before publishing: absent rows resolve live conditions in Ops. */
@@ -172,14 +193,8 @@ export async function collectStorefrontExceptionSources(container: MedusaContain
       ...(typeof row.reference === "string" ? { payment_reference: row.reference.slice(0, 128) } : {}) };
   };
   for (const row of paystack.attempts) {
-    if (row.status === "captured" && (!row.captured_order_id || !orderIds.has(row.captured_order_id))) {
-      add("missing_operational_paid_order", String(row.id), "Verified external payment has no surviving native order; original payment and checkout binding are retained.", row.created_at,
-        { status: "terminal", provider_verified: true, blocks_checkout: true, ...money(row) });
-    } else if (["unknown", "initiation_unknown"].includes(String(row.status)) ||
-        (["initiating", "pending", "checkout_created"].includes(String(row.status)) && now - Date.parse(String(row.created_at)) >= HANDOFF_AGED_THRESHOLD_MS)) {
-      add("unknown_payment", String(row.id), "Payment outcome remains unknown; reconcile with the provider before repeating or repairing it.", row.created_at,
-        { status: "aged", blocks_checkout: true, ...money(row) });
-    }
+    const finding = paystackAttemptFinding(row, orderIds, now);
+    if (finding) add(finding.kind, String(row.id), finding.explanation, row.created_at, { ...finding.extra, ...money(row) });
   }
   for (const row of paystack.inbox) {
     const attempt = attempts.get(row.reference);

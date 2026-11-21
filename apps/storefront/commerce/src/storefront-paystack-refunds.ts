@@ -32,6 +32,7 @@ type RefundResolution = {
   currency_code: string;
   provider_refund_id: string;
 };
+const OPEN_REFUND_STATES = ["unknown", "pending", "needs_attention"];
 type RefundFact = Pick<PaystackObservation, "provider_refund_id" | "amount_minor" | "currency_code">;
 
 function record(value: unknown): JsonRecord {
@@ -238,6 +239,14 @@ async function processRefundCommand(
     }
     if (dispatch.status !== "received") return;
 
+    // Only a charge we captured for this exact order may be refunded. No
+    // request reaches Paystack otherwise; staff see the unknown command.
+    const attempt = await findPaystackAttemptByReference(db, command.original_transaction_id);
+    if (attempt?.status !== "captured" || attempt.captured_order_id !== command.external_order_id) {
+      await markUnknown(db, command.request_id, fetcher, "paystack_capture_not_verified_no_request_sent");
+      return;
+    }
+
     if (!await claimPaystackRefundDispatchForDispatch(db, command.request_id)) return;
     let outcomeSent = false;
     try { outcomeSent = await postCommandOutcome(command.request_id, "dispatching", fetcher, undefined, command); }
@@ -247,10 +256,9 @@ async function processRefundCommand(
       return;
     }
 
-    const attempt = await findPaystackAttemptByReference(db, command.original_transaction_id);
     const result = await createPaystackRefund(config, {
       transactionReference: command.original_transaction_id,
-      transactionId: attempt?.transaction_id || null,
+      transactionId: attempt.transaction_id || null,
       amountMinor: command.amount_minor,
       currencyCode: command.currency_code,
       requestId: command.request_id,
@@ -302,14 +310,22 @@ export async function reconcilePaystackRefundsForCapture(
   if (!config) return 0;
   const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
   const attempt = await findPaystackAttemptByReference(db, captureReference);
-  if (!attempt?.transaction_id) return 0;
+  if (!attempt) return 0;
   const dispatches = await findPaystackRefundsForCapture(db, captureReference);
   const requestByReference = new Map(dispatches.map((row) => [paystackRefundReference(row.request_id), row.request_id]));
+  // Normally list every refund on the charge. Without Paystack's numeric
+  // charge ID, fall back to reading each open request by our own reference.
+  const items = attempt.transaction_id
+    ? await listPaystackRefunds(config, { transactionId: attempt.transaction_id }, fetcher)
+    : (await Promise.all(dispatches.filter((row) => OPEN_REFUND_STATES.includes(row.status)).map((row) =>
+      listPaystackRefunds(config, { refundReference: paystackRefundReference(row.request_id) }, fetcher)))).flat();
   let processed = 0;
-  for (const item of await listPaystackRefunds(config, { transactionId: attempt.transaction_id }, fetcher)) {
+  for (const item of items) {
     const reference = typeof item.reference === "string" ? item.reference.toLowerCase() : "";
+    const refundRequestId = requestByReference.get(reference) || null;
     const observation = parsePaystackRefund(item, {
-      reference: captureReference, transactionId: attempt.transaction_id, refundRequestId: requestByReference.get(reference) || null,
+      reference: captureReference, transactionId: attempt.transaction_id,
+      refundRequestId, refundReference: refundRequestId ? reference : null,
     });
     if (!observation) continue;
     const persisted = await receivePaystackObservation(db, observation, source, signature);
