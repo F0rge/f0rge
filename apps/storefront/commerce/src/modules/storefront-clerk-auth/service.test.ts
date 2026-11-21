@@ -7,8 +7,16 @@ const issuer = "https://unit-test.clerk.accounts.dev";
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwtKey = publicKey.export({ type: "spki", format: "pem" }).toString();
 
-function token(overrides: Record<string, unknown> = {}): string {
-  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "test-key" })).toString("base64url");
+function token(
+  overrides: Record<string, unknown> = {},
+  category: string | null = "cl_B7d4PD222AAA",
+): string {
+  const header = Buffer.from(JSON.stringify({
+    alg: "RS256",
+    typ: "JWT",
+    kid: "test-key",
+    ...(category ? { cat: category } : {}),
+  })).toString("base64url");
   const payload = Buffer.from(JSON.stringify({
     iss: issuer,
     sub: "user_clerk_123",
@@ -82,6 +90,17 @@ describe("Storefront Clerk auth provider", () => {
       provider_metadata: { issuer },
       user_metadata: expect.objectContaining({ email: "customer@example.com", email_verified: true }),
     }));
+  });
+
+  it("rejects a signed token without a Clerk category before looking up an identity", async () => {
+    const identities = createIdentityService();
+    const result = await new StorefrontClerkAuthProvider().authenticate(
+      { body: { token: token({}, null) } },
+      identities,
+    );
+    expect(result.success).toBe(false);
+    expect(identities.retrieve).not.toHaveBeenCalled();
+    expect(identities.create).not.toHaveBeenCalled();
   });
 
   it.each([
