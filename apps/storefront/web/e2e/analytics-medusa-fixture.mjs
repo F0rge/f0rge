@@ -40,10 +40,18 @@ function addLine(cart, { variant_id, quantity }) {
   if (!unit) return false
   const line = cart.items.find((item) => item.variant_id === variant_id)
   if (line) line.quantity += quantity
-  else cart.items.push({ id: `item_${variant_id}`, variant_id, title: product.title, thumbnail: product.thumbnail, quantity, unit_price: unit.calculated_price.calculated_amount })
+  else cart.items.push({ id: `cali_${variant_id}`, variant_id, product_id: product.id, title: product.title, thumbnail: product.thumbnail, quantity, unit_price: unit.calculated_price.calculated_amount })
+  totals(cart)
+  return true
+}
+function totals(cart) {
   for (const item of cart.items) item.total = item.unit_price * item.quantity
   cart.subtotal = cart.total = cart.items.reduce((sum, item) => sum + item.total, 0)
-  return true
+}
+const readJson = async (request) => {
+  let body = ''
+  for await (const chunk of request) body += chunk
+  return body ? JSON.parse(body) : {}
 }
 
 createServer(async (request, response) => {
@@ -55,19 +63,46 @@ createServer(async (request, response) => {
     response.end(JSON.stringify({ cart }))
     return
   }
-  const cartPath = /^\/store\/carts\/([^/]+)(\/line-items)?$/.exec(url.pathname)
+  const cartPath = /^\/store\/carts\/([^/]+)(?:\/(line-items|checkout-hold|storefront-checkout)(?:\/([^/]+))?)?$/.exec(url.pathname)
   const cart = cartPath && carts.get(cartPath[1])
-  if (cart && !cartPath[2] && request.method === 'GET') {
+  const [, , action, itemId] = cartPath || []
+  if (cart && !action && request.method === 'GET') {
     response.end(JSON.stringify({ cart }))
     return
   }
-  if (cart && cartPath[2] && request.method === 'POST') {
-    let body = ''
-    for await (const chunk of request) body += chunk
-    if (addLine(cart, JSON.parse(body))) {
+  if (cart && action === 'line-items' && !itemId && request.method === 'POST') {
+    if (addLine(cart, await readJson(request))) {
       response.end(JSON.stringify({ cart }))
       return
     }
+  }
+  const line = cart && itemId && cart.items.find((item) => item.id === itemId)
+  if (line && request.method === 'POST') {
+    line.quantity = (await readJson(request)).quantity
+    totals(cart)
+    response.end(JSON.stringify({ cart }))
+    return
+  }
+  if (line && request.method === 'DELETE') {
+    cart.items = cart.items.filter((item) => item !== line)
+    totals(cart)
+    response.end(JSON.stringify({ parent: cart }))
+    return
+  }
+  // A hold is just a flag here; real Medusa reserves stock for 20 minutes.
+  if (cart && action === 'checkout-hold') {
+    const hold = request.method === 'POST'
+      ? { status: 'active', expires_at: new Date(Date.now() + 20 * 60_000).toISOString() }
+      : { status: 'cancelled' }
+    cart.metadata = { storefront_hold: hold }
+    response.end(JSON.stringify({ hold }))
+    return
+  }
+  // No card provider is configured in the fixture: commerce answers before it creates any order.
+  if (cart && action === 'storefront-checkout') {
+    response.statusCode = 404
+    response.end(JSON.stringify({ code: 'payment_unavailable', message: 'Checkout is not available here' }))
+    return
   }
   if (url.pathname === '/store/regions') {
     response.end(JSON.stringify({ regions: [{ id: 'reg_test', currency_code: 'zar' }] }))
@@ -75,7 +110,8 @@ createServer(async (request, response) => {
   }
   if (url.pathname === '/store/products') {
     const handles = url.searchParams.getAll('handle')
-    const matching = products().filter((product) => !handles.length || handles.includes(product.handle))
+    const ids = url.searchParams.getAll('id')
+    const matching = products().filter((product) => (!handles.length || handles.includes(product.handle)) && (!ids.length || ids.includes(product.id)))
     response.end(JSON.stringify({ products: matching, count: matching.length }))
     return
   }

@@ -18,7 +18,7 @@ test('DasKasas desktop navigation shows the four categories, Shop all and Help',
   const nav = page.getByRole('navigation', { name: 'Main navigation' })
   await expect(nav.getByRole('link')).toHaveText(menu.map(([label]) => label))
   for (const [label, href] of menu) await expect(nav.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href)
-  await expect(header.getByRole('link', { name: 'Bag', exact: true })).toBeVisible()
+  await expect(header.getByRole('button', { name: 'Bag, 0 items' })).toBeVisible()
   await expect(header.getByRole('link', { name: 'Account', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden()
   await header.getByRole('link', { name: 'DasKasas home' }).click()
@@ -57,7 +57,7 @@ for (const width of [390, 320]) {
     await expect(page).toHaveURL(/\/shop$/)
     await expect(dialog).toBeHidden()
     expect(await noHorizontalScroll(page)).toBe(true)
-    await expect(page.getByRole('banner').getByRole('link', { name: 'Bag', exact: true })).toBeVisible()
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Bag, 0 items' })).toBeVisible()
 
     await trigger.click()
     await dialog.getByRole('button', { name: 'Close', exact: true }).click()

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BagError, cartCookie, createCart, currentCartId, getCart, medusaRequest, publicBag, signedCart } from "@/lib/bag-server";
+import { BagError, cartCookie, createCart, currentCartId, getCart, medusaRequest, publicBag, signedCart, withStock } from "@/lib/bag-server";
 import { isSameOrigin } from "@/lib/same-origin";
 
 type CartResponse = { cart?: Parameters<typeof publicBag>[0]; parent?: Parameters<typeof publicBag>[0] };
@@ -31,7 +31,7 @@ async function activeCart(id: string | null) {
 export async function GET() {
   try {
     const id = await currentCartId();
-    return NextResponse.json(await activeCart(id) || publicBag());
+    return NextResponse.json(await withStock(await activeCart(id) || publicBag()));
   } catch (error) { return reply(error); }
 }
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     if (!cart.id) throw new BagError(503, "Bag unavailable");
     if (hasActiveHold(cart.hold)) return NextResponse.json({ message: "Change bag to edit this reservation" }, { status: 409 });
     const { cart: updated } = await medusaRequest<CartResponse>(`/store/carts/${cart.id}/line-items`, "POST", { variant_id: variantId, quantity });
-    const response = NextResponse.json(publicBag(updated));
+    const response = NextResponse.json(await withStock(publicBag(updated)));
     if (cart.id !== existingId) response.cookies.set(cartCookie, signedCart(cart.id), {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30,
     });
@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest) {
     if (!bag.items.some((item) => item.id === itemId)) return NextResponse.json({ message: "Item not found" }, { status: 404 });
     if (hasActiveHold(bag.hold)) return NextResponse.json({ message: "Change bag to edit this reservation" }, { status: 409 });
     const { cart } = await medusaRequest<CartResponse>(`/store/carts/${id}/line-items/${itemId}`, "POST", { quantity });
-    return NextResponse.json(publicBag(cart));
+    return NextResponse.json(await withStock(publicBag(cart)));
   } catch (error) { return reply(error); }
 }
 
@@ -92,6 +92,6 @@ export async function DELETE(request: NextRequest) {
     if (!bag.items.some((item) => item.id === itemId)) return NextResponse.json({ message: "Item not found" }, { status: 404 });
     if (hasActiveHold(bag.hold)) return NextResponse.json({ message: "Change bag to edit this reservation" }, { status: 409 });
     const { parent } = await medusaRequest<CartResponse>(`/store/carts/${id}/line-items/${itemId}`, "DELETE");
-    return NextResponse.json(publicBag(parent));
+    return NextResponse.json(await withStock(publicBag(parent)));
   } catch (error) { return reply(error); }
 }

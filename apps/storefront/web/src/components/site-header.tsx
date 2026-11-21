@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, ShoppingBag, User } from "lucide-react";
-import { Button, Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@f0rge/ui";
+import { Badge, Button, Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@f0rge/ui";
+import { itemCount, useBag } from "./bag";
 import { SHOP_CATEGORIES } from "@/lib/shop-categories";
 import { HeaderAuth } from "./header-auth";
 import { Wordmark } from "./wordmark";
@@ -18,6 +19,8 @@ const links = [
 export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { bag, setOpen: setBagOpen } = useBag();
+  const count = itemCount(bag);
   const current = (href: string) => (pathname === href ? "page" : undefined);
 
   return <>
@@ -57,8 +60,9 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
             </Button>
             {clerkConfigured && <HeaderAuth />}
           </div>
-          <Button variant="outline" size="icon-lg" nativeButton={false} role="link" render={<Link href="/bag" aria-label="Bag" aria-current={current("/bag")} />}>
+          <Button variant="outline" size="icon-lg" className="relative" aria-haspopup="dialog" aria-label={`Bag, ${count} ${count === 1 ? "item" : "items"}`} onClick={() => setBagOpen(true)}>
             <ShoppingBag className="size-5" />
+            {count > 0 && <Badge data-testid="bag-count" className="absolute -top-2 -right-2 h-5 min-w-5 px-1">{count}</Badge>}
           </Button>
         </div>
       </div>

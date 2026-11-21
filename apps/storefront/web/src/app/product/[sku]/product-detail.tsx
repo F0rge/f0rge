@@ -2,9 +2,9 @@
 
 import { Button, Stepper, cn } from "@f0rge/ui";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import type { MedusaVariant, StoreProduct } from "@/lib/medusa";
 import { PieceImage } from "@/components/piece-image";
+import { bagRequest, useBag } from "@/components/bag";
 import { useProductAttention } from "@/components/analytics/use-product-attention";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
@@ -49,7 +49,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const [requested, setRequested] = useState(1);
   const [adding, setAdding] = useState(false);
   const [bagMessage, setBagMessage] = useState("");
-  const [bagFailed, setBagFailed] = useState(false);
+  const { setBag, setOpen: openBag } = useBag();
   const feedbackRef = useRef<HTMLParagraphElement>(null);
   const image = activeImage && gallery.includes(activeImage) ? activeImage : gallery[0];
   const imagePosition = image ? gallery.indexOf(image) + 1 : 0;
@@ -77,7 +77,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
   const description = customerFacingCopy(product.description);
   const category = product.categories?.[0]?.name;
-  const feedback = bagMessage ? purchaseFeedback(bagMessage, bagFailed) : null;
+  const feedback = bagMessage ? purchaseFeedback(bagMessage, true) : null;
   useEffect(() => { if (bagMessage) feedbackRef.current?.focus(); }, [bagMessage]);
   useEffect(() => {
     if (choice === "accepted") capture({ name: "storefront_product_viewed", properties: { product_id: product.id } });
@@ -151,28 +151,22 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           <div className="text-sm font-medium">
             <Button size="lg" type="button" className="h-12 w-full" disabled={!canAdd || adding} onClick={async () => {
               if (!variant) return;
-              setAdding(true); setBagMessage(""); setBagFailed(false);
+              setAdding(true); setBagMessage("");
               try {
-                const response = await fetch("/api/bag", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ variant_id: variant.id, quantity: chosenQuantity }) });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.message || "Could not add this piece");
+                setBag(await bagRequest("POST", "/api/bag", { variant_id: variant.id, quantity: chosenQuantity }));
                 const valueMinor = zarMinorUnits((variant.calculated_price?.calculated_amount ?? NaN) * chosenQuantity);
                 if (valueMinor !== null) capture({
                   name: "storefront_cart_item_added",
                   properties: { variant_id: variant.id, product_id: product.id, quantity: chosenQuantity, value_minor: valueMinor },
                 });
-                setBagFailed(false);
-                setBagMessage(`Added ${chosenQuantity} × ${product.title} to your bag.`);
+                openBag(true);
               } catch (error) {
-                setBagFailed(true);
                 setBagMessage(error instanceof Error ? error.message : "Could not add this piece");
               }
               finally { setAdding(false); }
             }}>{adding ? "Adding…" : "Add to bag"}</Button>
           </div>
-          {feedback && <p ref={feedbackRef} role={feedback.role} tabIndex={feedback.tabIndex} className={cn("rounded-lg border p-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring", bagFailed ? "border-destructive text-destructive" : "bg-muted")}>
-            {feedback.message}{!bagFailed && <> <Link href="/bag" className="font-medium underline underline-offset-4">View bag</Link></>}
-          </p>}
+          {feedback && <p ref={feedbackRef} role={feedback.role} tabIndex={feedback.tabIndex} className="rounded-lg border border-destructive p-4 text-sm text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring">{feedback.message}</p>}
         </div>
 
         <div className="border-t pt-6">

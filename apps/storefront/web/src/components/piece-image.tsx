@@ -2,7 +2,7 @@ import { cn } from "@f0rge/ui";
 import type { StoreProduct } from "@/lib/medusa";
 
 // A neat named tile wherever a piece has no photograph yet.
-export function PieceImage({ product, className }: { product: StoreProduct; className?: string }) {
+export function PieceImage({ product, className }: { product: Pick<StoreProduct, "title" | "thumbnail" | "images">; className?: string }) {
   const image = product.thumbnail || product.images?.[0]?.url;
   return image
     ? <img src={image} alt="" width={800} height={800} loading="lazy" className={cn("size-full object-cover transition-transform group-hover:scale-105", className)} />

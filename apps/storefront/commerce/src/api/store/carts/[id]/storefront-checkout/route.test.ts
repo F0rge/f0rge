@@ -7,6 +7,7 @@ import {
   updateCartWorkflow,
 } from "@medusajs/medusa/core-flows";
 import { checkoutHoldForCart, withCheckoutInventoryLock } from "../../../../../checkout-holds";
+import { testPaymentEnabled } from "../../../../../test-payment-config";
 import { POST } from "./route";
 
 jest.mock("@medusajs/medusa/core-flows", () => ({
@@ -119,4 +120,13 @@ test("binds the durable payment to the original cart, immutable checkout snapsho
   expect(paymentSessionRun).toHaveBeenCalledWith({ input: expect.objectContaining({
     data: { storefront_cart_id: cart.id, storefront_checkout_snapshot: cart, storefront_customer_email: "guest@example.test" },
   }) });
+});
+
+test("answers a stable payment_unavailable code before touching the bag when no card provider is configured", async () => {
+  (testPaymentEnabled as jest.Mock).mockReturnValueOnce(false);
+  const { req, response } = fixture(null);
+  await POST(req, response);
+  expect(response.statusCode).toBe(404);
+  expect(response.body).toEqual({ code: "payment_unavailable", message: "Checkout is not available here" });
+  expect(withCheckoutInventoryLock).not.toHaveBeenCalled();
 });

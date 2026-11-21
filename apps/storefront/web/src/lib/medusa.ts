@@ -153,6 +153,20 @@ export async function getStoreProduct(slug: string): Promise<StoreProduct | null
   return products[0] && isPublicProduct(products[0]) ? publicProduct(products[0]) : null;
 }
 
+// The most of each variant a shopper can put in the bag: its stock, or the made-to-order places left, at most 99.
+// ponytail: ignores offer freshness and expiry; the checkout hold re-checks availability before payment.
+export async function variantQuantityCaps(productIds: string[]): Promise<Map<string, number>> {
+  if (!productIds.length) return new Map();
+  const query = new URLSearchParams({ fields: "id,*variants,+variants.inventory_quantity,+variants.metadata" });
+  for (const id of new Set(productIds)) query.append("id", id);
+  const { products } = await storeFetch<{ products: StoreProduct[] }>(`/store/products?${query}`);
+  return new Map(products.flatMap((product) => product.variants.map((variant) => {
+    const stock = variant.inventory_quantity ?? 0;
+    const offer = variant.metadata?.storefront_made_to_order_offer;
+    return [variant.id, Math.min(99, stock > 0 ? stock : Math.max(offer?.remaining_capacity ?? 0, 0))] as const;
+  })));
+}
+
 export function productPath(product: StoreProduct): string {
   return `/product/${product.handle.replace(/^firstout-(?!group-)/, "")}`;
 }

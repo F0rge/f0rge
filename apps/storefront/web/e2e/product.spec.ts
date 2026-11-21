@@ -28,10 +28,9 @@ test('an in-stock piece shows its facts, caps quantity at stock and adds to the 
   const added = page.waitForRequest((request) => request.url().endsWith('/api/bag') && request.method() === 'POST')
   await page.getByRole('button', { name: 'Add to bag' }).click()
   expect((await added).postDataJSON()).toEqual({ variant_id: 'variant_tilda_sofa', quantity: 2 })
-  const confirmation = article.getByRole('status').filter({ hasText: 'Added' })
-  await expect(confirmation).toHaveText('Added 2 × Tilda Sofa to your bag. View bag')
-  await expect(confirmation).toBeFocused()
-  await expect(confirmation.getByRole('link', { name: 'View bag' })).toHaveAttribute('href', '/bag')
+  const drawer = page.getByRole('dialog', { name: 'Your bag' })
+  await expect(drawer.getByLabel('Quantity of Tilda Sofa: 2')).toBeVisible()
+  await page.keyboard.press('Escape')
 
   await expect(page.getByRole('region', { name: 'Delivery and returns' })).toContainText('selected Gauteng areas')
   await expect(page.getByRole('region', { name: 'Delivery and returns' })).toContainText('confirmed in your order total before payment')
@@ -74,7 +73,9 @@ test('the gallery and add to bag work from the keyboard', async ({ page }) => {
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Add to bag' })).toBeFocused()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('status').filter({ hasText: 'Added 1 × Test chair' })).toBeFocused()
+  const drawer = page.getByRole('dialog', { name: 'Your bag' })
+  await expect(drawer.getByRole('heading', { name: 'Test chair' })).toBeVisible()
+  await expect.poll(() => drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true)
 })
 
 for (const path of [tilda, wren, vale]) {
