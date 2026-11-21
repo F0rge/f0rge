@@ -12,7 +12,11 @@ jest.mock("../../../storefront-paystack-refunds", () => ({ reconcilePaystackRefu
 
 const secret = "whsec_route_test";
 const attempt = { id: "spay_1", reference: "dk_reference_route", payment_session_id: "payses_1" };
-const env = { PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY, PAYSTACK_WEBHOOK_SECRET: process.env.PAYSTACK_WEBHOOK_SECRET };
+const env = {
+  PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
+  PAYSTACK_WEBHOOK_SECRET: process.env.PAYSTACK_WEBHOOK_SECRET,
+  STOREFRONT_PUBLIC_URL: process.env.STOREFRONT_PUBLIC_URL,
+};
 
 function signed(body: string, t = Math.floor(Date.now() / 1000)): string {
   return `t=${t},v1=whk_test:${createHmac("sha512", secret).update(`${t}.`).update(body).digest("hex")}`;
@@ -40,6 +44,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   process.env.PAYSTACK_SECRET_KEY = "sk_test_route";
   process.env.PAYSTACK_WEBHOOK_SECRET = secret;
+  // CI runs with NODE_ENV=production, where the http://localhost default is refused.
+  process.env.STOREFRONT_PUBLIC_URL = "https://shop.example.test";
   jest.mocked(findPaystackAttemptByReference).mockResolvedValue(attempt as never);
   jest.mocked(verifyAndProcessPaystackCharge).mockResolvedValue("processed");
   jest.mocked(reconcilePaystackRefundsForCapture).mockResolvedValue(1);
