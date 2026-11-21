@@ -88,6 +88,7 @@ function WorkspaceContent<T extends { id: string }>({
   renderDetails,
   loadingDetails,
   headerActions,
+  summary,
   renderSelectionActions,
   onExport,
   children,
@@ -175,6 +176,7 @@ function WorkspaceContent<T extends { id: string }>({
           )}
         </div>
       </header>
+      {summary}
       {notice && (
         <InlineNotification
           kind="info"

@@ -63,6 +63,8 @@ export interface RecordWorkspaceProps<T extends { id: string }> {
   renderDetails: (item: T, context: RecordWorkspaceContext) => ReactNode;
   loadingDetails?: { tabs: readonly string[]; fields: readonly string[] };
   headerActions?: ReactNode;
+  /** Shown between the header and the filters, e.g. KPI tiles. */
+  summary?: ReactNode;
   renderSelectionActions?: (selection: { ids: string[]; query: WorkspaceQuery }) => ReactNode;
   onExport?: (query: WorkspaceQuery) => void | Promise<void>;
   children?: ReactNode;

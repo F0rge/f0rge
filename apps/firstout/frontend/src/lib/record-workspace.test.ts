@@ -15,6 +15,15 @@ import type { AuthUser } from "./api";
 
 const defaults = () => readWorkspaceQuery(new URLSearchParams());
 describe("record workspace URL state", () => {
+  it("reads a leading minus on the default sort as descending until the URL picks a sort", () => {
+    expect(readWorkspaceQuery(new URLSearchParams(), "-paid_on").sort).toEqual({
+      field: "paid_on",
+      direction: "desc",
+    });
+    expect(
+      readWorkspaceQuery(new URLSearchParams("sort=amount&direction=asc"), "-paid_on").sort,
+    ).toEqual({ field: "amount", direction: "asc" });
+  });
   it("does not mislabel advanced numeric thresholds as zero shortcuts", () => {
     expect(
       quickFilterValue("number", {

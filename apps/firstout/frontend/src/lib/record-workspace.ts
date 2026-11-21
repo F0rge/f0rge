@@ -68,6 +68,7 @@ export function readWorkspaceQuery(
   const limit = Number(params.get("size") || 25);
   const page = Math.max(1, Number(params.get("page")) || 1);
   const lifecycle = params.get("lifecycle");
+  const sort = params.get("sort");
   return {
     q: (params.get("q") || "").slice(0, 200),
     lifecycle:
@@ -78,10 +79,16 @@ export function readWorkspaceQuery(
           : "active",
     match: params.get("match") === "any" ? "any" : "all",
     filters,
-    sort: {
-      field: params.get("sort") || defaultSort,
-      direction: params.get("direction") === "desc" ? "desc" : "asc",
-    },
+    // A leading "-" on the default sort means newest/largest first.
+    sort: sort
+      ? {
+          field: sort,
+          direction: params.get("direction") === "desc" ? "desc" : "asc",
+        }
+      : {
+          field: defaultSort.replace(/^-/, ""),
+          direction: defaultSort.startsWith("-") ? "desc" : "asc",
+        },
     limit: WORKSPACE_PAGE_SIZES.includes(limit) ? limit : 25,
     offset:
       (Math.min(Math.floor(page), 100000) - 1) *

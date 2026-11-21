@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from app.schemas.account import AccountResponse
 from app.schemas.customer_crm import CustomerCrmResponse
 from app.schemas.location import LocationResponse
+from app.schemas.payment import PaymentResponse
 from app.schemas.price_list import PriceListResponse
 from app.schemas.proforma import ProformaResponse
 from app.schemas.quote import QuoteListItem
@@ -29,6 +30,7 @@ WorkspaceResource = Literal[
     "repeating-invoices",
     "proformas",
     "quotes",
+    "payments",
 ]
 WorkspaceAction = Literal[
     "edit",
@@ -52,6 +54,7 @@ WorkspaceRow = Union[
     RepeatingInvoiceResponse,
     ProformaResponse,
     QuoteListItem,
+    PaymentResponse,
 ]
 
 

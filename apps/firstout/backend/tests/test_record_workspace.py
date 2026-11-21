@@ -228,6 +228,7 @@ async def test_query_rejects_unapproved_fields_and_operators(owner_client, body)
         "repeating-invoices",
         "proformas",
         "quotes",
+        "payments",
     ],
 )
 async def test_every_workspace_resource_has_a_scoped_query(owner_client, resource):

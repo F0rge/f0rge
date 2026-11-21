@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from app.models.account import Account
 from app.models.customer import Customer
 from app.models.location import Location
+from app.models.payment import Payment
 from app.models.price_list import PriceList
 from app.models.proforma import Proforma
 from app.models.quote import Quote
@@ -207,5 +208,28 @@ DEFINITIONS = {
         SALES_QUOTES,
         # Lifecycle Open / Converted: converted and accepted quotes are read-only.
         archive_field="is_converted",
+    ),
+    "payments": WorkspaceDefinition(
+        Payment,
+        {
+            **COMMON,
+            "payment_number": "text",
+            "direction": "text",
+            "party_name": "text",
+            "document_number": "text",
+            "tender": "text",
+            "reference": "text",
+            "currency": "text",
+            "amount": "number",
+            "amount_zar": "number",
+            "fx_gain_loss_zar": "number",
+            "paid_on": "date",
+            "is_reconciled": "boolean",
+        },
+        frozenset(),
+        # Voiding needs a reason and has its own endpoint, never a bulk action.
+        frozenset(),
+        BOOKS_MUTATE,
+        archive_field="is_voided",
     ),
 }

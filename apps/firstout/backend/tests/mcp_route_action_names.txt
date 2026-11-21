@@ -127,6 +127,7 @@ list_journals
 list_laybys
 list_location_bins
 list_locations
+list_open_payment_documents
 list_payments
 list_periods
 list_picks
@@ -164,6 +165,7 @@ match_bank_line
 match_bank_line_document
 pack_delivery
 patch_delivery_tracking
+payment_summary
 post_journal
 preview_auto_match
 preview_pick
@@ -216,3 +218,4 @@ upsert_category_map
 upsert_price_list_item
 vat201_draft
 void_journal
+void_payment

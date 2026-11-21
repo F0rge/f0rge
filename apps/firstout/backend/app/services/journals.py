@@ -140,31 +140,8 @@ class JournalService:
 
         await assert_date_postable(self.db, entry.entry_date)
 
-        reversing_id = uuid.uuid4()
-        reversing = JournalEntry(
-            id=reversing_id,
-            document_type=JournalDocumentType.MANUAL,
-            document_id=reversing_id,
-            memo=f"Void of {entry.journal_number}",
-            status=JournalStatus.POSTED,
-            entry_date=entry.entry_date,
-            source="void",
-            journal_number=None,
-        )
         async with unit_of_work(self.db):
-            reversing.journal_number = await self.crud.get_next_journal_number()
-            await self.crud.add_and_flush(reversing)
-            for line in entry.lines:
-                await self.crud.add_line(
-                    JournalLine(
-                        entry_id=reversing.id,
-                        account_id=line.account_id,
-                        debit_zar=line.credit_zar,
-                        credit_zar=line.debit_zar,
-                    )
-                )
-            entry.status = JournalStatus.VOIDED
-            entry.voided_by_id = reversing.id
+            await self.stage_reversal(entry, memo=f"Void of {entry.journal_number}")
             await self.events.record(
                 BooksDocumentType.JOURNAL,
                 entry.id,
@@ -173,6 +150,44 @@ class JournalService:
             )
 
         return self._to_response(await self._get_or_404(entry.id))
+
+    async def stage_reversal(
+        self,
+        entry: JournalEntry,
+        *,
+        memo: str,
+        document_type: JournalDocumentType = JournalDocumentType.MANUAL,
+        document_id: Optional[uuid.UUID] = None,
+    ) -> JournalEntry:
+        """Post the mirror image of ``entry`` on its date and mark it voided.
+
+        Stages only; the caller owns the transaction and the period check. A manual
+        void's reversal is its own document; a source document passes its own id.
+        """
+        reversing_id = uuid.uuid4()
+        reversing = JournalEntry(
+            id=reversing_id,
+            document_type=document_type,
+            document_id=document_id or reversing_id,
+            memo=memo,
+            status=JournalStatus.POSTED,
+            entry_date=entry.entry_date,
+            source="void",
+            journal_number=await self.crud.get_next_journal_number(),
+        )
+        await self.crud.add_and_flush(reversing)
+        for line in entry.lines:
+            await self.crud.add_line(
+                JournalLine(
+                    entry_id=reversing.id,
+                    account_id=line.account_id,
+                    debit_zar=line.credit_zar,
+                    credit_zar=line.debit_zar,
+                )
+            )
+        entry.status = JournalStatus.VOIDED
+        entry.voided_by_id = reversing.id
+        return reversing
 
     async def _get_or_404(self, journal_id: uuid.UUID) -> JournalEntry:
         entry = await self.crud.get_entry_by_id(journal_id)

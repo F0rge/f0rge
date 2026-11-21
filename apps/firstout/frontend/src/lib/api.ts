@@ -2538,6 +2538,8 @@ export async function downloadBillAttachment(id: string, billNumber: string): Pr
 
 export type PaymentDirection = "in" | "out";
 
+export type PaymentMethod = "eft" | "card" | "cash" | "other";
+
 export type Payment = {
   id: string;
   payment_number: string;
@@ -2550,13 +2552,26 @@ export type Payment = {
   amount_zar: string;
   fx_gain_loss_zar: string;
   paid_on: string;
+  /** Payment method; till payments may also be "deposit". */
+  tender: PaymentMethod | "deposit" | null;
+  reference: string | null;
+  party_name: string | null;
+  document_number: string | null;
   is_reconciled: boolean;
   reconciled_at: string | null;
+  is_voided: boolean;
+  voided_at: string | null;
+  void_reason: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type CreatePaymentInPayload = {
+type PaymentMethodPayload = {
+  tender?: PaymentMethod;
+  reference?: string;
+};
+
+export type CreatePaymentInPayload = PaymentMethodPayload & {
   direction: "in";
   invoice_id: string;
   amount: string;
@@ -2564,7 +2579,7 @@ export type CreatePaymentInPayload = {
   paid_on: string;
 };
 
-export type CreatePaymentOutPayload = {
+export type CreatePaymentOutPayload = PaymentMethodPayload & {
   direction: "out";
   bill_id: string;
   amount: string;
@@ -2572,6 +2587,44 @@ export type CreatePaymentOutPayload = {
   fx_to_zar?: string;
   paid_on: string;
 };
+
+export type PaymentOpenDocument = {
+  kind: "invoice" | "bill";
+  document_id: string;
+  number: string;
+  contact_name: string;
+  issue_date: string;
+  currency: string;
+  fx_to_zar: string;
+  outstanding_foreign: string;
+  outstanding_zar: string;
+};
+
+export type PaymentSummary = {
+  received_this_month_zar: string;
+  received_this_month_count: number;
+  paid_this_month_zar: string;
+  paid_this_month_count: number;
+  unreconciled_count: number;
+  unreconciled_net_zar: string;
+};
+
+export function listOpenPaymentDocuments(
+  direction: PaymentDirection,
+): Promise<PaymentOpenDocument[]> {
+  return apiFetch<PaymentOpenDocument[]>(`/payments/open-documents?direction=${direction}`);
+}
+
+export function getPaymentSummary(): Promise<PaymentSummary> {
+  return apiFetch<PaymentSummary>("/payments/summary");
+}
+
+export function voidPayment(id: string, reason: string): Promise<Payment> {
+  return apiFetch<Payment>(`/payments/${id}/void`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
 
 export type CreatePaymentPayload = CreatePaymentInPayload | CreatePaymentOutPayload;
 

@@ -23,6 +23,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { BooksHistory } from "@/components/books-history";
+import { PaymentMethodFields, paymentMethodLabel } from "@/components/payment-method-fields";
 import {
   canMutateBooks,
   createPayment,
@@ -34,6 +35,7 @@ import {
   uploadBillAttachment,
   type Bill,
   type Payment,
+  type PaymentMethod,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatSettlementAmount } from "@/lib/source-history";
@@ -67,6 +69,8 @@ export default function BillDetailPage() {
   const [paymentCurrency, setPaymentCurrency] = useState("USD");
   const [paymentFx, setPaymentFx] = useState("");
   const [paymentDate, setPaymentDate] = useState(todayIso());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("eft");
+  const [paymentReference, setPaymentReference] = useState("");
   const [lastPayment, setLastPayment] = useState<Payment | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
 
@@ -137,6 +141,7 @@ export default function BillDetailPage() {
     setPaymentCurrency(bill.currency);
     setPaymentFx(bill.fx_to_zar);
     setPaymentDate(todayIso());
+    setPaymentReference("");
     setPaymentOpen(true);
   }
 
@@ -164,6 +169,8 @@ export default function BillDetailPage() {
         currency: paymentCurrency.trim(),
         fx_to_zar: paymentCurrency === "ZAR" ? undefined : paymentFx.trim(),
         paid_on: paymentDate,
+        tender: paymentMethod,
+        reference: paymentReference.trim() || undefined,
       });
       setLastPayment(payment);
       setPaymentOpen(false);
@@ -314,12 +321,15 @@ export default function BillDetailPage() {
               <TableHeader>Paid on</TableHeader>
               <TableHeader>Amount</TableHeader>
               <TableHeader>ZAR</TableHeader>
+              <TableHeader>Method</TableHeader>
+              <TableHeader>Reference</TableHeader>
+              <TableHeader>Status</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
             {payments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4}>No payments recorded yet.</TableCell>
+                <TableCell colSpan={7}>No payments recorded yet.</TableCell>
               </TableRow>
             ) : (
               payments.map((payment) => (
@@ -330,6 +340,9 @@ export default function BillDetailPage() {
                     {payment.currency} {payment.amount}
                   </TableCell>
                   <TableCell>{formatZarAmount(payment.amount_zar)}</TableCell>
+                  <TableCell>{paymentMethodLabel(payment.tender)}</TableCell>
+                  <TableCell>{payment.reference ?? "—"}</TableCell>
+                  <TableCell>{payment.is_voided ? "Voided" : payment.is_reconciled ? "Reconciled" : "Unreconciled"}</TableCell>
                 </TableRow>
               ))
             )}
@@ -460,6 +473,13 @@ export default function BillDetailPage() {
             value={paymentDate}
             onChange={(event) => setPaymentDate(event.target.value)}
             required
+          />
+          <PaymentMethodFields
+            idPrefix="bill-payment"
+            method={paymentMethod}
+            reference={paymentReference}
+            onMethodChange={setPaymentMethod}
+            onReferenceChange={setPaymentReference}
           />
         </Stack>
       </Modal> : null}

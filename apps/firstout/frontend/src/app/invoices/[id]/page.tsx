@@ -26,6 +26,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { BooksHistory } from "@/components/books-history";
+import { PaymentMethodFields, paymentMethodLabel } from "@/components/payment-method-fields";
 import {
   INVOICE_NOTE_MAX,
   canMutateBooks,
@@ -50,6 +51,7 @@ import {
   type Invoice,
   type Payment,
   type SalesStaffOption,
+  type PaymentMethod,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
@@ -79,6 +81,8 @@ export default function InvoiceDetailPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(todayIso());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("eft");
+  const [paymentReference, setPaymentReference] = useState("");
   const [creditOpen, setCreditOpen] = useState(false);
   const [creditReason, setCreditReason] = useState("");
   const [lastPayment, setLastPayment] = useState<Payment | null>(null);
@@ -151,6 +155,7 @@ export default function InvoiceDetailPage() {
     }
     setPaymentAmount(invoice.balance);
     setPaymentDate(todayIso());
+    setPaymentReference("");
     setPaymentOpen(true);
   }
 
@@ -176,6 +181,8 @@ export default function InvoiceDetailPage() {
         amount: paymentAmount.trim(),
         currency: "ZAR",
         paid_on: paymentDate,
+        tender: paymentMethod,
+        reference: paymentReference.trim() || undefined,
       });
       setLastPayment(payment);
       setPaymentOpen(false);
@@ -564,13 +571,15 @@ export default function InvoiceDetailPage() {
               <TableHeader>Number</TableHeader>
               <TableHeader>Paid on</TableHeader>
               <TableHeader>Amount</TableHeader>
+              <TableHeader>Method</TableHeader>
+              <TableHeader>Reference</TableHeader>
               <TableHeader>Reconciled</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
             {payments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4}>No payments recorded yet.</TableCell>
+                <TableCell colSpan={6}>No payments recorded yet.</TableCell>
               </TableRow>
             ) : (
               payments.map((payment) => (
@@ -578,7 +587,9 @@ export default function InvoiceDetailPage() {
                   <TableCell>{payment.payment_number}</TableCell>
                   <TableCell>{payment.paid_on}</TableCell>
                   <TableCell>{formatZarAmount(payment.amount)}</TableCell>
-                  <TableCell>{payment.is_reconciled ? "Yes" : "No"}</TableCell>
+                  <TableCell>{paymentMethodLabel(payment.tender)}</TableCell>
+                  <TableCell>{payment.reference ?? "—"}</TableCell>
+                  <TableCell>{payment.is_voided ? "Voided" : payment.is_reconciled ? "Yes" : "No"}</TableCell>
                 </TableRow>
               ))
             )}
@@ -613,6 +624,13 @@ export default function InvoiceDetailPage() {
             value={paymentDate}
             onChange={(event) => setPaymentDate(event.target.value)}
             required
+          />
+          <PaymentMethodFields
+            idPrefix="invoice-payment"
+            method={paymentMethod}
+            reference={paymentReference}
+            onMethodChange={setPaymentMethod}
+            onReferenceChange={setPaymentReference}
           />
         </Stack>
       </Modal> : null}

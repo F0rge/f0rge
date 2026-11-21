@@ -23,6 +23,7 @@ from app.services.accounts import AccountService
 from app.services.customers_crm import CustomersCrmService
 from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
 from app.services.locations import LocationService
+from app.services.payments import PaymentService
 from app.services.permissions import PermissionService
 from app.services.price_lists import PriceListService
 from app.services.proformas import ProformaService
@@ -87,6 +88,8 @@ class RecordWorkspaceService:
             return await RoleService(self.db).list()
         if resource == "accounts":
             return await AccountService(self.db).list()
+        if resource == "payments":
+            return await PaymentService(self.db).list_all()
         return await RepeatingInvoiceService(self.db).list()
 
     async def row(
