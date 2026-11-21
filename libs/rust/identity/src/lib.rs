@@ -55,9 +55,11 @@ impl Auth {
             .collect();
         let jwks_url = std::env::var("ACCESS_JWKS_URL")
             .unwrap_or_else(|_| format!("{issuer}/cdn-cgi/access/certs"));
-        let local = std::env::var("BUYCYCLE_ENV").as_deref() == Ok("local");
-        Self::new(issuer, audience, jwks_url, emails, local).await
+        // Environment configuration never enables local mode; only `new(.., true)` does.
+        Self::new(issuer, audience, jwks_url, emails, false).await
     }
+    /// `local` permits loopback HTTP issuer/JWKS fixtures and disables Cloudflare origin/path pinning;
+    /// tests only. Production callers pass `false`.
     pub async fn new(
         issuer: String,
         audience: String,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time switch of the environment monitor (Pi) to Releases by cd.yml. Order of use: 2 of 6.
+# One-time switch of the environment monitor (Pi) to Releases by cd.yml. Order of use: 2 of 5.
 #   .github/deploy/switch/envmon.sh
 APP=envmon
 TITLE="Environment monitor: switch the Pi to image Releases"

@@ -58,7 +58,7 @@ pub async fn setup() -> (Auth, actix_web::dev::ServerHandle, String) {
     let emails = HashSet::from(["leo@example.test".to_owned()]);
     let auth = Auth::new(
         issuer.clone(),
-        "buycycle-test".into(),
+        "identity-test".into(),
         format!("{issuer}/cdn-cgi/access/certs"),
         emails,
         true,
@@ -72,7 +72,7 @@ pub fn claims(issuer: &str) -> Value {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    json!({"iss":issuer,"aud":["buycycle-test"],"sub":"person-1","email":"Leo@example.test","exp":now+600,"nbf":now-10})
+    json!({"iss":issuer,"aud":["identity-test"],"sub":"person-1","email":"Leo@example.test","exp":now+600,"nbf":now-10})
 }
 pub fn signed(claims: Value) -> String {
     let mut header = Header::new(Algorithm::RS256);

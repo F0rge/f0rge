@@ -37,7 +37,7 @@ Pipeline overview: [root `AGENTS.md`](../../../AGENTS.md#cicd).
 
 ## Boundaries + OpenAPI + e2e
 
-- TS imports: `@nx/enforce-module-boundaries` via `eslint/nx-boundaries.mjs`. This sentence is not a full inventory of that file: it also names `scope:firstout` and `scope:daskasas`, and it does not name `scope:buycycle` or `scope:envmon`. Do not edit the ESLint file from an instruction-only change.
+- TS imports: `@nx/enforce-module-boundaries` via `eslint/nx-boundaries.mjs`. This sentence is not a full inventory of that file: it also names `scope:firstout` and `scope:daskasas`, and it does not name `scope:envmon`. Do not edit the ESLint file from an instruction-only change.
 - Python libs→apps: keep `.github/scripts/check-lib-boundary.sh` (ESLint does not see Python).
 - Marrow OpenAPI: `marrow-frontend` has `implicitDependencies: ["marrow-backend"]` and `codegen:check` (depends on `marrow-backend:openapi`). Do not replace with ad-hoc CI export+diff steps.
 - Playwright: `npx nx run marrow-frontend:e2e` (inferred), run locally against a running stack. CI does not run it.
