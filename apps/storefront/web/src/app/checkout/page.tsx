@@ -249,6 +249,8 @@ export default function CheckoutPage() {
                   <Field id="checkout-last-name" label="Last name" name="last_name" autoComplete="family-name" required maxLength={100} />
                 </div>
                 <Field id="checkout-phone" label="Phone" name="phone" type="tel" autoComplete="tel" required maxLength={40} />
+                {/* POPIA s18(2)(a): the short notice comes before the details are collected. */}
+                <p className="text-sm text-muted-foreground">We use these details, and your address if we deliver, to process the order and contact you about it. They are required: without them we cannot complete the order. <Link href="/policies/privacy" className="font-medium text-foreground underline underline-offset-4">Our privacy policy</Link> explains who we share them with, including outside South Africa, and your rights, including the right to object.</p>
               </fieldset>
 
               <fieldset className="grid min-w-0 gap-3">

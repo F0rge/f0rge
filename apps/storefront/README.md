@@ -171,7 +171,8 @@ Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
 Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
 before launch; canonical links use it. Page metadata permits indexing only
 when `STOREFRONT_INDEXING_ENABLED=true` on a production Railway environment
-with an HTTPS origin. The private preview keeps that flag false, requires
+with an HTTPS origin, and only once the reviewed owner policy document exists
+(`currentCustomerPolicies()` in `web/src/lib/customer-policies.ts`). The private preview keeps that flag false, requires
 Basic Auth, and adds a no-index response header to every route. A public launch
 needs a reviewed change to the preview gate and response header. Account and
 checkout pages remain excluded from indexing.

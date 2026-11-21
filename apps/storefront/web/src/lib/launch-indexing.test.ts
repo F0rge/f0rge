@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { canonicalUrl, catalogueIndexable, sitemapPaths, storefrontIndexable } from "./launch-indexing";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { currentCustomerPolicies, type CustomerPolicyDocument } from "./customer-policies";
+import { canonicalUrl, catalogueIndexable, robotsHeader, sitemapPaths, storefrontIndexable } from "./launch-indexing";
+
+vi.mock("./customer-policies", async (original) => ({
+  ...await original<typeof import("./customer-policies")>(),
+  currentCustomerPolicies: vi.fn(),
+}));
+
+const ownerFacts = vi.mocked(currentCustomerPolicies);
 
 const production = {
   STOREFRONT_INDEXING_ENABLED: "true",
@@ -9,12 +17,25 @@ const production = {
 };
 
 describe("storefront indexing", () => {
+  beforeEach(() => {
+    ownerFacts.mockReturnValue({} as CustomerPolicyDocument);
+  });
+
+  it("keeps the whole site noindex while the owner policy document is missing", () => {
+    ownerFacts.mockReturnValue(null);
+    expect(storefrontIndexable(production)).toBe(false);
+    expect(catalogueIndexable("/", production)).toBe(false);
+    expect(catalogueIndexable("/product/chair", production)).toBe(false);
+    expect(robotsHeader("/shop", production)).toBe("noindex, nofollow, noarchive");
+  });
+
   it("stays non-indexable without an explicit production decision", () => {
     expect(storefrontIndexable({})).toBe(false);
     expect(storefrontIndexable({ ...production, RAILWAY_ENVIRONMENT_NAME: "develop" })).toBe(false);
     expect(storefrontIndexable({ ...production, NEXT_PUBLIC_BASE_URL: "http://daskasas.example" })).toBe(false);
     expect(storefrontIndexable({ ...production, STOREFRONT_PRIVATE_PREVIEW: "on" })).toBe(false);
     expect(storefrontIndexable({ ...production, STOREFRONT_INDEXING_ENABLED: "false" })).toBe(false);
+    expect(storefrontIndexable(production)).toBe(true);
   });
 
   it("allows catalogue paths only when production indexing is on", () => {
@@ -57,6 +78,7 @@ describe("storefront indexing", () => {
     expect(paths).toContain("/policies/refunds");
     expect(paths).toContain("/policies/returns");
     expect(paths).toContain("/policies/delivery");
+    expect(paths).toContain("/policies/paia");
     expect(paths).toContain("/help");
     expect(paths).not.toContain("/contact");
     expect(paths.some((path) => path.startsWith("/account") || path.startsWith("/checkout") || path.startsWith("/order"))).toBe(false);

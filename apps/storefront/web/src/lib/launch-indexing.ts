@@ -1,10 +1,13 @@
+import { currentCustomerPolicies } from "./customer-policies";
 import { SHOP_CATEGORIES } from "./shop-categories";
 
-const PRIVATE_PREFIXES = ["/account", "/checkout", "/bag", "/sign-in", "/sign-up", "/order", "/api", "/study"];
+const PRIVATE_PREFIXES = ["/account", "/checkout", "/bag", "/sign-in", "/sign-up", "/order", "/api"];
 
 type IndexingEnv = Record<string, string | undefined>;
 
 export function storefrontIndexable(env: IndexingEnv = process.env): boolean {
+  // Spec #1000: the whole site stays noindex until the owner's reviewed policy facts exist.
+  if (!currentCustomerPolicies()) return false;
   if (env.STOREFRONT_INDEXING_ENABLED !== "true") return false;
   if (env.RAILWAY_ENVIRONMENT_NAME !== "production") return false;
   if (env.STOREFRONT_PRIVATE_PREVIEW !== "off") return false;
@@ -30,6 +33,7 @@ export const PUBLIC_INFO_PATHS = [
   "/policies/refunds",
   "/policies/terms",
   "/policies/privacy",
+  "/policies/paia",
 ] as const;
 
 const CATEGORY_PATHS: string[] = SHOP_CATEGORIES.map((category) => category.href);

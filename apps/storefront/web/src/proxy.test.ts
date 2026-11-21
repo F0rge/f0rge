@@ -12,6 +12,12 @@ vi.mock("@clerk/nextjs/server", () => ({
   },
 }));
 
+const ownerFacts = vi.hoisted(() => ({ document: null as object | null }));
+vi.mock("./lib/customer-policies", async (original) => ({
+  ...await original<typeof import("./lib/customer-policies")>(),
+  currentCustomerPolicies: () => ownerFacts.document,
+}));
+
 describe("Clerk and private-preview proxy composition", () => {
   const envNames = [
     "STOREFRONT_RUNTIME_KIND", "STOREFRONT_PRIVATE_PREVIEW",
@@ -32,6 +38,7 @@ describe("Clerk and private-preview proxy composition", () => {
     process.env.STOREFRONT_CLERK_JWT_TEMPLATE = "storefront_medusa";
     clerkState.configured.mockClear();
     clerkState.invoked.mockClear();
+    ownerFacts.document = null;
     vi.resetModules();
   });
 
@@ -113,6 +120,8 @@ describe("Clerk and private-preview proxy composition", () => {
     delete process.env.STOREFRONT_PREVIEW_USERNAME;
     delete process.env.STOREFRONT_PREVIEW_PASSWORD;
     const { proxy } = await import("./proxy");
+    expect((await proxy(new NextRequest("https://daskasas.example/shop"), {} as never)).headers.get("x-robots-tag")).toContain("noindex");
+    ownerFacts.document = {};
     const shop = await proxy(new NextRequest("https://daskasas.example/shop"), {} as never);
     const category = await proxy(new NextRequest("https://daskasas.example/shop/dining-room"), {} as never);
     expect(category.headers.get("x-robots-tag")).toBeNull();

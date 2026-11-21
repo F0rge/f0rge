@@ -18,7 +18,7 @@
 .panel a { color: var(--foreground); }
 .panel .status { font-family: var(--mono); font-size: .75rem; }
 .actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
-.primaryButton,.secondaryButton,.settingsButton,.closeButton {
+.primaryButton,.secondaryButton,.closeButton {
   min-height: 44px;
   padding: .65rem .8rem;
   border: 1px solid var(--primary);
@@ -30,12 +30,10 @@
 }
 .primaryButton { background: var(--primary); color: #fff; }
 .primaryButton:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-.secondaryButton,.settingsButton { background: var(--background); color: var(--primary); }
-.settingsButton { position: fixed; z-index: 40; right: 1rem; bottom: 1rem; box-shadow: 0 5px 18px rgb(0 0 0 / 8%); }
+.secondaryButton { background: var(--background); color: var(--primary); }
 .closeButton { width: 44px; border-radius: 50%; padding: 0; border-color: transparent; background: transparent; color: var(--foreground); font: 1.5rem var(--sans); }
 
 @media (max-width: 600px) {
   .panel { right: .5rem; bottom: .5rem; width: calc(100vw - 1rem); }
-  .settingsButton { right: .5rem; bottom: .5rem; }
   .actions > button { flex: 1 1 100%; }
 }

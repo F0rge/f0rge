@@ -15,7 +15,7 @@ const ABSENT: LaunchPackFinding[] = [
   {
     section: "business_identity",
     code: "business_identity_unconfirmed",
-    detail: "Owner has not confirmed the legal entity, trading name, contact address, phone, company registration number, VAT position, support mailbox, daily operator, or escalation availability.",
+    detail: "Owner has not confirmed the legal entity, legal status, office bearers, legal service address, codes of conduct, trading name, contact address, phone, company registration number, VAT position, support mailbox, daily operator, or escalation availability.",
   },
   {
     section: "catalogue",
@@ -30,7 +30,7 @@ const ABSENT: LaunchPackFinding[] = [
   {
     section: "policies_and_skin",
     code: "policies_unreviewed",
-    detail: "Owner has not supplied reviewed delivery, terms, refund, return, privacy, and PAIA content, or selected a final DasKasas font and palette.",
+    detail: "Owner has not reviewed the delivery content and policy wording, named the Information Officer with an email, postal address, and fax number, or selected a final DasKasas font and palette.",
   },
   {
     section: "provisioning",
@@ -80,7 +80,10 @@ function businessConfirmed(value: unknown): boolean {
   if (isFirstoutName(business.legal_name) || isFirstoutName(business.trading_name)) return false;
   const vatKnown = business.vat_registered === false ||
     (business.vat_registered === true && typeof business.vat_number === "string" && /^\d{10}$/.test(business.vat_number));
+  const officeBearers = Array.isArray(business.office_bearers) ? business.office_bearers : [];
   return text(business.legal_name, 3) && text(business.trading_name, 2) && text(business.contact_address, 12) &&
+    text(business.legal_status, 3) && officeBearers.length > 0 && officeBearers.every((name) => text(name, 3)) &&
+    text(business.legal_service_address, 12) && text(business.codes_of_conduct, 4) &&
     phoneNumber(business.phone) && registrationNumber(business.company_registration_number) &&
     vatKnown && dedicatedMailbox(business.support_mailbox) && text(business.daily_operator_name, 3) &&
     text(business.escalation_availability, 12) && text(business.confirmed_by, 3) &&
@@ -223,14 +226,6 @@ function policyFinding(detail: string): LaunchPackFinding {
   return { section: "policies_and_skin", code: "policies_unreviewed", detail };
 }
 
-function mentions(value: unknown, phrase: string): boolean {
-  return typeof value === "string" && value.toLowerCase().replace(/-/g, " ").includes(phrase);
-}
-
-function distinguishesGoods(value: unknown): boolean {
-  return mentions(value, "made to order") && mentions(value, "bespoke");
-}
-
 const PROVISIONING_CHANNELS = ["clerk", "paystack", "email", "posthog", "railway", "temporary_hostname"];
 const SECRET_KEY = /password|secret|token|api[_-]?key|private[_-]?key|credential|authorization/i;
 const SECRET_VALUE = /sk_(?:live|test)_|pk_(?:live|test)_|-----BEGIN |whsec_|Bearer /;
@@ -291,22 +286,13 @@ function policyFindings(value: unknown): LaunchPackFinding[] {
   if (!policies) return [ABSENT[3]];
   const findings: LaunchPackFinding[] = [];
   if (!text(policies.reviewed_by, 3) || typeof policies.reviewed_on !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(policies.reviewed_on)) {
-    findings.push(policyFinding("Delivery, terms, returns, refunds, and privacy content has no recorded owner review."));
+    findings.push(policyFinding("Delivery content and policy wording have no recorded owner review."));
   }
   if (!text(policies.delivery, 80)) findings.push(policyFinding("Reviewed delivery content is missing."));
-  if (!text(policies.terms, 80)) findings.push(policyFinding("Reviewed terms and conditions are missing."));
-  if (!text(policies.refund_policy, 80) || !distinguishesGoods(policies.refund_policy)) {
-    findings.push(policyFinding("Refund terms do not distinguish standard made to order from bespoke goods."));
-  }
-  if (!text(policies.return_policy, 80) || !distinguishesGoods(policies.return_policy)) {
-    findings.push(policyFinding("Return terms do not distinguish standard made to order from bespoke goods."));
-  }
-  if (!text(policies.privacy, 80)) findings.push(policyFinding("Reviewed privacy content is missing."));
-  if (!text(policies.data_collected, 40)) findings.push(policyFinding("A description of the personal information collected is missing."));
-  if (!text(policies.processors, 40)) findings.push(policyFinding("The list of operators and processors is missing."));
-  if (!text(policies.retention, 40)) findings.push(policyFinding("Retention of personal information is missing."));
-  if (!text(policies.information_officer_name, 3) || !text(policies.information_officer_responsibilities, 40) || !text(policies.paia_baseline, 40)) {
-    findings.push(policyFinding("Information Officer and PAIA baseline responsibilities are missing."));
+  // PAIA s51(1)(a)(i) and POPIA s55: the head's contact details. fax_number may state that there is none.
+  if (!text(policies.information_officer_name, 3) || !dedicatedMailbox(policies.information_officer_email) ||
+      !text(policies.postal_address, 12) || !text(policies.fax_number, 4)) {
+    findings.push(policyFinding("The Information Officer name, email, postal address, or fax number is missing."));
   }
   if (typeof policies.collector_skin !== "string" || !COLLECTOR_SKINS.includes(policies.collector_skin as typeof COLLECTOR_SKINS[number])) {
     findings.push(policyFinding("The final DasKasas font and palette is not selected."));

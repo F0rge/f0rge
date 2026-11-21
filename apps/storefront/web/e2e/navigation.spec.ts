@@ -94,15 +94,18 @@ test('every page footer carries the showroom facts while policy pages stay free 
       await expect(footer).toContainText(fact)
     }
   }
-  await expect(page.locator('article')).not.toContainText('@')
+  // Before the owner document lands, the privacy policy names only the showroom's public email and the Information Regulator's.
+  const emails = await page.locator('article').evaluate((element) => [...new Set((element as HTMLElement).innerText.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) ?? [])])
+  expect(emails).toEqual(['Cindy@daskasas.co.za', 'enquiries@inforegulator.org.za', 'POPIAComplaints@inforegulator.org.za'])
+  await expect(page.locator('article')).toContainText('[PLACEHOLDER: Information Officer email')
 })
 
 test('the footer reopens the cookie choice', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('storefront-analytics-consent-v1', 'rejected'))
   await page.goto('/')
   const choices = page.getByRole('region', { name: 'Your privacy choices' })
-  await expect(page.getByRole('button', { name: 'Privacy settings' })).toBeVisible()
   await expect(choices).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Privacy settings' })).toHaveCount(0)
   await page.getByRole('contentinfo').getByRole('button', { name: 'Cookie settings' }).click()
   await expect(choices).toBeVisible()
   await expect(choices.getByRole('button', { name: 'Accept optional analytics' })).toBeVisible()

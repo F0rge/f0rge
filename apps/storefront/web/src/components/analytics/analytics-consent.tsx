@@ -13,13 +13,8 @@ export function AnalyticsConsentPanel({ choice, ready, choose, settingsOpen, set
   settingsOpen: boolean;
   setSettingsOpen(open: boolean): void;
 }) {
-  if (!ready) return null;
-
-  if (choice && !settingsOpen) {
-    return <button className={styles.settingsButton} type="button" onClick={() => setSettingsOpen(true)} aria-expanded="false">
-      Privacy settings
-    </button>;
-  }
+  // Once chosen, the footer's "Cookie settings" reopens this; no floating control covers page content or the bag drawer.
+  if (!ready || (choice && !settingsOpen)) return null;
 
   return <section className={styles.panel} aria-labelledby="analytics-consent-title" aria-describedby="analytics-consent-description">
     <div className={styles.headingRow}>
@@ -36,7 +31,7 @@ export function AnalyticsConsentPanel({ choice, ready, choose, settingsOpen, set
       </button> : <button className={styles.primaryButton} type="button" onClick={() => { choose("accepted"); setSettingsOpen(false); }}>
         Accept optional analytics
       </button>}
-      {choice === null && <button className={styles.secondaryButton} type="button" onClick={() => choose("rejected")}>
+      {choice === null && <button className={styles.primaryButton} type="button" onClick={() => choose("rejected")}>
         Reject optional analytics
       </button>}
       {choice === "rejected" && <button className={styles.secondaryButton} type="button" onClick={() => setSettingsOpen(false)}>

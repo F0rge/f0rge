@@ -3,6 +3,7 @@ import { formatZar } from "./order-money";
 import { SHOWROOM } from "./showroom";
 import {
   POLICY_PLACEHOLDERS,
+  POLICY_REVIEW_NOTICE,
   currentCustomerPolicies,
   policyPage,
   RETURNS_SUMMARY,
@@ -27,16 +28,19 @@ const reviewed: CustomerPolicyDocument = {
   collection_location: "Kramerville showroom, 12 Commerce Road, Johannesburg",
   collection_instructions: "Collect from the showroom desk on weekdays between 09:00 and 16:00.",
   gauteng_zones: [{ name: "Johannesburg", rate_zar_incl_vat: "950.00" }],
-  privacy: "We use contact details to fulfil the order and to provide support.",
-  data_collected: "Name, email, phone, and delivery address.",
-  processors: "Clerk, PostHog, Paystack, SendGrid, and Railway.",
-  retention: "Order records follow tax law.",
   information_officer_name: "Naledi Dlamini",
-  information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
-  paia_baseline: "The information officer publishes the PAIA manual and acknowledges requests received at the support mailbox.",
+  information_officer_email: "privacy@northwind.co.za",
+  postal_address: "PO Box 1234, Kramerville, 2090",
+  fax_number: "None",
   collector_skin: "Oxblood / citron",
   distinguishes_standard_made_to_order_from_bespoke: true,
 };
+
+const REGULATOR_EMAILS = ["enquiries@inforegulator.org.za", "POPIAComplaints@inforegulator.org.za"];
+
+function emailsIn(text: string): string[] {
+  return [...new Set(text.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) ?? [])];
+}
 
 function textOf(page: PolicyView): string {
   return page.blocks.map((block) => block.text).join("\n");
@@ -55,15 +59,13 @@ describe("customer policies", () => {
     expect(page.published).toBe(false);
     expect(textOf(page)).toContain(POLICY_PLACEHOLDERS.legalName);
     expect(textOf(page)).toContain(POLICY_PLACEHOLDERS.informationOfficer);
-    expect(textOf(page)).toContain(POLICY_PLACEHOLDERS.paia);
+    expect(textOf(page)).toContain(POLICY_PLACEHOLDERS.informationOfficerEmail);
     expect(textOf(page)).toContain("POPIA");
-    expect(textOf(page)).toContain("Clerk");
-    expect(textOf(page)).toContain("PostHog");
-    expect(textOf(page)).toContain("Paystack");
-    expect(textOf(page)).toContain("SendGrid");
-    expect(textOf(page)).toContain("Railway");
-    expect(textOf(page)).not.toContain("@");
+    for (const processor of ["Clerk", "PostHog", "Paystack", "SendGrid", "Railway"]) expect(textOf(page)).toContain(processor);
+    // Only the showroom's public email and the Information Regulator's addresses appear before the owner document lands.
+    expect(emailsIn(textOf(page))).toEqual([SHOWROOM.email, ...REGULATOR_EMAILS]);
     expect(textOf(page).toLowerCase()).not.toContain("northwind");
+    for (const section of ["privacy", "paia"] as const) expect(policyPage(null, section).blocks[0]).toEqual({ type: "notice", text: POLICY_REVIEW_NOTICE });
   });
 
   it("fills return and refund rules without placeholders, and keeps delivery and contact unmarked", () => {
@@ -86,26 +88,23 @@ describe("customer policies", () => {
     expect(sectionText(terms, "Cancellations and returns")).toContain("bespoke");
     expect(textOf(policyPage(null, "delivery"))).toContain(POLICY_PLACEHOLDERS.delivery);
     expect(textOf(policyPage(null, "delivery"))).not.toMatch(/R\s?\d/);
-    expect(textOf(policyPage(null, "contact"))).toContain(POLICY_PLACEHOLDERS.email);
-    expect(textOf(policyPage(null, "contact"))).toContain(POLICY_PLACEHOLDERS.phone);
-    expect(textOf(policyPage(null, "contact"))).toContain(POLICY_PLACEHOLDERS.address);
-    expect(textOf(policyPage(null, "contact"))).not.toContain("@");
   });
 
   it("shows reviewed contact, delivery, privacy and business facts only from the supplied document", () => {
-    expect(textOf(policyPage(reviewed, "contact"))).toContain("011 555 0100");
-    expect(textOf(policyPage(reviewed, "contact"))).toContain("2020/123456/07");
-    expect(textOf(policyPage(reviewed, "contact"))).toContain("support@northwind.co.za");
     expect(textOf(policyPage(reviewed, "delivery"))).toContain(formatZar("950.00"));
     expect(textOf(policyPage(reviewed, "delivery"))).toContain(reviewed.collection_location);
-    expect(textOf(policyPage(reviewed, "privacy"))).toContain("Naledi Dlamini");
-    expect(textOf(policyPage(reviewed, "privacy"))).toContain(reviewed.processors);
+    for (const fact of ["Northwind Furnishings (Pty) Ltd", "Naledi Dlamini", "privacy@northwind.co.za", reviewed.contact_address]) {
+      expect(textOf(policyPage(reviewed, "privacy"))).toContain(fact);
+      expect(textOf(policyPage(reviewed, "paia"))).toContain(fact);
+    }
+    for (const fact of [reviewed.postal_address, "Fax: None.", "011 555 0100"]) expect(sectionText(policyPage(reviewed, "paia"), "Contact details of the head of DasKasas")).toContain(fact);
     const terms = policyPage(reviewed, "terms");
     expect(terms.published).toBe(true);
     for (const fact of ["Northwind Furnishings (Pty) Ltd", reviewed.legal_status, "2020/123456/07", "Thandi Mokoena, Pieter Botha", "4123456789", reviewed.contact_address, reviewed.legal_service_address, "011 555 0100", "support@northwind.co.za", reviewed.codes_of_conduct]) {
       expect(sectionText(terms, "Business information")).toContain(fact);
     }
-    for (const section of ["terms", "returns", "refunds", "delivery"] as const) {
+    for (const section of ["terms", "returns", "refunds", "delivery", "privacy", "paia"] as const) {
+      expect(policyPage(reviewed, section).published).toBe(true);
       expect(textOf(policyPage(reviewed, section))).not.toContain("[PLACEHOLDER:");
       expect(policyPage(reviewed, section).blocks.some((block) => block.type === "notice" && block.text.startsWith("Draft"))).toBe(false);
     }
@@ -192,5 +191,74 @@ describe("customer policies", () => {
       expect(text).toContain("made to your specifications or clearly personalised");
     }
     expect(textOf(policyPage(null, "refunds"))).toContain("including the delivery charge");
+  });
+
+  it("gives every POPIA s18(1) item and the right to object in the privacy policy", () => {
+    for (const document of [null, reviewed]) {
+      const page = policyPage(document, "privacy");
+      const text = textOf(page);
+      // (a) information collected and its source when not from the customer.
+      expect(sectionText(page, "What we collect")).toContain("When you check out: your name, email address and phone number");
+      expect(sectionText(page, "What we collect")).toContain("From others: Paystack");
+      // (b) name and address of the responsible party.
+      expect(sectionText(page, "Who we are")).toContain(document ? reviewed.legal_name : POLICY_PLACEHOLDERS.legalName);
+      expect(sectionText(page, "Who we are")).toContain(document ? reviewed.contact_address : SHOWROOM.address);
+      // (c) purposes, with the s11 lawful basis.
+      for (const basis of ["11(1)(a)", "11(1)(b)", "11(1)(c)", "11(1)(f)"]) expect(sectionText(page, "Why we use it")).toContain(basis);
+      // (d), (e) voluntary or mandatory, and the consequences.
+      expect(sectionText(page, "What you must give us")).toContain("Without them we cannot take, deliver or tell you about your order");
+      expect(sectionText(page, "What you must give us")).toContain("optional");
+      // (f) law requiring the collection.
+      expect(sectionText(page, "Laws that require us to keep information")).toContain("Tax Administration Act 28 of 2011");
+      // (g) cross-border transfers, where each processor is based, and the s72 ground.
+      const transfers = sectionText(page, "Information sent outside South Africa");
+      for (const ground of ["72(1)(a)", "72(1)(b)", "72(1)(c)"]) expect(transfers).toContain(ground);
+      for (const [processor, place] of [["Paystack", "Nigeria"], ["SendGrid", "United States"], ["Clerk", "United States"], ["Railway", "United States"], ["PostHog", "European Union"]]) {
+        expect(transfers).toMatch(new RegExp(`${processor}[^.]*${place}`));
+        expect(sectionText(page, "Who we share it with")).toContain(processor);
+      }
+      // (h)(i)-(ii) recipients and categories; (iii) access and correction; (iv) objection; (v) the Regulator.
+      expect(sectionText(page, "Your rights")).toContain("Access: you may ask, free of charge");
+      expect(sectionText(page, "Your rights")).toContain("Correction and deletion");
+      expect(sectionText(page, "Your right to object")).toContain("You have the right to object, at any time and free of charge");
+      expect(sectionText(page, "How to make a request")).toContain("within 30 days");
+      expect(sectionText(page, "Information Officer")).toContain(document ? "Naledi Dlamini" : POLICY_PLACEHOLDERS.informationOfficer);
+      const regulator = sectionText(page, "Complaints to the Information Regulator");
+      for (const fact of ["Woodmead North Office Park, 54 Maxwell Drive, Woodmead, Johannesburg, 2191", "010 023 5200", "0800 017 160", ...REGULATOR_EMAILS, "eservices.inforegulator.org.za"]) expect(regulator).toContain(fact);
+      // s19 safeguards, retention and marketing only with opt-in.
+      expect(sectionText(page, "How we protect it")).toContain("never see or store your full card number");
+      expect(sectionText(page, "How long we keep it")).toContain("tax and accounting law");
+      expect(sectionText(page, "Marketing")).toContain("unless you opt in");
+      expect(sectionText(page, "Marketing")).toContain("never ticked for you");
+      expect(text).not.toMatch(/JD House|Stiemens/);
+      expect(page.links).toContainEqual({ href: "/policies/paia", label: "PAIA manual" });
+    }
+  });
+
+  it("publishes a PAIA s51 manual with every required heading and no stale Regulator address", () => {
+    for (const document of [null, reviewed]) {
+      const page = policyPage(document, "paia");
+      expect(page.title).toBe("PAIA manual");
+      expect(page.blocks.filter((block) => block.type === "heading").map((block) => block.text)).toEqual([
+        "About this manual",
+        "Contact details of the head of DasKasas", // s51(1)(a)
+        "The Information Regulator's PAIA Guide", // s51(1)(b)(i)
+        "Records available without a request", // s51(1)(b)(ii)
+        "Records kept under other laws", // s51(1)(b)(iii)
+        "Subjects and categories of records", // s51(1)(b)(iv)
+        "How to request a record",
+        "Personal information we process", // s51(1)(c)
+        "Availability of this manual", // s51(3)
+        "Information Regulator",
+      ]);
+      const processing = sectionText(page, "Personal information we process");
+      for (const item of ["Purposes:", "People and information:", "Recipients:", "Planned transfers outside South Africa:", "Security measures:"]) expect(processing).toContain(item);
+      expect(sectionText(page, "Availability of this manual")).toContain("www.daskasas.co.za/policies/paia");
+      expect(sectionText(page, "Information Regulator")).toContain("Woodmead North Office Park");
+      expect(textOf(page)).not.toMatch(/JD House|Stiemens/);
+    }
+    const draft = sectionText(policyPage(null, "paia"), "Contact details of the head of DasKasas");
+    for (const placeholder of [POLICY_PLACEHOLDERS.informationOfficer, POLICY_PLACEHOLDERS.postalAddress, POLICY_PLACEHOLDERS.fax, POLICY_PLACEHOLDERS.informationOfficerEmail]) expect(draft).toContain(placeholder);
+    expect(draft).toContain(SHOWROOM.address);
   });
 });

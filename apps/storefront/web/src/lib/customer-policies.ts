@@ -25,18 +25,17 @@ export type CustomerPolicyDocument = {
   collection_location: string;
   collection_instructions: string;
   gauteng_zones: { name: string; rate_zar_incl_vat: string }[];
-  privacy: string;
-  data_collected: string;
-  processors: string;
-  retention: string;
+  // POPIA s55 and PAIA s1 "head": the CEO or managing director, or the person they authorise in writing. Must match the Regulator registration.
   information_officer_name: string;
-  information_officer_responsibilities: string;
-  paia_baseline: string;
+  information_officer_email: string;
+  // PAIA s51(1)(a)(i): postal address and fax number of the head of the body; fax_number may say there is none.
+  postal_address: string;
+  fax_number: string;
   collector_skin: string;
   distinguishes_standard_made_to_order_from_bespoke: true;
 };
 
-export type PolicySection = "support" | "contact" | "delivery" | "returns" | "refunds" | "terms" | "privacy";
+export type PolicySection = "delivery" | "returns" | "refunds" | "terms" | "privacy" | "paia";
 
 export type PolicyBlock =
   | { type: "notice"; text: string }
@@ -69,36 +68,23 @@ export const POLICY_PLACEHOLDERS = {
   codesOfConduct: policyPlaceholder("industry bodies, codes of conduct or dispute-resolution codes DasKasas subscribes to, or confirmation that there are none"),
   registration: policyPlaceholder("company registration number"),
   vat: policyPlaceholder("VAT number, or confirmation that DasKasas is not VAT registered"),
-  email: policyPlaceholder("support email"),
-  phone: policyPlaceholder("phone number"),
-  address: policyPlaceholder("physical address"),
   delivery: policyPlaceholder("delivery areas, lead times, and VAT-inclusive ZAR shipping rates"),
   informationOfficer: policyPlaceholder("Information Officer name"),
-  informationOfficerDuties: policyPlaceholder("Information Officer responsibilities"),
-  paia: policyPlaceholder("where the PAIA manual is published and how to submit a request"),
+  informationOfficerEmail: policyPlaceholder("Information Officer email"),
+  postalAddress: policyPlaceholder("postal address"),
+  fax: policyPlaceholder("fax number, or confirmation that there is none"),
 } as const;
 
 const TITLES: Record<PolicySection, string> = {
-  support: "Support",
-  contact: "Contact",
   delivery: "Delivery and collection",
   returns: "Return policy",
   refunds: "Refund policy",
   terms: "Terms and conditions",
   privacy: "Privacy policy",
+  paia: "PAIA manual",
 };
 
 const LINKS: Record<PolicySection, PolicyLink[]> = {
-  support: [
-    { href: "/help#contact", label: "Contact" },
-    { href: "/policies/returns", label: "Returns" },
-    { href: "/policies/refunds", label: "Refunds" },
-  ],
-  contact: [
-    { href: "/policies/privacy", label: "Privacy" },
-    { href: "/policies/returns", label: "Returns" },
-    { href: "/policies/refunds", label: "Refunds" },
-  ],
   delivery: [
     { href: "/policies/returns", label: "Returns" },
     { href: "/policies/refunds", label: "Refunds" },
@@ -122,8 +108,13 @@ const LINKS: Record<PolicySection, PolicyLink[]> = {
     { href: "/help#contact", label: "Contact" },
   ],
   privacy: [
+    { href: "/policies/paia", label: "PAIA manual" },
     { href: "/help#contact", label: "Contact" },
     { href: "/policies/terms", label: "Terms" },
+  ],
+  paia: [
+    { href: "/policies/privacy", label: "Privacy" },
+    { href: "/help#contact", label: "Contact" },
   ],
 };
 
@@ -154,36 +145,6 @@ function vatLine(document: CustomerPolicyDocument): string {
 
 function zoneLines(document: CustomerPolicyDocument): string[] {
   return document.gauteng_zones.map((zone) => `${zone.name}: ${formatZar(zone.rate_zar_incl_vat)} incl. VAT`);
-}
-
-function contactBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
-  if (!document) {
-    return [
-      notice(),
-      heading("Email"),
-      paragraph(POLICY_PLACEHOLDERS.email),
-      heading("Phone"),
-      paragraph(POLICY_PLACEHOLDERS.phone),
-      heading("Physical address"),
-      paragraph(POLICY_PLACEHOLDERS.address),
-      heading("Company"),
-      paragraph(`${POLICY_PLACEHOLDERS.legalName}, trading as ${POLICY_PLACEHOLDERS.tradingName}.`),
-      paragraph(`Registration number: ${POLICY_PLACEHOLDERS.registration}.`),
-      paragraph(`VAT: ${POLICY_PLACEHOLDERS.vat}.`),
-    ];
-  }
-  return [
-    heading("Email"),
-    paragraph(document.support_mailbox),
-    heading("Phone"),
-    paragraph(document.phone),
-    heading("Physical address"),
-    paragraph(document.contact_address),
-    heading("Company"),
-    paragraph(`${document.legal_name}, trading as ${document.trading_name}.`),
-    paragraph(`Registration number: ${document.company_registration_number}.`),
-    paragraph(`VAT: ${vatLine(document)}.`),
-  ];
 }
 
 // Public address the storefront is served from (apps/storefront/web/project.json NEXT_PUBLIC_BASE_URL).
@@ -427,65 +388,197 @@ function termsBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
   return document ? blocks : [notice(), ...blocks];
 }
 
-function privacyBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
-  if (document) {
-    return [
-      heading("Privacy"),
-      paragraph(document.privacy),
-      heading("Personal information collected"),
-      paragraph(document.data_collected),
-      heading("Operators and processors"),
-      paragraph(document.processors),
-      heading("Retention"),
-      paragraph(document.retention),
-      heading("Information Officer"),
-      paragraph(document.information_officer_name),
-      paragraph(document.information_officer_responsibilities),
-      heading("PAIA"),
-      paragraph(document.paia_baseline),
-    ];
+// POPIA s55 and PAIA s51(1)(a): the Information Officer (head of the body) and how to reach them; placeholders until #1006.
+function officerFacts(document: CustomerPolicyDocument | null) {
+  if (!document) {
+    return {
+      name: POLICY_PLACEHOLDERS.informationOfficer,
+      email: POLICY_PLACEHOLDERS.informationOfficerEmail,
+      postalAddress: POLICY_PLACEHOLDERS.postalAddress,
+      fax: POLICY_PLACEHOLDERS.fax,
+    };
   }
-  return [
-    notice(),
-    heading("Responsible party"),
-    paragraph(`The responsible party under the Protection of Personal Information Act 4 of 2013 (POPIA) is ${POLICY_PLACEHOLDERS.legalName}, trading as ${POLICY_PLACEHOLDERS.tradingName}. Registration number: ${POLICY_PLACEHOLDERS.registration}. VAT: ${POLICY_PLACEHOLDERS.vat}.`),
-    heading("Information Officer"),
-    paragraph(`Name: ${POLICY_PLACEHOLDERS.informationOfficer}.`),
-    paragraph(`Responsibilities: ${POLICY_PLACEHOLDERS.informationOfficerDuties}.`),
-    paragraph(`Privacy requests can be sent to ${POLICY_PLACEHOLDERS.email}, by phone at ${POLICY_PLACEHOLDERS.phone}, or by post to ${POLICY_PLACEHOLDERS.address}.`),
-    heading("Personal information collected"),
-    paragraph("To sell and deliver a piece, the storefront collects the name, email address, phone number, and delivery or collection details you enter, the contents of the order, and a payment reference. Full card numbers are handled by the payment provider and are not stored as part of the catalogue. Account sign-in collects the identity details the sign-in service needs. Optional analytics stay off until you accept them, and they are not used to send search text, personal details, or payment data."),
-    heading("Operators and processors"),
-    paragraph("The storefront is built to use these operators: Clerk for account sign-in, PostHog for optional analytics, Paystack for card payments, SendGrid for transactional email, and Railway for hosting. Each operator may process the personal information needed for that role. This list is the set the software is built for and should be confirmed before go-live."),
-    heading("Retention"),
+  return { name: document.information_officer_name, email: document.information_officer_email, postalAddress: document.postal_address, fax: document.fax_number };
+}
+
+// POPIA s18(1)(h)(v) and s74; PAIA s77A. Current details from inforegulator.org.za (Contact and Complaints pages, checked 21 Nov 2026).
+// The JD House, Stiemens Street, Braamfontein street address on older Regulator documents is stale; the P.O. Box is current.
+const INFORMATION_REGULATOR = [
+  "Information Regulator (South Africa)",
+  "Address: Woodmead North Office Park, 54 Maxwell Drive, Woodmead, Johannesburg, 2191. Post: P.O. Box 31533, Braamfontein, Johannesburg, 2017.",
+  "Phone: 010 023 5200. Toll-free: 0800 017 160.",
+  "General enquiries: enquiries@inforegulator.org.za. POPIA complaints: POPIAComplaints@inforegulator.org.za, or online through the eServices Portal at eservices.inforegulator.org.za.",
+  "Website: inforegulator.org.za.",
+];
+
+// POPIA s18(1)(c) and s11(1): each purpose with its lawful basis.
+const PURPOSES = [
+  "To take, deliver and support your order: we process the order, arrange delivery or collection, send order and delivery emails, and handle returns, refunds and faults. We need the information to carry out our contract with you (POPIA section 11(1)(b)).",
+  "To run your account, if you choose to have one: sign-in, saved delivery addresses and your order history. This also carries out our contract with you.",
+  "To keep the records the law requires, such as tax and accounting records (section 11(1)(c)).",
+  "To keep the shop secure and prevent fraud and misuse. This is our legitimate interest (section 11(1)(f)), and you may object to it.",
+  "To learn which pieces and shop filters are useful, only if you accept optional analytics. Your consent is the basis (section 11(1)(a)), and you may withdraw it at any time.",
+  "We do not sell your personal information.",
+];
+
+// POPIA s18(1)(h)(i) recipients; s18(1)(g) and s72 where each is based. Railway: the DasKasas database runs in its US West (sfo) region (Railway project config, 21 Nov 2026).
+// PostHog: the storefront sends only to the EU host (lib/analytics/policy.ts). Vendor DPAs were not reviewed (research-popia-paia-ecta.md §1.4).
+const RECIPIENTS = [
+  "Paystack processes card payments. It receives your name, email address, the order amount and the card details you enter on its payment page. Paystack is based in Nigeria and also operates in South Africa.",
+  "SendGrid (Twilio) sends our order and delivery emails. It receives your name, email address and order details. It is based in the United States.",
+  "Clerk runs account sign-in. It receives your email address and sign-in activity. It is based in the United States.",
+  "Railway hosts our website, shop system and database, which hold all the information described here. It is based in the United States, and our database runs in its United States (California) region.",
+  "PostHog receives analytics events, only if you accept optional analytics. We use PostHog's EU cloud, hosted in the European Union.",
+  "Whoever delivers your order receives your name, phone number, delivery address and the pieces to deliver.",
+  "We also share information when the law requires it, for example with the South African Revenue Service.",
+];
+
+// POPIA s72(1): (a) binding agreement with substantially similar protection, (b) consent, (c) necessary for the contract with the data subject.
+const TRANSFERS = [
+  "Some of these providers are outside South Africa. POPIA section 72 allows this only on certain grounds. The ground we rely on for each provider is:",
+  "Paystack (Nigeria, when a payment is not processed in South Africa) and SendGrid (United States): the transfer is necessary to carry out your purchase (section 72(1)(c)).",
+  "Clerk (United States) and Railway (United States): an agreement that binds the provider to protection substantially similar to POPIA, including limits on passing the information on (section 72(1)(a)).",
+  "PostHog (European Union): your consent to optional analytics (section 72(1)(b)) and an agreement as above (section 72(1)(a)). PostHog is also bound there by the EU General Data Protection Regulation.",
+];
+
+// POPIA s19 (and s20-s22 for operators and breaches); ECTA s43(1)(p) security procedures.
+const SAFEGUARDS = [
+  "We take reasonable technical and organisational steps to protect your information against loss, damage and unauthorised access.",
+  "Our website, the payment page and our providers use encrypted (HTTPS) connections. You enter card details on Paystack's secure payment page, so we never see or store your full card number.",
+  "Only people who need your information to handle your order can see it. Each provider may use it only for us and must keep it secure and confidential under a written agreement.",
+  "Analytics stays off until you accept it, and never records search text, personal details or payment data.",
+  "We check these safeguards regularly and update them as risks change.",
+  "If we believe someone has accessed your information without authorisation, we tell you and the Information Regulator as soon as reasonably possible.",
+];
+
+function privacyBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
+  const business = businessFacts(document);
+  const contact = contactFacts(document);
+  const officer = officerFacts(document);
+  const blocks: PolicyBlock[] = [
+    // POPIA s18(1)(b): name and address of the responsible party.
+    heading("Who we are"),
+    paragraph(`${business.legalName}, trading as ${business.tradingName} ("DasKasas", "we"), is responsible for your personal information under the Protection of Personal Information Act 4 of 2013 (POPIA). Address: ${contact.address}. Phone: ${contact.phone}. Email: ${contact.email}.`),
+    paragraph("This notice explains what we collect, why, who we share it with, and your rights. It covers our website and our showroom."),
+    // s18(1)(a) and (h)(ii): what is collected, and its source when it does not come from you.
+    heading("What we collect"),
+    paragraph("When you check out: your name, email address and phone number, your delivery address or that you will collect, the pieces you order, and a payment reference."),
+    paragraph("When you create an account: your email address and the one-time sign-in codes Clerk sends you. If you save a delivery address, we keep it with your account."),
+    paragraph("When you contact us by email, phone or in the showroom: your contact details and what you tell us."),
+    paragraph("If you accept optional analytics: which pages and pieces you view, the shop filters you use, how long a product is in view, the website that sent you, and a random visitor number. Analytics never records search text, personal details or payment data."),
+    paragraph("From others: Paystack tells us whether your payment went through, and Clerk tells us when you are signed in."),
+    heading("Why we use it"),
+    ...PURPOSES.map(paragraph),
+    // s18(1)(d), (e): voluntary or mandatory, and the consequences of not supplying it.
+    heading("What you must give us"),
+    paragraph("Checkout needs your name, email address, phone number and, for delivery, your address. Without them we cannot take, deliver or tell you about your order."),
+    paragraph("An account is optional. You can check out as a guest."),
+    paragraph("Optional analytics is voluntary. If you say no, the shop works the same for you."),
+    // s18(1)(f): law requiring the collection or retention.
+    heading("Laws that require us to keep information"),
+    paragraph("South African tax and company law requires us to keep records of each sale. This includes the Tax Administration Act 28 of 2011, the Companies Act 71 of 2008 and, if we are registered for VAT, the Value-Added Tax Act 89 of 1991. The Consumer Protection Act 68 of 2008 and the Electronic Communications and Transactions Act 25 of 2002 set rules for order records, returns and refunds."),
+    heading("Who we share it with"),
+    ...RECIPIENTS.map(paragraph),
+    heading("Information sent outside South Africa", "outside-south-africa"),
+    ...TRANSFERS.map(paragraph),
+    heading("How we protect it"),
+    ...SAFEGUARDS.map(paragraph),
+    // POPIA s14: kept no longer than the purpose or a legal duty needs.
+    heading("How long we keep it"),
     paragraph("Order, tax, and payment records are kept for as long as South African tax and accounting law requires and for as long as a return, refund, or dispute about that order is open. Account details are kept while the account is open and then for as long as those legal duties remain. Optional analytics are not collected unless you accept them, and they are not kept for a purpose that acceptance did not cover."),
-    heading("PAIA"),
-    paragraph(POLICY_PLACEHOLDERS.paia),
+    // POPIA s69 and POPIA Regulations reg 6.4 (2025): opt-out is not consent.
+    heading("Marketing", "marketing"),
+    paragraph("We do not send you marketing by email, SMS, WhatsApp or any other electronic message unless you opt in. Opting in means ticking a separate box that is never ticked for you. You can stop at any time, free of charge. Order, delivery and account emails are not marketing."),
+    heading("Cookies and optional analytics"),
+    paragraph("Without your choice, the shop uses only the storage it needs to work, such as your bag and sign-in. Optional analytics stays off until you choose Accept. You can change your choice at any time with Cookie settings at the bottom of every page."),
+    // s18(1)(h)(iii); s23 access (confirmation free), s24 correction and deletion (free, POPIA Regulations reg 3 as amended 2025).
     heading("Your rights"),
-    paragraph("You may ask what personal information is held, ask for a correction, object to processing that POPIA allows you to object to, and lodge a complaint with the Information Regulator. Those requests go to the Information Officer once that person is named."),
+    paragraph("Access: you may ask, free of charge, whether we hold personal information about you. You may also ask for a copy or description of it, and of who has had access to it. If a fee applies to a copy, we tell you before we go ahead."),
+    paragraph("Correction and deletion: you may ask us, free of charge, to correct or delete information that is wrong, out of date, incomplete, excessive, misleading or obtained unlawfully, or to delete a record we may no longer keep."),
+    paragraph("Withdrawing consent: you may withdraw your consent to optional analytics or to marketing at any time."),
+    paragraph("Complaints: you may complain to the Information Regulator at any time. Its contact details are below."),
+    // s18(1)(h)(iv) and s11(3)-(4); POPIA Regulations reg 2 (2025): notice of the right to object at collection; any channel, free.
+    heading("Your right to object", "right-to-object"),
+    paragraph("You have the right to object, at any time and free of charge, to our use of your personal information for our legitimate interests, such as security and fraud prevention, and for direct marketing. Once you object, we stop using it for that purpose."),
+    paragraph("You can object in any way: by email, SMS, WhatsApp, phone, post or in person. You may use Form 1 in the POPIA Regulations, but you do not have to."),
+    // s23-s25 and POPIA Regulations reg 3.4-3.6 (2025): any channel, phone requests recorded, outcome within 30 days.
+    heading("How to make a request"),
+    paragraph(`Send any privacy request or objection to our Information Officer. Email ${officer.email}, phone ${contact.phone}, or write to or visit ${contact.address}.`),
+    paragraph("We may ask you to prove your identity before we share or change information. We record requests made by phone. We tell you what we did within 30 days."),
+    // POPIA s55(1).
+    heading("Information Officer", "information-officer"),
+    paragraph(`Our Information Officer is ${officer.name}. Email: ${officer.email}. Phone: ${contact.phone}. Address: ${contact.address}.`),
+    paragraph("The Information Officer makes sure we follow POPIA, deals with your requests, and works with the Information Regulator."),
+    heading("Complaints to the Information Regulator", "information-regulator"),
+    paragraph("If you are unhappy with how we handle your personal information, please tell us first. You also have the right to complain to the Information Regulator:"),
+    ...INFORMATION_REGULATOR.map(paragraph),
+    heading("Access to records"),
+    paragraph("Our PAIA manual explains how to ask for access to the records we hold."),
   ];
+  return document ? blocks : [notice(), ...blocks];
+}
+
+// PAIA s51(1)-(3) as substituted by POPIA s110 (30 June 2021). No small-business exemption is in force since 31 Dec 2021 (GeN 397); s90(3) offence.
+function paiaBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
+  const business = businessFacts(document);
+  const contact = contactFacts(document);
+  const officer = officerFacts(document);
+  const blocks: PolicyBlock[] = [
+    heading("About this manual"),
+    paragraph(`This manual is published under section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA). It explains how to ask ${business.legalName}, trading as ${business.tradingName} ("DasKasas"), a private body, for access to its records.`),
+    // s51(1)(a)(i).
+    heading("Contact details of the head of DasKasas"),
+    paragraph(`Head and Information Officer: ${officer.name}.`),
+    paragraph(`Street address: ${contact.address}.`),
+    paragraph(`Postal address: ${officer.postalAddress}.`),
+    paragraph(`Phone: ${contact.phone}.`),
+    paragraph(`Fax: ${officer.fax}.`),
+    paragraph(`Email: ${officer.email}.`),
+    // s51(1)(b)(i), s10.
+    heading("The Information Regulator's PAIA Guide"),
+    paragraph("The Information Regulator publishes a Guide on how to use PAIA, in every official language. It explains how to request a record and what you can do if a request is refused. Get it from the Regulator's website, inforegulator.org.za, or from its offices. Its contact details are at the end of this manual."),
+    // s51(1)(b)(ii), s52.
+    heading("Records available without a request"),
+    paragraph("We have not published a notice under section 52. You can read these records on this website without a request: our terms and conditions, delivery, return and refund policies, privacy policy, this manual, and product details and prices."),
+    // s51(1)(b)(iii).
+    heading("Records kept under other laws"),
+    paragraph("We keep records under these laws, where they apply to us: the Companies Act 71 of 2008, the Income Tax Act 58 of 1962, the Tax Administration Act 28 of 2011, the Value-Added Tax Act 89 of 1991, the Consumer Protection Act 68 of 2008, the Electronic Communications and Transactions Act 25 of 2002 and the Protection of Personal Information Act 4 of 2013. If we have employees, also the Basic Conditions of Employment Act 75 of 1997, the Unemployment Insurance Act 63 of 2001 and the Skills Development Levies Act 9 of 1999."),
+    // s51(1)(b)(iv).
+    heading("Subjects and categories of records"),
+    paragraph("Company: registration documents, directors' records, minutes and resolutions."),
+    paragraph("Finance and tax: accounting records, invoices, bank statements, and tax and VAT returns."),
+    paragraph("Customers: orders, payments and refunds, delivery and collection details, returns, faults, correspondence and accounts."),
+    paragraph("Products and suppliers: the catalogue, stock, prices, suppliers, purchase orders and made-to-order commissions."),
+    paragraph("Staff, if we have staff: employment contracts, pay, leave and tax records."),
+    paragraph("Website and systems: website content, analytics from visitors who accepted it, and security logs."),
+    // PAIA s53 (form and contents), s54 (fees; no request fee for a personal requester), s56-s57 (30 days, one extension), Part 3 Ch 4 (refusal grounds), s77A/s78 (remedies).
+    heading("How to request a record"),
+    paragraph("Use Form 2 (Request for Access to Record) in the PAIA Regulations, 2021, available on the Information Regulator's website. Send it to the head of DasKasas using the contact details above."),
+    paragraph("Describe the record well enough for us to find it, and say how you want access. Say which right you want to exercise or protect and why you need the record for it. If you ask on someone else's behalf, show that you may act for them."),
+    paragraph("A request fee and access fees set in the PAIA Regulations may apply. We tell you about any fee before we go further. There is no request fee when you ask for your own personal information."),
+    paragraph("We decide within 30 days and tell you in writing. We may extend this once, by up to 30 days, and we tell you why. We may refuse only on the grounds PAIA allows, such as protecting another person's privacy or commercial information."),
+    paragraph("If you disagree with our decision, you may complain to the Information Regulator or apply to court."),
+    // s51(1)(c)(i)-(v).
+    heading("Personal information we process"),
+    paragraph("Purposes: to take, deliver and support orders, run customer accounts, keep the records the law requires, keep the shop secure, and, only with consent, measure which pieces and filters are useful. The privacy policy sets out the lawful basis for each."),
+    paragraph("People and information: customers and website visitors (names, contact details, delivery addresses, orders, payment references, accounts, and analytics if accepted); suppliers and makers (business and contact details, bank details and orders); staff, if we have staff (identity, contact, employment, pay and tax details)."),
+    paragraph("Recipients: Paystack, SendGrid, Clerk, Railway and PostHog as described in the privacy policy, whoever delivers an order, our professional advisers such as accountants, and public bodies when the law requires, such as the South African Revenue Service."),
+    paragraph("Planned transfers outside South Africa: to Clerk, SendGrid and Railway in the United States, PostHog in the European Union, and Paystack in Nigeria when a payment is not processed in South Africa. The privacy policy gives the POPIA section 72 ground for each."),
+    paragraph(`Security measures: ${SAFEGUARDS.join(" ")}`),
+    // s51(2)-(3).
+    heading("Availability of this manual"),
+    paragraph(`This manual is on our website at ${WEBSITE}/policies/paia. You can inspect a copy at ${contact.address} during business hours. We give a copy to anyone who asks, for a reasonable fee, and to the Information Regulator on request. We update the manual regularly.`),
+    heading("Information Regulator"),
+    ...INFORMATION_REGULATOR.map(paragraph),
+  ];
+  return document ? blocks : [notice(), ...blocks];
 }
 
 export function policyPage(document: CustomerPolicyDocument | null, section: PolicySection): PolicyView {
-  if (section === "support" || section === "contact") return view(section, document !== null, contactBlocks(document));
   if (section === "delivery") return view(section, document !== null, deliveryBlocks(document));
   if (section === "returns") return view(section, document !== null, returnBlocks(document));
   if (section === "refunds") return view(section, document !== null, refundBlocks(document));
   if (section === "terms") return view(section, document !== null, termsBlocks(document));
+  if (section === "paia") return view(section, document !== null, paiaBlocks(document));
   return view(section, document !== null, privacyBlocks(document));
-}
-
-export function contactDetails(document: CustomerPolicyDocument | null): { email: string; phone: string; address: string } {
-  if (!document) {
-    return {
-      email: POLICY_PLACEHOLDERS.email,
-      phone: POLICY_PLACEHOLDERS.phone,
-      address: POLICY_PLACEHOLDERS.address,
-    };
-  }
-  return {
-    email: document.support_mailbox,
-    phone: document.phone,
-    address: document.contact_address,
-  };
 }

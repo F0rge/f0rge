@@ -5,6 +5,10 @@ const now = new Date("2026-10-05T12:00:00.000Z");
 const business = {
   legal_name: "Northwind Furnishings (Pty) Ltd",
   trading_name: "Northwind",
+  legal_status: "Private company registered in South Africa",
+  office_bearers: ["Naledi Dlamini"],
+  legal_service_address: "12 Commerce Road, Kramerville, Johannesburg, 2090",
+  codes_of_conduct: "None",
   contact_address: "12 Commerce Road, Kramerville, Johannesburg, 2090",
   phone: "011 555 0100",
   company_registration_number: "2020/123456/07",
@@ -16,8 +20,6 @@ const business = {
   confirmed_by: "Naledi Dlamini",
   confirmed_on: "2026-10-05",
 };
-
-const goodsLine = "Standard made to order pieces keep the confirmed lead time on the order and, once delivered, follow the same unused-return rules as stocked pieces. Bespoke commissions are not offered on the storefront, use a separate agreement, and are not refunded for a change of mind.";
 
 function variant(index: number, patch: Record<string, unknown> = {}) {
   const n = String(index + 1).padStart(2, "0");
@@ -64,16 +66,10 @@ function readyPack(patch: Record<string, unknown> = {}) {
       reviewed_by: "Naledi Dlamini",
       reviewed_on: "2026-10-05",
       delivery: "Delivery is available in the approved Gauteng zones at the stated VAT-inclusive rate. Collection from the showroom is the alternative.",
-      terms: "Customer prices are in South African Rand and include VAT. Delivery, returns, and refunds are the reviewed pages in this pack.",
-      refund_policy: goodsLine,
-      return_policy: goodsLine,
-      privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
-      data_collected: "We collect the name, email, phone, delivery address, and order details needed to fulfil a purchase.",
-      processors: "Clerk handles sign-in, PostHog handles optional analytics, Paystack handles card payments, SendGrid sends email, and Railway hosts the store.",
-      retention: "Order records are kept for as long as tax law and open disputes require, and analytics stay off until accepted.",
       information_officer_name: "Naledi Dlamini",
-      information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
-      paia_baseline: "The information officer publishes the PAIA manual and acknowledges requests received at the support mailbox.",
+      information_officer_email: "privacy@northwind.co.za",
+      postal_address: "PO Box 100, Kramerville, Johannesburg, 2090",
+      fax_number: "None",
       collector_skin: "Oxblood / citron",
     },
     provisioning: {
@@ -203,10 +199,14 @@ test("a rejected reload does not unpublish pieces from the last approved load", 
   expect(second.shelf.orders).toEqual([paidOrder]);
 });
 
-test("reviewed support, delivery, returns and privacy are copied only from an approved pack", () => {
+test("the owner's business, delivery and Information Officer facts are copied only from an approved pack", () => {
   expect(publishedCustomerPolicies(readyPack(), now)).toEqual({
     legal_name: "Northwind Furnishings (Pty) Ltd",
     trading_name: "Northwind",
+    legal_status: "Private company registered in South Africa",
+    office_bearers: ["Naledi Dlamini"],
+    legal_service_address: "12 Commerce Road, Kramerville, Johannesburg, 2090",
+    codes_of_conduct: "None",
     contact_address: "12 Commerce Road, Kramerville, Johannesburg, 2090",
     support_mailbox: "support@northwind.co.za",
     phone: "011 555 0100",
@@ -217,22 +217,16 @@ test("reviewed support, delivery, returns and privacy are copied only from an ap
     collection_location: "Kramerville showroom, 12 Commerce Road, Johannesburg",
     collection_instructions: "Collect from the showroom desk on weekdays between 09:00 and 16:00.",
     gauteng_zones: [{ name: "Johannesburg", rate_zar_incl_vat: "950.00" }],
-    terms: "Customer prices are in South African Rand and include VAT. Delivery, returns, and refunds are the reviewed pages in this pack.",
-    refund_policy: goodsLine,
-    return_policy: goodsLine,
-    privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
-    data_collected: "We collect the name, email, phone, delivery address, and order details needed to fulfil a purchase.",
-    processors: "Clerk handles sign-in, PostHog handles optional analytics, Paystack handles card payments, SendGrid sends email, and Railway hosts the store.",
-    retention: "Order records are kept for as long as tax law and open disputes require, and analytics stay off until accepted.",
     information_officer_name: "Naledi Dlamini",
-    information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
-    paia_baseline: "The information officer publishes the PAIA manual and acknowledges requests received at the support mailbox.",
+    information_officer_email: "privacy@northwind.co.za",
+    postal_address: "PO Box 100, Kramerville, Johannesburg, 2090",
+    fax_number: "None",
     collector_skin: "Oxblood / citron",
     distinguishes_standard_made_to_order_from_bespoke: true,
   });
-  const undifferentiated = readyPack();
-  undifferentiated.policies.return_policy = undifferentiated.policies.return_policy.replace("Bespoke commissions", "Custom work");
-  expect(publishedCustomerPolicies(undifferentiated, now)).toBeNull();
+  const noOfficerEmail = readyPack();
+  noOfficerEmail.policies.information_officer_email = "";
+  expect(publishedCustomerPolicies(noOfficerEmail, now)).toBeNull();
 });
 
 test("the load summary reports an absent pack without echoing a secret", () => {
