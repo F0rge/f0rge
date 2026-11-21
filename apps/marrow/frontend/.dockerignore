@@ -12,12 +12,6 @@ apps/*
 !apps/marrow
 apps/marrow/*
 !apps/marrow/frontend
-!apps/dk
-apps/dk/*
-!apps/dk/tag-printer
-apps/dk/tag-printer/*
-!apps/dk/tag-printer/frontend
-!apps/dk/tag-printer/frontend/package.json
 !apps/firstout
 apps/firstout/*
 !apps/firstout/frontend

@@ -9,7 +9,7 @@ This package is the legacy shared kit for existing apps, not actual Primer and n
 1. Add component under `libs/ui/src/components/ui/`.
 2. Export from `libs/ui/src/index.ts`.
 3. Add a Storybook story when `libs/ui/.storybook` exists.
-4. Use **semantic tokens only** (`bg-primary`, `text-muted-foreground`) — never `--marrow-*` or `--dk-*`.
+4. Use **semantic tokens only** (`bg-primary`, `text-muted-foreground`) — never `--marrow-*`.
 
 ## Engines
 

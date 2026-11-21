@@ -22,7 +22,6 @@ Overview and App table: [root `AGENTS.md`](../../../AGENTS.md#cicd). Programs, d
 | marrow | Railway project `Marrow`. Services `marrow-api`, `marrow-worker`, `marrow-mcp` (no HTTP health path) and `marrow-frontend`. |
 | firstout | **Own** Railway project `Firstout`; hosts `firstout.co.za` / `api.firstout.co.za`. |
 | daskasas | Own Railway project `DasKasas`; services `storefront` and `storefront-commerce`. |
-| dk | Pi, Coolify. Stateless. Host ports 8002 (backend) and 3002 (frontend). |
 | envmon | Pi, Coolify, internal only (backend 5001, frontend 5000). SQLite `/app/data/readings.db` on volume `environment-monitor_sensor_data`. |
 
 # Marrow Infrastructure (Railway)

@@ -243,13 +243,6 @@
     ]
   },
   {
-    "path": "apps/dk/tag-printer/docker-compose.yml",
-    "owner": "f0rge-quality-testing",
-    "reviewers": [
-      "f0rge-devops"
-    ]
-  },
-  {
     "path": "apps/marrow/backend/tests/test_migration_upgrade_head.py",
     "owner": "f0rge-data",
     "reviewers": [
@@ -290,7 +283,7 @@
     ]
   },
   {
-    "path": "apps/dk/tag-printer/backend/app/models/schemas.py",
+    "path": "apps/environment-monitor/backend/models/api_models.py",
     "owner": "f0rge-backend",
     "reviewers": [
       "f0rge-quality-testing"

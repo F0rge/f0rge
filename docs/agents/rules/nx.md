@@ -9,7 +9,7 @@ Canonical map: `nx.json` + each app/lib `project.json`. Details live there — d
 A Project that should be released also needs a deploy block; see [the deploy page](../../../.github/deploy/README.md).
 
 1. `project.json` with tags:
-   - Python: `platform:py` + `scope:shared|marrow|dk|…`
+   - Python: `platform:py` + `scope:shared|marrow|…`
    - TypeScript: `platform:ts` + matching `scope:`
    - Rust: `platform:rust` + matching `scope:`, with [the Rust target contract](../../../.github/rust/README.md)
    - Exception: `marrow-ios` — `scope:marrow` only (no `platform:` — Linux CI ignores it)

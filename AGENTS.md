@@ -2,7 +2,7 @@
 
 This is the repository entry point for Codex and Claude Code. Before planning or implementation, read the [agent guide](docs/agents/README.md) and [shared protocol](docs/agents/protocol.md). The [routing manifest](docs/agents/manifest.json) is the single source for repository role assignments; it is a repo convention, not a native agent loader.
 
-Personal Nx monorepo for Marrow, Firstout, DasKasas storefront and tag printer, Environment Monitor, and Airflow.
+Personal Nx monorepo for Marrow, Firstout, DasKasas storefront, Environment Monitor, and Airflow.
 
 ## Canonical decisions
 
@@ -41,22 +41,6 @@ Service names, health paths, the migration command and start commands live in th
 ## apps/environment-monitor
 
 Room sensor dashboard on the Pi (Coolify). Backend port 5001, frontend port 5000. SQLite stays `/app/data/readings.db` on volume `environment-monitor_sensor_data`. See [apps/environment-monitor/AGENTS.md](apps/environment-monitor/AGENTS.md). Public repo: never commit the sensor DB, CSV exports, or `.env`.
-
-## apps/dk (tag printer)
-
-DasKasas price tag tool — stateless FastAPI + Next.js, **no auth, no DB**.
-
-| Env | Host | URLs |
-|-----|------|------|
-| Production (`main`) | Pi Coolify | https://tags.leo-figueiredo.com, https://tags-api.leo-figueiredo.com |
-
-Local dev:
-
-```bash
-cd apps/dk/tag-printer && docker compose up --build   # :3002 / :8002
-```
-
-Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree).
 
 ## apps/firstout
 
@@ -97,7 +81,6 @@ Two workflows, read top to bottom. Terms (Project, App, Host, Artifact, Release)
 | `firstout` | Railway | `firstout-backend`, `firstout-frontend` |
 | `marrow` | Railway | `marrow-backend`, `marrow-frontend` |
 | `daskasas` | Railway | `daskasas-commerce`, `daskasas-web` |
-| `dk` | Pi (Coolify) | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 | `envmon` | Pi (Coolify) | `environment-monitor-backend`, `environment-monitor-frontend` |
 
 Airflow runs on the Pi outside this pipeline.
@@ -147,7 +130,7 @@ Resolve each changed library path through the [routing manifest](docs/agents/man
 
 - Python: ruff for linting/formatting, target Python 3.11
 - Use `from __future__ import annotations` in all Python files
-- Existing Marrow/dk frontend conventions: TypeScript strict, Tailwind for styling; primitives from `@f0rge/ui`; forms from `@f0rge/ui/forms`; token skins in app CSS; Storybook is the catalogue — see `docs/agents/rules/ui-kit.md`. New apps follow the Primer ADR; preserve each legacy app until an approved migration.
+- Existing Marrow frontend conventions: TypeScript strict, Tailwind for styling; primitives from `@f0rge/ui`; forms from `@f0rge/ui/forms`; token skins in app CSS; Storybook is the catalogue — see `docs/agents/rules/ui-kit.md`. New apps follow the Primer ADR; preserve each legacy app until an approved migration.
 - API prefix: /api/v1
 - Marrow auth cookie name: ht_session
 
@@ -173,7 +156,7 @@ Read the applicable Markdown rules explicitly before planning or changing files.
 | [qa-gate](docs/agents/rules/qa-gate.md) | Before preparing any PR or verifying a feature; tests, `libs/**`, workflows |
 | [data-pipelines](docs/agents/rules/data-pipelines.md) | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
-Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/dk/tag-printer/AGENTS.md` and `libs/ui/AGENTS.md`). A generated Codex or Claude Code profile does not load scoped rules automatically; read the files selected by the table above.
+Read the nested `AGENTS.md` files that apply to the changed paths (for example `apps/firstout/AGENTS.md` and `libs/ui/AGENTS.md`). A generated Codex or Claude Code profile does not load scoped rules automatically; read the files selected by the table above.
 
 ## Sub-agents
 

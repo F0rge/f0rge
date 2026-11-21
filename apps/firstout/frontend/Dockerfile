@@ -4,7 +4,6 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/marrow/frontend/package.json ./apps/marrow/frontend/
-COPY apps/dk/tag-printer/frontend/package.json ./apps/dk/tag-printer/frontend/
 COPY apps/firstout/frontend/package.json ./apps/firstout/frontend/
 COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
 COPY apps/storefront/web/package.json ./apps/storefront/web/

@@ -3,7 +3,6 @@
   "private": true,
   "workspaces": [
     "apps/marrow/frontend",
-    "apps/dk/tag-printer/frontend",
     "apps/firstout/frontend",
     "apps/storefront/commerce",
     "apps/storefront/web",

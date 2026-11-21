@@ -20,7 +20,7 @@ The decisions were reconstructed from the 7 November 2026 architecture conversat
 
 New apps use the accepted stack: Rust and Actix Web for HTTP, Diesel for PostgreSQL, PostgreSQL as the database, a standalone React frontend with strict TypeScript, Vite, actual Primer, TanStack Query, TanStack Router, and TanStack Form. Shared UI bricks are Primer components, not a lookalike. Follow [P-005](governance.md#p-005) for Leo's review and automatic squash merging; a reviewed merge releases the affected Apps ([P-006](governance.md#p-006)). Every PR includes the ADR Check for its touched domains required by P-003, written with the [`pr` skill](../../.agents/skills/pr/SKILL.md). The table below is the decision index, not a compliance assessment. ADR compliance is judged in review, not by CI ([P-004](governance.md#p-004)).
 
-Apps already in the tree — Marrow, Firstout, dk, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
+Apps already in the tree — Marrow, Firstout, environment-monitor, DasKasas storefront, Airflow, and the Swift iOS client — keep their current commands and safety rules. Their Python, Next.js, Medusa, Carbon, shadcn, Mantine, and SQLite files are legacy inventory. They are not approved exceptions and they are not migrated by these records.
 
 `C-001` (generated Zod from a Rust contract into TanStack Form) and `C-002` (Vitest, Storybook browser tests, Playwright journeys) stay conditional.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time switch of Marrow (Railway) to Releases by cd.yml. Order of use: 4 of 5.
+# One-time switch of Marrow (Railway) to Releases by cd.yml. Order of use: 3 of 4.
 # Run before 2026-12-01: Railway stops reading railway.toml that day.
 #   .github/deploy/switch/marrow.sh
 APP=marrow
