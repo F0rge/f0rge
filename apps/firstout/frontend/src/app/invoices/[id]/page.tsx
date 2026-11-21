@@ -46,11 +46,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
-import {
-  partialPaymentError,
-  settlementStatusLabel,
-  settlementTagType,
-} from "@/lib/payment-status";
+import { invoiceStatusTag, partialPaymentError } from "@/lib/payment-status";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -263,7 +259,7 @@ export default function InvoiceDetailPage() {
 
   const showPayment = !invoice.is_archive && canMutate && hasPositiveBalance(invoice.balance);
   const showCreditNote = !invoice.is_archive && canMutate && !creditNote;
-  const paymentStatus = invoice.is_archive ? "unknown" : invoice.payment_status;
+  const statusTag = invoiceStatusTag(invoice);
   const formatInvoiceAmount = invoice.is_archive ? formatArchiveCurrency : formatZarAmount;
 
   return (
@@ -278,8 +274,8 @@ export default function InvoiceDetailPage() {
         <p className="cds--type-body-01">
           {invoice.customer_name} · Issued {invoice.issue_date}
         </p>
-        <Tag type={settlementTagType(paymentStatus)} size="sm">
-          {settlementStatusLabel(paymentStatus)}
+        <Tag type={statusTag.type} size="sm">
+          {statusTag.label}
         </Tag>
       </div>
 

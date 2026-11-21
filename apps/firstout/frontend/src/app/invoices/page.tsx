@@ -43,7 +43,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { formatSettlementAmount } from "@/lib/source-history";
 import { suspectUnitPriceWarning } from "@/lib/quote-sku-price";
-import { settlementStatusLabel, settlementTagType } from "@/lib/payment-status";
+import { invoiceStatusTag } from "@/lib/payment-status";
 
 const TABLE_HEADERS = [
   { key: "invoice_number", header: "Number" },
@@ -287,7 +287,7 @@ function InvoicesPageContent() {
     total_inc_vat: formatZarAmount(entry.total_inc_vat),
     amount_paid: formatSettlementAmount(entry.amount_paid, entry.is_archive),
     balance: formatSettlementAmount(entry.balance, entry.is_archive),
-    payment_status: settlementStatusLabel(entry.payment_status),
+    payment_status: invoiceStatusTag(entry).label,
     actions: entry.id,
   }));
 
@@ -389,8 +389,8 @@ function InvoicesPageContent() {
                           return (
                             <TableCell key={cell.id}>
                               {invoice ? (
-                                <Tag type={settlementTagType(invoice.payment_status)} size="sm">
-                                  {settlementStatusLabel(invoice.payment_status)}
+                                <Tag type={invoiceStatusTag(invoice).type} size="sm">
+                                  {invoiceStatusTag(invoice).label}
                                 </Tag>
                               ) : (
                                 cell.value

@@ -262,6 +262,7 @@ class InvoiceService:
             amount_paid=invoice.amount_paid,
             balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
+            on_account=invoice.on_account,
             created_at=invoice.created_at,
             updated_at=invoice.updated_at,
         )
@@ -286,6 +287,7 @@ class InvoiceService:
             amount_paid=invoice.amount_paid,
             balance=_response_money(invoice, balance),
             payment_status="unknown" if invoice.is_archive else invoice.payment_status.value,
+            on_account=invoice.on_account,
             prices_include_vat=invoice.prices_include_vat,
             lines=[
                 InvoiceLineResponse(

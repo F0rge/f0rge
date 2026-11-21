@@ -1310,7 +1310,7 @@ export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   received: "Received",
 };
 
-export type TillTender = "cash" | "card" | "deposit" | "eft";
+export type TillTender = "statement" | "cash" | "card" | "deposit" | "eft";
 
 export type TillSaleLinePayload = {
   sku_id: string;
@@ -1480,6 +1480,8 @@ export type TillPricePreview = {
 export type TillSalePayload = TillPriceRequest & {
   location_id: string;
   tender: TillTender;
+  /** Statement sales only; defaults to issue date + payment terms. */
+  due_date?: string;
   price_revision?: string;
   pick_id?: string;
   pick_ids?: string[];
@@ -1494,10 +1496,13 @@ export type TillSaleResult = {
   /** Draft till pick for the units reserved against the invoice; null when the showroom had them all. */
   pick_id: string | null;
   invoice_number: string;
-  payment_id: string;
-  payment_number: string;
+  /** Null for a statement sale: no payment is recorded at the till. */
+  payment_id: string | null;
+  payment_number: string | null;
   tender: TillTender;
   issue_date: string;
+  due_date: string | null;
+  on_account: boolean;
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
@@ -2163,6 +2168,8 @@ export type InvoiceListItem = {
   amount_paid: string;
   balance: string;
   payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
+  /** Issued unpaid on account; reads "On statement" until a payment is recorded. */
+  on_account: boolean;
   created_at: string;
   updated_at: string;
 };

@@ -26,6 +26,19 @@ export function settlementTagType(status: SettlementStatus): "gray" | "blue" | "
   }
 }
 
+/** Invoice status tag: an unpaid invoice issued on account reads "On statement". */
+export function invoiceStatusTag(invoice: {
+  payment_status: SettlementStatus;
+  on_account: boolean;
+  is_archive: boolean;
+}): { label: string; type: "gray" | "blue" | "green" | "purple" } {
+  const status = invoice.is_archive ? "unknown" : invoice.payment_status;
+  if (status === "unpaid" && invoice.on_account) {
+    return { label: "On statement", type: "purple" };
+  }
+  return { label: settlementStatusLabel(status), type: settlementTagType(status) };
+}
+
 function moneyToCents(value: string): number | null {
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim());
   if (!match) {

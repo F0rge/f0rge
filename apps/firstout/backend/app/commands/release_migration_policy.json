@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "101_stock_reservation_changes",
+  "target_revision": "102_invoice_on_account",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -409,6 +409,10 @@
     },
     "101_stock_reservation_changes": {
       "sha256": "58d337a823030545f7fd3e7f3cab71626d381b20bd4a7eed2fb5709f0d080ff5",
+      "automatic": true
+    },
+    "102_invoice_on_account": {
+      "sha256": "94c126adf67bc40ed98bd33d604996024b6a581314ba7ac3c2879e8f50cdf480",
       "automatic": true
     }
   }

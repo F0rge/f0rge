@@ -64,6 +64,10 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     is_archive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Issued unpaid to go on the customer's statement; reads "On statement" until a payment.
+    on_account: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     cin7_source_payload: Mapped[Optional[dict[str, object]]] = mapped_column(
         JSONB(none_as_null=True), nullable=True
     )

@@ -41,6 +41,7 @@ import {
   Locked,
   Money,
   Purchase,
+  Receipt,
   Scan,
   TrashCan,
   Undo,
@@ -67,6 +68,7 @@ import styles from "./page.module.css";
 import { TillLoading } from "./loading-layout";
 import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
 import { TillPickList } from "./till-pick-list";
+import { localIsoDate, statementDueDate } from "@/lib/till-statement";
 
 import {
   ApiError,
@@ -194,6 +196,7 @@ const TENDER_OPTIONS: {
   label: string;
   icon: typeof Purchase;
 }[] = [
+  { value: "statement", label: "Pay on statement", icon: Receipt },
   { value: "card", label: "Card", icon: Purchase },
   { value: "cash", label: "Cash", icon: Money },
   { value: "eft", label: "EFT", icon: Building },
@@ -369,7 +372,9 @@ function TillWorkspace() {
     error?: string;
   } | null>(null);
   const [pricingAttempt, setPricingAttempt] = useState(0);
-  const [tender, setTender] = useState<TillTender>("cash");
+  const [tender, setTender] = useState<TillTender>("statement");
+  // A typed due date belongs to the customer it was typed for; a new customer gets their terms.
+  const [dueDateEdit, setDueDateEdit] = useState<{ customerId: string; value: string } | null>(null);
   const [amountTendered, setAmountTendered] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadSucceeded, setLoadSucceeded] = useState(false);
@@ -774,6 +779,25 @@ function TillWorkspace() {
     setAmountTendered(totalIncLabel);
   }, [totalIncLabel]);
 
+  const onStatement = tender === "statement";
+  const saleDate = localIsoDate();
+  const dueDate =
+    dueDateEdit?.customerId === customerId
+      ? dueDateEdit.value
+      : statementDueDate(
+          saleDate,
+          selectedCustomer?.payment_terms_days,
+          companySettings?.payment_terms_days,
+        );
+  const dueDateError = !onStatement
+    ? null
+    : !dueDate
+      ? "Enter a due date."
+      : dueDate < saleDate
+        ? "The due date can't be before the issue date."
+        : null;
+  const creditOverrideActive = !onStatement && canOverrideCredit && creditOverride;
+
   const tenderedAmount = parsePriceInput(amountTendered) ?? totalInc;
   const changeAmount = Math.max(0, tenderedAmount - totalInc);
   const showChange = Boolean(pricePreview) && (tender === "cash" || tender === "eft");
@@ -1117,7 +1141,7 @@ function TillWorkspace() {
         refreshReservations();
         applySnapshot(snapshot, restored);
         setResumedSale(true);
-        setTender("cash");
+        setTender("statement");
         setCreditOverride(false);
         setCreditOverrideReason("");
         refreshPrices();
@@ -1233,8 +1257,12 @@ function TillWorkspace() {
     if (!saleValid || !pricePreview || !cartReady || heldLocked || heldLock.current || submitting) {
       return;
     }
-    if (creditOverride && canOverrideCredit && !creditOverrideReason.trim()) {
+    if (creditOverrideActive && !creditOverrideReason.trim()) {
       setError("Override reason is required.");
+      return;
+    }
+    if (dueDateError) {
+      setError(dueDateError);
       return;
     }
     setSubmitting(true);
@@ -1252,9 +1280,10 @@ function TillWorkspace() {
         ...priceRequest,
         price_revision: pricePreview.price_revision,
         tender,
+        ...(onStatement ? { due_date: dueDate } : {}),
         ...(pickId ? { pick_id: pickId } : {}),
         ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
-        ...(canOverrideCredit && creditOverride
+        ...(creditOverrideActive
           ? {
               credit_override: true,
               credit_override_reason: creditOverrideReason.trim(),
@@ -1267,6 +1296,7 @@ function TillWorkspace() {
       setResumedSale(false);
       setSkuId("");
       setCustomerId("");
+      setDueDateEdit(null);
       setPickId("");
       setLinkedPickIds({});
       setKitBlocks([]);
@@ -2160,7 +2190,8 @@ function TillWorkspace() {
                   </Select>
                 ) : null}
 
-                {canOverrideCredit &&
+                {!onStatement &&
+                canOverrideCredit &&
                 (selectedCustomer?.on_hold || creditBlock) ? (
                   <>
                     <Checkbox
@@ -2199,12 +2230,41 @@ function TillWorkspace() {
                   ))}
                 </RadioButtonGroup>
 
-                <TextInput
-                  id="till-amount-tendered"
-                  labelText="Amount Tendered"
-                  value={amountTendered}
-                  onChange={(event) => setAmountTendered(event.target.value)}
-                />
+                {onStatement ? (
+                  <>
+                    <TextInput
+                      id="till-due-date"
+                      labelText="Due date"
+                      type="date"
+                      min={saleDate}
+                      value={dueDate}
+                      onChange={(event) =>
+                        setDueDateEdit({ customerId, value: event.target.value })
+                      }
+                      invalid={Boolean(dueDateError)}
+                      invalidText={dueDateError ?? undefined}
+                      helperText={
+                        selectedCustomer?.payment_terms_days != null
+                          ? `${selectedCustomer.name} has ${selectedCustomer.payment_terms_days}-day terms.`
+                          : `${companySettings?.payment_terms_days ?? 30} days, the company's payment terms.`
+                      }
+                    />
+                    <InlineNotification
+                      kind="info"
+                      lowContrast
+                      hideCloseButton
+                      title="No payment is recorded now."
+                      subtitle="The invoice shows as On statement until someone records a payment on it."
+                    />
+                  </>
+                ) : (
+                  <TextInput
+                    id="till-amount-tendered"
+                    labelText="Amount Tendered"
+                    value={amountTendered}
+                    onChange={(event) => setAmountTendered(event.target.value)}
+                  />
+                )}
 
                 {showChange ? (
                   <p className="firstout-muted-text">
@@ -2219,9 +2279,8 @@ function TillWorkspace() {
                     !cartReady ||
                     heldLocked ||
                     submitting ||
-                    (creditOverride &&
-                      canOverrideCredit &&
-                      !creditOverrideReason.trim())
+                    Boolean(dueDateError) ||
+                    (creditOverrideActive && !creditOverrideReason.trim())
                   }
                   onClick={() => void handleCompleteSale()}
                 >
@@ -2246,9 +2305,19 @@ function TillWorkspace() {
           <Stack gap={5}>
             <div className="firstout-tax-invoice__header">
               <h2>Tax invoice {lastSale.invoice_number}</h2>
-              <p>
-                Payment {lastSale.payment_number} — {lastSale.tender}
-              </p>
+              {lastSale.payment_number ? (
+                <p>
+                  Payment {lastSale.payment_number} — {lastSale.tender}
+                </p>
+              ) : (
+                <p>
+                  <Tag type="purple" size="sm">
+                    On statement
+                  </Tag>{" "}
+                  {formatZarAmount(lastSale.total_inc_vat)} owing
+                  {lastSale.due_date ? `, due ${lastSale.due_date}` : ""}
+                </p>
+              )}
             </div>
 
             <div className="firstout-tax-invoice__parties">
@@ -2346,6 +2415,12 @@ function TillWorkspace() {
                 </p>
               )}
             </div>
+
+            {lastSale.on_account ? (
+              <p className="cds--type-helper-text-01">
+                When the customer pays, open the invoice and choose Record payment.
+              </p>
+            ) : null}
 
             <div className="firstout-catalogue-actions">
               <Button

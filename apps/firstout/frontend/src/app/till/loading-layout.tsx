@@ -96,7 +96,7 @@ export function TillLoading({
                 <RadioButton key={value} id={`loading-till-tender-${value}`} value={value} labelText={label} />
               ))}
             </RadioButtonGroup>
-            <TextInput id="loading-till-tendered" labelText="Amount Tendered" disabled />
+            {tender === "statement" ? null : <TextInput id="loading-till-tendered" labelText="Amount Tendered" disabled />}
             <Button disabled>Complete sale</Button>
           </Stack>
         </Tile>

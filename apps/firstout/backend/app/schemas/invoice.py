@@ -61,6 +61,7 @@ class InvoiceListItem(BaseModel):
     amount_paid: Decimal
     balance: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]
+    on_account: bool = False
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -81,6 +82,7 @@ class InvoiceResponse(BaseModel):
     amount_paid: Decimal
     balance: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]
+    on_account: bool = False
     prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     created_at: datetime.datetime
