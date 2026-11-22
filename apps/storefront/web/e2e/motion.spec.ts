@@ -64,10 +64,11 @@ test('gallery selection remains visible and announces its image with reduced mot
 
 test('focusing a shopping card ends its reveal and scrolling back does not replay it', async ({ page }) => {
   test.skip(!process.env.STOREFRONT_TEST_SKU_ID, 'A published catalogue is required')
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.setViewportSize({ width: 1440, height: 500 })
   await page.goto('/')
   await page.waitForLoadState('networkidle')
   const section = page.locator('#selected-pieces')
+  await expect(section).not.toBeInViewport()
   await section.scrollIntoViewIfNeeded()
   await expect.poll(() => section.evaluate((element) => element.getAnimations().length)).toBeGreaterThan(0)
   const card = section.getByRole('link').nth(1)
