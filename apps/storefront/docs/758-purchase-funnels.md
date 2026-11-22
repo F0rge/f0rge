@@ -1,4 +1,4 @@
-# Purchase funnels and limited replay (#758)
+# Purchase funnels (#758)
 
 Consented commerce events extend the browsing measurement from
 `docs/757-consented-measurement.md`. Optional capture still starts only after
@@ -36,17 +36,6 @@ unfiltered URLs. Capture sets `$geoip_disable` and does not send an IP field.
 Project-level GeoIP enrichment and IP retention still have to be turned off in
 PostHog. That switch is not available from this repo.
 
-## Replay
-
-`decideReplay` starts the masked recorder only when it returns record: consent
-accepted, the session in the first 10% of the 1000-bucket sample, a catalogue,
-search, product, or bag route, and no sensitive overlay. Losing consent,
-leaving those routes, or opening a sensitive overlay stops recording
-immediately. Auth, account, checkout, payment, and confirmation are blocked
-routes. The recorder masks every input and all text. Autocapture, pageviews,
-console logs, headers, and bodies stay off. It does not load an unrestricted
-PostHog SDK. A config that turns any of those channels on does not start.
-
 ## Dashboards
 
 `consentedCommerceDashboards` defines seven saved dashboards: store health,
@@ -59,16 +48,13 @@ guest campaign to a later order through the anonymous id captured at sign-in.
 
 ## Retention, deletion, and cost
 
-Checked against PostHog's pricing, events retention, and replay retention docs
+Checked against PostHog's pricing and events retention docs
 on 2026-10-03:
 
 - Free-plan analytics events are retained for one year. Paid plans keep events
   for seven years. Retention cannot be shortened to delete data.
-- Free-plan recordings are retained for 30 days, not one year. One-year replay
-  needs a paid add-on and is not the V1 baseline.
-- Verified deletion uses PostHog person deletion with recordings. Export uses
-  batch export and per-recording JSON. Both are human steps in project
-  `292683`. This change does not call those APIs.
+- Use PostHog person deletion and batch export in project `292683` for requests
+  involving personal information. The storefront does not call those APIs.
 - Browser events are tagged `production` on the two public HTTPS DasKasas
   origins and `test` elsewhere. Server outcomes default to `test` outside the
   DasKasas production storefront Railway service, unless explicitly configured.
@@ -76,8 +62,8 @@ on 2026-10-03:
 - Product detail and successful add-to-bag events carry the public
   `product_title` alongside the stable `product_id`. The product interest
   dashboard groups by ID and shows the most recent reported title.
-- The free allowance is 1,000,000 analytics events and 5,000 recordings a
-  month. Above that, the free plan drops data. If billing is enabled, set the
+- The free allowance is 1,000,000 analytics events a month. Above that, the
+  free plan drops data. If billing is enabled, set the
   analytics product billing limit to USD 5 so ingestion stops. Alerts at 70%
   and 90% are not a cap. USD 5 sits inside the USD 50 platform budget. A human
   has to set the limit in PostHog billing settings.
@@ -88,7 +74,7 @@ A human still has to click through project `292683` and a running DasKasas:
 
 1. In PostHog, turn off GeoIP enrichment and IP retention. Set the analytics
    billing limit to USD 5, and add alerts at 70% and 90%. Confirm event
-   retention is one year and replay retention is 30 days.
+   retention is one year and leave session recording off.
 2. Put that project's public token in `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`
    without committing it.
 3. Accept analytics as a guest. Open the shop, a product, the bag, and
@@ -105,7 +91,5 @@ A human still has to click through project `292683` and a running DasKasas:
 8. Sign out and confirm the next event uses a new anonymous id.
 9. Save the seven dashboard definitions from `consentedCommerceDashboards` in
    PostHog. Confirm revenue tiles use server order and refund events.
-10. From the shop, open checkout and the payment panel, then sign-in, account,
-    and confirmation. Confirm replay is off on each.
-11. Block `https://eu.i.posthog.com` and complete checkout. Confirm the order
+10. Block `https://eu.i.posthog.com` and complete checkout. Confirm the order
     still succeeds.

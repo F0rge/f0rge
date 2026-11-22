@@ -339,7 +339,6 @@ function readyAnalytics() {
     consented: true,
     rejected_stopped: true,
     withdrawn_stopped: true,
-    replay_excludes_sensitive_routes: true,
     dashboards: DASHBOARDS,
     personal_information_exposed: false,
     commerce_blocked: false,
@@ -347,7 +346,12 @@ function readyAnalytics() {
 }
 
 test("consented, rejected, and withdrawn analytics with seven dashboards close only that gate", () => {
-  const result = assessFirstSaleReadiness({ analytics: readyAnalytics() });
+  const analytics = readyAnalytics();
+  const result = assessFirstSaleReadiness({ analytics });
+  const legacyResult = assessFirstSaleReadiness({
+    analytics: { ...analytics, replay_excludes_sensitive_routes: true },
+  });
+  expect(legacyResult).toEqual(result);
   expect(result.missing.some((line) => line.startsWith("Consented, rejected"))).toBe(false);
   expect(result.public_selling).toBe(false);
 });

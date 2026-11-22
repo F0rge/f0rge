@@ -15,7 +15,7 @@ export default async function AccountPage() {
     if (context) customer = { email: context.email, first_name: context.first_name, last_name: context.last_name };
   } catch { unavailable = true; }
 
-  return <div className="mx-auto w-full max-w-7xl px-4 py-10 md:px-6" data-storefront-no-capture="">
+  return <div className="mx-auto w-full max-w-7xl px-4 py-10 md:px-6">
     <h1 className="text-2xl font-semibold">Your account</h1>
     {unavailable ? <p role="alert" className="mt-6 rounded-lg border border-destructive p-4 text-sm text-destructive">Customer sign-in is temporarily unavailable. Please try again later or continue shopping as a guest.</p>
       : customer ? <AccountClient customer={customer} />
