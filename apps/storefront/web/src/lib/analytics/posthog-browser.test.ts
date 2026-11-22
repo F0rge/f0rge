@@ -1,5 +1,4 @@
-import { describe, expect, it } from "vitest";
-import { analyticsEnvironment } from "./policy";
+import { describe, expect, it, vi } from "vitest";
 import { createPostHogBrowserProvider, POSTHOG_CAPTURE_URL, type PostHogCapturePayload } from "./posthog-browser";
 
 describe("PostHog browser adapter", () => {
@@ -38,9 +37,37 @@ describe("PostHog browser adapter", () => {
         sort_order: "default",
         result_count: 2,
         $geoip_disable: true,
-        environment: analyticsEnvironment(),
+        environment: "test",
       },
     });
+  });
+
+  it.each([
+    ["https://daskasas.co.za", "production"],
+    ["https://www.daskasas.co.za", "production"],
+    ["http://daskasas.co.za", "test"],
+    ["https://daskasas.co.za.preview.example.com", "test"],
+    ["https://storefront.up.railway.app", "test"],
+    ["http://localhost:3004", "test"],
+  ])("labels browser events from %s as %s", (origin, expected) => {
+    vi.stubGlobal("location", { origin });
+    vi.stubEnv("NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV", "production");
+    try {
+      let payload: PostHogCapturePayload | undefined;
+      const provider = createPostHogBrowserProvider({
+        projectToken: "phc_test_fixture",
+        fetcher: async (_input, init) => {
+          payload = JSON.parse(String(init?.body)) as PostHogCapturePayload;
+          return new Response("ok");
+        },
+      });
+
+      provider.capture({ name: "storefront_product_viewed", properties: { product_id: "prod_fixture" } });
+      expect(payload?.properties.environment).toBe(expected);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
   });
 
   it("does not send without a project token and ignores transport failures", () => {

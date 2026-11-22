@@ -80,8 +80,11 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const feedback = bagMessage ? purchaseFeedback(bagMessage, true) : null;
   useEffect(() => { if (bagMessage) feedbackRef.current?.focus(); }, [bagMessage]);
   useEffect(() => {
-    if (choice === "accepted") capture({ name: "storefront_product_viewed", properties: { product_id: product.id } });
-  }, [capture, choice, product.id]);
+    if (choice === "accepted") capture({
+      name: "storefront_product_viewed",
+      properties: { product_id: product.id, product_title: product.title },
+    });
+  }, [capture, choice, product.id, product.title]);
 
   return <article aria-labelledby="product-title" className="relative mx-auto w-full max-w-7xl p-6">
     <div ref={attentionRef} className="product-attention-region" aria-hidden="true" />
@@ -157,7 +160,13 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
                 const valueMinor = zarMinorUnits((variant.calculated_price?.calculated_amount ?? NaN) * chosenQuantity);
                 if (valueMinor !== null) capture({
                   name: "storefront_cart_item_added",
-                  properties: { variant_id: variant.id, product_id: product.id, quantity: chosenQuantity, value_minor: valueMinor },
+                  properties: {
+                    variant_id: variant.id,
+                    product_id: product.id,
+                    product_title: product.title,
+                    quantity: chosenQuantity,
+                    value_minor: valueMinor,
+                  },
                 });
                 openBag(true);
               } catch (error) {

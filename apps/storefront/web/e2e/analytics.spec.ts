@@ -139,6 +139,19 @@ test('shop impressions and reports stay on the consented allowlist', async ({ pa
   await expect.poll(() => captured.filter((event) => event.event === 'storefront_search_results_viewed').length).toBe(2)
 })
 
+test('product detail views and successful adds to bag name the same catalogue product', async ({ page }) => {
+  await chooseStoredConsent(page, 'accepted')
+  await page.goto(productUrl)
+  await expect(page.getByRole('heading', { name: 'Test chair' })).toBeVisible()
+  await expect.poll(() => captured.find((event) => event.event === 'storefront_product_viewed')?.properties)
+    .toMatchObject({ product_id: 'prod_test_chair', product_title: 'Test chair', environment: 'test' })
+
+  await page.getByRole('button', { name: 'Add to bag' }).click()
+  await expect(page.getByRole('dialog', { name: 'Your bag' }).getByRole('heading', { name: 'Test chair' })).toBeVisible()
+  await expect.poll(() => captured.find((event) => event.event === 'storefront_cart_item_added')?.properties)
+    .toMatchObject({ product_id: 'prod_test_chair', product_title: 'Test chair', variant_id: 'variant_test_chair', environment: 'test' })
+})
+
 test('analytics transport failure does not block browsing', async ({ page }) => {
   await page.unroute('https://eu.i.posthog.com/i/v0/e/')
   await page.route('https://eu.i.posthog.com/i/v0/e/', async (route) => {

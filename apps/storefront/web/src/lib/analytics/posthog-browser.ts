@@ -1,6 +1,6 @@
 import { opaqueAnalyticsId, type AnalyticsCustomerType } from "./attribution";
 import { sanitizeAnalyticsEvent, type AnalyticsProperties, type BrowserAnalyticsProvider, type StorefrontBrowserEvent } from "./events";
-import { analyticsEnvironment } from "./policy";
+import { browserAnalyticsEnvironment } from "./policy";
 
 export const POSTHOG_EU_HOST = "https://eu.i.posthog.com";
 export const POSTHOG_CAPTURE_URL = `${POSTHOG_EU_HOST}/i/v0/e/`;
@@ -44,6 +44,7 @@ export function createPostHogBrowserProvider(options: ProviderOptions = {}): Pos
   const fetcher = options.fetcher || globalThis.fetch;
   const createDistinctId = options.createDistinctId || createAnonymousId;
   const pending = new Set<AbortController>();
+  const environment = browserAnalyticsEnvironment(globalThis.location?.origin);
   let distinctId = token ? createDistinctId() : null;
   let customerType: AnalyticsCustomerType = "guest";
   let enabled = Boolean(token);
@@ -55,7 +56,7 @@ export function createPostHogBrowserProvider(options: ProviderOptions = {}): Pos
       api_key: token,
       event: name,
       distinct_id: id,
-      properties: { ...properties, $geoip_disable: true, environment: analyticsEnvironment() },
+      properties: { ...properties, $geoip_disable: true, environment },
     };
     try {
       void fetcher(POSTHOG_CAPTURE_URL, {
