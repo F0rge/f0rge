@@ -212,7 +212,7 @@ export function checkoutChanges(cart: Cart, variants: Variant[], nowMs: number, 
   if (cart.currency_code !== "zar") changes.push("The cart currency is unavailable.");
   const byId = new Map(variants.map((variant) => [variant.id, variant]));
   for (const line of cart.items) {
-    if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 99) {
+    if (!Number.isSafeInteger(line.quantity) || line.quantity < 1) {
       changes.push("Choose a valid quantity for every piece.");
       continue;
     }

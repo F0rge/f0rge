@@ -22,6 +22,7 @@ from app.models.unit_cost_audit import UnitCostAuditSource
 from app.permissions import STOCK_COST_VIEW
 from app.services.permissions import PermissionService
 from app.schemas.sku import (
+    SKU_DETAIL_FIELDS,
     SkuCreate,
     SkuListPage,
     SkuResponse,
@@ -309,6 +310,10 @@ class SkuService:
         if "supplier_ref" in fields_set:
             sku.supplier_ref = data.supplier_ref
 
+        for field in SKU_DETAIL_FIELDS:
+            if field in fields_set:
+                setattr(sku, field, getattr(data, field))
+
         if "carton_count" in fields_set:
             assert data.carton_count is not None
             sku.carton_count = data.carton_count
@@ -374,6 +379,7 @@ class SkuService:
             supplier_ref=data.supplier_ref,
             category=data.category,
             carton_count=data.carton_count,
+            **{field: getattr(data, field) for field in SKU_DETAIL_FIELDS},
         )
         try:
             async with unit_of_work(self.db):
@@ -408,6 +414,8 @@ class SkuService:
             raise NotFoundError("SKU not found")
         if sku.is_archived:
             raise ConflictError("Restore the SKU before editing its photo")
+        if sku.gallery_photo_keys:
+            raise ConflictError("Replace the gallery through the curated catalogue import")
 
         raw_bytes = await file.read()
         if not raw_bytes:
@@ -431,12 +439,20 @@ class SkuService:
         assert reloaded is not None
         return (await self._to_responses([reloaded], user_id))[0]
 
-    async def serve_photo(self, sku_id: uuid.UUID) -> Response:
+    async def serve_photo(self, sku_id: uuid.UUID, *, slot: int = 1) -> Response:
         sku = await self.crud.get_by_id(sku_id)
-        if sku is None or not sku.photo_storage_key:
+        if sku is None:
             raise NotFoundError("SKU photo not found")
 
-        storage_key = sku.photo_storage_key
+        storage_key = (
+            sku.gallery_photo_keys[slot - 1]
+            if sku.gallery_photo_keys
+            else sku.photo_storage_key
+            if slot == 1
+            else None
+        )
+        if not storage_key:
+            raise NotFoundError("SKU photo not found")
         try:
             data = await asyncio.to_thread(read_bytes, storage_key)
         except FileNotFoundError as exc:
@@ -530,7 +546,11 @@ class SkuService:
             reorder_min=sku.reorder_min,
             last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
-            photo_storage_key=sku.photo_storage_key,
+            photo_storage_key=(
+                sku.gallery_photo_keys[0] if sku.gallery_photo_keys else sku.photo_storage_key
+            ),
+            gallery_photo_count=len(sku.gallery_photo_keys or ()),
+            **{field: getattr(sku, field) for field in SKU_DETAIL_FIELDS},
             stockist_ex_vat=sku.stockist_ex_vat,
             stockist_inc_vat=inc_vat_or_none(sku.stockist_ex_vat),
             wholesale_ex_vat=sku.wholesale_ex_vat,

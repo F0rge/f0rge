@@ -125,7 +125,9 @@ async function customerForBag() {
   }
 }
 
-export async function medusaResponse<T>(path: string, method = "GET", body?: unknown): Promise<{ status: number; payload: T & { message?: string } }> {
+type CommerceErrorPayload = { message?: string; code?: string };
+
+export async function medusaResponse<T>(path: string, method = "GET", body?: unknown): Promise<{ status: number; payload: T & CommerceErrorPayload }> {
   const key = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY;
   if (!key) throw new Error("Medusa publishable key is missing");
   const customer = await customerForBag();
@@ -152,13 +154,19 @@ export async function medusaResponse<T>(path: string, method = "GET", body?: unk
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
   });
-  const payload = await response.json().catch(() => ({})) as T & { message?: string };
+  const payload = await response.json().catch(() => ({})) as T & CommerceErrorPayload;
   return { status: response.status, payload };
 }
 
 export async function medusaRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const { status, payload } = await medusaResponse<T>(path, method, body);
-  if (status < 200 || status >= 300) throw new BagError(status, payload.message || "The bag could not be updated. Please try again.");
+  if (status < 200 || status >= 300) {
+    const stockProblem = payload.code === "insufficient_inventory" ||
+      /\b(?:stock|inventory|remaining capacity)\b/i.test(payload.message ?? "");
+    const message = stockProblem ? "That quantity is no longer available for this piece."
+      : payload.message || "The bag could not be updated. Please try again.";
+    throw new BagError(status, message);
+  }
   return payload;
 }
 
@@ -204,7 +212,15 @@ export function publicBag(cart?: MedusaCart | null): Bag {
 // Adds each line's quantity cap; a piece no longer for sale keeps its current quantity as the cap.
 export async function withStock(bag: Bag): Promise<Bag> {
   const caps = await variantQuantityCaps(bag.items.flatMap((item) => item.product_id ? [item.product_id] : []));
-  return { ...bag, items: bag.items.map((item) => ({ ...item, max_quantity: caps.get(item.variant_id) ?? item.quantity })) };
+  const totals = new Map<string, number>();
+  for (const { variant_id, quantity } of bag.items) {
+    totals.set(variant_id, (totals.get(variant_id) ?? 0) + quantity);
+  }
+  return { ...bag, items: bag.items.map((item) => {
+    const cap = caps.get(item.variant_id);
+    const otherUnits = (totals.get(item.variant_id) ?? item.quantity) - item.quantity;
+    return { ...item, max_quantity: cap === undefined ? item.quantity : Math.max(0, cap - otherUnits) };
+  }) };
 }
 
 export async function getCart(id: string): Promise<Bag> {

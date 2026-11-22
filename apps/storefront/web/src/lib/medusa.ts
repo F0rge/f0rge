@@ -23,6 +23,12 @@ export type FulfillmentPromise = {
   estimated_by: string;
   expires_at?: string;
 };
+export type DimensionsCm = {
+  width: number | null;
+  depth: number | null;
+  height: number | null;
+  diameter: number | null;
+};
 export type MedusaVariant = {
   id: string;
   sku: string | null;
@@ -32,6 +38,8 @@ export type MedusaVariant = {
   options?: { id: string; value: string; option_id?: string | null; option?: { id: string; title: string } | null }[];
   metadata?: {
     suitable_image_urls?: string[] | string;
+    dimensions_cm?: DimensionsCm | null;
+    piece_count?: number | null;
     lead_time_days?: number | string;
     care_instructions?: string;
     made_to_order_offer?: MadeToOrderOffer | null;
@@ -115,6 +123,8 @@ function publicProduct(product: StoreProduct): StoreProduct {
       calculated_price: variant.calculated_price,
       metadata: {
         suitable_image_urls: variant.metadata?.suitable_image_urls,
+        dimensions_cm: variant.metadata?.dimensions_cm,
+        piece_count: variant.metadata?.piece_count,
         lead_time_days: variant.metadata?.lead_time_days,
         care_instructions: variant.metadata?.care_instructions,
         made_to_order_offer: variant.metadata?.storefront_made_to_order_offer as MadeToOrderOffer | null | undefined,
@@ -149,8 +159,8 @@ export async function getStoreProduct(slug: string): Promise<StoreProduct | null
   return products[0] && isPublicProduct(products[0]) ? publicProduct(products[0]) : null;
 }
 
-// The most of each variant a shopper can put in the bag: its stock, or the made-to-order places left, at most 99.
-// ponytail: ignores offer freshness and expiry; the checkout hold re-checks availability before payment.
+// The most of each variant a shopper can put in the bag. Authoritative cart
+// mutations and checkout recheck availability independently.
 export async function variantQuantityCaps(productIds: string[]): Promise<Map<string, number>> {
   if (!productIds.length) return new Map();
   const query = new URLSearchParams({ fields: "id,*variants,+variants.inventory_quantity,+variants.metadata" });
@@ -159,7 +169,7 @@ export async function variantQuantityCaps(productIds: string[]): Promise<Map<str
   return new Map(products.flatMap((product) => product.variants.map((variant) => {
     const stock = variant.inventory_quantity ?? 0;
     const offer = variant.metadata?.storefront_made_to_order_offer;
-    return [variant.id, Math.min(99, stock > 0 ? stock : Math.max(offer?.remaining_capacity ?? 0, 0))] as const;
+    return [variant.id, stock > 0 ? stock : offerLive(offer) ? offer.remaining_capacity : 0] as const;
   })));
 }
 
@@ -183,10 +193,9 @@ export function fromPrice(product: StoreProduct): string {
   return `${new Set(prices).size > 1 ? "From " : ""}${priceLabel(lowestPricedVariant(product.variants))}`;
 }
 
-export function stockLabel(product: StoreProduct): string | null {
-  const stock = product.variants.reduce((total, variant) => total + Math.max(variant.inventory_quantity ?? 0, 0), 0);
-  if (stock > 0) return `${stock} in stock`;
-  return product.variants.some((variant) => offerLive(variant.metadata?.made_to_order_offer)) ? "Made to order" : null;
+export function stockLabel(product: StoreProduct): string {
+  if (product.variants.some((variant) => (variant.inventory_quantity ?? 0) > 0)) return "In stock";
+  return product.variants.some((variant) => offerLive(variant.metadata?.made_to_order_offer)) ? "Made to order" : "Out of stock";
 }
 
 export type Availability = "in-stock" | "made-to-order";

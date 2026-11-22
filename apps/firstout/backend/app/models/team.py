@@ -4,7 +4,7 @@ from typing import Optional
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String
+from sqlalchemy import Boolean, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,5 +24,8 @@ class Team(UUIDPkMixin, TimestampMixin, Base):
     clerk_org_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    storefront_curated_catalogue: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     users: Mapped[list[User]] = relationship(back_populates="team")

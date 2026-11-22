@@ -9,7 +9,8 @@ import { useProductAttention } from "@/components/analytics/use-product-attentio
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
 import { formatCustomerPrice } from "@/lib/order-money";
-import { offerFresh, offerLive } from "@/lib/made-to-order";
+import { offerLive } from "@/lib/made-to-order";
+import { pickVariant, productVariantOptions, selectedImages, variantChoices } from "@/lib/product-variants";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 
 const assurances = [
@@ -23,40 +24,24 @@ function formatPrice(variant?: MedusaVariant): string {
   return amount == null ? "Price unavailable" : formatCustomerPrice(amount, variant?.calculated_price?.currency_code);
 }
 
-function selectedImages(product: StoreProduct, variant?: MedusaVariant): string[] {
-  const all = [...(variant?.images?.map((image) => image.url) || []), ...(product.images?.map((image) => image.url) || [])];
-  const suitableValue = variant?.metadata?.suitable_image_urls;
-  let suitable: string[] = [];
-  if (Array.isArray(suitableValue)) suitable = suitableValue;
-  else if (typeof suitableValue === "string") {
-    try {
-      const parsed: unknown = JSON.parse(suitableValue);
-      if (Array.isArray(parsed)) suitable = parsed.filter((url): url is string => typeof url === "string");
-    } catch { /* Invalid merchant metadata falls back to the product gallery. */ }
-  }
-  if (suitable?.length) return Array.from(new Set(all.filter((url) => suitable.includes(url))));
-  return Array.from(new Set(all.length ? all : variant?.thumbnail ? [variant.thumbnail] : product.thumbnail ? [product.thumbnail] : []));
-}
-
 export function ProductDetail({ product }: { product: StoreProduct }) {
   const attentionRef = useProductAttention(product.id);
   const { choice, capture } = useStorefrontAnalytics();
-  const first = product.variants[0];
-  const [choices, setChoices] = useState<Record<string, string>>(() => Object.fromEntries((first?.options || []).map((option) => [option.option_id || option.option?.id, option.value]).filter((entry): entry is [string, string] => !!entry[0])));
-  const options = (product.options || []).filter((option) => (option.values?.length || 0) > 1);
-  const variant = options.length === 0 ? first : product.variants.find((candidate) => options.every((option) => candidate.options?.some((value) => (value.option_id || value.option?.id) === option.id && value.value === choices[option.id])));
+  const [variantId, setVariantId] = useState(product.variants[0]?.id);
+  const variant = product.variants.find((candidate) => candidate.id === variantId) ?? product.variants[0];
+  const options = productVariantOptions(product);
+  const choices = variantChoices(variant);
   const gallery = selectedImages(product, variant);
-  const [activeImage, setActiveImage] = useState<string | null>(null);
+  const [activeAngle, setActiveAngle] = useState(0);
   const [requested, setRequested] = useState(1);
   const [adding, setAdding] = useState(false);
   const [bagMessage, setBagMessage] = useState("");
-  const { setBag, setOpen: openBag } = useBag();
+  const { bag, setBag, setOpen: openBag } = useBag();
   const feedbackRef = useRef<HTMLParagraphElement>(null);
-  const image = activeImage && gallery.includes(activeImage) ? activeImage : gallery[0];
+  const image = gallery[activeAngle] ?? gallery[0];
   const imagePosition = image ? gallery.indexOf(image) + 1 : 0;
   const quantity = variant?.inventory_quantity ?? 0;
   const offer = variant?.metadata?.made_to_order_offer;
-  const fresh = offerFresh(offer);
   const offerAvailable = offerLive(offer);
   const promisedWindow = offerAvailable ? (() => {
     const start = new Date();
@@ -66,13 +51,20 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     const date = (value: Date) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(value);
     return `${date(start)} – ${date(end)}`;
   })() : null;
-  const availability = !variant ? "This combination is unavailable" : quantity > 0 ? `${quantity} in stock` : offerAvailable ? `Made to order · ${offer!.min_lead_time_days}–${offer!.max_lead_time_days} days` : offer && !fresh ? "Made-to-order availability needs refreshing" : offer ? "Made-to-order allowance exhausted or expired" : "Currently unavailable";
-  // Quantity is capped at stock, or at the made-to-order places left; the bag API takes at most 99.
-  const maxQuantity = Math.min(99, quantity > 0 ? quantity : offerAvailable ? offer!.remaining_capacity : 0);
+  const availability = !variant ? "This combination is unavailable" : quantity > 0 ? "In stock" : offerAvailable ? `Made to order · ${offer.min_lead_time_days}–${offer.max_lead_time_days} days` : "Out of stock";
+  const skuCapacity = quantity > 0 ? quantity : offerAvailable ? offer.remaining_capacity : 0;
+  const inBag = bag?.items.reduce((total, item) => total + (item.variant_id === variant?.id ? item.quantity : 0), 0) ?? 0;
+  const maxQuantity = Math.max(0, skuCapacity - inBag);
   const chosenQuantity = Math.max(1, Math.min(requested, maxQuantity));
   const canAdd = !!variant?.calculated_price && maxQuantity > 0;
-  const dimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
-  const hasDimensions = dimensions.every((value) => value != null && value > 0);
+  const measured = variant?.metadata?.dimensions_cm;
+  const dimensions = measured ? [
+    { label: "Width", value: measured.width }, { label: "Depth", value: measured.depth },
+    { label: "Height", value: measured.height }, { label: "Diameter", value: measured.diameter },
+  ].filter(({ value }) => typeof value === "number" && value > 0) : [];
+  const legacyDimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
+  const hasLegacyDimensions = measured == null && legacyDimensions.every((value) => value != null && value > 0);
+  const pieceCount = variant?.metadata?.piece_count;
   const material = variant?.material || product.material;
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
   const description = customerFacingCopy(product.description);
@@ -83,20 +75,32 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     if (choice === "accepted") capture({ name: "storefront_product_viewed", properties: { product_id: product.id } });
   }, [capture, choice, product.id]);
 
+  function selectOption(optionId: string, value: string, index: number) {
+    const selected = pickVariant(product.variants, variant, optionId, value);
+    if (!selected || selected.id === variant?.id) return;
+    setVariantId(selected.id);
+    setRequested(1);
+    setBagMessage("");
+    capture({
+      name: "storefront_product_variant_selected",
+      properties: { product_id: product.id, option_id: optionId, value_index: index, variant_id: selected.id },
+    });
+  }
+
   return <article aria-labelledby="product-title" className="relative mx-auto w-full max-w-7xl p-6">
     <div ref={attentionRef} className="product-attention-region" aria-hidden="true" />
     <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
       <div className="min-w-0 space-y-4">
         <div data-main-image className="relative aspect-square overflow-hidden rounded-xl bg-muted">
           {image
-            ? <img key={image} src={image} alt={`${product.title}${variant?.title && variant.title !== "Default" ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={800} fetchPriority="high" className="size-full object-cover" />
+            ? <img key={image} src={image} alt={`${product.title}${variant?.title && variant.title !== "Default" ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={800} fetchPriority="high" className="size-full object-contain" />
             : <PieceImage product={product} />}
         </div>
         <p className="sr-only" aria-live="polite">{imagePosition ? `Image ${imagePosition} of ${gallery.length} for ${product.title}` : `No photo yet for ${product.title}`}</p>
         {gallery.length > 1 && <div role="group" aria-label="Product images" className="grid grid-cols-4 gap-4">{gallery.map((url, index) => <Button key={url} type="button" variant="ghost" aria-label={`Show image ${index + 1} of ${gallery.length}`} aria-pressed={url === image} onClick={() => {
-          setActiveImage(url);
+          setActiveAngle(index);
           capture({ name: "storefront_product_media_selected", properties: { product_id: product.id, media_index: index } });
-        }} className={cn("aspect-square h-auto overflow-hidden rounded-xl border-2 border-transparent bg-muted p-0", url === image && "border-primary")}><img src={url} alt="" className="size-full object-cover" /></Button>)}</div>}
+        }} className={cn("aspect-square h-auto overflow-hidden rounded-xl border-2 border-transparent bg-muted p-0", url === image && "border-primary")}><img src={url} alt="" className="size-full object-contain" /></Button>)}</div>}
       </div>
 
       <div className="min-w-0 space-y-8 self-start lg:sticky lg:top-20">
@@ -112,40 +116,44 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
             <span id="product-sku">{variant?.sku ? `SKU ${variant.sku}` : "Select an available combination"}</span>
             {" · "}<span role="status">{availability}</span>
           </p>
-          {quantity < 1 && offerAvailable && promisedWindow && <p className="text-sm text-muted-foreground">Made to order for you: estimated ready between {promisedWindow}. {offer!.remaining_capacity} made-to-order {offer!.remaining_capacity === 1 ? "place" : "places"} currently available.</p>}
+          {quantity < 1 && offerAvailable && promisedWindow && <p className="text-sm text-muted-foreground">Made to order for you. Estimated ready between {promisedWindow}.</p>}
         </div>
 
-        {(description || material || hasDimensions || care) && <div className="space-y-3 text-muted-foreground">
+        {(description || material || dimensions.length > 0 || hasLegacyDimensions || pieceCount || care) && <div className="space-y-3 text-muted-foreground">
           {description && <p>{description}</p>}
-          {(material || hasDimensions || care) && <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+          {(material || dimensions.length > 0 || hasLegacyDimensions || pieceCount || care) && <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
             {material && <><dt className="font-medium text-foreground">Material</dt><dd>{material}</dd></>}
-            {hasDimensions && <><dt className="font-medium text-foreground">Size (L × W × H)</dt><dd>{dimensions.join(" × ")} {product.metadata?.dimension_unit || ""}</dd></>}
+            {dimensions.map(({ label, value }) => <div className="contents" key={label}><dt className="font-medium text-foreground">{label}</dt><dd>{value} cm</dd></div>)}
+            {hasLegacyDimensions && <><dt className="font-medium text-foreground">Size (L × W × H)</dt><dd>{legacyDimensions.join(" × ")} {product.metadata?.dimension_unit || ""}</dd></>}
+            {pieceCount != null && pieceCount > 0 && <><dt className="font-medium text-foreground">Pieces included</dt><dd>{pieceCount}</dd></>}
             {care && <><dt className="font-medium text-foreground">Care</dt><dd>{care}</dd></>}
           </dl>}
         </div>}
 
-        {options.length > 0 && <div className="space-y-4 border-t pt-6">{options.map((option) => {
-          const values = option.values?.map(({ value }) => value) || Array.from(new Set(product.variants.flatMap((candidate) => candidate.options?.filter((item) => (item.option_id || item.option?.id) === option.id).map((item) => item.value) || [])));
-          return <div key={option.id} className="space-y-2">
-            <label htmlFor={`option-${option.id}`} className="block text-sm font-medium">{option.title}</label>
-            <select id={`option-${option.id}`} value={choices[option.id] || ""} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base md:text-sm" onChange={(event) => {
-              const nextValue = event.target.value;
-              const nextChoices = { ...choices, [option.id]: nextValue };
-              const selected = product.variants.find((candidate) => options.every((item) => candidate.options?.some((value) => (value.option_id || value.option?.id) === item.id && value.value === nextChoices[item.id])));
-              setChoices(nextChoices);
-              setActiveImage(null);
-              capture({ name: "storefront_product_variant_selected", properties: {
-                product_id: product.id,
-                option_id: option.id,
-                value_index: values.indexOf(nextValue),
-                ...(selected ? { variant_id: selected.id } : {}),
-              } });
-            }}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select>
-          </div>;
-        })}</div>}
-        {!variant && <div className="text-sm font-medium"><Button type="button" variant="outline" onClick={() => { setChoices(Object.fromEntries((first?.options || []).map((option) => [option.option_id || option.option?.id, option.value]).filter((entry): entry is [string, string] => !!entry[0]))); setActiveImage(null); }}>Choose an available combination</Button></div>}
+        {options.length > 0 && <div className="space-y-4 border-t pt-6">
+          {options.map(({ id, title, availableValues }) => (
+            <fieldset key={id} className="min-w-0 space-y-2">
+              <legend className="text-sm font-medium">{title}</legend>
+              <div className="flex flex-wrap gap-2">
+                {availableValues.map((value, index) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={choices[id] === value ? "default" : "outline"}
+                    className="h-auto min-h-11 max-w-full whitespace-normal text-start"
+                    aria-pressed={choices[id] === value}
+                    onClick={() => selectOption(id, value, index)}
+                  >
+                    {value}
+                  </Button>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+        </div>}
 
         <div className="space-y-6 border-t pt-6">
+          {skuCapacity > 0 && maxQuantity === 0 && <p className="text-sm text-muted-foreground">You have the available quantity of this option in your bag.</p>}
           {canAdd && <div className="flex justify-start"><Stepper label="Quantity" value={chosenQuantity} min={1} max={maxQuantity} onChange={setRequested} /></div>}
           {/* Mantine's unlayered button reset makes buttons inherit their font, so the wrapper carries it. */}
           <div className="text-sm font-medium">
@@ -154,6 +162,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
               setAdding(true); setBagMessage("");
               try {
                 setBag(await bagRequest("POST", "/api/bag", { variant_id: variant.id, quantity: chosenQuantity }));
+                setRequested(1);
                 const valueMinor = zarMinorUnits((variant.calculated_price?.calculated_amount ?? NaN) * chosenQuantity);
                 if (valueMinor !== null) capture({
                   name: "storefront_cart_item_added",

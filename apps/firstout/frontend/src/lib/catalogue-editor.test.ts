@@ -153,3 +153,31 @@ describe("catalogue API failure fields", () => {
     expect(result.fields).toEqual({ lead_time_days: "Must be a whole number" });
   });
 });
+
+describe("measured SKU details", () => {
+  it("saves measurements, notes and pieces independently of cartons", () => {
+    const original = { ...sku, width_cm: 101.25, piece_count: 2, notes: "Old note" };
+    const form = {
+      ...catalogueFormFromSku(original),
+      width_cm: "",
+      depth_cm: "74.5",
+      piece_count: "3",
+      notes: "  Internal finish reference  ",
+    };
+    expect(validateCatalogueForm(form)).toEqual({});
+    expect(buildCatalogueUpdate(original, form)).toEqual({
+      width_cm: null,
+      depth_cm: 74.5,
+      piece_count: 3,
+      notes: "Internal finish reference",
+    });
+  });
+
+  it("rejects non-positive measurements and non-integer piece counts", () => {
+    const form = { ...catalogueFormFromSku(sku), diameter_cm: "0", piece_count: "1.5" };
+    expect(validateCatalogueForm(form)).toMatchObject({
+      diameter_cm: expect.any(String),
+      piece_count: expect.any(String),
+    });
+  });
+});

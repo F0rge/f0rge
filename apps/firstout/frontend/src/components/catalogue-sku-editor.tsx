@@ -18,6 +18,7 @@ import {
 import { useRef, useState } from "react";
 
 import { formatZarAmount, updateSku, type Sku, type Supplier } from "@/lib/api";
+import { SkuProductDetailsFields } from "@/components/sku-product-details-fields";
 import {
   buildCatalogueUpdate,
   catalogueFormFromSku,
@@ -312,6 +313,7 @@ export function CatalogueSkuEditor({
                         />
                       </div>
                     </div>
+                    <SkuProductDetailsFields idPrefix="catalogue-edit" form={form} errors={errors} disabled={saving} onChange={update} />
                   </TabPanel>
                   <TabPanel>
                     <div className={styles.heading}>

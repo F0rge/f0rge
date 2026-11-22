@@ -1,11 +1,12 @@
 import type { IInventoryService, MedusaContainer, ReservationItemDTO } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, MedusaError, Modules, ProductStatus } from "@medusajs/framework/utils";
+import { createHash } from "node:crypto";
 import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
 import { recordOpsCheckoutHealth, refreshOpsCheckoutHealth } from "./storefront-commerce-exceptions";
-import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation } from "./made-to-order-capacity";
+import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation, readCapacityState } from "./made-to-order-capacity";
 import {
   batchLinkProductsToCategoryWorkflow, batchVariantImagesWorkflow, createCollectionsWorkflow, createInventoryLevelsWorkflow, createProductsWorkflow,
-  createProductVariantsWorkflow, deleteFilesWorkflow, deleteProductVariantsWorkflow, updateCollectionsWorkflow,
+  createProductVariantsWorkflow, deleteFilesWorkflow, deleteProductVariantsWorkflow, linkProductsToSalesChannelWorkflow, updateCollectionsWorkflow,
   updateInventoryLevelsWorkflow, updateProductVariantsWorkflow, updateProductsWorkflow, uploadFilesWorkflow,
 } from "@medusajs/medusa/core-flows";
 
@@ -13,7 +14,8 @@ import {
   CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE, STOREFRONT_CATEGORIES,
   collectionEnsurePlan, type CollectionRecord,
 } from "./catalogue-collections";
-import { medusaPrice, parseOpsProducts, pendingCommitments, projectAvailableQuantity, shouldApplyRevision, type OpsProduct } from "./ops-contract";
+import { medusaPrice, parseOpsProducts, pendingCommitments, projectAvailableQuantity, shouldApplyRevision, type OpsProduct, type OpsProductsResponse } from "./ops-contract";
+import { CURATED_PRODUCT_METADATA_KEY } from "./publication";
 
 type CommerceVariant = {
   id: string; sku: string | null; allow_backorder?: boolean; metadata: Record<string, unknown> | null;
@@ -33,6 +35,13 @@ function syncedCapacityMetadata(row: OpsProduct, metadata: Record<string, unknow
   return {
     [CAPACITY_STATE_METADATA_KEY]: state,
     storefront_made_to_order_offer: presentation ? { ...presentation, observed_at: row.observed_at } : null,
+  };
+}
+
+function syncedCatalogueMetadata(row: OpsProduct) {
+  return {
+    ...(row.dimensions_cm === undefined ? {} : { dimensions_cm: row.dimensions_cm }),
+    ...(row.piece_count === undefined ? {} : { piece_count: row.piece_count }),
   };
 }
 
@@ -59,9 +68,9 @@ export function groupOpsProducts(source: OpsProduct[]): SourceGroup[] {
   return [...groups.values()];
 }
 
-export function catalogueExternalIds(source: OpsProduct[]): string[] {
+export function catalogueExternalIds(source: OpsProduct[], curated = false): string[] {
   return groupOpsProducts(source)
-    .filter((group) => group.rows.length > 0 && group.rows.every(isCatalogueRow))
+    .filter((group) => curated ? group.rows.some(isCatalogueRow) : group.rows.every(isCatalogueRow))
     .map((group) => group.externalId);
 }
 
@@ -94,9 +103,9 @@ async function opsGet(path: string): Promise<{ response: Response; companyId: st
   return { response, companyId };
 }
 
-async function fetchOpsProducts(): Promise<OpsProduct[]> {
-  const { response, companyId } = await opsGet("/products");
-  return parseOpsProducts(await response.json(), companyId).products;
+async function fetchOpsProducts(): Promise<OpsProductsResponse> {
+  const { response, companyId } = await opsGet("/products?catalogue_version=2");
+  return parseOpsProducts(await response.json(), companyId);
 }
 
 type PaidReservationOrder = {
@@ -104,6 +113,38 @@ type PaidReservationOrder = {
   items?: { id: string }[];
   payment_collections?: { payments?: { captured_at?: string | Date | null }[] }[];
 };
+
+async function paidStorefrontOrdersForLineItems(container: MedusaContainer, lineIds: string[]): Promise<PaidReservationOrder[]> {
+  if (!lineIds.length) return [];
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const relevantOrderIds = new Set<string>();
+  const pageSize = 500;
+  for (let skip = 0; ; skip += pageSize) {
+    const { data: orderItems } = await query.graph({
+      entity: "order_item", fields: ["item_id", "order_id"],
+      filters: { item_id: lineIds },
+      pagination: { skip, take: pageSize },
+    });
+    for (const item of orderItems) {
+      // Medusa returns the selected native FK although its generated OrderItem
+      // type omits it. Validate the wire field rather than guessing ownership.
+      const orderId: unknown = Reflect.get(item, "order_id");
+      if (typeof orderId !== "string" || !orderId) {
+        throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Native order item mapping is missing");
+      }
+      relevantOrderIds.add(orderId);
+    }
+    if (orderItems.length < pageSize) break;
+  }
+  const orderIds = [...relevantOrderIds];
+  if (!orderIds.length) return [];
+  const { data: orders } = await query.graph({
+    entity: "order", fields: ["id", "metadata", "items.id", "payment_collections.payments.captured_at"],
+    filters: { id: orderIds }, pagination: { take: orderIds.length },
+  });
+  return (orders as PaidReservationOrder[]).filter((order) => order.metadata?.storefront_confirmation_sha256 &&
+    order.payment_collections?.some((collection) => collection.payments?.some((payment) => payment.captured_at)));
+}
 
 async function paidOrderReservedQuantity(container: MedusaContainer, inventoryItemId: string, locationId: string): Promise<number> {
   const inventory = container.resolve<IInventoryService>(Modules.INVENTORY);
@@ -115,36 +156,8 @@ async function paidOrderReservedQuantity(container: MedusaContainer, inventoryIt
     if (page.length < pageSize) break;
   }
   const orderReservations = reservations.filter((row) => row.line_item_id && !row.created_by?.startsWith("storefront_hold:"));
-  if (!orderReservations.length) return 0;
-  const query = container.resolve(ContainerRegistrationKeys.QUERY);
-  const relevantOrderIds = new Set<string>();
-  for (let skip = 0; ; skip += pageSize) {
-    const { data: orderItems } = await query.graph({
-      entity: "order_item", fields: ["item_id", "order_id"],
-      filters: { item_id: orderReservations.map((row) => row.line_item_id!) },
-      pagination: { skip, take: pageSize },
-    });
-    for (const item of orderItems) {
-      // Medusa returns the selected native FK although its generated OrderItem
-      // type omits it. Validate the wire field rather than guessing ownership.
-      const orderId: unknown = Reflect.get(item, "order_id");
-      if (typeof orderId !== "string" || !orderId) {
-        throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Native reservation order mapping is missing");
-      }
-      relevantOrderIds.add(orderId);
-    }
-    if (orderItems.length < pageSize) break;
-  }
-  const orderIds = [...relevantOrderIds];
-  if (!orderIds.length) return 0;
-  const { data: orders } = await query.graph({
-    entity: "order", fields: ["id", "metadata", "items.id", "payment_collections.payments.captured_at"],
-    filters: { id: orderIds }, pagination: { take: orderIds.length },
-  });
-  const paidLines = new Set((orders as PaidReservationOrder[])
-    .filter((order) => order.metadata?.storefront_confirmation_sha256 &&
-      order.payment_collections?.some((collection) => collection.payments?.some((payment) => payment.captured_at)))
-    .flatMap((order) => (order.items || []).map((item) => item.id)));
+  const paidOrders = await paidStorefrontOrdersForLineItems(container, orderReservations.map((row) => row.line_item_id!));
+  const paidLines = new Set(paidOrders.flatMap((order) => (order.items || []).map((item) => item.id)));
   return orderReservations.filter((row) => paidLines.has(row.line_item_id!))
     .reduce((quantity, row) => quantity + Number(row.quantity), 0);
 }
@@ -179,6 +192,7 @@ export async function writeStock(container: MedusaContainer, variantId: string, 
 
 type CatalogueProduct = {
   id: string; external_id: string | null; status: string; collection_id?: string | null;
+  sales_channels?: { id: string }[];
 };
 
 // The publication hook rejects a product with no tax-inclusive ZAR price. That
@@ -242,7 +256,7 @@ async function ensureStorefrontCollections(container: MedusaContainer): Promise<
 }
 
 async function setCatalogueMembership(
-  container: MedusaContainer, ids: string[], update: { status: ProductStatus; collection_id: string | null },
+  container: MedusaContainer, ids: string[], update: { status: ProductStatus; collection_id?: string | null },
 ) {
   for (let index = 0; index < ids.length; index += 20) {
     await updateProductsWorkflow(container).run({
@@ -265,31 +279,59 @@ async function publishCatalogueProducts(container: MedusaContainer, ids: string[
   }
 }
 
-async function publishCatalogue(container: MedusaContainer, readyIds: Set<string>) {
+async function publishCatalogue(container: MedusaContainer, readyIds: Set<string>, curatedChannel?: string, withdrawOnly = false) {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data } = await query.graph({
-    entity: "product", fields: ["id", "external_id", "status", "collection_id"],
+    entity: "product", fields: ["id", "external_id", "status", "collection_id", "sales_channels.id"],
   });
-  const products = (data as CatalogueProduct[]).filter((product) => product.external_id?.startsWith(SOURCE_PREFIX));
+  const products = (data as CatalogueProduct[]).filter((product) => curatedChannel || product.external_id?.startsWith(SOURCE_PREFIX));
   const wanted = products.filter((product) => readyIds.has(product.external_id || ""));
+  const withdraw = products
+    .filter((product) => product.external_id?.startsWith(SOURCE_PREFIX))
+    .filter((product) => !readyIds.has(product.external_id || "") &&
+      (product.status !== ProductStatus.DRAFT || !!product.collection_id))
+    .map((product) => product.id);
+  if (withdraw.length) {
+    await setCatalogueMembership(container, withdraw, { status: ProductStatus.DRAFT, collection_id: null });
+  }
+  if (curatedChannel) {
+    const manualIds = products.filter((product) => !product.external_id?.startsWith(SOURCE_PREFIX) &&
+      product.sales_channels?.some(({ id }) => id === curatedChannel)).map((product) => product.id);
+    if (manualIds.length) await linkProductsToSalesChannelWorkflow(container).run({
+      input: { id: curatedChannel, remove: manualIds },
+    });
+  }
+  if (withdrawOnly) return;
+  if (curatedChannel) {
+    const missing = wanted.filter((product) => !product.sales_channels?.some(({ id }) => id === curatedChannel));
+    if (missing.length) await linkProductsToSalesChannelWorkflow(container).run({
+      input: { id: curatedChannel, add: missing.map((product) => product.id) },
+    });
+  }
   const collectionId = await ensureStorefrontCollections(container);
   const publish = wanted
     .filter((product) => product.status !== ProductStatus.PUBLISHED || product.collection_id !== collectionId)
     .map((product) => product.id);
-  const withdraw = products
-    .filter((product) => !readyIds.has(product.external_id || "") &&
-      (product.status !== ProductStatus.DRAFT || !!product.collection_id))
-    .map((product) => product.id);
   if (publish.length) await publishCatalogueProducts(container, publish, collectionId);
-  if (withdraw.length) {
-    await setCatalogueMembership(container, withdraw, { status: ProductStatus.DRAFT, collection_id: null });
+}
+
+async function storefrontChannel(container: MedusaContainer, curated: boolean): Promise<string | undefined> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const { data: channels } = await query.graph({
+    entity: "sales_channel", fields: ["id", "name"], ...(curated ? { filters: { name: "DasKasas" } } : {}),
+  });
+  if (curated && channels.length !== 1) {
+    throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "The curated catalogue needs one DasKasas sales channel");
   }
+  return channels[0]?.id;
 }
 
 /** Variant metadata: the Firstout photo token last synced, whether or not staff kept the image. */
 const PHOTO_TOKEN_METADATA_KEY = "firstout_photo_token";
 /** Product image metadata marking an image the sync created; any other image belongs to staff. */
 const PHOTO_SOURCE_METADATA_KEY = "firstout_source_sku_id";
+const PHOTO_SLOT_METADATA_KEY = "firstout_gallery_slot";
+const GALLERY_TOKENS_METADATA_KEY = "firstout_gallery_photo_tokens";
 
 type PhotoImage = { id: string; url: string; metadata?: Record<string, unknown> | null };
 type PhotoVariant = {
@@ -385,14 +427,95 @@ async function syncVariantPhoto(
   }] } });
 }
 
+/** Stage every changed image before linking the reviewed gallery to its variant. */
+async function syncReviewedGallery(
+  container: MedusaContainer, product: PhotoProduct, variant: PhotoVariant, row: OpsProduct, useAsProductHero: boolean,
+): Promise<void> {
+  const tokens = row.gallery_photo_tokens || [];
+  const images = product.images || [];
+  const owned = images.filter((image) => image.metadata?.[PHOTO_SOURCE_METADATA_KEY] === row.source_sku_id);
+  const findImage = (slot: number, token: string) => owned.find((image) =>
+    image.metadata?.[PHOTO_SLOT_METADATA_KEY] === slot && image.metadata?.[PHOTO_TOKEN_METADATA_KEY] === token);
+  const missing = tokens.map((token, index) => ({ token, slot: index + 1 }))
+    .filter(({ token, slot }) => !findImage(slot, token));
+  const toUpload = await Promise.all(missing.map(async ({ token, slot }) => {
+    const { response } = await opsGet(`/products/${row.source_sku_id}/photo?slot=${slot}`);
+    const bytes = await readJpeg(response);
+    if (createHash("sha256").update(bytes).digest("hex") !== token) {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Firstout gallery changed during download");
+    }
+    return { slot, token, file: {
+      filename: `firstout-${row.source_sku_id}-${slot}.jpg`, mimeType: "image/jpeg", content: bytes.toString("base64"),
+      access: "public" as const,
+    } };
+  }));
+  if (toUpload.length) {
+    const { result: files } = await uploadFilesWorkflow(container).run({ input: { files: toUpload.map((entry) => entry.file) } });
+    const added = toUpload.map(({ slot, token }, index) => ({ url: files[index].url, metadata: {
+      [PHOTO_SOURCE_METADATA_KEY]: row.source_sku_id, [PHOTO_SLOT_METADATA_KEY]: slot, [PHOTO_TOKEN_METADATA_KEY]: token,
+    } }));
+    try {
+      await updateProductsWorkflow(container).run({ input: { selector: { id: product.id }, update: {
+        images: [...images.map(({ id, url }) => ({ id, url })), ...added],
+      } } });
+    } catch (error) {
+      await deleteFilesWorkflow(container).run({ input: { ids: files.map((file) => file.id) } });
+      throw error;
+    }
+    const query = container.resolve(ContainerRegistrationKeys.QUERY);
+    const { data } = await query.graph({ entity: "product", fields: ["images.id", "images.url"], filters: { id: product.id } });
+    const attached = (data[0] as PhotoProduct | undefined)?.images || [];
+    for (const entry of added) {
+      const image = attached.find((candidate) => candidate.url === entry.url);
+      if (!image) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Medusa did not attach the reviewed gallery");
+      owned.push({ ...image, metadata: entry.metadata });
+    }
+    product.images = [...images, ...owned.filter((image) => !images.some(({ id }) => id === image.id))];
+  }
+
+  const ordered = tokens.map((token, index) => findImage(index + 1, token)!);
+  const urls = ordered.map((image) => image.url);
+  const newIds = new Set(ordered.map((image) => image.id));
+  const linkedIds = new Set((variant.images || []).map((image) => image.id));
+  const add = [...newIds].filter((id) => !linkedIds.has(id));
+  const remove = owned.map((image) => image.id).filter((id) => linkedIds.has(id) && !newIds.has(id));
+  if (add.length || remove.length) {
+    await batchVariantImagesWorkflow(container).run({ input: { variant_id: variant.id, add, remove } });
+  }
+  if (variant.thumbnail !== urls[0] || JSON.stringify(variant.metadata?.[GALLERY_TOKENS_METADATA_KEY]) !== JSON.stringify(tokens) ||
+      JSON.stringify(variant.metadata?.suitable_image_urls) !== JSON.stringify(urls)) {
+    await updateProductVariantsWorkflow(container).run({ input: { product_variants: [{
+      id: variant.id, thumbnail: urls[0],
+      metadata: { [GALLERY_TOKENS_METADATA_KEY]: tokens, suitable_image_urls: urls },
+    }] } });
+  }
+  if (useAsProductHero && product.thumbnail !== urls[0]) {
+    await updateProductsWorkflow(container).run({ input: { selector: { id: product.id }, update: { thumbnail: urls[0] } } });
+    product.thumbnail = urls[0];
+  }
+  const usedByOtherVariants = new Set((product.variants || []).filter(({ id }) => id !== variant.id)
+    .flatMap((candidate) => [...(candidate.images || []).map((image) => image.id), candidate.thumbnail]));
+  const obsolete = new Set(owned.filter((image) => !newIds.has(image.id) && !usedByOtherVariants.has(image.id) &&
+    !usedByOtherVariants.has(image.url) && image.url !== product.thumbnail).map((image) => image.id));
+  if (obsolete.size) {
+    const retained = (product.images || []).filter((image) => !obsolete.has(image.id));
+    await updateProductsWorkflow(container).run({ input: { selector: { id: product.id }, update: {
+      images: retained.map(({ id, url }) => ({ id, url })),
+    } } });
+    product.images = retained;
+  }
+}
+
 /**
- * Downloads a Firstout photo only when its token differs from the one recorded
- * on the variant. A failed photo is logged and retried next run; it never
- * affects stock or price. The old file of a replaced photo stays on the volume.
+ * Only missing photo revisions are uploaded. A curated SKU is ready for
+ * publication when all its reviewed images are attached in the approved order.
  */
-export async function syncFirstoutPhotos(container: MedusaContainer, source: OpsProduct[]): Promise<void> {
-  const tokens = new Map(source.flatMap((row) => row.photo_token ? [[row.source_sku_id, row.photo_token] as const] : []));
-  if (!tokens.size) return;
+export async function syncFirstoutPhotos(container: MedusaContainer, source: OpsProduct[]): Promise<Set<string>> {
+  const ready = new Set<string>();
+  const withPhotos = new Map(source.flatMap((row) =>
+    row.gallery_photo_tokens?.length || row.photo_token ? [[row.source_sku_id, row] as const] : []));
+  if (!withPhotos.size) return ready;
+  const primarySources = new Set(groupOpsProducts(source).map((group) => group.rows[0].source_sku_id));
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
   const { data } = await query.graph({
@@ -402,15 +525,22 @@ export async function syncFirstoutPhotos(container: MedusaContainer, source: Ops
   for (const product of (data as PhotoProduct[]).filter((row) => row.external_id?.startsWith(SOURCE_PREFIX))) {
     for (const variant of product.variants || []) {
       const sourceSkuId = variant.metadata?.source_sku_id;
-      const token = typeof sourceSkuId === "string" ? tokens.get(sourceSkuId) : undefined;
-      if (!token || variant.metadata?.[PHOTO_TOKEN_METADATA_KEY] === token) continue;
+      const row = typeof sourceSkuId === "string" ? withPhotos.get(sourceSkuId) : undefined;
+      if (!row) continue;
       try {
-        await syncVariantPhoto(container, product, variant, sourceSkuId as string, token);
+        if (row.gallery_photo_tokens?.length) {
+          await syncReviewedGallery(container, product, variant, row, primarySources.has(row.source_sku_id));
+          ready.add(row.source_sku_id);
+        } else if (row.photo_token && variant.metadata?.[PHOTO_TOKEN_METADATA_KEY] !== row.photo_token &&
+            !Array.isArray(variant.metadata?.[GALLERY_TOKENS_METADATA_KEY])) {
+          await syncVariantPhoto(container, product, variant, row.source_sku_id, row.photo_token);
+        }
       } catch (error) {
         logger.warn(`Firstout photo for SKU ${sourceSkuId} was not synced and will be retried: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
+  return ready;
 }
 
 /** Product metadata: the Firstout name the sync last set as the title. */
@@ -427,7 +557,7 @@ type MerchandisedProduct = {
  * Firstout name the sync last set, so a staff edit in Medusa Admin always wins. Only rows
  * carrying shop_category (Firstout auto-publish on) are touched; otherwise nothing is written.
  */
-export async function syncFirstoutMerchandising(container: MedusaContainer, source: OpsProduct[]): Promise<void> {
+export async function syncFirstoutMerchandising(container: MedusaContainer, source: OpsProduct[], curated = false): Promise<void> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
   const groups = groupOpsProducts(source).filter((group) => group.rows[0].shop_category);
@@ -466,13 +596,15 @@ export async function syncFirstoutMerchandising(container: MedusaContainer, sour
     const recorded = product.metadata?.[FIRSTOUT_TITLE_METADATA_KEY];
     // A product synced before names were recorded counts as unedited only while it still has the Firstout name.
     const unedited = product.title === (typeof recorded === "string" ? recorded : group.title);
-    if (!unedited || recorded === group.title) continue;
+    const reviewed = curated && group.rows.some((row) => row.gallery_photo_tokens?.length);
+    if ((!reviewed && !unedited) || (recorded === group.title && product.title === group.title)) continue;
     try {
       // Metadata merges in Medusa, so only the recorded name is written.
       await updateProductsWorkflow(container).run({ input: { selector: { id: product.id }, update: {
         title: group.title, metadata: { [FIRSTOUT_TITLE_METADATA_KEY]: group.title },
       } } });
     } catch (error) {
+      if (reviewed) throw error;
       logger.warn(`Firstout name for ${group.externalId} was not synced and will be retried: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -480,34 +612,110 @@ export async function syncFirstoutMerchandising(container: MedusaContainer, sour
 
 export async function syncFirstout(container: MedusaContainer): Promise<void> {
   const locking = container.resolve(Modules.LOCKING);
-  const source = await locking.execute("storefront:inventory", async () => syncFirstoutLocked(container));
-  // Names and categories never affect stock or checkout, so they also run outside the inventory lock.
-  try {
-    await locking.execute("storefront:merchandising", async () => syncFirstoutMerchandising(container, source));
-  } catch (error) {
-    container.resolve(ContainerRegistrationKeys.LOGGER).warn(
-      `Firstout names and categories skipped this run: ${error instanceof Error ? error.message : String(error)}`,
-    );
+  // Keep all phases on one source snapshot without holding the checkout lock
+  // across remote image downloads. A later sync cannot publish an older gallery.
+  await locking.execute("storefront:catalogue-sync", async () => {
+    const { snapshot, channelId } = await locking.execute("storefront:inventory", async () => syncFirstoutLocked(container));
+    const { products: source, curated_catalogue: curated } = snapshot;
+    const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
+    try {
+      await syncFirstoutMerchandising(container, source, curated);
+    } catch (error) {
+      if (curated) throw error;
+      logger.warn(`Firstout names and categories skipped this run: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    try {
+      const galleries = await syncFirstoutPhotos(container, source);
+      if (curated) {
+        const eligible = new Set(catalogueExternalIds(source, true));
+        const ready = groupOpsProducts(source).filter((group) => eligible.has(group.externalId) &&
+          group.rows.every((row) => !row.gallery_photo_tokens?.length || galleries.has(row.source_sku_id)));
+        await locking.execute("storefront:inventory", async () => publishCatalogue(container, new Set(ready.map((group) => group.externalId)), channelId));
+      }
+    } catch (error) {
+      if (curated) throw error;
+      logger.warn(`Firstout photo sync skipped this run: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
+}
+
+// Medusa recreates variants when their product group changes. Its delete
+// workflow also removes the variant's inventory links, so check all moves
+// before touching any catalogue rows.
+async function assertPaidRecoveryHasSnapshot(
+  container: MedusaContainer, variant: CommerceVariant, source: unknown,
+): Promise<void> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const lineIds = new Set<string>();
+  const pageSize = 500;
+  for (let skip = 0; ; skip += pageSize) {
+    const { data } = await query.graph({
+      entity: "order_line_item", fields: ["id"], filters: { variant_id: variant.id }, pagination: { skip, take: pageSize },
+    });
+    for (const line of data) lineIds.add(line.id);
+    if (data.length < pageSize) break;
   }
-  // Photos run outside the inventory lock so a slow download never blocks checkout.
-  try {
-    await locking.execute("storefront:photos", async () => syncFirstoutPhotos(container, source));
-  } catch (error) {
-    container.resolve(ContainerRegistrationKeys.LOGGER).warn(
-      `Firstout photo sync skipped this run: ${error instanceof Error ? error.message : String(error)}`,
-    );
+  for (const order of await paidStorefrontOrdersForLineItems(container, [...lineIds])) {
+    const affected = (order.items || []).filter(({ id }) => lineIds.has(id));
+    if (!affected.length) continue;
+    const outbox = order.metadata?.storefront_handoff_outbox as { status?: unknown; payload?: { lines?: unknown[] } } | null | undefined;
+    const lines = Array.isArray(outbox?.payload?.lines) ? outbox.payload.lines : [];
+    const captured = new Set(lines.flatMap((line) => {
+      if (!line || typeof line !== "object" || !("external_line_id" in line) || !("source_sku_id" in line) || !("sku" in line) ||
+          typeof line.external_line_id !== "string" || line.source_sku_id !== source || line.sku !== variant.sku) return [];
+      return [line.external_line_id];
+    }));
+    if (affected.some(({ id }) => !captured.has(id))) {
+      throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `Catalogue regrouping waits for the paid-order handoff snapshot on SKU ${variant.sku}`);
+    }
+    const fulfillment = order.metadata?.storefront_fulfillment_status as { status?: unknown } | null | undefined;
+    if (outbox?.status !== "imported" || !["delivered", "collected", "cancelled"].some((status) => status === fulfillment?.status)) {
+      throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `Catalogue regrouping waits for a paid order to finish on SKU ${variant.sku}`);
+    }
   }
 }
 
-async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduct[]> {
-  let sourceProducts;
+async function assertRegroupingSafe(
+  container: MedusaContainer, existing: CommerceProduct[], desiredOwner: Map<string, string>,
+): Promise<void> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const inventory = container.resolve<IInventoryService>(Modules.INVENTORY);
+  const retainedGroups = new Set(desiredOwner.values());
+  const now = Date.now();
+  for (const product of existing) {
+    const oldSource = product.external_id?.startsWith(`${SOURCE_PREFIX}group-`) ? undefined : product.external_id?.slice(SOURCE_PREFIX.length);
+    for (const variant of product.variants || []) {
+      const source = variant.metadata?.source_sku_id ?? oldSource;
+      const owner = typeof source === "string" ? desiredOwner.get(source) : undefined;
+      const replacing = owner !== product.external_id && (!!owner || retainedGroups.has(product.external_id || ""));
+      if (!replacing) continue;
+      const capacity = Object.values(readCapacityState(variant.metadata).allocations);
+      const mustRetain = pendingCommitments(variant.metadata).length > 0 ||
+        capacity.some((offer) => Object.values(offer.holds).some((hold) => Date.parse(hold.expires_at) > now) ||
+          (Date.parse(offer.expires_at) > now && Object.keys(offer.committed).length > 0));
+      const { data } = await query.graph({
+        entity: "product_variant", fields: ["inventory_items.inventory_item_id"], filters: { id: variant.id },
+      });
+      const itemIds = ((data[0] as VariantInventory | undefined)?.inventory_items || []).map((item) => item.inventory_item_id);
+      if (mustRetain || (itemIds.length && (await inventory.listReservationItems({ inventory_item_id: itemIds }, { take: 1 })).length)) {
+        throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `Catalogue regrouping waits for active reservations or paid commitments on SKU ${variant.sku}`);
+      }
+      await assertPaidRecoveryHasSnapshot(container, variant, source);
+    }
+  }
+}
+
+async function syncFirstoutLocked(container: MedusaContainer): Promise<{ snapshot: OpsProductsResponse; channelId: string }> {
+  let snapshot;
   try {
-    sourceProducts = await fetchOpsProducts();
+    snapshot = await fetchOpsProducts();
     await refreshOpsCheckoutHealth();
   } catch (error) {
     recordOpsCheckoutHealth({ opsReachable: false, checkoutAllowed: false });
     throw error;
   }
+  const { products: sourceProducts, curated_catalogue: curated } = snapshot;
+  const eligible = new Set(catalogueExternalIds(sourceProducts, curated));
   await reconcileStorefrontHandoffs(
     container,
     sourceProducts.flatMap((product) => product.acknowledged_commitment_ids),
@@ -527,10 +735,10 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
     }
     bySourceId.set(product.external_id!, product);
   }
-  const { data: channels } = await query.graph({ entity: "sales_channel", fields: ["id"] });
+  const channelId = await storefrontChannel(container, Boolean(curated));
   const { data: locations } = await query.graph({ entity: "stock_location", fields: ["id"] });
   const { data: profiles } = await query.graph({ entity: "shipping_profile", fields: ["id"] });
-  if (!channels[0] || !locations[0] || !profiles[0]) {
+  if (!channelId || !locations[0] || !profiles[0]) {
     throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Run the DasKasas bootstrap before syncing");
   }
 
@@ -539,6 +747,10 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
   const desiredOwner = new Map(groups.flatMap((group) =>
     group.rows.map((row) => [row.source_sku_id, group.externalId] as const),
   ));
+  if (curated) {
+    await assertRegroupingSafe(container, existing, desiredOwner);
+    await publishCatalogue(container, eligible, channelId, true);
+  }
   for (const product of existing) {
     const oldSourceId = product.external_id?.startsWith(`${SOURCE_PREFIX}group-`)
       ? null : product.external_id?.slice(SOURCE_PREFIX.length);
@@ -565,15 +777,16 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
       const { result } = await createProductsWorkflow(container).run({ input: { products: [{
         title: group.title, handle: group.externalId, external_id: group.externalId,
         status: ProductStatus.DRAFT, shipping_profile_id: profiles[0].id,
-        sales_channels: [{ id: channels[0].id }], options,
+        sales_channels: [{ id: channelId }], options,
         variants: group.rows.map((row) => ({
           title: variantTitle(row), sku: row.sku, manage_inventory: true, allow_backorder: allowsFiniteBackorder(row),
           options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
-          metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null) },
+          metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null), ...syncedCatalogueMetadata(row) },
         })),
         metadata: {
           ...(group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {}),
           ...(group.rows[0].shop_category ? { [FIRSTOUT_TITLE_METADATA_KEY]: group.title } : {}),
+          ...(curated ? { [CURATED_PRODUCT_METADATA_KEY]: true } : {}),
         },
       }] } });
       const createdId = result[0]?.id;
@@ -588,6 +801,12 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
       continue;
     }
 
+    if (Boolean(product.metadata?.[CURATED_PRODUCT_METADATA_KEY]) !== Boolean(curated)) {
+      await updateProductsWorkflow(container).run({ input: { selector: { id: product.id }, update: {
+        status: ProductStatus.DRAFT, metadata: { [CURATED_PRODUCT_METADATA_KEY]: Boolean(curated) },
+      } } });
+      product.status = ProductStatus.DRAFT;
+    }
     const currentKeys = (product.options || []).map((option) => option.title).sort();
     const nextKeys = options.map((option) => option.title).sort();
     if (JSON.stringify(currentKeys) !== JSON.stringify(nextKeys)) {
@@ -616,7 +835,7 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
       const { result } = await createProductVariantsWorkflow(container).run({ input: { product_variants: added.map((row) => ({
         product_id: product.id, title: variantTitle(row), sku: row.sku, manage_inventory: true, allow_backorder: allowsFiniteBackorder(row),
         options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
-        metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null) },
+        metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null), ...syncedCatalogueMetadata(row) },
       })) } });
       for (const row of added) {
         const variant = result.find((item) => item.sku === row.sku);
@@ -646,18 +865,20 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
       const remainingPending = pending.filter((item) => !acknowledged.has(item.commitment_id));
       const commitmentsChanged = remainingPending.length !== pending.length;
       const projectionChanged = variant.metadata?.source_projected_quantity !== projected || commitmentsChanged;
+      const catalogue = syncedCatalogueMetadata(row);
+      const catalogueChanged = Object.entries(catalogue).some(([key, value]) => JSON.stringify(value) !== JSON.stringify(variant.metadata?.[key]));
       // Reservation consumption/cancellation can change independently of the
       // source revision. Rebase stock on every accepted projection.
       await writeStock(container, variant.id, locations[0].id, projected);
-      if (!optionsChanged && !revisionChanged && !observationChanged && !projectionChanged && !capacityChanged && !backorderChanged) continue;
+      if (!optionsChanged && !revisionChanged && !observationChanged && !projectionChanged && !capacityChanged && !backorderChanged && !catalogueChanged) continue;
       await updateProductVariantsWorkflow(container).run({ input: { product_variants: [{
         id: variant.id, allow_backorder: allowBackorder, ...(revisionChanged ? { sku: row.sku, prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }] } : {}),
         ...(optionsChanged ? { options: nextOptions, title: variantTitle(row) } : {}),
-        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, pending_paid_commitments: remainingPending, source_price_includes_tax: true, ...nextCapacityMetadata },
+        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, pending_paid_commitments: remainingPending, source_price_includes_tax: true, ...nextCapacityMetadata, ...catalogue },
       }] } });
     }
   }
 
-  await publishCatalogue(container, new Set(catalogueExternalIds(sourceProducts)));
-  return sourceProducts;
+  if (!curated) await publishCatalogue(container, eligible);
+  return { snapshot, channelId };
 }

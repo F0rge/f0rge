@@ -25,6 +25,14 @@ test("checkout accepts recent matching price and rejects stale, missing or chang
     .toContain("Choose a valid quantity for every piece.");
 });
 
+test("checkout accepts more than 99 units of a SKU when physical stock covers the request", () => {
+  const manyItems = { ...cart, items: [{ ...cart.items[0], quantity: 105 }] };
+  const manyStock = { ...variant, metadata: { ...variant.metadata, source_available_quantity: 105 } };
+  expect(checkoutChanges(manyItems, [manyStock], now, 5 * 60_000)).toEqual([]);
+  expect(checkoutChanges(manyItems, [variant], now, 5 * 60_000))
+    .toContain("This piece has no current stock or made-to-order allowance.");
+});
+
 test("staleness and reservation limits use configured durations", () => {
   const previousAge = process.env.STOREFRONT_AVAILABILITY_MAX_AGE_SECONDS;
   const previousTtl = process.env.STOREFRONT_HOLD_TTL_SECONDS;

@@ -74,6 +74,10 @@ export function BagProvider({ children }: { children: ReactNode }) {
       return next;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Please try again");
+      if (method === "PATCH") {
+        try { setBag(await bagRequest("GET")); }
+        catch { /* Keep the quantity error if the refresh also fails. */ }
+      }
       return null;
     } finally { setBusy(false); }
   }, []);
@@ -97,6 +101,7 @@ export function BagLine({ item, compact = false }: { item: BagItem; compact?: bo
   const { capture } = useStorefrontAnalytics();
   const held = isHeld(bag);
   const currency = bag?.currency_code;
+  const quantityLimit = item.max_quantity ?? item.quantity;
   return <li className={cn("flex gap-4", compact ? "border-b pb-4 last:border-0" : "overflow-hidden rounded-xl border bg-card")}>
     <div className={cn("relative shrink-0 overflow-hidden bg-muted", compact ? "size-20 rounded-md" : "w-24 sm:w-32")}>
       <PieceImage product={{ title: item.title, thumbnail: item.thumbnail }} className="min-h-0" />
@@ -117,10 +122,10 @@ export function BagLine({ item, compact = false }: { item: BagItem; compact?: bo
         }}><Trash2 className="size-4" /></Button>}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        {held
+        {held || quantityLimit === 0
           ? <p className="text-sm text-muted-foreground" aria-label={`Quantity of ${item.title}: ${item.quantity}`}>Qty {item.quantity}</p>
-          : <Stepper size="compact" label={`Quantity of ${item.title}`} value={item.quantity} min={1} max={item.max_quantity ?? item.quantity} onChange={(quantity) => {
-            if (!busy) void update("PATCH", "/api/bag", { item_id: item.id, quantity });
+          : <Stepper size="compact" label={`Quantity of ${item.title}`} value={item.quantity} min={1} max={quantityLimit} onChange={(quantity) => {
+            if (!busy) void update("PATCH", "/api/bag", { item_id: item.id, quantity: Math.min(quantity, quantityLimit) });
           }} />}
         <p className={cn("font-medium whitespace-nowrap", compact && "text-sm")}>{money(item.total, currency)}</p>
       </div>

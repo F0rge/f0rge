@@ -1,21 +1,31 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from typing import Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 from fastapi.responses import Response
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.datastructures import UploadFile as ParsedUploadFile
+from starlette.formparsers import MultiPartException, MultiPartParser
 
+from app.database import get_db
 from app.dependencies.auth import (
     get_current_user_id,
     get_sku_bom_service,
     get_sku_service,
     require_catalogue_mutate,
+    require_owner,
 )
+from app.schemas.curated_catalogue import CuratedCatalogueResult
 from app.schemas.sku import SkuCreate, SkuListPage, SkuResponse, SkuUnitCostPage, SkuUpdate
 from app.schemas.sku_bom import SkuBomLineResponse, SkuBomReplace
 from app.services.sku_bom import SkuBomService
+from app.services.curated_catalogue import CuratedCatalogueService
+from app.services.curated_catalogue_archive import MAX_ARCHIVE_BYTES
 from app.services.skus import SkuService
+from f0rge_core.exceptions import ValidationError
 
 skus_router = APIRouter(prefix="/api/v1/skus", tags=["skus"])
 
@@ -73,6 +83,61 @@ async def create_sku(
     return await service.create(body, user_id)
 
 
+@skus_router.post(
+    "/curated-catalogue",
+    response_model=CuratedCatalogueResult,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["archive"],
+                        "properties": {
+                            "archive": {"type": "string", "format": "binary"},
+                            "dry_run": {"type": "boolean", "default": True},
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+async def import_curated_catalogue(
+    request: Request,
+    user_id: uuid.UUID = Depends(require_owner),
+    db: AsyncSession = Depends(get_db),
+) -> CuratedCatalogueResult:
+    if request.headers.get("content-type", "").split(";", 1)[0].strip() != "multipart/form-data":
+        raise ValidationError("A catalogue ZIP upload is required")
+
+    async def upload_chunks() -> AsyncIterator[bytes]:
+        received = 0
+        async for chunk in request.stream():
+            received += len(chunk)
+            if received > MAX_ARCHIVE_BYTES + 1024 * 1024:
+                raise MultiPartException("The catalogue upload exceeds 41 MiB")
+            yield chunk
+
+    try:
+        form = await MultiPartParser(
+            request.headers, upload_chunks(), max_files=1, max_fields=1, max_part_size=1024
+        ).parse()
+    except MultiPartException as exc:
+        raise ValidationError(exc.message) from exc
+    try:
+        archive = form.get("archive")
+        dry_run = form.get("dry_run", "true")
+        if not isinstance(archive, ParsedUploadFile) or dry_run not in ("true", "false"):
+            raise ValidationError("Provide an archive file and a true or false dry_run value")
+        return await CuratedCatalogueService(db).import_archive(
+            archive.file, user_id=user_id, dry_run=dry_run == "true"
+        )
+    finally:
+        await form.close()
+
+
 @skus_router.get("/{sku_id}", response_model=SkuResponse)
 async def get_sku(
     sku_id: uuid.UUID,
@@ -114,10 +179,11 @@ async def upload_sku_photo(
 @skus_router.get("/{sku_id}/photo", response_model=None)
 async def get_sku_photo(
     sku_id: uuid.UUID,
+    slot: int = Query(default=1, ge=1, le=3),
     _: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ) -> Response:
-    return await service.serve_photo(sku_id)
+    return await service.serve_photo(sku_id, slot=slot)
 
 
 @skus_router.get("/{sku_id}/bom", response_model=list[SkuBomLineResponse])

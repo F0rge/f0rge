@@ -79,6 +79,32 @@ test('adding opens the drawer; quantity is capped at stock; remove empties the b
   await expect(main.getByText('Your bag is empty.')).toBeVisible()
 })
 
+test('reduces a stale bag line directly to an available quantity', async ({ page }) => {
+  const fixture = {
+    id: 'cart_stale',
+    currency_code: 'zar',
+    items: [{
+      id: 'cali_stale', variant_id: 'variant_tilda', title: 'Tilda Sofa',
+      quantity: 4, max_quantity: 2, unit_price: 18_999, total: 75_996,
+    }],
+    subtotal: 75_996,
+    hold: null,
+  }
+  await page.route('**/api/bag', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      expect(route.request().postDataJSON()).toEqual({ item_id: 'cali_stale', quantity: 2 })
+      await route.fulfill({ json: { ...fixture, items: [{ ...fixture.items[0], quantity: 2 }] } })
+    } else {
+      await route.fulfill({ json: fixture })
+    }
+  })
+  await page.goto('/bag')
+  const main = page.getByRole('main')
+  await expect(main.getByLabel('Quantity of Tilda Sofa: 4')).toBeVisible()
+  await main.getByRole('button', { name: 'Decrease Quantity of Tilda Sofa' }).click()
+  await expect(main.getByLabel('Quantity of Tilda Sofa: 2')).toBeVisible()
+})
+
 test('checkout with delivery reaches the card-payment-unavailable step and releases the hold', async ({ page }) => {
   const drawer = await addToBag(page, chair)
   await drawer.getByRole('button', { name: 'Checkout' }).click()

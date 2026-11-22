@@ -1,5 +1,5 @@
 import { ProductStatus } from "@medusajs/framework/utils";
-import { assertPublishedProductComplete, assertVariantsPurchasable, publicationProblems, type PublicationProduct, type PublicationVariant } from "./publication";
+import { assertPublishedProductComplete, assertVariantsPurchasable, basketVariantTotals, CURATED_PRODUCT_METADATA_KEY, publicationProblems, type PublicationProduct, type PublicationVariant } from "./publication";
 import type { MedusaContainer } from "@medusajs/framework/types";
 import { publicFileBackendUrl } from "./file-storage-url";
 
@@ -118,6 +118,34 @@ test("cart completion rejects a variant that was removed from its sales channel"
   const graph = jest.fn().mockResolvedValue({ data: [{ ...variant, product }] });
   const container = { resolve: () => ({ graph }) } as unknown as MedusaContainer;
   await expect(assertVariantsPurchasable(container, [variant.id], "sc_removed")).rejects.toThrow("sales channel");
+  graph.mockResolvedValueOnce({ data: [{ ...variant, product: { ...product, external_id: "staff" } }] });
+  await expect(assertVariantsPurchasable(container, [variant.id], "sc_removed")).rejects.toThrow("no longer available");
+});
+
+test("a curated product can show a sold-out option beside a stocked variant, but the bag still rejects it", async () => {
+  const soldOut = { ...variant, id: "variant_2", metadata: { ...variant.metadata, source_available_quantity: 0 } };
+  const curated = { ...product, metadata: { ...product.metadata, [CURATED_PRODUCT_METADATA_KEY]: true } };
+  const graph = jest.fn()
+    .mockResolvedValueOnce({ data: [{ ...curated, variants: [variant, soldOut] }] })
+    .mockResolvedValueOnce({ data: [{ ...soldOut, product: curated }] });
+  const container = { resolve: () => ({ graph }) } as unknown as MedusaContainer;
+  await expect(assertPublishedProductComplete(container, product.id)).resolves.toBeUndefined();
+  await expect(assertVariantsPurchasable(container, [soldOut.id], "sc_1")).rejects.toThrow("stock or a positive lead time is required");
+});
+
+test("cart writes count existing and incoming units together without disclosing the stock ceiling", async () => {
+  const affected = new Set([variant.id]);
+  const current = [{ variant_id: variant.id, quantity: 104 }];
+  const total = (quantity: number) => basketVariantTotals([...current, { variant_id: variant.id, quantity }], affected);
+  const graph = jest.fn().mockResolvedValue({ data: [{
+    ...variant,
+    product,
+    metadata: { ...variant.metadata, source_available_quantity: 111, source_projected_quantity: 110 },
+  }] });
+  const container = { resolve: () => ({ graph }) } as unknown as MedusaContainer;
+  await expect(assertVariantsPurchasable(container, [variant.id], "sc_1", total(6))).resolves.toBeUndefined();
+  await expect(assertVariantsPurchasable(container, [variant.id], "sc_1", total(7)))
+    .rejects.toThrow("That quantity is no longer available for this piece.");
 });
 
 test("a Firstout photo the sync stores on the hosted volume passes the public-image check", () => {

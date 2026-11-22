@@ -33,6 +33,26 @@ test("validates a provider-neutral private product snapshot", () => {
   }
 });
 
+test("v2 accepts ordered catalogue fields without internal notes or zero prices", () => {
+  const row = {
+    ...contract.products[0], dimensions_cm: { width: null, depth: null, height: 74, diameter: 150 },
+    piece_count: 2, gallery_photo_tokens: ["a", "b", "c"].map((letter) => letter.repeat(64)),
+  };
+  const request = (product: unknown) => parseOpsProducts({
+    ...contract, curated_catalogue: true, products: [product],
+  }, contract.company_id);
+  expect(request(row)).toMatchObject({ curated_catalogue: true, products: [row] });
+  expect(request({ ...row, dimensions_cm: null, piece_count: null })).toMatchObject({
+    products: [{ dimensions_cm: null, piece_count: null }],
+  });
+  expect(() => request({ ...row, gallery_photo_tokens: row.gallery_photo_tokens.slice(0, 2) })).toThrow();
+  expect(() => request({ ...row, gallery_photo_tokens: Array(3).fill("a".repeat(64)) })).toThrow();
+  expect(() => request({ ...row, dimensions_cm: { ...row.dimensions_cm, height: -1 } })).toThrow();
+  expect(() => request({ ...row, piece_count: 0 })).toThrow();
+  expect(() => request({ ...row, price_minor_zar: 0 })).toThrow();
+  expect(() => request({ ...row, notes: "internal" })).toThrow();
+});
+
 test("validates finite made-to-order offers and rejects an inverted promise range", () => {
   const offer = {
     id: "bcd2f5d4-237b-43fb-a152-bef10a6a3eaa",

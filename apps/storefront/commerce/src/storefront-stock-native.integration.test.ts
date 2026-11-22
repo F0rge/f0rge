@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { medusaIntegrationTestRunner } from "@medusajs/test-utils";
-import { createOrderPaymentCollectionWorkflow } from "@medusajs/medusa/core-flows";
-import type { IInventoryService, IOrderModuleService, IPaymentModuleService, IProductModuleService, IStockLocationService, MedusaContainer } from "@medusajs/framework/types";
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { addToCartWorkflowId, createOrderPaymentCollectionWorkflow, createProductsWorkflow, createRegionsWorkflow, linkSalesChannelsToStockLocationWorkflow, updateLineItemInCartWorkflowId } from "@medusajs/medusa/core-flows";
+import type { ICartModuleService, IInventoryService, IOrderModuleService, IPaymentModuleService, IProductModuleService, ISalesChannelModuleService, IStockLocationService, IWorkflowEngineService, MedusaContainer } from "@medusajs/framework/types";
+import { ContainerRegistrationKeys, Modules, ProductStatus } from "@medusajs/framework/utils";
 import { writeStock } from "./sync-firstout";
 import { projectAvailableQuantity, type OpsProduct } from "./ops-contract";
+import "./workflows/hooks/validate-storefront-publication";
 
 jest.setTimeout(180_000);
 
@@ -58,7 +59,7 @@ if (enabled) {
             items: [{ title: "Stock integrity chair", quantity: 1, unit_price: 100, variant_id: variantId }] });
           const { result: collections } = await createOrderPaymentCollectionWorkflow(container).run({ input: { order_id: order.id, amount: 100 } });
           const payments = container.resolve<IPaymentModuleService>(Modules.PAYMENT);
-          const session = await payments.createPaymentSession(collections[0].id, { provider_id: "pp_storefront-test_local", currency_code: "zar", amount: 100, data: {} });
+          const session = await payments.createPaymentSession(collections[0].id, { provider_id: "pp_system_default", currency_code: "zar", amount: 100, data: {} });
           const payment = await payments.authorizePaymentSession(session.id, {});
           if (!payment) throw new Error("Fixture payment authorization failed");
           await payments.capturePayment({ payment_id: payment.id });
@@ -86,6 +87,43 @@ if (enabled) {
           expect(await available()).toBe(4);
           await writeStock(container, variantId, locationId, 4);
           expect(await available()).toBe(4);
+        });
+
+        test("native basket writes cannot exceed the selected SKU's stock, including simultaneous additions", async () => {
+          const channels = container.resolve<ISalesChannelModuleService>(Modules.SALES_CHANNEL);
+          const carts = container.resolve<ICartModuleService>(Modules.CART);
+          const workflows = container.resolve<IWorkflowEngineService>(Modules.WORKFLOW_ENGINE);
+          const channel = await channels.createSalesChannels({ name: "Stocked basket fixture" });
+          const { result: [region] } = await createRegionsWorkflow(container).run({
+            input: { regions: [{ name: "Stocked basket fixture", currency_code: "zar", countries: ["za"], is_tax_inclusive: true }] },
+          });
+          await linkSalesChannelsToStockLocationWorkflow(container).run({ input: { id: locationId, add: [channel.id] } });
+          const { result: [projectedProduct] } = await createProductsWorkflow(container).run({ input: { products: [{
+            title: "Stocked basket chair", external_id: `firstout-${randomUUID()}`, status: ProductStatus.PUBLISHED,
+            sales_channels: [{ id: channel.id }], options: [{ title: "Item", values: ["Standard"] }],
+            variants: [{
+              title: "Standard", sku: `BASKET-${randomUUID()}`, manage_inventory: true, options: { Item: "Standard" },
+              prices: [{ amount: 100, currency_code: "zar" }],
+              metadata: { source_sku_id: randomUUID(), source_price_includes_tax: true, source_available_quantity: 110, source_projected_quantity: 110 },
+            }],
+          }] } });
+          const stocked = projectedProduct.variants![0];
+          await writeStock(container, stocked.id, locationId, 110);
+          const cart = await carts.createCarts({ currency_code: "zar", region_id: region.id, sales_channel_id: channel.id });
+          const add = (quantity: number) => workflows.run(addToCartWorkflowId, { input: {
+            cart_id: cart.id, items: [{ variant_id: stocked.id, quantity }],
+          } });
+          await add(104);
+          const additions = await Promise.allSettled([add(6), add(6)]);
+          expect(additions.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+          const after = await carts.retrieveCart(cart.id, { relations: ["items"] });
+          expect(after.items).toHaveLength(1);
+          expect(after.items![0].quantity).toBe(110);
+          const edit = await workflows.run(updateLineItemInCartWorkflowId, { throwOnError: false, input: {
+            cart_id: cart.id, item_id: after.items![0].id, update: { quantity: 111 },
+          } });
+          expect(edit.errors.map(({ error }: { error: Error }) => error.message)).toContain("That quantity is no longer available for this piece.");
+          expect((await carts.retrieveCart(cart.id, { relations: ["items"] })).items![0].quantity).toBe(110);
         });
       });
     },

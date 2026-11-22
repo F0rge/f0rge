@@ -4,6 +4,7 @@ import { SHOWROOM } from "./showroom";
 import {
   POLICY_PLACEHOLDERS,
   POLICY_REVIEW_NOTICE,
+  IMPORTANT_TERMS,
   currentCustomerPolicies,
   policyPage,
   RETURNS_SUMMARY,
@@ -191,6 +192,27 @@ describe("customer policies", () => {
       expect(text).toContain("made to your specifications or clearly personalised");
     }
     expect(textOf(policyPage(null, "refunds"))).toContain("including the delivery charge");
+  });
+
+  it("keeps the failed-delivery charge, cooling-off refund and fault inspection consistent", () => {
+    const deliveryTerm = IMPORTANT_TERMS.find((term) => term.includes("third-party courier"));
+    expect(deliveryTerm).toContain("reasonable courier cost");
+    expect(deliveryTerm).toContain("After three failed attempts");
+    expect(deliveryTerm).toContain("refund what you paid, less any permitted failed-delivery charges");
+    for (const section of ["terms", "delivery", "refunds"] as const) {
+      const copy = textOf(policyPage(null, section));
+      expect(copy).toContain(deliveryTerm);
+      expect(copy).not.toContain("at our discretion");
+    }
+    for (const section of ["terms", "returns"] as const) {
+      const copy = textOf(policyPage(null, section));
+      expect(copy).toContain("We refund everything you paid, including the delivery charge, within 7 days after you cancel.");
+      expect(copy).toContain("We can arrange for our technician to inspect");
+      expect(copy).toContain("within six months after delivery");
+    }
+    const refunds = textOf(policyPage(null, "refunds"));
+    expect(refunds).toContain("For a cooling-off cancellation, we make the refund within 7 days after you cancel.");
+    expect(refunds).not.toContain("within 30 days after you cancel");
   });
 
   it("gives every POPIA s18(1) item and the right to object in the privacy policy", () => {
