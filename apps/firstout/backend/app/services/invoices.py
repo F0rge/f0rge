@@ -16,7 +16,6 @@ from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
-from app.models.journal import JournalDocumentType
 from app.models.sales_staff import SalesStaff
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import (
@@ -35,16 +34,8 @@ from app.schemas.page import Page, PageParams
 from app.schemas.payment import PaymentCreate
 from app.schemas.till import TillPriceLine, TillPricePreview, TillSaleLineCreate
 from app.services.books_events import BooksEventService
-from app.services.books_periods import assert_date_postable
-from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
-from app.services.chart_of_accounts import (
-    CODE_AR,
-    CODE_VAT,
-    LedgerPostingService,
-)
 from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
-from app.services.payment_terms import compute_due_date
 from app.services.party_archive import require_active_customer
 from app.services.sellability import assert_sku_sellable
 from app.services.sku_archive import SkuArchiveService
@@ -62,6 +53,7 @@ from app.services.sales_staff import SalesStaffService
 from app.services.settings import SettingsService
 from app.services.settlement import SettlementStatus, cents
 from app.services.till_pricing import TillPricing
+from app.services.tax_invoice_issue import TaxInvoiceIssue
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -73,8 +65,6 @@ class InvoiceService:
         self.crud = TaxInvoiceCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.customer_crud = CustomerCRUD(db)
-        self.posting = LedgerPostingService(db)
-        self.category_posting = CategoryPostingService(db)
         self.events = BooksEventService(db)
         self.credit = CustomerCreditService(db)
 
@@ -237,13 +227,10 @@ class InvoiceService:
             [line.sku_id for line in data.lines if line.sku_id is not None]
         )
         customer = await require_active_customer(self.db, data.customer_id)
-        await assert_date_postable(self.db, data.issue_date)
 
         line_models, priced = await self._price_lines(customer, data.lines)
-        subtotal = priced.subtotal_ex_vat
-        vat_total = priced.vat_amount
         total_inc = priced.total_inc_vat
-        if subtotal <= 0:
+        if priced.subtotal_ex_vat <= 0:
             raise ValidationError("Invoice total must be positive")
 
         override_note = await self.credit.assert_allowed(
@@ -254,53 +241,20 @@ class InvoiceService:
             user_id=user_id,
         )
 
-        due_date = data.due_date or compute_due_date(data.issue_date, customer, team_settings)
-
         async with unit_of_work(self.db):
-            invoice_number = await self.crud.get_next_invoice_number()
-            invoice = TaxInvoice(
-                invoice_number=invoice_number,
-                customer_id=data.customer_id,
+            invoice = await TaxInvoiceIssue(self.db).issue(
+                customer=customer,
                 issue_date=data.issue_date,
-                due_date=due_date,
-                subtotal_ex_vat=subtotal,
-                vat_amount=vat_total,
-                total_inc_vat=total_inc,
-                amount_paid=Decimal(0),
+                due_date=data.due_date,
+                lines=line_models,
                 prices_include_vat=shows_prices_including_vat(customer),
+                memo="Tax invoice",
+                actor_user_id=user_id,
+                event_note=override_note,
+                sales_staff_id=data.sales_staff_id,
                 on_account=on_account,
                 note_printed=data.note_printed,
                 note_internal=data.note_internal,
-                sales_staff_id=data.sales_staff_id,
-                lines=line_models,
-            )
-            await self.crud.add_and_flush(invoice)
-            sales_parts: list[tuple[str, Decimal, Decimal]] = []
-            for line in line_models:
-                sku = None
-                if line.sku_id is not None:
-                    sku = await self.sku_crud.get_by_id(line.sku_id)
-                sales_code = await self.category_posting.sales_code_for_sku(sku)
-                sales_parts.append((sales_code, Decimal(0), line.ex_vat))
-            await self.posting.post(
-                JournalDocumentType.INVOICE,
-                invoice.id,
-                f"Tax invoice {invoice_number}",
-                self.category_posting.collapse(
-                    [
-                        (CODE_AR, total_inc, Decimal(0)),
-                        *sales_parts,
-                        (CODE_VAT, Decimal(0), vat_total),
-                    ]
-                ),
-                entry_date=invoice.issue_date,
-            )
-            await self.events.record(
-                BooksDocumentType.INVOICE,
-                invoice.id,
-                BooksEventAction.CREATED,
-                actor_user_id=user_id,
-                note=override_note,
             )
             if payment is not None:
                 # Same transaction: a refused payment leaves no invoice behind.

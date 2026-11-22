@@ -19,9 +19,6 @@ from app.crud.ops_commerce_orders import OpsCommerceOrdersCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sales_order import SalesOrderCRUD
 from app.crud.sku import SkuCRUD
-from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import TeamCRUD
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
 from app.models.ops_commerce_order import OpsCommerceOrder
@@ -33,7 +30,7 @@ from app.models.sales_order import (
     SalesOrderPayment,
     SalesOrderStatus,
 )
-from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.models.tax_invoice import InvoiceLine
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.ops_commerce_order import StorefrontPaidOrder
 from app.schemas.page import Page, PageParams
@@ -47,21 +44,18 @@ from app.schemas.sales_order import (
     SalesOrderPaymentResponse,
     SalesOrderResponse,
 )
-from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
-    CODE_AR,
     CODE_BANK,
     CODE_DEPOSITS,
     CODE_INVENTORY,
-    CODE_VAT,
     LedgerPostingService,
 )
-from app.services.payment_terms import compute_due_date
 from app.services.pricing import resolve_unit_price, shows_prices_including_vat
 from app.services.stock_movements import StockMovementService
 from app.services.suspect_price import annotate_line_warnings
 from app.services.stocktakes import StocktakeService
+from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
 from app.services.vat import CENT, discounted_unit_ex, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -77,7 +71,6 @@ class SalesOrdersService:
         self.location_crud = LocationCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.location_stock_crud = LocationStockCRUD(db)
-        self.invoice_crud = TaxInvoiceCRUD(db)
         self.stock_movements = StockMovementService(db)
         self.stocktakes = StocktakeService(db)
         self.posting = LedgerPostingService(db)
@@ -383,13 +376,11 @@ class SalesOrdersService:
         if tax_snapshot is not None:
             stock_source = UnitCostAuditSource.STOREFRONT
         issue_date = datetime.date.today()
-        await assert_date_postable(self.db, issue_date)
 
         invoice_line_models: list[InvoiceLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)
         total_inc = Decimal(0)
-        sales_parts: list[tuple[str, Decimal, Decimal]] = []
         for index, line in enumerate(order.lines):
             if tax_snapshot is None:
                 ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(
@@ -406,8 +397,6 @@ class SalesOrdersService:
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat
-            sales_code = await self.category_posting.sales_code_for_sku(line.sku)
-            sales_parts.append((sales_code, Decimal(0), ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=line.description,
@@ -430,7 +419,8 @@ class SalesOrdersService:
                 subtotal += delivery_ex
                 vat_total += delivery_vat
                 total_inc += delivery_inc
-                sales_parts.append(("4000", Decimal(0), delivery_ex))
+                # ponytail: delivery has no SKU, so it posts to CODE_SALES ("4000"), as it
+                # always has; a delivery income account is its own decision.
                 invoice_line_models.append(
                     InvoiceLine(
                         description="Storefront delivery",
@@ -450,13 +440,6 @@ class SalesOrdersService:
             ):
                 raise ValidationError("Storefront tax snapshot does not match the paid order")
 
-        team = await TeamCRUD(self.db).get_first()
-        if team is None:
-            raise NotFoundError("Team not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
-        due_date = compute_due_date(issue_date, order.customer, team_settings)
-        deposit_total = order.amount_paid
-
         outgoing_needed = [line for line in order.lines if line.held_qty < line.qty]
         if outgoing_needed:
             location_id = order.location_id
@@ -465,44 +448,19 @@ class SalesOrdersService:
             await self.stocktakes.assert_location_unlocked(location_id)
 
         async with unit_of_work(self.db):
-            invoice_number = await self.invoice_crud.get_next_invoice_number()
-            invoice = TaxInvoice(
-                invoice_number=invoice_number,
-                customer_id=order.customer_id,
+            invoice = await TaxInvoiceIssue(self.db).issue(
+                customer=order.customer,
                 issue_date=issue_date,
-                due_date=due_date,
-                subtotal_ex_vat=subtotal,
-                vat_amount=vat_total,
-                total_inc_vat=total_inc,
-                amount_paid=deposit_total,
-                prices_include_vat=order.prices_include_vat,
                 lines=invoice_line_models,
-            )
-            await self.invoice_crud.add_and_flush(invoice)
-            await self.posting.post(
-                JournalDocumentType.INVOICE,
-                invoice.id,
-                f"Sales order tax invoice {invoice_number}",
-                self.category_posting.collapse(
-                    [
-                        (CODE_AR, total_inc, Decimal(0)),
-                        *sales_parts,
-                        (CODE_VAT, Decimal(0), vat_total),
-                    ]
+                prices_include_vat=order.prices_include_vat,
+                memo="Sales order tax invoice",
+                actor_user_id=user_id,
+                deposits=Deposits(
+                    source_id=order.id,
+                    memo=f"Apply sales order deposits {order.so_number}",
+                    amount=order.amount_paid,
                 ),
-                entry_date=issue_date,
             )
-            if deposit_total > 0:
-                await self.posting.post(
-                    JournalDocumentType.PAYMENT,
-                    order.id,
-                    f"Apply sales order deposits {order.so_number}",
-                    [
-                        (CODE_DEPOSITS, deposit_total, Decimal(0)),
-                        (CODE_AR, Decimal(0), deposit_total),
-                    ],
-                    entry_date=issue_date,
-                )
 
             total_cogs = Decimal(0)
             cogs_parts: list[tuple[str, Decimal, Decimal]] = []

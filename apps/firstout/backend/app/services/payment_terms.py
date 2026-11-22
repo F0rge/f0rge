@@ -9,16 +9,19 @@ from app.models.team_settings import DEFAULT_PAYMENT_TERMS_DAYS, TeamSettings
 DEFAULT_TERMS_DAYS = DEFAULT_PAYMENT_TERMS_DAYS
 
 
-def effective_terms_days(customer: Customer, team_settings: TeamSettings) -> int:
+def effective_terms_days(customer: Customer, team_settings: Optional[TeamSettings]) -> int:
     if customer.payment_terms_days is not None:
         return customer.payment_terms_days
+    if team_settings is None:
+        # No settings row yet: the default the row would be created with.
+        return DEFAULT_PAYMENT_TERMS_DAYS
     return team_settings.payment_terms_days
 
 
 def compute_due_date(
     issue_date: datetime.date,
     customer: Customer,
-    team_settings: TeamSettings,
+    team_settings: Optional[TeamSettings],
 ) -> datetime.date:
     return issue_date + datetime.timedelta(days=effective_terms_days(customer, team_settings))
 

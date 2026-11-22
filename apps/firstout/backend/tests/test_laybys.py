@@ -169,6 +169,11 @@ async def test_payment_to_ready_then_complete(
     body = completed.json()
     assert body["status"] == "completed"
     assert body["invoice_id"] is not None
+    events = await owner_client.get(
+        "/api/v1/books-events",
+        params={"document_type": "invoice", "document_id": body["invoice_id"]},
+    )
+    assert [row["action"] for row in events.json()] == ["created"]
 
     on_hand_after = await _inventory_on_hand(owner_client, sku_id, bedford_id)
     assert on_hand_after == 1

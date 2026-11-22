@@ -30,7 +30,7 @@ from app.models.payment import Payment, PaymentDirection
 from app.models.quote import QuoteStatus
 from app.models.customer import Customer
 from app.models.sku import Sku
-from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.models.tax_invoice import InvoiceLine
 from app.schemas.invoice import InvoiceLineResponse
 from app.schemas.till import (
     TillPriceLine,
@@ -44,13 +44,11 @@ from app.services.sku_bom import whole_component_qty
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
-from app.services.payment_terms import compute_due_date
 from app.services.stock_movements import StockMovementService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_BANK,
     CODE_INVENTORY,
-    CODE_VAT,
     LedgerPostingService,
 )
 from app.services.stocktakes import StocktakeService
@@ -69,8 +67,8 @@ from app.exceptions import (
 )
 from app.permissions import TILL_DISCOUNT, USERS_MANAGE
 from app.services.permissions import PermissionService
-from app.services.books_periods import assert_date_postable
 from app.services.till_pricing import TillPricing
+from app.services.tax_invoice_issue import TaxInvoiceIssue
 from app.services.suspect_price import annotate_line_warnings
 from app.services.vat import CENT
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -213,7 +211,6 @@ class TillOrchestrator:
         sale_date = datetime.date.today()
         if data.due_date is not None and data.due_date < sale_date:
             raise ValidationError("Due date cannot be before the issue date")
-        await assert_date_postable(self.db, sale_date)
 
         line_inputs: list[tuple[Sku, TillPriceLine]] = []
         cogs_parts: list[tuple[str, Decimal, Decimal]] = []
@@ -315,15 +312,11 @@ class TillOrchestrator:
             raise KitRequiresPickError(kit_blocks)
 
         subtotal = preview.subtotal_ex_vat
-        vat_total = preview.vat_amount
         total_inc = preview.total_inc_vat
         invoice_line_models: list[InvoiceLine] = []
-        sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
         for index, (sku, line) in enumerate(line_inputs):
             discounted_unit = (line.ex_vat / line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
-            sales_code = await self.category_posting.sales_code_for_sku(sku)
-            sales_parts.append((sales_code, Decimal(0), line.ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=sku.name,
@@ -347,45 +340,23 @@ class TillOrchestrator:
                 customer, total_inc, credit_override=data.credit_override
             )
 
-        team_settings = await settings_crud.get_or_create_for_team(team.id)
-        due_date = data.due_date or compute_due_date(sale_date, customer, team_settings)
-
         async with unit_of_work(self.db):
-            invoice_number = await self.invoice_crud.get_next_invoice_number()
-
-            invoice = TaxInvoice(
-                invoice_number=invoice_number,
-                customer_id=customer.id,
+            invoice = await TaxInvoiceIssue(self.db).issue(
+                customer=customer,
                 issue_date=sale_date,
-                due_date=due_date,
-                subtotal_ex_vat=subtotal,
-                vat_amount=vat_total,
-                total_inc_vat=total_inc,
-                amount_paid=Decimal(0),
+                due_date=data.due_date,
+                lines=invoice_line_models,
                 prices_include_vat=preview.prices_include_vat,
+                memo="Till tax invoice",
+                actor_user_id=user_id,
+                event_note=override_note,
+                sales_staff_id=data.sales_staff_id,
                 on_account=on_account,
                 note_printed=data.note_printed,
                 note_internal=data.note_internal,
-                sales_staff_id=data.sales_staff_id,
                 source="till",
-                lines=invoice_line_models,
             )
-
-            await self.invoice_crud.add_and_flush(invoice)
-
-            await self.posting.post(
-                JournalDocumentType.INVOICE,
-                invoice.id,
-                f"Till tax invoice {invoice_number}",
-                self.category_posting.collapse(
-                    [
-                        (CODE_AR, total_inc, Decimal(0)),
-                        *sales_parts,
-                        (CODE_VAT, Decimal(0), vat_total),
-                    ]
-                ),
-                entry_date=sale_date,
-            )
+            invoice_number = invoice.invoice_number
 
             payment: Optional[Payment] = None
             if not on_account:
@@ -456,13 +427,6 @@ class TillOrchestrator:
                     invoice.id, customer.id, remainders, user_id
                 )
                 pick_id = till_pick.id
-            await self.events.record(
-                BooksDocumentType.INVOICE,
-                invoice.id,
-                BooksEventAction.CREATED,
-                actor_user_id=user_id,
-                note=override_note,
-            )
             if payment is not None:
                 await self.events.record(
                     BooksDocumentType.PAYMENT,

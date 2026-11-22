@@ -16,13 +16,10 @@ from app.crud.layby import LaybyCRUD
 from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
-from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import TeamCRUD
 from app.models.journal import JournalDocumentType
 from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
 from app.models.location import LocationType
-from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.models.tax_invoice import InvoiceLine
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.layby import (
     LaybyCreate,
@@ -34,21 +31,18 @@ from app.schemas.layby import (
 )
 from app.schemas.page import Page, PageParams
 from app.services.layby_pdf import build_layby_pdf
-from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
-from app.services.payment_terms import compute_due_date
 from app.services.chart_of_accounts import (
-    CODE_AR,
     CODE_BANK,
     CODE_DEPOSITS,
     CODE_INVENTORY,
-    CODE_VAT,
     LedgerPostingService,
 )
 from app.services.settings import SettingsService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.pricing import shows_prices_including_vat
+from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -62,7 +56,6 @@ class LaybysService:
         self.location_crud = LocationCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.location_stock_crud = LocationStockCRUD(db)
-        self.invoice_crud = TaxInvoiceCRUD(db)
         self.stock_movements = StockMovementService(db)
         self.stocktakes = StocktakeService(db)
         self.posting = LedgerPostingService(db)
@@ -211,23 +204,15 @@ class LaybysService:
             await self.stocktakes.assert_location_unlocked(layby.location_id)
 
         issue_date = datetime.date.today()
-        await assert_date_postable(self.db, issue_date)
 
         invoice_line_models: list[InvoiceLine] = []
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
         total_inc = Decimal(0)
-        sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
         for index, line in enumerate(layby.lines):
             ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = ex_to_inc(ex_vat)
             line_vat = inc_vat - ex_vat
-            subtotal += ex_vat
-            vat_total += line_vat
             total_inc += inc_vat
-            sales_code = await self.category_posting.sales_code_for_sku(line.sku)
-            sales_parts.append((sales_code, Decimal(0), ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=line.sku.name,
@@ -241,51 +226,20 @@ class LaybysService:
                 )
             )
 
-        team = await TeamCRUD(self.db).get_first()
-        if team is None:
-            raise NotFoundError("Team not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
-        due_date = compute_due_date(issue_date, layby.customer, team_settings)
-
         async with unit_of_work(self.db):
-            invoice_number = await self.invoice_crud.get_next_invoice_number()
-            invoice = TaxInvoice(
-                invoice_number=invoice_number,
-                customer_id=layby.customer_id,
+            # A ready layby is fully paid: its deposits settle the whole invoice.
+            invoice = await TaxInvoiceIssue(self.db).issue(
+                customer=layby.customer,
                 issue_date=issue_date,
-                due_date=due_date,
-                subtotal_ex_vat=subtotal,
-                vat_amount=vat_total,
-                total_inc_vat=total_inc,
-                amount_paid=total_inc,
-                prices_include_vat=shows_prices_including_vat(layby.customer),
                 lines=invoice_line_models,
-            )
-            await self.invoice_crud.add_and_flush(invoice)
-
-            await self.posting.post(
-                JournalDocumentType.INVOICE,
-                invoice.id,
-                f"Layby tax invoice {invoice_number}",
-                self.category_posting.collapse(
-                    [
-                        (CODE_AR, total_inc, Decimal(0)),
-                        *sales_parts,
-                        (CODE_VAT, Decimal(0), vat_total),
-                    ]
+                prices_include_vat=shows_prices_including_vat(layby.customer),
+                memo="Layby tax invoice",
+                actor_user_id=user_id,
+                deposits=Deposits(
+                    source_id=layby.id,
+                    memo=f"Apply layby deposits {layby.layby_number}",
+                    amount=total_inc,
                 ),
-                entry_date=issue_date,
-            )
-
-            await self.posting.post(
-                JournalDocumentType.PAYMENT,
-                layby.id,
-                f"Apply layby deposits {layby.layby_number}",
-                [
-                    (CODE_DEPOSITS, total_inc, Decimal(0)),
-                    (CODE_AR, Decimal(0), total_inc),
-                ],
-                entry_date=issue_date,
             )
 
             total_cogs = Decimal(0)
