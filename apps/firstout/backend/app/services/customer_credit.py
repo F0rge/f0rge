@@ -8,12 +8,12 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD, CustomerInvoiceAgg
-from app.exceptions import ForbiddenError
+from app.exceptions import CustomerCreditBlockedError, ForbiddenError
 from app.models.customer import Customer
 from app.permissions import PO_RAISE, USERS_MANAGE
 from app.services.permissions import PermissionService
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
-from f0rge_core.exceptions import ConflictError, ValidationError
+from f0rge_core.exceptions import ValidationError
 
 CREDIT_OVERRIDE_KEYS = (USERS_MANAGE, PO_RAISE)
 CUSTOMER_ON_HOLD = "Customer is on hold"
@@ -49,7 +49,7 @@ class CustomerCreditService:
         if self.is_walk_in(customer):
             return
         if customer.on_hold and not credit_override:
-            raise ConflictError(CUSTOMER_ON_HOLD)
+            raise CustomerCreditBlockedError(CUSTOMER_ON_HOLD)
 
     async def assert_within_limit(
         self,
@@ -65,7 +65,7 @@ class CustomerCreditService:
         )
         open_zar = aggs.get(customer.id, CustomerInvoiceAgg()).open_zar
         if open_zar + sale_total > customer.credit_limit:
-            raise ConflictError(CUSTOMER_EXCEEDS_CREDIT_LIMIT)
+            raise CustomerCreditBlockedError(CUSTOMER_EXCEEDS_CREDIT_LIMIT)
 
     async def assert_allowed(
         self,

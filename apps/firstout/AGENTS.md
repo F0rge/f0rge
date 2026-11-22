@@ -254,7 +254,7 @@ Extends the existing `customers` table (no second customer entity). Books invoic
 
 **List filters** (AND): `GET /customers?overdue=&active_layby=&on_hold=` — `overdue` = `overdue_invoices_count > 0`, `active_layby` = `active_laybys_count > 0`.
 
-**Till / books credit gate:** named customer `on_hold` → 409 `"Customer is on hold"`; `credit_limit` set and `open_invoices_zar + sale/invoice total_inc_vat > credit_limit` → 409 `"Customer exceeds credit limit"`. Walk-in is skipped. Override keys on till (and books invoice create): `credit_override` + non-empty `credit_override_reason`. Override allowed only with `users.manage` OR `po.raise` (403 otherwise; 400 if override without reason). Audit on the invoice `books_events` CREATED row: `note` = `credit override: {reason}` (no new books action enum).
+**Till / books credit gate:** named customer `on_hold`, or `credit_limit` set and `open_invoices_zar + sale/invoice total_inc_vat > credit_limit` → 409 `{"code": "customer_credit_blocked", "message": "Customer is on hold" | "Customer exceeds credit limit"}` on till sales and books invoice create. Walk-in is skipped. Override keys on till (and books invoice create): `credit_override` + non-empty `credit_override_reason`. Override allowed only with `users.manage` OR `po.raise` (403 otherwise; 400 if override without reason). Audit on the invoice `books_events` CREATED row: `note` = `credit override: {reason}` (no new books action enum).
 
 | Action | Permission |
 |--------|------------|

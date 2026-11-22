@@ -547,4 +547,7 @@ async def test_books_invoice_on_hold_conflicts(owner_client: AsyncClient) -> Non
         },
     )
     assert invoice.status_code == 409
-    assert invoice.json()["detail"] == "Customer is on hold"
+    assert invoice.json()["detail"] == {
+        "code": "customer_credit_blocked",
+        "message": "Customer is on hold",
+    }

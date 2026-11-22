@@ -37,6 +37,14 @@ class TillPriceConflictError(ConflictError):
         self.payload = {"code": "till_price_conflict", "message": detail}
 
 
+class CustomerCreditBlockedError(ConflictError):
+    """The customer is on hold or over their credit limit; a credit override may sell anyway."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.payload = {"code": "customer_credit_blocked", "message": detail}
+
+
 class HeldResumeTargetChangedError(ConflictError):
     """The selected held basket was edited or consumed before this resume."""
 

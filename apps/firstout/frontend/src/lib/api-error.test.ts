@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, createTillSale, formatHttpError, formatTransportError, listSkus } from "./api";
+import { ApiError, conflictCode, createTillSale, formatHttpError, formatTransportError, listSkus } from "./api";
 import { parseKitRequiresPick } from "./till-kit-pick";
 
 afterEach(() => {
@@ -17,6 +17,19 @@ describe("formatHttpError", () => {
     expect(formatHttpError("POST /till/sales", 409, "Conflict", "Customer is on hold")).toBe(
       "Customer is on hold",
     );
+  });
+});
+
+describe("conflictCode", () => {
+  it("reads the code of a structured 409 and nothing else", () => {
+    expect(conflictCode(new ApiError(409, "Prices changed", { code: "till_price_conflict", message: "x" }))).toBe(
+      "till_price_conflict",
+    );
+    expect(conflictCode(new ApiError(409, "Customer is on hold", "Customer is on hold"))).toBeNull();
+    expect(conflictCode(new ApiError(409, "Conflict", { code: 7 }))).toBeNull();
+    expect(conflictCode(new ApiError(500, "Boom", { code: "basket_expired" }))).toBeNull();
+    expect(conflictCode(new ApiError(0, "Offline"))).toBeNull();
+    expect(conflictCode(new Error("network"))).toBeNull();
   });
 });
 
@@ -76,7 +89,7 @@ describe("till kit block", () => {
     const apiError = error as ApiError;
     expect(apiError.status).toBe(409);
     expect(apiError.message).toBe(message);
-    const parsed = parseKitRequiresPick(apiError.detail);
+    const parsed = parseKitRequiresPick(apiError);
     expect(parsed?.kits[0]?.sku_name).toBe(kitName);
     expect(parsed?.kits[0]?.sku_code).toBe("P36410/2");
   });

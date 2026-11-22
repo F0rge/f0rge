@@ -70,6 +70,9 @@ def _refusal(status: int, payload: Any) -> str:
             for issue in detail[:5]
             if isinstance(issue, dict)
         )
+    if isinstance(detail, dict) and isinstance(detail.get("message"), str) and detail["message"]:
+        # A coded refusal ({"code", "message", ...}): the sentence is what a client can act on.
+        detail = detail["message"]
     text = detail if isinstance(detail, str) else json.dumps(detail, separators=(",", ":"))
     if detail is None or len(text) > _MAX_ERROR_CHARS:
         return f"Firstout refused this request (HTTP {status})"

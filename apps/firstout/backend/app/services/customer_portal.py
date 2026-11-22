@@ -93,6 +93,8 @@ class CustomerPortalService:
     ) -> SalesOrderResponse:
         user = await self._require_user(portal_user_id)
         if user.customer.on_hold:
+            # Not CustomerCreditBlockedError: its code offers a staff credit override, which a
+            # trade customer cannot give themselves.
             raise ConflictError("Customer is on hold")
         order = await self.orders.create_draft(
             SalesOrderCreate(

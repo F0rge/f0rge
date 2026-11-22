@@ -51,6 +51,15 @@ export class ApiError extends Error {
   }
 }
 
+/** The `code` of a 409 the server explained with `{ code, message, ... }`; null for any other failure. */
+export function conflictCode(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const detail = error.detail;
+  return detail && typeof detail === "object" && "code" in detail && typeof detail.code === "string"
+    ? detail.code
+    : null;
+}
+
 export type Page<T> = { items: T[]; total: number };
 export const PAGE_SIZES = [10, 25, 50] as const;
 export type ListParams = {

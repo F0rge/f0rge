@@ -1,3 +1,4 @@
+import { conflictCode, type ApiError } from "@/lib/api";
 import { picksCreateHref } from "@/lib/picks";
 
 export type TillKitPickReason = "missing_parts" | "split_pick";
@@ -80,11 +81,15 @@ function parseBlock(value: unknown): TillKitBlock | null {
   };
 }
 
+/** The kits a sale's `kit_requires_pick` 409 names; null for any other failure. */
 export function parseKitRequiresPick(
-  detail: unknown,
+  error: unknown,
 ): { message: string; kits: TillKitBlock[] } | null {
-  const row = asRecord(detail);
-  if (!row || row.code !== "kit_requires_pick" || !Array.isArray(row.kits)) {
+  if (conflictCode(error) !== "kit_requires_pick") {
+    return null;
+  }
+  const row = asRecord((error as ApiError).detail);
+  if (!row || !Array.isArray(row.kits)) {
     return null;
   }
   const kits = row.kits

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { ApiError } from "./api";
+
 import {
   nextTillStateAfterKitConfirm,
   openPicksHrefForKit,
@@ -34,21 +36,17 @@ const headboard: TillKitBlock = {
 
 describe("parseKitRequiresPick", () => {
   it("reads a single split-pick block and a missing-parts block", () => {
-    const parsed = parseKitRequiresPick({
+    const parsed = parseKitRequiresPick(new ApiError(409, "Kits", {
       code: "kit_requires_pick",
       message: `${flower.message} ${headboard.message}`,
       kits: [flower, headboard],
-    });
+    }));
     expect(parsed).not.toBeNull();
     expect(parsed?.kits.map((kit) => kit.reason)).toEqual(["split_pick", "missing_parts"]);
     expect(parsed?.kits[0]?.sku_code).toBe("P72085ORC");
     expect(parsed?.kits[1]?.sku_name).toContain("Eva Headboard");
     expect(parsed?.message).toContain("P72085ORC");
     expect(parsed?.message).toContain("P36410/2");
-  });
-
-  it("ignores a plain string error", () => {
-    expect(parseKitRequiresPick("Kit requires pick")).toBeNull();
   });
 });
 

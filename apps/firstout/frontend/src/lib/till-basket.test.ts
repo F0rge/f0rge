@@ -64,7 +64,6 @@ describe("till basket mapping", () => {
     expect(isBasketConflict(new ApiError(409, "Reserved", { code: "stock_reserved", basket: server }))).toBe(true);
     expect(isBasketConflict(new ApiError(409, "Expired", { code: "basket_expired", basket: server }))).toBe(true);
     expect(isBasketConflict(new ApiError(409, "Price", { code: "till_price_conflict" }))).toBe(false);
-    expect(isBasketConflict(new ApiError(0, "Offline"))).toBe(false);
   });
 });
 

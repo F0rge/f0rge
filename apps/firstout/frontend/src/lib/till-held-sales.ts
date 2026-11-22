@@ -1,5 +1,5 @@
 import {
-  ApiError, type HeldSale, type HeldSaleCreate, type HeldSaleResume, type PickDocument, type TillBasket,
+  ApiError, conflictCode, type HeldSale, type HeldSaleCreate, type HeldSaleResume, type PickDocument, type TillBasket,
   type TillBasketUpdate,
 } from "./api";
 import type { TillCartSnapshot } from "./till-kit-pick";
@@ -72,7 +72,5 @@ export function canKeepOriginalBasket(error: unknown, operation: PendingHeldOper
   if (operation.kind !== "resume" || operation.startedAt === undefined) return false;
   const age = now - operation.startedAt;
   return age >= 0 && age < 29 * 24 * 60 * 60 * 1000 &&
-    error instanceof ApiError && error.status === 409 &&
-    Boolean(error.detail && typeof error.detail === "object" &&
-      "code" in error.detail && error.detail.code === "held_resume_target_changed");
+    conflictCode(error) === "held_resume_target_changed";
 }

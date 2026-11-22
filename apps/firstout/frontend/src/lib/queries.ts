@@ -3,7 +3,9 @@ import { queryOptions, useQueries } from "@tanstack/react-query";
 import {
   getSettings,
   listCustomers,
+  listInventory,
   listLocations,
+  listPicks,
   listPriceLists,
   listSalesStaffOptions,
   listSkus,
@@ -24,6 +26,8 @@ export const queryKeys = {
   settings: ["settings"],
   locations: ["locations"],
   salesStaffOptions: ["sales-staff", "options"],
+  inventory: ["inventory"],
+  picks: ["picks"],
 } as const;
 
 // Reference data changes rarely; pages share one copy for this long.
@@ -37,6 +41,12 @@ export const referenceQueries = {
   settings: queryOptions({ queryKey: queryKeys.settings, queryFn: getSettings, staleTime: REFERENCE_STALE_MS }),
   locations: queryOptions({ queryKey: queryKeys.locations, queryFn: listLocations, staleTime: REFERENCE_STALE_MS }),
   salesStaffOptions: queryOptions({ queryKey: queryKeys.salesStaffOptions, queryFn: listSalesStaffOptions, staleTime: REFERENCE_STALE_MS }),
+};
+
+/** Stock and till picks: every sale changes them, so they are never fresh for long. */
+export const stockQueries = {
+  inventory: queryOptions({ queryKey: queryKeys.inventory, queryFn: () => listInventory() }),
+  tillPicks: queryOptions({ queryKey: [...queryKeys.picks, "till"], queryFn: () => listPicks("till") }),
 };
 
 type Result<T> = { data?: T; error: Error | null };
