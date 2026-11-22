@@ -187,27 +187,6 @@ export function blockNativePaystackWebhook(req: MedusaRequest, res: MedusaRespon
   next();
 }
 
-const legacyRefundWorkflows = new Set([
-  "cancel-order",
-  "complete-cart",
-  "process-payment-workflow",
-  "refund-captured-payments-workflow",
-  "refund-payment-and-recreate-payment-session",
-  "refund-payment-workflow",
-  "refund-payments-workflow",
-]);
-
-export function restrictLegacyRefundWorkflow(req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction): void {
-  const match = /^\/admin\/workflows-executions\/([^/]+)\/(?:run|steps\/(?:success|failure))\/?$/i.exec(normalizedPath(req) ?? "");
-  if (req.method === "POST" && match && legacyRefundWorkflows.has(match[1])) {
-    // The generic runner acknowledges a queued execution without waiting for
-    // it to finish. Use the supported domain endpoints while this image is live.
-    res.status(409).json({ message: "Use the order or payment action for this workflow during the Medusa upgrade." });
-    return;
-  }
-  next();
-}
-
 export default defineMiddlewares({ routes: [{
   matcher: "/hooks/paystack",
   methods: ["POST"],
@@ -216,10 +195,6 @@ export default defineMiddlewares({ routes: [{
   matcher: "/hooks/payment/*",
   methods: ["POST"],
   middlewares: [blockNativePaystackWebhook],
-}, {
-  matcher: "/admin/workflows-executions/*",
-  methods: ["POST"],
-  middlewares: [restrictLegacyRefundWorkflow],
 }, {
   // The normalizer cheaply passes unrelated paths. A broad string wildcard
   // catches case-insensitive and encoded Store/Auth prefixes before native

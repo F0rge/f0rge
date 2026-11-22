@@ -10,7 +10,6 @@ import {
 import { PAYSTACK_PAYMENT_PROVIDER_ID, paystackPaymentConfig, type PaystackPaymentConfig } from "./paystack-payment-config";
 import { enqueueRefundStatusNotification } from "./storefront-notifications";
 import { withStorefrontOrderHandoffLock } from "./storefront-order-handoff";
-import { isStorefrontRefundDeferred, withStorefrontRefundWriter } from "./refund-cutover";
 import {
   claimPaystackObservation, claimPaystackRefundDispatchForDispatch, completePaystackObservation, createPaystackRefundDispatch,
   findPaystackAttemptByReference, findPaystackRefundByProviderId, findPaystackRefundDispatch, findPaystackRefundsForCapture,
@@ -199,7 +198,6 @@ export async function syncStorefrontPaystackRefundCommands(
           await processRefundCommand(container, db, config, item, fetcher);
           dispatched += 1;
         } catch (error) {
-          if (isStorefrontRefundDeferred(error)) break;
           console.warn("Storefront Paystack refund command remains pending", {
             request_id: item.request_id,
             failure: safeCode(error instanceof Error ? error.message : ""),
@@ -230,19 +228,55 @@ async function processRefundCommand(
   fetcher: typeof fetch,
 ): Promise<void> {
   await withRefundLock(container, command.request_id, async () => {
-    // Hold admission from before the Firstout dispatch barrier through the
-    // provider response's durable inbox write. Release it before reconciliation,
-    // which acquires its own admission at the native Medusa refund boundary.
-    const result = await withStorefrontRefundWriter(db,
-      { operation: "paystack_dispatch", referenceId: command.request_id },
-      () => dispatchRefundCommand(db, config, command, fetcher),
-    );
-    if (!result) return;
+    const { dispatch } = await createPaystackRefundDispatch(db, command);
+    // A remote dispatching status means a previous worker crossed Firstout's
+    // durable barrier. Its provider POST may have happened even if no response
+    // was persisted, so recovery marks unknown and reconciles by reference.
+    if (command.status === "dispatching" || dispatch.status === "dispatching") {
+      if (!["received", "dispatching", "unknown"].includes(dispatch.status)) return;
+      await markUnknown(db, command.request_id, fetcher, "recovered_dispatch_without_result");
+      return;
+    }
+    if (dispatch.status !== "received") return;
+
+    // Only a charge we captured for this exact order may be refunded. No
+    // request reaches Paystack otherwise; staff see the unknown command.
+    const attempt = await findPaystackAttemptByReference(db, command.original_transaction_id);
+    if (attempt?.status !== "captured" || attempt.captured_order_id !== command.external_order_id) {
+      await markUnknown(db, command.request_id, fetcher, "paystack_capture_not_verified_no_request_sent");
+      return;
+    }
+
+    if (!await claimPaystackRefundDispatchForDispatch(db, command.request_id)) return;
+    let outcomeSent = false;
+    try { outcomeSent = await postCommandOutcome(command.request_id, "dispatching", fetcher, undefined, command); }
+    catch { /* No refund POST unless Firstout durably accepts dispatching. */ }
+    if (!outcomeSent) {
+      await markUnknown(db, command.request_id, fetcher, "dispatch_state_unconfirmed");
+      return;
+    }
+
+    const result = await createPaystackRefund(config, {
+      transactionReference: command.original_transaction_id,
+      transactionId: attempt.transaction_id || null,
+      amountMinor: command.amount_minor,
+      currencyCode: command.currency_code,
+      requestId: command.request_id,
+    }, fetcher);
     if (result.kind === "duplicate") {
+      // Our reference already exists at Paystack. Read it back; never post again.
+      await markUnknown(db, command.request_id, fetcher, "paystack_refund_reference_exists");
       await reconcilePaystackRefundsForCapture(container, command.original_transaction_id, "status", fetcher);
       return;
     }
-    const claimed = await claimPaystackObservation(db, result.id);
+    if (result.kind !== "observed") {
+      await markUnknown(db, command.request_id, fetcher,
+        result.kind === "rejected" ? `paystack_refund_rejected_http_${result.status}` : result.code);
+      return;
+    }
+
+    const persisted = await receivePaystackObservation(db, result.observation, "refund-response");
+    const claimed = await claimPaystackObservation(db, persisted.id);
     if (!claimed) return;
     let outcome: "processed" | "needs_review" | "pending";
     try {
@@ -256,62 +290,6 @@ async function processRefundCommand(
       await postCommandOutcome(command.request_id, "pending", fetcher);
     }
   });
-}
-
-async function dispatchRefundCommand(
-  db: Knex,
-  config: PaystackPaymentConfig,
-  command: PaystackRefundCommand,
-  fetcher: typeof fetch,
-): Promise<{ kind: "duplicate" } | { kind: "observation"; id: string } | undefined> {
-  const { dispatch } = await createPaystackRefundDispatch(db, command);
-  // A remote dispatching status means a previous worker crossed Firstout's
-  // durable barrier. Its provider POST may have happened even if no response
-  // was persisted, so recovery marks unknown and reconciles by reference.
-  if (command.status === "dispatching" || dispatch.status === "dispatching") {
-    if (!["received", "dispatching", "unknown"].includes(dispatch.status)) return;
-    await markUnknown(db, command.request_id, fetcher, "recovered_dispatch_without_result");
-    return;
-  }
-  if (dispatch.status !== "received") return;
-
-  // Only a charge we captured for this exact order may be refunded. No
-  // request reaches Paystack otherwise; staff see the unknown command.
-  const attempt = await findPaystackAttemptByReference(db, command.original_transaction_id);
-  if (attempt?.status !== "captured" || attempt.captured_order_id !== command.external_order_id) {
-    await markUnknown(db, command.request_id, fetcher, "paystack_capture_not_verified_no_request_sent");
-    return;
-  }
-
-  if (!await claimPaystackRefundDispatchForDispatch(db, command.request_id)) return;
-  let outcomeSent = false;
-  try { outcomeSent = await postCommandOutcome(command.request_id, "dispatching", fetcher, undefined, command); }
-  catch { /* No refund POST unless Firstout durably accepts dispatching. */ }
-  if (!outcomeSent) {
-    await markUnknown(db, command.request_id, fetcher, "dispatch_state_unconfirmed");
-    return;
-  }
-
-  const result = await createPaystackRefund(config, {
-    transactionReference: command.original_transaction_id,
-    transactionId: attempt.transaction_id || null,
-    amountMinor: command.amount_minor,
-    currencyCode: command.currency_code,
-    requestId: command.request_id,
-  }, fetcher);
-  if (result.kind === "duplicate") {
-    // Our reference already exists at Paystack. Read it back; never post again.
-    await markUnknown(db, command.request_id, fetcher, "paystack_refund_reference_exists");
-    return { kind: "duplicate" };
-  }
-  if (result.kind !== "observed") {
-    await markUnknown(db, command.request_id, fetcher,
-      result.kind === "rejected" ? `paystack_refund_rejected_http_${result.status}` : result.code);
-    return;
-  }
-
-  const persisted = await receivePaystackObservation(db, result.observation, "refund-response");
-  return { kind: "observation", id: persisted.id };
 }
 
 /**
@@ -548,110 +526,105 @@ async function ensureNativeMedusaRefund(
   if (!dispatch || !dispatch.provider_refund_id || Number(dispatch.amount_minor) <= 0) return false;
   // Every refund on one order changes the same native Order summary. Serialize
   // those local convergence steps while allowing unrelated orders to proceed.
-  return withRefundLock(container, `medusa-order:${dispatch.external_order_id}`, () =>
-    withStorefrontRefundWriter(db, { operation: "paystack_reconcile", referenceId: requestId }, async () => {
-      const fresh = await findPaystackRefundDispatch(db, requestId);
-      if (!fresh || !fresh.provider_refund_id) return false;
-      if (fresh.medusa_refund_id) {
-        const row = await existingRefundRow(db, fresh.medusa_refund_id);
+  return withRefundLock(container, `medusa-order:${dispatch.external_order_id}`, async () => {
+    const fresh = await findPaystackRefundDispatch(db, requestId);
+    if (!fresh || !fresh.provider_refund_id) return false;
+    if (fresh.medusa_refund_id) {
+      const row = await existingRefundRow(db, fresh.medusa_refund_id);
+      if (row) {
+        try {
+          await ensureNativeOrderRefundAccounting(
+            container, orderIdFromDispatch(fresh), fresh.medusa_refund_id,
+            Number(fresh.amount_minor), fresh.currency_code,
+          );
+        } catch {
+          // The gateway outcome is already verified. Leave the local dispatch
+          // replayable until Order's transaction and credit line converge.
+          return false;
+        }
+        await db("refund").where({ id: fresh.medusa_refund_id }).update({
+          metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: fresh.provider_refund_id } },
+          updated_at: new Date(),
+        });
+        return true;
+      }
+      // A failed Medusa bookkeeping transaction may have removed the draft
+      // Refund after the provider gate claimed it. Paystack already succeeded, so
+      // only retry the local record creation; never repeat the gateway POST.
+      await updatePaystackRefundDispatch(db, requestId, {
+        status: "verified", medusa_refund_id: null, authorization_key: null,
+      });
+    }
+
+    const capability = randomUUID();
+    await updatePaystackRefundDispatch(db, requestId, {
+      status: "verified", authorization_key: capability, medusa_payment_id: paymentId,
+    });
+    const paymentModule = container.resolve(Modules.PAYMENT) as unknown as {
+      refundPayment(input: Record<string, unknown>): Promise<JsonRecord>;
+    };
+    try {
+      await paymentModule.refundPayment({
+        payment_id: paymentId,
+        amount: minorToMajor(Number(fresh.amount_minor)),
+        created_by: "storefront-refund-reconciler",
+        note: `Paystack refund ${fresh.provider_refund_id}`,
+        metadata: {
+          storefront_paystack_refund: {
+            request_id: requestId,
+            provider_refund_id: fresh.provider_refund_id,
+            authorization_key: capability,
+          },
+        },
+      });
+    } catch {
+      const after = await findPaystackRefundDispatch(db, requestId);
+      if (after?.medusa_refund_id) {
+        const row = await existingRefundRow(db, after.medusa_refund_id);
         if (row) {
           try {
             await ensureNativeOrderRefundAccounting(
-              container, orderIdFromDispatch(fresh), fresh.medusa_refund_id,
-              Number(fresh.amount_minor), fresh.currency_code,
+              container, orderIdFromDispatch(after), after.medusa_refund_id,
+              Number(after.amount_minor), after.currency_code,
             );
           } catch {
-            // The gateway outcome is already verified. Leave the local dispatch
-            // replayable until Order's transaction and credit line converge.
             return false;
           }
-          await db("refund").where({ id: fresh.medusa_refund_id }).update({
+          await db("refund").where({ id: after.medusa_refund_id }).update({
             metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: fresh.provider_refund_id } },
             updated_at: new Date(),
           });
           return true;
         }
-        // A failed Medusa bookkeeping transaction may have removed the draft
-        // Refund after the provider gate claimed it. Paystack already succeeded, so
-        // only retry the local record creation; never repeat the gateway POST.
         await updatePaystackRefundDispatch(db, requestId, {
           status: "verified", medusa_refund_id: null, authorization_key: null,
         });
       }
-
-      const capability = randomUUID();
+      return false;
+    }
+    const after = await findPaystackRefundDispatch(db, requestId);
+    if (!after?.medusa_refund_id) return false;
+    const row = await existingRefundRow(db, after.medusa_refund_id);
+    if (!row) {
       await updatePaystackRefundDispatch(db, requestId, {
-        status: "verified", authorization_key: capability, medusa_payment_id: paymentId,
+        status: "verified", medusa_refund_id: null, authorization_key: null,
       });
-      const paymentModule = container.resolve(Modules.PAYMENT) as unknown as {
-        refundPayment(input: Record<string, unknown>): Promise<JsonRecord>;
-      };
-      try {
-        await paymentModule.refundPayment({
-          payment_id: paymentId,
-          amount: minorToMajor(Number(fresh.amount_minor)),
-          created_by: "storefront-refund-reconciler",
-          note: `Paystack refund ${fresh.provider_refund_id}`,
-          metadata: {
-            storefront_paystack_refund: {
-              request_id: requestId,
-              provider_refund_id: fresh.provider_refund_id,
-              authorization_key: capability,
-            },
-          },
-        });
-      } catch (error) {
-        // Keep the verified dispatch and leased observation available for replay.
-        // A temporary cutover deferral is not an ambiguous provider result.
-        if (isStorefrontRefundDeferred(error)) throw error;
-        const after = await findPaystackRefundDispatch(db, requestId);
-        if (after?.medusa_refund_id) {
-          const row = await existingRefundRow(db, after.medusa_refund_id);
-          if (row) {
-            try {
-              await ensureNativeOrderRefundAccounting(
-                container, orderIdFromDispatch(after), after.medusa_refund_id,
-                Number(after.amount_minor), after.currency_code,
-              );
-            } catch {
-              return false;
-            }
-            await db("refund").where({ id: after.medusa_refund_id }).update({
-              metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: fresh.provider_refund_id } },
-              updated_at: new Date(),
-            });
-            return true;
-          }
-          await updatePaystackRefundDispatch(db, requestId, {
-            status: "verified", medusa_refund_id: null, authorization_key: null,
-          });
-        }
-        return false;
-      }
-      const after = await findPaystackRefundDispatch(db, requestId);
-      if (!after?.medusa_refund_id) return false;
-      const row = await existingRefundRow(db, after.medusa_refund_id);
-      if (!row) {
-        await updatePaystackRefundDispatch(db, requestId, {
-          status: "verified", medusa_refund_id: null, authorization_key: null,
-        });
-        return false;
-      }
-      try {
-        await ensureNativeOrderRefundAccounting(
-          container, orderIdFromDispatch(after), after.medusa_refund_id,
-          Number(after.amount_minor), after.currency_code,
-        );
-      } catch {
-        return false;
-      }
-      await db("refund").where({ id: after.medusa_refund_id }).update({
-        metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: after.provider_refund_id } },
-        updated_at: new Date(),
-      });
-      return true;
-    }),
-  );
+      return false;
+    }
+    try {
+      await ensureNativeOrderRefundAccounting(
+        container, orderIdFromDispatch(after), after.medusa_refund_id,
+        Number(after.amount_minor), after.currency_code,
+      );
+    } catch {
+      return false;
+    }
+    await db("refund").where({ id: after.medusa_refund_id }).update({
+      metadata: { storefront_paystack_refund: { request_id: requestId, provider_refund_id: after.provider_refund_id } },
+      updated_at: new Date(),
+    });
+    return true;
+  });
 }
 
 function orderIdFromDispatch(dispatch: PaystackRefundDispatch): string {
