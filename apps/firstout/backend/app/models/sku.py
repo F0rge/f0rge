@@ -71,6 +71,9 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     storefront_published: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    storefront_hidden: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     is_archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

@@ -26,6 +26,7 @@ import {
   Tag,
   TextInput,
   Tile,
+  Toggle,
 } from "@carbon/react";
 import { Barcode } from "@carbon/icons-react";
 import { useParams, useRouter } from "next/navigation";
@@ -55,6 +56,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { isValidCartonCount, skuCartonCount } from "@/lib/carton-helpers";
 import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
+import { canToggleShopVisibility, SHOP_HIDDEN_HELP, setSkuShopHidden } from "@/lib/shop-visibility";
 import { printSkuLabels } from "@/lib/sku-label-print";
 import { formatStockQty, visibleBins } from "@/lib/stock-table";
 
@@ -122,6 +124,7 @@ export default function SkuDetailPage() {
   const [loading, setLoading] = useState(true);
   const [identitySaving, setIdentitySaving] = useState(false);
   const [priceSaving, setPriceSaving] = useState(false);
+  const [shopSaving, setShopSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [lifecycleAction, setLifecycleAction] = useState<"archive" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +189,23 @@ export default function SkuDetailPage() {
       }
     } finally {
       setIdentitySaving(false);
+    }
+  }
+
+  async function handleShopHiddenChange(hidden: boolean) {
+    if (!sku || !canToggleShopVisibility(user, sku)) {
+      return;
+    }
+    setShopSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      setSku(await setSkuShopHidden(sku.id, hidden));
+      setSuccess(hidden ? "Hidden from the shop." : "No longer hidden from the shop.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update shop visibility.");
+    } finally {
+      setShopSaving(false);
     }
   }
 
@@ -471,6 +491,20 @@ export default function SkuDetailPage() {
                     >
                       {identitySaving ? "Saving…" : "Save identity"}
                     </Button>
+                  ) : null}
+                  {canToggleShopVisibility(user, sku) ? (
+                    <div>
+                      <Toggle
+                        id="detail-sku-storefront-hidden"
+                        labelText="Hide from shop"
+                        labelA="Off"
+                        labelB="On"
+                        toggled={sku.storefront_hidden ?? false}
+                        disabled={shopSaving}
+                        onToggle={(checked) => void handleShopHiddenChange(checked)}
+                      />
+                      <p className="cds--type-helper-text-01">{SHOP_HIDDEN_HELP}</p>
+                    </div>
                   ) : null}
                 </Stack>
               </Tile>

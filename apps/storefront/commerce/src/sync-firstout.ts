@@ -4,14 +4,14 @@ import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
 import { recordOpsCheckoutHealth, refreshOpsCheckoutHealth } from "./storefront-commerce-exceptions";
 import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation } from "./made-to-order-capacity";
 import {
-  batchVariantImagesWorkflow, createCollectionsWorkflow, createInventoryLevelsWorkflow, createProductsWorkflow,
+  batchLinkProductsToCategoryWorkflow, batchVariantImagesWorkflow, createCollectionsWorkflow, createInventoryLevelsWorkflow, createProductsWorkflow,
   createProductVariantsWorkflow, deleteFilesWorkflow, deleteProductVariantsWorkflow, updateCollectionsWorkflow,
   updateInventoryLevelsWorkflow, updateProductVariantsWorkflow, updateProductsWorkflow, uploadFilesWorkflow,
 } from "@medusajs/medusa/core-flows";
 
 import {
-  CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE, collectionEnsurePlan,
-  type CollectionRecord,
+  CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE, STOREFRONT_CATEGORIES,
+  collectionEnsurePlan, type CollectionRecord,
 } from "./catalogue-collections";
 import { medusaPrice, parseOpsProducts, pendingCommitments, projectAvailableQuantity, shouldApplyRevision, type OpsProduct } from "./ops-contract";
 
@@ -413,9 +413,82 @@ export async function syncFirstoutPhotos(container: MedusaContainer, source: Ops
   }
 }
 
+/** Product metadata: the Firstout name the sync last set as the title. */
+const FIRSTOUT_TITLE_METADATA_KEY = "firstout_title";
+
+type MerchandisedProduct = {
+  id: string; external_id: string | null; title?: string | null; metadata: Record<string, unknown> | null;
+  categories?: { id: string }[] | null;
+};
+
+/**
+ * Puts each product in its Firstout shop category, moving it out of the other three and
+ * never touching any other category. Renames a product only while its title is still the
+ * Firstout name the sync last set, so a staff edit in Medusa Admin always wins. Only rows
+ * carrying shop_category (Firstout auto-publish on) are touched; otherwise nothing is written.
+ */
+export async function syncFirstoutMerchandising(container: MedusaContainer, source: OpsProduct[]): Promise<void> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
+  const groups = groupOpsProducts(source).filter((group) => group.rows[0].shop_category);
+  if (!groups.length) return;
+  const { data } = await query.graph({ entity: "product", fields: ["id", "external_id", "title", "metadata", "categories.id"] });
+  const products = new Map((data as MerchandisedProduct[])
+    .filter((product) => product.external_id?.startsWith(SOURCE_PREFIX))
+    .map((product) => [product.external_id!, product]));
+
+  const placed = groups.filter((group) => products.has(group.externalId));
+  if (placed.length) {
+    const { data: categories } = await query.graph({
+      entity: "product_category", fields: ["id", "handle"],
+      filters: { handle: STOREFRONT_CATEGORIES.map((category) => category.handle) },
+    });
+    const ids = new Map((categories as { id: string; handle: string }[]).map((category) => [category.handle, category.id]));
+    const changes = new Map([...ids.values()].map((id) => [id, { add: [] as string[], remove: [] as string[] }]));
+    for (const group of placed) {
+      const product = products.get(group.externalId)!;
+      const target = ids.get(group.rows[0].shop_category!);
+      if (!target) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Run the DasKasas bootstrap: a shop category is missing");
+      const linked = new Set((product.categories || []).map((category) => category.id));
+      for (const [id, change] of changes) {
+        if (id === target && !linked.has(id)) change.add.push(product.id);
+        if (id !== target && linked.has(id)) change.remove.push(product.id);
+      }
+    }
+    for (const [id, { add, remove }] of changes) {
+      if (add.length || remove.length) await batchLinkProductsToCategoryWorkflow(container).run({ input: { id, add, remove } });
+    }
+  }
+
+  for (const group of groups) {
+    const product = products.get(group.externalId);
+    if (!product) continue;
+    const recorded = product.metadata?.[FIRSTOUT_TITLE_METADATA_KEY];
+    // A product synced before names were recorded counts as unedited only while it still has the Firstout name.
+    const unedited = product.title === (typeof recorded === "string" ? recorded : group.title);
+    if (!unedited || recorded === group.title) continue;
+    try {
+      // Metadata merges in Medusa, so only the recorded name is written.
+      await updateProductsWorkflow(container).run({ input: { selector: { id: product.id }, update: {
+        title: group.title, metadata: { [FIRSTOUT_TITLE_METADATA_KEY]: group.title },
+      } } });
+    } catch (error) {
+      logger.warn(`Firstout name for ${group.externalId} was not synced and will be retried: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+
 export async function syncFirstout(container: MedusaContainer): Promise<void> {
   const locking = container.resolve(Modules.LOCKING);
   const source = await locking.execute("storefront:inventory", async () => syncFirstoutLocked(container));
+  // Names and categories never affect stock or checkout, so they also run outside the inventory lock.
+  try {
+    await locking.execute("storefront:merchandising", async () => syncFirstoutMerchandising(container, source));
+  } catch (error) {
+    container.resolve(ContainerRegistrationKeys.LOGGER).warn(
+      `Firstout names and categories skipped this run: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   // Photos run outside the inventory lock so a slow download never blocks checkout.
   try {
     await locking.execute("storefront:photos", async () => syncFirstoutPhotos(container, source));
@@ -498,7 +571,10 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<OpsProduc
           options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
           metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null) },
         })),
-        metadata: group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {},
+        metadata: {
+          ...(group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {}),
+          ...(group.rows[0].shop_category ? { [FIRSTOUT_TITLE_METADATA_KEY]: group.title } : {}),
+        },
       }] } });
       const createdId = result[0]?.id;
       if (!createdId) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Medusa did not create product ${group.externalId}`);

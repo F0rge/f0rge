@@ -617,3 +617,39 @@ async def test_create_sku_rejects_carton_count_zero(owner_client: AsyncClient) -
         },
     )
     assert resp.status_code == 422
+
+
+async def test_storefront_hidden_is_read_and_toggled_with_catalogue_mutate(
+    owner_client: AsyncClient, async_client: AsyncClient
+) -> None:
+    created = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-HIDE",
+            "our_barcode": "BAR-HIDE",
+            "name": "Hidden sofa",
+            "design": "Hide design",
+            "fabric": "Hide fabric",
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["storefront_hidden"] is False
+    sku_id = created.json()["id"]
+
+    hidden = await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"storefront_hidden": True})
+    assert hidden.status_code == 200
+    assert hidden.json()["storefront_hidden"] is True
+    assert (await owner_client.get(f"/api/v1/skus/{sku_id}")).json()["storefront_hidden"] is True
+    null = await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"storefront_hidden": None})
+    assert null.status_code == 400
+
+    await create_test_staff(
+        owner_client, email="till-hide@example.com", password="till-password", role="till"
+    )
+    async_client.cookies.clear()
+    async_client.headers.pop("Authorization", None)
+    assert (await authenticate_as(async_client, "till-hide@example.com")).status_code == 200
+    forbidden = await async_client.patch(
+        f"/api/v1/skus/{sku_id}", json={"storefront_hidden": False}
+    )
+    assert forbidden.status_code == 403

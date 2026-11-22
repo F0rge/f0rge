@@ -5,7 +5,7 @@ import { listStoreProducts, listedPiece } from "@/lib/medusa";
 import type { ShopCategory } from "@/lib/shop-categories";
 import { ShopListing } from "./shop-listing";
 
-// /shop lists every piece for sale; /shop/<handle> only the pieces staff put in that Medusa category.
+// /shop lists every piece for sale; /shop/<handle> only the pieces the Firstout sync put in that Medusa category.
 export async function Listing({ category }: { category?: ShopCategory }) {
   const products = await listStoreProducts();
   const inListing = category ? products.filter((product) => product.categories?.some((item) => item.handle === category.handle)) : products;

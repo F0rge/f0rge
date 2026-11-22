@@ -124,6 +124,8 @@ async def tenant_database(rls_database_url, monkeypatch):
                 )
             for table in (
                 "tax_invoices",
+                "product_group_variants",
+                "product_groups",
                 "skus",
                 "customer_portal_users",
                 "customers",
@@ -475,6 +477,7 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
     from app.models.customer_portal_user import CustomerPortalUser
     from app.models.portal_identity import PortalAccess
     from app.models.membership import Membership
+    from app.models.product_group import ProductGroup, ProductGroupVariant
     from app.models.sku import Sku
     from app.models.user import User
     from app.services import object_storage
@@ -482,7 +485,7 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
     from tests.conftest import legacy_portal_token, signed_clerk_token
 
     _, _, maker, a, b = tenant_database
-    users, skus, accesses, portal_users = {}, {}, {}, {}
+    users, skus, accesses, portal_users, groupeds = {}, {}, {}, {}, {}
     for team in (a, b):
         async with organisation_session(maker, team) as session:
             user = User(
@@ -501,12 +504,34 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
                 fabric="plain",
                 retail_ex_vat=100,
                 storefront_published=True,
+                category="Sofas",
             )
             sku.photo_storage_key = object_storage.save_bytes(
                 "http/photo.jpg", b"synthetic-image-" + str(team).encode()
             )
-            session.add_all([user, customer, sku])
+            # A grouped SKU per company, so the auto-publish group path is isolated too.
+            grouped = Sku(
+                our_ref=f"HTTP-G-{team}",
+                our_barcode=f"HTTP-G-{team}",
+                name="HTTP grouped",
+                design="grouped",
+                fabric="plain",
+                retail_ex_vat=100,
+                category="Bedroom",
+                photo_storage_key=sku.photo_storage_key,
+            )
+            group = ProductGroup(title=f"Group {team}", options={"Finish": ["Oak"]})
+            session.add_all([user, customer, sku, grouped, group])
             await session.flush()
+            session.add(
+                ProductGroupVariant(
+                    product_group_id=group.id,
+                    source_sku_id=grouped.id,
+                    options={"Finish": "Oak"},
+                    option_signature='{"Finish":"Oak"}',
+                )
+            )
+            groupeds[team] = grouped.id
             session.add(
                 Membership(
                     user_id=user.id,
@@ -597,7 +622,10 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
                 assert (await client.get("/api/v1/portal/me", headers=selector)).status_code == 200
                 catalogue = await client.get("/api/v1/portal/catalogue", headers=selector)
                 assert catalogue.status_code == 200, catalogue.text
-                assert {row["id"] for row in catalogue.json()} == {str(skus[own])}
+                assert {row["id"] for row in catalogue.json()} == {
+                    str(skus[own]),
+                    str(groupeds[own]),
+                }
                 approved = await client.get("/api/v1/portal/organisations")
                 assert approved.status_code == 200
                 assert {row["id"] for row in approved.json()} == {str(accesses[own])}
@@ -633,6 +661,16 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
             assert own_photo.content == b"synthetic-image-" + str(a).encode()
             foreign_photo = await client.get(photo.format(skus[b]), headers=headers)
             assert foreign_photo.status_code == 404, foreign_photo.text
+            monkeypatch.setattr(settings, "ops_commerce_auto_publish_enabled", True)
+            auto = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
+            assert auto.status_code == 200, auto.text
+            assert sorted(
+                (row["source_sku_id"], row["shop_category"]) for row in auto.json()["products"]
+            ) == sorted([(str(skus[a]), "sofas-armchairs"), (str(groupeds[a]), "bedroom")])
+            grouped_photo = await client.get(photo.format(groupeds[b]), headers=headers)
+            assert grouped_photo.status_code == 404, grouped_photo.text
+            assert (await client.get(photo.format(skus[a]), headers=headers)).status_code == 200
+            assert (await client.get(photo.format(skus[b]), headers=headers)).status_code == 404
             headers["x-ops-company-id"] = str(b)
             rejected = await client.get("/api/v1/ops-commerce/v1/products", headers=headers)
             assert rejected.status_code == 403, rejected.text

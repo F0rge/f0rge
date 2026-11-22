@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     # Off until the storefront's commerce release accepts photo_token; older strict
     # contracts reject unknown keys. Off omits the key from the feed entirely.
     ops_commerce_photo_tokens_enabled: bool = False
+    # Off until the storefront's commerce release accepts shop_category. On, the feed is
+    # every photographed, unhidden SKU in a shop category (not storefront_published), each
+    # with its shop_category; photo_token is sent too, whatever the setting above says.
+    ops_commerce_auto_publish_enabled: bool = False
 
     @field_validator("record_workspace_signing_key")
     @classmethod

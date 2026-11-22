@@ -21,15 +21,70 @@ Room (`dining-room`), Bedroom (`bedroom`) and Coffee & Console Tables
 (`coffee-console-tables`). The bootstrap creates any that are missing, active
 and public, on every release. It never edits a category that already exists.
 
-Staff choose a piece's category in Medusa Admin:
+Which pieces are on the shop, and in which category, comes from Firstout
+(owner decision, 21 Nov 2026). With `OPS_COMMERCE_AUTO_PUBLISH_ENABLED=true` on
+`firstout-api`, the feed holds every SKU that:
 
-1. Open **Products** and the piece.
-2. Under **Organize**, choose **Edit**, pick one of the four categories, and save.
-3. The shop reads categories from Medusa directly. No Firstout change or sync is needed.
+- is in a mapped Firstout category (matched trimmed and in any case):
 
-The Firstout sync never writes or clears product categories, so a staff choice
-stays across syncs. A published piece with no category appears only under
-**Shop all**.
+  | Firstout category | Shop category |
+  |---|---|
+  | Sofas, Armchairs | `sofas-armchairs` |
+  | Dining Room | `dining-room` |
+  | Bedroom | `bedroom` |
+  | Coffee and Lamp Tables, Consoles and TV Units | `coffee-console-tables` |
+
+- has a Firstout photo, and
+- is not switched to **Hide from shop** on its Firstout SKU page.
+
+It also needs to be sellable, unarchived and priced, as before. Only pieces in
+stock or with a live made-to-order offer reach On Sale; the rest stay drafts.
+This replaces the hand-set Firstout publish flag. The rule applies to every
+SKU, grouped or not: a product group shows with only the members that meet it,
+and is left out entirely if none does. A group with an archived, unsellable or
+unpriced member stays off the shop, as before. If a group's qualifying members
+map to different shop categories, the group takes the category of its first
+qualifying member by SKU code, so every variant of one product shares one
+category. The mapping lives in Firstout (`SHOP_CATEGORIES` in
+`apps/firstout/backend/app/crud/ops_commerce.py`), and Firstout's database
+matches the category against it.
+
+Each product carries `shop_category`. The sync puts the product in that Medusa
+category and takes it out of the other three. It never adds or removes any other
+category, so a staff-made category stays. Staff no longer assign the four
+categories in Medusa Admin: a change there is put back on the next sync run.
+A piece that leaves the feed is withdrawn to draft as before and keeps its
+category.
+
+Names and categories are written only for feed rows that carry
+`shop_category`. With the Firstout setting off, the sync changes neither.
+
+Names: the sync creates a product with its Firstout name and records that name
+in product metadata `firstout_title`. A later Firstout rename updates the title
+only while the title still equals `firstout_title`; once staff edit the title in
+Medusa Admin, the sync never overwrites it. A product created before names were
+recorded is adopted while its title still equals the Firstout name, and is
+treated as staff-edited otherwise. Variant titles come from option values, as
+before. Names and categories run after the stock sync, outside the inventory
+lock; a failure there is logged and retried next run.
+
+Go-live: Firstout sends `shop_category` only when
+`OPS_COMMERCE_AUTO_PUBLISH_ENABLED` is on, and it is off by default, because a
+commerce release older than this one rejects the unknown key and pauses
+checkout. With it off, the feed is selected by the publish flag as before and
+the sync leaves categories alone. After both the Firstout and DasKasas releases
+are live, set `OPS_COMMERCE_AUTO_PUBLISH_ENABLED=true` on `firstout-api` and
+redeploy it. Turning it on also sends `photo_token`, whatever
+`OPS_COMMERCE_PHOTO_TOKENS_ENABLED` says. Pieces published by hand that fail the
+rule, such as the ones without a photo, drop out of the feed and are withdrawn.
+About 300 photos at about 1 MB each fit the 1 GB photo volume.
+
+Rollback: turn `OPS_COMMERCE_AUTO_PUBLISH_ENABLED` off before rolling commerce
+back to a pre-#1018 image; that image rejects `shop_category` and pauses
+checkout. Turning the setting off returns the feed to the publish flag, so
+pieces not published by hand are withdrawn on the next sync.
+
+A published piece with no category appears only under **Shop all**.
 
 The four category names and handles are also written in the web code,
 `web/src/lib/shop-categories.ts`, which drives the header, footer, category

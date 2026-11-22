@@ -6,8 +6,8 @@ export const CATALOGUE_COLLECTION_HANDLE = "on-sale";
 export const CATALOGUE_COLLECTION_TITLE = "On Sale";
 export const LEGACY_CATALOGUE_COLLECTION_HANDLE = "in-stock";
 
-// Owner decision, 21 Nov 2026. Staff assign products to these in Medusa Admin;
-// the Firstout sync never writes or clears product categories.
+// Owner decision, 21 Nov 2026. Firstout maps its categories to these handles and the
+// sync assigns each product to one of them; it never touches any other category.
 export const STOREFRONT_CATEGORIES = [
   { handle: "sofas-armchairs", name: "Sofas & Armchairs" },
   { handle: "dining-room", name: "Dining Room" },

@@ -69,6 +69,7 @@ class SkuUpdate(BaseModel):
     is_sellable: Optional[bool] = None
     till_no_stock_required: Optional[bool] = None
     exclude_from_commission: Optional[bool] = None
+    storefront_hidden: Optional[bool] = None
     our_ref: Optional[str] = Field(default=None, min_length=1, max_length=64)
     our_barcode: Optional[str] = Field(default=None, min_length=1, max_length=64)
     name: Optional[str] = Field(default=None, min_length=1)
@@ -101,6 +102,7 @@ class SkuResponse(BaseModel):
     is_sellable: bool
     till_no_stock_required: bool = False
     exclude_from_commission: bool = False
+    storefront_hidden: bool = False
     id: uuid.UUID
     our_ref: str
     our_barcode: str

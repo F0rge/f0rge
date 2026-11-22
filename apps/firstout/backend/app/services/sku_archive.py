@@ -11,6 +11,7 @@ from typing import Optional
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.delivery import Delivery, DeliveryLine
 from app.models.inventory import LocationStock, SkuStock
 from app.models.layby import Layby, LaybyLine
@@ -138,7 +139,11 @@ class SkuArchiveService:
                     {"id": parent.id, "label": f"{parent.our_ref} · {parent.name}"}
                     for parent in sorted(active_parents, key=lambda item: item.our_ref)
                 ]
-            elif sku.storefront_published or self.active_mto(sku):
+            # With auto-publish on, the flag no longer controls the shop: an archived SKU
+            # leaves the feed and commerce withdraws it.
+            elif (
+                sku.storefront_published and not settings.ops_commerce_auto_publish_enabled
+            ) or self.active_mto(sku):
                 impact.reason = "Withdraw this SKU from the online shop and end its active made-to-order offer before archiving"
         elif impact.reason is None and action == "restore":
             inactive = [component for component in components if component.is_archived]

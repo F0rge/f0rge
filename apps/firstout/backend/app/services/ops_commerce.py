@@ -89,7 +89,8 @@ class OpsCommerceService:
             requested_company=requested_company,
             request_host=request_host,
         )
-        snapshots = await self.crud.published_products()
+        auto_publish = settings.ops_commerce_auto_publish_enabled
+        snapshots = await self.crud.published_products(auto_publish=auto_publish)
         return OpsProductsResponse(
             company_id=company_id,
             products=[
@@ -107,11 +108,13 @@ class OpsCommerceService:
                     acknowledged_commitment_ids=sku.acknowledged_commitment_ids,
                     made_to_order_offer=sku.made_to_order_offer,
                     # Unset (not None) when disabled: the route drops unset fields.
+                    # Auto-publish selects pieces by photo, so it always sends the token.
                     **(
                         {"photo_token": self._photo_token(sku.photo_storage_key)}
-                        if settings.ops_commerce_photo_tokens_enabled
+                        if settings.ops_commerce_photo_tokens_enabled or auto_publish
                         else {}
                     ),
+                    **({"shop_category": sku.shop_category} if auto_publish else {}),
                 )
                 for sku in snapshots
             ],
@@ -133,7 +136,13 @@ class OpsCommerceService:
         # ponytail: reuses the whole feed query so "published" means exactly what the feed
         # means; one query per download, and downloads happen only when a photo changes.
         snapshot = next(
-            (sku for sku in await self.crud.published_products() if sku.id == source_sku_id),
+            (
+                sku
+                for sku in await self.crud.published_products(
+                    auto_publish=settings.ops_commerce_auto_publish_enabled
+                )
+                if sku.id == source_sku_id
+            ),
             None,
         )
         if snapshot is None or not snapshot.photo_storage_key:
