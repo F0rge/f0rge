@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "110_sku_storefront_hidden",
+  "target_revision": "111_sku_curated_catalogue",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -445,6 +445,10 @@
     },
     "110_sku_storefront_hidden": {
       "sha256": "c89fd81e11c5753af4717b09ca7ddecb443558224a45a14829b7f2d103c9118f",
+      "automatic": true
+    },
+    "111_sku_curated_catalogue": {
+      "sha256": "addef78e7597da1d1cb00e33cc1c0cfbab134db4dbb7ed96c0f5a970ceb0381f",
       "automatic": true
     }
   }
