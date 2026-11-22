@@ -23,7 +23,7 @@ export async function Listing({ category }: { category?: ShopCategory }) {
         </div>
       </div>
     </section>
-    <ShopListing pieces={inListing.map(listedPiece)} categoryId={categoryId} />
+    <ShopListing pieces={inListing.map(listedPiece)} categoryId={categoryId} shopAll={!category} />
     <CategoryTiles products={products} exclude={category?.handle} title={category ? "Other categories" : "Shop by category"} description="More from the showroom." />
   </>;
 }

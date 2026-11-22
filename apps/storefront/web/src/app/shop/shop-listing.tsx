@@ -1,99 +1,138 @@
 "use client";
 
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useSyncExternalStore } from "react";
 import { ListFilter } from "lucide-react";
 import { Badge, Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@f0rge/ui";
 import { Checkbox } from "@f0rge/ui/forms";
 import { countLabel } from "@/components/category-tiles";
-import { PieceImage } from "@/components/piece-image";
+import { ProductCardGallery } from "@/components/product-card-gallery";
 import { SearchResultsTracker } from "@/components/analytics/search-results-tracker";
 import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
-import type { Availability, ListedPiece } from "@/lib/medusa";
+import type { ListedPiece } from "@/lib/medusa";
+import { SHOP_CATEGORIES } from "@/lib/shop-categories";
+import { AVAILABILITY_OPTIONS, PRICE_BANDS, SORT_OPTIONS, availableShopAvailability, readShopFilters, shopFacetCount, shopMatches, writeShopFilters, type ShopFilters, type SortKey } from "@/lib/shop-filters";
 
-const AVAILABILITY: { value: Availability; label: string }[] = [
-  { value: "in-stock", label: "In stock" },
-  { value: "made-to-order", label: "Made to order" },
-];
+type FilterGroup = "categories" | "price" | "availability";
 
-// A piece without a price sorts last either way.
-const SORTS = {
-  name: { label: "Name, A to Z", compare: (a: ListedPiece, b: ListedPiece) => a.title.localeCompare(b.title, "en-ZA") },
-  "price-asc": { label: "Price, low to high", compare: (a: ListedPiece, b: ListedPiece) => (a.price ?? Infinity) - (b.price ?? Infinity) },
-  "price-desc": { label: "Price, high to low", compare: (a: ListedPiece, b: ListedPiece) => (b.price ?? -Infinity) - (a.price ?? -Infinity) },
-} as const;
-type SortKey = keyof typeof SORTS;
+const FILTER_CHANGE_EVENT = "storefront-shop-filters-changed";
+const currentSearch = () => window.location.search;
 
-export function ShopListing({ pieces, categoryId }: { pieces: ListedPiece[]; categoryId?: string }) {
-  const [chosen, setChosen] = useState<Availability[]>([]);
-  const [sort, setSort] = useState<SortKey>("name");
-  // Counts and grid both come from `pieces`, so a count always matches what ticking it shows.
-  const options = AVAILABILITY.map((option) => ({ ...option, count: pieces.filter((piece) => piece.availability.includes(option.value)).length }))
-    .filter((option) => option.count > 0);
-  const shown = pieces.filter((piece) => !chosen.length || piece.availability.some((value) => chosen.includes(value))).sort(SORTS[sort].compare);
-  const toggle = (value: Availability) => setChosen((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+function subscribeToSearch(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  window.addEventListener(FILTER_CHANGE_EVENT, onChange);
+  return () => {
+    window.removeEventListener("popstate", onChange);
+    window.removeEventListener(FILTER_CHANGE_EVENT, onChange);
+  };
+}
 
-  const filters = (where: string) => options.length > 0 && <fieldset className="space-y-3">
-    <legend className="mb-3 text-sm font-medium">Availability</legend>
-    {options.map((option) => <Checkbox key={option.value} id={`${where}-${option.value}`} checked={chosen.includes(option.value)} onChange={() => toggle(option.value)}
-      label={<>{option.label} <span className="text-muted-foreground">({option.count})</span></>} />)}
-  </fieldset>;
-  const clear = chosen.length > 0 && <Button variant="ghost" size="sm" onClick={() => setChosen([])}>Clear all</Button>;
+export function ShopListing({ pieces, categoryId, shopAll }: { pieces: ListedPiece[]; categoryId?: string; shopAll: boolean }) {
+  const routedSearch = useSearchParams().toString();
+  // The browser URL owns the filters. Update the controlled checkboxes immediately
+  // on a local pushState while Next synchronizes its navigation state.
+  const search = useSyncExternalStore(subscribeToSearch, currentSearch, () => routedSearch ? `?${routedSearch}` : "");
+  const offered = availableShopAvailability(pieces);
+  const availabilityChoices = offered.length > 1 ? offered : [];
+  const showFilters = shopAll || availabilityChoices.length > 0;
+  const filters = readShopFilters(new URLSearchParams(search), shopAll, availabilityChoices);
+  const shown = shopMatches(pieces, filters);
+  const selectionCount = filters.categories.length + filters.price.length + filters.availability.length;
+
+  function changeFilters(revised: ShopFilters) {
+    const url = new URL(window.location.href);
+    url.search = writeShopFilters(url.searchParams, revised);
+    if (url.href === window.location.href) return;
+    window.history.pushState(null, "", url);
+    window.dispatchEvent(new Event(FILTER_CHANGE_EVENT));
+  }
+
+  function toggle<Group extends FilterGroup>(group: Group, value: ShopFilters[Group][number]) {
+    const selected: readonly string[] = filters[group];
+    changeFilters({
+      ...filters, [group]: selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value],
+    });
+  }
+
+  function fieldset<Group extends FilterGroup>(
+    where: string, title: string, group: Group, options: readonly { value: ShopFilters[Group][number]; label: string }[],
+  ) {
+    const selected: readonly string[] = filters[group];
+    return <fieldset className="space-y-3">
+      <legend className="mb-3 text-sm font-medium">{title}</legend>
+      {options.map(({ value, label }) => <Checkbox
+        key={value}
+        id={`${where}-${group}-${value}`}
+        checked={selected.includes(value)}
+        onChange={() => toggle(group, value)}
+        label={<>{label} <span className="text-muted-foreground">({shopFacetCount(pieces, filters, group, value)})</span></>}
+      />)}
+    </fieldset>;
+  }
+
+  const filterControls = (where: string) => <div className="space-y-6">
+    {shopAll && fieldset(where, "Category", "categories", SHOP_CATEGORIES.map(({ handle, name }) => ({ value: handle, label: name })))}
+    {shopAll && fieldset(where, "Price", "price", PRICE_BANDS)}
+    {availabilityChoices.length > 0 && fieldset(where, "Availability", "availability", AVAILABILITY_OPTIONS.filter(({ value }) => availabilityChoices.includes(value)))}
+  </div>;
+  const clear = () => changeFilters({ ...filters, categories: [], price: [], availability: [] });
+  const trackedCategory = filters.categories.length === 1
+    ? pieces.flatMap((piece) => piece.categories ?? []).find((item) => item.handle === filters.categories[0])?.id
+    : categoryId;
 
   return <div className="mx-auto w-full max-w-7xl p-4 md:p-6">
-    <SearchResultsTracker queryPresent={false} categoryId={categoryId} priceFilterActive={false} resultCount={shown.length}
-      availability={chosen.length === 1 ? (chosen[0] === "in-stock" ? "in_stock" : "made_to_order") : "all"}
-      sortOrder={sort === "price-asc" ? "price_asc" : sort === "price-desc" ? "price_desc" : "default"} />
+    <SearchResultsTracker queryPresent={false} categoryId={trackedCategory} priceFilterActive={filters.price.length > 0} resultCount={shown.length}
+      availability={filters.availability.length === 1 ? (filters.availability[0] === "in-stock" ? "in_stock" : "made_to_order") : "all"}
+      sortOrder={filters.sort === "price-asc" ? "price_asc" : filters.sort === "price-desc" ? "price_desc" : "default"} />
     <div className="flex flex-col gap-8 lg:flex-row">
-      <div className="lg:hidden">
+      {showFilters && <div className="lg:hidden">
         <Sheet>
           <SheetTrigger render={<Button variant="outline" size="sm" className="gap-2" />}>
-            <ListFilter aria-hidden="true" className="size-4" />Filters
-            {chosen.length > 0 && <Badge variant="secondary" className="ml-1">{chosen.length}</Badge>}
+            <ListFilter aria-hidden className="size-4" />Filters
+            {selectionCount > 0 && <Badge variant="secondary" className="ml-1">{selectionCount}</Badge>}
           </SheetTrigger>
-          <SheetContent side="bottom">
+          <SheetContent side="bottom" className="max-h-[85dvh]">
             <SheetHeader className="border-b">
               <SheetTitle>Filters</SheetTitle>
-              <SheetDescription>Narrow the list by availability.</SheetDescription>
+              <SheetDescription>Narrow the list to find a piece that suits your space.</SheetDescription>
             </SheetHeader>
-            <div className="px-4 py-2">{filters("drawer")}</div>
-            <SheetFooter className="flex-row justify-between border-t">
-              <Button variant="outline" onClick={() => setChosen([])}>Clear all</Button>
+            <div className="min-h-0 overflow-y-auto px-4 py-2">{filterControls("drawer")}</div>
+            <SheetFooter className="shrink-0 flex-row justify-between border-t">
+              <Button variant="outline" onClick={clear}>Clear all</Button>
               <SheetClose render={<Button />}>Show {countLabel(shown.length)}</SheetClose>
             </SheetFooter>
           </SheetContent>
         </Sheet>
-      </div>
+      </div>}
 
-      <aside aria-label="Filters" className="hidden w-64 shrink-0 lg:block">
+      {showFilters && <aside aria-label="Filters" className="hidden w-64 shrink-0 lg:block">
         <div className="mb-4 flex min-h-8 items-center justify-between">
           <h2 className="text-lg font-semibold">Filters</h2>
-          {clear}
+          {selectionCount > 0 && <Button variant="ghost" size="sm" onClick={clear}>Clear all</Button>}
         </div>
-        {filters("sidebar")}
-      </aside>
+        {filterControls("sidebar")}
+      </aside>}
 
       <div className="min-w-0 flex-1">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p role="status" className="text-sm text-muted-foreground">{countLabel(shown.length)}</p>
-          <Select items={Object.entries(SORTS).map(([value, { label }]) => ({ value, label }))} value={sort} onValueChange={(value) => value && setSort(value as SortKey)}>
+          <Select items={SORT_OPTIONS} value={filters.sort} onValueChange={(value) => value && changeFilters({ ...filters, sort: value as SortKey })}>
             <SelectTrigger className="w-48" aria-label="Sort by"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {Object.entries(SORTS).map(([value, { label }]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+              {SORT_OPTIONS.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
 
         {shown.length > 0
           ? <ul aria-label="Pieces" className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((piece) => <li key={piece.id}>
-              <TrackedProductLink href={piece.href} productId={piece.id} className="group block h-full overflow-hidden rounded-xl border bg-card">
-                <div className="relative aspect-square overflow-hidden bg-muted"><PieceImage product={piece} /></div>
-                <div className="flex items-center justify-between gap-4 p-4">
-                  <h3 className="line-clamp-2 min-w-0 font-medium">{piece.title}</h3>
-                  <div className="text-right">
-                    <p className="font-medium whitespace-nowrap">{piece.priceLabel}</p>
-                    {piece.stockLabel && <p className="text-sm text-muted-foreground">{piece.stockLabel}</p>}
-                  </div>
+            {shown.map((piece) => <li key={piece.id} data-product-card className="min-w-0 overflow-hidden rounded-xl border bg-card">
+              <ProductCardGallery key={piece.variant?.id} title={piece.title} images={piece.variant?.images ?? []} />
+              <TrackedProductLink href={piece.href} productId={piece.id} className="flex items-center justify-between gap-4 p-4 hover:underline">
+                <h3 className="line-clamp-2 min-w-0 font-medium">{piece.title}</h3>
+                <div className="text-right">
+                  <p className="font-medium whitespace-nowrap">{piece.priceLabel}</p>
+                  <p className="text-sm text-muted-foreground">{piece.stockLabel}</p>
                 </div>
               </TrackedProductLink>
             </li>)}

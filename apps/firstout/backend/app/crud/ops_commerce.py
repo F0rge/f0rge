@@ -67,6 +67,7 @@ class PublishedSkuSnapshot:
     gallery_photo_keys: tuple[str, ...]
     dimensions_cm: dict[str, Optional[Decimal]]
     piece_count: Optional[int]
+    setting_photo_storage_key: Optional[str]
 
 
 class OpsCommerceCRUD:
@@ -162,6 +163,7 @@ class OpsCommerceCRUD:
                 Sku.height_cm,
                 Sku.diameter_cm,
                 Sku.piece_count,
+                Sku.setting_photo_storage_key,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
             .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
@@ -278,6 +280,7 @@ class OpsCommerceCRUD:
                     "diameter": row[21],
                 },
                 piece_count=row[22],
+                setting_photo_storage_key=row[23],
             )
             for row in rows
         ]

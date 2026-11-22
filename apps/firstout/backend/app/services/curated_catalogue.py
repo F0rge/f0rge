@@ -4,8 +4,10 @@ import asyncio
 import hashlib
 import json
 import uuid
+from pathlib import PurePosixPath
 from typing import BinaryIO
 
+from PIL import Image
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,11 +21,16 @@ from app.permissions import SLUG_OWNER
 from app.schemas.curated_catalogue import (
     CuratedCatalogueManifest,
     CuratedCatalogueResult,
+    CuratedCatalogueScope,
     ReviewedGroup,
     ReviewedSku,
 )
 from app.schemas.sku import SKU_DETAIL_FIELDS
-from app.services.curated_catalogue_archive import ReviewedCatalogue, read_catalogue_archive
+from app.services.curated_catalogue_archive import (
+    ReviewedCatalogue,
+    read_catalogue_archive,
+    validate_jpeg,
+)
 from app.services.object_storage import read_bytes, save_bytes, tenant_storage_ref
 from app.services.permissions import PermissionService
 from app.services.sku_archive import SkuArchiveService
@@ -37,7 +44,12 @@ class CuratedCatalogueService:
         self.db = db
 
     async def import_archive(
-        self, file: BinaryIO, *, user_id: uuid.UUID, dry_run: bool
+        self,
+        file: BinaryIO,
+        *,
+        user_id: uuid.UUID,
+        dry_run: bool,
+        scope: CuratedCatalogueScope = "catalogue",
     ) -> CuratedCatalogueResult:
         team_id = tenant_id_ctx.get()
         if team_id is None:
@@ -45,6 +57,10 @@ class CuratedCatalogueService:
         await self._require_owner(user_id)
         reviewed = await asyncio.to_thread(read_catalogue_archive, file)
         manifest = reviewed.manifest
+        if scope == "sku":
+            return await self._update_selected_sku(team_id, user_id, reviewed, dry_run=dry_run)
+        if any(row.retain_current_photo_as_setting for row in manifest.skus):
+            raise ValidationError("Use the single SKU scope to retain the current setting photo")
         if dry_run:
             skus = await self._catalogue_skus(team_id, manifest)
             return self._receipt(reviewed, skus, applied=False)
@@ -78,15 +94,82 @@ class CuratedCatalogueService:
             ) from exc
         return receipt
 
+    async def _update_selected_sku(
+        self,
+        team_id: uuid.UUID,
+        user_id: uuid.UUID,
+        reviewed: ReviewedCatalogue,
+        *,
+        dry_run: bool,
+    ) -> CuratedCatalogueResult:
+        manifest = reviewed.manifest
+        row = manifest.skus[0]
+        if len(manifest.skus) != 1 or manifest.groups or row.gallery is None:
+            raise ValidationError("A single SKU update needs one three-photo gallery and no groups")
+
+        sku = await self._selected_sku(team_id, manifest)
+        setting_key = _setting_source(sku, row)
+        if setting_key:
+            await asyncio.to_thread(
+                _read_setting_photo,
+                setting_key,
+                row,
+                preserved=setting_key == sku.setting_photo_storage_key,
+            )
+        if dry_run:
+            return self._receipt(
+                reviewed,
+                {sku.id: sku},
+                applied=False,
+                setting_photos=int(bool(setting_key or sku.setting_photo_storage_key)),
+            )
+
+        # Staged studio photos are immutable. The setting source is resolved again under
+        # the SKU lock so a concurrent legacy upload cannot change what is retained.
+        gallery_keys = await self._stage_galleries(reviewed)
+        async with unit_of_work(self.db):
+            await SkuArchiveService(self.db).lock_skus([row.sku_id])
+            await self._require_owner(user_id)
+            sku = await self._selected_sku(team_id, manifest)
+            setting_key = _setting_source(sku, row)
+            if setting_key:
+                sku.setting_photo_storage_key = await asyncio.to_thread(
+                    _preserve_setting_photo,
+                    row,
+                    setting_key,
+                    preserved=setting_key == sku.setting_photo_storage_key,
+                )
+            self._write_reviewed_details(sku, row, gallery_keys[row.sku_id])
+            return self._receipt(
+                reviewed,
+                {sku.id: sku},
+                applied=True,
+                setting_photos=int(bool(sku.setting_photo_storage_key)),
+            )
+
+    async def _selected_sku(self, team_id: uuid.UUID, manifest: CuratedCatalogueManifest) -> Sku:
+        skus = await self._catalogue_skus(team_id, manifest, include_current_selection=False)
+        sku = skus[manifest.skus[0].sku_id]
+        if not sku.storefront_catalogue_selected or sku.storefront_hidden:
+            raise ValidationError("A single SKU update requires an existing curated storefront SKU")
+        return sku
+
     async def _require_owner(self, user_id: uuid.UUID) -> None:
         role = await PermissionService(self.db).require_staff_manager_role(user_id)
         if role != SLUG_OWNER:
             raise ForbiddenError("Only an organisation owner can apply a curated catalogue")
 
     async def _catalogue_skus(
-        self, team_id: uuid.UUID, manifest: CuratedCatalogueManifest
+        self,
+        team_id: uuid.UUID,
+        manifest: CuratedCatalogueManifest,
+        *,
+        include_current_selection: bool = True,
     ) -> dict[uuid.UUID, Sku]:
         selected_ids = [row.sku_id for row in manifest.skus]
+        selection = Sku.id.in_(selected_ids)
+        if include_current_selection:
+            selection = or_(selection, Sku.storefront_catalogue_selected.is_(True))
         skus = {
             sku.id: sku
             for sku in (
@@ -94,7 +177,7 @@ class CuratedCatalogueService:
                     select(Sku)
                     .where(
                         Sku.team_id == team_id,
-                        or_(Sku.id.in_(selected_ids), Sku.storefront_catalogue_selected.is_(True)),
+                        selection,
                     )
                     .execution_options(populate_existing=True)
                 )
@@ -108,6 +191,8 @@ class CuratedCatalogueService:
                 raise ValidationError(f"SKU must be active and sellable: {row.our_ref}")
             if _category(sku) not in SHOP_CATEGORIES:
                 raise ValidationError(f"SKU has no storefront category: {row.our_ref}")
+            if sku.setting_photo_storage_key:
+                _validate_setting_distinct(row, PurePosixPath(sku.setting_photo_storage_key).stem)
         for group in manifest.groups:
             if len({SHOP_CATEGORIES[_category(skus[row.sku_id])] for row in group.variants}) != 1:
                 raise ValidationError(
@@ -117,12 +202,16 @@ class CuratedCatalogueService:
 
     @staticmethod
     def _receipt(
-        reviewed: ReviewedCatalogue, skus: dict[uuid.UUID, Sku], *, applied: bool
+        reviewed: ReviewedCatalogue,
+        skus: dict[uuid.UUID, Sku],
+        *,
+        applied: bool,
+        setting_photos: int = 0,
     ) -> CuratedCatalogueResult:
         return CuratedCatalogueResult(
             applied=applied,
             selected_skus=len(reviewed.manifest.skus),
-            gallery_images=len(reviewed.images),
+            gallery_images=len(reviewed.images) + setting_photos,
             groups=len(reviewed.manifest.groups),
             held_without_price=sorted(
                 row.our_ref
@@ -242,3 +331,39 @@ def _store_reviewed_photo(relative_path: str, data: bytes, digest: str) -> str:
     if hashlib.sha256(read_bytes(key)).hexdigest() != digest:
         raise ConflictError("Stored gallery image did not match the approved checksum")
     return key
+
+
+def _setting_source(sku: Sku, row: ReviewedSku) -> str | None:
+    if not row.retain_current_photo_as_setting:
+        return None
+    key = sku.setting_photo_storage_key or sku.photo_storage_key
+    if not key:
+        raise ValidationError("The SKU has no current photo to retain as a setting")
+    return key
+
+
+def _validate_setting_distinct(row: ReviewedSku, digest: str) -> None:
+    if any(photo.sha256 == digest for photo in row.gallery or ()):
+        raise ValidationError("The retained setting photo must be distinct from the studio photos")
+
+
+def _read_setting_photo(key: str, row: ReviewedSku, *, preserved: bool) -> tuple[bytes, str]:
+    try:
+        data = read_bytes(key)
+        if len(data) > 5 * 1024 * 1024:
+            raise ValidationError("The current setting photo is larger than 5 MiB")
+        validate_jpeg(data)
+    except (OSError, Image.DecompressionBombError) as exc:
+        raise ValidationError("The current photo must be available as a readable JPEG") from exc
+    digest = hashlib.sha256(data).hexdigest()
+    if preserved and digest != PurePosixPath(key).stem:
+        raise ConflictError("The retained setting photo did not match its checksum")
+    _validate_setting_distinct(row, digest)
+    return data, digest
+
+
+def _preserve_setting_photo(row: ReviewedSku, key: str, *, preserved: bool) -> str:
+    data, digest = _read_setting_photo(key, row, preserved=preserved)
+    if preserved:
+        return key
+    return _store_reviewed_photo(f"skus/{row.sku_id}/setting/{digest}.jpg", data, digest)

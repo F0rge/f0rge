@@ -30,7 +30,7 @@ export function TrackedProductLink({ href, productId, className, children }: {
       capture({ name: "storefront_product_impressed", properties: { product_id: productId, surface } });
       observer.disconnect();
     }, { threshold: [0.5] });
-    observer.observe(element);
+    observer.observe(element.closest("[data-product-card]") ?? element);
     return () => observer.disconnect();
   }, [capture, choice, productId]);
 

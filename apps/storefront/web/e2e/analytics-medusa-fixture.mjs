@@ -12,6 +12,19 @@ const piece = ({ uuid, id, title, image, extraImages = [], categories = [], vari
   categories, collection: { id: 'col_on_sale', title: 'On Sale', handle: 'on-sale' }, variants,
 })
 
+const options = [
+  { id: 'opt_umbra_colour', title: 'Colour', values: ['Silver', 'Gold', 'Bronze'].map((value) => ({ id: value, value })) },
+  { id: 'opt_umbra_size', title: 'Size', values: ['160 cm', '200 cm'].map((value) => ({ id: value, value })) },
+]
+function umbraVariant(id, sku, colour, size, amount, inventory, urls) {
+  return {
+    ...variant(id, sku, amount, inventory, { suitable_image_urls: urls }),
+    title: `${colour} / ${size}`,
+    options: [colour, size].map((value, index) => ({ id: `${id}_${index}`, option_id: options[index].id, value })),
+    images: urls.map((url) => ({ id: url, url })).reverse(),
+  }
+}
+
 // Titles sort after "Test chair" so the analytics spec still opens it first on /shop.
 function products() {
   const now = Date.now()
@@ -24,7 +37,11 @@ function products() {
   return [
     piece({ uuid: '11111111-1111-4111-8111-111111111111', id: 'prod_test_chair', title: 'Test chair', image: '/demo/arc-front.jpg', extraImages: ['/demo/arc-angle.jpg'], categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_test_chair', 'TEST-CHAIR', 2400, 1)] }),
     piece({ uuid: '22222222-2222-4222-8222-222222222222', id: 'prod_tilda_sofa', title: 'Tilda Sofa', image: '/hero-sofas.jpg', material: 'Bouclé', length: 220, width: 95, height: 80, metadata: { dimension_unit: 'cm' }, categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_tilda_sofa', 'TILDA-SOFA', 18999, 2)] }),
-    piece({ uuid: '33333333-3333-4333-8333-333333333333', id: 'prod_umbra_table', title: 'Umbra Dining Table', image: '/demo/arc-angle.jpg', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_umbra_table', 'UMBRA-TABLE', 34773.92, 1)] }),
+    piece({ uuid: 'group-33333333-3333-4333-8333-333333333333', id: 'prod_umbra_table', title: 'Umbra Dining Table', image: '/demo/arc-angle.jpg', categories: category('dining-room', 'Dining Room'), options, variants: [
+      umbraVariant('variant_umbra_table', 'UMBRA-TABLE', 'Silver', '200 cm', 34773.92, 1, ['/demo/arc-angle.jpg', '/demo/arc-detail.jpg']),
+      umbraVariant('variant_umbra_gold_large', 'UMBRA-GOLD-200', 'Gold', '200 cm', 36500, 0, ['/hero-sofas.jpg']),
+      umbraVariant('variant_umbra_gold_small', 'UMBRA-GOLD-160', 'Gold', '160 cm', 37000, 2, ['/demo/arc-front.jpg']),
+    ] }),
     piece({ uuid: '44444444-4444-4444-8444-444444444444', id: 'prod_vale_bedside', title: 'Vale Bedside Table', categories: category('bedroom', 'Bedroom'), variants: [variant('variant_vale_bedside', 'VALE-BEDSIDE', 6877.39, 1)] }),
     piece({ uuid: '55555555-5555-4555-8555-555555555555', id: 'prod_wren_coffee', title: 'Wren Coffee Table', image: '/demo/arc-detail.jpg', categories: category('coffee-console-tables', 'Coffee & Console Tables'), variants: [variant('variant_wren_coffee', 'WREN-COFFEE', 7817.39, 0, madeToOrder)] }),
     piece({ uuid: '66666666-6666-4666-8666-666666666666', id: 'prod_yara_lamp', title: 'Yara Floor Lamp', image: '/demo/arc-front.jpg', variants: [variant('variant_yara_lamp', 'YARA-LAMP', 1999, 3)] }),

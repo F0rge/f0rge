@@ -1,6 +1,7 @@
 import "server-only";
 import { formatCustomerPrice } from "./order-money";
 import { offerLive } from "./made-to-order";
+import { selectedImages } from "./product-variants";
 
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
@@ -194,28 +195,42 @@ export function fromPrice(product: StoreProduct): string {
 }
 
 export function stockLabel(product: StoreProduct): string {
-  if (product.variants.some((variant) => (variant.inventory_quantity ?? 0) > 0)) return "In stock";
-  return product.variants.some((variant) => offerLive(variant.metadata?.made_to_order_offer)) ? "Made to order" : "Out of stock";
+  const variants = product.variants.map(variantAvailability);
+  if (variants.includes("in-stock")) return "In stock";
+  return variants.includes("made-to-order") ? "Made to order" : "Out of stock";
 }
 
 export type Availability = "in-stock" | "made-to-order";
-// What a listing card, its filter and its sort read; computed once so the counts and the grid agree.
-export type ListedPiece = Pick<StoreProduct, "id" | "title" | "thumbnail" | "images"> & {
+function variantAvailability(variant: MedusaVariant): Availability | null {
+  if ((variant.inventory_quantity ?? 0) > 0) return "in-stock";
+  return offerLive(variant.metadata?.made_to_order_offer) ? "made-to-order" : null;
+}
+
+export type ListedVariant = {
+  id: string;
+  price: number | null;
+  priceLabel: string;
+  availability: Availability | null;
+  images: string[];
+};
+
+// Project only the presentation and selector fields needed by the listing.
+export type ListedPiece = Pick<StoreProduct, "id" | "title" | "categories"> & {
   href: string;
   price: number | null;
   priceLabel: string;
-  stockLabel: string | null;
-  availability: Availability[];
+  stockLabel: string;
+  variants: ListedVariant[];
 };
 
 export function listedPiece(product: StoreProduct): ListedPiece {
-  const availability: Availability[] = [];
-  if (product.variants.some((variant) => (variant.inventory_quantity ?? 0) > 0)) availability.push("in-stock");
-  if (product.variants.some((variant) => offerLive(variant.metadata?.made_to_order_offer))) availability.push("made-to-order");
   return {
-    id: product.id, title: product.title, thumbnail: product.thumbnail, images: product.images?.slice(0, 1),
-    href: productPath(product),
+    id: product.id, title: product.title, categories: product.categories, href: productPath(product),
     price: lowestPricedVariant(product.variants)?.calculated_price?.calculated_amount ?? null,
-    priceLabel: fromPrice(product), stockLabel: stockLabel(product), availability,
+    priceLabel: fromPrice(product), stockLabel: stockLabel(product),
+    variants: product.variants.map((variant) => ({
+      id: variant.id, price: variant.calculated_price?.calculated_amount ?? null, priceLabel: priceLabel(variant),
+      availability: variantAvailability(variant), images: selectedImages(product, variant),
+    })),
   };
 }

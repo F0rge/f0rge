@@ -231,7 +231,7 @@ test("curated projection verifies and orders three SKU images, stores typed deta
   const photo = jest.fn((_sku: string, slot: number | null) => jpeg(bytes[(slot || 0) - 1]));
   state.photo = photo;
   await syncFirstout(container);
-  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/products?catalogue_version=2"), expect.anything());
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/products?catalogue_version=2&include_setting_photo=true"), expect.anything());
   expect(existing.status).toBe("published");
   expect(existing.title).toBe("Approved table");
   expect(outside).toMatchObject({ status: "published", collection_id: "pcol_staff", sales_channels: [{ id: "sc_other" }] });
@@ -255,19 +255,38 @@ test("curated projection verifies and orders three SKU images, stores typed deta
 });
 
 test("a curated product waits for a verified gallery and recovers on the next consistent snapshot", async () => {
-  const bytes = [1, 2, 3].map((slot) => new Uint8Array([0xff, 0xd8, 0xff, slot]));
+  const bytes = [1, 2, 3, 4].map((slot) => new Uint8Array([0xff, 0xd8, 0xff, slot]));
   const tokens = bytes.map((body) => createHash("sha256").update(body).digest("hex"));
   const existing = stagedTable();
-  const { calls, state, container, logger } = fakeMedusa([existing], [{ ...table, gallery_photo_tokens: tokens }]);
+  const studio = { ...table, gallery_photo_tokens: tokens.slice(0, 3) };
+  const { calls, state, container, logger } = fakeMedusa([existing], [{ ...studio, setting_photo_token: tokens[3] }]);
   state.curated = true;
-  state.photo = () => jpeg(bytes[0]);
+  const photo = jest.fn((_id: string, slot: number | null) => jpeg(bytes[slot === 4 ? 0 : (slot || 0) - 1]));
+  state.photo = photo;
   await syncFirstout(container);
   expect(existing.status).toBe("draft");
   expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Firstout gallery changed during download"));
   expect(calls.filter((call) => call.workflow === "uploadFilesWorkflow")).toHaveLength(0);
-  state.photo = (_id, slot) => jpeg(bytes[(slot || 0) - 1]);
+  photo.mockImplementation((_id, slot) => jpeg(bytes[(slot || 0) - 1]));
   await syncFirstout(container);
   expect(existing.status).toBe("published");
+  const variant = existing.variants![0];
+  const gallery = variant.metadata?.suitable_image_urls as string[];
+  expect(gallery.map((url) => url.slice(-6))).toEqual(["-1.jpg", "-2.jpg", "-3.jpg", "-4.jpg"]);
+  expect(existing.thumbnail).toBe(gallery[0]);
+  expect(variant.thumbnail).toBe(gallery[0]);
+  expect(photo.mock.calls.map(([, slot]) => slot)).toEqual([1, 2, 3, 4, 1, 2, 3, 4]);
+
+  state.feed = [studio];
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual(gallery);
+  expect(photo).toHaveBeenCalledTimes(8);
+
+  state.feed = [{ ...studio, setting_photo_token: null }];
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual(gallery.slice(0, 3));
+  expect(existing.images?.map((image) => image.url)).not.toContain(gallery[3]);
+  expect(photo).toHaveBeenCalledTimes(8);
 });
 
 test("a selected legacy-only product keeps its custom title and images while an omitted unpriced SKU stays off the shop", async () => {

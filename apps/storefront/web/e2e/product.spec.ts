@@ -83,6 +83,40 @@ test('the gallery and add to bag work from the keyboard', async ({ page }) => {
   await expect.poll(() => drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true)
 })
 
+test('colour and size select real SKUs, prices and photos on one grouped page', async ({ page }) => {
+  const path = '/product/firstout-group-33333333-3333-4333-8333-333333333333'
+  await page.goto(path)
+  const colour = page.getByRole('group', { name: 'Colour', exact: true })
+  const size = page.getByRole('group', { name: 'Size', exact: true })
+  const article = page.getByRole('article')
+  await expect(colour.getByRole('button', { name: 'Silver' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(colour.getByRole('button', { name: 'Bronze' })).toHaveCount(0)
+  await expect(size.getByRole('button', { name: '200 cm' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/demo/arc-angle.jpg')
+
+  await colour.getByRole('button', { name: 'Gold' }).click()
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-200')
+  await expect(page.locator('#product-price')).toHaveText(/^R\s36\s500,00$/)
+  await expect(article.getByRole('status')).toHaveText('Out of stock')
+  await expect(page.getByRole('button', { name: 'Add to bag' })).toBeDisabled()
+
+  await size.getByRole('button', { name: '160 cm' }).click()
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-160')
+  await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/demo/arc-front.jpg')
+  await expect(article.getByRole('status')).toHaveText('In stock')
+  await expect(page.getByRole('button', { name: 'Add to bag' })).toBeEnabled()
+
+  await colour.getByRole('button', { name: 'Silver' }).click()
+  await expect(size.getByRole('button', { name: '200 cm' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-TABLE')
+  await expect(page).toHaveURL(new RegExp(`${path}$`))
+
+  await page.goto(`${path}?variant=variant_umbra_gold_small`)
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-160')
+  await expect(colour.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(size.getByRole('button', { name: '160 cm' })).toHaveAttribute('aria-pressed', 'true')
+})
+
 for (const path of [tilda, wren, vale]) {
   test(`${path} fits 390px without horizontal scroll`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })

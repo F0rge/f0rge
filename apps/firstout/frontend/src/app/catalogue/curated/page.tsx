@@ -6,6 +6,8 @@ import {
   FileUploader,
   InlineNotification,
   Modal,
+  Select,
+  SelectItem,
   Stack,
   Tile,
 } from "@carbon/react";
@@ -13,7 +15,12 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 
 import { PageLoading } from "@/components/page-loading";
-import { canMutateCatalogue, uploadCuratedCatalogue, type CuratedCatalogueResult } from "@/lib/api";
+import {
+  canMutateCatalogue,
+  uploadCuratedCatalogue,
+  type CuratedCatalogueResult,
+  type CuratedCatalogueScope,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 const MAX_ARCHIVE_BYTES = 40 * 1024 * 1024;
@@ -21,11 +28,14 @@ const MAX_ARCHIVE_BYTES = 40 * 1024 * 1024;
 export default function CuratedCataloguePage() {
   const { user, loading } = useAuth();
   const [archive, setArchive] = useState<File | null>(null);
+  const [scope, setScope] = useState<CuratedCatalogueScope>("catalogue");
   const [result, setResult] = useState<CuratedCatalogueResult | null>(null);
   const [error, setError] = useState("");
   const [stage, setStage] = useState<"preview" | "apply" | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const pending = useRef(false);
+  const singleSku = scope === "sku";
+  const applyLabel = singleSku ? "Apply SKU update" : "Apply catalogue";
 
   function chooseArchive(file: File | null) {
     setResult(null);
@@ -44,7 +54,7 @@ export default function CuratedCataloguePage() {
     setStage(dryRun ? "preview" : "apply");
     setError("");
     try {
-      const response = await uploadCuratedCatalogue(archive, dryRun);
+      const response = await uploadCuratedCatalogue(archive, dryRun, scope);
       if (response.applied === dryRun) throw new Error("Firstout returned an unexpected import result. Check the catalogue before trying again.");
       setResult(response);
       setConfirmOpen(false);
@@ -70,10 +80,25 @@ export default function CuratedCataloguePage() {
       ) : (
         <Tile>
           <Stack gap={5}>
-            <p>Check the approved catalogue archive, then apply its SKU details, galleries, variant groups and storefront selection.</p>
+            <Select
+              id="curated-catalogue-scope"
+              labelText="Import scope"
+              helperText={singleSku ? "Update one selected storefront SKU and its gallery." : "Replace the storefront selection with the reviewed catalogue."}
+              value={scope}
+              disabled={stage !== null}
+              onChange={(event) => {
+                setScope(event.target.value === "sku" ? "sku" : "catalogue");
+                setResult(null);
+                setError("");
+                setConfirmOpen(false);
+              }}
+            >
+              <SelectItem value="catalogue" text="Entire catalogue" />
+              <SelectItem value="sku" text="Single SKU" />
+            </Select>
             <FileUploader
               accept={[".zip", "application/zip"]}
-              labelTitle="Approved catalogue archive"
+              labelTitle={singleSku ? "Approved SKU archive" : "Approved catalogue archive"}
               labelDescription="ZIP up to 40 MiB."
               buttonLabel="Choose ZIP"
               filenameStatus="edit"
@@ -86,8 +111,12 @@ export default function CuratedCataloguePage() {
             {error && <InlineNotification kind="error" title="Catalogue upload failed" subtitle={error} hideCloseButton />}
             {result && <InlineNotification
               kind={result.applied ? "success" : "info"}
-              title={result.applied ? "Catalogue applied in Firstout" : "Catalogue ready to apply"}
-              subtitle={`${result.selected_skus} selected SKUs, ${result.gallery_images} gallery photos and ${result.groups} variant groups.`}
+              title={singleSku
+                ? result.applied ? "SKU updated in Firstout" : "SKU update ready to apply"
+                : result.applied ? "Catalogue applied in Firstout" : "Catalogue ready to apply"}
+              subtitle={singleSku
+                ? `One SKU and ${result.gallery_images} gallery photos.`
+                : `${result.selected_skus} selected SKUs, ${result.gallery_images} gallery photos and ${result.groups} variant groups.`}
               hideCloseButton
             />}
             {result?.held_without_price.length ? (
@@ -106,7 +135,7 @@ export default function CuratedCataloguePage() {
                 type="button"
                 disabled={!result || result.applied || stage !== null}
                 onClick={() => setConfirmOpen(true)}
-              >Apply catalogue</Button>
+              >{applyLabel}</Button>
             </div>
           </Stack>
         </Tile>
@@ -114,15 +143,17 @@ export default function CuratedCataloguePage() {
       {confirmOpen && result && <Modal
         open
         danger
-        modalHeading="Apply the approved catalogue?"
-        primaryButtonText={stage === "apply" ? "Applying…" : "Apply catalogue"}
+        modalHeading={singleSku ? "Apply the approved SKU update?" : "Apply the approved catalogue?"}
+        primaryButtonText={stage === "apply" ? "Applying…" : applyLabel}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={stage === "apply"}
         preventCloseOnClickOutside
         onRequestClose={() => { if (stage === null) setConfirmOpen(false); }}
         onRequestSubmit={() => void upload(false)}
       >
-        <p>Apply the reviewed archive for {result.selected_skus} SKUs to this Firstout workspace. The shop uses the new selection after synchronization.</p>
+        <p>{singleSku
+          ? "Apply the reviewed details and gallery to one SKU in this workspace. The shop uses them after synchronization."
+          : `Apply the reviewed archive for ${result.selected_skus} SKUs to this Firstout workspace. The shop uses the new selection after synchronization.`}</p>
       </Modal>}
     </Stack>
   );

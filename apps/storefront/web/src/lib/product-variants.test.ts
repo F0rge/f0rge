@@ -46,5 +46,6 @@ describe("approved product variants", () => {
   it("uses ordered images for the chosen SKU regardless of relation order", () => {
     expect(selectedImages(product, goldSmall)).toEqual(["/g-front.jpg", "/g-side.jpg"]);
     expect(selectedImages(product, silver)).toEqual(["/s-front.jpg", "/s-side.jpg"]);
+    expect(selectedImages({ ...product, thumbnail: "/s-front.jpg", images: silver.images ?? [] }, goldLarge)).toEqual([]);
   });
 });

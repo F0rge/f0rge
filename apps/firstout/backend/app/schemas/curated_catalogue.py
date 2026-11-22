@@ -15,6 +15,7 @@ ApprovedText = Annotated[
 ArchiveFilename = Annotated[
     str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.jpg$")
 ]
+CuratedCatalogueScope = Literal["catalogue", "sku"]
 
 
 class ReviewedPhoto(BaseModel):
@@ -32,6 +33,7 @@ class ReviewedSku(SkuDetails):
     name: Optional[ApprovedText] = None
     fabric: Optional[ApprovedText] = None
     gallery: Optional[tuple[ReviewedPhoto, ReviewedPhoto, ReviewedPhoto]] = None
+    retain_current_photo_as_setting: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def preserve_or_replace_gallery(self) -> ReviewedSku:

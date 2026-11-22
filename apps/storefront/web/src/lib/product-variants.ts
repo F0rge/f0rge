@@ -56,6 +56,7 @@ export function selectedImages(product: StoreProduct, variant?: MedusaVariant): 
   }
   if (variantImages.length) return [...new Set(variantImages)];
   if (variant?.thumbnail) return [variant.thumbnail];
+  if (product.variants.length > 1) return [];
   if (all.length) return [...new Set(all)];
   return product.thumbnail ? [product.thumbnail] : [];
 }
