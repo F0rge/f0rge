@@ -9,15 +9,18 @@ runs:
       shell: bash
       run: echo "version=0.13.7" >> "$GITHUB_OUTPUT"
 
-    - uses: astral-sh/setup-uv@v3
+    - uses: astral-sh/setup-uv@v10.4.0 # no moving major tags since v8
       id: setup-uv
       continue-on-error: true
       with:
         version: ${{ steps.uv-version.outputs.version }}
         enable-cache: true
+        # A job that runs no uv command beyond `uv python install` (typescript without a
+        # codegen:check) may leave no cache dir; without this the post step fails the job.
+        ignore-nothing-to-cache: true
 
     # Release-asset outages must not prevent the required checks from running.
-    # v3's post step only warns when download failed before cache-key state exists.
+    # The post step only warns when download failed before cache-key state exists.
     - name: Bootstrap pinned uv from PyPI if the release download failed
       if: steps.setup-uv.outcome == 'failure'
       shell: bash

@@ -4,13 +4,13 @@ description: Node 22 and the root npm workspace install, restored from cache whe
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: 22
 
     # The installed tree is cached, not npm's download cache: `npm ci` itself is the slow part.
     # .nx/cache is deliberately not persisted between machines.
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       id: node-modules
       with:
         path: '**/node_modules'

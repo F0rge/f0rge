@@ -52,11 +52,11 @@ jobs:
       tree: ${{ steps.plan.outputs.tree }} # the tree merge-gate marks as tested
       tested: ${{ steps.plan.outputs.tested }} # push only: every commit's tree already passed merge-gate
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: nrwl/nx-set-shas@v4
+      - uses: nrwl/nx-set-shas@v5
         id: shas
       - uses: ./.github/actions/setup-node-workspace
       - name: Repository guards
@@ -84,7 +84,7 @@ jobs:
       NX_BASE: ${{ needs.plan.outputs.base }}
       NX_HEAD: ${{ needs.plan.outputs.head }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -101,7 +101,7 @@ jobs:
       NX_BASE: ${{ needs.plan.outputs.base }}
       NX_HEAD: ${{ needs.plan.outputs.head }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -121,7 +121,7 @@ jobs:
       NX_BASE: ${{ needs.plan.outputs.base }}
       NX_HEAD: ${{ needs.plan.outputs.head }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -147,7 +147,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-node-workspace
@@ -172,7 +172,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-node-workspace
@@ -199,7 +199,7 @@ jobs:
       - if: ${{ success() && !cancelled() }}
         run: echo "$GITHUB_SHA" > tested
       - if: ${{ success() && !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         continue-on-error: true # an artifact outage only costs a re-test on main
         with:
           name: tested-${{ needs.plan.outputs.tree }}
