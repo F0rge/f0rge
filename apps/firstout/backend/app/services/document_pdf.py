@@ -10,6 +10,7 @@ so an internal note can never reach the page.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from io import BytesIO
 from typing import Optional
 from xml.sax.saxutils import escape
@@ -34,6 +35,7 @@ from reportlab.platypus import (
 
 from app.schemas.document_template import DocumentKind, DocumentTemplate
 from app.services.invoice_pdf import SellerDetails
+from app.services.vat import vat_percent
 
 FONTS = {
     "sans": ("Helvetica", "Helvetica-Bold", "Helvetica-Oblique"),
@@ -76,6 +78,8 @@ class DocumentData:
     total: str
     subtotal_ex_vat: Optional[str] = None
     vat_amount: Optional[str] = None
+    # The document's stored VAT rate (ADR 0003); a receipt has none.
+    vat_rate: Optional[Decimal] = None
     total_label: str = "Total"
     lines: list[DocumentLine] = field(default_factory=list)
     # A receipt has no VAT lines: (description, amount) rows instead.
@@ -126,7 +130,9 @@ def render_document_pdf(
     pad = 3 if compact else 5
     accent = colors.HexColor(template.accent_colour)
     wording = getattr(template.wording, data.kind)
-    vat_label = seller.vat_percent_label.replace(".00%", "%")
+    vat_label = (
+        f"{vat_percent(data.vat_rate)}%".replace(".00%", "%") if data.vat_rate is not None else ""
+    )
     width, height = A4
     body_width = width - 2 * MARGIN
 
@@ -425,6 +431,8 @@ def sample_document(kind: DocumentKind) -> DocumentData:
         served_by="Sam",
         subtotal_ex_vat="10000.00",
         vat_amount="1500.00",
+        # The sample amounts above are worked at 15%; a sample, not a rate rule.
+        vat_rate=Decimal("0.15"),
         total="11500.00",
         payments=[("Paid", "5000.00"), ("Balance owing", "6500.00")] if kind == "invoice" else [],
         note="This is a sample printed note. Delivery within 10 working days."

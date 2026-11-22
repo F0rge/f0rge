@@ -7,7 +7,6 @@ import {
   listPriceLists,
   listSalesStaffOptions,
   listSkus,
-  type AppSettings,
   type CustomerCrm,
   type PriceList,
   type Sku,
@@ -40,37 +39,28 @@ export const referenceQueries = {
   salesStaffOptions: queryOptions({ queryKey: queryKeys.salesStaffOptions, queryFn: listSalesStaffOptions, staleTime: REFERENCE_STALE_MS }),
 };
 
-/** VAT rate shown when settings carry none. */
-export const DEFAULT_VAT_PERCENT = "15";
-
 type Result<T> = { data?: T; error: Error | null };
 
 // Module-level so TanStack keeps the combined object stable between renders.
-export function combineSaleReference([skus, customers, priceLists, settings]: [
-  Result<Sku[]>, Result<CustomerCrm[]>, Result<PriceList[]>, Result<AppSettings>,
+export function combineSaleReference([skus, customers, priceLists]: [
+  Result<Sku[]>, Result<CustomerCrm[]>, Result<PriceList[]>,
 ]) {
   return {
-    error: skus.error ?? customers.error ?? priceLists.error ?? settings.error,
-    data: skus.data && customers.data && priceLists.data && settings.data
-      ? {
-          skus: skus.data,
-          customers: customers.data,
-          priceLists: priceLists.data,
-          settings: settings.data,
-          vatPercent: settings.data.vat_percent ?? DEFAULT_VAT_PERCENT,
-        }
+    error: skus.error ?? customers.error ?? priceLists.error,
+    data: skus.data && customers.data && priceLists.data
+      ? { skus: skus.data, customers: customers.data, priceLists: priceLists.data }
       : undefined,
   };
 }
 
 /**
- * What a sale is priced against: catalogue, customers, price lists and settings. The
- * invoice and quote editors load this one copy; the till still has its own loader.
- * `data` is undefined until all four arrive; `error` is the first failure.
+ * What a sale's finder offers: catalogue, customers, and the price lists that decide
+ * which SKUs the server can price (`mayBePriced`). The invoice and quote editors load
+ * this one copy. `data` is undefined until all three arrive; `error` is the first failure.
  */
 export function useSaleReference() {
   return useQueries({
-    queries: [referenceQueries.skus, referenceQueries.customers, referenceQueries.priceLists, referenceQueries.settings],
+    queries: [referenceQueries.skus, referenceQueries.customers, referenceQueries.priceLists],
     combine: combineSaleReference,
   });
 }

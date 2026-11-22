@@ -32,6 +32,7 @@ import {
   formatPriceAmount,
   formatZarAmount,
   skuPhotoUrl,
+  vatPercentLabel,
   type CustomerCrm,
   type SalesStaffOption,
   type Sku,
@@ -132,7 +133,6 @@ export type CartEditorProps = {
   preview?: SalePricePreview;
   pricingError?: string;
   onRetryPricing: () => void;
-  vatRateLabel: string;
   canDiscount: boolean;
   colleagues: SalesStaffOption[] | null;
   colleaguesError: boolean;
@@ -649,7 +649,7 @@ export function CartEditor(props: CartEditorProps) {
                 </div>
               )}
               <div className="firstout-sale-summary__row">
-                <dt>VAT ({props.vatRateLabel}){showInclusive ? " included" : ""}</dt>
+                <dt>VAT{preview ? ` (${vatPercentLabel(preview.vat_rate)})` : ""}{showInclusive ? " included" : ""}</dt>
                 <dd>{money(preview?.vat_amount)}</dd>
               </div>
               <div className="firstout-sale-summary__row firstout-sale-summary__row--total">

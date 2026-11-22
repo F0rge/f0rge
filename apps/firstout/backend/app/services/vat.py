@@ -1,20 +1,35 @@
+"""VAT conversions at an explicit rate (Firstout ADR 0003: no hard-coded rate).
+
+A sale document converts at the rate it stores (``vat_rate``); anything priced today
+converts at the team's ``vat_rate`` setting, read with ``current_vat_rate``.
+"""
+
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
+from app.models.team_settings import DEFAULT_VAT_RATE
 from f0rge_core.exceptions import ValidationError
 
-VAT_MULTIPLIER = Decimal("1.15")
 CENT = Decimal("0.01")
 
 
-def ex_to_inc(ex: Decimal) -> Decimal:
-    return (ex * VAT_MULTIPLIER).quantize(CENT, rounding=ROUND_HALF_UP)
+def ex_to_inc(ex: Decimal, vat_rate: Decimal) -> Decimal:
+    return (ex * (1 + vat_rate)).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
-def inc_to_ex(inc: Decimal) -> Decimal:
-    return (inc / VAT_MULTIPLIER).quantize(CENT, rounding=ROUND_HALF_UP)
+def inc_to_ex(inc: Decimal, vat_rate: Decimal) -> Decimal:
+    return (inc / (1 + vat_rate)).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def vat_percent(vat_rate: Decimal) -> Decimal:
+    """0.15 → 15.00, as printed and returned beside the rate."""
+    return (vat_rate * 100).quantize(CENT)
 
 
 def validate_non_negative_price(value: Decimal, field_name: str) -> None:
@@ -22,7 +37,15 @@ def validate_non_negative_price(value: Decimal, field_name: str) -> None:
         raise ValidationError(f"{field_name} must not be negative")
 
 
-def inc_vat_or_none(ex_vat: Optional[Decimal]) -> Optional[Decimal]:
+def inc_vat_or_none(ex_vat: Optional[Decimal], vat_rate: Decimal) -> Optional[Decimal]:
     if ex_vat is None:
         return None
-    return ex_to_inc(ex_vat)
+    return ex_to_inc(ex_vat, vat_rate)
+
+
+async def current_vat_rate(db: AsyncSession) -> Decimal:
+    """The team's VAT rate setting today. Read only: a missing settings row means the
+    default it would be created with (creating it here would commit the caller's work)."""
+    team = await TeamCRUD(db).get_first()
+    settings = await TeamSettingsCRUD(db).get_by_team_id(team.id) if team else None
+    return settings.vat_rate if settings is not None else DEFAULT_VAT_RATE

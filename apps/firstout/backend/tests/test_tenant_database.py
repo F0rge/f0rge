@@ -425,6 +425,7 @@ async def test_duplicate_sku_invoice_keys_and_authenticated_uuid_idor(tenant_dat
                 subtotal_ex_vat=100,
                 vat_amount=15,
                 total_inc_vat=115,
+                vat_rate=0.15,
                 amount_paid=0,
             )
             session.add(invoice)

@@ -123,6 +123,7 @@ class SalesOrdersService:
             subtotal_ex_vat=priced.subtotal_ex_vat,
             vat_amount=priced.vat_amount,
             total_inc_vat=priced.total_inc_vat,
+            vat_rate=priced.vat_rate,
             amount_paid=Decimal(0),
             notes=data.notes,
             prices_include_vat=shows_prices_including_vat(customer),
@@ -143,8 +144,8 @@ class SalesOrdersService:
         existing = await self.crud.get_by_quote_id(quote.id)
         if existing is not None:
             raise ConflictError("Quote already has a sales order")
-        # The quote's list unit and discount carry over; the order totals its own lines
-        # with the one line rule, so its invoice adds up to what the order charged.
+        # The quote's list unit, discount and VAT rate carry over; the order totals its own
+        # lines with the one line rule, so its invoice adds up to what the order charged.
         line_models = [
             SalesOrderLine(
                 sku_id=line.sku_id,
@@ -159,7 +160,8 @@ class SalesOrdersService:
             for line in quote.lines
         ]
         subtotal, vat_amount, total_inc = document_totals(
-            (line.unit_ex_vat, line.qty, line.discount_percent) for line in line_models
+            ((line.unit_ex_vat, line.qty, line.discount_percent) for line in line_models),
+            quote.vat_rate,
         )
         order = SalesOrder(
             so_number="",
@@ -172,6 +174,7 @@ class SalesOrdersService:
             subtotal_ex_vat=subtotal,
             vat_amount=vat_amount,
             total_inc_vat=total_inc,
+            vat_rate=quote.vat_rate,
             prices_include_vat=quote.prices_include_vat,
             amount_paid=Decimal(0),
             notes=quote.notes,
@@ -393,7 +396,7 @@ class SalesOrdersService:
         for index, line in enumerate(order.lines):
             if tax_snapshot is None:
                 ex_vat, line_vat, inc_vat = line_amounts(
-                    line.unit_ex_vat, line.qty, line.discount_percent
+                    line.unit_ex_vat, line.qty, line.discount_percent, order.vat_rate
                 )
             else:
                 if len(tax_snapshot) != len(order.lines) + 1:
@@ -460,6 +463,7 @@ class SalesOrdersService:
                 customer=order.customer,
                 issue_date=issue_date,
                 lines=invoice_line_models,
+                vat_rate=order.vat_rate,
                 prices_include_vat=order.prices_include_vat,
                 memo="Sales order tax invoice",
                 actor_user_id=user_id,
@@ -717,6 +721,7 @@ class SalesOrdersService:
             subtotal_ex_vat=order.subtotal_ex_vat,
             vat_amount=order.vat_amount,
             total_inc_vat=order.total_inc_vat,
+            vat_rate=order.vat_rate,
             amount_paid=order.amount_paid,
             balance=balance,
             notes=order.notes,
@@ -754,6 +759,6 @@ class SalesOrdersService:
             self.db,
             response.lines,
             viewer_user_id=viewer_user_id,
-            prices_include_vat=order.prices_include_vat,
+            inclusive_vat_rate=order.vat_rate if order.prices_include_vat else None,
         )
         return response

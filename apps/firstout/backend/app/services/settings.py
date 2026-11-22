@@ -5,7 +5,6 @@ from f0rge_db.organisation import tenant_id_ctx
 import asyncio
 import logging
 import uuid
-from decimal import Decimal
 from typing import Optional
 
 from fastapi import UploadFile
@@ -38,6 +37,7 @@ from app.services.object_storage import (
     read_bytes,
     save_bytes,
 )
+from app.services.vat import vat_percent
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 from f0rge_storage.images import resize_image
@@ -320,7 +320,7 @@ class SettingsService:
                 )
             },
             vat_rate=vat_rate,
-            vat_percent=(vat_rate * Decimal("100")).quantize(Decimal("0.01")),
+            vat_percent=vat_percent(vat_rate),
             home_currency=home_currency,
             defaults_locked=defaults_locked,
             warning=warning,

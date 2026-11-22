@@ -44,7 +44,6 @@ type Loaded = {
   skus: Sku[];
   customers: CustomerCrm[];
   priceLists: PriceList[];
-  vatPercent: string;
   termsDays: number;
 };
 
@@ -212,7 +211,7 @@ function InvoiceForm({
       <div className="firstout-page-header">
         <div>
           <h1 className="cds--type-heading-05">Create invoice</h1>
-          <p className="cds--type-body-01">Tax invoices with {loaded.vatPercent}% VAT.</p>
+          <p className="cds--type-body-01">Tax invoices with VAT at the team&apos;s rate.</p>
         </div>
       </div>
 
@@ -244,7 +243,6 @@ function InvoiceForm({
         preview={preview}
         pricingError={pricingError}
         onRetryPricing={() => setPricingAttempt((attempt) => attempt + 1)}
-        vatRateLabel={`${loaded.vatPercent}%`}
         canDiscount={canDiscount}
         colleagues={colleagues}
         colleaguesError={colleaguesError}

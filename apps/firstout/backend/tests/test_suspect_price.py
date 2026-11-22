@@ -24,18 +24,16 @@ from tests.test_sku_bom import _sku
 def test_placeholder_and_below_cost_thresholds() -> None:
     placeholder = suspect_unit_price_warning(Decimal("1.00"), None, reveal_cost=True)
     assert placeholder == (
-        "Unit price R1.00 excl. VAT is R1.00 excl. VAT or below "
-        "(R1.15 incl. VAT or less). Check this price."
+        "Unit price R1.00 excl. VAT is R1.00 excl. VAT or below. Check this price."
     )
     retail_placeholder = suspect_unit_price_warning(
         Decimal("0.87"),
         None,
         reveal_cost=True,
-        prices_include_vat=True,
+        inclusive_vat_rate=Decimal("0.15"),
     )
     assert retail_placeholder == (
-        "Unit price R1.00 incl. VAT (R0.87 excl.) is R1.00 excl. VAT or below "
-        "(R1.15 incl. VAT or less). Check this price."
+        "Unit price R1.00 incl. VAT (R0.87 excl.) is R1.00 excl. VAT or below. Check this price."
     )
 
     at_cost = suspect_unit_price_warning(Decimal("1.00"), Decimal("1.00"), reveal_cost=True)
@@ -48,7 +46,7 @@ def test_placeholder_and_below_cost_thresholds() -> None:
         Decimal("400.00"),
         Decimal("1500.00"),
         reveal_cost=True,
-        prices_include_vat=True,
+        inclusive_vat_rate=Decimal("0.15"),
     )
     assert retail_below == (
         "Unit price R460.00 incl. VAT (R400.00 excl.) is below average cost R1500.00 excl. VAT."
@@ -63,7 +61,7 @@ def test_placeholder_and_below_cost_thresholds() -> None:
         Decimal("400.00"),
         Decimal("1500.00"),
         reveal_cost=False,
-        prices_include_vat=True,
+        inclusive_vat_rate=Decimal("0.15"),
     )
     assert hidden == RESTRICTED_SUSPECT_PRICE_WARNING
     assert "1500" not in hidden
@@ -168,8 +166,7 @@ async def test_manual_override_still_warns_and_quote_is_not_blocked(
     line = created.json()["lines"][0]
     assert Decimal(line["unit_ex_vat"]) == Decimal("1.00")
     assert line["suspect_price_warning"] == (
-        "Unit price R1.15 incl. VAT (R1.00 excl.) is R1.00 excl. VAT or below "
-        "(R1.15 incl. VAT or less). Check this price."
+        "Unit price R1.15 incl. VAT (R1.00 excl.) is R1.00 excl. VAT or below. Check this price."
     )
 
 

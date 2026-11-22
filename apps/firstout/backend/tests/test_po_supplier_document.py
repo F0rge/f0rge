@@ -607,7 +607,6 @@ def test_supplier_pdf_paginates_long_notes_and_unbreakable_fields():
             name="Seller " + "S" * 180,
             address="Address " + "A" * 300,
             vat_number="V" * 64,
-            vat_percent_label="15%",
         ),
         lines=[
             PurchaseOrderPdfLine(
@@ -648,7 +647,6 @@ def test_supplier_pdf_treats_dynamic_markup_as_literal_text():
             name="Seller <b>literal seller</b>",
             address="Address & <suite>",
             vat_number="VAT<123>",
-            vat_percent_label="15%",
         ),
         lines=[
             PurchaseOrderPdfLine(

@@ -66,7 +66,7 @@ from app.exceptions import (
 from app.services.sale_line_pricing import PricingAuthority, SaleLinePricing, SaleLineRequest
 from app.services.tax_invoice_issue import TaxInvoiceIssue
 from app.services.suspect_price import annotate_line_warnings
-from app.services.vat import CENT
+from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -322,6 +322,7 @@ class TillOrchestrator:
                 issue_date=sale_date,
                 due_date=data.due_date,
                 lines=invoice_line_models,
+                vat_rate=preview.vat_rate,
                 prices_include_vat=preview.prices_include_vat,
                 memo="Till tax invoice",
                 actor_user_id=user_id,
@@ -467,12 +468,14 @@ class TillOrchestrator:
             vat_amount=reloaded.vat_amount.quantize(CENT),
             total_inc_vat=reloaded.total_inc_vat.quantize(CENT),
             prices_include_vat=reloaded.prices_include_vat,
+            vat_rate=reloaded.vat_rate,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,
                     description=line.description,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    unit_inc_vat=ex_to_inc(line.unit_ex_vat, reloaded.vat_rate),
                     discount_percent=line.discount_percent,
                     ex_vat=line.ex_vat,
                     inc_vat=line.inc_vat.quantize(CENT),
@@ -494,7 +497,7 @@ class TillOrchestrator:
             self.db,
             sale.lines,
             viewer_user_id=user_id,
-            prices_include_vat=reloaded.prices_include_vat,
+            inclusive_vat_rate=reloaded.vat_rate if reloaded.prices_include_vat else None,
         )
         return sale
 

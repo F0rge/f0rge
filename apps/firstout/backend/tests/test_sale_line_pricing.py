@@ -8,6 +8,8 @@ from typing import Optional
 
 import pytest
 
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.exceptions import ForbiddenError
 from app.models.customer import Customer
 from app.models.price_list import PriceList, PriceListItem
@@ -44,7 +46,7 @@ STAFF = PricingAuthority(
 def test_line_amounts_round_each_line_once(unit, qty, discount, expected) -> None:
     # The till, quotes, orders and laybys take whole quantities only (qty: int), so there
     # is no fractional-quantity case.
-    amounts = line_amounts(D(unit), qty, D(discount) if discount is not None else None)
+    amounts = line_amounts(D(unit), qty, D(discount) if discount is not None else None, D("0.15"))
     assert amounts == tuple(D(value) for value in expected)
 
 
@@ -79,6 +81,39 @@ async def _customer(db, classification: str = "Retail", list_name: Optional[str]
 async def _price(db, customer, lines, authority=STAFF, *, enforce=True):
     pricing = await SaleLinePricing.for_customer(db, customer, authority)
     return await pricing.price(lines, enforce=enforce)
+
+
+async def _set_team_vat_rate(db, rate: str) -> None:
+    team = await TeamCRUD(db).get_first()
+    settings = await TeamSettingsCRUD(db).get_or_create_for_team(team.id)
+    settings.vat_rate = D(rate)
+    await db.flush()
+
+
+async def test_vat_comes_from_the_team_rate_or_the_stored_document_rate(async_db) -> None:
+    """ADR 0003: no hard-coded rate. The team's rate prices new documents; a stored
+    document's rate reprices that document whatever the setting says today."""
+    sku = await _sku(async_db, "1000.00")
+    customer = await _customer(async_db)
+    await _set_team_vat_rate(async_db, "0.16")
+
+    today = await _price(async_db, customer, [SaleLineRequest(sku=sku, qty=2)])
+    line = today.lines[0]
+    assert today.vat_rate == D("0.16")
+    assert (line.ex_vat, line.vat_amount, line.inc_vat) == (D("2000.00"), D("320.00"), D("2320.00"))
+    assert line.unit_inc_vat == D("1160.00")
+    assert (today.vat_amount, today.total_inc_vat, today.before_discount_inc_vat) == (
+        D("320.00"),
+        D("2320.00"),
+        D("2320.00"),
+    )
+
+    pricing = await SaleLinePricing.for_customer(async_db, customer, STAFF, vat_rate=D("0.15"))
+    stored = await pricing.price([SaleLineRequest(sku=sku, qty=2)])
+    assert stored.vat_rate == D("0.15")
+    assert (stored.vat_amount, stored.total_inc_vat) == (D("300.00"), D("2300.00"))
+    # The rate is part of the agreed calculation: a rate change is a price change.
+    assert stored.price_revision != today.price_revision
 
 
 async def test_price_list_beats_tier_beats_retail_and_cin7_lists_are_skipped(async_db) -> None:
@@ -278,6 +313,7 @@ async def test_draft_reprice_keeps_legacy_net_order_lines(async_db) -> None:
         subtotal_ex_vat=D("130.00"),
         vat_amount=D("19.50"),
         total_inc_vat=D("149.50"),
+        vat_rate=D("0.15"),
         amount_paid=D(0),
         prices_include_vat=True,
         lines=[

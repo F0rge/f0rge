@@ -128,7 +128,7 @@ function DraftFields({ draft }: { draft: Vat201Draft }) {
             </TableRow>
             <TableRow>
               <TableCell>2</TableCell>
-              <TableCell>Output tax at 15%</TableCell>
+              <TableCell>Output tax</TableCell>
               <TableCell>
                 <TextInput id="field-2" labelText="" hideLabel value={draft.output_tax} readOnly />
               </TableCell>

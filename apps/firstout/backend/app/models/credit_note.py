@@ -30,6 +30,10 @@ class CreditNote(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # The VAT rate the amounts above were computed at (0.15 is 15%), kept for reprints,
+    # credit notes and conversions (Firstout ADR 0003). Every writer sets it; the
+    # database default only lets the previous release insert during a deploy (P-020).
+    vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
 
     invoice: Mapped["TaxInvoice"] = relationship("TaxInvoice", back_populates="credit_note")
 

@@ -15,7 +15,7 @@ function line(sku_id: string | null, inc_vat: string): SaleLinePrice {
 
 function preview(lines: SaleLinePrice[]): SalePricePreview {
   return {
-    classification: "Retail", price_list_name: null, prices_include_vat: true,
+    classification: "Retail", price_list_name: null, prices_include_vat: true, vat_rate: "0.1500",
     before_discount_ex_vat: "0", before_discount_inc_vat: "0", subtotal_ex_vat: "0",
     vat_amount: "0", total_inc_vat: "0", price_revision: "r", lines,
   };

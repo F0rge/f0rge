@@ -76,7 +76,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const drafts = useSettingsDrafts();
   const client = useQueryClient();
-  const [vatPercent, setVatPercent] = useState("15");
+  const [vatPercent, setVatPercent] = useState("");
   const [currency, setCurrency] = useState("ZAR");
   const [legalName, setLegalName] = useState("");
   const [tradingName, setTradingName] = useState("");
@@ -557,7 +557,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
                   <NumberInput
                     id="vat-percent"
                     label="VAT rate (%)"
-                    helperText="Locked default is 15%. Owner may adjust for what-if only."
+                    helperText="Changes apply to new documents; existing documents keep the rate they were priced at."
                     value={vatPercent}
                     min={0}
                     max={100}

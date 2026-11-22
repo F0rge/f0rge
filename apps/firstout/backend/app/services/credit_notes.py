@@ -109,7 +109,9 @@ class CreditNoteService:
                 DocumentLine(
                     description=description,
                     qty=str(line.qty),
-                    unit=format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
+                    unit=format_pdf_unit(
+                        line.unit_ex_vat, invoice.prices_include_vat, credit_note.vat_rate
+                    ),
                     ex_vat=f"{line.ex_vat:.2f}",
                     vat=f"{line.vat_amount:.2f}",
                     inc_vat=f"{line.inc_vat:.2f}",
@@ -135,6 +137,7 @@ class CreditNoteService:
             lines=lines,
             subtotal_ex_vat=f"{credit_note.subtotal_ex_vat:.2f}",
             vat_amount=f"{credit_note.vat_amount:.2f}",
+            vat_rate=credit_note.vat_rate,
             total=f"{credit_note.total_inc_vat:.2f}",
             unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
             unit_header=pdf_unit_header(invoice.prices_include_vat),
@@ -188,6 +191,8 @@ class CreditNoteService:
             subtotal_ex_vat=subtotal_ex_vat,
             vat_amount=vat_amount,
             total_inc_vat=total_inc_vat,
+            # A credit note reverses VAT at the invoice's rate, never today's (ADR 0003).
+            vat_rate=invoice.vat_rate,
         )
         await self.crud.add_and_flush(credit_note)
         sales_parts: list[tuple[str, Decimal, Decimal]] = []
@@ -230,6 +235,7 @@ class CreditNoteService:
             subtotal_ex_vat=credit_note.subtotal_ex_vat,
             vat_amount=credit_note.vat_amount,
             total_inc_vat=credit_note.total_inc_vat,
+            vat_rate=credit_note.vat_rate,
             created_at=credit_note.created_at,
             updated_at=credit_note.updated_at,
         )

@@ -289,6 +289,7 @@ export {
   incVatToExVat,
   parsePriceInput,
   roundHalfUp,
+  vatPercentLabel,
 } from "./money";
 
 export {
@@ -1374,7 +1375,7 @@ export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 ];
 
 export const TAX_TREATMENTS: { value: TaxTreatment; label: string }[] = [
-  { value: "vat15", label: "VAT 15%" },
+  { value: "vat15", label: "VAT at the team's rate" },
   { value: "none", label: "None" },
 ];
 

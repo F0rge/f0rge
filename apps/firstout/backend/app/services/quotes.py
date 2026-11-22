@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from decimal import Decimal
 from typing import Optional
 
 from fastapi.responses import Response
@@ -116,6 +117,7 @@ class QuotesService:
             subtotal_ex_vat=priced.subtotal_ex_vat,
             vat_amount=priced.vat_amount,
             total_inc_vat=priced.total_inc_vat,
+            vat_rate=priced.vat_rate,
             notes=data.notes,
             internal_note=data.internal_note,
             valid_until=data.valid_until
@@ -178,6 +180,7 @@ class QuotesService:
                 user_id,
                 previous_lines=list(quote.lines),
                 priced_for=priced_for,
+                vat_rate=quote.vat_rate,
             )
             quote.lines.clear()
             await self.db.flush()
@@ -226,9 +229,11 @@ class QuotesService:
         customer = await self._require_customer(data.customer_id)
         previous: list[QuoteLine] = []
         priced_for = None
+        vat_rate = None
         if data.quote_id is not None:
             quote = await self._get_or_404(data.quote_id)
             previous, priced_for = list(quote.lines), quote.customer_id
+            vat_rate = quote.vat_rate
         _, preview = await self._build_line_models(
             customer,
             data.lines,
@@ -236,6 +241,7 @@ class QuotesService:
             previous_lines=previous,
             priced_for=priced_for,
             enforce=False,
+            vat_rate=vat_rate,
         )
         return preview
 
@@ -263,7 +269,9 @@ class QuotesService:
         quote = await self._get_or_404(quote_id)
         lines = []
         for line in quote.lines:
-            ex_vat, vat, inc_vat = line_amounts(line.unit_ex_vat, line.qty, line.discount_percent)
+            ex_vat, vat, inc_vat = line_amounts(
+                line.unit_ex_vat, line.qty, line.discount_percent, quote.vat_rate
+            )
             description = line.description
             printed_warning = customer_price_warning(line.price_warning)
             if printed_warning:
@@ -273,7 +281,9 @@ class QuotesService:
                 DocumentLine(
                     description=description,
                     qty=str(line.qty),
-                    unit=format_pdf_unit(line.unit_ex_vat, quote.prices_include_vat),
+                    unit=format_pdf_unit(
+                        line.unit_ex_vat, quote.prices_include_vat, quote.vat_rate
+                    ),
                     ex_vat=f"{ex_vat:.2f}",
                     vat=f"{vat:.2f}",
                     inc_vat=f"{inc_vat:.2f}",
@@ -297,6 +307,7 @@ class QuotesService:
             lines=lines,
             subtotal_ex_vat=f"{quote.subtotal_ex_vat:.2f}",
             vat_amount=f"{quote.vat_amount:.2f}",
+            vat_rate=quote.vat_rate,
             total=f"{quote.total_inc_vat:.2f}",
             unit_basis_note=pdf_unit_basis_note(quote.prices_include_vat),
             unit_header=pdf_unit_header(quote.prices_include_vat),
@@ -333,11 +344,13 @@ class QuotesService:
         previous_lines: Optional[list[QuoteLine]] = None,
         priced_for: Optional[uuid.UUID] = None,
         enforce: bool = True,
+        vat_rate: Optional[Decimal] = None,
     ) -> tuple[list[QuoteLine], SalePricePreview]:
         """A quote line keeps its saved price and discount unless the request changes them.
 
         Saved lines were priced for ``priced_for``. For another customer they are priced
-        afresh, unless the actor may override prices anyway (ADR 0002).
+        afresh, unless the actor may override prices anyway (ADR 0002). ``vat_rate`` is
+        the saved quote's rate (ADR 0003); a new quote takes the team's.
         """
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
         authority = await PricingAuthority.of(self.db, user_id)
@@ -368,7 +381,9 @@ class QuotesService:
                     saved=prior if keep_saved else None,
                 )
             )
-        pricing = await SaleLinePricing.for_customer(self.db, customer, authority)
+        pricing = await SaleLinePricing.for_customer(
+            self.db, customer, authority, vat_rate=vat_rate
+        )
         preview = await pricing.price(requests, enforce=enforce)
         models = [
             QuoteLine(
@@ -485,6 +500,7 @@ class QuotesService:
             subtotal_ex_vat=quote.subtotal_ex_vat,
             vat_amount=quote.vat_amount,
             total_inc_vat=quote.total_inc_vat,
+            vat_rate=quote.vat_rate,
             notes=quote.notes,
             internal_note=quote.internal_note,
             sales_staff_id=quote.sales_staff_id,
@@ -517,6 +533,6 @@ class QuotesService:
             self.db,
             response.lines,
             viewer_user_id=viewer_user_id,
-            prices_include_vat=quote.prices_include_vat,
+            inclusive_vat_rate=quote.vat_rate if quote.prices_include_vat else None,
         )
         return response

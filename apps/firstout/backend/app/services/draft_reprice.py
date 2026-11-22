@@ -114,7 +114,12 @@ class DraftRepriceService:
                     document.vat_amount,
                     document.total_inc_vat,
                 ) = document_totals(
-                    (line.unit_ex_vat, line.qty, line.discount_percent) for line in document.lines
+                    (
+                        (line.unit_ex_vat, line.qty, line.discount_percent)
+                        for line in document.lines
+                    ),
+                    # The draft keeps the rate it was created at (ADR 0003).
+                    document.vat_rate,
                 )
                 document.prices_include_vat = including_vat
 

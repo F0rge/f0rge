@@ -34,7 +34,12 @@ from app.services.inventory import InventoryService
 from app.services.sku_barcode import csv_style_barcode
 from app.services.stock_movements import StockMovementService
 from app.services.suspect_price import average_costs_by_sku_id, tier_price_below_cost
-from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
+from app.services.vat import (
+    current_vat_rate,
+    inc_to_ex,
+    inc_vat_or_none,
+    validate_non_negative_price,
+)
 from app.services.object_storage import (
     read_bytes,
     save_bytes,
@@ -61,6 +66,7 @@ def _apply_stored_ex_vat(
     column: str,
     ex_field: str,
     inc_field: str,
+    vat_rate: Decimal,
 ) -> None:
     if ex_field in fields_set and inc_field in fields_set:
         raise ValidationError(f"Cannot set both {ex_field} and {inc_field}")
@@ -76,7 +82,7 @@ def _apply_stored_ex_vat(
             setattr(sku, column, None)
         else:
             validate_non_negative_price(value, inc_field)
-            setattr(sku, column, inc_to_ex(value))
+            setattr(sku, column, inc_to_ex(value, vat_rate))
 
 
 def _blank_to_none(value: Optional[str]) -> Optional[str]:
@@ -318,6 +324,9 @@ class SkuService:
             assert data.carton_count is not None
             sku.carton_count = data.carton_count
 
+        # Catalogue prices convert at the team's rate today (ADR 0003). Known limit, not
+        # fixed here (ADR 0001): R999 incl. → R868.70 excl. → R999.01 incl.
+        vat_rate = await current_vat_rate(self.db)
         for column, ex_field, inc_field in _PRICE_COLUMNS:
             _apply_stored_ex_vat(
                 sku,
@@ -326,6 +335,7 @@ class SkuService:
                 column=column,
                 ex_field=ex_field,
                 inc_field=inc_field,
+                vat_rate=vat_rate,
             )
 
         try:
@@ -479,10 +489,12 @@ class SkuService:
         supplier_names = await self.supplier_crud.names_by_ids(supplier_ids)
         kit_ids = await self.bom_crud.parent_ids_with_bom(sku_ids)
         average_costs = await average_costs_by_sku_id(self.db, sku_ids)
+        vat_rate = await current_vat_rate(self.db)
 
         return [
             self._to_response(
                 sku,
+                vat_rate=vat_rate,
                 preferred_supplier_name=(
                     supplier_names.get(sku.preferred_supplier_id)
                     if sku.preferred_supplier_id is not None
@@ -511,6 +523,7 @@ class SkuService:
         self,
         sku: Sku,
         *,
+        vat_rate: Decimal,
         preferred_supplier_name: Optional[str] = None,
         last_landed_cost_zar: Optional[Decimal] = None,
         is_kit: bool = False,
@@ -552,13 +565,13 @@ class SkuService:
             gallery_photo_count=len(sku.gallery_photo_keys or ()),
             **{field: getattr(sku, field) for field in SKU_DETAIL_FIELDS},
             stockist_ex_vat=sku.stockist_ex_vat,
-            stockist_inc_vat=inc_vat_or_none(sku.stockist_ex_vat),
+            stockist_inc_vat=inc_vat_or_none(sku.stockist_ex_vat, vat_rate),
             wholesale_ex_vat=sku.wholesale_ex_vat,
-            wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
+            wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat, vat_rate),
             decorator_ex_vat=sku.decorator_ex_vat,
-            decorator_inc_vat=inc_vat_or_none(sku.decorator_ex_vat),
+            decorator_inc_vat=inc_vat_or_none(sku.decorator_ex_vat, vat_rate),
             retail_ex_vat=sku.retail_ex_vat,
-            retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat, vat_rate),
             average_unit_cost_zar=average_unit_cost_zar,
             stockist_below_cost=stockist_below_cost,
             wholesale_below_cost=wholesale_below_cost,

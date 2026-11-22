@@ -149,6 +149,7 @@ class LaybysService:
             subtotal_ex_vat=priced.subtotal_ex_vat,
             vat_amount=priced.vat_amount,
             total_inc_vat=priced.total_inc_vat,
+            vat_rate=priced.vat_rate,
             amount_paid=Decimal(0),
             notes=data.notes,
             created_by_user_id=user_id,
@@ -224,8 +225,11 @@ class LaybysService:
         total_inc = Decimal(0)
 
         for index, line in enumerate(layby.lines):
-            # Layby lines carry no discount.
-            ex_vat, line_vat, inc_vat = line_amounts(line.unit_ex_vat, line.qty, None)
+            # Layby lines carry no discount. The rate is the layby's, fixed when it was
+            # concluded (ADR 0003, SARS 2018 FAQ Q13), not today's setting.
+            ex_vat, line_vat, inc_vat = line_amounts(
+                line.unit_ex_vat, line.qty, None, layby.vat_rate
+            )
             total_inc += inc_vat
             invoice_line_models.append(
                 InvoiceLine(
@@ -246,6 +250,7 @@ class LaybysService:
                 customer=layby.customer,
                 issue_date=issue_date,
                 lines=invoice_line_models,
+                vat_rate=layby.vat_rate,
                 prices_include_vat=shows_prices_including_vat(layby.customer),
                 memo="Layby tax invoice",
                 actor_user_id=user_id,
@@ -494,6 +499,7 @@ class LaybysService:
             subtotal_ex_vat=layby.subtotal_ex_vat,
             vat_amount=layby.vat_amount,
             total_inc_vat=layby.total_inc_vat,
+            vat_rate=layby.vat_rate,
             amount_paid=layby.amount_paid,
             balance=balance,
             notes=layby.notes,

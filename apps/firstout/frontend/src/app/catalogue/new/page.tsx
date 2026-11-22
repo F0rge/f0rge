@@ -445,9 +445,9 @@ export default function NewSkuPage() {
 
           <Tile>
             <Stack gap={5}>
-              <h2 className="cds--type-productive-heading-02">Pricing (ZAR, includes 15% VAT)</h2>
+              <h2 className="cds--type-productive-heading-02">Pricing (ZAR, includes VAT)</h2>
               <p className="cds--type-body-01">
-                Enter each price including VAT. Firstout stores the ex-VAT amount at 15%.
+                Enter each price including VAT. Firstout stores the ex-VAT amount at the team&apos;s VAT rate.
               </p>
               <Grid condensed fullWidth>
                 <Column lg={8} md={4} sm={4}>

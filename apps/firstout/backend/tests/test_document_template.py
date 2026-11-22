@@ -22,7 +22,6 @@ SELLER = SellerDetails(
     name="Example Pty Ltd",
     address="1 Test Street",
     vat_number="4000000001",
-    vat_percent_label="15.00%",
     bank_name="Example Bank",
     bank_account="000000",
 )

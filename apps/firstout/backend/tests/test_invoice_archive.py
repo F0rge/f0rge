@@ -176,6 +176,7 @@ async def test_archive_restore_lifecycle_status_filters_and_kpis(
         subtotal_ex_vat=Decimal(100),
         vat_amount=Decimal(15),
         total_inc_vat=Decimal(115),
+        vat_rate=Decimal("0.15"),
         amount_paid=Decimal(0),
         is_archive=True,
         lines=[

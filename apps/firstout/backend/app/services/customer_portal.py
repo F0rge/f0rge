@@ -21,7 +21,7 @@ from app.schemas.sales_order import SalesOrderCreate, SalesOrderLineCreate, Sale
 from app.services.pricing import customer_price_warning, resolve_unit_ex_vat
 from app.services.portal_identity import PortalPrincipal
 from app.services.sales_orders import SalesOrdersService
-from app.services.vat import ex_to_inc
+from app.services.vat import current_vat_rate, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 
 CUSTOMER_COOKIE_NAME = "firstout_customer_session"
@@ -66,6 +66,7 @@ class CustomerPortalService:
     async def catalogue(self, portal_user_id: uuid.UUID) -> list[PortalCatalogueItem]:
         user = await self._require_user(portal_user_id)
         skus = await self.sku_crud.list_all()
+        vat_rate = await current_vat_rate(self.db)
         items: list[PortalCatalogueItem] = []
         for sku in skus:
             if sku.is_archived or not sku.is_sellable:
@@ -80,7 +81,7 @@ class CustomerPortalService:
                     our_ref=sku.our_ref,
                     name=sku.name,
                     unit_ex_vat=unit_ex,
-                    unit_inc_vat=ex_to_inc(unit_ex),
+                    unit_inc_vat=ex_to_inc(unit_ex, vat_rate),
                 )
             )
         return items

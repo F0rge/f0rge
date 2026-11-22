@@ -35,6 +35,7 @@ import {
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { formatObservedMedianLine } from "@/lib/lead-times";
+import { referenceQueries } from "@/lib/queries";
 
 type PriceBasis = "ex" | "inc";
 
@@ -305,6 +306,9 @@ export function SkuPriceEditor({
     enabled: costAuditEnabled,
   });
   const costAudit = (costAuditEnabled && costAuditQuery.data) || [];
+  // The inc/ex pairing uses the team's VAT rate (ADR 0003); price fields wait for it.
+  const settingsQuery = useQuery(referenceQueries.settings);
+  const vatRate = settingsQuery.data?.vat_rate;
   const costAuditLoading = costAuditQuery.isFetching;
 
   useEffect(() => {
@@ -320,9 +324,9 @@ export function SkuPriceEditor({
     setForm((current) => {
       const parsed = parsePriceInput(value);
       const paired =
-        parsed === null
+        parsed === null || !vatRate
           ? ""
-          : formatPriceAmount(basis === "ex" ? exVatToIncVat(parsed) : incVatToExVat(parsed));
+          : formatPriceAmount(basis === "ex" ? exVatToIncVat(parsed, vatRate) : incVatToExVat(parsed, vatRate));
       return {
         ...current,
         prices: {
@@ -578,21 +582,34 @@ export function SkuPriceEditor({
               <InlineNotification kind="error" title="Made-to-order offer needs attention" subtitle={madeToOrderError} hideCloseButton lowContrast />}
           </>
         )}
+        {!readOnly && settingsQuery.isError && !vatRate ? (
+          <InlineNotification
+            kind="error"
+            title="Could not load the team's VAT rate"
+            subtitle="Prices can't be edited until it loads."
+            hideCloseButton
+            lowContrast
+          >
+            <Button kind="tertiary" size="sm" onClick={() => void settingsQuery.refetch()}>
+              Try again
+            </Button>
+          </InlineNotification>
+        ) : null}
         {PRICE_TIERS.map((tier) => (
           <div key={tier.key} style={{ display: "grid", gap: "1rem" }}>
             <TextInput
               id={`sku-${tier.key}-ex-vat`}
               labelText={`${tier.label} ex-VAT`}
-              helperText="Stored ex VAT. VAT 15% — paired inc-VAT updates as you type"
+              helperText="Stored ex VAT. The inc-VAT price follows at the team's VAT rate as you type."
               value={form.prices[tier.key].ex}
-              readOnly={readOnly}
+              readOnly={readOnly || !vatRate}
               onChange={(event) => updateTier(tier.key, "ex", event.target.value)}
             />
             <TextInput
               id={`sku-${tier.key}-inc-vat`}
               labelText={`${tier.label} inc-VAT`}
               value={form.prices[tier.key].inc}
-              readOnly={readOnly}
+              readOnly={readOnly || !vatRate}
               onChange={(event) => updateTier(tier.key, "inc", event.target.value)}
             />
           </div>

@@ -55,6 +55,7 @@ class TaxInvoiceIssue:
         customer: Customer,
         issue_date: datetime.date,
         lines: list[InvoiceLine],
+        vat_rate: Decimal,
         prices_include_vat: bool,
         memo: str,
         actor_user_id: Optional[uuid.UUID],
@@ -68,6 +69,8 @@ class TaxInvoiceIssue:
         event_note: Optional[str] = None,
     ) -> TaxInvoice:
         """Issue ``lines`` as a numbered, posted tax invoice.
+
+        ``vat_rate`` is the rate the caller priced ``lines`` at; the invoice keeps it.
 
         ``memo`` labels the sales journal ("Till tax invoice" → "Till tax invoice INV-0001").
         Raises ``ConflictError`` when the books period covering ``issue_date`` is locked.
@@ -87,6 +90,7 @@ class TaxInvoiceIssue:
             subtotal_ex_vat=subtotal,
             vat_amount=vat_total,
             total_inc_vat=total_inc,
+            vat_rate=vat_rate,
             amount_paid=deposits.amount if deposits is not None else Decimal(0),
             prices_include_vat=prices_include_vat,
             on_account=on_account,

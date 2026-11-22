@@ -63,7 +63,7 @@ from app.services.chart_of_accounts import (
 from app.services.object_storage import read_bytes
 from app.services.sales_orders import SalesOrdersService
 from app.services.storefront_system_actor import StorefrontSystemActorService
-from app.services.vat import ex_to_inc
+from app.services.vat import current_vat_rate, ex_to_inc
 from app.models.unit_cost_audit import UnitCostAuditSource
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -95,6 +95,7 @@ class OpsCommerceService:
         auto_publish = settings.ops_commerce_auto_publish_enabled
         curated = await self.crud.curated_catalogue_enabled(company_id)
         snapshots = await self.crud.published_products(auto_publish=auto_publish, curated=curated)
+        vat_rate = await current_vat_rate(self.db)
         return OpsProductsResponse(
             company_id=company_id,
             **({"curated_catalogue": curated} if catalogue_version == 2 else {}),
@@ -103,7 +104,7 @@ class OpsCommerceService:
                     source_sku_id=sku.id,
                     sku=sku.sku,
                     name=sku.name,
-                    price_minor_zar=int(ex_to_inc(sku.retail_ex_vat) * 100),
+                    price_minor_zar=int(ex_to_inc(sku.retail_ex_vat, vat_rate) * 100),
                     available_quantity=sku.available_quantity,
                     revision=self._utc_revision(sku.revision),
                     observed_at=self._as_utc(sku.observed_at),
@@ -456,6 +457,9 @@ class OpsCommerceService:
             ),
             vat_amount=money(data.totals.tax_minor_zar),
             total_inc_vat=order_total,
+            # The storefront's own tax amounts, charged at the published inclusive prices,
+            # which follow the team's rate today.
+            vat_rate=await current_vat_rate(self.db),
             amount_paid=order_total,
             fulfillment_promise=(
                 data.fulfillment_promise.model_dump(mode="json")

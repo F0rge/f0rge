@@ -1,24 +1,32 @@
 /**
  * Rand amounts in the browser: display formatting and parsing. Sale documents are
- * priced by the server (Firstout ADR 0001); the VAT conversions below serve the
- * catalogue price editor and stored-unit display until the VAT rate is snapshotted.
+ * priced by the server (Firstout ADR 0001). The browser holds no VAT rate (ADR 0003):
+ * callers pass a document's stored `vat_rate`, a preview's, or the team's setting.
  */
 
-const VAT_MULTIPLIER = 1.15;
-
-/** Round to cents using ROUND_HALF_UP (ties away from zero). */
+/**
+ * Round to cents using ROUND_HALF_UP (ties away from zero), as the server's Decimal does.
+ * toPrecision(15) drops float noise first: 1739.10 x 1.15 is 1999.9649999999997 in binary,
+ * a tie at the cent that must round up to 1999.97.
+ */
 export function roundHalfUp(value: number, decimals = 2): number {
   const factor = 10 ** decimals;
-  const scaled = value * factor;
+  const scaled = Number((value * factor).toPrecision(15));
   return (Math.sign(scaled) * Math.round(Math.abs(scaled))) / factor;
 }
 
-export function exVatToIncVat(ex: number): number {
-  return roundHalfUp(ex * VAT_MULTIPLIER, 2);
+/** `rate` is a VAT rate as the API sends it, e.g. "0.1500". */
+export function exVatToIncVat(ex: number, rate: string): number {
+  return roundHalfUp(ex * (1 + Number(rate)), 2);
 }
 
-export function incVatToExVat(inc: number): number {
-  return roundHalfUp(inc / VAT_MULTIPLIER, 2);
+export function incVatToExVat(inc: number, rate: string): number {
+  return roundHalfUp(inc / (1 + Number(rate)), 2);
+}
+
+/** "0.1500" -> "15%". */
+export function vatPercentLabel(rate: string): string {
+  return `${roundHalfUp(Number(rate) * 100, 2)}%`;
 }
 
 export function formatPriceAmount(value: number): string {

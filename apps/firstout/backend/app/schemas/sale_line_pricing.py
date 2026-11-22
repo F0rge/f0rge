@@ -38,6 +38,8 @@ class SalePricePreview(BaseModel):
     classification: str
     price_list_name: Optional[str]
     prices_include_vat: bool
+    # The VAT rate these amounts use (0.15 is 15%); the document stores it (ADR 0003).
+    vat_rate: Decimal
     before_discount_ex_vat: Decimal
     before_discount_inc_vat: Decimal
     subtotal_ex_vat: Decimal

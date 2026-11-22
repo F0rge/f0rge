@@ -66,7 +66,7 @@ function invoicesAdapter(colleagues: readonly SalesStaffOption[]) {
     title: "Invoices",
     singular: "invoice",
     breadcrumb: "Books",
-    description: "Tax invoices with 15% VAT.",
+    description: "Tax invoices with VAT at the team's rate.",
     defaultSort: "-issue_date",
     columns: [
       { key: "invoice_number", label: "Number", sortable: true, render: (item) => item.invoice_number },

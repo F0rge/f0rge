@@ -5,7 +5,11 @@ Till sales and their preview, quotes, sales orders, laybys, books invoices and t
 reprice all price through ``SaleLinePricing.price``; readers of stored lines use
 ``line_amounts`` / ``document_totals``. Behind the interface: unit price resolution
 (hand-made price list, classification tier, Retail), override and discount authority,
-rounding once per line, VAT per line, and the suspect-price warning.
+rounding once per line, VAT per line at one rate, and the suspect-price warning.
+
+ADR 0003: the rate is the team's ``vat_rate`` setting, read once when pricing starts, or
+the stored rate of the document being repriced; the preview returns it for the document
+to keep.
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ from app.services.pricing import (
     resolve_unit_price,
 )
 from app.services.suspect_price import average_costs_by_sku_id, suspect_line_warning
-from app.services.vat import CENT, ex_to_inc
+from app.services.vat import CENT, current_vat_rate, ex_to_inc
 from f0rge_core.exceptions import ConflictError
 
 _HUNDRED = Decimal(100)
@@ -47,7 +51,7 @@ def _cents(amount: Decimal) -> Decimal:
 
 
 def line_amounts(
-    unit_ex_vat: Decimal, qty: int, discount_percent: Optional[Decimal]
+    unit_ex_vat: Decimal, qty: int, discount_percent: Optional[Decimal], vat_rate: Decimal
 ) -> tuple[Decimal, Decimal, Decimal]:
     """A line's (ex VAT, VAT, incl. VAT): rounded once, half-up, VAT from the rounded amount.
 
@@ -55,17 +59,18 @@ def line_amounts(
     """
     discount = discount_percent or Decimal(0)
     ex_vat = _cents(unit_ex_vat * qty * (_HUNDRED - discount) / _HUNDRED)
-    inc_vat = ex_to_inc(ex_vat)
+    inc_vat = ex_to_inc(ex_vat, vat_rate)
     return ex_vat, inc_vat - ex_vat, inc_vat
 
 
 def document_totals(
     lines: Iterable[tuple[Decimal, int, Optional[Decimal]]],
+    vat_rate: Decimal,
 ) -> tuple[Decimal, Decimal, Decimal]:
     """(subtotal ex VAT, VAT, total incl. VAT) of (unit, qty, discount %) lines."""
     subtotal = vat = total = Decimal(0)
     for unit, qty, discount in lines:
-        ex_vat, line_vat, inc_vat = line_amounts(unit, qty, discount)
+        ex_vat, line_vat, inc_vat = line_amounts(unit, qty, discount, vat_rate)
         subtotal += ex_vat
         vat += line_vat
         total += inc_vat
@@ -143,12 +148,14 @@ class SaleLinePricing:
         authority: PricingAuthority,
         price_list_name: Optional[str],
         require_listed_price: bool,
+        vat_rate: Decimal,
     ) -> None:
         self.db = db
         self.customer = customer
         self.authority = authority
         self.price_list_name = price_list_name
         self.require_listed_price = require_listed_price
+        self.vat_rate = vat_rate
 
     @classmethod
     async def for_customer(
@@ -158,11 +165,16 @@ class SaleLinePricing:
         authority: PricingAuthority,
         *,
         enforce_required_list: bool = False,
+        vat_rate: Optional[Decimal] = None,
     ) -> SaleLinePricing:
         """``enforce_required_list`` applies the list's "till must use a listed price" switch.
 
         The till and books invoices set it; other documents fall back to tier and Retail.
+        ``vat_rate`` is a stored document's rate when repricing it; None takes the team's
+        rate today.
         """
+        if vat_rate is None:
+            vat_rate = await current_vat_rate(db)
         if customer.price_list_id is not None:
             policy = await PriceListCRUD(db).get_till_policy(customer.price_list_id)
             if policy is not None and not is_cin7_generated_price_list(policy[0]):
@@ -172,8 +184,8 @@ class SaleLinePricing:
                     raise TillPriceConflictError(
                         f"Assign an active price list instead of {name} before selling"
                     )
-                return cls(db, customer, authority, name, required)
-        return cls(db, customer, authority, None, False)
+                return cls(db, customer, authority, name, required, vat_rate)
+        return cls(db, customer, authority, None, False, vat_rate)
 
     async def price(
         self, lines: list[SaleLineRequest], *, enforce: bool = True
@@ -200,7 +212,7 @@ class SaleLinePricing:
                     line.discount_percent,
                     costs.get(line.sku_id),
                     reveal_cost=self.authority.sees_cost,
-                    prices_include_vat=including_vat,
+                    inclusive_vat_rate=self.vat_rate if including_vat else None,
                 )
         subtotal = sum((line.ex_vat for line in priced), Decimal(0))
         vat = sum((line.vat_amount for line in priced), Decimal(0))
@@ -208,11 +220,13 @@ class SaleLinePricing:
             classification=classification,
             price_list_name=self.price_list_name,
             prices_include_vat=including_vat,
+            vat_rate=self.vat_rate,
             before_discount_ex_vat=sum(
                 (line.before_discount_ex_vat for line in priced), Decimal(0)
             ),
             before_discount_inc_vat=sum(
-                (ex_to_inc(line.before_discount_ex_vat) for line in priced), Decimal(0)
+                (ex_to_inc(line.before_discount_ex_vat, self.vat_rate) for line in priced),
+                Decimal(0),
             ),
             subtotal_ex_vat=subtotal,
             vat_amount=vat,
@@ -311,13 +325,13 @@ class SaleLinePricing:
                 blocked = blocked or USERS_MANAGE
                 discount = Decimal("0.00")
 
-        ex_vat, vat, inc_vat = line_amounts(unit, request.qty, discount)
+        ex_vat, vat, inc_vat = line_amounts(unit, request.qty, discount, self.vat_rate)
         return SaleLinePrice(
             sku_id=request.sku.id if request.sku is not None else None,
             qty=request.qty,
             discount_percent=discount,
             unit_ex_vat=unit,
-            unit_inc_vat=ex_to_inc(unit),
+            unit_inc_vat=ex_to_inc(unit, self.vat_rate),
             resolved_unit_ex_vat=resolved,
             before_discount_ex_vat=unit * request.qty,
             ex_vat=ex_vat,

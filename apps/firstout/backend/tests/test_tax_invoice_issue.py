@@ -82,6 +82,7 @@ async def test_issue_numbers_posts_and_records(
         customer=customer,
         issue_date=TODAY,
         lines=_lines(),
+        vat_rate=Decimal("0.15"),
         prices_include_vat=True,
         memo="Test tax invoice",
         actor_user_id=None,
@@ -92,6 +93,7 @@ async def test_issue_numbers_posts_and_records(
         issue_date=TODAY,
         due_date=TODAY + datetime.timedelta(days=60),
         lines=_lines(),
+        vat_rate=Decimal("0.15"),
         prices_include_vat=False,
         memo="Test tax invoice",
         actor_user_id=None,
@@ -107,6 +109,8 @@ async def test_issue_numbers_posts_and_records(
         Decimal("153.33"),
     )
     assert first.amount_paid == Decimal(0)
+    # The invoice keeps the rate its lines were priced at (ADR 0003).
+    assert first.vat_rate == Decimal("0.15")
     # Due date: the customer's terms unless the caller set one.
     assert first.due_date == TODAY + datetime.timedelta(days=7)
     assert second.due_date == TODAY + datetime.timedelta(days=60)
@@ -151,6 +155,7 @@ async def test_issue_applies_deposits(
         customer=customer,
         issue_date=TODAY,
         lines=_lines(),
+        vat_rate=Decimal("0.15"),
         prices_include_vat=True,
         memo="Test tax invoice",
         actor_user_id=None,
@@ -185,6 +190,7 @@ async def test_issue_refuses_a_locked_period(
                 customer=customer,
                 issue_date=TODAY,
                 lines=_lines(),
+                vat_rate=Decimal("0.15"),
                 prices_include_vat=True,
                 memo="Test tax invoice",
                 actor_user_id=None,
@@ -209,6 +215,7 @@ async def test_issue_defaults_to_30_days_without_customer_terms_or_team_settings
         customer=customer,
         issue_date=TODAY,
         lines=_lines(),
+        vat_rate=Decimal("0.15"),
         prices_include_vat=True,
         memo="Test tax invoice",
         actor_user_id=None,

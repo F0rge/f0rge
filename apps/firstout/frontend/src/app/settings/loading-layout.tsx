@@ -31,7 +31,7 @@ export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents"
               </p>
               <SkeletonPlaceholder aria-hidden="true" style={{ width: "100%", height: "4rem" }} />
             </div>
-            <LoadingField label="VAT rate (%)" helperText="Locked default is 15%. Owner may adjust for what-if only." />
+            <LoadingField label="VAT rate (%)" helperText="Changes apply to new documents; existing documents keep the rate they were priced at." />
             <LoadingField label="Home currency" helperText="Locked default is ZAR." />
           </>
         ) : panel === "Documents" ? (

@@ -37,8 +37,6 @@ import {
   createCreditNote,
   createPayment,
   downloadInvoicePdf,
-  exVatToIncVat,
-  formatPriceAmount,
   formatZarAmount,
   getCustomer,
   getInvoice,
@@ -49,6 +47,7 @@ import {
   updateInvoiceNote,
   updateInvoiceSalesStaff,
   listPayments,
+  vatPercentLabel,
   type AppSettings,
   type CreditNote,
   type CustomerCrm,
@@ -519,7 +518,7 @@ export default function InvoiceDetailPage() {
                 </TableHeader> : null}
                 {!invoice.is_archive ? <TableHeader>Discount</TableHeader> : null}
                 <TableHeader>Ex VAT</TableHeader>
-                <TableHeader>{invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}</TableHeader>
+                <TableHeader>{invoice.is_archive ? "VAT" : `VAT (${vatPercentLabel(invoice.vat_rate)})`}</TableHeader>
                 <TableHeader>Inc VAT</TableHeader>
               </TableRow>
             </TableHead>
@@ -539,7 +538,7 @@ export default function InvoiceDetailPage() {
                   {!invoice.is_archive ? <TableCell>
                     {formatZarAmount(
                       invoice.prices_include_vat
-                        ? formatPriceAmount(exVatToIncVat(Number(line.unit_ex_vat)))
+                        ? line.unit_inc_vat
                         : line.unit_ex_vat,
                     )}
                   </TableCell> : null}
@@ -557,7 +556,7 @@ export default function InvoiceDetailPage() {
             Subtotal ex VAT: {formatInvoiceAmount(invoice.subtotal_ex_vat)}
           </p>
           <p className="cds--type-body-01">
-            {invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}: {formatInvoiceAmount(invoice.vat_amount)}
+            {invoice.is_archive ? "VAT" : `VAT (${vatPercentLabel(invoice.vat_rate)})`}: {formatInvoiceAmount(invoice.vat_amount)}
           </p>
           <p className="cds--type-productive-heading-02">
             Total: {formatInvoiceAmount(invoice.total_inc_vat)}

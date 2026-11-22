@@ -6179,6 +6179,8 @@ export interface components {
             vat_amount: string;
             /** Total Inc Vat */
             total_inc_vat: string;
+            /** Vat Rate */
+            vat_rate: string;
             /**
              * Created At
              * Format: date-time
@@ -7282,6 +7284,8 @@ export interface components {
             qty: number;
             /** Unit Ex Vat */
             unit_ex_vat: string;
+            /** Unit Inc Vat */
+            unit_inc_vat: string;
             /** Discount Percent */
             discount_percent: string | null;
             /** Ex Vat */
@@ -7450,6 +7454,8 @@ export interface components {
             vat_amount: string;
             /** Total Inc Vat */
             total_inc_vat: string;
+            /** Vat Rate */
+            vat_rate: string;
             /** Amount Paid */
             amount_paid: string;
             /** Balance */
@@ -7989,6 +7995,8 @@ export interface components {
             vat_amount: string;
             /** Total Inc Vat */
             total_inc_vat: string;
+            /** Vat Rate */
+            vat_rate: string;
             /** Amount Paid */
             amount_paid: string;
             /** Balance */
@@ -9655,6 +9663,8 @@ export interface components {
             vat_amount: string;
             /** Total Inc Vat */
             total_inc_vat: string;
+            /** Vat Rate */
+            vat_rate: string;
             /** Notes */
             notes: string | null;
             /** Internal Note */
@@ -9960,6 +9970,8 @@ export interface components {
             price_list_name: string | null;
             /** Prices Include Vat */
             prices_include_vat: boolean;
+            /** Vat Rate */
+            vat_rate: string;
             /** Before Discount Ex Vat */
             before_discount_ex_vat: string;
             /** Before Discount Inc Vat */
@@ -10244,6 +10256,8 @@ export interface components {
             vat_amount: string;
             /** Total Inc Vat */
             total_inc_vat: string;
+            /** Vat Rate */
+            vat_rate: string;
             /** Amount Paid */
             amount_paid: string;
             /** Balance */
@@ -12404,6 +12418,8 @@ export interface components {
             vat_amount: string;
             /** Total Inc Vat */
             total_inc_vat: string;
+            /** Vat Rate */
+            vat_rate: string;
             /** Prices Include Vat */
             prices_include_vat: boolean;
             /** Lines */

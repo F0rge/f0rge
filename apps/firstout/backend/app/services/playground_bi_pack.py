@@ -55,7 +55,7 @@ from app.services.skus import SkuService
 from app.services.suppliers import SupplierService
 from app.services.till_orchestrator import TillOrchestrator
 from app.services.transfers import TransferService
-from app.services.vat import CENT, ex_to_inc
+from app.services.vat import CENT, current_vat_rate, ex_to_inc
 from f0rge_core.exceptions import NotFoundError
 from f0rge_db.crud import unit_of_work
 
@@ -707,6 +707,7 @@ class PlaygroundBiPack:
             and spec["category"] in ("Seating", "Dining", "Bedroom")
             and self.showroom[spec["our_ref"]] >= 1
         ][:6]
+        vat_rate = await current_vat_rate(self.db)
         plans = [
             ("open", True, Decimal("0.20")),
             ("open", True, Decimal("0.25")),
@@ -720,7 +721,7 @@ class PlaygroundBiPack:
             if hold and self.showroom[spec["our_ref"]] < 1:
                 continue
             retail = Decimal(spec["retail_ex"])
-            total_inc = ex_to_inc(retail)
+            total_inc = ex_to_inc(retail, vat_rate)
             deposit = (total_inc * deposit_frac).quantize(CENT)
             if deposit <= 0:
                 deposit = Decimal("500.00")

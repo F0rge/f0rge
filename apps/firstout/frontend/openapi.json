@@ -20033,6 +20033,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Inc Vat"
           },
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -20056,6 +20061,7 @@
           "subtotal_ex_vat",
           "vat_amount",
           "total_inc_vat",
+          "vat_rate",
           "created_at",
           "updated_at"
         ],
@@ -22992,6 +22998,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Unit Ex Vat"
           },
+          "unit_inc_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Inc Vat"
+          },
           "discount_percent": {
             "anyOf": [
               {
@@ -23074,6 +23085,7 @@
           "description",
           "qty",
           "unit_ex_vat",
+          "unit_inc_vat",
           "discount_percent",
           "ex_vat",
           "inc_vat",
@@ -23387,6 +23399,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Inc Vat"
           },
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
           "amount_paid": {
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -23531,6 +23548,7 @@
           "subtotal_ex_vat",
           "vat_amount",
           "total_inc_vat",
+          "vat_rate",
           "amount_paid",
           "balance",
           "payment_status",
@@ -24729,6 +24747,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Inc Vat"
           },
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
           "amount_paid": {
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -24791,6 +24814,7 @@
           "subtotal_ex_vat",
           "vat_amount",
           "total_inc_vat",
+          "vat_rate",
           "amount_paid",
           "balance",
           "notes",
@@ -29496,6 +29520,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Inc Vat"
           },
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
           "notes": {
             "anyOf": [
               {
@@ -29602,6 +29631,7 @@
           "subtotal_ex_vat",
           "vat_amount",
           "total_inc_vat",
+          "vat_rate",
           "notes",
           "internal_note",
           "sales_staff_id",
@@ -30498,6 +30528,11 @@
             "type": "boolean",
             "title": "Prices Include Vat"
           },
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
           "before_discount_ex_vat": {
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -30540,6 +30575,7 @@
           "classification",
           "price_list_name",
           "prices_include_vat",
+          "vat_rate",
           "before_discount_ex_vat",
           "before_discount_inc_vat",
           "subtotal_ex_vat",
@@ -31237,6 +31273,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Inc Vat"
           },
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
           "amount_paid": {
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -31306,6 +31347,7 @@
           "subtotal_ex_vat",
           "vat_amount",
           "total_inc_vat",
+          "vat_rate",
           "amount_paid",
           "balance",
           "notes",
@@ -37805,6 +37847,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Inc Vat"
           },
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
           "prices_include_vat": {
             "type": "boolean",
             "title": "Prices Include Vat"
@@ -37835,6 +37882,7 @@
           "subtotal_ex_vat",
           "vat_amount",
           "total_inc_vat",
+          "vat_rate",
           "prices_include_vat",
           "lines",
           "location"

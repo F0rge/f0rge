@@ -76,7 +76,6 @@ def build_purchase_order_pdf(
         name=SELLER_NAME,
         address=SELLER_ADDRESS,
         vat_number=SELLER_VAT_NUMBER,
-        vat_percent_label="15%",
     )
     buffer = BytesIO()
     width, height = A4

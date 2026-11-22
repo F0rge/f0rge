@@ -53,7 +53,7 @@ from app.services.settings import SettingsService
 from app.services.settlement import SettlementStatus, cents
 from app.services.sale_line_pricing import PricingAuthority, SaleLinePricing, SaleLineRequest
 from app.services.tax_invoice_issue import TaxInvoiceIssue
-from app.services.vat import CENT
+from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -241,6 +241,7 @@ class InvoiceService:
                 issue_date=data.issue_date,
                 due_date=data.due_date,
                 lines=line_models,
+                vat_rate=priced.vat_rate,
                 prices_include_vat=shows_prices_including_vat(customer),
                 memo="Tax invoice",
                 actor_user_id=user_id,
@@ -290,7 +291,9 @@ class InvoiceService:
                 DocumentLine(
                     description=description,
                     qty=str(line.qty),
-                    unit=format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
+                    unit=format_pdf_unit(
+                        line.unit_ex_vat, invoice.prices_include_vat, invoice.vat_rate
+                    ),
                     ex_vat=f"{line.ex_vat:.2f}",
                     vat=f"{line.vat_amount:.2f}",
                     inc_vat=f"{line.inc_vat:.2f}",
@@ -320,6 +323,7 @@ class InvoiceService:
             lines=lines,
             subtotal_ex_vat=f"{invoice.subtotal_ex_vat:.2f}",
             vat_amount=f"{invoice.vat_amount:.2f}",
+            vat_rate=invoice.vat_rate,
             total=f"{invoice.total_inc_vat:.2f}",
             payments=[("Paid", f"{invoice.amount_paid:.2f}"), ("Balance owing", f"{balance:.2f}")],
             unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
@@ -445,12 +449,14 @@ class InvoiceService:
             if invoice.sales_staff_id
             else None,
             prices_include_vat=invoice.prices_include_vat,
+            vat_rate=invoice.vat_rate,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,
                     description=line.description,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    unit_inc_vat=ex_to_inc(line.unit_ex_vat, invoice.vat_rate),
                     discount_percent=line.discount_percent,
                     ex_vat=line.ex_vat,
                     inc_vat=_response_money(invoice, line.inc_vat),
@@ -470,7 +476,7 @@ class InvoiceService:
             self.db,
             response.lines,
             viewer_user_id=viewer_user_id,
-            prices_include_vat=invoice.prices_include_vat,
+            inclusive_vat_rate=invoice.vat_rate if invoice.prices_include_vat else None,
         )
         return response
 

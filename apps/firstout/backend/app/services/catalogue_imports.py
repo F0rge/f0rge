@@ -28,7 +28,7 @@ from app.services.catalogue_csv import (
 )
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
-from app.services.vat import inc_to_ex
+from app.services.vat import current_vat_rate, inc_to_ex
 from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ValidationError
 from f0rge_db.crud import unit_of_work
@@ -274,12 +274,14 @@ class CatalogueImportService:
         seen: set[str] = set()
         created_skus = 0
         updated_skus = 0
+        # Retail incl. VAT converts at the team's rate today (ADR 0003).
+        vat_rate = await current_vat_rate(self.db)
         for row in parsed.rows:
             if row.our_ref is None or row.our_ref in seen:
                 continue
             seen.add(row.our_ref)
             existing = await self.sku_crud.get_by_our_ref(row.our_ref)
-            sku = await self._upsert_inventory_row(row)
+            sku = await self._upsert_inventory_row(row, vat_rate)
             sku_ids[row.our_ref] = sku.id
             if existing is None:
                 created_skus += 1
@@ -287,11 +289,11 @@ class CatalogueImportService:
                 updated_skus += 1
         return sku_ids, inventory_costs, created_skus, updated_skus
 
-    async def _upsert_inventory_row(self, row: InventoryCsvRow) -> Sku:
+    async def _upsert_inventory_row(self, row: InventoryCsvRow, vat_rate: Decimal) -> Sku:
         assert row.our_ref is not None
         assert row.name is not None
         assert row.retail_inc_vat is not None
-        retail_ex = inc_to_ex(row.retail_inc_vat)
+        retail_ex = inc_to_ex(row.retail_inc_vat, vat_rate)
         existing = await self.sku_crud.get_by_our_ref(row.our_ref)
         if existing is not None:
             existing.name = row.name

@@ -59,6 +59,7 @@ async def test_archive_api_history_readable_but_live_debt_and_reconstructed_pdf_
         subtotal_ex_vat=Decimal(200),
         vat_amount=Decimal(30),
         total_inc_vat=Decimal(230),
+        vat_rate=Decimal("0.15"),
         amount_paid=Decimal(0),
         is_archive=True,
         lines=[

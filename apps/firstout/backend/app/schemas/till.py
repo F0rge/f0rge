@@ -72,6 +72,8 @@ class TillSaleResponse(BaseModel):
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal
+    # The rate the amounts use (0.15 is 15%), stored with the document (ADR 0003).
+    vat_rate: Decimal
     prices_include_vat: bool
     lines: list[InvoiceLineResponse]
     location: TillSaleLocationStock

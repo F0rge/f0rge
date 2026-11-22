@@ -43,7 +43,6 @@ type Loaded = {
   skus: Sku[];
   customers: CustomerCrm[];
   priceLists: PriceList[];
-  vatPercent: string;
   quote: Quote | null;
 };
 
@@ -353,7 +352,6 @@ function QuoteForm({
             preview={preview}
             pricingError={pricingError}
             onRetryPricing={() => setPricingAttempt((attempt) => attempt + 1)}
-            vatRateLabel={`${loaded.vatPercent}%`}
             canDiscount={canDiscount}
             colleagues={colleagues}
             colleaguesError={colleaguesError}

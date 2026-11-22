@@ -57,17 +57,15 @@ describe("queryKeys", () => {
 
 describe("combineSaleReference", () => {
   const ok = <T,>(data: T) => ({ data, error: null });
-  const settings = (vat_percent: string | null) => ({ vat_percent, payment_terms_days: 30 }) as never;
+  const lists = [{ id: "list-1", name: "Trade" }] as never[];
 
-  it("waits for all four and defaults VAT to 15%", () => {
-    expect(combineSaleReference([ok([]), { error: null }, ok([]), ok(settings(null))]).data).toBeUndefined();
-    const done = combineSaleReference([ok([]), ok([]), ok([]), ok(settings(null))]);
-    expect(done.data?.vatPercent).toBe("15");
-    expect(combineSaleReference([ok([]), ok([]), ok([]), ok(settings("16"))]).data?.vatPercent).toBe("16");
+  it("waits for all three", () => {
+    expect(combineSaleReference([ok([]), { error: null }, ok(lists)]).data).toBeUndefined();
+    expect(combineSaleReference([ok([]), ok([]), ok(lists)]).data?.priceLists).toEqual(lists);
   });
 
   it("reports the first failure", () => {
     const failure = new ApiError(500, "boom");
-    expect(combineSaleReference([ok([]), { error: failure }, ok([]), ok(settings(null))]).error).toBe(failure);
+    expect(combineSaleReference([ok([]), { error: failure }, ok(lists)]).error).toBe(failure);
   });
 });

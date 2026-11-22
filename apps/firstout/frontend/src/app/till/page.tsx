@@ -89,7 +89,6 @@ import {
   holdTillSale,
   resumeTillHeldSale,
   listPicks,
-  exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
   isActiveLocation,
@@ -104,6 +103,7 @@ import {
   previewTillPrices,
   settingsLogoUrl,
   updateTillBasket,
+  vatPercentLabel,
   type AppSettings,
   type CustomerCrm,
   type InventorySku,
@@ -467,7 +467,6 @@ function TillWorkspace() {
     () => new Map(inventory.map((entry) => [entry.sku_id, entry])),
     [inventory],
   );
-  const vatRateLabel = `${companySettings?.vat_percent ?? "15"}%`;
 
   const selectedCustomer =
     customers.find((customer) => customer.id === customerId) ??
@@ -1650,7 +1649,6 @@ function TillWorkspace() {
           preview={pricePreview}
           pricingError={pricingError}
           onRetryPricing={refreshPrices}
-          vatRateLabel={vatRateLabel}
           canDiscount={canDiscount}
           colleagues={colleagues}
           colleaguesError={colleaguesError}
@@ -1986,11 +1984,7 @@ function TillWorkspace() {
                       <TableCell>{line.qty}</TableCell>
                       <TableCell>
                         {formatZarAmount(
-                          lastSale.prices_include_vat
-                            ? formatPriceAmount(
-                                exVatToIncVat(Number(line.unit_ex_vat)),
-                              )
-                            : line.unit_ex_vat,
+                          lastSale.prices_include_vat ? line.unit_inc_vat : line.unit_ex_vat,
                         )}
                       </TableCell>
                       <TableCell>{formatDiscount(line.discount_percent)}</TableCell>
@@ -2008,7 +2002,7 @@ function TillWorkspace() {
                 Subtotal ex VAT: {formatZarAmount(lastSale.subtotal_ex_vat)}
               </p>
               <p>
-                VAT ({vatRateLabel}): {formatZarAmount(lastSale.vat_amount)}
+                VAT ({vatPercentLabel(lastSale.vat_rate)}): {formatZarAmount(lastSale.vat_amount)}
               </p>
               <p>
                 <strong>

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Optional
 
 from reportlab.lib.units import mm
@@ -24,7 +23,6 @@ class SellerDetails:
     name: str
     address: str
     vat_number: str
-    vat_percent_label: str
     bank_name: Optional[str] = None
     bank_account: Optional[str] = None
     bank_branch_code: Optional[str] = None
@@ -37,12 +35,10 @@ def seller_details_from_settings(
     *,
     logo_bytes: Optional[bytes] = None,
 ) -> SellerDetails:
-    vat_pct = (settings.vat_rate * Decimal("100")).quantize(Decimal("0.01"))
     return SellerDetails(
         name=settings.legal_name,
         address=settings.address,
         vat_number=settings.vat_number,
-        vat_percent_label=f"{vat_pct}%",
         bank_name=settings.bank_name,
         bank_account=settings.bank_account,
         bank_branch_code=settings.bank_branch_code,

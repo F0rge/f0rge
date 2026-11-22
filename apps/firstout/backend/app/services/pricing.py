@@ -73,9 +73,10 @@ def shows_prices_including_vat(customer: Optional[Customer]) -> bool:
     return classification_of(customer) == RETAIL_CLASSIFICATION
 
 
-def format_pdf_unit(unit_ex: Decimal, including_vat: bool) -> str:
+def format_pdf_unit(unit_ex: Decimal, including_vat: bool, vat_rate: Decimal) -> str:
     # The basis lives in the column header (pdf_unit_header), as on the invoice screen.
-    return f"{ex_to_inc(unit_ex) if including_vat else unit_ex:.2f}"
+    # ``vat_rate`` is the document's stored rate.
+    return f"{ex_to_inc(unit_ex, vat_rate) if including_vat else unit_ex:.2f}"
 
 
 def format_pdf_discount(discount_percent: Optional[Decimal]) -> Optional[str]:
