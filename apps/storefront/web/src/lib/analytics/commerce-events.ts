@@ -1,4 +1,5 @@
 import { opaqueAnalyticsId, type AnalyticsCustomerType } from "./attribution";
+import { catalogueProductTitle } from "./catalogue-title";
 import { asMinorUnits } from "./money";
 import type { AnalyticsProperties, SanitizedAnalyticsEvent } from "./events";
 
@@ -12,7 +13,7 @@ export type FrictionKind = "payment_declined" | "payment_cancelled" | "payment_u
 
 export type StorefrontCommerceBrowserEvent =
   | { name: "storefront_cart_viewed"; properties: { cart_id: string; item_count: number; value_minor: number } }
-  | { name: "storefront_cart_item_added"; properties: { variant_id: string; quantity: number; value_minor: number; product_id?: string; cart_id?: string } }
+  | { name: "storefront_cart_item_added"; properties: { variant_id: string; quantity: number; value_minor: number; product_id?: string; product_title?: string; cart_id?: string } }
   | { name: "storefront_cart_item_removed"; properties: { variant_id: string; quantity: number; value_minor: number; product_id?: string; cart_id?: string } }
   | { name: "storefront_checkout_started"; properties: { cart_id: string; item_count: number; value_minor: number; checkout_type: CheckoutType } }
   | { name: "storefront_checkout_step_completed"; properties: { cart_id: string; step: CheckoutStep; checkout_type: CheckoutType } }
@@ -91,7 +92,13 @@ export function sanitizeCommerceBrowserEvent(input: unknown): SanitizedAnalytics
       const safe: AnalyticsProperties = { variant_id: variantId, quantity, value_minor: valueMinor };
       const productId = properties.product_id === undefined ? null : opaqueAnalyticsId(properties.product_id);
       if (properties.product_id !== undefined && !productId) return null;
-      if (productId) safe.product_id = productId;
+      if (productId) {
+        safe.product_id = productId;
+        if (event.name === "storefront_cart_item_added") {
+          const productTitle = catalogueProductTitle(properties.product_title);
+          if (productTitle) safe.product_title = productTitle;
+        }
+      }
       const cartId = properties.cart_id === undefined ? null : opaqueAnalyticsId(properties.cart_id);
       if (properties.cart_id !== undefined && !cartId) return null;
       if (cartId) safe.cart_id = cartId;

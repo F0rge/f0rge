@@ -241,8 +241,12 @@ enrichment and IP retention, set a USD 5 analytics billing limit (an alert is
 not a cap), then set the public project token as
 `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`. The token is a public ingestion key, not
 an API secret. Without it, the consent controls work but the adapter sends no
-requests. Leave `NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV` unset so traffic stays
-marked `test`.
+requests. Browser events on `https://daskasas.co.za` and
+`https://www.daskasas.co.za` are tagged `production`. Other browser origins are
+tagged `test`. Server outcomes use the DasKasas production storefront service
+identity on Railway and otherwise default to `test`. The server honors
+`NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV` when explicitly set and also supports
+`STOREFRONT_RUNTIME_KIND=production` for deployments outside Railway.
 
 The analytics browser test uses the named `STOREFRONT_ANALYTICS_E2E=true` opt-in,
 the synthetic Medusa catalogue at `web/e2e/analytics-medusa-fixture.mjs`, and a

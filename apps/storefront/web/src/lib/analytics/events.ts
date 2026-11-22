@@ -1,4 +1,5 @@
 import { SHOP_CATEGORIES } from "../shop-categories";
+import { catalogueProductTitle } from "./catalogue-title";
 import { sanitizeCommerceBrowserEvent, type StorefrontCommerceBrowserEvent } from "./commerce-events";
 
 export type AnalyticsPageKey = "home" | "shop" | "category" | "product" | "help";
@@ -10,7 +11,7 @@ export type StorefrontBrowserEvent =
   | { name: "storefront_page_viewed"; properties: { page_key: AnalyticsPageKey; product_id?: string; utm_source?: string; utm_medium?: string; utm_campaign?: string; referrer_host?: string } }
   | { name: "storefront_product_impressed"; properties: { product_id: string; surface: AnalyticsSurface } }
   | { name: "storefront_product_selected"; properties: { product_id: string; surface: AnalyticsSurface } }
-  | { name: "storefront_product_viewed"; properties: { product_id: string } }
+  | { name: "storefront_product_viewed"; properties: { product_id: string; product_title?: string } }
   | { name: "storefront_product_media_selected"; properties: { product_id: string; media_index: number } }
   | { name: "storefront_product_variant_selected"; properties: { product_id: string; option_id: string; value_index: number; variant_id?: string } }
   | { name: "storefront_search_results_viewed"; properties: { query_present: boolean; category_id?: string; collection_id?: string; availability: SearchAvailability; price_filter_active: boolean; sort_order: SearchSortOrder; result_count: number } }
@@ -99,7 +100,11 @@ export function sanitizeAnalyticsEvent(input: unknown): SanitizedAnalyticsEvent 
     }
     case "storefront_product_viewed": {
       const productId = safeId(properties.product_id);
-      return productId ? { name: event.name, properties: { product_id: productId } } : null;
+      if (!productId) return null;
+      const safe: AnalyticsProperties = { product_id: productId };
+      const productTitle = catalogueProductTitle(properties.product_title);
+      if (productTitle) safe.product_title = productTitle;
+      return { name: event.name, properties: safe };
     }
     case "storefront_product_media_selected": {
       const productId = safeId(properties.product_id);

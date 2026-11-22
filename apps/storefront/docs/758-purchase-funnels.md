@@ -3,8 +3,8 @@
 Consented commerce events extend the browsing measurement from
 `docs/757-consented-measurement.md`. Optional capture still starts only after
 accept, and reject or withdraw still stops it. PostHog Cloud EU project
-`292683` ingests at `https://eu.i.posthog.com`. This repo does not call the
-PostHog API and does not contain a personal or project token.
+`292683` ingests at `https://eu.i.posthog.com`. The storefront uses a public
+ingestion token. It does not use a personal PostHog API key.
 
 ## Events
 
@@ -69,9 +69,13 @@ on 2026-10-03:
 - Verified deletion uses PostHog person deletion with recordings. Export uses
   batch export and per-recording JSON. Both are human steps in project
   `292683`. This change does not call those APIs.
-- Test traffic stays on `environment=test` until
-  `NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV=production` or
-  `STOREFRONT_RUNTIME_KIND=production`.
+- Browser events are tagged `production` on the two public HTTPS DasKasas
+  origins and `test` elsewhere. Server outcomes default to `test` outside the
+  DasKasas production storefront Railway service, unless explicitly configured.
+  `NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV=test` forces test tagging for server outcomes.
+- Product detail and successful add-to-bag events carry the public
+  `product_title` alongside the stable `product_id`. The product interest
+  dashboard groups by ID and shows the most recent reported title.
 - The free allowance is 1,000,000 analytics events and 5,000 recordings a
   month. Above that, the free plan drops data. If billing is enabled, set the
   analytics product billing limit to USD 5 so ingestion stops. Alerts at 70%

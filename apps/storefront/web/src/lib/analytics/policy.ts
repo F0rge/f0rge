@@ -30,8 +30,18 @@ export const ANALYTICS_POLICY = {
   testTrafficValue: "test",
 } as const;
 
+export function browserAnalyticsEnvironment(origin: string | undefined): "production" | "test" {
+  return origin === "https://daskasas.co.za" || origin === "https://www.daskasas.co.za" ? "production" : "test";
+}
+
 export function analyticsEnvironment(): "production" | "test" {
-  if (process.env.NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV === "production") return "production";
+  const configured = process.env.NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV;
+  if (configured === "production" || configured === "test") return configured;
   if (process.env.STOREFRONT_RUNTIME_KIND === "production") return "production";
+  if (
+    process.env.RAILWAY_PROJECT_NAME === "DasKasas" &&
+    process.env.RAILWAY_ENVIRONMENT_NAME === "production" &&
+    process.env.RAILWAY_SERVICE_NAME === "storefront"
+  ) return "production";
   return "test";
 }
