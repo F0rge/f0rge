@@ -40,3 +40,5 @@ test exercises the shared adapter; the first consuming app must add that coverag
 This uses test tools for this implementation; it does not turn conditional ADRs
 C-001 or C-002 into a repository-wide selection. No generated Zod adoption is
 introduced. No production app is migrated merely by adding this library.
+
+<!-- probe: setup-uv CI check, reverted next -->

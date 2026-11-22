@@ -16,3 +16,5 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+# probe: setup-uv CI check, reverted next
