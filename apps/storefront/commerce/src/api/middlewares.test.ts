@@ -1,6 +1,6 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
-import storefrontMiddlewares, { requireStorefrontBff } from "./middlewares";
+import storefrontMiddlewares, { requireStorefrontBff, restrictLegacyRefundWorkflow } from "./middlewares";
 
 type FakeResponse = {
   statusCode?: number;
@@ -159,5 +159,37 @@ describe("Paystack webhook route hardening", () => {
     expect(customRoute?.methods).toEqual(["POST"]);
     expect(customRoute?.bodyParser).toMatchObject({ preserveRawBody: true, sizeLimit: "64kb" });
     expect(customRoute?.middlewares).not.toContain(handler);
+  });
+});
+
+describe("legacy refund workflow execution", () => {
+  it.each([
+    "cancel-order/run",
+    "%63ancel-order/steps/success",
+    "refund-captured-payments-workflow/steps/failure",
+    "refund-payments-workflow/run",
+    "refund-payment-workflow/run",
+    "refund-payment-and-recreate-payment-session/run",
+    "complete-cart/run",
+    "process-payment-workflow/run",
+  ])("blocks the generic mutation for %s", (path) => {
+    const call = setup(`/admin/workflows-executions/${path}`, null);
+    call.req.method = "POST";
+    restrictLegacyRefundWorkflow(call.req, call.response, call.next);
+    expect(call.rawResponse.statusCode).toBe(409);
+    expect(call.next).not.toHaveBeenCalled();
+  });
+
+  it("leaves workflow reads, subscriptions and unrelated starts to the native routes", () => {
+    for (const [method, path] of [
+      ["GET", "/admin/workflows-executions/cancel-order/transaction"],
+      ["GET", "/admin/workflows-executions/cancel-order/subscribe"],
+      ["POST", "/admin/workflows-executions/update-products/run"],
+    ]) {
+      const call = setup(path, null);
+      call.req.method = method;
+      restrictLegacyRefundWorkflow(call.req, call.response, call.next);
+      expect(call.next).toHaveBeenCalledTimes(1);
+    }
   });
 });

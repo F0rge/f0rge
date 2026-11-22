@@ -3,12 +3,14 @@ import { assertHostedCommerceConfig } from './src/hosted-commerce-config'
 import { hostedLocalFileOptions } from './src/file-storage-url'
 import { testPaymentEnabled } from './src/test-payment-config'
 import { paystackPaymentEnabled } from './src/paystack-payment-config'
+import { installLegacyMedusaRefundGate } from './src/legacy-medusa-refund-gate'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 // Compilation opens no runtime services and needs no deployment credentials.
 // Actual start/develop/exec commands always validate their runtime configuration.
 const compileOnly = process.argv[2] === 'build'
 if (!compileOnly) assertHostedCommerceConfig(process.env)
+installLegacyMedusaRefundGate()
 
 const modules: Record<string, unknown>[] = process.env.REDIS_URL ? [
   {
@@ -29,6 +31,8 @@ const modules: Record<string, unknown>[] = process.env.REDIS_URL ? [
     }] },
   },
 ] : []
+
+modules.push({ resolve: "./src/modules/storefront-refund-cutover" })
 
 const notificationProviders: Record<string, unknown>[] = []
 if (process.env.STOREFRONT_SENDGRID_API_KEY && process.env.STOREFRONT_SENDGRID_FROM) {
