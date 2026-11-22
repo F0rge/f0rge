@@ -18,6 +18,7 @@ from app.models.journal import JournalDocumentType, JournalEntry, JournalLine
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
 from f0rge_core.exceptions import ConflictError
+from f0rge_db.crud import unit_of_work
 from tests.test_books_periods import _lock_books_period_for_today
 
 TODAY = datetime.date.today()
@@ -176,15 +177,18 @@ async def test_issue_refuses_a_locked_period(
     await _lock_books_period_for_today(owner_client)
     before = await async_db.scalar(select(func.count()).select_from(TaxInvoice))
 
+    # The posting seam refuses the sales journal; the caller's unit_of_work rolls back the
+    # already-flushed invoice with it.
     with pytest.raises(ConflictError, match="Books period is locked for this date"):
-        await TaxInvoiceIssue(async_db).issue(
-            customer=customer,
-            issue_date=TODAY,
-            lines=_lines(),
-            prices_include_vat=True,
-            memo="Test tax invoice",
-            actor_user_id=None,
-        )
+        async with unit_of_work(async_db):
+            await TaxInvoiceIssue(async_db).issue(
+                customer=customer,
+                issue_date=TODAY,
+                lines=_lines(),
+                prices_include_vat=True,
+                memo="Test tax invoice",
+                actor_user_id=None,
+            )
 
     assert await async_db.scalar(select(func.count()).select_from(TaxInvoice)) == before
 

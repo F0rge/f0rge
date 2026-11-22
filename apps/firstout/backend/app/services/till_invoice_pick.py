@@ -82,6 +82,7 @@ class TillInvoicePick:
         """
         assert pick.invoice is not None
         today = datetime.date.today()
+        # post() only runs when cost of goods > 0; this also stops zero-cost stock moving.
         await assert_date_postable(self.db, today)
         stocks = LocationStockCRUD(self.db)
         category_posting = CategoryPostingService(self.db)

@@ -3,8 +3,26 @@
 from __future__ import annotations
 
 import datetime
+import uuid
+from decimal import Decimal
 
+import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.journal import JournalDocumentType, JournalEntry
+from app.services.chart_of_accounts import CODE_BANK, CODE_DEPOSITS, LedgerPostingService
+from f0rge_core.exceptions import ConflictError
+from tests.test_laybys import _create_customer as _create_layby_customer
+from tests.test_laybys import _layby_payload, _stocked_sku_at_bedford
+from tests.test_stock_adjustments import (
+    _create_sku_with_opening,
+    _kramerville_id,
+    _location_on_hand,
+)
+from tests.test_stock_returns import _return_payload, _till_sale
+from tests.test_till import _inventory_on_hand
 from tests.test_purchase_orders import (
     MINIMAL_PDF,
     _create_sku,
@@ -340,3 +358,108 @@ async def test_locked_books_period_blocks_transfer_receive(
     )
     assert ok.status_code == 200, ok.text
     assert ok.json()["status"] == "received"
+
+
+# The lock lives behind LedgerPostingService.post: every system posting goes through it.
+
+
+async def _journal_count(db: AsyncSession, document_id: uuid.UUID) -> int:
+    return await db.scalar(
+        select(func.count())
+        .select_from(JournalEntry)
+        .where(JournalEntry.document_id == document_id)
+    )
+
+
+async def test_post_refuses_a_locked_date_and_writes_nothing(
+    owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    period = await _create_books_period(owner_client, "2026-03-01", "2026-03-31")
+    locked = await owner_client.post(f"/api/v1/books-periods/{period['id']}/lock")
+    assert locked.status_code == 200
+    lines = [
+        (CODE_BANK, Decimal("10.00"), Decimal(0)),
+        (CODE_DEPOSITS, Decimal(0), Decimal("10.00")),
+    ]
+    posting = LedgerPostingService(async_db)
+
+    refused_id = uuid.uuid4()
+    with pytest.raises(ConflictError, match="^Books period is locked for this date$"):
+        await posting.post(
+            JournalDocumentType.PAYMENT,
+            refused_id,
+            "Locked",
+            lines,
+            entry_date=datetime.date(2026, 3, 31),
+        )
+    assert await _journal_count(async_db, refused_id) == 0
+
+    open_id = uuid.uuid4()
+    entry = await posting.post(
+        JournalDocumentType.PAYMENT, open_id, "Open", lines, entry_date=datetime.date(2026, 4, 1)
+    )
+    assert entry.entry_date == datetime.date(2026, 4, 1)
+    assert await _journal_count(async_db, open_id) == 1
+
+
+async def test_locked_books_period_blocks_stock_adjustment(owner_client: AsyncClient) -> None:
+    location_id = await _kramerville_id(owner_client)
+    sku = await _create_sku_with_opening(owner_client, "BOOKS-ADJ", location_id, qty=5)
+    created = await owner_client.post(
+        "/api/v1/adjustments", json={"location_id": location_id, "reason": "damage"}
+    )
+    assert created.status_code == 201, created.text
+    adjustment_id = created.json()["id"]
+    line = await owner_client.post(
+        f"/api/v1/adjustments/{adjustment_id}/lines",
+        json={"sku_id": sku["id"], "qty_delta": -2},
+    )
+    assert line.status_code == 201, line.text
+    period = await _lock_books_period_for_today(owner_client)
+
+    blocked = await owner_client.post(f"/api/v1/adjustments/{adjustment_id}/complete")
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "Books period is locked for this date"
+    assert await _location_on_hand(owner_client, sku["id"], location_id) == 5
+
+    await _reopen_books_period(owner_client, period["id"])
+    ok = await owner_client.post(f"/api/v1/adjustments/{adjustment_id}/complete")
+    assert ok.status_code == 200, ok.text
+    assert await _location_on_hand(owner_client, sku["id"], location_id) == 3
+
+
+async def test_locked_books_period_blocks_stock_return(
+    async_client: AsyncClient, owner_client: AsyncClient
+) -> None:
+    sku_id, bedford_id, invoice_id, sale = await _till_sale(async_client, owner_client, "BOOKS-RTN")
+    created = await owner_client.post(
+        "/api/v1/returns",
+        json=_return_payload(invoice_id, bedford_id, sale["lines"][0]["id"], "restock"),
+    )
+    assert created.status_code == 201, created.text
+    return_id = created.json()["id"]
+    await _lock_books_period_for_today(owner_client)
+
+    blocked = await owner_client.post(f"/api/v1/returns/{return_id}/complete")
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "Books period is locked for this date"
+    unchanged = await owner_client.get(f"/api/v1/returns/{return_id}")
+    assert unchanged.json()["status"] == "draft"
+    assert unchanged.json()["credit_note_id"] is None
+    assert await _inventory_on_hand(owner_client, sku_id, bedford_id) == 1
+
+
+async def test_locked_books_period_blocks_layby_deposit(
+    async_client: AsyncClient, owner_client: AsyncClient
+) -> None:
+    sku_id, bedford_id = await _stocked_sku_at_bedford(async_client, owner_client, "BOOKS-LB")
+    customer_id = await _create_layby_customer(owner_client)
+    await _lock_books_period_for_today(owner_client)
+
+    blocked = await owner_client.post(
+        "/api/v1/laybys", json=_layby_payload(customer_id, bedford_id, sku_id)
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "Books period is locked for this date"
+    assert (await owner_client.get("/api/v1/laybys")).json()["total"] == 0
+    assert await _inventory_on_hand(owner_client, sku_id, bedford_id) == 2

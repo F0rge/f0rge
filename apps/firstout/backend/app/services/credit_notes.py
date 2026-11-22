@@ -28,7 +28,6 @@ from app.services.chart_of_accounts import (
 from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
 from app.services.sales_staff import SalesStaffService
 from app.services.pricing import format_pdf_unit, pdf_unit_basis_note, pdf_unit_header
-from app.services.books_periods import assert_date_postable
 from app.services.settings import SettingsService
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -71,8 +70,6 @@ class CreditNoteService:
         existing = await self.crud.get_by_invoice_id(data.invoice_id)
         if existing is not None:
             raise ConflictError("This invoice has already been credited")
-
-        await assert_date_postable(self.db, datetime.date.today())
 
         async with unit_of_work(self.db):
             credit_note = await self._create_and_post(
@@ -156,7 +153,6 @@ class CreditNoteService:
         sales_splits: list[tuple[Optional[uuid.UUID], Decimal]],
     ) -> CreditNote:
         """Create and post a credit note inside the caller's unit_of_work."""
-        await assert_date_postable(self.db, datetime.date.today())
         return await self._create_and_post(
             invoice=invoice,
             reason=reason,

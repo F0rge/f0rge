@@ -17,10 +17,14 @@ from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 
+class BooksPeriodLockedError(ConflictError):
+    """A posting dated in a locked books period. HTTP 409 like any ConflictError."""
+
+
 async def assert_date_postable(db: AsyncSession, target_date: datetime.date) -> None:
     locked = await BooksPeriodCRUD(db).find_locked_covering(target_date)
     if locked is not None:
-        raise ConflictError("Books period is locked for this date")
+        raise BooksPeriodLockedError("Books period is locked for this date")
 
 
 class BooksPeriodService:

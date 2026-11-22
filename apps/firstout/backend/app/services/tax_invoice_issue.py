@@ -17,7 +17,6 @@ from app.models.journal import JournalDocumentType
 from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.services.books_events import BooksEventService
-from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import CODE_AR, CODE_DEPOSITS, CODE_VAT, LedgerPostingService
 from app.services.payment_terms import compute_due_date
@@ -73,7 +72,6 @@ class TaxInvoiceIssue:
         ``memo`` labels the sales journal ("Till tax invoice" → "Till tax invoice INV-0001").
         Raises ``ConflictError`` when the books period covering ``issue_date`` is locked.
         """
-        await assert_date_postable(self.db, issue_date)
         if due_date is None:
             due_date = compute_due_date(issue_date, customer, await self._team_settings())
 

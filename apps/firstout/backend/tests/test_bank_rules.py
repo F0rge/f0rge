@@ -111,6 +111,40 @@ async def test_recode_journal_matched_line_to_other_expense(owner_client: AsyncC
     assert "5000" not in by_code
 
 
+async def test_recode_refuses_a_journal_in_a_locked_books_period(owner_client: AsyncClient) -> None:
+    from tests.test_books_periods import _create_books_period
+
+    accounts = await _accounts_by_code(owner_client)
+    rule = await _create_telephone_rule(owner_client, accounts)
+    upload = await owner_client.post(
+        "/api/v1/bank-imports",
+        files={"file": ("tel.csv", TELEPHONE_CSV.encode(), "text/csv")},
+    )
+    assert upload.status_code == 201
+    body = upload.json()
+    line_id = body["lines"][0]["id"]
+    applied = await owner_client.post(
+        f"/api/v1/bank-imports/{body['id']}/lines/{line_id}/apply-rule",
+        json={"rule_id": rule["id"]},
+    )
+    assert applied.status_code == 200
+    journal_id = applied.json()["matched_journal_id"]
+    period = await _create_books_period(owner_client, "2026-09-01", "2026-09-30")
+    assert (
+        await owner_client.post(f"/api/v1/books-periods/{period['id']}/lock")
+    ).status_code == 200
+
+    recode = await owner_client.post(
+        f"/api/v1/bank-imports/{body['id']}/lines/{line_id}/recode",
+        json={"account_id": accounts["5010"]["id"]},
+    )
+    assert recode.status_code == 409
+    assert recode.json()["detail"] == "Books period is locked for this date"
+    journal = await owner_client.get(f"/api/v1/journals/{journal_id}")
+    codes = {row["account_code"] for row in journal.json()["lines"]}
+    assert codes == {"5000", "1100"}
+
+
 async def test_inactive_rule_does_not_suggest(owner_client: AsyncClient) -> None:
     accounts = await _accounts_by_code(owner_client)
     rule = await _create_telephone_rule(owner_client, accounts)
