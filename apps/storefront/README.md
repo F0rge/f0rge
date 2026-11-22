@@ -233,12 +233,10 @@ Firstout or Marrow Railway projects.
 Optional DasKasas analytics stays off until a visitor accepts it. The browser
 adapter sends typed browsing and commerce events to PostHog Cloud EU. Purchases
 and refunds are emitted by the server confirmation path, once per opaque order
-or refund id. Session replay is consent-gated, sampled at 10% of eligible
-sessions, masked, and off for auth, account, checkout, payment, and
-confirmation routes. The adapter does not use cookies, persistent identity, or
-autocapture. Before enabling it, use EU project `292683`, disable GeoIP
-enrichment and IP retention, set a USD 5 analytics billing limit (an alert is
-not a cap), then set the public project token as
+or refund id. The adapter does not use cookies, persistent identity,
+autocapture, or session replay. Before enabling event analytics, use EU project
+`292683`, disable GeoIP enrichment and IP retention, and set a USD 5 analytics
+billing limit. Then set the public project token as
 `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`. The token is a public ingestion key, not
 an API secret. Without it, the consent controls work but the adapter sends no
 requests. Browser events on `https://daskasas.co.za` and

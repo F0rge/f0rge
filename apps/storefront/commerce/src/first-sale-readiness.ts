@@ -350,9 +350,6 @@ function analyticsFindings(value: unknown): string[] {
   if (analytics.consented !== true || analytics.rejected_stopped !== true || analytics.withdrawn_stopped !== true) {
     problems.push("Consented, rejected, and withdrawn analytics journeys were not recorded.");
   }
-  if (analytics.replay_excludes_sensitive_routes !== true) {
-    problems.push("Replay exclusions for auth, account, checkout, and confirmation were not recorded.");
-  }
   const dashboards = Array.isArray(analytics.dashboards) ? analytics.dashboards.filter((id) => typeof id === "string") : [];
   if (DASHBOARD_IDS.some((id) => !dashboards.includes(id))) problems.push("Analytics dashboards are incomplete.");
   if (analytics.personal_information_exposed !== false) problems.push("Analytics exposed personal information.");

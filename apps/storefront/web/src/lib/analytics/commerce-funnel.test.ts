@@ -7,8 +7,6 @@ import { OutcomeLedger, planConfirmationOutcomes, planPaymentFailure, stableRefu
 import { publishConfirmationOutcomes, publishPaymentFailure } from "./posthog-server";
 import { DASHBOARD_IDS, consentedCommerceDashboards } from "./dashboards";
 import { CONSENTED_MEASUREMENT_DISCLAIMER } from "./reports";
-import { decideReplay, isReplaySampled, replayConfigAllowsCapture, replayRouteAllowed, replaySampleBucket, REPLAY_SAMPLE_THRESHOLD, REPLAY_VENDOR_CONFIG } from "./replay";
-import { applyReplayDecision, startMaskedReplay, type ReplayRoot } from "./replay-recorder";
 
 const canary = {
   email: "ada@example.com",
@@ -199,108 +197,6 @@ describe("purchase attribution, privacy, and deduplication", () => {
   });
 });
 
-describe("replay gate", () => {
-  it("samples at most ten percent and stops on sensitive routes and overlays", () => {
-    expect(REPLAY_VENDOR_CONFIG.session_recording.sampleRate).toBe(0.1);
-    expect(REPLAY_VENDOR_CONFIG.session_recording.maskAllInputs).toBe(true);
-    expect(REPLAY_VENDOR_CONFIG.session_recording.maskTextSelector).toBe("*");
-    expect(REPLAY_VENDOR_CONFIG.session_recording.recordBody).toBe(false);
-    expect(REPLAY_VENDOR_CONFIG.session_recording.recordHeaders).toBe(false);
-    expect(REPLAY_VENDOR_CONFIG.enable_recording_console_log).toBe(false);
-    expect(REPLAY_VENDOR_CONFIG.autocapture).toBe(false);
-    expect(REPLAY_VENDOR_CONFIG.ip).toBe(false);
-    expect(REPLAY_VENDOR_CONFIG.api_host).toBe(POSTHOG_EU_HOST);
-
-    const keys = Array.from({ length: 400 }, (_value, index) => `session-${index}`);
-    expect(REPLAY_SAMPLE_THRESHOLD / 1000).toBe(0.1);
-    expect(keys.every((key) => isReplaySampled(key) === (replaySampleBucket(key) < REPLAY_SAMPLE_THRESHOLD))).toBe(true);
-    const sampled = keys.find((key) => isReplaySampled(key));
-    const unsampled = keys.find((key) => !isReplaySampled(key));
-    expect(sampled && unsampled).toBeTruthy();
-
-    const allowed = decideReplay({ consent: "accepted", sessionKey: sampled || "", pathname: "/shop?q=secret", sensitiveOverlay: false });
-    expect(allowed.record).toBe(true);
-    expect(allowed.config).toBe(REPLAY_VENDOR_CONFIG);
-    expect(JSON.stringify(allowed)).not.toContain("secret");
-
-    const journey = ["/shop", "/product/prod_chair", "/bag", "/checkout", "/order/confirmation", "/bag"];
-    const reasons = journey.map((pathname) => decideReplay({ consent: "accepted", sessionKey: sampled || "", pathname, sensitiveOverlay: false }).reason);
-    expect(reasons).toEqual(["consented_sample", "consented_sample", "consented_sample", "blocked_route", "blocked_route", "consented_sample"]);
-    for (const pathname of ["/sign-in", "/sign-up", "/account", "/account/orders/order_1", "/checkout", "/order/confirmation"]) {
-      expect(replayRouteAllowed(pathname)).toBe(false);
-    }
-    expect(decideReplay({ consent: "accepted", sessionKey: sampled || "", pathname: "/shop", sensitiveOverlay: true }).reason).toBe("sensitive_overlay");
-    expect(decideReplay({ consent: "rejected", sessionKey: sampled || "", pathname: "/shop", sensitiveOverlay: false }).record).toBe(false);
-    expect(decideReplay({ consent: null, sessionKey: sampled || "", pathname: "/bag", sensitiveOverlay: false }).record).toBe(false);
-    expect(decideReplay({ consent: "accepted", sessionKey: unsampled || "", pathname: "/shop", sensitiveOverlay: false }).record).toBe(false);
-
-    const root = fakeReplayRoot(canary.email);
-    const open = decideReplay({ consent: "accepted", sessionKey: sampled || "", pathname: "/shop", sensitiveOverlay: false });
-    let recording = applyReplayDecision(null, open, root);
-    expect(recording?.recording).toBe(true);
-    expect(root.subscribed).toBe(true);
-    const kept = applyReplayDecision(recording, open, root);
-    expect(kept).toBe(recording);
-    root.emit();
-    expect(recording?.frames()).toEqual([{ kind: "input", masked: "*" }]);
-    expect(JSON.stringify(recording?.frames())).not.toContain(canary.email);
-    expect(JSON.stringify(recording?.frames())).not.toContain(canary.token);
-
-    recording = applyReplayDecision(recording, decideReplay({
-      consent: "rejected", sessionKey: sampled || "", pathname: "/shop", sensitiveOverlay: false,
-    }), root);
-    expect(recording).toBeNull();
-    expect(root.subscribed).toBe(false);
-
-    recording = applyReplayDecision(null, open, root);
-    recording = applyReplayDecision(recording, decideReplay({
-      consent: "accepted", sessionKey: sampled || "", pathname: "/shop", sensitiveOverlay: true,
-    }), root);
-    expect(recording).toBeNull();
-
-    recording = applyReplayDecision(null, open, root);
-    recording = applyReplayDecision(recording, decideReplay({
-      consent: "accepted", sessionKey: sampled || "", pathname: "/checkout", sensitiveOverlay: false,
-    }), root);
-    expect(recording).toBeNull();
-
-    const unrestricted = {
-      ...REPLAY_VENDOR_CONFIG,
-      autocapture: true,
-      capture_pageview: true,
-      enable_recording_console_log: true,
-      session_recording: {
-        ...REPLAY_VENDOR_CONFIG.session_recording,
-        maskAllInputs: false,
-        maskTextSelector: "",
-        recordHeaders: true,
-        recordBody: true,
-      },
-    };
-    expect(replayConfigAllowsCapture(unrestricted)).toBe(false);
-    const quiet = fakeReplayRoot(canary.address);
-    expect(startMaskedReplay(unrestricted as typeof REPLAY_VENDOR_CONFIG, quiet).recording).toBe(false);
-    expect(quiet.subscribed).toBe(false);
-  });
-});
-
-function fakeReplayRoot(secret: string): ReplayRoot & { secret: string; subscribed: boolean; emit(): void } {
-  let listener: (() => void) | null = null;
-  return {
-    secret,
-    subscribed: false,
-    subscribe(next) {
-      listener = next;
-      this.subscribed = true;
-      return () => {
-        listener = null;
-        this.subscribed = false;
-      };
-    },
-    emit() { listener?.(); },
-  };
-}
-
 describe("seven commerce dashboards", () => {
   it("uses consent-scoped denominators and server revenue only", () => {
     const dashboards = consentedCommerceDashboards([
@@ -343,11 +239,10 @@ describe("seven commerce dashboards", () => {
     ]);
     expect(dashboards.purchase_funnel.rows.map((row) => row.visitors)).toEqual([1, 1, 1, 1, 1, 1, 1]);
     expect(dashboards.search_merchandising.rows).toEqual(expect.arrayContaining([{ metric: "orders_after_search", value: 1 }]));
-    expect(dashboards.friction_quality.rows).toEqual(expect.arrayContaining([
-      { metric: "replay_sample_rate", value: 0.1 },
+    expect(dashboards.friction_quality.rows).toEqual([
       { kind: "declined", value: 1 },
       { kind: "reservation_expired", value: 1 },
-    ]));
+    ]);
     expect(dashboards.accounts.rows).toEqual(expect.arrayContaining([
       { metric: "account_created", value: 1 },
       { metric: "account_signed_in", value: 1 },
@@ -361,12 +256,11 @@ describe("seven commerce dashboards", () => {
 });
 
 describe("analytics policy baseline", () => {
-  it("records the one-year event retention, 30-day replay retention, and a real billing limit", () => {
+  it("records the one-year event retention and a real billing limit", () => {
     expect(ANALYTICS_POLICY.projectId).toBe("292683");
     expect(ANALYTICS_POLICY.ingestHost).toBe(POSTHOG_EU_INGEST_HOST);
     expect(POSTHOG_EU_INGEST_HOST).toBe(POSTHOG_EU_HOST);
     expect(ANALYTICS_POLICY.analyticsRetention).toBe("P1Y");
-    expect(ANALYTICS_POLICY.replayRetention).toBe("P30D");
     expect(ANALYTICS_POLICY.retentionIsNotDeletion).toBe(true);
     expect(ANALYTICS_POLICY.analyticsBillingLimitUsd).toBe(5);
     expect(ANALYTICS_POLICY.platformBudgetUsd).toBe(50);
@@ -374,6 +268,5 @@ describe("analytics policy baseline", () => {
     expect(ANALYTICS_POLICY.billingLimitDropsIngestion).toBe(true);
     expect(ANALYTICS_POLICY.geoipEnrichment).toBe("disabled");
     expect(ANALYTICS_POLICY.ipRetention).toBe("disabled");
-    expect(ANALYTICS_POLICY.replaySampleRate).toBeLessThanOrEqual(0.1);
   });
 });

@@ -3,7 +3,7 @@ import { DASHBOARD_IDS } from "./dashboards";
 import { assessAnalyticsRehearsal } from "./first-sale-rehearsal";
 
 describe("assessAnalyticsRehearsal", () => {
-  it("records consented, rejected, and withdrawn journeys and keeps sensitive routes out of replay", () => {
+  it("records consented, rejected, and withdrawn journeys", () => {
     const result = assessAnalyticsRehearsal({
       journeys: [
         { choice: "accepted", eventsEmitted: 2 },
@@ -29,7 +29,6 @@ describe("assessAnalyticsRehearsal", () => {
       consented: true,
       rejected_stopped: true,
       withdrawn_stopped: true,
-      replay_excludes_sensitive_routes: true,
       dashboards: [...DASHBOARD_IDS],
       personal_information_exposed: false,
       commerce_blocked: false,

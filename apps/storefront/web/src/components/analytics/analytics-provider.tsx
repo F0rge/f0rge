@@ -7,8 +7,6 @@ import { loadAnalyticsConsent, saveAnalyticsConsent, type AnalyticsConsentChoice
 import { ANALYTICS_CUSTOMER_TYPE_HEADER, ANALYTICS_ID_HEADER } from "@/lib/analytics/attribution";
 import { acquisitionProperties, analyticsPageForPathname, type StorefrontBrowserEvent } from "@/lib/analytics/events";
 import { configuredPostHogBrowserProvider, type PostHogBrowserProvider } from "@/lib/analytics/posthog-browser";
-import { decideReplay } from "@/lib/analytics/replay";
-import { applyReplayDecision, type MaskedReplayHandle } from "@/lib/analytics/replay-recorder";
 
 type AnalyticsContextValue = {
   choice: AnalyticsConsentChoice | null;
@@ -18,7 +16,6 @@ type AnalyticsContextValue = {
   resetIdentity(): void;
   identify(customerId: string, options?: { created?: boolean }): void;
   attributionHeaders(): Record<string, string>;
-  setSensitiveOverlay(active: boolean): void;
   openPrivacySettings(): void;
 };
 
@@ -72,11 +69,7 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
   const [ready, setReady] = useState(false);
   const choiceRef = useRef<AnalyticsConsentChoice | null>(null);
   const providerRef = useRef<PostHogBrowserProvider | null>(null);
-  const replayRef = useRef<MaskedReplayHandle | null>(null);
-  const [overlay, setOverlay] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [attributionVersion, setAttributionVersion] = useState(0);
-  const pathname = usePathname() || "/";
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -84,7 +77,6 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
       choiceRef.current = saved;
       if (saved === "accepted") providerRef.current = configuredPostHogBrowserProvider();
       setChoice(saved);
-      setAttributionVersion((version) => version + 1);
       setReady(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -98,11 +90,8 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
     } else {
       providerRef.current?.revoke();
       providerRef.current = null;
-      replayRef.current?.stop();
-      replayRef.current = null;
     }
     setChoice(next);
-    setAttributionVersion((version) => version + 1);
   }, []);
 
   const capture = useCallback((event: StorefrontBrowserEvent) => {
@@ -114,13 +103,11 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
 
   const resetIdentity = useCallback(() => {
     try { providerRef.current?.resetIdentity(); } catch { /* Analytics failures never interrupt account actions. */ }
-    setAttributionVersion((version) => version + 1);
   }, []);
 
   const identify = useCallback((customerId: string, options?: { created?: boolean }) => {
     if (choiceRef.current !== "accepted") return;
     try { providerRef.current?.identify(customerId, options); } catch { /* Analytics failures never interrupt sign-in. */ }
-    setAttributionVersion((version) => version + 1);
   }, []);
 
   const attributionHeaders = useCallback((): Record<string, string> => {
@@ -133,28 +120,9 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
     };
   }, []);
 
-  const setSensitiveOverlay = useCallback((active: boolean) => {
-    setOverlay(active);
-  }, []);
-
   const openPrivacySettings = useCallback(() => setSettingsOpen(true), []);
 
-  useEffect(() => {
-    const decision = decideReplay({
-      consent: choice,
-      sessionKey: providerRef.current?.distinctId() ?? null,
-      pathname,
-      sensitiveOverlay: overlay,
-    });
-    replayRef.current = applyReplayDecision(replayRef.current, decision);
-  }, [attributionVersion, choice, overlay, pathname]);
-
-  useEffect(() => () => {
-    replayRef.current?.stop();
-    replayRef.current = null;
-  }, []);
-
-  const value = useMemo(() => ({ choice, ready, capture, choose, resetIdentity, identify, attributionHeaders, setSensitiveOverlay, openPrivacySettings }), [attributionHeaders, capture, choice, choose, identify, openPrivacySettings, ready, resetIdentity, setSensitiveOverlay]);
+  const value = useMemo(() => ({ choice, ready, capture, choose, resetIdentity, identify, attributionHeaders, openPrivacySettings }), [attributionHeaders, capture, choice, choose, identify, openPrivacySettings, ready, resetIdentity]);
   return <AnalyticsContext.Provider value={value}>
     {children}
     <PageViewTracker enabled={choice === "accepted"} capture={capture} />

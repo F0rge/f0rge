@@ -52,7 +52,7 @@ function ShowroomContact() {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { capture, attributionHeaders, setSensitiveOverlay } = useStorefrontAnalytics();
+  const { capture, attributionHeaders } = useStorefrontAnalytics();
   const { bag, error: bagError, busy: bagBusy, update } = useBag();
   const startedCart = useRef("");
   const [fulfillment, setFulfillment] = useState<Fulfillment>("delivery");
@@ -84,11 +84,6 @@ export default function CheckoutPage() {
       } catch { /* Saved addresses are optional; guest checkout continues. */ }
     })();
   }, []);
-
-  useEffect(() => {
-    setSensitiveOverlay(Boolean(checkout));
-    return () => setSensitiveOverlay(false);
-  }, [checkout, setSensitiveOverlay]);
 
   useEffect(() => {
     if (!bag?.id || !bag.items.length || startedCart.current === bag.id) return;
@@ -147,7 +142,6 @@ export default function CheckoutPage() {
       if (payload.checkout.provider_id === "pp_paystack_checkout" && payload.checkout.redirect_url) {
         const redirect = new URL(payload.checkout.redirect_url);
         if (redirect.origin !== "https://checkout.paystack.com") throw new Error("The hosted payment destination could not be verified");
-        setSensitiveOverlay(true);
         window.location.assign(redirect.toString());
         return;
       }
@@ -190,7 +184,7 @@ export default function CheckoutPage() {
   const held = isHeld(bag);
   const feedback = error ? purchaseFeedback(error, true) : null;
   const paystack = checkout?.provider_id === "pp_paystack_checkout";
-  return <div className="mx-auto w-full max-w-[1400px] px-4 py-10 md:px-6" data-storefront-no-capture="">
+  return <div className="mx-auto w-full max-w-[1400px] px-4 py-10 md:px-6">
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
       <div className="min-w-0 space-y-4">
         {feedback && <p ref={errorRef} id="checkout-error" role={feedback.role} tabIndex={feedback.tabIndex} className="rounded-lg border border-destructive p-4 text-sm text-destructive outline-none">{feedback.message}</p>}

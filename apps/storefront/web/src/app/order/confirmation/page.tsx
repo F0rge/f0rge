@@ -52,7 +52,7 @@ const refundLabels: Record<string, string> = {
 };
 
 export default function OrderConfirmationPage() {
-  const { attributionHeaders, capture, setSensitiveOverlay } = useStorefrontAnalytics();
+  const { attributionHeaders, capture } = useStorefrontAnalytics();
   const [result, setResult] = useState<Confirmation | null>(null);
   const notedPayment = useRef<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -76,10 +76,6 @@ export default function OrderConfirmationPage() {
       setUnavailable(true);
     }
   }, [attributionHeaders]);
-  useEffect(() => {
-    setSensitiveOverlay(true);
-    return () => setSensitiveOverlay(false);
-  }, [setSensitiveOverlay]);
   useEffect(() => {
     const step = confirmedPaymentStep({
       status: result?.status,
@@ -116,7 +112,7 @@ export default function OrderConfirmationPage() {
   const line = "flex justify-between gap-4 border-t py-3";
   const link = "inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4";
   // Mantine's unlayered button reset makes buttons inherit their font, so the wrappers carry it.
-  return <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-10 md:px-6" data-storefront-no-capture="">
+  return <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-10 md:px-6">
     {!result && !unavailable && <p role="status">Checking your order…</p>}
     {unavailable && <div role="alert" className="space-y-3"><h1 className="text-2xl font-semibold">Confirmation temporarily unavailable</h1><p className="text-muted-foreground">Refresh this page to check again. Open your private confirmation link or return in the browser you used at checkout.</p><div className="text-sm font-medium"><Button type="button" className="h-11 px-4" onClick={() => void load()}>Check again</Button></div></div>}
     {result?.status === "captured" && result.order && <>

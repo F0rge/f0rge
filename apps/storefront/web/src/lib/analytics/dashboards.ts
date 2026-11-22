@@ -186,10 +186,7 @@ export function consentedCommerceDashboards(events: MeasuredCapture[]): Record<D
       { metric: "empty_searches", value: emptySearch },
       { metric: "orders_after_search", value: searchOrders },
     ], "server_confirmed_orders_and_refunds"),
-    friction_quality: shell("friction_quality", "Friction and quality", [
-      { metric: "replay_sample_rate", value: 0.1 },
-      ...[...friction.entries()].map(([kind, value]) => ({ kind, value })),
-    ], "not_revenue"),
+    friction_quality: shell("friction_quality", "Friction and quality", Array.from(friction, ([kind, value]) => ({ kind, value })), "not_revenue"),
     accounts: shell("accounts", "Accounts", [
       { metric: "account_created", value: linked.filter((event) => event.name === "storefront_account_created").length },
       { metric: "account_signed_in", value: linked.filter((event) => event.name === "storefront_account_signed_in").length },
