@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "112_sale_line_unit_cost",
+  "target_revision": "113_sale_line_discount",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -453,6 +453,10 @@
     },
     "112_sale_line_unit_cost": {
       "sha256": "66e96f26a245778c2755b61d8d1d85eb6ddcb9f09228f818d2ca05767db3e664",
+      "automatic": true
+    },
+    "113_sale_line_discount": {
+      "sha256": "5c6146c2afbca3a6856dd82972d8221c57311245c1c40c075b5e7d1297ad8153",
       "automatic": true
     }
   }

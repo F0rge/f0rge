@@ -6,13 +6,13 @@ import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { CartEditor, mergeCartBySku, unitExVat, type CartLine } from "@/components/cart-editor";
+import { CartEditor, mergeCartBySku, type CartLine } from "@/components/cart-editor";
 import { PageLoading } from "@/components/page-loading";
 import {
   ApiError,
+  can,
   canMutateQuotes,
   canUseTill,
-  canViewCostAudit,
   createQuote,
   deleteQuote,
   downloadQuotePdf,
@@ -29,11 +29,11 @@ import {
   type Quote,
   type SalesStaffOption,
   type Sku,
-  type TillPricePreview,
+  type SalePricePreview,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { referenceQueries, useSaleReference } from "@/lib/queries";
-import { canEditQuoteDiscount } from "@/lib/quote-sku-price";
+import { anyLineBlocked, mayBePriced } from "@/lib/sale-preview";
 import { defaultValidUntil, isQuoteOpen, quoteState, quoteStateInfo } from "@/lib/quote-state";
 import { rememberedColleague } from "@/lib/sales-staff";
 
@@ -90,8 +90,7 @@ export function QuoteEditor({ id }: { id?: string }) {
       colleaguesError={colleaguesError}
       canMutate={canMutate}
       canSell={canUseTill(user)}
-      canDiscount={canEditQuoteDiscount(user?.role)}
-      canViewCost={canViewCostAudit(user)}
+      canDiscount={can(user, "till.discount")}
       onSaved={(quote) => {
         client.setQueryData(["quotes", quote.id], quote);
         setQuoteId(quote.id);
@@ -102,7 +101,7 @@ export function QuoteEditor({ id }: { id?: string }) {
 }
 
 function QuoteForm({
-  loaded, colleagues, colleaguesError, canMutate, canSell, canDiscount, canViewCost, onSaved,
+  loaded, colleagues, colleaguesError, canMutate, canSell, canDiscount, onSaved,
 }: {
   loaded: Loaded;
   colleagues: SalesStaffOption[] | null;
@@ -110,7 +109,6 @@ function QuoteForm({
   canMutate: boolean;
   canSell: boolean;
   canDiscount: boolean;
-  canViewCost: boolean;
   onSaved: (quote: Quote) => void;
 }) {
   const router = useRouter();
@@ -132,7 +130,7 @@ function QuoteForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [pricing, setPricing] = useState<{ key: string; preview?: TillPricePreview; error?: string } | null>(null);
+  const [pricing, setPricing] = useState<{ key: string; preview?: SalePricePreview; error?: string } | null>(null);
   const [pricingAttempt, setPricingAttempt] = useState(0);
   const missingLines = (quote?.lines ?? []).filter((line) => !skus.some((sku) => sku.id === line.sku_id));
 
@@ -155,7 +153,7 @@ function QuoteForm({
 
   const selectedCustomer = customers.find((row) => row.id === customerId) ?? null;
   const products = useMemo(
-    () => skus.filter((sku) => !sku.is_archived && sku.is_sellable && unitExVat(sku, selectedCustomer, priceLists) > 0),
+    () => skus.filter((sku) => !sku.is_archived && sku.is_sellable && mayBePriced(sku, selectedCustomer, priceLists)),
     [priceLists, selectedCustomer, skus],
   );
   const lines = useMemo(() => cart.map((line) => ({
@@ -186,7 +184,8 @@ function QuoteForm({
     setDirty(true);
   };
   const colleagueChosen = !colleagues?.length || colleagues.some((item) => item.id === salesStaffId);
-  const valid = editable && !!customerId && cart.length > 0 && colleagueChosen && !!validUntil;
+  const valid = editable && !!customerId && cart.length > 0 && colleagueChosen && !!validUntil &&
+    !anyLineBlocked(preview);
 
   function payload(): CreateQuotePayload {
     return {
@@ -351,13 +350,11 @@ function QuoteForm({
             customerId={customerId}
             onCustomerChange={change(setCustomerId)}
             selectedCustomer={selectedCustomer}
-            priceLists={priceLists}
             preview={preview}
             pricingError={pricingError}
             onRetryPricing={() => setPricingAttempt((attempt) => attempt + 1)}
             vatRateLabel={`${loaded.vatPercent}%`}
             canDiscount={canDiscount}
-            canViewCost={canViewCost}
             colleagues={colleagues}
             colleaguesError={colleaguesError}
             salesStaffId={salesStaffId}

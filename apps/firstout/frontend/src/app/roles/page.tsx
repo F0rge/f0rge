@@ -16,7 +16,7 @@ import styles from "./roles.module.css";
 const permissionGroups = [
   { label: "Administration", keys: ["users.manage", "settings.mutate"] },
   { label: "Stock", keys: ["catalogue.mutate", "po.raise", "stock.receive", "stock.transfer", "stock.adjust", "stock.cost.view"] },
-  { label: "Sales", keys: ["till.sell", "till.discount", "sales.returns", "sales.laybys", "sales.quotes", "sales.orders", "sales.refunds", "sales.deliveries", "sales.customers"] },
+  { label: "Sales", keys: ["till.sell", "till.discount", "sales.returns", "sales.laybys", "sales.quotes", "sales.orders", "sales.refunds", "sales.deliveries", "sales.customers", "sales.price_override"] },
   { label: "Finance", keys: ["books.mutate", "books.journals"] },
 ] as const satisfies ReadonlyArray<{ label: string; keys: readonly PermissionKey[] }>;
 const knownPermissions = new Set<string>(PERMISSION_CATALOG);

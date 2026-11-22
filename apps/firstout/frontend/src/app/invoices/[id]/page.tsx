@@ -58,6 +58,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { referenceQueries } from "@/lib/queries";
+import { formatDiscount } from "@/lib/sale-preview";
 import { localIsoDate } from "@/lib/dates";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
 import { invoiceStatusTag, partialPaymentError } from "@/lib/payment-status";
@@ -324,7 +325,11 @@ export default function InvoiceDetailPage() {
                 ))}
               </div>
               <TableContainer title="Line items">
-                <LoadingTableRows columns={["Description", "Qty", "Unit", "Ex VAT", "VAT", "Inc VAT"]} />
+                <LoadingTableRows
+                  columns={invoice?.is_archive
+                    ? ["Description", "Qty", "Ex VAT", "VAT", "Inc VAT"]
+                    : ["Description", "Qty", "Unit", "Discount", "Ex VAT", "VAT", "Inc VAT"]}
+                />
               </TableContainer>
               <div className="firstout-tax-invoice__totals" aria-hidden="true">
                 <SkeletonText paragraph lineCount={3} width="10rem" />
@@ -512,6 +517,7 @@ export default function InvoiceDetailPage() {
                 {!invoice.is_archive ? <TableHeader>
                   {invoice.prices_include_vat ? "Unit incl. VAT" : "Unit excl. VAT"}
                 </TableHeader> : null}
+                {!invoice.is_archive ? <TableHeader>Discount</TableHeader> : null}
                 <TableHeader>Ex VAT</TableHeader>
                 <TableHeader>{invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}</TableHeader>
                 <TableHeader>Inc VAT</TableHeader>
@@ -537,6 +543,7 @@ export default function InvoiceDetailPage() {
                         : line.unit_ex_vat,
                     )}
                   </TableCell> : null}
+                  {!invoice.is_archive ? <TableCell>{formatDiscount(line.discount_percent)}</TableCell> : null}
                   <TableCell>{formatInvoiceAmount(line.ex_vat)}</TableCell>
                   <TableCell>{formatInvoiceAmount(line.vat_amount)}</TableCell>
                   <TableCell>{formatInvoiceAmount(line.inc_vat)}</TableCell>

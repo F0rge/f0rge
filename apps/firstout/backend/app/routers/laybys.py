@@ -12,7 +12,14 @@ from app.dependencies.auth import (
     require_laybys,
 )
 from app.models.layby import LaybyStatus
-from app.schemas.layby import LaybyCreate, LaybyListItem, LaybyPaymentCreate, LaybyResponse
+from app.schemas.layby import (
+    LaybyCreate,
+    LaybyListItem,
+    LaybyPaymentCreate,
+    LaybyPreviewRequest,
+    LaybyResponse,
+)
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.schemas.page import Page, PageParams, get_page_params
 from app.services.laybys import LaybysService
 
@@ -40,6 +47,15 @@ async def create_layby(
     service: LaybysService = Depends(get_layby_service),
 ):
     return await service.create(body, user_id)
+
+
+@laybys_router.post("/preview", response_model=SalePricePreview)
+async def preview_layby_prices(
+    body: LaybyPreviewRequest,
+    user_id: uuid.UUID = Depends(require_laybys),
+    service: LaybysService = Depends(get_layby_service),
+):
+    return await service.preview(body, user_id)
 
 
 @laybys_router.get("/{layby_id}", response_model=LaybyResponse)

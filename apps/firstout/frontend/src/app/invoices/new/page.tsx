@@ -15,30 +15,29 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { CartEditor, mergeCartBySku, unitExVat, type CartLine } from "@/components/cart-editor";
+import { CartEditor, mergeCartBySku, type CartLine } from "@/components/cart-editor";
 import { PageLoading } from "@/components/page-loading";
 import { PaymentMethodFields } from "@/components/payment-method-fields";
 import {
   can,
   canMutateBooks,
-  canViewCostAudit,
   createInvoice,
-  exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
   parsePriceInput,
   previewInvoicePrices,
   type CreateInvoiceLinePayload,
   type CustomerCrm,
-  type PaymentMethod,
   type PriceList,
+  type PaymentMethod,
   type SalesStaffOption,
   type Sku,
-  type TillPricePreview,
+  type SalePricePreview,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { referenceQueries, useSaleReference } from "@/lib/queries";
 import { rememberedColleague } from "@/lib/sales-staff";
+import { alignPreviewLines, anyLineBlocked, mayBePriced } from "@/lib/sale-preview";
 import { localIsoDate } from "@/lib/dates";
 
 type Loaded = {
@@ -60,12 +59,14 @@ function addDays(iso: string, days: number): string {
 export default function NewInvoicePage() {
   const { user } = useAuth();
   const reference = useSaleReference();
+  const settings = useQuery(referenceQueries.settings);
   const staff = useQuery(referenceQueries.salesStaffOptions);
-  const loaded: Loaded | null = reference.data
-    ? { ...reference.data, termsDays: reference.data.settings.payment_terms_days }
+  const loaded: Loaded | null = reference.data && settings.data
+    ? { ...reference.data, termsDays: settings.data.payment_terms_days }
     : null;
-  const loadError = reference.error && !loaded
-    ? reference.error.message || "Could not load the invoice form."
+  const failure = reference.error ?? settings.error;
+  const loadError = failure && !loaded
+    ? failure.message || "Could not load the invoice form."
     : null;
   const colleagues = staff.data ?? null;
   const colleaguesError = staff.isError;
@@ -97,19 +98,17 @@ export default function NewInvoicePage() {
       colleagues={colleagues}
       colleaguesError={colleaguesError}
       canDiscount={can(user, "till.discount")}
-      canViewCost={canViewCostAudit(user)}
     />
   );
 }
 
 function InvoiceForm({
-  loaded, colleagues, colleaguesError, canDiscount, canViewCost,
+  loaded, colleagues, colleaguesError, canDiscount,
 }: {
   loaded: Loaded;
   colleagues: SalesStaffOption[] | null;
   colleaguesError: boolean;
   canDiscount: boolean;
-  canViewCost: boolean;
 }) {
   const router = useRouter();
   const { skus, customers, priceLists } = loaded;
@@ -130,12 +129,12 @@ function InvoiceForm({
   const [qty, setQty] = useState<number | "">(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pricing, setPricing] = useState<{ key: string; preview?: TillPricePreview; error?: string } | null>(null);
+  const [pricing, setPricing] = useState<{ key: string; preview?: SalePricePreview; error?: string } | null>(null);
   const [pricingAttempt, setPricingAttempt] = useState(0);
 
   const selectedCustomer = customers.find((row) => row.id === customerId) ?? null;
   const products = useMemo(
-    () => skus.filter((sku) => !sku.is_archived && sku.is_sellable && unitExVat(sku, selectedCustomer, priceLists) > 0),
+    () => skus.filter((sku) => !sku.is_archived && sku.is_sellable && mayBePriced(sku, selectedCustomer, priceLists)),
     [priceLists, selectedCustomer, skus],
   );
   // SKU lines first, in cart order, so the preview's lines line up with the cart.
@@ -180,7 +179,7 @@ function InvoiceForm({
     !lines.length && "at least one line",
     !colleagueChosen && "a sales colleague",
   ].filter((item): item is string => !!item);
-  const valid = !missing.length && !!issueDate && !dueInvalid && (!paid || !!paidOn);
+  const valid = !missing.length && !!issueDate && !dueInvalid && (!paid || !!paidOn) && !anyLineBlocked(preview);
 
   async function create() {
     if (!valid || saving) return;
@@ -204,6 +203,8 @@ function InvoiceForm({
     }
   }
 
+  // Free-text lines follow the cart's lines in the request, so their prices follow in the preview.
+  const freePrices = alignPreviewLines(lines.map((line) => line.sku_id ?? null), preview).slice(cart.length);
   const total = preview ? formatZarAmount(formatPriceAmount(Number(preview.total_inc_vat))) : null;
 
   return (
@@ -211,7 +212,7 @@ function InvoiceForm({
       <div className="firstout-page-header">
         <div>
           <h1 className="cds--type-heading-05">Create invoice</h1>
-          <p className="cds--type-body-01">Tax invoices with 15% VAT.</p>
+          <p className="cds--type-body-01">Tax invoices with {loaded.vatPercent}% VAT.</p>
         </div>
       </div>
 
@@ -240,13 +241,11 @@ function InvoiceForm({
         customerId={customerId}
         onCustomerChange={setCustomerId}
         selectedCustomer={selectedCustomer}
-        priceLists={priceLists}
         preview={preview}
         pricingError={pricingError}
         onRetryPricing={() => setPricingAttempt((attempt) => attempt + 1)}
         vatRateLabel={`${loaded.vatPercent}%`}
         canDiscount={canDiscount}
-        canViewCost={canViewCost}
         colleagues={colleagues}
         colleaguesError={colleaguesError}
         salesStaffId={salesStaffId}
@@ -258,7 +257,7 @@ function InvoiceForm({
         lineCount={lines.length}
         afterLines={
           <Stack gap={4}>
-            {freeLines.map((line) => (
+            {freeLines.map((line, index) => (
               <div key={line.key} className="firstout-sale-summary__row">
                 <div>
                   <p className="cds--type-heading-compact-01">{line.description}</p>
@@ -268,7 +267,7 @@ function InvoiceForm({
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <span className="cds--type-body-01">
-                    {formatZarAmount(formatPriceAmount(exVatToIncVat(line.qty * line.unitExVat)))}
+                    {formatZarAmount(freePrices[index]?.inc_vat ?? null)}
                   </span>
                   <Button
                     kind="ghost"
@@ -429,11 +428,6 @@ function FreeLineModal({ onAdd, onClose }: { onAdd: (line: FreeLine) => void; on
           onChange={(event) => setUnit(event.target.value)}
           invalid={unitInvalid}
           invalidText="Enter an amount above zero."
-          helperText={
-            unitValue !== null && unitValue > 0
-              ? `${formatZarAmount(formatPriceAmount(exVatToIncVat(unitValue)))} incl. VAT`
-              : undefined
-          }
         />
       </Stack>
     </Modal>

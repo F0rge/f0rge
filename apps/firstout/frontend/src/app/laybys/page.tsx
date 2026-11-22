@@ -38,7 +38,6 @@ import {
   cancelLayby,
   canMutateLaybys,
   completeLayby,
-  computeInvoicePreview,
   createCustomer,
   createLayby,
   findCustomerDuplicates,
@@ -49,6 +48,7 @@ import {
   getLayby,
   isActiveLocation,
   listLaybys,
+  previewLaybyPrices,
   roundHalfUp,
   type CustomerCrm,
   type CustomerDuplicateMatch,
@@ -56,13 +56,13 @@ import {
   type LaybyListItem,
   type LaybyTender,
   type Location,
-  type Sku,
 } from "@/lib/api";
 import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { queryKeys, referenceQueries } from "@/lib/queries";
 import { localIsoDate } from "@/lib/dates";
 import { printHtml } from "@/lib/print-html";
+import { mayBePriced } from "@/lib/sale-preview";
 
 const TABLE_HEADERS = [
   { key: "layby_number", header: "Reference" },
@@ -76,7 +76,6 @@ const TABLE_HEADERS = [
   { key: "actions", header: "Action" },
 ] as const;
 
-const VAT_RATE_LABEL = "15%";
 const SUGGESTED_DEPOSIT_RATE = 0.2;
 
 type StatusFilter = "all" | "active" | "overdue" | "ready";
@@ -221,19 +220,6 @@ function printLaybyReceipt(layby: Layby): void {
 </html>`);
 }
 
-function sumLinesExVat(lines: LineForm[], skusById: Map<string, Sku>): number {
-  return lines.reduce((sum, line) => {
-    if (!line.sku_id || typeof line.qty !== "number" || line.qty <= 0) {
-      return sum;
-    }
-    const sku = skusById.get(line.sku_id);
-    if (!sku?.retail_ex_vat) {
-      return sum;
-    }
-    return sum + line.qty * Number(sku.retail_ex_vat);
-  }, 0);
-}
-
 function LaybysLoading({ route = false }: { route?: boolean }) {
   const table = (
     <PageLoading
@@ -328,11 +314,19 @@ function LaybysPageContent() {
   const customersQuery = useQuery({ ...referenceQueries.customers, enabled: formDataEnabled });
   const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: formDataEnabled });
   const skusQuery = useQuery({ ...referenceQueries.skus, enabled: formDataEnabled });
+  const priceListsQuery = useQuery({ ...referenceQueries.priceLists, enabled: formDataEnabled });
   const customers = customersQuery.data ?? [];
   const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
-  const skus = useMemo(() => (skusQuery.data ?? []).filter((sku) => sku.is_sellable && sku.retail_ex_vat), [skusQuery.data]);
+  const layByCustomer = customers.find((entry) => entry.id === customerId);
+  const skus = useMemo(
+    () => (skusQuery.data ?? []).filter(
+      (sku) => sku.is_sellable && mayBePriced(sku, layByCustomer, priceListsQuery.data ?? []),
+    ),
+    [layByCustomer, priceListsQuery.data, skusQuery.data],
+  );
 
-  const loadFailure = laybysQuery.error ?? customersQuery.error ?? locationsQuery.error ?? skusQuery.error;
+  const loadFailure =
+    laybysQuery.error ?? customersQuery.error ?? locationsQuery.error ?? skusQuery.error ?? priceListsQuery.error;
   const { error, setError } = usePageError(loadFailure, laybysQuery.error ? "Failed to load laybys." : "Failed to load layby form data.");
   const loadLaybys = () => client.invalidateQueries({ queryKey: ["laybys"] });
 
@@ -352,25 +346,36 @@ function LaybysPageContent() {
 
   const dueDate = durationMonths === "3" ? addMonthsIso(3) : addMonthsIso(6);
 
-  const subtotalExVat = sumLinesExVat(lines, skusById);
-  const preview = computeInvoicePreview(subtotalExVat);
-  const suggestedDeposit = roundHalfUp(preview.totalIncVat * SUGGESTED_DEPOSIT_RATE, 2);
-  const numericDeposit = typeof depositAmount === "number" ? depositAmount : 0;
-  const remainingBalance = Math.max(roundHalfUp(preview.totalIncVat - numericDeposit, 2), 0);
-  const durationCount = durationMonths === "3" ? 3 : 6;
-  const monthlyInstallment = roundHalfUp(remainingBalance / durationCount, 2);
-
-  const validLines = lines
+  const validLines = useMemo(() => lines
     .map((line) => {
       if (!line.sku_id || typeof line.qty !== "number" || line.qty <= 0) {
         return null;
       }
       return { sku_id: line.sku_id, qty: line.qty };
     })
-    .filter((line): line is { sku_id: string; qty: number } => line !== null);
+    .filter((line): line is { sku_id: string; qty: number } => line !== null), [lines]);
+
+  // The server prices the layby exactly as creating it would (Firstout ADR 0001).
+  const canPreview = Boolean(customerId) && validLines.length > 0;
+  const previewQuery = useQuery({
+    queryKey: ["layby-preview", customerId, validLines],
+    queryFn: ({ signal }) => previewLaybyPrices({ customer_id: customerId, lines: validLines }, signal),
+    enabled: canPreview,
+    placeholderData: keepPreviousData,
+  });
+  const preview = canPreview ? previewQuery.data : undefined;
+  // Figures from the previous request, shown dimmed until the new prices arrive.
+  const previewStale = previewQuery.isPlaceholderData;
+  const totalIncVat = Number(preview?.total_inc_vat ?? 0);
+  // ponytail: deposit plan arithmetic on the server's total; the server re-checks deposit <= total.
+  const suggestedDeposit = roundHalfUp(totalIncVat * SUGGESTED_DEPOSIT_RATE, 2);
+  const numericDeposit = typeof depositAmount === "number" ? depositAmount : 0;
+  const remainingBalance = Math.max(roundHalfUp(totalIncVat - numericDeposit, 2), 0);
+  const durationCount = durationMonths === "3" ? 3 : 6;
+  const monthlyInstallment = roundHalfUp(remainingBalance / durationCount, 2);
 
   const createFormValid = Boolean(
-    customerId && locationId && validLines.length > 0 && subtotalExVat > 0 && numericDeposit >= 0,
+    customerId && locationId && preview && !previewQuery.isPlaceholderData && numericDeposit >= 0,
   );
 
   useEffect(() => {
@@ -880,11 +885,33 @@ function LaybysPageContent() {
             ))}
           </Select>
 
-          {subtotalExVat > 0 ? (
+          {canPreview && previewQuery.isError ? (
+            <InlineNotification
+              kind="error"
+              title="Could not price the layby"
+              subtitle={previewQuery.error.message}
+              hideCloseButton
+              lowContrast
+            />
+          ) : null}
+          {canPreview && !preview && previewQuery.isPending ? (
+            <p role="status" className="cds--type-body-01">Pricing the layby…</p>
+          ) : null}
+          {preview ? (
             <Stack gap={3}>
-              <p className="cds--type-body-01">
-                Total inc VAT ({VAT_RATE_LABEL}):{" "}
-                <strong>{formatZarAmount(formatPriceAmount(preview.totalIncVat))}</strong>
+              {previewStale ? (
+                <p role="status" className="cds--type-helper-text-01">Updating prices…</p>
+              ) : null}
+              {preview.lines.flatMap((line, index) =>
+                [line.price_warning, line.suspect_price_warning].filter(Boolean).map((warning, which) => (
+                  <p key={`${index}-${which}`} className="cds--type-helper-text-01">
+                    {skusById.get(line.sku_id ?? "")?.our_ref}: {warning}
+                  </p>
+                )),
+              )}
+              <p className="cds--type-body-01" style={previewStale ? { opacity: 0.5 } : undefined}>
+                Total inc VAT ({preview.classification}{preview.price_list_name ? ` · ${preview.price_list_name}` : ""}):{" "}
+                <strong>{formatZarAmount(preview.total_inc_vat)}</strong>
               </p>
               <p className="cds--type-body-01">
                 Suggested deposit (20%):{" "}

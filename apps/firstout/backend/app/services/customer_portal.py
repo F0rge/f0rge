@@ -18,7 +18,7 @@ from app.schemas.customer_portal import (
     PortalUserCreate,
 )
 from app.schemas.sales_order import SalesOrderCreate, SalesOrderLineCreate, SalesOrderResponse
-from app.services.pricing import resolve_unit_ex_vat
+from app.services.pricing import customer_price_warning, resolve_unit_ex_vat
 from app.services.portal_identity import PortalPrincipal
 from app.services.sales_orders import SalesOrdersService
 from app.services.vat import ex_to_inc
@@ -93,7 +93,7 @@ class CustomerPortalService:
         user = await self._require_user(portal_user_id)
         if user.customer.on_hold:
             raise ConflictError("Customer is on hold")
-        return await self.orders.create_draft(
+        order = await self.orders.create_draft(
             SalesOrderCreate(
                 customer_id=user.customer_id,
                 lines=[
@@ -104,11 +104,12 @@ class CustomerPortalService:
             ),
             user_id=None,
         )
+        return _for_customer(order)
 
     async def list_orders(self, portal_user_id: uuid.UUID) -> list[SalesOrderResponse]:
         user = await self._require_user(portal_user_id)
         rows = await self.orders.crud.list_for_customer(user.customer_id)
-        return [await self.orders._to_response(row) for row in rows]
+        return [_for_customer(await self.orders._to_response(row)) for row in rows]
 
     async def _require_user(self, portal_user_id: uuid.UUID) -> CustomerPortalUser:
         user = await self.crud.get_by_id(portal_user_id)
@@ -135,3 +136,11 @@ class CustomerPortalService:
             customer_name=user.customer.name,
             price_tier=user.customer.price_tier,
         )
+
+
+def _for_customer(order: SalesOrderResponse) -> SalesOrderResponse:
+    """Staff-only warnings (suspect prices, the price-list note) stay off the portal."""
+    for line in order.lines:
+        line.price_warning = customer_price_warning(line.price_warning)
+        line.suspect_price_warning = None
+    return order

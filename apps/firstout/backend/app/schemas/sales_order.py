@@ -40,6 +40,8 @@ class SalesOrderLineResponse(BaseModel):
     name: str
     qty: int
     unit_ex_vat: Decimal
+    # Line discount %. None on lines stored before it was kept: their unit is already net.
+    discount_percent: Optional[Decimal] = None
     description: str
     notes: Optional[str]
     price_warning: Optional[str] = None

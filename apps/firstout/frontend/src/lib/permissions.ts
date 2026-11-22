@@ -16,6 +16,7 @@ export const PERMISSION_CATALOG = [
   "sales.refunds",
   "sales.deliveries",
   "sales.customers",
+  "sales.price_override",
   "books.mutate",
   "books.journals",
 ] as const;
@@ -32,7 +33,7 @@ export const PERMISSION_LABELS = {
   "stock.adjust": "Adjust stock",
   "stock.cost.view": "View stock costs",
   "till.sell": "Sell at the till",
-  "till.discount": "Apply till discounts",
+  "till.discount": "Apply discounts",
   "sales.returns": "Process returns",
   "sales.laybys": "Manage laybys",
   "sales.quotes": "Manage quotes",
@@ -40,6 +41,7 @@ export const PERMISSION_LABELS = {
   "sales.refunds": "Manage refunds",
   "sales.deliveries": "Manage deliveries",
   "sales.customers": "Manage customers",
+  "sales.price_override": "Override unit prices",
   "books.mutate": "Manage accounting records",
   "books.journals": "Manage journals",
 } satisfies Record<PermissionKey, string>;

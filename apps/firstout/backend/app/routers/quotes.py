@@ -23,7 +23,7 @@ from app.schemas.quote import (
     QuoteUpdate,
 )
 from app.schemas.sales_order import SalesOrderResponse
-from app.schemas.till import TillPricePreview
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.services.quotes import QuotesService
 
 quotes_router = APIRouter(prefix="/api/v1/quotes", tags=["quotes"])
@@ -48,7 +48,7 @@ async def create_quote(
     return await service.create(body, user_id)
 
 
-@quotes_router.post("/preview", response_model=TillPricePreview)
+@quotes_router.post("/preview", response_model=SalePricePreview)
 async def preview_quote_prices(
     body: QuotePreviewRequest,
     user_id: uuid.UUID = Depends(require_quotes),

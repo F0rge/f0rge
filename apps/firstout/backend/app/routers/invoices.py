@@ -19,7 +19,7 @@ from app.schemas.invoice import (
     InvoiceUpdate,
 )
 from app.schemas.page import Page, PageParams, get_page_params
-from app.schemas.till import TillPricePreview
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.services.invoices import InvoiceService
 
 invoices_router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"])
@@ -43,7 +43,7 @@ async def create_invoice(
     return await service.create_manual(body, user_id)
 
 
-@invoices_router.post("/preview", response_model=TillPricePreview)
+@invoices_router.post("/preview", response_model=SalePricePreview)
 async def preview_invoice_prices(
     body: InvoicePreviewRequest,
     user_id: uuid.UUID = Depends(require_books_mutate),

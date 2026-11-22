@@ -75,8 +75,9 @@ async def test_manual_invoice_prices_sku_and_free_text_lines_like_the_till(
     )
     assert preview.status_code == 200, preview.text
     priced = preview.json()
-    # Only catalogue lines are listed, in cart order; the totals include free text.
-    assert [line["sku_id"] for line in priced["lines"]] == [sofa["id"], delivery["id"]]
+    # Every line is listed, in cart order: the browser never prices a line itself.
+    assert [line["sku_id"] for line in priced["lines"]] == [sofa["id"], delivery["id"], None]
+    assert [line["ex_vat"] for line in priced["lines"]] == ["180.00", "100.00", "76.50"]
     assert Decimal(priced["subtotal_ex_vat"]) == Decimal("356.50")  # 180 + 100 + 76.50
 
     invoice = await _invoice(
@@ -99,14 +100,16 @@ async def test_manual_invoice_prices_sku_and_free_text_lines_like_the_till(
             line["description"],
             line["sku_id"],
             Decimal(line["unit_ex_vat"]),
+            Decimal(line["discount_percent"]),
             Decimal(line["ex_vat"]),
             line["exclude_from_commission"],
         )
         for line in invoice["lines"]
     ] == [
-        ("Sofa", sofa["id"], Decimal("90"), Decimal("180"), False),
-        ("Delivery", delivery["id"], Decimal("100"), Decimal("100"), True),
-        ("Assembly", None, Decimal("25.50"), Decimal("76.50"), False),
+        # The list unit and the discount, not a discounted unit (ADR 0001).
+        ("Sofa", sofa["id"], Decimal("100"), Decimal("10"), Decimal("180"), False),
+        ("Delivery", delivery["id"], Decimal("100"), Decimal("0"), Decimal("100"), True),
+        ("Assembly", None, Decimal("25.50"), Decimal("0"), Decimal("76.50"), False),
     ]
 
 

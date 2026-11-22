@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from app.services.staff_identity import staff_identity_ctx
-
 import datetime
 import uuid
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from fastapi.responses import Response
@@ -17,13 +14,9 @@ from app.services.sellability import assert_sku_sellable
 from app.services.sku_archive import SkuArchiveService
 from app.crud.quote import QuoteCRUD
 from app.crud.sku import SkuCRUD
-from app.crud.user import UserCRUD
-from app.exceptions import ForbiddenError
-from app.crud.price_list import PriceListCRUD
 from app.models.quote import OPEN_QUOTE_STATUSES, Quote, QuoteLine, QuoteStatus
 from app.models.sales_staff import SalesStaff
 from app.models.tax_invoice import TaxInvoice
-from app.models.user import UserRole
 from app.schemas.page import Page, PageParams
 from app.schemas.quote import (
     QuoteAccept,
@@ -36,33 +29,29 @@ from app.schemas.quote import (
     QuoteResponse,
     QuoteUpdate,
 )
-from app.schemas.till import TillPriceLine, TillPricePreview
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
 from app.services.pricing import (
-    classification_of,
+    customer_price_warning,
+    format_pdf_discount,
     format_pdf_unit,
-    is_cin7_generated_price_list,
     pdf_unit_basis_note,
     pdf_unit_header,
-    resolve_unit_price,
     shows_prices_including_vat,
+)
+from app.services.sale_line_pricing import (
+    PricingAuthority,
+    SaleLinePricing,
+    SaleLineRequest,
+    line_amounts,
 )
 from app.services.sales_staff import SalesStaffService
 from app.services.settings import SettingsService
 from app.services.suspect_price import annotate_line_warnings
-from app.services.vat import CENT, discounted_unit_ex, ex_to_inc, inc_to_ex
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
-_DISCOUNT_ROLES = frozenset({UserRole.OWNER.value, UserRole.TILL.value, UserRole.WAREHOUSE.value})
 QUOTE_VALID_DAYS = 14
-
-
-def _line_amounts(qty: int, unit_ex_vat: Decimal, discount: Decimal) -> tuple[Decimal, Decimal]:
-    """A quote line's ex- and inc-VAT totals after its discount."""
-    charged_unit = discounted_unit_ex(unit_ex_vat, discount)
-    ex_vat = (Decimal(qty) * charged_unit).quantize(CENT, rounding=ROUND_HALF_UP)
-    return ex_vat, ex_to_inc(ex_vat)
 
 
 def quote_state(quote: Quote, today: datetime.date) -> str:
@@ -80,7 +69,6 @@ class QuotesService:
         self.crud = QuoteCRUD(db)
         self.customer_crud = CustomerCRUD(db)
         self.sku_crud = SkuCRUD(db)
-        self.user_crud = UserCRUD(db)
 
     async def list(
         self,
@@ -120,20 +108,14 @@ class QuotesService:
         assert_customer_active(customer)
         if data.sales_staff_id is not None:
             await SalesStaffService(self.db).check_sale_colleague(data.sales_staff_id)
-        role = await self._actor_role(user_id)
-        line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
-            customer,
-            data.lines,
-            allow_price_override=role == UserRole.OWNER.value,
-            allow_discount=role in _DISCOUNT_ROLES,
-        )
+        line_models, priced = await self._build_line_models(customer, data.lines, user_id)
         return Quote(
             quote_number="",
             customer_id=customer.id,
             status=QuoteStatus.DRAFT,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_amount,
-            total_inc_vat=total_inc,
+            subtotal_ex_vat=priced.subtotal_ex_vat,
+            vat_amount=priced.vat_amount,
+            total_inc_vat=priced.total_inc_vat,
             notes=data.notes,
             internal_note=data.internal_note,
             valid_until=data.valid_until
@@ -147,59 +129,6 @@ class QuotesService:
     async def stage_draft(self, quote: Quote) -> None:
         quote.quote_number = await self.crud.get_next_quote_number()
         await self.crud.add_and_flush(quote)
-
-    async def create_from_snapshots(
-        self,
-        *,
-        customer_id: uuid.UUID,
-        user_id: uuid.UUID,
-        notes: str,
-        lines: list[tuple[uuid.UUID, int, Decimal, str]],
-    ) -> QuoteResponse:
-        customer = await self._require_customer(customer_id)
-        assert_customer_active(customer)
-        await SkuArchiveService(self.db).lock_skus([line[0] for line in lines])
-        models: list[QuoteLine] = []
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
-        total_inc = Decimal(0)
-        for sku_id, qty, unit_inc, description in lines:
-            sku = await self.sku_crud.get_by_id(sku_id)
-            if sku is None:
-                raise NotFoundError("SKU not found")
-            assert_sku_sellable(sku)
-            unit_ex = inc_to_ex(unit_inc)
-            ex_vat = (Decimal(qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = (Decimal(qty) * unit_inc).quantize(CENT, rounding=ROUND_HALF_UP)
-            vat_total += inc_vat - ex_vat
-            subtotal += ex_vat
-            total_inc += inc_vat
-            models.append(
-                QuoteLine(
-                    sku_id=sku.id,
-                    qty=qty,
-                    unit_ex_vat=unit_ex,
-                    discount_percent=Decimal(0),
-                    description=description,
-                    notes=None,
-                )
-            )
-        quote = Quote(
-            quote_number="",
-            customer_id=customer.id,
-            status=QuoteStatus.DRAFT,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_total,
-            total_inc_vat=total_inc,
-            notes=notes,
-            prices_include_vat=shows_prices_including_vat(customer),
-            created_by_user_id=user_id,
-            lines=models,
-        )
-        async with unit_of_work(self.db):
-            quote.quote_number = await self.crud.get_next_quote_number()
-            await self.crud.add_and_flush(quote)
-        return await self._to_response(await self._get_or_404(quote.id), user_id)
 
     async def update(
         self,
@@ -227,6 +156,7 @@ class QuotesService:
         if isinstance(data, QuoteReplace):
             quote.notes = data.notes
         customer = quote.customer
+        priced_for = quote.customer_id
         if data.customer_id is not None:
             customer = await self._require_customer(data.customer_id)
             if data.customer_id != quote.customer_id:
@@ -242,20 +172,19 @@ class QuotesService:
         if data.notes is not None:
             quote.notes = data.notes
         if data.lines is not None:
-            role = await self._actor_role(user_id)
-            line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
+            line_models, priced = await self._build_line_models(
                 customer,
                 data.lines,
-                allow_price_override=role == UserRole.OWNER.value,
-                allow_discount=role in _DISCOUNT_ROLES,
+                user_id,
                 previous_lines=list(quote.lines),
+                priced_for=priced_for,
             )
             quote.lines.clear()
             await self.db.flush()
             quote.lines.extend(line_models)
-            quote.subtotal_ex_vat = subtotal
-            quote.vat_amount = vat_amount
-            quote.total_inc_vat = total_inc
+            quote.subtotal_ex_vat = priced.subtotal_ex_vat
+            quote.vat_amount = priced.vat_amount
+            quote.total_inc_vat = priced.total_inc_vat
         await self.crud.commit_refresh(quote)
         return await self._to_response(await self._get_or_404(quote.id), user_id)
 
@@ -292,57 +221,23 @@ class QuotesService:
         async with unit_of_work(self.db):
             await self.db.delete(quote)
 
-    async def preview(self, data: QuotePreviewRequest, user_id: uuid.UUID) -> TillPricePreview:
+    async def preview(self, data: QuotePreviewRequest, user_id: uuid.UUID) -> SalePricePreview:
         """The cart's prices and totals exactly as saving it would store them."""
         customer = await self._require_customer(data.customer_id)
         previous: list[QuoteLine] = []
+        priced_for = None
         if data.quote_id is not None:
             quote = await self._get_or_404(data.quote_id)
-            previous = list(quote.lines)
-        role = await self._actor_role(user_id)
-        models, subtotal, vat_amount, total_inc = await self._build_line_models(
+            previous, priced_for = list(quote.lines), quote.customer_id
+        _, preview = await self._build_line_models(
             customer,
             data.lines,
-            allow_price_override=role == UserRole.OWNER.value,
-            allow_discount=role in _DISCOUNT_ROLES,
+            user_id,
             previous_lines=previous,
+            priced_for=priced_for,
+            enforce=False,
         )
-        lines = []
-        for model in models:
-            ex_vat, inc_vat = _line_amounts(model.qty, model.unit_ex_vat, model.discount_percent)
-            lines.append(
-                TillPriceLine(
-                    sku_id=model.sku_id,
-                    qty=model.qty,
-                    discount_percent=model.discount_percent,
-                    unit_ex_vat=model.unit_ex_vat,
-                    before_discount_ex_vat=model.unit_ex_vat * model.qty,
-                    ex_vat=ex_vat,
-                    vat_amount=inc_vat - ex_vat,
-                    inc_vat=inc_vat,
-                    source="quote",
-                    price_warning=model.price_warning,
-                )
-            )
-        price_list_name = None
-        if customer.price_list_id is not None:
-            policy = await PriceListCRUD(self.db).get_till_policy(customer.price_list_id)
-            if policy is not None and not is_cin7_generated_price_list(policy[0]):
-                price_list_name = policy[0]
-        return TillPricePreview(
-            classification=classification_of(customer),
-            price_list_name=price_list_name,
-            prices_include_vat=shows_prices_including_vat(customer),
-            before_discount_ex_vat=sum((line.before_discount_ex_vat for line in lines), Decimal(0)),
-            before_discount_inc_vat=sum(
-                (ex_to_inc(line.before_discount_ex_vat) for line in lines), Decimal(0)
-            ),
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_amount,
-            total_inc_vat=total_inc,
-            lines=lines,
-            price_revision="",
-        )
+        return preview
 
     async def lock_for_conversion(self, quote_id: uuid.UUID) -> Quote:
         """The open quote a till sale converts, locked until that sale commits."""
@@ -368,10 +263,11 @@ class QuotesService:
         quote = await self._get_or_404(quote_id)
         lines = []
         for line in quote.lines:
-            ex_vat, inc_vat = _line_amounts(line.qty, line.unit_ex_vat, line.discount_percent)
+            ex_vat, vat, inc_vat = line_amounts(line.unit_ex_vat, line.qty, line.discount_percent)
             description = line.description
-            if line.price_warning:
-                description = f"{description} — {line.price_warning}"
+            printed_warning = customer_price_warning(line.price_warning)
+            if printed_warning:
+                description = f"{description} — {printed_warning}"
             sku = await self.sku_crud.get_by_id(line.sku_id)
             lines.append(
                 DocumentLine(
@@ -379,9 +275,9 @@ class QuotesService:
                     qty=str(line.qty),
                     unit=format_pdf_unit(line.unit_ex_vat, quote.prices_include_vat),
                     ex_vat=f"{ex_vat:.2f}",
-                    vat=f"{inc_vat - ex_vat:.2f}",
+                    vat=f"{vat:.2f}",
                     inc_vat=f"{inc_vat:.2f}",
-                    discount=f"{line.discount_percent:.2f}%" if line.discount_percent > 0 else None,
+                    discount=format_pdf_discount(line.discount_percent),
                     sku_ref=sku.our_ref if sku is not None else None,
                 )
             )
@@ -428,64 +324,27 @@ class QuotesService:
             raise NotFoundError("Customer not found")
         return customer
 
-    async def _actor_role(self, user_id: uuid.UUID) -> str:
-        user = await self.user_crud.get_by_id(user_id)
-        if user is None:
-            return ""
-        identity = staff_identity_ctx.get()
-        return identity.role if identity and identity.user_id == user.id else user.role
-
-    def _resolve_discount(
-        self,
-        sku,
-        submitted: Decimal,
-        previous: Decimal,
-        allow_discount: bool,
-    ) -> Decimal:
-        submitted_q = submitted.quantize(CENT, rounding=ROUND_HALF_UP)
-        previous_q = previous.quantize(CENT, rounding=ROUND_HALF_UP)
-        if submitted_q == previous_q or allow_discount:
-            return submitted_q
-        raise ForbiddenError(
-            f"Only the owner, till, or warehouse can change the discount for {sku.our_ref}"
-        )
-
-    async def _line_unit_ex_vat(
-        self,
-        sku,
-        customer,
-        line: QuoteLineCreate,
-        allow_price_override: bool,
-        previous_unit: Optional[Decimal],
-        previous_warning: Optional[str],
-    ) -> tuple[Decimal, Optional[str]]:
-        resolved = await resolve_unit_price(self.db, sku, customer)
-        computed = resolved.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
-        if line.unit_ex_vat is None:
-            if previous_unit is not None:
-                return previous_unit.quantize(CENT, rounding=ROUND_HALF_UP), previous_warning
-            return computed, resolved.warning
-        submitted = line.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
-        if submitted == computed or allow_price_override:
-            warning = resolved.warning if submitted == computed else None
-            return submitted, warning
-        raise ForbiddenError(f"Only the owner can change the unit price for {sku.our_ref}")
-
     async def _build_line_models(
         self,
         customer,
         lines: list[QuoteLineCreate],
+        user_id: uuid.UUID,
         *,
-        allow_price_override: bool,
-        allow_discount: bool,
         previous_lines: Optional[list[QuoteLine]] = None,
-    ) -> tuple[list[QuoteLine], Decimal, Decimal, Decimal]:
+        priced_for: Optional[uuid.UUID] = None,
+        enforce: bool = True,
+    ) -> tuple[list[QuoteLine], SalePricePreview]:
+        """A quote line keeps its saved price and discount unless the request changes them.
+
+        Saved lines were priced for ``priced_for``. For another customer they are priced
+        afresh, unless the actor may override prices anyway (ADR 0002).
+        """
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
-        models: list[QuoteLine] = []
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
-        total_inc = Decimal(0)
+        authority = await PricingAuthority.of(self.db, user_id)
+        keep_saved = priced_for == customer.id or authority.can_override
         unmatched = list(previous_lines or [])
+        skus = []
+        requests = []
         for line in lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
@@ -499,37 +358,31 @@ class QuotesService:
                 )
             if prior is not None:
                 unmatched.remove(prior)
-            unit_ex, warning = await self._line_unit_ex_vat(
-                sku,
-                customer,
-                line,
-                allow_price_override,
-                prior.unit_ex_vat if prior is not None else None,
-                prior.price_warning if prior is not None else None,
-            )
-            discount = self._resolve_discount(
-                sku,
-                line.discount_percent,
-                prior.discount_percent if prior is not None else Decimal(0),
-                allow_discount,
-            )
-            ex_vat, inc_vat = _line_amounts(line.qty, unit_ex, discount)
-            line_vat = inc_vat - ex_vat
-            subtotal += ex_vat
-            vat_total += line_vat
-            total_inc += inc_vat
-            models.append(
-                QuoteLine(
-                    sku_id=sku.id,
+            skus.append(sku)
+            requests.append(
+                SaleLineRequest(
+                    sku=sku,
                     qty=line.qty,
-                    unit_ex_vat=unit_ex,
-                    discount_percent=discount,
-                    description=sku.name,
-                    notes=line.notes,
-                    price_warning=warning,
+                    discount_percent=line.discount_percent,
+                    unit_ex_vat=line.unit_ex_vat,
+                    saved=prior if keep_saved else None,
                 )
             )
-        return models, subtotal, vat_total, total_inc
+        pricing = await SaleLinePricing.for_customer(self.db, customer, authority)
+        preview = await pricing.price(requests, enforce=enforce)
+        models = [
+            QuoteLine(
+                sku_id=sku.id,
+                qty=line.qty,
+                unit_ex_vat=priced.unit_ex_vat,
+                discount_percent=priced.discount_percent,
+                description=sku.name,
+                notes=line.notes,
+                price_warning=priced.price_warning,
+            )
+            for sku, line, priced in zip(skus, lines, preview.lines, strict=True)
+        ]
+        return models, preview
 
     async def _get_or_404(self, quote_id: uuid.UUID) -> Quote:
         quote = await self.crud.get_by_id(quote_id)

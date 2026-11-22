@@ -281,7 +281,6 @@ export const USER_ROLES: { value: PresetRole; label: string }[] = [
 ];
 
 export {
-  computeInvoicePreview,
   displayPrice,
   exVatToIncVat,
   formatFxGainLoss,
@@ -290,7 +289,6 @@ export {
   incVatToExVat,
   parsePriceInput,
   roundHalfUp,
-  sumInvoiceLinesExVat,
 } from "./money";
 
 export {
@@ -911,14 +909,17 @@ export function deleteTillHeldSales(locationId: string, ids: string[], all: bool
 
 export type TillPriceRequest = Schema["TillPriceRequest"];
 
-export type TillPricePreview = Schema["TillPricePreview"];
+// The server's Sale line pricing preview, shared by the till, quotes, invoices and laybys.
+export type SalePricePreview = Schema["SalePricePreview"];
+
+export type SaleLinePrice = Schema["SaleLinePrice"];
 
 export type TillSalePayload = Schema["TillSaleCreate"];
 
 export type TillSaleResult = Schema["TillSaleResponse"];
 
-export function previewTillPrices(payload: TillPriceRequest, signal: AbortSignal): Promise<TillPricePreview> {
-  return apiFetch<TillPricePreview>("/till/price-preview", {
+export function previewTillPrices(payload: TillPriceRequest, signal: AbortSignal): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/till/price-preview", {
     method: "POST",
     body: JSON.stringify(payload),
     signal,
@@ -1439,12 +1440,12 @@ export function getInvoiceSummary(): Promise<InvoiceSummary> {
   return apiFetch<InvoiceSummary>("/invoices/summary");
 }
 
-/** The invoice cart priced as creating it would; `lines` lists only the SKU lines, in order. */
+/** The invoice cart priced as creating it would: one preview line per request line, in order. */
 export function previewInvoicePrices(
   payload: { customer_id: string; lines: CreateInvoiceLinePayload[] },
   signal: AbortSignal,
-): Promise<TillPricePreview> {
-  return apiFetch<TillPricePreview>("/invoices/preview", {
+): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/invoices/preview", {
     method: "POST",
     body: JSON.stringify(payload),
     signal,
@@ -2654,6 +2655,18 @@ export function createLayby(payload: CreateLaybyPayload): Promise<Layby> {
   });
 }
 
+/** The layby cart priced exactly as creating it would. */
+export function previewLaybyPrices(
+  payload: Schema["LaybyPreviewRequest"],
+  signal?: AbortSignal,
+): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/laybys/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
 export function addLaybyPayment(id: string, payload: AddLaybyPaymentPayload): Promise<Layby> {
   return apiFetch<Layby>(`/laybys/${id}/payments`, {
     method: "POST",
@@ -2737,8 +2750,8 @@ export function deleteQuote(id: string): Promise<void> {
 export function previewQuotePrices(
   payload: { customer_id: string; lines: QuoteLinePayload[]; quote_id?: string },
   signal: AbortSignal,
-): Promise<TillPricePreview> {
-  return apiFetch<TillPricePreview>("/quotes/preview", {
+): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/quotes/preview", {
     method: "POST",
     body: JSON.stringify(payload),
     signal,

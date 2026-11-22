@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import uuid
 from contextlib import asynccontextmanager
 
-import pytest
 from sqlalchemy import event, func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.util import await_only
@@ -19,15 +17,12 @@ from app.models.purchase_order import PoLine, PurchaseOrder
 from app.models.sku import Sku
 from app.models.sku_supplier_price import SkuSupplierPrice
 from app.models.supplier import Supplier
-from app.models.tax_invoice import TaxInvoice
 from app.models.team import Team
 from app.models.team_settings import TeamSettings
 from app.models.user import User
-from app.schemas.invoice import InvoiceCreate
 from app.schemas.purchase_order import PoLineSkuCreate, PurchaseOrderCreate
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.document_numbering import DocumentNumberingService
-from app.services.invoices import InvoiceService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ValidationError
@@ -116,10 +111,9 @@ def pause_actual_commit(session, matches, observed, resume):
     return committed
 
 
-@pytest.mark.parametrize("document", ["invoice", "purchase_order"])
-async def test_first_settings_commit_precedes_archived_sku_validation(
-    second_postgres_url, document
-):
+# Invoices no longer create team settings on first use (pricing reads them), so only a
+# purchase order commits settings before its SKU validation.
+async def test_first_settings_commit_precedes_archived_sku_validation(second_postgres_url):
     async with isolated_requests(second_postgres_url) as (maker, ids):
         async with maker() as writer, maker() as archiver:
             observed, resume = asyncio.Event(), asyncio.Event()
@@ -136,24 +130,6 @@ async def test_first_settings_commit_precedes_archived_sku_validation(
 
             async def create_document():
                 try:
-                    if document == "invoice":
-                        return await InvoiceService(writer).create(
-                            InvoiceCreate.model_validate(
-                                {
-                                    "customer_id": ids["customer"],
-                                    "issue_date": datetime.date.today(),
-                                    "lines": [
-                                        {
-                                            "sku_id": ids["sku"],
-                                            "description": "Race product",
-                                            "qty": 1,
-                                            "unit_ex_vat": "100",
-                                        }
-                                    ],
-                                }
-                            ),
-                            ids["actor"],
-                        )
                     return await PurchaseOrderService(writer).create(
                         PurchaseOrderCreate.model_validate(
                             {
@@ -188,8 +164,7 @@ async def test_first_settings_commit_precedes_archived_sku_validation(
         async with maker() as check:
             assert (await check.get(Sku, ids["sku"])).is_archived
             assert await check.scalar(select(TeamSettings.id)) is not None
-            model = TaxInvoice if document == "invoice" else PurchaseOrder
-            assert await check.scalar(select(func.count()).select_from(model)) == 0
+            assert await check.scalar(select(func.count()).select_from(PurchaseOrder)) == 0
 
 
 async def test_new_po_sku_is_revalidated_after_creation_commit(second_postgres_url):

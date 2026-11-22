@@ -27,7 +27,13 @@ from app.services.chart_of_accounts import (
 )
 from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
 from app.services.sales_staff import SalesStaffService
-from app.services.pricing import format_pdf_unit, pdf_unit_basis_note, pdf_unit_header
+from app.services.pricing import (
+    customer_price_warning,
+    format_pdf_discount,
+    format_pdf_unit,
+    pdf_unit_basis_note,
+    pdf_unit_header,
+)
 from app.services.settings import SettingsService
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -95,8 +101,9 @@ class CreditNoteService:
         lines = []
         for line in invoice.lines:
             description = line.description
-            if line.price_warning:
-                description = f"{description} — {line.price_warning}"
+            printed_warning = customer_price_warning(line.price_warning)
+            if printed_warning:
+                description = f"{description} — {printed_warning}"
             sku = await self.sku_crud.get_by_id(line.sku_id) if line.sku_id else None
             lines.append(
                 DocumentLine(
@@ -106,6 +113,7 @@ class CreditNoteService:
                     ex_vat=f"{line.ex_vat:.2f}",
                     vat=f"{line.vat_amount:.2f}",
                     inc_vat=f"{line.inc_vat:.2f}",
+                    discount=format_pdf_discount(line.discount_percent),
                     sku_ref=sku.our_ref if sku is not None else None,
                 )
             )

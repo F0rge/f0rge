@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Optional
 
 from fastapi.responses import Response
@@ -23,6 +23,7 @@ from app.models.tax_invoice import InvoiceLine
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.layby import (
     LaybyCreate,
+    LaybyPreviewRequest,
     LaybyLineResponse,
     LaybyListItem,
     LaybyPaymentCreate,
@@ -30,6 +31,7 @@ from app.schemas.layby import (
     LaybyResponse,
 )
 from app.schemas.page import Page, PageParams
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.services.layby_pdf import build_layby_pdf
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
@@ -43,7 +45,12 @@ from app.services.stock_movements import StockCost, StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.pricing import shows_prices_including_vat
 from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
-from app.services.vat import CENT, ex_to_inc
+from app.services.sale_line_pricing import (
+    PricingAuthority,
+    SaleLinePricing,
+    SaleLineRequest,
+    line_amounts,
+)
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -101,8 +108,13 @@ class LaybysService:
         pdf_bytes, _, _ = await self.build_pdf_bytes(layby_id)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
+    async def preview(self, data: LaybyPreviewRequest, user_id: uuid.UUID) -> SalePricePreview:
+        """The layby's prices and totals exactly as creating it would store them."""
+        customer = await require_active_customer(self.db, data.customer_id)
+        return await self._price(customer, data.lines, user_id)
+
     async def create(self, data: LaybyCreate, user_id: uuid.UUID) -> LaybyResponse:
-        await require_active_customer(self.db, data.customer_id)
+        customer = await require_active_customer(self.db, data.customer_id)
 
         location = await self.location_crud.get_by_id(data.location_id)
         if location is None:
@@ -115,13 +127,15 @@ class LaybysService:
                 raise ConflictError("Layby stock hold is only allowed at showroom locations")
             await self.stocktakes.assert_location_unlocked(data.location_id)
 
-        line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
+        line_models, priced = await self._build_line_models(
+            customer,
             data.lines,
             data.location_id,
             data.hold_stock,
+            user_id,
         )
 
-        if data.deposit_amount > total_inc:
+        if data.deposit_amount > priced.total_inc_vat:
             raise ValidationError("Deposit cannot exceed layby total")
 
         paid_on = datetime.date.today()
@@ -132,9 +146,9 @@ class LaybysService:
             due_date=data.due_date,
             hold_stock=data.hold_stock,
             status=LaybyStatus.OPEN,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_amount,
-            total_inc_vat=total_inc,
+            subtotal_ex_vat=priced.subtotal_ex_vat,
+            vat_amount=priced.vat_amount,
+            total_inc_vat=priced.total_inc_vat,
             amount_paid=Decimal(0),
             notes=data.notes,
             created_by_user_id=user_id,
@@ -210,9 +224,8 @@ class LaybysService:
         total_inc = Decimal(0)
 
         for index, line in enumerate(layby.lines):
-            ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
+            # Layby lines carry no discount.
+            ex_vat, line_vat, inc_vat = line_amounts(line.unit_ex_vat, line.qty, None)
             total_inc += inc_vat
             invoice_line_models.append(
                 InvoiceLine(
@@ -334,43 +347,37 @@ class LaybysService:
             unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
         return StockCost(Decimal(line.qty), unit_cost)
 
-    async def _build_line_models(
-        self,
-        lines: list,
-        location_id: uuid.UUID,
-        hold_stock: bool,
-    ) -> tuple[list[LaybyLine], Decimal, Decimal, Decimal]:
-        qty_by_sku: dict[uuid.UUID, int] = {}
-        await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
-        models: list[LaybyLine] = []
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
-        total_inc = Decimal(0)
-
+    async def _price(self, customer, lines: list, user_id: uuid.UUID) -> SalePricePreview:
+        requests = []
         for line in lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
             assert_sku_sellable(sku)
-            if sku.retail_ex_vat is None or sku.retail_ex_vat <= 0:
-                raise ValidationError(f"SKU {sku.our_ref} has no retail price")
+            # Layby lines carry no discount or price override.
+            requests.append(SaleLineRequest(sku=sku, qty=line.qty))
+        pricing = await SaleLinePricing.for_customer(
+            self.db, customer, await PricingAuthority.of(self.db, user_id)
+        )
+        return await pricing.price(requests)
 
+    async def _build_line_models(
+        self,
+        customer,
+        lines: list,
+        location_id: uuid.UUID,
+        hold_stock: bool,
+        user_id: uuid.UUID,
+    ) -> tuple[list[LaybyLine], SalePricePreview]:
+        await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
+        priced = await self._price(customer, lines, user_id)
+        models = [
+            LaybyLine(sku_id=line.sku_id, qty=line.qty, unit_ex_vat=price.unit_ex_vat)
+            for line, price in zip(lines, priced.lines, strict=True)
+        ]
+        qty_by_sku: dict[uuid.UUID, int] = {}
+        for line in lines:
             qty_by_sku[line.sku_id] = qty_by_sku.get(line.sku_id, 0) + line.qty
-
-            unit_ex = sku.retail_ex_vat
-            ex_vat = (Decimal(line.qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
-            subtotal += ex_vat
-            vat_total += line_vat
-            total_inc += inc_vat
-            models.append(
-                LaybyLine(
-                    sku_id=line.sku_id,
-                    qty=line.qty,
-                    unit_ex_vat=unit_ex,
-                )
-            )
 
         if hold_stock:
             for sku_id, qty in qty_by_sku.items():
@@ -385,7 +392,7 @@ class LaybysService:
                         f"Insufficient on-hand quantity for {sku.our_ref} at this location"
                     )
 
-        return models, subtotal, vat_total, total_inc
+        return models, priced
 
     async def _post_deposit(
         self,

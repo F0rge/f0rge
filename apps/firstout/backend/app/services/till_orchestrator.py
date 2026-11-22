@@ -20,7 +20,6 @@ from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.models.pick import Pick, PickSourceType, PickStatus
 from app.models.books_event import BooksDocumentType, BooksEventAction
@@ -33,9 +32,8 @@ from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.invoice import InvoiceLineResponse
+from app.schemas.sale_line_pricing import SaleLinePrice, SalePricePreview
 from app.schemas.till import (
-    TillPriceLine,
-    TillPricePreview,
     TillPriceRequest,
     TillSaleCreate,
     TillSaleLocationStock,
@@ -62,13 +60,10 @@ from app.services.till_kit_pick import (
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from app.exceptions import (
     BasketExpiredSignal,
-    ForbiddenError,
     KitRequiresPickError,
     TillPriceConflictError,
 )
-from app.permissions import TILL_DISCOUNT, USERS_MANAGE
-from app.services.permissions import PermissionService
-from app.services.till_pricing import TillPricing
+from app.services.sale_line_pricing import PricingAuthority, SaleLinePricing, SaleLineRequest
 from app.services.tax_invoice_issue import TaxInvoiceIssue
 from app.services.suspect_price import annotate_line_warnings
 from app.services.vat import CENT
@@ -92,21 +87,6 @@ class TillOrchestrator:
         self.bom_crud = SkuBomLineCRUD(db)
         self.pick_crud = PickCRUD(db)
 
-    async def require_discounts(
-        self, request: TillPriceRequest, user_id: uuid.UUID | None, max_discount: Decimal | None
-    ) -> None:
-        """Line discounts need till.discount; above the team maximum, users.manage too."""
-        if user_id is None or not any(line.discount_percent > 0 for line in request.lines):
-            return
-        permissions = PermissionService(self.db)
-        if not await permissions.has_permission(user_id, TILL_DISCOUNT):
-            raise ForbiddenError("Till discount permission required")
-        if max_discount is not None and any(
-            line.discount_percent > max_discount for line in request.lines
-        ):
-            if not await permissions.has_permission(user_id, USERS_MANAGE):
-                raise ConflictError(f"Discount exceeds maximum allowed ({max_discount}%)")
-
     async def _active_customer(self, request: TillPriceRequest) -> Customer:
         if request.customer_id is None:
             customer = await self._get_walk_in_customer()
@@ -118,11 +98,14 @@ class TillOrchestrator:
         return customer
 
     async def _price_cart(
-        self, request: TillPriceRequest, customer: Customer
-    ) -> tuple[list[Sku], TillPricePreview]:
-        pricing = await TillPricing.for_customer(self.db, customer)
+        self,
+        request: TillPriceRequest,
+        customer: Customer,
+        user_id: Optional[uuid.UUID],
+        *,
+        enforce: bool,
+    ) -> tuple[list[Sku], SalePricePreview]:
         skus = []
-        priced_lines = []
         for line in request.lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
@@ -130,21 +113,26 @@ class TillOrchestrator:
             if sku.is_sellable is False:
                 assert_sku_sellable(sku)
             skus.append(sku)
-            priced_lines.append(await pricing.line(sku, line))
-        return skus, pricing.preview(priced_lines)
+        pricing = await SaleLinePricing.for_customer(
+            self.db,
+            customer,
+            await PricingAuthority.of(self.db, user_id),
+            enforce_required_list=True,
+        )
+        preview = await pricing.price(
+            [
+                SaleLineRequest(sku=sku, qty=line.qty, discount_percent=line.discount_percent)
+                for sku, line in zip(skus, request.lines, strict=True)
+            ],
+            enforce=enforce,
+        )
+        return skus, preview
 
     async def preview_prices(
         self, request: TillPriceRequest, user_id: uuid.UUID
-    ) -> TillPricePreview:
-        team = await TeamCRUD(self.db).get_first()
-        if team is None:
-            raise NotFoundError("Team not found")
-        settings = await TeamSettingsCRUD(self.db).get_by_team_id(team.id)
-        await self.require_discounts(
-            request, user_id, settings.max_till_discount_percent if settings else None
-        )
+    ) -> SalePricePreview:
         customer = await self._active_customer(request)
-        _, preview = await self._price_cart(request, customer)
+        _, preview = await self._price_cart(request, customer, user_id, enforce=False)
         return preview
 
     async def create_sale(
@@ -155,11 +143,6 @@ class TillOrchestrator:
         team = await TeamCRUD(self.db).get_first()
         if team is None:
             raise NotFoundError("Team not found")
-        settings_crud = TeamSettingsCRUD(self.db)
-        settings = await settings_crud.get_by_team_id(team.id)
-        await self.require_discounts(
-            data, user_id, settings.max_till_discount_percent if settings else None
-        )
 
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         from app.crud.location import LocationCRUD
@@ -213,7 +196,7 @@ class TillOrchestrator:
         if data.due_date is not None and data.due_date < sale_date:
             raise ValidationError("Due date cannot be before the issue date")
 
-        line_inputs: list[tuple[Sku, TillPriceLine]] = []
+        line_inputs: list[tuple[Sku, SaleLinePrice]] = []
         # Lines that book cost of goods: (line index, SKU, cost a pick already moved,
         # stock this sale takes off the showroom shelf as (sku_id, qty, our_ref)).
         costed: list[tuple[int, Sku, Decimal, list[tuple[uuid.UUID, int, str]]]] = []
@@ -230,7 +213,7 @@ class TillOrchestrator:
         pick_id: Optional[uuid.UUID] = None
 
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in data.lines])
-        skus, preview = await self._price_cart(data, customer)
+        skus, preview = await self._price_cart(data, customer, user_id, enforce=True)
         if data.price_revision is not None and data.price_revision != preview.price_revision:
             raise TillPriceConflictError(
                 "Prices changed. Review the new total before completing the sale."
@@ -309,12 +292,12 @@ class TillOrchestrator:
         invoice_line_models: list[InvoiceLine] = []
 
         for index, (sku, line) in enumerate(line_inputs):
-            discounted_unit = (line.ex_vat / line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
             invoice_line_models.append(
                 InvoiceLine(
                     description=sku.name,
                     qty=line.qty,
-                    unit_ex_vat=discounted_unit,
+                    unit_ex_vat=line.unit_ex_vat,
+                    discount_percent=line.discount_percent,
                     ex_vat=line.ex_vat,
                     inc_vat=line.inc_vat,
                     vat_amount=line.vat_amount,
@@ -490,6 +473,7 @@ class TillOrchestrator:
                     description=line.description,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    discount_percent=line.discount_percent,
                     ex_vat=line.ex_vat,
                     inc_vat=line.inc_vat.quantize(CENT),
                     vat_amount=line.vat_amount.quantize(CENT),

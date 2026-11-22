@@ -142,6 +142,8 @@ class SalesOrderLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     )
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # Line discount % (Firstout ADR 0001). NULL on lines stored before 112: unit is net.
+    discount_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

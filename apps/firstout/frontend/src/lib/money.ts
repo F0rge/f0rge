@@ -1,6 +1,7 @@
 /**
- * Rand amounts in the browser: display formatting and the client-side VAT
- * preview. Moved unchanged from the HTTP client; the server's totals win.
+ * Rand amounts in the browser: display formatting and parsing. Sale documents are
+ * priced by the server (Firstout ADR 0001); the VAT conversions below serve the
+ * catalogue price editor and stored-unit display until the VAT rate is snapshotted.
  */
 
 const VAT_MULTIPLIER = 1.15;
@@ -45,30 +46,6 @@ export function formatZarAmount(value: string | null | undefined): string {
     return "—";
   }
   return `R ${value}`;
-}
-
-export function sumInvoiceLinesExVat(
-  lines: { qty: number | ""; unit_ex_vat: string }[],
-): number {
-  return lines.reduce((sum, line) => {
-    if (typeof line.qty !== "number" || line.qty <= 0) {
-      return sum;
-    }
-    const unit = parsePriceInput(line.unit_ex_vat);
-    if (unit === null || unit <= 0) {
-      return sum;
-    }
-    return sum + line.qty * unit;
-  }, 0);
-}
-
-export function computeInvoicePreview(subtotalExVat: number): {
-  vat: number;
-  totalIncVat: number;
-} {
-  const vat = roundHalfUp(subtotalExVat * 0.15, 2);
-  const totalIncVat = roundHalfUp(subtotalExVat + vat, 2);
-  return { vat, totalIncVat };
 }
 
 export function formatFxGainLoss(value: string): string {

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +16,13 @@ from app.crud.customer import CustomerCRUD
 from app.crud.sku import SkuCRUD
 from app.models.quote import Quote, QuoteStatus
 from app.models.sales_order import SalesOrder, SalesOrderStatus
-from app.services.pricing import resolve_unit_price, shows_prices_including_vat
-from app.services.vat import CENT, discounted_unit_ex, ex_to_inc
+from app.services.pricing import shows_prices_including_vat
+from app.services.sale_line_pricing import (
+    PricingAuthority,
+    SaleLinePricing,
+    SaleLineRequest,
+    document_totals,
+)
 from f0rge_core.exceptions import NotFoundError
 from f0rge_db.crud import unit_of_work
 
@@ -83,55 +87,35 @@ class DraftRepriceService:
             .all()
         )
 
+        # The reprice is not a staff discount decision: each line keeps its discount and
+        # takes the customer's new resolved price.
+        pricing = await SaleLinePricing.for_customer(self.db, customer, PricingAuthority.system())
         async with unit_of_work(self.db):
-            for quote in quotes:
-                for line in quote.lines:
+            for document in [*quotes, *orders]:
+                # A line stored before discounts were kept (NULL) has an already-net unit;
+                # repricing it would drop a discount we cannot see, so it keeps its unit.
+                lines = [line for line in document.lines if line.discount_percent is not None]
+                requests = []
+                for line in lines:
                     sku = await self.skus.get_by_id(line.sku_id)
                     if sku is None:
                         raise NotFoundError("SKU not found")
-                    resolved = await resolve_unit_price(self.db, sku, customer)
-                    line.unit_ex_vat = resolved.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
-                    line.price_warning = resolved.warning
-                subtotal, vat_amount, total_inc = _quote_totals(quote.lines)
-                quote.subtotal_ex_vat = subtotal
-                quote.vat_amount = vat_amount
-                quote.total_inc_vat = total_inc
-                quote.prices_include_vat = including_vat
-
-            for order in orders:
-                subtotal = Decimal(0)
-                vat_amount = Decimal(0)
-                total_inc = Decimal(0)
-                for line in order.lines:
-                    sku = await self.skus.get_by_id(line.sku_id)
-                    if sku is None:
-                        raise NotFoundError("SKU not found")
-                    resolved = await resolve_unit_price(self.db, sku, customer)
-                    unit_ex = resolved.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
-                    line.unit_ex_vat = unit_ex
-                    line.price_warning = resolved.warning
-                    ex_vat = (Decimal(line.qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
-                    inc_vat = ex_to_inc(ex_vat)
-                    subtotal += ex_vat
-                    vat_amount += inc_vat - ex_vat
-                    total_inc += inc_vat
-                order.subtotal_ex_vat = subtotal
-                order.vat_amount = vat_amount
-                order.total_inc_vat = total_inc
-                order.prices_include_vat = including_vat
+                    requests.append(
+                        SaleLineRequest(
+                            sku=sku, qty=line.qty, discount_percent=line.discount_percent
+                        )
+                    )
+                priced = await pricing.price(requests)
+                for line, price in zip(lines, priced.lines, strict=True):
+                    line.unit_ex_vat = price.unit_ex_vat
+                    line.price_warning = price.price_warning
+                (
+                    document.subtotal_ex_vat,
+                    document.vat_amount,
+                    document.total_inc_vat,
+                ) = document_totals(
+                    (line.unit_ex_vat, line.qty, line.discount_percent) for line in document.lines
+                )
+                document.prices_include_vat = including_vat
 
         return DraftDocumentCounts(quotes=len(quotes), sales_orders=len(orders))
-
-
-def _quote_totals(lines) -> tuple[Decimal, Decimal, Decimal]:
-    subtotal = Decimal(0)
-    vat_amount = Decimal(0)
-    total_inc = Decimal(0)
-    for line in lines:
-        charged = discounted_unit_ex(line.unit_ex_vat, line.discount_percent)
-        ex_vat = (Decimal(line.qty) * charged).quantize(CENT, rounding=ROUND_HALF_UP)
-        inc_vat = ex_to_inc(ex_vat)
-        subtotal += ex_vat
-        vat_amount += inc_vat - ex_vat
-        total_inc += inc_vat
-    return subtotal, vat_amount, total_inc

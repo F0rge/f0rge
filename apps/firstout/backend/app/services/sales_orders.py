@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from collections.abc import Awaitable, Callable
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,7 @@ from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.ops_commerce_order import StorefrontPaidOrder
 from app.schemas.page import Page, PageParams
 from app.schemas.quote import QuoteAccept
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.schemas.sales_order import (
     SalesOrderConfirm,
     SalesOrderCreate,
@@ -51,12 +52,18 @@ from app.services.chart_of_accounts import (
     CODE_INVENTORY,
     LedgerPostingService,
 )
-from app.services.pricing import resolve_unit_price, shows_prices_including_vat
+from app.services.pricing import shows_prices_including_vat
+from app.services.sale_line_pricing import (
+    PricingAuthority,
+    SaleLinePricing,
+    SaleLineRequest,
+    document_totals,
+    line_amounts,
+)
 from app.services.stock_movements import StockCost, StockMovementService
 from app.services.suspect_price import annotate_line_warnings
 from app.services.stocktakes import StocktakeService
 from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
-from app.services.vat import CENT, discounted_unit_ex, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -106,19 +113,16 @@ class SalesOrdersService:
     ) -> SalesOrderResponse:
         customer = await self._require_customer(data.customer_id)
         assert_customer_active(customer)
-        line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
-            customer,
-            data.lines,
-        )
+        line_models, priced = await self._build_line_models(customer, data.lines, user_id)
         order = SalesOrder(
             so_number="",
             customer_id=customer.id,
             hold_stock=False,
             awaiting_stock=False,
             status=SalesOrderStatus.DRAFT,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_amount,
-            total_inc_vat=total_inc,
+            subtotal_ex_vat=priced.subtotal_ex_vat,
+            vat_amount=priced.vat_amount,
+            total_inc_vat=priced.total_inc_vat,
             amount_paid=Decimal(0),
             notes=data.notes,
             prices_include_vat=shows_prices_including_vat(customer),
@@ -139,23 +143,24 @@ class SalesOrdersService:
         existing = await self.crud.get_by_quote_id(quote.id)
         if existing is not None:
             raise ConflictError("Quote already has a sales order")
-        line_models = []
-        for line in quote.lines:
-            notes = line.notes
-            if line.discount_percent > 0:
-                discount_note = f"{line.discount_percent:.2f}% line discount"
-                notes = f"{notes}; {discount_note}" if notes else discount_note
-            line_models.append(
-                SalesOrderLine(
-                    sku_id=line.sku_id,
-                    qty=line.qty,
-                    unit_ex_vat=discounted_unit_ex(line.unit_ex_vat, line.discount_percent),
-                    description=line.description,
-                    notes=notes,
-                    price_warning=line.price_warning,
-                    held_qty=0,
-                )
+        # The quote's list unit and discount carry over; the order totals its own lines
+        # with the one line rule, so its invoice adds up to what the order charged.
+        line_models = [
+            SalesOrderLine(
+                sku_id=line.sku_id,
+                qty=line.qty,
+                unit_ex_vat=line.unit_ex_vat,
+                discount_percent=line.discount_percent,
+                description=line.description,
+                notes=line.notes,
+                price_warning=line.price_warning,
+                held_qty=0,
             )
+            for line in quote.lines
+        ]
+        subtotal, vat_amount, total_inc = document_totals(
+            (line.unit_ex_vat, line.qty, line.discount_percent) for line in line_models
+        )
         order = SalesOrder(
             so_number="",
             customer_id=quote.customer_id,
@@ -164,9 +169,9 @@ class SalesOrdersService:
             hold_stock=False,
             awaiting_stock=False,
             status=SalesOrderStatus.OPEN,
-            subtotal_ex_vat=quote.subtotal_ex_vat,
-            vat_amount=quote.vat_amount,
-            total_inc_vat=quote.total_inc_vat,
+            subtotal_ex_vat=subtotal,
+            vat_amount=vat_amount,
+            total_inc_vat=total_inc,
             prices_include_vat=quote.prices_include_vat,
             amount_paid=Decimal(0),
             notes=quote.notes,
@@ -387,11 +392,9 @@ class SalesOrdersService:
         total_inc = Decimal(0)
         for index, line in enumerate(order.lines):
             if tax_snapshot is None:
-                ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(
-                    CENT, rounding=ROUND_HALF_UP
+                ex_vat, line_vat, inc_vat = line_amounts(
+                    line.unit_ex_vat, line.qty, line.discount_percent
                 )
-                inc_vat = ex_to_inc(ex_vat)
-                line_vat = inc_vat - ex_vat
             else:
                 if len(tax_snapshot) != len(order.lines) + 1:
                     raise ValidationError("Storefront tax snapshot does not match order lines")
@@ -406,6 +409,7 @@ class SalesOrdersService:
                     description=line.description,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    discount_percent=line.discount_percent,
                     ex_vat=ex_vat,
                     inc_vat=inc_vat,
                     vat_amount=line_vat,
@@ -600,37 +604,37 @@ class SalesOrdersService:
         self,
         customer,
         lines,
-    ) -> tuple[list[SalesOrderLine], Decimal, Decimal, Decimal]:
+        user_id: Optional[uuid.UUID],
+    ) -> tuple[list[SalesOrderLine], SalePricePreview]:
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
-        models: list[SalesOrderLine] = []
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
-        total_inc = Decimal(0)
+        skus = []
         for line in lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
             assert_sku_sellable(sku)
-            resolved = await resolve_unit_price(self.db, sku, customer)
-            unit_ex = resolved.unit_ex_vat
-            ex_vat = (Decimal(line.qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
-            subtotal += ex_vat
-            vat_total += line_vat
-            total_inc += inc_vat
-            models.append(
-                SalesOrderLine(
-                    sku_id=sku.id,
-                    qty=line.qty,
-                    unit_ex_vat=unit_ex,
-                    description=sku.name,
-                    notes=getattr(line, "notes", None),
-                    price_warning=resolved.warning,
-                    held_qty=0,
-                )
+            skus.append(sku)
+        pricing = await SaleLinePricing.for_customer(
+            self.db, customer, await PricingAuthority.of(self.db, user_id)
+        )
+        # Sales order lines carry no discount or price override.
+        priced = await pricing.price(
+            [SaleLineRequest(sku=sku, qty=line.qty) for sku, line in zip(skus, lines, strict=True)]
+        )
+        models = [
+            SalesOrderLine(
+                sku_id=sku.id,
+                qty=line.qty,
+                unit_ex_vat=price.unit_ex_vat,
+                discount_percent=price.discount_percent,
+                description=sku.name,
+                notes=getattr(line, "notes", None),
+                price_warning=price.price_warning,
+                held_qty=0,
             )
-        return models, subtotal, vat_total, total_inc
+            for sku, line, price in zip(skus, lines, priced.lines, strict=True)
+        ]
+        return models, priced
 
     async def _require_customer(self, customer_id: uuid.UUID):
         customer = await self.customer_crud.get_by_id(customer_id)
@@ -725,6 +729,7 @@ class SalesOrdersService:
                     name=line.sku.name,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    discount_percent=line.discount_percent,
                     description=line.description,
                     notes=line.notes,
                     price_warning=line.price_warning,

@@ -35,7 +35,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { queryKeys } from "@/lib/queries";
 import { formatIsoDate } from "@/lib/customer-crm";
-import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
+import { isCin7GeneratedPriceList } from "@/lib/price-lists";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (

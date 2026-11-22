@@ -19,6 +19,8 @@ SALES_QUOTES = "sales.quotes"
 SALES_ORDERS = "sales.orders"
 SALES_DELIVERIES = "sales.deliveries"
 SALES_CUSTOMERS = "sales.customers"
+# A unit price other than the one Sale line pricing resolved (ADR 0002).
+SALES_PRICE_OVERRIDE = "sales.price_override"
 BOOKS_MUTATE = "books.mutate"
 BOOKS_JOURNALS = "books.journals"
 
@@ -40,6 +42,7 @@ PERMISSION_CATALOG: tuple[str, ...] = (
     SALES_ORDERS,
     SALES_DELIVERIES,
     SALES_CUSTOMERS,
+    SALES_PRICE_OVERRIDE,
     BOOKS_MUTATE,
     BOOKS_JOURNALS,
 )
@@ -71,6 +74,8 @@ ROLE_PRESETS: dict[str, frozenset[str]] = {
             SALES_RETURNS,
             SALES_QUOTES,
             SALES_DELIVERIES,
+            # Discounts quotes, as its role slug used to allow; no till.sell (ADR 0002).
+            TILL_DISCOUNT,
         }
     ),
     SLUG_TILL: frozenset(

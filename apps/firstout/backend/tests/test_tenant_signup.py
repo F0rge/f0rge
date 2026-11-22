@@ -271,7 +271,6 @@ async def test_invitation_cap_role_validation_revoke_and_idempotency(owner_clien
 
 
 async def test_business_apis_still_reject_unknown_clerk_subject(async_client, monkeypatch):
-
     response = await async_client.get(
         "/api/v1/locations",
         headers={

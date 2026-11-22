@@ -19,7 +19,7 @@ import {
   type PriceList,
 } from "@/lib/api";
 import { queryKeys, referenceQueries } from "@/lib/queries";
-import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
+import { isCin7GeneratedPriceList } from "@/lib/price-lists";
 
 export const emptyCustomerForm: CreateCustomerPayload = {
   name: "",

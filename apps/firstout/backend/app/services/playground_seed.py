@@ -27,7 +27,7 @@ from app.schemas.bank_import import BankImportMatchRequest
 from app.schemas.bill import BillCreate, BillLineCreate
 from app.schemas.customer_crm import CustomerCrmCreate
 from app.schemas.invoice import InvoiceCreate, InvoiceLineCreate
-from app.schemas.layby import LaybyCreate, LaybyLineCreate
+from app.schemas.layby import LaybyCreate, LaybyLineCreate, LaybyPreviewRequest
 from app.schemas.payment import PaymentCreate
 from app.schemas.purchase_order import PoLineCreate, PurchaseOrderCreate, ReceiveRequest
 from app.schemas.sku import SkuCreate, SkuUpdate
@@ -54,7 +54,6 @@ from app.services.skus import SkuService
 from app.services.suppliers import SupplierService
 from app.services.till_orchestrator import TillOrchestrator
 from app.services.transfers import TransferService
-from app.services.vat import ex_to_inc
 from f0rge_core.exceptions import NotFoundError
 
 MINIMAL_PDF = PLACEHOLDER_PDF
@@ -531,7 +530,15 @@ class PlaygroundSeedService:
             )
         )
 
-        ottoman_total = ex_to_inc(Decimal("900.00"))
+        # Paid in full: the deposit is the layby total at the trade customer's price.
+        ottoman_total = (
+            await laybys.preview(
+                LaybyPreviewRequest(
+                    customer_id=studio.id, lines=[LaybyLineCreate(sku_id=ottoman.id, qty=1)]
+                ),
+                owner.id,
+            )
+        ).total_inc_vat
 
         await self._ensure_transaction()
         await laybys.create(

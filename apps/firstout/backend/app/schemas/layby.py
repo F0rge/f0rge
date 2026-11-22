@@ -26,6 +26,13 @@ class LaybyCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class LaybyPreviewRequest(BaseModel):
+    """Price a layby cart exactly as creating it would, without saving."""
+
+    customer_id: uuid.UUID
+    lines: list[LaybyLineCreate] = Field(min_length=1)
+
+
 class LaybyPaymentCreate(BaseModel):
     amount: Decimal = Field(gt=0)
     tender: Literal["cash", "card"]

@@ -54,7 +54,6 @@ import {
   CartEditor,
   mergeCartBySku,
   clampDiscount,
-  unitExVat,
   type CartLine,
 } from "@/components/cart-editor";
 import { TillScanner } from "@/components/till-scanner";
@@ -70,13 +69,13 @@ import { TillPickList } from "./till-pick-list";
 import { localIsoDate } from "@/lib/dates";
 import { statementDueDate } from "@/lib/till-statement";
 import { rememberedColleague } from "@/lib/sales-staff";
+import { anyLineBlocked, formatDiscount, mayBePriced } from "@/lib/sale-preview";
 
 import {
   ApiError,
   can,
   canManageCustomerCredit,
   canUseTill,
-  canViewCostAudit,
   cancelPick,
   confirmPick,
   createPick,
@@ -116,7 +115,7 @@ import {
   type PickDocument,
   type Quote,
   type TillBasket,
-  type TillPricePreview,
+  type SalePricePreview,
   type TillPriceRequest,
   type TillSaleResult,
   type TillReservation,
@@ -244,7 +243,6 @@ function TillWorkspace() {
   const { user } = useAuth();
   const canSell = canUseTill(user);
   const canDiscount = can(user, "till.discount");
-  const canViewCost = canViewCostAudit(user);
   const canOverrideCredit = canManageCustomerCredit(user);
   const [locations, setLocations] = useState<Location[]>([]);
   const [companySettings, setCompanySettings] = useState<AppSettings | null>(
@@ -291,7 +289,7 @@ function TillWorkspace() {
   const [pricing, setPricing] = useState<{
     request: TillPriceRequest;
     attempt: number;
-    preview?: TillPricePreview;
+    preview?: SalePricePreview;
     error?: string;
   } | null>(null);
   const [pricingAttempt, setPricingAttempt] = useState(0);
@@ -416,16 +414,16 @@ function TillWorkspace() {
         inventoryData,
         customerData,
         settingsData,
-        priceListData,
         pickData,
+        priceListData,
       ] = await Promise.all([
         listLocations(),
         listSkus(),
         listInventory(),
         listCustomers(),
         getSettings(),
-        listPriceLists(),
         listPicks("till"),
+        listPriceLists(),
       ]);
       const showrooms = locationData.filter(
         (loc) => isActiveLocation(loc) && loc.type === "showroom",
@@ -478,7 +476,7 @@ function TillWorkspace() {
   const skuOptions = skus.filter((sku) => {
     if (sku.is_archived || !sku.is_sellable || !locationId) return false;
     if (sku.till_no_stock_required && !sku.is_kit) {
-      return unitExVat(sku, selectedCustomer, priceLists) > 0;
+      return mayBePriced(sku, selectedCustomer, priceLists);
     }
     if (!sku.retail_ex_vat) return false;
     if (sku.is_kit) return true;
@@ -741,7 +739,7 @@ function TillWorkspace() {
         addQty,
         floorOnHand: (id) => availabilityFor(id).limit,
         cartQty: (id) => cartQtyBySku.get(id) ?? 0,
-        hasServicePrice: (sku) => unitExVat(sku, selectedCustomer, priceLists) > 0,
+        hasServicePrice: (sku) => mayBePriced(sku, selectedCustomer, priceLists),
       });
       if (!result.ok) {
         const scanned = skus.find((sku) => sku.our_barcode === trimmed) ??
@@ -804,6 +802,7 @@ function TillWorkspace() {
     colleagueChosen &&
     locationId &&
     !!pricePreview &&
+    !anyLineBlocked(pricePreview) &&
     totalInc > 0 &&
     cart.length > 0 &&
     cart.every((line) => {
@@ -835,7 +834,7 @@ function TillWorkspace() {
       (!sku.till_no_stock_required && !sku.retail_ex_vat) ||
       !Number.isFinite(quantity) ||
       quantity <= 0 ||
-      unitExVat(sku, selectedCustomer, priceLists) <= 0
+      !mayBePriced(sku, selectedCustomer, priceLists)
     )
       return false;
     const needsFloorStock = requiresTillFloorStock(sku);
@@ -1648,13 +1647,11 @@ function TillWorkspace() {
           selectedCustomer={selectedCustomer}
           onAddCustomer={() => router.push("/customers")}
           onBrowseCatalogue={() => router.push("/catalogue")}
-          priceLists={priceLists}
           preview={pricePreview}
           pricingError={pricingError}
           onRetryPricing={refreshPrices}
           vatRateLabel={vatRateLabel}
           canDiscount={canDiscount}
-          canViewCost={canViewCost}
           colleagues={colleagues}
           colleaguesError={colleaguesError}
           salesStaffId={salesStaffId}
@@ -1964,6 +1961,7 @@ function TillWorkspace() {
                         ? "Unit incl. VAT"
                         : "Unit excl. VAT"}
                     </TableHeader>
+                    <TableHeader>Discount</TableHeader>
                     <TableHeader>Ex VAT</TableHeader>
                     <TableHeader>VAT</TableHeader>
                     <TableHeader>Inc VAT</TableHeader>
@@ -1995,6 +1993,7 @@ function TillWorkspace() {
                             : line.unit_ex_vat,
                         )}
                       </TableCell>
+                      <TableCell>{formatDiscount(line.discount_percent)}</TableCell>
                       <TableCell>{formatZarAmount(line.ex_vat)}</TableCell>
                       <TableCell>{formatZarAmount(line.vat_amount)}</TableCell>
                       <TableCell>{formatZarAmount(line.inc_vat)}</TableCell>

@@ -2007,6 +2007,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/laybys/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Layby Prices */
+        post: operations["preview_layby_prices_api_v1_laybys_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/laybys/{layby_id}": {
         parameters: {
             query?: never;
@@ -7265,6 +7282,8 @@ export interface components {
             qty: number;
             /** Unit Ex Vat */
             unit_ex_vat: string;
+            /** Discount Percent */
+            discount_percent: string | null;
             /** Ex Vat */
             ex_vat: string;
             /** Inc Vat */
@@ -7915,6 +7934,19 @@ export interface components {
              * Format: date
              */
             paid_on: string;
+        };
+        /**
+         * LaybyPreviewRequest
+         * @description Price a layby cart exactly as creating it would, without saving.
+         */
+        LaybyPreviewRequest: {
+            /**
+             * Customer Id
+             * Format: uuid
+             */
+            customer_id: string;
+            /** Lines */
+            lines: components["schemas"]["LaybyLineCreate"][];
         };
         /** LaybyResponse */
         LaybyResponse: {
@@ -9886,6 +9918,63 @@ export interface components {
             /** Permissions */
             permissions?: string[] | null;
         };
+        /**
+         * SaleLinePrice
+         * @description One priced line of a sale document, exactly as saving it would store it.
+         */
+        SaleLinePrice: {
+            /** Sku Id */
+            sku_id: string | null;
+            /** Qty */
+            qty: number;
+            /** Discount Percent */
+            discount_percent: string;
+            /** Unit Ex Vat */
+            unit_ex_vat: string;
+            /** Unit Inc Vat */
+            unit_inc_vat: string;
+            /** Resolved Unit Ex Vat */
+            resolved_unit_ex_vat: string | null;
+            /** Before Discount Ex Vat */
+            before_discount_ex_vat: string;
+            /** Ex Vat */
+            ex_vat: string;
+            /** Vat Amount */
+            vat_amount: string;
+            /** Inc Vat */
+            inc_vat: string;
+            /** Source */
+            source: string;
+            /** Price Warning */
+            price_warning: string | null;
+            /** Suspect Price Warning */
+            suspect_price_warning: string | null;
+            /** Blocked By */
+            blocked_by: string | null;
+        };
+        /** SalePricePreview */
+        SalePricePreview: {
+            /** Classification */
+            classification: string;
+            /** Price List Name */
+            price_list_name: string | null;
+            /** Prices Include Vat */
+            prices_include_vat: boolean;
+            /** Before Discount Ex Vat */
+            before_discount_ex_vat: string;
+            /** Before Discount Inc Vat */
+            before_discount_inc_vat: string;
+            /** Subtotal Ex Vat */
+            subtotal_ex_vat: string;
+            /** Vat Amount */
+            vat_amount: string;
+            /** Total Inc Vat */
+            total_inc_vat: string;
+            /** Lines */
+            lines: components["schemas"]["SaleLinePrice"][];
+            /** Price Revision */
+            price_revision: string;
+        };
         /** SalesBySkuLine */
         SalesBySkuLine: {
             /**
@@ -9994,6 +10083,8 @@ export interface components {
             qty: number;
             /** Unit Ex Vat */
             unit_ex_vat: string;
+            /** Discount Percent */
+            discount_percent: string | null;
             /** Description */
             description: string;
             /** Notes */
@@ -12183,55 +12274,6 @@ export interface components {
             };
             /** Lines */
             lines?: components["schemas"]["HeldSaleLineCreate-Input"][];
-        };
-        /** TillPriceLine */
-        TillPriceLine: {
-            /**
-             * Sku Id
-             * Format: uuid
-             */
-            sku_id: string;
-            /** Qty */
-            qty: number;
-            /** Discount Percent */
-            discount_percent: string;
-            /** Unit Ex Vat */
-            unit_ex_vat: string;
-            /** Before Discount Ex Vat */
-            before_discount_ex_vat: string;
-            /** Ex Vat */
-            ex_vat: string;
-            /** Vat Amount */
-            vat_amount: string;
-            /** Inc Vat */
-            inc_vat: string;
-            /** Source */
-            source: string;
-            /** Price Warning */
-            price_warning: string | null;
-        };
-        /** TillPricePreview */
-        TillPricePreview: {
-            /** Classification */
-            classification: string;
-            /** Price List Name */
-            price_list_name: string | null;
-            /** Prices Include Vat */
-            prices_include_vat: boolean;
-            /** Before Discount Ex Vat */
-            before_discount_ex_vat: string;
-            /** Before Discount Inc Vat */
-            before_discount_inc_vat: string;
-            /** Subtotal Ex Vat */
-            subtotal_ex_vat: string;
-            /** Vat Amount */
-            vat_amount: string;
-            /** Total Inc Vat */
-            total_inc_vat: string;
-            /** Lines */
-            lines: components["schemas"]["TillPriceLine"][];
-            /** Price Revision */
-            price_revision: string;
         };
         /** TillPriceRequest */
         TillPriceRequest: {
@@ -17770,6 +17812,39 @@ export interface operations {
             };
         };
     };
+    preview_layby_prices_api_v1_laybys_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaybyPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalePricePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_layby_api_v1_laybys__layby_id__get: {
         parameters: {
             query?: never;
@@ -18015,7 +18090,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TillPricePreview"];
+                    "application/json": components["schemas"]["SalePricePreview"];
                 };
             };
             /** @description Validation Error */
@@ -18748,7 +18823,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TillPricePreview"];
+                    "application/json": components["schemas"]["SalePricePreview"];
                 };
             };
             /** @description Validation Error */
@@ -19757,7 +19832,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TillPricePreview"];
+                    "application/json": components["schemas"]["SalePricePreview"];
                 };
             };
             /** @description Validation Error */

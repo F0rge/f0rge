@@ -24,32 +24,6 @@ class TillPriceRequest(BaseModel):
     customer_id: Optional[uuid.UUID] = None
 
 
-class TillPriceLine(BaseModel):
-    sku_id: uuid.UUID
-    qty: int
-    discount_percent: Decimal
-    unit_ex_vat: Decimal
-    before_discount_ex_vat: Decimal
-    ex_vat: Decimal
-    vat_amount: Decimal
-    inc_vat: Decimal
-    source: str
-    price_warning: Optional[str] = None
-
-
-class TillPricePreview(BaseModel):
-    classification: str
-    price_list_name: Optional[str]
-    prices_include_vat: bool
-    before_discount_ex_vat: Decimal
-    before_discount_inc_vat: Decimal
-    subtotal_ex_vat: Decimal
-    vat_amount: Decimal
-    total_inc_vat: Decimal
-    lines: list[TillPriceLine]
-    price_revision: str
-
-
 TillTender = Literal["statement", "cash", "card", "deposit", "eft"]
 
 

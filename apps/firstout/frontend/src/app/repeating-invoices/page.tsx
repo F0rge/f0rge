@@ -8,19 +8,19 @@ import {
   Stack,
   TextInput,
 } from "@carbon/react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { CustomerPicker } from "@/components/customer-picker";
 import {
   canMutateBooks,
-  computeInvoicePreview,
   createRepeatingInvoice,
   formatPriceAmount,
+  formatZarAmount,
   listCustomers,
   apiFetch,
+  previewInvoicePrices,
   runRepeatingInvoice,
-  sumInvoiceLinesExVat,
   type CreateInvoiceLinePayload,
   type RepeatingInvoice,
 } from "@/lib/api";
@@ -90,18 +90,32 @@ function RepeatingInvoicesContent() {
   }, [customers, archivedCustomers]);
   const archivedCustomerIds = useMemo(() => new Set(archivedCustomers.map((customer) => customer.id)), [archivedCustomers]);
 
-  const preview = useMemo(() => {
-    const subtotal = sumInvoiceLinesExVat(lines);
-    return { subtotal, ...computeInvoicePreview(subtotal) };
-  }, [lines]);
-
   const linesValid = lines.every(
     (line) =>
       line.description.trim() &&
       typeof line.qty === "number" &&
       line.qty > 0 &&
-      line.unit_ex_vat.trim(),
+      Number(line.unit_ex_vat) > 0,
   );
+  const payloadLines = lines.map(
+    (line): CreateInvoiceLinePayload => ({
+      description: line.description.trim(),
+      qty: line.qty as number,
+      unit_ex_vat: line.unit_ex_vat.trim(),
+    }),
+  );
+  // Totals as the books invoice service would price these lines today (Firstout ADR 0001).
+  // Keyed on what changes the amounts, so typing a description does not refetch.
+  const canPreview = Boolean(customerId) && linesValid;
+  const amountLines = payloadLines.map(({ qty, unit_ex_vat }) => ({ description: "Line", qty, unit_ex_vat }));
+  const previewQuery = useQuery({
+    queryKey: ["repeating-invoice-preview", customerId, amountLines],
+    queryFn: ({ signal }) => previewInvoicePrices({ customer_id: customerId, lines: amountLines }, signal),
+    enabled: canPreview,
+    placeholderData: keepPreviousData,
+  });
+  const preview = canPreview ? previewQuery.data : undefined;
+  const previewStale = previewQuery.isPlaceholderData;
   const formValid =
     Boolean(customerId) &&
     Boolean(nextDate) &&
@@ -147,13 +161,7 @@ function RepeatingInvoicesContent() {
         ...(trimmedName ? { name: trimmedName } : {}),
         day_of_month: dayOfMonth,
         next_date: nextDate,
-        lines: lines.map(
-          (line): CreateInvoiceLinePayload => ({
-            description: line.description.trim(),
-            qty: line.qty as number,
-            unit_ex_vat: line.unit_ex_vat.trim(),
-          }),
-        ),
+        lines: payloadLines,
       });
       setCreateOpen(false);
       resetCreateForm();
@@ -372,12 +380,25 @@ function RepeatingInvoicesContent() {
             </Button>
           </div>
           <div className="firstout-invoice-preview">
-            <p className="cds--type-productive-heading-02">Preview (15% VAT)</p>
-            <p className="cds--type-body-01">Ex VAT: R {formatPriceAmount(preview.subtotal)}</p>
-            <p className="cds--type-body-01">VAT: R {formatPriceAmount(preview.vat)}</p>
-            <p className="cds--type-body-01">
-              <strong>Total inc VAT: R {formatPriceAmount(preview.totalIncVat)}</strong>
-            </p>
+            <p className="cds--type-productive-heading-02">Preview</p>
+            {preview ? (
+              <div style={previewStale ? { opacity: 0.5 } : undefined} aria-busy={previewStale}>
+                {previewStale ? <p role="status" className="cds--type-helper-text-01">Updating…</p> : null}
+                <p className="cds--type-body-01">Ex VAT: {formatZarAmount(preview.subtotal_ex_vat)}</p>
+                <p className="cds--type-body-01">VAT: {formatZarAmount(preview.vat_amount)}</p>
+                <p className="cds--type-body-01">
+                  <strong>Total inc VAT: {formatZarAmount(preview.total_inc_vat)}</strong>
+                </p>
+              </div>
+            ) : (
+              <p role="status" className="cds--type-helper-text-01">
+                {!canPreview
+                  ? "Choose a customer and complete the lines to see the totals."
+                  : previewQuery.isError
+                    ? previewQuery.error.message
+                    : "Working out the totals…"}
+              </p>
+            )}
           </div>
         </Stack></fieldset>
       </Modal>

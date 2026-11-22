@@ -7228,6 +7228,47 @@
         }
       }
     },
+    "/api/v1/laybys/preview": {
+      "post": {
+        "tags": [
+          "laybys"
+        ],
+        "summary": "Preview Layby Prices",
+        "operationId": "preview_layby_prices_api_v1_laybys_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaybyPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalePricePreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/laybys/{layby_id}": {
       "get": {
         "tags": [
@@ -7601,7 +7642,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TillPricePreview"
+                  "$ref": "#/components/schemas/SalePricePreview"
                 }
               }
             }
@@ -8672,7 +8713,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TillPricePreview"
+                  "$ref": "#/components/schemas/SalePricePreview"
                 }
               }
             }
@@ -10176,7 +10217,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TillPricePreview"
+                  "$ref": "#/components/schemas/SalePricePreview"
                 }
               }
             }
@@ -22951,6 +22992,18 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Unit Ex Vat"
           },
+          "discount_percent": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Percent"
+          },
           "ex_vat": {
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -23021,6 +23074,7 @@
           "description",
           "qty",
           "unit_ex_vat",
+          "discount_percent",
           "ex_vat",
           "inc_vat",
           "vat_amount",
@@ -24571,6 +24625,30 @@
           "paid_on"
         ],
         "title": "LaybyPaymentResponse"
+      },
+      "LaybyPreviewRequest": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Customer Id"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LaybyLineCreate"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "lines"
+        ],
+        "title": "LaybyPreviewRequest",
+        "description": "Price a layby cart exactly as creating it would, without saving."
       },
       "LaybyResponse": {
         "properties": {
@@ -30276,6 +30354,202 @@
         "type": "object",
         "title": "RoleUpdate"
       },
+      "SaleLinePrice": {
+        "properties": {
+          "sku_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku Id"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "discount_percent": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Discount Percent"
+          },
+          "unit_ex_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Ex Vat"
+          },
+          "unit_inc_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Inc Vat"
+          },
+          "resolved_unit_ex_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Unit Ex Vat"
+          },
+          "before_discount_ex_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Before Discount Ex Vat"
+          },
+          "ex_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ex Vat"
+          },
+          "vat_amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Amount"
+          },
+          "inc_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Inc Vat"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "price_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Warning"
+          },
+          "suspect_price_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspect Price Warning"
+          },
+          "blocked_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sku_id",
+          "qty",
+          "discount_percent",
+          "unit_ex_vat",
+          "unit_inc_vat",
+          "resolved_unit_ex_vat",
+          "before_discount_ex_vat",
+          "ex_vat",
+          "vat_amount",
+          "inc_vat",
+          "source",
+          "price_warning",
+          "suspect_price_warning",
+          "blocked_by"
+        ],
+        "title": "SaleLinePrice",
+        "description": "One priced line of a sale document, exactly as saving it would store it."
+      },
+      "SalePricePreview": {
+        "properties": {
+          "classification": {
+            "type": "string",
+            "title": "Classification"
+          },
+          "price_list_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price List Name"
+          },
+          "prices_include_vat": {
+            "type": "boolean",
+            "title": "Prices Include Vat"
+          },
+          "before_discount_ex_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Before Discount Ex Vat"
+          },
+          "before_discount_inc_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Before Discount Inc Vat"
+          },
+          "subtotal_ex_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Subtotal Ex Vat"
+          },
+          "vat_amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Amount"
+          },
+          "total_inc_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Inc Vat"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SaleLinePrice"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "price_revision": {
+            "type": "string",
+            "title": "Price Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "classification",
+          "price_list_name",
+          "prices_include_vat",
+          "before_discount_ex_vat",
+          "before_discount_inc_vat",
+          "subtotal_ex_vat",
+          "vat_amount",
+          "total_inc_vat",
+          "lines",
+          "price_revision"
+        ],
+        "title": "SalePricePreview"
+      },
       "SalesBySkuLine": {
         "properties": {
           "sku_id": {
@@ -30537,6 +30811,18 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Unit Ex Vat"
           },
+          "discount_percent": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Percent"
+          },
           "description": {
             "type": "string",
             "title": "Description"
@@ -30599,6 +30885,7 @@
           "name",
           "qty",
           "unit_ex_vat",
+          "discount_percent",
           "description",
           "notes",
           "price_warning",
@@ -37115,151 +37402,6 @@
         ],
         "title": "TillBasketUpdate",
         "description": "Whole-basket replace; an empty line list is a valid open basket."
-      },
-      "TillPriceLine": {
-        "properties": {
-          "sku_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Sku Id"
-          },
-          "qty": {
-            "type": "integer",
-            "title": "Qty"
-          },
-          "discount_percent": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Discount Percent"
-          },
-          "unit_ex_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Unit Ex Vat"
-          },
-          "before_discount_ex_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Before Discount Ex Vat"
-          },
-          "ex_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Ex Vat"
-          },
-          "vat_amount": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Vat Amount"
-          },
-          "inc_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Inc Vat"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "price_warning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Warning"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sku_id",
-          "qty",
-          "discount_percent",
-          "unit_ex_vat",
-          "before_discount_ex_vat",
-          "ex_vat",
-          "vat_amount",
-          "inc_vat",
-          "source",
-          "price_warning"
-        ],
-        "title": "TillPriceLine"
-      },
-      "TillPricePreview": {
-        "properties": {
-          "classification": {
-            "type": "string",
-            "title": "Classification"
-          },
-          "price_list_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price List Name"
-          },
-          "prices_include_vat": {
-            "type": "boolean",
-            "title": "Prices Include Vat"
-          },
-          "before_discount_ex_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Before Discount Ex Vat"
-          },
-          "before_discount_inc_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Before Discount Inc Vat"
-          },
-          "subtotal_ex_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Subtotal Ex Vat"
-          },
-          "vat_amount": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Vat Amount"
-          },
-          "total_inc_vat": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Total Inc Vat"
-          },
-          "lines": {
-            "items": {
-              "$ref": "#/components/schemas/TillPriceLine"
-            },
-            "type": "array",
-            "title": "Lines"
-          },
-          "price_revision": {
-            "type": "string",
-            "title": "Price Revision"
-          }
-        },
-        "type": "object",
-        "required": [
-          "classification",
-          "price_list_name",
-          "prices_include_vat",
-          "before_discount_ex_vat",
-          "before_discount_inc_vat",
-          "subtotal_ex_vat",
-          "vat_amount",
-          "total_inc_vat",
-          "lines",
-          "price_revision"
-        ],
-        "title": "TillPricePreview"
       },
       "TillPriceRequest": {
         "properties": {

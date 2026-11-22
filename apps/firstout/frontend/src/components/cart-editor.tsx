@@ -33,20 +33,11 @@ import {
   formatZarAmount,
   skuPhotoUrl,
   type CustomerCrm,
-  type PriceList,
   type SalesStaffOption,
   type Sku,
-  type TillPricePreview,
+  type SalePricePreview,
 } from "@/lib/api";
-import {
-  classificationOf,
-  displayUnitAmount,
-  isCin7GeneratedPriceList,
-  pricesIncludeVat,
-  quoteLineSuspectWarning,
-  quoteSkuUnitExVat,
-  vatBasisLabel,
-} from "@/lib/quote-sku-price";
+import { alignPreviewLines, blockedReason } from "@/lib/sale-preview";
 import { commissionBase, rememberColleague, zar } from "@/lib/sales-staff";
 import styles from "./cart-editor.module.css";
 
@@ -64,10 +55,6 @@ export type CartLine = {
 type SkuOption = Sku & { disabled?: boolean; reason?: string };
 
 const DOCUMENT: Record<CartMode, string> = { till: "invoice", quote: "quote", invoice: "invoice" };
-
-export function unitExVat(sku: Sku, customer: CustomerCrm | null, priceLists: PriceList[]): number {
-  return quoteSkuUnitExVat(sku, customer, priceLists).unitExVat ?? 0;
-}
 
 export function clampDiscount(value: number): number {
   if (value < 0) {
@@ -123,7 +110,7 @@ export type CartEditorProps = {
   mode: CartMode;
   /** Heading of the cart panel. */
   title?: string;
-  /** Products the finder offers; the caller decides what can be sold here. */
+  /** Products the finder offers; the caller decides what can be sold and priced here (`mayBePriced`). */
   products: Sku[];
   cart: CartLine[];
   onAdd: (sku: Sku, qty: number) => boolean;
@@ -141,13 +128,12 @@ export type CartEditorProps = {
   /** Opens the new-customer form; the cart opens it in a new tab when absent. */
   onAddCustomer?: () => void;
   onBrowseCatalogue?: () => void;
-  priceLists: PriceList[];
-  preview?: TillPricePreview;
+  /** The server's prices for `cart`, then any `afterLines` lines, in that order (ADR 0001). */
+  preview?: SalePricePreview;
   pricingError?: string;
   onRetryPricing: () => void;
   vatRateLabel: string;
   canDiscount: boolean;
-  canViewCost: boolean;
   colleagues: SalesStaffOption[] | null;
   colleaguesError: boolean;
   salesStaffId: string;
@@ -189,7 +175,7 @@ export type CartEditorProps = {
 
 export function CartEditor(props: CartEditorProps) {
   const {
-    mode, cart, preview, selectedCustomer, priceLists, colleagues, customers, customerId,
+    mode, cart, preview, selectedCustomer, colleagues, customers, customerId,
   } = props;
   const [productQuery, setProductQuery] = useState("");
   const [productPage, setProductPage] = useState(1);
@@ -198,12 +184,10 @@ export function CartEditor(props: CartEditorProps) {
   const lineCount = props.lineCount ?? cart.length;
   const documentWord = DOCUMENT[mode];
 
-  const showInclusive = preview?.prices_include_vat ?? pricesIncludeVat(selectedCustomer);
-  const classification = preview?.classification ?? classificationOf(selectedCustomer);
-  const assignedPriceList = priceLists.find((list) => list.id === selectedCustomer?.price_list_id);
-  const priceListName = preview
-    ? preview.price_list_name
-    : assignedPriceList && !isCin7GeneratedPriceList(assignedPriceList.name) ? assignedPriceList.name : null;
+  // The browser never prices (ADR 0001): every amount on a cart line or in the summary is the server's.
+  const showInclusive = preview?.prices_include_vat ?? true;
+  const basis = showInclusive ? "incl. VAT" : "excl. VAT";
+  const linePrices = alignPreviewLines(cart.map((line) => line.sku.id), preview);
   const money = (amount: string | number | undefined) =>
     amount === undefined ? (lineCount ? "—" : formatZarAmount("0.00")) : formatZarAmount(formatPriceAmount(Number(amount)));
   const beforeDiscount = preview
@@ -226,8 +210,7 @@ export function CartEditor(props: CartEditorProps) {
     !!selectedSku?.is_sellable &&
     !selectedSku.is_archived &&
     numericQty > 0 &&
-    (props.canAddQty?.(selectedSku, numericQty) ?? true) &&
-    unitExVat(selectedSku, selectedCustomer, priceLists) > 0;
+    (props.canAddQty?.(selectedSku, numericQty) ?? true);
 
   const browserProducts = props.products.filter(
     (sku) =>
@@ -264,7 +247,7 @@ export function CartEditor(props: CartEditorProps) {
                   <p className="cds--type-label-01">{isTill ? "SHOWROOM PRODUCTS" : "PRODUCTS"}</p>
                   <h2 className="cds--type-heading-03">Find a product</h2>
                 </div>
-                <Tag type="blue">{vatBasisLabel(showInclusive)}</Tag>
+                <Tag type="blue">Retail incl. VAT</Tag>
               </div>
               {props.finderTop}
 
@@ -335,7 +318,6 @@ export function CartEditor(props: CartEditorProps) {
               <div className={styles.productGrid}>
                 {visibleProducts.map((sku) => {
                   const reason = blocked(sku);
-                  const priced = quoteSkuUnitExVat(sku, selectedCustomer, priceLists);
                   return (
                     <ClickableTile
                       role="button"
@@ -344,8 +326,6 @@ export function CartEditor(props: CartEditorProps) {
                       onClick={() => props.onAdd(sku, 1)}
                       disabled={
                         props.addDisabled ||
-                        priced.unitExVat === null ||
-                        priced.unitExVat <= 0 ||
                         (props.tileDisabled?.(sku) ?? false)
                       }
                     >
@@ -360,12 +340,11 @@ export function CartEditor(props: CartEditorProps) {
                         <h3 className="cds--type-heading-compact-01">{sku.name}</h3>
                         <p className="cds--type-label-01">{sku.our_ref}</p>
                         <div className={styles.priceRow}>
+                          {/* The shelf price as stored; the customer's own price shows on the cart line. */}
                           <p className="cds--type-body-01">
-                            {priced.unitExVat === null
-                              ? "Price unavailable"
-                              : formatZarAmount(
-                                  formatPriceAmount(displayUnitAmount(priced.unitExVat, showInclusive)),
-                                )}
+                            {Number(sku.retail_inc_vat ?? 0) > 0
+                              ? `${formatZarAmount(sku.retail_inc_vat)} Retail`
+                              : "No Retail price"}
                           </p>
                           <Purchase size={20} aria-hidden />
                         </div>
@@ -379,7 +358,6 @@ export function CartEditor(props: CartEditorProps) {
                             {props.stockState(sku)}
                           </p>
                         ) : null}
-                        {priced.warning && <p className="cds--type-label-01">{priced.warning}</p>}
                       </div>
                     </ClickableTile>
                   );
@@ -453,12 +431,14 @@ export function CartEditor(props: CartEditorProps) {
               )}
             </div>
 
-            <div>
-              <p className="cds--type-label-01">Pricing for this {isTill ? "sale" : documentWord}</p>
-              <p className="cds--type-body-01">
-                {classification} · {priceListName ?? "Catalogue tier"} · Unit prices {vatBasisLabel(showInclusive)}
-              </p>
-            </div>
+            {preview && (
+              <div>
+                <p className="cds--type-label-01">Pricing for this {isTill ? "sale" : documentWord}</p>
+                <p className="cds--type-body-01">
+                  {preview.classification} · {preview.price_list_name ?? "Catalogue tier"} · Unit prices {basis}
+                </p>
+              </div>
+            )}
             {colleagues?.length ? (
               <Select
                 id={`${mode}-sales-colleague`}
@@ -466,9 +446,10 @@ export function CartEditor(props: CartEditorProps) {
                 value={colleague?.id ?? ""}
                 invalid={lineCount > 0 && !colleague}
                 invalidText={`Choose who made this ${isTill ? "sale" : documentWord}`}
-                helperText={colleague ? `Counts towards ${colleague.short_name || colleague.name.split(/\s+/)[0]}'s commission: ${zar(commissionBase(cart.map((line, index) => ({
+                // Only once the server has priced every line; a partial sum would understate it.
+                helperText={colleague && linePrices.every(Boolean) ? `Counts towards ${colleague.short_name || colleague.name.split(/\s+/)[0]}'s commission: ${zar(commissionBase(cart.map((line, index) => ({
                   excluded: !!line.sku.exclude_from_commission,
-                  exVat: preview?.lines[index]?.ex_vat,
+                  exVat: linePrices[index]?.ex_vat,
                 }))))} excl. VAT` : undefined}
                 onChange={(event) => {
                   props.onSalesStaffChange(event.target.value);
@@ -525,15 +506,9 @@ export function CartEditor(props: CartEditorProps) {
                 </div>
               ) : (
                 cart.map((line, index) => {
-                  const linePricing = preview?.lines[index];
-                  const priced = quoteSkuUnitExVat(line.sku, selectedCustomer, priceLists);
-                  const suspect = quoteLineSuspectWarning(
-                    linePricing?.unit_ex_vat ?? "",
-                    line.sku,
-                    priced,
-                    props.canViewCost,
-                    showInclusive,
-                  );
+                  const linePricing = linePrices[index];
+                  const lineDiscount = Number(linePricing?.discount_percent ?? 0);
+                  const refused = blockedReason(linePricing?.blocked_by);
                   const lineQtyMax = props.lineQtyMax?.(line.sku);
                   return (
                     <div className={styles.cartLine} key={line.key}>
@@ -592,13 +567,14 @@ export function CartEditor(props: CartEditorProps) {
                             props.onUpdateLine(line.key, { qty: Math.max(1, next) });
                           }}
                         />
-                        {props.canDiscount && (
+                        {/* Without till.discount a carried-over discount can only be lowered or cleared. */}
+                        {(props.canDiscount || line.discountPercent > 0) && (
                           <NumberInput
                             id={`cart-discount-${line.key}`}
                             label="Discount (%)"
                             size="sm"
                             min={0}
-                            max={100}
+                            max={props.canDiscount ? 100 : line.discountPercent}
                             value={line.discountPercent}
                             onChange={(_, { value }) => {
                               const next =
@@ -609,9 +585,11 @@ export function CartEditor(props: CartEditorProps) {
                         )}
                       </div>
                       <div className={styles.priceRow}>
-                        <p className="cds--type-label-01">Unit ({vatBasisLabel(showInclusive)})</p>
+                        {/* The list unit and the discount %, never a discounted unit (ADR 0001). */}
+                        <p className="cds--type-label-01">Unit ({basis})</p>
                         <p className="cds--type-body-01">
-                          {money(linePricing && displayUnitAmount(Number(linePricing.unit_ex_vat), showInclusive))}
+                          {money(showInclusive ? linePricing?.unit_inc_vat : linePricing?.unit_ex_vat)}
+                          {lineDiscount > 0 ? ` · ${lineDiscount}% off` : ""}
                         </p>
                       </div>
                       <div className={styles.priceRow}>
@@ -627,13 +605,22 @@ export function CartEditor(props: CartEditorProps) {
                           subtitle={linePricing.price_warning}
                         />
                       )}
-                      {suspect && (
+                      {linePricing?.suspect_price_warning && (
                         <InlineNotification
                           kind="warning"
                           lowContrast
                           hideCloseButton
                           title="Check this price"
-                          subtitle={suspect}
+                          subtitle={linePricing.suspect_price_warning}
+                        />
+                      )}
+                      {refused && (
+                        <InlineNotification
+                          kind="error"
+                          lowContrast
+                          hideCloseButton
+                          title={`This ${isTill ? "sale" : documentWord} can't be saved with this line`}
+                          subtitle={refused}
                         />
                       )}
                     </div>

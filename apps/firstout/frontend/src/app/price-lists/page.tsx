@@ -10,7 +10,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { queryKeys, referenceQueries } from "@/lib/queries";
-import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
+import { isCin7GeneratedPriceList } from "@/lib/price-lists";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { PriceListItems } from "./price-list-items";
 import styles from "./price-lists.module.css";

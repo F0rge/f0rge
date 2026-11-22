@@ -274,7 +274,10 @@ async def test_migration_roundtrip_preserves_staff_and_grants(rls_database_url):
         ).all()
         assert before == after
         assert membership == (team_id, "warehouse", False, True)
-        assert grants_before == grants_after
+        # 112 deliberately grants till.discount to the built-in warehouse role (ADR 0002).
+        assert sorted(map(tuple, grants_after)) == sorted(
+            [*map(tuple, grants_before), ("warehouse", "till.discount")]
+        )
         assert (
             await conn.scalar(
                 sa.text(

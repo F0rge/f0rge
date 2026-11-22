@@ -95,6 +95,29 @@ def suspect_unit_price_warning(
     )
 
 
+def suspect_line_warning(
+    unit_ex_vat: Decimal,
+    discount_percent: Optional[Decimal],
+    average_cost: Optional[Decimal],
+    *,
+    reveal_cost: bool,
+    prices_include_vat: bool = False,
+) -> Optional[str]:
+    """Warning for a sale line. ``reveal_cost`` is ``stock.cost.view``.
+
+    Cost viewers are warned on the net unit after the line discount, so a discount that
+    takes the line below cost is flagged. Anyone else is warned on the unit before the
+    discount only: a discount they may give must not let them probe the average cost.
+    A None discount is a stored line whose unit is already net.
+    """
+    unit = unit_ex_vat
+    if reveal_cost and discount_percent:
+        unit = cents(unit * (Decimal(100) - discount_percent) / Decimal(100))
+    return suspect_unit_price_warning(
+        unit, average_cost, reveal_cost=reveal_cost, prices_include_vat=prices_include_vat
+    )
+
+
 async def average_costs_by_sku_id(
     db: AsyncSession,
     sku_ids: list[uuid.UUID],
@@ -126,8 +149,9 @@ async def annotate_line_warnings(
     reveal_cost = await viewer_can_see_cost(db, viewer_user_id)
     for line in lines:
         cost = costs.get(line.sku_id) if line.sku_id is not None else None
-        line.suspect_price_warning = suspect_unit_price_warning(
+        line.suspect_price_warning = suspect_line_warning(
             line.unit_ex_vat,
+            getattr(line, "discount_percent", None),
             cost,
             reveal_cost=reveal_cost,
             prices_include_vat=prices_include_vat,

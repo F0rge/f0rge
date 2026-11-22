@@ -127,6 +127,8 @@ class InvoiceLineResponse(BaseModel):
     description: str
     qty: int
     unit_ex_vat: Decimal
+    # Line discount %. None on lines stored before it was kept: their unit is already net.
+    discount_percent: Optional[Decimal] = None
     ex_vat: Decimal
     inc_vat: Decimal
     vat_amount: Decimal

@@ -19,7 +19,8 @@ from app.schemas.held_sale import (
     TillBasketUpdate,
 )
 from app.schemas.till_reservation import TillReservation
-from app.schemas.till import TillPricePreview, TillPriceRequest, TillSaleCreate, TillSaleResponse
+from app.schemas.sale_line_pricing import SalePricePreview
+from app.schemas.till import TillPriceRequest, TillSaleCreate, TillSaleResponse
 from app.services.held_sale import HeldSaleService
 from app.services.till_basket import TillBasketService
 from app.services.till_orchestrator import TillOrchestrator
@@ -27,7 +28,7 @@ from app.services.till_orchestrator import TillOrchestrator
 till_router = APIRouter(prefix="/api/v1/till", tags=["till"])
 
 
-@till_router.post("/price-preview", response_model=TillPricePreview)
+@till_router.post("/price-preview", response_model=SalePricePreview)
 async def preview_till_prices(
     body: TillPriceRequest,
     user_id: uuid.UUID = Depends(require_till),
