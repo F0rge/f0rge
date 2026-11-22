@@ -32,7 +32,7 @@
     "@medusajs/framework": "2.21.1",
     "@medusajs/medusa": "2.21.1",
     "@medusajs/ui": "4.2.14",
-    "@tanstack/react-query": "5.64.2",
+    "@tanstack/react-query": "5.108.1",
     "react-i18next": "18.0.1",
     "react-router-dom": "7.18.4",
     "uuid": "11.1.1",
