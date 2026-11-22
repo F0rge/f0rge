@@ -11,3 +11,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+
+  # `/` covers .github/workflows only; the composite actions need their own directories.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+    groups:
+      actions: # one PR for all action bumps
+        patterns: ['*']
