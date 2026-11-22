@@ -2,6 +2,8 @@ import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, MedusaError, ProductStatus } from "@medusajs/framework/utils";
 import { isIP } from "node:net";
 
+export const CURATED_PRODUCT_METADATA_KEY = "firstout_curated_catalogue";
+
 export type PublicationVariant = {
   id: string;
   sku?: string | null;
@@ -77,7 +79,14 @@ function publicImage(url: unknown): url is string {
   } catch { return false; }
 }
 
-export function publicationProblems(product: PublicationProduct, variant: PublicationVariant, channelId?: string | null): string[] {
+function variantHasAvailability(variant: PublicationVariant): boolean {
+  return positive(variant.metadata?.source_available_quantity) ||
+    hasFiniteMadeToOrderOffer(variant.metadata?.storefront_made_to_order_offer);
+}
+
+export function publicationProblems(
+  product: PublicationProduct, variant: PublicationVariant, channelId?: string | null, allowSoldOut = false,
+): string[] {
   const problems: string[] = [];
   if (product.status !== ProductStatus.PUBLISHED) problems.push("product is not published");
   if (channelId && !product.sales_channels?.some((channel) => channel.id === channelId)) problems.push("product is not in the cart sales channel");
@@ -93,8 +102,7 @@ export function publicationProblems(product: PublicationProduct, variant: Public
   if (attested?.length && !attested.every((url) => publicImage(url) && gallery.has(url))) {
     problems.push("attested gallery photos must be public images on this variant");
   }
-  if (!positive(variant.metadata?.source_available_quantity) &&
-      !hasFiniteMadeToOrderOffer(variant.metadata?.storefront_made_to_order_offer)) {
+  if (!allowSoldOut && !variantHasAvailability(variant)) {
     problems.push("stock or a positive lead time is required");
   }
   return problems;
@@ -108,7 +116,35 @@ const publicationFields = [
   "product.options.title", "product.images.url", "product.sales_channels.id",
 ];
 
-export async function assertVariantsPurchasable(container: MedusaContainer, variantIds: string[], channelId?: string | null): Promise<void> {
+type BasketLine = { variant_id?: string | null; quantity: unknown };
+
+export function basketVariantTotals(lines: BasketLine[], affected: Set<string>): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const { variant_id, quantity } of lines) {
+    if (!variant_id || !affected.has(variant_id)) continue;
+    const value = Number(quantity);
+    const total = (totals.get(variant_id) ?? 0) + value;
+    if (!Number.isSafeInteger(value) || value < 0 || !Number.isSafeInteger(total)) {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Choose a valid quantity for this piece.");
+    }
+    totals.set(variant_id, total);
+  }
+  return totals;
+}
+
+// Native Medusa also checks reservations and locks cart writes. This cap keeps
+// its backorder escape hatch limited to Firstout's finite made-to-order offers.
+function basketQuantityLimit(variant: PublicationVariant): number {
+  const stocked = Number(variant.metadata?.source_projected_quantity ?? variant.metadata?.source_available_quantity);
+  if (Number.isSafeInteger(stocked) && stocked > 0) return stocked;
+  if (positive(variant.metadata?.source_available_quantity)) return 0;
+  const offer = variant.metadata?.storefront_made_to_order_offer;
+  return hasFiniteMadeToOrderOffer(offer) ? Number((offer as Record<string, unknown>).remaining_capacity) : 0;
+}
+
+export async function assertVariantsPurchasable(
+  container: MedusaContainer, variantIds: string[], channelId?: string | null, totals?: Map<string, number>,
+): Promise<void> {
   if (!variantIds.length) return;
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data } = await query.graph({
@@ -119,9 +155,18 @@ export async function assertVariantsPurchasable(container: MedusaContainer, vari
   for (const id of variantIds) {
     const variant = found.get(id);
     if (!variant?.product) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `Variant ${id} is unavailable`);
-    if (!variant.product.external_id?.startsWith("firstout-")) continue;
+    if (!variant.product.external_id?.startsWith("firstout-")) {
+      if (variant.product.status !== ProductStatus.PUBLISHED ||
+          (channelId && !variant.product.sales_channels?.some(({ id }) => id === channelId))) {
+        throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "This piece is no longer available in the shop.");
+      }
+      continue;
+    }
     const problems = publicationProblems(variant.product, variant, channelId);
     if (problems.length) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `Variant ${id} is unavailable: ${problems.join("; ")}`);
+    if ((totals?.get(id) ?? 0) > basketQuantityLimit(variant)) {
+      throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "That quantity is no longer available for this piece.");
+    }
   }
 }
 
@@ -140,8 +185,9 @@ export async function assertPublishedProductComplete(container: MedusaContainer,
   const product = data[0] as PublicationProduct & { variants?: PublicationVariant[] } | undefined;
   if (!product || !product.external_id?.startsWith("firstout-") || product.status !== ProductStatus.PUBLISHED) return;
   if (!product.variants?.length) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Published product has no variants");
+  const hasStockedSibling = product.metadata?.[CURATED_PRODUCT_METADATA_KEY] === true && product.variants.some(variantHasAvailability);
   for (const variant of product.variants) {
-    const problems = publicationProblems(product, variant);
+    const problems = publicationProblems(product, variant, null, hasStockedSibling);
     if (problems.length) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `Variant ${variant.id} cannot be published: ${problems.join("; ")}`);
   }
 }

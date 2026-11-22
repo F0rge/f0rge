@@ -14,9 +14,10 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -51,6 +52,16 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     reorder_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    gallery_photo_keys: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
+    width_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
+    depth_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
+    height_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
+    diameter_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    piece_count: Mapped[Optional[int]] = mapped_column(Integer)
+    storefront_catalogue_selected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     stockist_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     wholesale_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     decorator_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
@@ -91,6 +102,15 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
             unique=True,
         ),
         CheckConstraint("carton_count >= 1", name="ck_skus_carton_count"),
+        CheckConstraint(
+            "width_cm > 0 AND depth_cm > 0 AND height_cm > 0 AND diameter_cm > 0",
+            name="ck_skus_positive_dimensions",
+        ),
+        CheckConstraint("piece_count >= 1", name="ck_skus_positive_piece_count"),
+        CheckConstraint(
+            "cardinality(gallery_photo_keys) = 3 AND array_position(gallery_photo_keys, NULL) IS NULL",
+            name="ck_skus_three_gallery_photos",
+        ),
         CheckConstraint(
             "(made_to_order_capacity IS NULL AND made_to_order_lead_time_min_days IS NULL "
             "AND made_to_order_lead_time_max_days IS NULL AND made_to_order_expires_at IS NULL "

@@ -3,6 +3,8 @@ import { MedusaError } from "@medusajs/framework/utils";
 import { STOREFRONT_CATEGORIES } from "./catalogue-collections";
 
 const shopCategoryHandles = STOREFRONT_CATEGORIES.map((category) => category.handle) as [string, ...string[]];
+const photoToken = z.string().regex(/^[0-9a-f]{64}$/);
+const centimetres = z.number().finite().positive().nullable();
 
 const madeToOrderOfferSchema = z.object({
   id: z.string().uuid(),
@@ -29,7 +31,16 @@ const productSchema = z.object({
   made_to_order_offer: madeToOrderOfferSchema.nullable(),
   // Opaque; changes only when the SKU's Firstout photo changes. Null when it has none.
   // Absent (a Firstout release older than this commerce) means no photo info: photos are left alone.
-  photo_token: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional(),
+  photo_token: photoToken.nullable().optional(),
+  // The version 2 request gets ordered SHA-256s of the immutable JPEG bytes.
+  gallery_photo_tokens: z.array(photoToken).length(3).optional().refine(
+    (tokens) => !tokens || new Set(tokens).size === tokens.length,
+    "Gallery photo tokens must be distinct",
+  ),
+  dimensions_cm: z.object({
+    width: centimetres, depth: centimetres, height: centimetres, diameter: centimetres,
+  }).strict().nullable().optional(),
+  piece_count: z.number().int().positive().nullable().optional(),
   // One of the four shop categories, from Firstout's mapping. Absent (auto-publish off, or an
   // older Firstout) means categories are left alone.
   shop_category: z.enum(shopCategoryHandles).optional(),
@@ -38,6 +49,7 @@ const productSchema = z.object({
 const responseSchema = z.object({
   company_id: z.string().uuid(),
   products: z.array(productSchema),
+  curated_catalogue: z.boolean().optional(),
 }).strict();
 
 export type OpsProduct = z.infer<typeof productSchema>;

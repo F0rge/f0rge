@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   turbopack: { root: repoRoot },
+  // The owner-only catalogue ZIP contains up to 40 MiB plus multipart framing.
+  experimental: { proxyClientMaxBodySize: "42mb" },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   transpilePackages: ["@carbon/react", "@carbon/icons-react"],
   async rewrites() {

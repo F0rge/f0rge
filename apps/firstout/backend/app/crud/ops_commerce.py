@@ -64,6 +64,9 @@ class PublishedSkuSnapshot:
     made_to_order_offer: Optional[dict[str, object]]
     photo_storage_key: Optional[str]
     shop_category: Optional[str]
+    gallery_photo_keys: tuple[str, ...]
+    dimensions_cm: dict[str, Optional[Decimal]]
+    piece_count: Optional[int]
 
 
 class OpsCommerceCRUD:
@@ -77,13 +80,37 @@ class OpsCommerceCRUD:
             )
         ).scalar_one_or_none() is not None
 
-    async def published_products(self, *, auto_publish: bool = False) -> list[PublishedSkuSnapshot]:
+    async def curated_catalogue_enabled(self, company_id: uuid.UUID) -> bool:
+        # Keep this mode and the feed rows on the same side of a concurrent activation.
+        return bool(
+            await self.db.scalar(
+                select(Team.storefront_curated_catalogue)
+                .where(Team.id == company_id)
+                .with_for_update(read=True)
+            )
+        )
+
+    async def published_products(
+        self,
+        *,
+        auto_publish: bool = False,
+        curated: bool = False,
+        source_sku_id: Optional[uuid.UUID] = None,
+    ) -> list[PublishedSkuSnapshot]:
         member = aliased(Sku)
         mapped = aliased(ProductGroupVariant)
         selected = Sku.storefront_published.is_(True)
         group_selected: ColumnElement[bool] = ProductGroup.storefront_published.is_(True)
         member_unselected: ColumnElement[bool] = member.storefront_published.is_(False)
-        if auto_publish:
+        if curated:
+            selected = (
+                Sku.storefront_catalogue_selected.is_(True)
+                & Sku.storefront_hidden.is_(False)
+                & SHOP_CATEGORY.is_not(None)
+            )
+            group_selected = true()
+            member_unselected = false()
+        elif auto_publish:
             # Every row, grouped or not, meets the rule itself; a group shows with the members
             # that do. Archived, unsellable or unpriced members still keep the whole group off.
             selected = ON_SHOP
@@ -94,6 +121,7 @@ class OpsCommerceCRUD:
             .join(member, member.id == mapped.source_sku_id)
             .where(
                 mapped.product_group_id == ProductGroup.id,
+                member.storefront_catalogue_selected.is_(True) if curated else true(),
                 (
                     member.is_archived.is_(True)
                     | member_unselected
@@ -128,6 +156,12 @@ class OpsCommerceCRUD:
                 Sku.made_to_order_offer_id,
                 Sku.photo_storage_key,
                 SHOP_CATEGORY,
+                Sku.gallery_photo_keys,
+                Sku.width_cm,
+                Sku.depth_cm,
+                Sku.height_cm,
+                Sku.diameter_cm,
+                Sku.piece_count,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
             .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
@@ -137,6 +171,7 @@ class OpsCommerceCRUD:
                 Sku.is_archived.is_(False),
                 Sku.is_sellable.is_(True),
                 Sku.retail_ex_vat > 0,
+                Sku.id == source_sku_id if source_sku_id is not None else true(),
                 ProductGroupVariant.id.is_(None) | (group_selected & ~incomplete_group),
             )
             .group_by(Sku.id, ProductGroup.id, ProductGroupVariant.id)
@@ -146,7 +181,7 @@ class OpsCommerceCRUD:
         # Members whose categories map to different shop categories take the first member's
         # (by SKU code), so every variant of one product carries the same shop category.
         group_categories: dict[uuid.UUID, str] = {}
-        if auto_publish:
+        if auto_publish or curated:
             for row in rows:
                 if row[7] is not None:
                     group_categories.setdefault(row[7], row[16])
@@ -229,12 +264,20 @@ class OpsCommerceCRUD:
                     if row[14] is not None
                     else None
                 ),
-                photo_storage_key=row[15],
+                photo_storage_key=row[17][0] if row[17] else row[15],
                 shop_category=(
                     (group_categories[row[7]] if row[7] is not None else row[16])
-                    if auto_publish
+                    if auto_publish or curated
                     else None
                 ),
+                gallery_photo_keys=tuple(row[17] or ()),
+                dimensions_cm={
+                    "width": row[18],
+                    "depth": row[19],
+                    "height": row[20],
+                    "diameter": row[21],
+                },
+                piece_count=row[22],
             )
             for row in rows
         ]

@@ -808,7 +808,17 @@ export function createIntakeSku(payload: {
   });
 }
 
-export type Sku = {
+export type SkuProductDetails = {
+  width_cm?: number | null;
+  depth_cm?: number | null;
+  height_cm?: number | null;
+  diameter_cm?: number | null;
+  piece_count?: number | null;
+  notes?: string | null;
+};
+
+export type Sku = SkuProductDetails & {
+  gallery_photo_count?: number;
   id: string;
   is_archived: boolean;
   archived_at?: string | null;
@@ -855,7 +865,7 @@ export type Sku = {
   updated_at: string;
 };
 
-export type UpdateSkuPricePayload = {
+export type UpdateSkuPricePayload = SkuProductDetails & {
   our_ref?: string;
   our_barcode?: string;
   name?: string;
@@ -923,7 +933,7 @@ export function displayPrice(value: string | null | undefined): string {
   return value ?? "—";
 }
 
-export type CreateSkuPayload = {
+export type CreateSkuPayload = SkuProductDetails & {
   our_ref: string;
   our_barcode?: string;
   name: string;
@@ -1046,8 +1056,23 @@ export function deleteSku(id: string): Promise<void> {
   return apiFetch<void>(`/skus/${id}`, { method: "DELETE" });
 }
 
-export function skuPhotoUrl(id: string): string {
-  return `/api/v1/skus/${id}/photo`;
+export function skuPhotoUrl(id: string, slot?: number): string {
+  return `/api/v1/skus/${id}/photo${slot ? `?slot=${slot}` : ""}`;
+}
+
+export type CuratedCatalogueResult = {
+  applied: boolean;
+  selected_skus: number;
+  gallery_images: number;
+  groups: number;
+  held_without_price: string[];
+};
+
+export function uploadCuratedCatalogue(archive: File, dryRun: boolean): Promise<CuratedCatalogueResult> {
+  const form = new FormData();
+  form.append("archive", archive);
+  form.append("dry_run", String(dryRun));
+  return apiUpload<CuratedCatalogueResult>("/skus/curated-catalogue", form);
 }
 
 export type SkuBomLine = {

@@ -9,6 +9,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import PurePosixPath
 from typing import Optional
 
 from fastapi import HTTPException
@@ -83,6 +84,7 @@ class OpsCommerceService:
         authorization: Optional[str],
         requested_company: Optional[str],
         request_host: str,
+        catalogue_version: int = 1,
     ) -> OpsProductsResponse:
         company_id = await self._authorize(
             authorization=authorization,
@@ -90,9 +92,11 @@ class OpsCommerceService:
             request_host=request_host,
         )
         auto_publish = settings.ops_commerce_auto_publish_enabled
-        snapshots = await self.crud.published_products(auto_publish=auto_publish)
+        curated = await self.crud.curated_catalogue_enabled(company_id)
+        snapshots = await self.crud.published_products(auto_publish=auto_publish, curated=curated)
         return OpsProductsResponse(
             company_id=company_id,
+            **({"curated_catalogue": curated} if catalogue_version == 2 else {}),
             products=[
                 OpsProductResponse(
                     source_sku_id=sku.id,
@@ -111,10 +115,30 @@ class OpsCommerceService:
                     # Auto-publish selects pieces by photo, so it always sends the token.
                     **(
                         {"photo_token": self._photo_token(sku.photo_storage_key)}
-                        if settings.ops_commerce_photo_tokens_enabled or auto_publish
+                        if settings.ops_commerce_photo_tokens_enabled or auto_publish or curated
                         else {}
                     ),
-                    **({"shop_category": sku.shop_category} if auto_publish else {}),
+                    **({"shop_category": sku.shop_category} if auto_publish or curated else {}),
+                    **(
+                        {
+                            "dimensions_cm": sku.dimensions_cm
+                            if sku.gallery_photo_keys
+                            or any(value is not None for value in sku.dimensions_cm.values())
+                            else None,
+                            "piece_count": sku.piece_count,
+                        }
+                        if catalogue_version == 2
+                        else {}
+                    ),
+                    **(
+                        {
+                            "gallery_photo_tokens": [
+                                PurePosixPath(key).stem for key in sku.gallery_photo_keys
+                            ],
+                        }
+                        if catalogue_version == 2 and sku.gallery_photo_keys
+                        else {}
+                    ),
                 )
                 for sku in snapshots
             ],
@@ -127,28 +151,34 @@ class OpsCommerceService:
         authorization: Optional[str],
         requested_company: Optional[str],
         request_host: str,
+        slot: int = 1,
     ) -> bytes:
-        await self._authorize(
+        company_id = await self._authorize(
             authorization=authorization,
             requested_company=requested_company,
             request_host=request_host,
         )
-        # ponytail: reuses the whole feed query so "published" means exactly what the feed
-        # means; one query per download, and downloads happen only when a photo changes.
-        snapshot = next(
-            (
-                sku
-                for sku in await self.crud.published_products(
-                    auto_publish=settings.ops_commerce_auto_publish_enabled
-                )
-                if sku.id == source_sku_id
-            ),
-            None,
+        curated = await self.crud.curated_catalogue_enabled(company_id)
+        # Reuse feed eligibility so excluded products also lose access to their public photos.
+        snapshots = await self.crud.published_products(
+            auto_publish=settings.ops_commerce_auto_publish_enabled,
+            curated=curated,
+            source_sku_id=source_sku_id,
         )
-        if snapshot is None or not snapshot.photo_storage_key:
+        if not snapshots:
+            raise NotFoundError("SKU photo not found")
+        snapshot = snapshots[0]
+        key = (
+            snapshot.gallery_photo_keys[slot - 1]
+            if snapshot.gallery_photo_keys
+            else snapshot.photo_storage_key
+            if slot == 1
+            else None
+        )
+        if not key:
             raise NotFoundError("SKU photo not found")
         try:
-            return await asyncio.to_thread(read_bytes, snapshot.photo_storage_key)
+            return await asyncio.to_thread(read_bytes, key)
         except FileNotFoundError as exc:
             raise NotFoundError("SKU photo not found") from exc
 

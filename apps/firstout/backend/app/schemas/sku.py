@@ -3,15 +3,36 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 
 from app.schemas.quantity import Quantity
 
 
-class SkuCreate(BaseModel):
+SKU_DIMENSION_FIELDS = ("width_cm", "depth_cm", "height_cm", "diameter_cm")
+SKU_DETAIL_FIELDS = (*SKU_DIMENSION_FIELDS, "notes", "piece_count")
+SkuDimension = Annotated[Decimal, Field(gt=0, max_digits=8, decimal_places=2, allow_inf_nan=False)]
+
+
+class SkuDetails(BaseModel):
+    width_cm: Optional[SkuDimension] = None
+    depth_cm: Optional[SkuDimension] = None
+    height_cm: Optional[SkuDimension] = None
+    diameter_cm: Optional[SkuDimension] = None
+    notes: Optional[str] = Field(default=None, max_length=4000)
+    piece_count: Optional[int] = Field(default=None, ge=1, le=2_147_483_647, strict=True)
+
+
+class SkuCreate(SkuDetails):
     is_sellable: bool = True
     till_no_stock_required: bool = False
     exclude_from_commission: bool = False
@@ -63,7 +84,7 @@ class SkuCreate(BaseModel):
         return self
 
 
-class SkuUpdate(BaseModel):
+class SkuUpdate(SkuDetails):
     model_config = ConfigDict(extra="forbid")
 
     is_sellable: Optional[bool] = None
@@ -95,7 +116,7 @@ class SkuUpdate(BaseModel):
     carton_count: Optional[int] = Field(default=None, ge=1)
 
 
-class SkuResponse(BaseModel):
+class SkuResponse(SkuDetails):
     is_archived: bool = False
     archived_at: Optional[datetime.datetime] = None
     archived_by_id: Optional[uuid.UUID] = None
@@ -122,6 +143,7 @@ class SkuResponse(BaseModel):
     last_landed_cost_zar: Optional[Decimal] = None
     category: Optional[str] = None
     photo_storage_key: Optional[str]
+    gallery_photo_count: int = 0
     stockist_ex_vat: Optional[Decimal] = None
     stockist_inc_vat: Optional[Decimal] = None
     wholesale_ex_vat: Optional[Decimal] = None
@@ -144,6 +166,10 @@ class SkuResponse(BaseModel):
     updated_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer(*SKU_DIMENSION_FIELDS, when_used="json")
+    def serialize_dimension(self, value: Optional[Decimal]) -> Optional[float]:
+        return float(value) if value is not None else None
 
 
 class SkuUnitCostItem(BaseModel):

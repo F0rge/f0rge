@@ -34,6 +34,8 @@ import {
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { SkuProductDetailsFields } from "@/components/sku-product-details-fields";
+import { skuDetailsFormFromSku, skuDetailsPayload, validateSkuDetails } from "@/lib/sku-details";
 import { isValidCartonCount } from "@/lib/carton-helpers";
 import {
   SKU_PHOTO_ACCEPT,
@@ -67,6 +69,7 @@ export default function NewSkuPage() {
   const router = useRouter();
   const canMutate = canMutateCatalogue(user);
   const [createForm, setCreateForm] = useState<CreateSkuPayload>(emptyCreateForm);
+  const [details, setDetails] = useState(() => skuDetailsFormFromSku({}));
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -130,7 +133,8 @@ export default function NewSkuPage() {
   });
   const missingMessage = missingNewSkuMessage(missingFields);
   const missing = new Set(missingFields);
-  const formValid = missingFields.length === 0;
+  const detailsErrors = validateSkuDetails(details);
+  const formValid = missingFields.length === 0 && !Object.keys(detailsErrors).length;
 
   async function handleCreate() {
     if (!canMutate || !formValid) {
@@ -140,6 +144,7 @@ export default function NewSkuPage() {
     setError(null);
     try {
       const payload: CreateSkuPayload = {
+        ...skuDetailsPayload(details),
         our_ref: createForm.our_ref.trim(),
         name: createForm.name.trim(),
         design: createForm.design.trim(),
@@ -441,6 +446,18 @@ export default function NewSkuPage() {
                   </div>
                 </Column>
               </Grid>
+            </Stack>
+          </Tile>
+          <Tile>
+            <Stack gap={5}>
+              <h2 className="cds--type-productive-heading-02">Product details</h2>
+              <SkuProductDetailsFields
+                idPrefix="new-sku"
+                form={details}
+                errors={detailsErrors}
+                disabled={saving}
+                onChange={(field, value) => setDetails((current) => ({ ...current, [field]: value }))}
+              />
             </Stack>
           </Tile>
 

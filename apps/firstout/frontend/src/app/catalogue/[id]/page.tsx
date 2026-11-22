@@ -2,6 +2,8 @@
 
 import { LoadingField, LoadingRegion } from "@/components/page-loading";
 import { StaffImage } from "@/components/staff-image";
+import { SkuProductDetailsFields } from "@/components/sku-product-details-fields";
+import { skuDetailsFormFromSku, skuDetailsPayload, validateSkuDetails, type SkuDetailsForm } from "@/lib/sku-details";
 
 import {
   Button,
@@ -60,7 +62,7 @@ import { canToggleShopVisibility, SHOP_HIDDEN_HELP, setSkuShopHidden } from "@/l
 import { printSkuLabels } from "@/lib/sku-label-print";
 import { formatStockQty, visibleBins } from "@/lib/stock-table";
 
-type SkuIdentityForm = {
+type SkuIdentityForm = SkuDetailsForm & {
   our_ref: string;
   our_barcode: string;
   name: string;
@@ -72,6 +74,7 @@ type SkuIdentityForm = {
 
 function emptyIdentityForm(): SkuIdentityForm {
   return {
+    ...skuDetailsFormFromSku({}),
     our_ref: "",
     our_barcode: "",
     name: "",
@@ -84,6 +87,7 @@ function emptyIdentityForm(): SkuIdentityForm {
 
 function identityFormFromSku(sku: Sku): SkuIdentityForm {
   return {
+    ...skuDetailsFormFromSku(sku),
     our_ref: sku.our_ref,
     our_barcode: sku.our_barcode,
     name: sku.name,
@@ -102,7 +106,7 @@ function isIdentityFormValid(form: SkuIdentityForm): boolean {
         form.name.trim() &&
         form.design.trim() &&
         form.fabric.trim(),
-    ) && isValidCartonCount(form.carton_count)
+    ) && isValidCartonCount(form.carton_count) && !Object.keys(validateSkuDetails(form)).length
   );
 }
 
@@ -168,6 +172,7 @@ export default function SkuDetailPage() {
     setSuccess(null);
     try {
       const payload: UpdateSkuPricePayload = {
+        ...skuDetailsPayload(identityForm, sku),
         our_ref: identityForm.our_ref.trim(),
         our_barcode: identityForm.our_barcode.trim(),
         name: identityForm.name.trim(),
@@ -401,13 +406,18 @@ export default function SkuDetailPage() {
                       ) : null}
                     </div>
                   ) : sku.photo_storage_key ? (
-                    <StaffImage
-                      src={skuPhotoUrl(sku.id)}
-                      alt={sku.name}
-                      width={160}
-                      height={160}
-                      style={{ objectFit: "cover" }}
-                    />
+                    <div role="group" aria-label="Product photos" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+                      {Array.from({ length: sku.gallery_photo_count || 1 }, (_, index) => (
+                        <StaffImage
+                          key={index}
+                          src={skuPhotoUrl(sku.id, sku.gallery_photo_count ? index + 1 : undefined)}
+                          alt={`${sku.name}, ${index ? `alternate view ${index}` : "main photo"}`}
+                          width={160}
+                          height={160}
+                          style={{ objectFit: "contain" }}
+                        />
+                      ))}
+                    </div>
                   ) : null}
                   <TextInput
                     id="detail-sku-our-ref"
@@ -482,6 +492,14 @@ export default function SkuDetailPage() {
                         carton_count: value === "" ? "" : Number(value),
                       }));
                     }}
+                  />
+                  <SkuProductDetailsFields
+                    idPrefix="detail-sku"
+                    form={identityForm}
+                    errors={validateSkuDetails(identityForm)}
+                    readOnly={!canMutate}
+                    disabled={identitySaving}
+                    onChange={(field, value) => setIdentityForm((form) => ({ ...form, [field]: value }))}
                   />
                   {canMutate ? (
                     <Button

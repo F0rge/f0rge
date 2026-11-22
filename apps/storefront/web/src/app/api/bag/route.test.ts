@@ -125,4 +125,19 @@ describe("repeat purchases", () => {
     expect(response.status).toBe(404);
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("forwards a positive requested quantity and hides exact inventory numbers in commerce errors", async () => {
+    state.cookies.set(cartCookie, signedCart(newCart.id));
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/store/carts/cart_new") return Response.json({ cart: newCart });
+      expect(path).toBe("/store/carts/cart_new/line-items");
+      expect(JSON.parse(String(init?.body))).toEqual({ variant_id: "variant_next", quantity: 105 });
+      return Response.json({ code: "insufficient_inventory", message: "Only 104 units in stock" }, { status: 409 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const response = await POST(request("/api/bag", { variant_id: "variant_next", quantity: 105 }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ message: "That quantity is no longer available for this piece." });
+  });
+
 });

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +37,7 @@ def get_ops_commerce_service(db: AsyncSession = Depends(get_db)) -> OpsCommerceS
 @router.get("/products", response_model=OpsProductsResponse, response_model_exclude_unset=True)
 async def list_products(
     request: Request,
+    catalogue_version: int = Query(default=1, ge=1, le=2),
     authorization: Optional[str] = Header(default=None),
     x_ops_company_id: Optional[str] = Header(default=None),
     service: OpsCommerceService = Depends(get_ops_commerce_service),
@@ -45,6 +46,7 @@ async def list_products(
         authorization=authorization,
         requested_company=x_ops_company_id,
         request_host=request.url.hostname or "",
+        catalogue_version=catalogue_version,
     )
 
 
@@ -52,6 +54,7 @@ async def list_products(
 async def product_photo(
     source_sku_id: uuid.UUID,
     request: Request,
+    slot: int = Query(default=1, ge=1, le=3),
     authorization: Optional[str] = Header(default=None),
     x_ops_company_id: Optional[str] = Header(default=None),
     service: OpsCommerceService = Depends(get_ops_commerce_service),
@@ -61,6 +64,7 @@ async def product_photo(
         authorization=authorization,
         requested_company=x_ops_company_id,
         request_host=request.url.hostname or "",
+        slot=slot,
     )
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 

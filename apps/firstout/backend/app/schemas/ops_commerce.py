@@ -15,6 +15,13 @@ class OpsMadeToOrderOfferResponse(BaseModel):
     expires_at: datetime
 
 
+class OpsCatalogueDimensions(BaseModel):
+    width: Optional[float]
+    depth: Optional[float]
+    height: Optional[float]
+    diameter: Optional[float]
+
+
 class OpsProductResponse(BaseModel):
     source_sku_id: uuid.UUID
     sku: str
@@ -30,11 +37,15 @@ class OpsProductResponse(BaseModel):
     made_to_order_offer: Optional[OpsMadeToOrderOfferResponse] = None
     photo_token: Optional[str] = None
     shop_category: Optional[str] = None
+    dimensions_cm: Optional[OpsCatalogueDimensions] = None
+    piece_count: Optional[int] = None
+    gallery_photo_tokens: Optional[list[str]] = None
 
 
 class OpsProductsResponse(BaseModel):
     company_id: uuid.UUID
     products: list[OpsProductResponse]
+    curated_catalogue: Optional[bool] = None
 
 
 class StorefrontCheckoutSafetyResponse(BaseModel):

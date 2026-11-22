@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const variantId = typeof body === "object" && body !== null && "variant_id" in body ? body.variant_id : null;
     const quantity = typeof body === "object" && body !== null && "quantity" in body ? body.quantity : 1;
     if (typeof variantId !== "string" || !/^variant_[A-Za-z0-9_-]+$/.test(variantId) ||
-      !Number.isSafeInteger(quantity) || typeof quantity !== "number" || quantity < 1 || quantity > 99) {
+      !Number.isSafeInteger(quantity) || typeof quantity !== "number" || quantity < 1) {
       return NextResponse.json({ message: "Choose a valid item and quantity" }, { status: 400 });
     }
     const existingId = await currentCartId();
@@ -69,8 +69,8 @@ export async function PATCH(request: NextRequest) {
     const itemId = typeof body === "object" && body !== null && "item_id" in body ? body.item_id : null;
     const quantity = typeof body === "object" && body !== null && "quantity" in body ? body.quantity : null;
     if (typeof itemId !== "string" || !/^cali_[A-Za-z0-9_-]+$/.test(itemId) ||
-      typeof quantity !== "number" || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99) {
-      return NextResponse.json({ message: "Choose a quantity from 1 to 99" }, { status: 400 });
+      typeof quantity !== "number" || !Number.isSafeInteger(quantity) || quantity < 1) {
+      return NextResponse.json({ message: "Choose a positive whole quantity" }, { status: 400 });
     }
     const bag = await getCart(id);
     if (!bag.items.some((item) => item.id === itemId)) return NextResponse.json({ message: "Item not found" }, { status: 404 });

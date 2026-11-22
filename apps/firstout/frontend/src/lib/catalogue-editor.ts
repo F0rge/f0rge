@@ -1,4 +1,5 @@
 import { ApiError, type Sku, type UpdateSkuPricePayload } from "./api";
+import { skuDetailsFormFromSku, skuDetailsPayload, validateSkuDetails } from "./sku-details";
 
 export const CATALOGUE_PRICE_FIELDS = [
   "stockist_inc_vat",
@@ -15,6 +16,12 @@ export const CATALOGUE_FIELD_TABS = {
   our_barcode: 0,
   category: 0,
   till_no_stock_required: 0,
+  width_cm: 0,
+  depth_cm: 0,
+  height_cm: 0,
+  diameter_cm: 0,
+  piece_count: 0,
+  notes: 0,
   stockist_inc_vat: 1,
   wholesale_inc_vat: 1,
   decorator_inc_vat: 1,
@@ -38,6 +45,7 @@ type EditableSku = Pick<Sku, CatalogueEditorField>;
 
 export function catalogueFormFromSku(sku: EditableSku): CatalogueEditorForm {
   return {
+    ...skuDetailsFormFromSku(sku),
     name: sku.name,
     design: sku.design,
     fabric: sku.fabric,
@@ -61,7 +69,7 @@ export function catalogueFormFromSku(sku: EditableSku): CatalogueEditorForm {
 export function validateCatalogueForm(
   form: CatalogueEditorForm,
 ): CatalogueEditorErrors {
-  const errors: CatalogueEditorErrors = {};
+  const errors: CatalogueEditorErrors = validateSkuDetails(form);
   for (const field of [
     "name",
     "design",
@@ -116,7 +124,7 @@ export function buildCatalogueUpdate(
   sku: EditableSku,
   form: CatalogueEditorForm,
 ): UpdateSkuPricePayload {
-  const payload: UpdateSkuPricePayload = {};
+  const payload: UpdateSkuPricePayload = skuDetailsPayload(form, sku);
   if (form.till_no_stock_required !== (sku.till_no_stock_required ?? false)) {
     payload.till_no_stock_required = form.till_no_stock_required;
   }

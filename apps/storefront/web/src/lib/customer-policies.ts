@@ -195,20 +195,24 @@ function collectionLines(document: CustomerPolicyDocument | null): string[] {
 // CPA s49(1): terms that limit our liability or ask the customer to accept a fact. One source for the terms page and checkout.
 // None is an unusual or serious-injury risk (s49(2)), so no separate signed or ticked assent is needed.
 export const IMPORTANT_TERMS_PURPOSE = "They limit what we are responsible for, or ask you to accept certain facts.";
+const FAILED_DELIVERY = "We use a third-party courier. If nobody is available to receive a piece at the agreed time, or we cannot get access for a reason you are responsible for, we may charge the reasonable courier cost of that failed attempt where the law permits. After three failed attempts for those reasons, we may cancel the order and refund what you paid, less any permitted failed-delivery charges.";
 export const IMPORTANT_TERMS = [
   "Wood, leather and natural fabrics vary: grain, knots, small cracks, live edges and colour differences are part of the material, not faults.",
   "Colours look different on screens, so visit the showroom to see a piece in person.",
   "We are not responsible for damage caused by misuse, an accident, or care that goes against the care instructions supplied with a piece.",
-  "If we cannot deliver after three attempts because nobody is there or we cannot get access, we may cancel the order, keep the cost of the failed deliveries and refund the rest.",
+  FAILED_DELIVERY,
   "If we collect a change-of-mind return, you pay the collection fee we quote when you book it.",
 ] as const;
 
-// ECTA s44(1)(a), (2), (3): seven days from receipt, only the direct cost of return, full refund within 30 days.
+// ECTA s44 allows up to 30 days for the refund. DasKasas promises seven days.
+const COOLING_OFF_REFUND_DAYS = 7;
+const COOLING_OFF_REFUND = `We refund everything you paid, including the delivery charge, within ${COOLING_OFF_REFUND_DAYS} days after you cancel.`;
+// ECTA s44(1)(a), (2): seven days to cancel from receipt, with only the direct cost of return payable.
 // ECTA s42(2)(f): no cooling-off for goods made to the consumer's specifications, clearly personalised, not returnable by nature, or likely to deteriorate.
 // Treating a chosen measurement, fabric or finish as "made to your specifications" is DasKasas's reading; no SA decision on s42(2)(f) exists (research-made-to-order-law.md §6).
 const COOLING_OFF = [
   "If you buy online, you may cancel without giving a reason within 7 days after you receive the goods. Tell us by email or phone.",
-  "We refund everything you paid, including the delivery charge, within 30 days after you cancel. The only cost you may have to pay is the direct cost of returning the goods.",
+  `${COOLING_OFF_REFUND} The only cost you may have to pay is the direct cost of returning the goods.`,
   "This 7-day right does not apply to goods made to your specifications or clearly personalised. It also does not apply to goods that by their nature cannot be returned, or that are likely to deteriorate quickly. We treat a bespoke commission, and a piece made to a measurement, fabric or finish you chose for your order, as made to your specifications.",
 ];
 
@@ -230,7 +234,7 @@ const WRONG_PIECE = "If the wrong piece arrives, a piece does not match the desc
 // were altered contrary to instructions. No assessment fee: s56(2) says "without penalty" (research-made-to-order-law.md §5).
 const FAULTS = [
   "Every piece must be of good quality, in good working order and free of defects. It must also last for a reasonable time.",
-  "If a piece is faulty, you may return it to us within six months after delivery. You pay no fee, and we carry the risk and cost of the return. You choose whether we repair it, replace it or refund the price you paid.",
+  "If you believe a piece is faulty, please contact us as soon as you notice. We can arrange for our technician to inspect the piece and report what they find. You may return a faulty piece to us within six months after delivery. You pay no fee, and we carry the risk and cost of the return. If the piece is faulty, you choose whether we repair it, replace it or refund the price you paid.",
   "If we repair a piece and the fault is not fixed within three months, or a new fault appears in that time, we replace it or refund the price you paid.",
   "We never charge you to inspect a fault.",
   "These rights cover every piece, including made-to-order pieces and bespoke commissions.",
@@ -253,7 +257,7 @@ function deliveryBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] 
     // CPA s19(5): examine on delivery. CPA s19(2)(c): goods stay at the supplier's risk until delivery is accepted.
     heading("When it arrives"),
     paragraph("Check each piece before you accept it. You may refuse a piece that is damaged or not what you ordered. A piece stays at our risk until you accept delivery or collect it."),
-    paragraph("If we cannot deliver after three attempts because nobody is there to receive the piece, or we cannot get access, we may cancel the order. We keep the cost of the failed deliveries and refund the rest."),
+    paragraph(FAILED_DELIVERY),
     heading("Collection"),
     ...collectionLines(document).map(paragraph),
   ];
@@ -293,15 +297,16 @@ function refundBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
     paragraph("Ask for a refund through the Contact page and include your order number. You get a refund when you cancel an online order within the 7-day cooling-off period, when we accept a change-of-mind return, when a piece is faulty, wrong or not as described, or when we cancel the order."),
     paragraph("A change-of-mind refund follows a return made within 30 days after delivery or collection. Outside the 7-day cooling-off period, a delivered piece has to come back under the return policy before we refund it."),
     // ECTA s46(3): unavailable goods are refunded within 30 days of notifying the consumer. ECTA s46(2): cancellation for late delivery.
-    paragraph("If we cancel, for example because a piece is unavailable or a price was shown in error, we tell you straight away. We refund the full amount you paid within 30 days. We do not charge a cancellation fee. If you cancel because we missed the agreed delivery period, we also refund the full amount you paid."),
+    paragraph("If we cancel because a piece is unavailable or a price was shown in error, we tell you straight away and refund the full amount you paid within 30 days. If you cancel because we missed the agreed delivery period, we also refund the full amount you paid."),
     heading("How a refund is paid, and when"),
-    paragraph("The refund goes back to the payment method you used. If you paid by card, Paystack returns it to your card. For a return, the refund starts once the piece is back with us and has been checked. It can take up to 10 working days after we receive the piece for the refund to show. Your bank may take longer. A cooling-off refund is always made within 30 days after you cancel. Working days are Monday to Friday, excluding South African public holidays."),
+    paragraph("The refund goes back to the payment method you used. If you paid by card, Paystack returns it to your card. For returns outside the cooling-off period, the refund starts once the piece is back with us and has been checked. It can take up to 10 working days after we receive the piece for the refund to show. Your bank may take longer. Working days are Monday to Friday, excluding South African public holidays."),
+    paragraph(`For a cooling-off cancellation, we make the refund within ${COOLING_OFF_REFUND_DAYS} days after you cancel.`),
     // ECTA s44(2)-(3): full refund, only the direct cost of return may be charged. CPA s56(2): faults at the supplier's risk and expense.
     heading("What we refund"),
     paragraph("7-day cooling-off: everything you paid, including the delivery charge. The only cost you may have to pay is the direct cost of returning the goods."),
     paragraph("Change of mind: the price of the piece. We keep the original delivery charge. If we collected the piece, we charge the collection fee quoted when you booked the return."),
     paragraph("Faulty, wrong or not as described: the price and the delivery charge for that piece. There is no collection fee and no inspection fee."),
-    paragraph("If we cannot deliver after three attempts because nobody is there to receive the piece, or we cannot get access, we may cancel the order. We keep the cost of the failed deliveries and refund the rest."),
+    paragraph(FAILED_DELIVERY),
     paragraph("For a change-of-mind return without the invoice or delivery note, including a gift without its delivery note, we do not refund money. We may offer another piece of the same price instead. If you choose a cheaper piece, we do not pay the difference."),
     heading("Made to order and bespoke"),
     paragraph("A standard made-to-order piece is refunded on the same basis as a piece in stock, once it has been delivered or collected and returned under the return policy. A bespoke commission is not refunded for a change of mind. If a bespoke piece is faulty, you choose a repair, a replacement or a refund, as for any other piece."),

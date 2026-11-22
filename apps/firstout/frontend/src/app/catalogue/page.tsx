@@ -7,6 +7,7 @@ import JsBarcode from "jsbarcode";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { CatalogueSkuEditor } from "@/components/catalogue-sku-editor";
+import { SKU_DIMENSIONS, SKU_DIMENSION_FIELDS } from "@/lib/sku-details";
 import { RecordDetail, RecordDetails, RecordWorkspace, type RecordWorkspaceAdapter, type WorkspaceField } from "@/components/record-workspace";
 import { StaffImage } from "@/components/staff-image";
 import { canMutateCatalogue, canViewCostAudit, formatZarAmount, getSkuLeadTimes, listSkuUnitCosts, listSkusPage, listSuppliers, skuPhotoUrl, type Sku, type SkuLeadTimeRow, type Supplier } from "@/lib/api";
@@ -143,7 +144,10 @@ function CatalogueScreen() {
         fields: ["Retail price (incl. VAT)", "Sales setting", ...(canViewCost ? ["Unit cost"] : []), "Preferred supplier", "Supplier ref", "Planned lead time", "Observed lead time", "Cartons", "Reorder minimum"],
       }}
       onExport={exportCatalogue}
-      headerActions={allowed ? <Button kind="tertiary" renderIcon={DocumentImport} onClick={() => router.push("/import")}>Import</Button> : undefined}
+      headerActions={allowed ? <>
+        <Button kind="tertiary" renderIcon={DocumentImport} onClick={() => router.push("/import")}>Import</Button>
+        {user?.role === "owner" && <Button kind="tertiary" onClick={() => router.push("/catalogue/curated")}>DasKasas catalogue import</Button>}
+      </> : undefined}
       renderSelectionActions={({ ids, query }) => <><Button kind="ghost" size="sm" renderIcon={Printer} disabled={batchBusy} onClick={() => void batchAction(query, ids, "print")}>Print labels</Button><Button kind="ghost" size="sm" renderIcon={DocumentExport} disabled={batchBusy} onClick={() => void batchAction(query, ids, "export")}>Export selected</Button></>}
       renderDetails={(sku) => <Stack gap={5}>
         {sku.is_archived && <InlineNotification kind="info" title="Archived SKU" subtitle="Restore before editing, selling or adding to a new order or kit. Stock and history remain; existing work and returns can finish. Restoring keeps the previous sales setting and does not publish online." lowContrast hideCloseButton />}
@@ -151,6 +155,11 @@ function CatalogueScreen() {
           <TabPanel><Stack gap={5}>
             <RecordDetails><RecordDetail label="Retail price (incl. VAT)">{money(sku.retail_inc_vat)}</RecordDetail><RecordDetail label="Sales setting"><Tag type="gray" size="sm">{sku.is_sellable ? "Sellable" : "Not for sale"}</Tag>{sku.till_no_stock_required && <Tag type="blue" size="sm">No stock needed</Tag>}</RecordDetail>{canViewCost && <RecordDetail label="Unit cost">{costState === "loading" ? "Loading…" : costState === "failed" ? "Unavailable" : money(costs.get(sku.id))}</RecordDetail>}</RecordDetails>
             <RecordDetails><RecordDetail label="Preferred supplier">{sku.preferred_supplier_name}</RecordDetail><RecordDetail label="Supplier ref">{sku.supplier_ref}</RecordDetail><RecordDetail label="Planned lead time">{leadDays(sku.lead_time_days)}</RecordDetail><RecordDetail label="Observed lead time">{formatObservedMedianLine(leadById.get(sku.id))}</RecordDetail><RecordDetail label="Cartons">{skuCartonCount(sku)}</RecordDetail><RecordDetail label="Reorder minimum">{sku.reorder_min}</RecordDetail></RecordDetails>
+            <RecordDetails>
+              {SKU_DIMENSIONS.map((field) => <RecordDetail key={field} label={SKU_DIMENSION_FIELDS[field]}>{sku[field]}</RecordDetail>)}
+              <RecordDetail label="Pieces per sellable unit">{sku.piece_count}</RecordDetail>
+              <RecordDetail label="Internal notes"><span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{sku.notes}</span></RecordDetail>
+            </RecordDetails>
             <ProductBarcode value={sku.our_barcode} />
           </Stack></TabPanel>
           <TabPanel><RecordDetails>{priceTiers.map((tier) => <RecordDetail key={tier.key} label={`${tier.label} (incl. VAT)`}>{money(sku[tier.key])}</RecordDetail>)}</RecordDetails></TabPanel>

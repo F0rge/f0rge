@@ -1,5 +1,34 @@
 # Firstout DasKasas publication
 
+## Reviewed catalogue
+
+When Firstout activates a reviewed catalogue for the shop, it supplies the
+curated SKU set through the private Ops product feed. The shop matches stable
+Firstout SKU IDs. A source product outside the set returns to draft. A manually
+managed Medusa product loses its link to the DasKasas sales channel and keeps
+its other channels. A new stock or photo record cannot add a SKU to the curated
+set.
+
+Each approved variant carries its own stock, price, centimetre measurements,
+piece count and three reviewed studio images. The first image is its hero.
+The sync verifies all three image hashes and attaches the files in source
+order before publishing the product. Variants without a reviewed gallery keep
+their existing catalogue data. Internal Firstout notes stay in Firstout.
+
+Each visible product needs a priced, available variant. An out-of-stock
+variant in that family remains visible as an option, with purchases disabled.
+Adding to a bag or editing a line checks the total requested for that SKU.
+Checkout revalidates availability and reserves stock before paying.
+
+Regrouping through Medusa can replace the operational variant and its inventory
+links. The curated sync checks for active reservations and unsettled paid or
+made-to-order commitments before attempting the move. A paid order also needs
+a durable handoff snapshot and a terminal fulfillment status before the
+historical variant can be replaced. Run the sync again after the reported
+SKU's commitments have cleared.
+
+## Legacy catalogue
+
 The private Ops snapshot owns product-group membership, option values, source SKU
 identity, ZAR retail price, and available stock. Medusa can also store a
 description, images, SEO, dimensions, materials, and care instructions when a

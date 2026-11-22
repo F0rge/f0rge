@@ -33,6 +33,8 @@ async def test_storefront_hidden_defaults_off_bumps_updated_at_and_round_trips(
             ).one()
             assert column.is_nullable == "NO" and column.column_default == "false"
 
+        # The current ORM includes newer columns. Check the update behavior at its schema head.
+        migrate(url, "head")
         # The ops-commerce revision is greatest(Sku.updated_at, ...): a toggle must move it.
         async with AsyncSession(engine, expire_on_commit=False) as session:
             sku = await session.get(Sku, sku_id)

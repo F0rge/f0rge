@@ -90,11 +90,15 @@ def read_bytes(storage_ref: str) -> bytes:
 
 
 def read_relative(relative_path: str, *, user_id: Optional[str] = None) -> bytes:
+    return read_bytes(tenant_storage_ref(relative_path))
+
+
+def tenant_storage_ref(relative_path: str) -> str:
     relative_path = _relative(relative_path)
     prefix = _tenant_prefix()
     if object_storage_enabled():
-        return read_bytes(f"{prefix}/{relative_path}")
-    return read_bytes(str(Path(settings.storage_dir).resolve() / prefix / relative_path))
+        return f"{prefix}/{relative_path}"
+    return str(Path(settings.storage_dir).resolve() / prefix / relative_path)
 
 
 def presigned_get_url(storage_ref: str, *, expires_in: int = 300) -> Optional[str]:
