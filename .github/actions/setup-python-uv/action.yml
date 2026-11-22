@@ -15,9 +15,7 @@ runs:
       with:
         version: ${{ steps.uv-version.outputs.version }}
         enable-cache: true
-        # A job that runs no uv command beyond `uv python install` (typescript without a
-        # codegen:check) may leave no cache dir; without this the post step fails the job.
-        ignore-nothing-to-cache: true
+        ignore-nothing-to-cache: true # keep v3 behaviour: a missing uv cache dir is not an error (v4+ default throws in the post step)
 
     # Release-asset outages must not prevent the required checks from running.
     # The post step only warns when download failed before cache-key state exists.
