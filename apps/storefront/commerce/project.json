@@ -40,11 +40,12 @@
         {
           "name": "storefront-commerce",
           "healthcheckPath": "/health",
-          "preDeployCommand": "node /app/node_modules/.bin/medusa db:migrate && node /app/node_modules/.bin/medusa exec ./src/scripts/bootstrap-storefront.js"
+          "preDeployCommand": "/usr/local/bin/docker-entrypoint.sh release"
         }
       ],
       "check": {
         "port": 9000,
+        "migrateOutput": "DasKasas bootstrap complete",
         "postgres": "postgres:17",
         "redis": "redis:7-alpine",
         "env": {
