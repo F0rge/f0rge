@@ -3,7 +3,8 @@
 import { LoadingRegion } from "@/components/page-loading";
 import { Button, InlineNotification, SkeletonText, Stack, Tag, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import {
   PartyHistoryLoading,
@@ -12,36 +13,22 @@ import {
 } from "@/components/records/history-tables";
 import { PartyRecords, PartyRecordsLoading } from "@/components/records/party-records";
 import { PartyArchiveAction } from "@/components/party-archive-actions";
-import { canMutateCatalogue, getSupplier, setSupplierArchived, type Supplier } from "@/lib/api";
+import { canMutateCatalogue, getSupplier, setSupplierArchived } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export default function SupplierDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const [supplier, setSupplier] = useState<Supplier | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const requestId = useRef(0);
-
-  const loadSupplier = useCallback(async () => {
-    const request = ++requestId.current;
-    setLoading(true);setSupplier(null);setError(null);setSuccess(null);
-    try {
-      const found = await getSupplier(params.id);
-      if (request === requestId.current) setSupplier(found);
-    } catch (err) {
-      if (request === requestId.current) setError(err instanceof Error ? err.message : "Failed to load supplier.");
-    } finally {
-      if (request === requestId.current) setLoading(false);
-    }
-  }, [params.id]);
-
-  useEffect(() => {
-    if (user) void loadSupplier();
-    return () => { requestId.current += 1; };
-  }, [user, loadSupplier]);
+  const client = useQueryClient();
+  const supplierQuery = useQuery({ queryKey: ["suppliers", { id: params.id }], queryFn: () => getSupplier(params.id), enabled: Boolean(user) });
+  const supplier = supplierQuery.data ?? null;
+  const loading = supplierQuery.isPending;
+  const error = supplierQuery.error ? supplierQuery.error.message || "Failed to load supplier." : null;
+  // A notice belongs to the supplier it was raised on.
+  const [notice, setNotice] = useState<{ id: string; text: string } | null>(null);
+  const success = notice?.id === params.id ? notice.text : null;
+  const setSuccess = (text: string | null) => setNotice(text ? { id: params.id, text } : null);
 
   if (loading || (supplier !== null && supplier.id !== params.id)) {
     return (
@@ -94,10 +81,8 @@ export default function SupplierDetailPage() {
           name={supplier.name}
           archived={supplier.is_archived}
           onConfirm={async () => {
-            const request = requestId.current;
             const updated = await setSupplierArchived(supplier.id, !supplier.is_archived);
-            if (request !== requestId.current) return;
-            setSupplier(updated);
+            client.setQueryData(["suppliers", { id: updated.id }], updated);
             setSuccess(updated.is_archived ? "Supplier archived. Account details and history are preserved." : "Supplier restored to the active list.");
           }}
         /> : null}

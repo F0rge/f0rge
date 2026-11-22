@@ -22,7 +22,8 @@ import {
   TextArea,
 } from "@carbon/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -39,7 +40,6 @@ import {
   listDeliveries,
   listInvoices,
   listLaybys,
-  listLocations,
   listSalesOrders,
   loadDelivery,
   packDelivery,
@@ -52,7 +52,10 @@ import {
   type Location,
   type SalesOrder,
 } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 
 const TABLE_HEADERS = [
   { key: "delivery_number", header: "Delivery ID" },
@@ -134,13 +137,7 @@ function DeliveriesPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canMutate = canMutateDeliveries(user);
-  const [deliveries, setDeliveries] = useState<DeliveryListItem[]>([]);
-  const [invoiceOptions, setInvoiceOptions] = useState<{ id: string; label: string }[]>([]);
-  const [laybyOptions, setLaybyOptions] = useState<{ id: string; label: string }[]>([]);
-  const [salesOrderOptions, setSalesOrderOptions] = useState<{ id: string; label: string }[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const client = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
@@ -150,135 +147,81 @@ function DeliveriesPageContent() {
   const [invoiceId, setInvoiceId] = useState("");
   const [laybyId, setLaybyId] = useState("");
   const [salesOrderId, setSalesOrderId] = useState("");
-  const [locationId, setLocationId] = useState("");
+  // null until staff pick one: the default dispatch location.
+  const [locationChoice, setLocationId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
-  const [sourcePreview, setSourcePreview] = useState<Invoice | Layby | SalesOrder | null>(null);
-  const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceQuery, setSourceQuery] = useState("");
-  const [debouncedSourceQuery, setDebouncedSourceQuery] = useState("");
+  const debouncedSourceQuery = useDebouncedValue(sourceQuery);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
   const prefillConsumed = useRef(false);
 
-  const loadDeliveries = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listDeliveries({
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      });
-      setDeliveries(data.items);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load deliveries.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize]);
+  const deliveriesQuery = useQuery({
+    queryKey: ["deliveries", { page, pageSize }],
+    queryFn: () => listDeliveries({ limit: pageSize, offset: (page - 1) * pageSize }),
+    enabled: Boolean(user),
+    placeholderData: keepPreviousData,
+  });
+  const deliveries = useMemo(() => deliveriesQuery.data?.items ?? [], [deliveriesQuery.data]);
+  const total = deliveriesQuery.data?.total ?? 0;
+  const loading = deliveriesQuery.isPending || deliveriesQuery.isFetching;
 
-  const loadCreateData = useCallback(async () => {
-    try {
-      const locationData = await listLocations();
-      const active = locationData.filter(isActiveLocation);
-      setLocations(active);
-      setLocationId((current) => current || defaultLocationId(active));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load create form data.");
-    }
-  }, []);
+  const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: createOpen && canMutate });
+  const locations = useMemo(() => (locationsQuery.data ?? []).filter(isActiveLocation), [locationsQuery.data]);
+  const locationId = locationChoice ?? defaultLocationId(locations);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSourceQuery(sourceQuery), 300);
-    return () => clearTimeout(timer);
-  }, [sourceQuery]);
-
-  useEffect(() => {
-    if (!createOpen || !canMutate) {
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        if (sourceType === "invoice") {
-          const data = await listInvoices({ limit: 25, q: debouncedSourceQuery || undefined });
-          if (!cancelled) {
-            setInvoiceOptions(
-              data.items.filter(isInvoiceFullyPaid).map((invoice) => ({
-                id: invoice.id,
-                label: `${invoice.invoice_number} — ${invoice.customer_name}`,
-              })),
-            );
-          }
-        } else if (sourceType === "sales_order") {
-          const data = await listSalesOrders({
-            limit: 25,
-            q: debouncedSourceQuery || undefined,
-          });
-          if (!cancelled) {
-            setSalesOrderOptions(
-              data.items
-                .filter((entry) => entry.status !== "cancelled")
-                .map((order) => ({
-                  id: order.id,
-                  label: `${order.so_number} — ${order.customer_name}`,
-                })),
-            );
-          }
-        } else {
-          const data = await listLaybys({
-            limit: 25,
-            q: debouncedSourceQuery || undefined,
-          });
-          if (!cancelled) {
-            setLaybyOptions(
-              data.items
-                .filter((entry) => entry.status !== "cancelled")
-                .map((layby) => ({
-                  id: layby.id,
-                  label: `${layby.layby_number} — ${layby.customer_name}`,
-                })),
-            );
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load sources.");
-        }
+  const optionsQuery = useQuery({
+    queryKey: ["deliveries", "source-options", sourceType, debouncedSourceQuery],
+    queryFn: async () => {
+      const q = debouncedSourceQuery || undefined;
+      if (sourceType === "invoice") {
+        const data = await listInvoices({ limit: 25, q });
+        return data.items.filter(isInvoiceFullyPaid).map((invoice) => ({
+          id: invoice.id,
+          label: `${invoice.invoice_number} — ${invoice.customer_name}`,
+        }));
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [createOpen, canMutate, sourceType, debouncedSourceQuery]);
+      if (sourceType === "sales_order") {
+        const data = await listSalesOrders({ limit: 25, q });
+        return data.items
+          .filter((entry) => entry.status !== "cancelled")
+          .map((order) => ({ id: order.id, label: `${order.so_number} — ${order.customer_name}` }));
+      }
+      const data = await listLaybys({ limit: 25, q });
+      return data.items
+        .filter((entry) => entry.status !== "cancelled")
+        .map((layby) => ({ id: layby.id, label: `${layby.layby_number} — ${layby.customer_name}` }));
+    },
+    enabled: createOpen && canMutate,
+    // Keep the options (and the selection) while the next search runs, but never across source types.
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === sourceType ? previous : undefined),
+  });
+  const sourceOptions = optionsQuery.data ?? [];
+  const invoiceOptions = sourceType === "invoice" ? sourceOptions : [];
+  const salesOrderOptions = sourceType === "sales_order" ? sourceOptions : [];
+  const laybyOptions = sourceType === "layby" ? sourceOptions : [];
 
-  const selectedInvoiceOption = useMemo(
-    () => invoiceOptions.find((option) => option.id === invoiceId) ?? null,
-    [invoiceOptions, invoiceId],
-  );
+  const sourceId = sourceType === "invoice" ? invoiceId : sourceType === "sales_order" ? salesOrderId : laybyId;
+  const previewQuery = useQuery<Invoice | Layby | SalesOrder>({
+    queryKey: ["deliveries", "source-preview", sourceType, sourceId],
+    queryFn: () =>
+      sourceType === "invoice" ? getInvoice(sourceId)
+        : sourceType === "sales_order" ? getSalesOrder(sourceId)
+          : getLayby(sourceId),
+    enabled: Boolean(sourceId),
+  });
+  const sourcePreview = sourceId ? previewQuery.data ?? null : null;
+  const sourceLoading = Boolean(sourceId) && previewQuery.isFetching;
 
-  const selectedLaybyOption = useMemo(
-    () => laybyOptions.find((option) => option.id === laybyId) ?? null,
-    [laybyOptions, laybyId],
-  );
+  const loadFailure = deliveriesQuery.error ?? locationsQuery.error ?? optionsQuery.error ?? previewQuery.error;
+  const { error, setError } = usePageError(loadFailure, "Failed to load deliveries.");
+  const loadDeliveries = () => client.invalidateQueries({ queryKey: ["deliveries"] });
 
-  const selectedSalesOrderOption = useMemo(
-    () => salesOrderOptions.find((option) => option.id === salesOrderId) ?? null,
-    [salesOrderOptions, salesOrderId],
-  );
+  const selectedInvoiceOption = invoiceOptions.find((option) => option.id === invoiceId) ?? null;
 
-  useEffect(() => {
-    if (user) {
-      void loadDeliveries();
-    }
-  }, [user, loadDeliveries]);
+  const selectedLaybyOption = laybyOptions.find((option) => option.id === laybyId) ?? null;
 
-  useEffect(() => {
-    if (createOpen && canMutate) {
-      void loadCreateData();
-    }
-  }, [createOpen, canMutate, loadCreateData]);
+  const selectedSalesOrderOption = salesOrderOptions.find((option) => option.id === salesOrderId) ?? null;
 
   useEffect(() => {
     if (!canMutate || prefillConsumed.current) {
@@ -310,91 +253,6 @@ function DeliveriesPageContent() {
     router.replace(qs ? `/deliveries?${qs}` : "/deliveries");
   }, [canMutate, searchParams, router]);
 
-  useEffect(() => {
-    if (sourceType === "invoice") {
-      if (!invoiceId) {
-        setSourcePreview(null);
-        return;
-      }
-      let cancelled = false;
-      setSourceLoading(true);
-      getInvoice(invoiceId)
-        .then((invoice) => {
-          if (!cancelled) {
-            setSourcePreview(invoice);
-          }
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setError(err instanceof Error ? err.message : "Failed to load invoice.");
-            setSourcePreview(null);
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setSourceLoading(false);
-          }
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (sourceType === "sales_order") {
-      if (!salesOrderId) {
-        setSourcePreview(null);
-        return;
-      }
-      let cancelled = false;
-      setSourceLoading(true);
-      getSalesOrder(salesOrderId)
-        .then((order) => {
-          if (!cancelled) {
-            setSourcePreview(order);
-          }
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setError(err instanceof Error ? err.message : "Failed to load sales order.");
-            setSourcePreview(null);
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setSourceLoading(false);
-          }
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (!laybyId) {
-      setSourcePreview(null);
-      return;
-    }
-    let cancelled = false;
-    setSourceLoading(true);
-    getLayby(laybyId)
-      .then((layby) => {
-        if (!cancelled) {
-          setSourcePreview(layby);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load layby.");
-          setSourcePreview(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSourceLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sourceType, invoiceId, laybyId, salesOrderId]);
-
   const formValid = Boolean(
     locationId &&
       ((sourceType === "invoice" && invoiceId) ||
@@ -409,8 +267,7 @@ function DeliveriesPageContent() {
     setSalesOrderId("");
     setSourceQuery("");
     setNotes("");
-    setSourcePreview(null);
-    setLocationId(defaultLocationId(locations));
+    setLocationId(null);
   }
 
   async function handleCreate() {
@@ -713,7 +570,6 @@ function DeliveriesPageContent() {
               setLaybyId("");
               setSalesOrderId("");
               setSourceQuery("");
-              setSourcePreview(null);
             }}
           >
             <SelectItem value="invoice" text="Invoice" />

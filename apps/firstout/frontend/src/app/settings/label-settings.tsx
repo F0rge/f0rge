@@ -5,9 +5,11 @@ import {
   NumberInput,
   Stack,
 } from "@carbon/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLayoutEffect, useState } from "react";
 import { updateSettings, type AppSettings } from "@/lib/api";
 import { AdminSaveActions } from "@/components/admin-save-actions";
+import { queryKeys } from "@/lib/queries";
 import { changedSettingsFields, useSettingsDrafts } from "@/components/settings-drafts";
 import styles from "./settings.module.css";
 import type { LabelSettings as LabelValues } from "@/lib/label-settings";
@@ -32,6 +34,7 @@ export function LabelSettings({
 }) {
   const [saved, setSaved] = useState<LabelValues>(() => labelValues(settings));
   const drafts = useSettingsDrafts();
+  const client = useQueryClient();
   const [values, setValues] = useState(() => labelValues({ ...settings, ...(canMutate ? drafts.get("labels")?.fields : {}) }));
   const changed = changedSettingsFields(saved, values);
   const dirty = Object.keys(changed).length > 0;
@@ -47,6 +50,7 @@ export function LabelSettings({
     setMessage(null);
     try {
       const updated = labelValues(await updateSettings(changed));
+      void client.invalidateQueries({ queryKey: queryKeys.settings });
       if (drafts.get("labels") === submittedDraft) drafts.set("labels");
       setSaved(updated);
       setValues(updated);

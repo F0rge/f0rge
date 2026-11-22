@@ -25,6 +25,7 @@ import {
   TextInput,
 } from "@carbon/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
 import { ArchiveInvoiceModal } from "@/components/archive-invoice-modal";
@@ -48,16 +49,15 @@ import {
   updateInvoiceNote,
   updateInvoiceSalesStaff,
   listPayments,
-  listSalesStaffOptions,
   type AppSettings,
   type CreditNote,
   type CustomerCrm,
   type Invoice,
   type Payment,
-  type SalesStaffOption,
   type PaymentMethod,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { localIsoDate } from "@/lib/dates";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
 import { invoiceStatusTag, partialPaymentError } from "@/lib/payment-status";
@@ -92,7 +92,7 @@ export default function InvoiceDetailPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
-  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
+  const colleagues = useQuery({ ...referenceQueries.salesStaffOptions, enabled: canMutate }).data ?? null;
   const [colleagueSaving, setColleagueSaving] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [actionHandled, setActionHandled] = useState(false);
@@ -232,10 +232,6 @@ export default function InvoiceDetailPage() {
       setActionLoading(false);
     }
   }
-
-  useEffect(() => {
-    if (canMutate) listSalesStaffOptions().then(setColleagues).catch(() => setColleagues(null));
-  }, [canMutate]);
 
   async function handleSalesColleague(staffId: string) {
     if (!invoice) return;

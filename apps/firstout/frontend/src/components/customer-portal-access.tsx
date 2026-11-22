@@ -1,41 +1,36 @@
 "use client";
 
 import { Button, InlineNotification, Stack, TextInput, Tile } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   createPortalInvitation, listCustomerPortalAccess, listPortalInvitations,
   revokeCustomerPortalAccess, revokePortalInvitation,
-  type CreatedPortalInvitation, type CustomerPortalAccess, type PortalInvitation,
+  type CreatedPortalInvitation,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 
 export function CustomerPortalAccessPanel({ customerId, defaultEmail }: { customerId: string; defaultEmail: string }) {
   const [email, setEmail] = useState(defaultEmail);
-  const [invitations, setInvitations] = useState<PortalInvitation[]>([]);
-  const [access, setAccess] = useState<CustomerPortalAccess[]>([]);
   const [created, setCreated] = useState<CreatedPortalInvitation | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  const load = useCallback(async () => {
-    const [nextInvitations, nextAccess] = await Promise.all([
-      listPortalInvitations(customerId), listCustomerPortalAccess(customerId),
-    ]);
-    setInvitations(nextInvitations);
-    setAccess(nextAccess);
-  }, [customerId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([listPortalInvitations(customerId), listCustomerPortalAccess(customerId)])
-      .then(([nextInvitations, nextAccess]) => {
-        if (!cancelled) { setInvitations(nextInvitations); setAccess(nextAccess); }
-      })
-      .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : "Could not load trade access."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [customerId]);
+  const client = useQueryClient();
+  const queryKey = ["customer-portal-access", { customerId }];
+  const portal = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const [invitations, access] = await Promise.all([
+        listPortalInvitations(customerId), listCustomerPortalAccess(customerId),
+      ]);
+      return { invitations, access };
+    },
+  });
+  const invitations = portal.data?.invitations ?? [];
+  const access = portal.data?.access ?? [];
+  const loading = portal.isPending;
+  const { error, setError } = usePageError(portal.error, "Could not load trade access.");
+  const load = () => client.invalidateQueries({ queryKey });
 
   async function create() {
     setBusy(true); setError(null); setCreated(null); setCopied(false);

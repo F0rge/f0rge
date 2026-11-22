@@ -3,6 +3,7 @@
 import { Button, InlineNotification, Modal, Stack, Tag, TextInput } from "@carbon/react";
 import { Copy, Download, Purchase, TrashCan, View } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import { CartEditor, mergeCartBySku, unitExVat, type CartLine } from "@/components/cart-editor";
@@ -18,12 +19,7 @@ import {
   duplicateQuote,
   formatZarAmount,
   getQuote,
-  getSettings,
   getSku,
-  listCustomers,
-  listPriceLists,
-  listSalesStaffOptions,
-  listSkus,
   previewQuotePdf,
   previewQuotePrices,
   replaceQuote,
@@ -36,6 +32,7 @@ import {
   type TillPricePreview,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries, useSaleReference } from "@/lib/queries";
 import { canEditQuoteDiscount } from "@/lib/quote-sku-price";
 import { defaultValidUntil, isQuoteOpen, quoteState, quoteStateInfo } from "@/lib/quote-state";
 import { rememberedColleague } from "@/lib/sales-staff";
@@ -55,27 +52,24 @@ export function QuoteEditor({ id }: { id?: string }) {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateQuotes(user);
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
-  const [colleaguesError, setColleaguesError] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    Promise.all([
-      listSkus(), listCustomers(), listPriceLists(), getSettings(), id ? getQuote(id) : Promise.resolve(null),
-    ])
-      .then(([skus, customers, priceLists, settings, quote]) => {
-        if (live) setLoaded({ skus, customers, priceLists, vatPercent: settings.vat_percent ?? "15", quote });
-      })
-      .catch((err: unknown) => {
-        if (live) setLoadError(err instanceof Error ? err.message : "Could not load the quote.");
-      });
-    listSalesStaffOptions()
-      .then((rows) => { if (live) setColleagues(rows); })
-      .catch(() => { if (live) setColleaguesError(true); });
-    return () => { live = false; };
-  }, [id]);
+  const reference = useSaleReference();
+  const client = useQueryClient();
+  // A saved new quote becomes an edit of that quote before the route changes.
+  const [quoteId, setQuoteId] = useState(id);
+  const quoteQuery = useQuery({
+    queryKey: ["quotes", quoteId],
+    queryFn: () => getQuote(quoteId!),
+    enabled: Boolean(quoteId),
+    // The form seeds once from this quote; never seed it from a copy cached by an earlier visit.
+    gcTime: 0,
+  });
+  const staff = useQuery(referenceQueries.salesStaffOptions);
+  const quote = quoteQuery.data ?? null;
+  const loaded: Loaded | null = reference.data && (!quoteId || quote) ? { ...reference.data, quote } : null;
+  const failure = reference.error ?? quoteQuery.error;
+  const loadError = failure && !loaded ? failure.message || "Could not load the quote." : null;
+  const colleagues = staff.data ?? null;
+  const colleaguesError = staff.isError;
 
   if (loadError) {
     return (
@@ -99,7 +93,8 @@ export function QuoteEditor({ id }: { id?: string }) {
       canDiscount={canEditQuoteDiscount(user?.role)}
       canViewCost={canViewCostAudit(user)}
       onSaved={(quote) => {
-        setLoaded((current) => current && { ...current, quote });
+        client.setQueryData(["quotes", quote.id], quote);
+        setQuoteId(quote.id);
         if (!id) router.replace(`/quotes/${quote.id}`);
       }}
     />

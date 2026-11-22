@@ -15,8 +15,10 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { InlineNotification } from "@carbon/react";
-import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AuthProvider } from "@/lib/auth";
+import { createQueryClient } from "@/lib/query-client";
 import { SettingsDraftsProvider } from "@/components/settings-drafts";
 import { organisationDestination } from "@/lib/organisations";
 import {
@@ -39,6 +41,11 @@ const appearance = {
     fontFamily: '"IBM Plex Sans", sans-serif',
   },
 };
+// Created under the keyed AuthProvider, so a new session or organisation starts with an empty cache.
+function QueryProvider({ children }: { children: ReactNode }) {
+  const [client] = useState(createQueryClient);
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 function ClerkSession({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const trade = pathname.startsWith("/trade");
@@ -71,7 +78,9 @@ function ClerkSession({ children }: { children: ReactNode }) {
         loadIdentity={!trade}
         onSignOut={(redirectUrl) => signOut({ redirectUrl: redirectUrl ?? (trade ? "/trade/login" : "/clerk-login") })}
       >
-        <SettingsDraftsProvider>{children}</SettingsDraftsProvider>
+        <QueryProvider>
+          <SettingsDraftsProvider>{children}</SettingsDraftsProvider>
+        </QueryProvider>
       </AuthProvider>
     </StaffSessionContext.Provider>
   );

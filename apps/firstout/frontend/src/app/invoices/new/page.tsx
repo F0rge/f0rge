@@ -12,6 +12,7 @@ import {
 } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import { CartEditor, mergeCartBySku, unitExVat, type CartLine } from "@/components/cart-editor";
@@ -25,11 +26,6 @@ import {
   exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
-  getSettings,
-  listCustomers,
-  listPriceLists,
-  listSalesStaffOptions,
-  listSkus,
   parsePriceInput,
   previewInvoicePrices,
   type CreateInvoiceLinePayload,
@@ -41,6 +37,7 @@ import {
   type TillPricePreview,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries, useSaleReference } from "@/lib/queries";
 import { rememberedColleague } from "@/lib/sales-staff";
 import { localIsoDate } from "@/lib/dates";
 
@@ -62,33 +59,16 @@ function addDays(iso: string, days: number): string {
 
 export default function NewInvoicePage() {
   const { user } = useAuth();
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
-  const [colleaguesError, setColleaguesError] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    Promise.all([listSkus(), listCustomers(), listPriceLists(), getSettings()])
-      .then(([skus, customers, priceLists, settings]) => {
-        if (live) {
-          setLoaded({
-            skus,
-            customers,
-            priceLists,
-            vatPercent: settings.vat_percent ?? "15",
-            termsDays: settings.payment_terms_days,
-          });
-        }
-      })
-      .catch((err: unknown) => {
-        if (live) setLoadError(err instanceof Error ? err.message : "Could not load the invoice form.");
-      });
-    listSalesStaffOptions()
-      .then((rows) => { if (live) setColleagues(rows); })
-      .catch(() => { if (live) setColleaguesError(true); });
-    return () => { live = false; };
-  }, []);
+  const reference = useSaleReference();
+  const staff = useQuery(referenceQueries.salesStaffOptions);
+  const loaded: Loaded | null = reference.data
+    ? { ...reference.data, termsDays: reference.data.settings.payment_terms_days }
+    : null;
+  const loadError = reference.error && !loaded
+    ? reference.error.message || "Could not load the invoice form."
+    : null;
+  const colleagues = staff.data ?? null;
+  const colleaguesError = staff.isError;
 
   if (loadError) {
     return (

@@ -3,36 +3,23 @@
 import { ArrowRight, Building, Location as LocationIcon, UserFollow, InventoryManagement } from "@carbon/icons-react";
 import { Button, InlineNotification, Stack, Tile } from "@carbon/react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { AdminDirectoryLinks, AdminPageHeader } from "@/components/administration";
 import { PageLoading } from "@/components/page-loading";
 import { StaffInvitationComposer } from "@/components/staff-invitation-composer";
 import { StaffMetrics } from "@/components/staff-metrics";
-import { isActiveLocation, listLocations, listRoles } from "@/lib/api";
+import { isActiveLocation, listRoles, type Location } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { ADMIN_DESTINATIONS, adminDestination, canOpenAdminDestination } from "@/lib/admin-navigation";
 import { getCurrentOrganisation, getOrganisationInvitations } from "@/lib/organisations";
 import { adminError, getStaffCapacity } from "@/lib/staff-administration";
 import styles from "./organisation.module.css";
 
-type Result<T> = { data: T; error?: never } | { data?: never; error: string };
-
-function useOverviewData<T>(load: () => Promise<T>, attempt: number) {
-  const [result, setResult] = useState<Result<T>>();
-  useEffect(() => {
-    let cancelled = false;
-    load().then(
-      (data) => { if (!cancelled) setResult({ data }); },
-      (reason: unknown) => {
-        if (!cancelled) setResult({ error: adminError(reason, "Could not load details.") });
-      },
-    );
-    return () => { cancelled = true; };
-  }, [attempt, load]);
-  return result;
-}
-
-const loadActiveLocations = () => listLocations().then((items) => items.filter(isActiveLocation));
+const activeLocations = (items: Location[]) => items.filter(isActiveLocation);
+const DETAILS_ERROR = "Could not load details.";
+const STAFF_KEYS = [["staff-capacity"], ["staff-roles"], ["staff-invitations"]];
 
 function OverviewError({ title, error, onRetry }: { title: string; error: string; onRetry: () => void }) {
   return (
@@ -44,17 +31,15 @@ function OverviewError({ title, error, onRetry }: { title: string; error: string
 }
 
 function OrganisationOverview() {
-  const [overviewAttempt, setOverviewAttempt] = useState(0);
-  const [staffAttempt, setStaffAttempt] = useState(0);
-  const [placesAttempt, setPlacesAttempt] = useState(0);
   const [inviting, setInviting] = useState(false);
   const [notice, setNotice] = useState("");
   const inviteButton = useRef<HTMLButtonElement>(null);
-  const organisation = useOverviewData(getCurrentOrganisation, overviewAttempt);
-  const locations = useOverviewData(loadActiveLocations, placesAttempt);
-  const capacity = useOverviewData(getStaffCapacity, staffAttempt);
-  const roles = useOverviewData(listRoles, staffAttempt);
-  const invitations = useOverviewData(getOrganisationInvitations, staffAttempt);
+  const client = useQueryClient();
+  const organisation = useQuery({ queryKey: ["organisation"], queryFn: getCurrentOrganisation });
+  const locations = useQuery({ ...referenceQueries.locations, select: activeLocations });
+  const capacity = useQuery({ queryKey: ["staff-capacity"], queryFn: getStaffCapacity });
+  const roles = useQuery({ queryKey: ["staff-roles"], queryFn: listRoles });
+  const invitations = useQuery({ queryKey: ["staff-invitations"], queryFn: getOrganisationInvitations });
   const { label, description } = ADMIN_DESTINATIONS.organisation;
 
   function closeInvitation() {
@@ -63,34 +48,34 @@ function OrganisationOverview() {
   }
 
   function refreshStaff() {
-    setStaffAttempt((value) => value + 1);
+    for (const queryKey of STAFF_KEYS) void client.invalidateQueries({ queryKey });
   }
 
   return (
     <Stack gap={6}>
       <AdminPageHeader title={label} description={description}>
-        {organisation?.data ? (
+        {organisation.data ? (
           <Button ref={inviteButton} renderIcon={UserFollow} aria-expanded={inviting} onClick={() => setInviting(true)}>
             Invite staff
           </Button>
         ) : null}
       </AdminPageHeader>
-      {organisation?.error ? (
-        <OverviewError title="Organisation unavailable" error={organisation.error} onRetry={() => setOverviewAttempt((value) => value + 1)} />
-      ) : !organisation?.data ? (
+      {organisation.error ? (
+        <OverviewError title="Organisation unavailable" error={adminError(organisation.error, DETAILS_ERROR)} onRetry={() => void organisation.refetch()} />
+      ) : !organisation.data ? (
         <PageLoading kind="status" label="Loading organisation…" />
       ) : (
         <>
           {notice && <InlineNotification kind="success" title={notice} onCloseButtonClick={() => setNotice("")} lowContrast />}
           {inviting && (
             <>
-              {roles?.error || invitations?.error ? (
-                <OverviewError title="Invitation details unavailable" error={roles?.error ?? invitations?.error ?? "Could not load invitation details."} onRetry={refreshStaff} />
+              {roles.error || invitations.error ? (
+                <OverviewError title="Invitation details unavailable" error={adminError(roles.error ?? invitations.error, DETAILS_ERROR)} onRetry={refreshStaff} />
               ) : null}
               <StaffInvitationComposer
-                roles={roles?.data ?? []}
-                capacity={capacity?.data ?? null}
-                invitations={invitations?.data ?? null}
+                roles={roles.data ?? []}
+                capacity={capacity.data ?? null}
+                invitations={invitations.data ?? null}
                 onInvited={(invitation) => {
                   setNotice(`Invitation sent to ${invitation.email}.`);
                   closeInvitation();
@@ -109,9 +94,9 @@ function OrganisationOverview() {
             </div>
             <Link className={`cds--link ${styles.trailing}`} href={adminDestination("company").href}>Company details <ArrowRight size={16} aria-hidden="true" /></Link>
           </Tile>
-          {capacity?.error ? (
-            <OverviewError title="Staff capacity unavailable" error={capacity.error} onRetry={refreshStaff} />
-          ) : <StaffMetrics capacity={capacity?.data} />}
+          {capacity.error ? (
+            <OverviewError title="Staff capacity unavailable" error={adminError(capacity.error, DETAILS_ERROR)} onRetry={refreshStaff} />
+          ) : <StaffMetrics capacity={capacity.data} />}
           <Stack gap={4}>
             <div className={styles.row}>
               <h2 className="cds--type-heading-03">Administration directory</h2>
@@ -128,9 +113,9 @@ function OrganisationOverview() {
                 </div>
                 <Link className="cds--link" href={adminDestination("locations").href}>Location defaults <ArrowRight size={16} aria-hidden="true" /></Link>
               </div>
-              {locations?.error ? (
-                <OverviewError title="Locations unavailable" error={locations.error} onRetry={() => setPlacesAttempt((value) => value + 1)} />
-              ) : !locations?.data ? (
+              {locations.error ? (
+                <OverviewError title="Locations unavailable" error={adminError(locations.error, DETAILS_ERROR)} onRetry={() => void locations.refetch()} />
+              ) : !locations.data ? (
                 <PageLoading kind="status" label="Loading locations…" />
               ) : locations.data.length ? (
                 <ul className={styles.placeList}>

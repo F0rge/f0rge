@@ -6,13 +6,14 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tag, TextInput, Toggle,
 } from "@carbon/react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { AdminPageHeader } from "@/components/administration";
 import { PageLoading } from "@/components/page-loading";
 import metrics from "@/components/staff-metrics.module.css";
 import {
   ApiError, can, createSalesStaff, deleteSalesStaff, getCommissionReport, listSalesStaff, updateSalesStaff,
-  type CommissionReport, type SalesStaff,
+  type SalesStaff,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { recentMonths, zar } from "@/lib/sales-staff";
@@ -85,9 +86,6 @@ function ColleagueModal({
 }
 
 function SalesStaffScreen() {
-  const [staff, setStaff] = useState<SalesStaff[] | null>(null);
-  const [report, setReport] = useState<CommissionReport | null>(null);
-  const [loadError, setLoadError] = useState("");
   const [view, setView] = useState<View>("active");
   const [editing, setEditing] = useState<SalesStaff | "new" | null>(null);
   const [deleting, setDeleting] = useState<SalesStaff | null>(null);
@@ -95,22 +93,24 @@ function SalesStaffScreen() {
   const [error, setError] = useState("");
   const [month] = useState(() => recentMonths()[0]);
 
-  const load = useCallback(async () => {
-    setLoadError("");
-    try {
+  const client = useQueryClient();
+  const directory = useQuery({
+    queryKey: ["sales-staff", "directory", month.value],
+    queryFn: async () => {
       const [rows, monthReport] = await Promise.all([
         listSalesStaff("all"),
         // The tile is a convenience: the directory still works without it.
         getCommissionReport(month.value).catch(() => null),
       ]);
-      setStaff(rows);
-      setReport(monthReport);
-    } catch (err) {
-      setLoadError(message(err, "Could not load sales staff."));
-    }
-  }, [month.value]);
-
-  useEffect(() => { void load(); }, [load]);
+      return { rows, monthReport };
+    },
+  });
+  const staff = directory.data?.rows ?? null;
+  const report = directory.data?.monthReport ?? null;
+  // A retry clears the message while it runs, as before.
+  const loadError = directory.error && !directory.isFetching ? message(directory.error, "Could not load sales staff.") : "";
+  // Also refreshes the till's colleague options.
+  const load = () => client.invalidateQueries({ queryKey: ["sales-staff"] });
 
   const active = staff?.filter((item) => item.is_active) ?? [];
   const inactive = staff?.filter((item) => !item.is_active) ?? [];

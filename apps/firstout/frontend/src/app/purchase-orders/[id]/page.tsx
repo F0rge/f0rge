@@ -26,6 +26,7 @@ import {
   TextInput,
 } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -51,6 +52,7 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { queryKeys } from "@/lib/queries";
 import { formatSourceAmount, sourceReportAmountText } from "@/lib/source-history";
 import {
   displayFabric,
@@ -146,6 +148,7 @@ export default function PurchaseOrderDetailPage() {
   const canRecv = canReceive(user);
   const canApprovePo = can(user, "users.manage");
   const canEditLines = canMutateCatalogue(user) || canApprovePo;
+  const client = useQueryClient();
   const [order, setOrder] = useState<PurchaseOrder | null>(null);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
@@ -455,6 +458,7 @@ export default function PurchaseOrderDetailPage() {
       });
       applyOrder(updated);
       setSkuOpen(false);
+      void client.invalidateQueries({ queryKey: queryKeys.skus });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

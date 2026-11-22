@@ -18,6 +18,7 @@ import {
 } from "@carbon/react";
 import { ArrowDown, ArrowUp, Reset } from "@carbon/icons-react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -122,7 +123,6 @@ export function DocumentTemplateSettings({ canMutate }: { canMutate: boolean }) 
   const [tradingName, setTradingName] = useState<string | null>(null);
   const [kind, setKind] = useState<DocumentKind>("invoice");
   const [sampleId, setSampleId] = useState("");
-  const [samples, setSamples] = useState<SampleOption[]>([]);
   const [hex, setHex] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -149,21 +149,12 @@ export function DocumentTemplateSettings({ canMutate }: { canMutate: boolean }) 
     };
   }, []);
 
-  useEffect(() => {
-    if (!canMutate) return;
-    let cancelled = false;
-    setSamples([]);
-    recentDocuments(kind)
-      .then((rows) => {
-        if (!cancelled) setSamples(rows);
-      })
-      .catch(() => {
-        // Sample data still previews; the picker just lists no documents.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canMutate, kind]);
+  // Sample data still previews when this fails; the picker just lists no documents.
+  const samples = useQuery({
+    queryKey: ["document-samples", { kind }],
+    queryFn: () => recentDocuments(kind),
+    enabled: canMutate,
+  }).data ?? [];
 
   if (loadError) {
     return <InlineNotification kind="error" title="Documents" subtitle={loadError} hideCloseButton lowContrast />;

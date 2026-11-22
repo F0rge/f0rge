@@ -27,9 +27,8 @@ import {
   Receipt,
 } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
-  useEffect,
-  useState,
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
@@ -153,10 +152,12 @@ function AttentionStatus({ item }: { item: HomeAttentionItem }) {
 export default function HomePage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [summary, setSummary] = useState<HomeSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  const summaryQuery = useQuery({ queryKey: ["home-summary"], queryFn: getHomeSummary });
+  const summary: HomeSummary | null = summaryQuery.data ?? null;
+  const loading = summaryQuery.isPending || summaryQuery.isFetching;
+  const error = !loading && summaryQuery.error
+    ? summaryQuery.error instanceof ApiError ? summaryQuery.error.message : "Failed to load home summary"
+    : null;
   const canViewCost = canViewCostAudit(user);
   const firstName = user?.display_name?.trim().split(/\s+/)[0];
 
@@ -175,28 +176,6 @@ export default function HomePage() {
     event.preventDefault();
     router.push(href);
   }
-
-  useEffect(() => {
-    let cancelled = false;
-    getHomeSummary()
-      .then((data) => {
-        if (!cancelled) setSummary(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled)
-          setError(
-            err instanceof ApiError
-              ? err.message
-              : "Failed to load home summary",
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [attempt]);
 
   const shortcuts = [
     {
@@ -290,11 +269,7 @@ export default function HomePage() {
           />
           <Button
             kind="tertiary"
-            onClick={() => {
-              setError(null);
-              setLoading(true);
-              setAttempt((value) => value + 1);
-            }}
+            onClick={() => void summaryQuery.refetch()}
           >
             Try again
           </Button>

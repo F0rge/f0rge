@@ -2,16 +2,16 @@
 
 import { Select, SelectItem, Stack, Tag } from "@carbon/react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
 
 import { RecordsTable, type RecordsColumn } from "@/components/records/records-table";
 import {
-  listLocations,
   listStockByBin,
   type ListParams,
-  type Location,
   type StockByBinRow,
 } from "@/lib/api";
+import { referenceQueries } from "@/lib/queries";
 import { formatQuantity } from "@/lib/quantity";
 
 const COLUMNS: RecordsColumn<StockByBinRow>[] = [
@@ -27,14 +27,8 @@ const COLUMNS: RecordsColumn<StockByBinRow>[] = [
 ];
 
 export default function StockByBinPage() {
-  const [locations, setLocations] = useState<Location[]>([]);
+  const locations = useQuery(referenceQueries.locations).data ?? [];
   const [locationId, setLocationId] = useState("");
-
-  useEffect(() => {
-    void listLocations()
-      .then(setLocations)
-      .catch(() => setLocations([]));
-  }, []);
 
   const load = useCallback(
     (params: ListParams) => listStockByBin(params, { location_id: locationId || undefined }),

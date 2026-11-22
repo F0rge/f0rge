@@ -17,7 +17,8 @@ import {
   TableRow,
 } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import {
   ApiError,
@@ -28,6 +29,7 @@ import {
   type PurchaseOrderListItem,
   type ReorderRow,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
@@ -59,44 +61,17 @@ export default function ReorderPage() {
   const router = useRouter();
   const { user } = useAuth();
   const canRaise = canRaisePo(user);
-  const [rows, setRows] = useState<ReorderRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [createdPos, setCreatedPos] = useState<PurchaseOrderListItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-
-  const loadRows = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listReorder();
-      setRows(data);
-      setSelectedIds((prev) => {
-        const valid = new Set(data.map((entry) => entry.sku_id));
-        const next = new Set<string>();
-        for (const id of prev) {
-          if (valid.has(id)) {
-            next.add(id);
-          }
-        }
-        return next;
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load reorder list.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadRows();
-    }
-  }, [user, loadRows]);
+  const client = useQueryClient();
+  const reorderQuery = useQuery({ queryKey: ["reorder"], queryFn: listReorder, enabled: Boolean(user) });
+  const rows = useMemo(() => reorderQuery.data ?? [], [reorderQuery.data]);
+  const loading = reorderQuery.isFetching;
+  const { error, setError } = usePageError(reorderQuery.error, "Failed to load reorder list.");
 
   const rowById = useMemo(() => {
     const map: Record<string, ReorderRow> = {};
@@ -165,7 +140,7 @@ export default function ReorderPage() {
       setSuccess(`Created draft PO${result.purchase_orders.length === 1 ? "" : "s"}: ${poNumbers}`);
       setCreatedPos(result.purchase_orders);
       setSelectedIds(new Set());
-      await loadRows();
+      await client.invalidateQueries({ queryKey: ["reorder"] });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

@@ -8,7 +8,8 @@ import {
   Stack,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import { CustomerPicker } from "@/components/customer-picker";
 import {
@@ -21,10 +22,11 @@ import {
   runRepeatingInvoice,
   sumInvoiceLinesExVat,
   type CreateInvoiceLinePayload,
-  type CustomerCrm,
   type RepeatingInvoice,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { queryKeys, referenceQueries } from "@/lib/queries";
 import { localIsoDate } from "@/lib/dates";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
@@ -59,9 +61,16 @@ function RepeatingInvoicesContent() {
   const [editDay, setEditDay] = useState<number | "">(1);
   const [editDate, setEditDate] = useState("");
   const [runTarget, setRunTarget] = useState<RepeatingInvoice | null>(null);
-  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
-  const [archivedCustomers, setArchivedCustomers] = useState<CustomerCrm[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const customersQuery = useQuery({ ...referenceQueries.customers, enabled: Boolean(user) });
+  const archivedQuery = useQuery({
+    queryKey: [...queryKeys.customers, { archived: true }],
+    queryFn: () => listCustomers({ archived: true }),
+    enabled: Boolean(user),
+  });
+  const customers = useMemo(() => customersQuery.data ?? [], [customersQuery.data]);
+  const archivedCustomers = useMemo(() => archivedQuery.data ?? [], [archivedQuery.data]);
+  const loadFailure = customersQuery.error ?? archivedQuery.error;
+  const { error, setError } = usePageError(loadFailure, "Failed to load repeating invoices.");
   const [success, setSuccess] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,26 +89,6 @@ function RepeatingInvoicesContent() {
     return names;
   }, [customers, archivedCustomers]);
   const archivedCustomerIds = useMemo(() => new Set(archivedCustomers.map((customer) => customer.id)), [archivedCustomers]);
-
-  const loadSchedules = useCallback(async () => {
-    setError(null);
-    try {
-      const [customerData, archivedData] = await Promise.all([
-        listCustomers(),
-        listCustomers({ archived: true }),
-      ]);
-      setCustomers(customerData);
-      setArchivedCustomers(archivedData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load repeating invoices.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadSchedules();
-    }
-  }, [user, loadSchedules]);
 
   const preview = useMemo(() => {
     const subtotal = sumInvoiceLinesExVat(lines);

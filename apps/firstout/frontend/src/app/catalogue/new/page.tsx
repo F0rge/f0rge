@@ -17,6 +17,7 @@ import {
 } from "@carbon/react";
 import { ArrowLeft, Save } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import {
@@ -25,17 +26,16 @@ import {
   createSku,
   formatPriceAmount,
   isActiveLocation,
-  listLocations,
   parsePriceInput,
   updateSku,
   uploadSkuPhoto,
   type CreateSkuPayload,
-  type Location,
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { SkuProductDetailsFields } from "@/components/sku-product-details-fields";
 import { skuDetailsFormFromSku, skuDetailsPayload, validateSkuDetails } from "@/lib/sku-details";
+import { queryKeys, referenceQueries } from "@/lib/queries";
 import { isValidCartonCount } from "@/lib/carton-helpers";
 import {
   SKU_PHOTO_ACCEPT,
@@ -83,30 +83,11 @@ export default function NewSkuPage() {
   const [openingUnitCost, setOpeningUnitCost] = useState("");
   const [openingDate, setOpeningDate] = useState("");
   const [cartonCount, setCartonCount] = useState<number | "">(1);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: canMutate });
+  const locations = (locationsQuery.data ?? []).filter(isActiveLocation);
+  const client = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!canMutate) {
-      return;
-    }
-    let cancelled = false;
-    listLocations()
-      .then((data) => {
-        if (!cancelled) {
-          setLocations(data.filter(isActiveLocation));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLocations([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canMutate]);
 
   useEffect(() => {
     if (!photoFile) {
@@ -185,6 +166,7 @@ export default function NewSkuPage() {
       }
 
       const created = await createSku(payload);
+      void client.invalidateQueries({ queryKey: queryKeys.skus });
 
       const pricePayload: UpdateSkuPricePayload = {};
       const stockist = parseOptionalIncVat(stockistIncVat, "Stockist inc VAT");

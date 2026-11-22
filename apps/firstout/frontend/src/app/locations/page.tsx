@@ -13,6 +13,7 @@ import {
   Tabs,
   TextInput,
 } from "@carbon/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { LocationBinsPanel } from "@/components/location-bins-panel";
 import {
@@ -31,6 +32,7 @@ import {
   type LocationType,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { queryKeys } from "@/lib/queries";
 import { workspaceIdentity } from "@/lib/record-workspace";
 
 export default function LocationsPage() {
@@ -40,7 +42,13 @@ export default function LocationsPage() {
 function LocationsScreen() {
   const { user } = useAuth();
   const allowed = canManageLocations(user);
-  const [refreshKey, refresh] = useState(0);
+  const client = useQueryClient();
+  const [refreshKey, setRefreshKey] = useState(0);
+  // Editors cache locations; a write here refreshes them too.
+  const refresh = () => {
+    setRefreshKey((value) => value + 1);
+    void client.invalidateQueries({ queryKey: queryKeys.locations });
+  };
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Location | null>(null);
   const [bins, setBins] = useState<Location | null>(null);
@@ -62,7 +70,7 @@ function LocationsScreen() {
       if (editing) await updateLocation(editing.id, { name: form.name.trim() });
       else await createLocation({ ...form, name: form.name.trim() });
       close();
-      refresh((n) => n + 1);
+      refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save location.");
     } finally {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import {
@@ -87,11 +88,29 @@ export function PurchaseOrderComposer(props: Props) {
 
 function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
   const [draft, setDraft] = useState<OrderDraft>(newOrderDraft);
-  const [choices, setChoices] = useState<Choices | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const choicesQuery = useQuery({
+    queryKey: ["purchase-orders", "composer-choices"],
+    queryFn: async (): Promise<Choices> => {
+      const [suppliers, proformas, skus] = await Promise.all([
+        listSuppliers({ archived: false }),
+        listProformas(),
+        listSkus({ lifecycle: "active" }),
+      ]);
+      return {
+        suppliers: suppliers.filter((item) => !item.is_archived),
+        proformas: proformas.filter((item) => !item.is_archived),
+        skus: skus.filter((item) => !item.is_archived),
+      };
+    },
+  });
+  const choices = choicesQuery.data ?? null;
+  // Every open shows its own load, as when choices were fetched per session.
+  const loading = choicesQuery.isFetching;
+  const loadError =
+    choicesQuery.error && !loading
+      ? choicesQuery.error.message || "Could not load suppliers and products."
+      : null;
   const [serverError, setServerError] = useState<string | null>(null);
-  const [retry, setRetry] = useState(0);
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<FormErrors>({});
   const [dirty, setDirty] = useState(false);
@@ -113,40 +132,6 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
     );
     return () => cancelAnimationFrame(frame);
   }, [discard]);
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const [suppliers, proformas, skus] = await Promise.all([
-          listSuppliers({ archived: false }),
-          listProformas(),
-          listSkus({ lifecycle: "active" }),
-        ]);
-        if (active)
-          setChoices({
-            suppliers: suppliers.filter((item) => !item.is_archived),
-            proformas: proformas.filter((item) => !item.is_archived),
-            skus: skus.filter((item) => !item.is_archived),
-          });
-      } catch (error) {
-        if (active)
-          setLoadError(
-            error instanceof Error
-              ? error.message
-              : "Could not load suppliers and products.",
-          );
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [retry]);
 
   const setLines = useCallback(
     (update: (lines: OrderLine[]) => OrderLine[]) => {
@@ -361,7 +346,7 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
               />
               <Button
                 kind="tertiary"
-                onClick={() => setRetry((value) => value + 1)}
+                onClick={() => void choicesQuery.refetch()}
               >
                 Try again
               </Button>

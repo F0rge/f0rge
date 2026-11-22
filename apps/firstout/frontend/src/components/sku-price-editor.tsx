@@ -17,6 +17,7 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import {
@@ -31,8 +32,6 @@ import {
   updateSku,
   type Sku,
   type SkuLeadTimeRow,
-  type Supplier,
-  type UnitCostAuditEntry,
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { formatObservedMedianLine } from "@/lib/lead-times";
@@ -292,9 +291,21 @@ export function SkuPriceEditor({
   embedded = false,
 }: SkuPriceEditorProps) {
   const [form, setForm] = useState<EditorFormState>(emptyForm);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [costAudit, setCostAudit] = useState<UnitCostAuditEntry[]>([]);
-  const [costAuditLoading, setCostAuditLoading] = useState(false);
+  const visible = open || embedded;
+  const suppliersQuery = useQuery({
+    queryKey: ["suppliers", "list"],
+    queryFn: () => listSuppliers(),
+    enabled: visible && !readOnly,
+  });
+  const suppliers = suppliersQuery.data ?? [];
+  const costAuditEnabled = Boolean(visible && sku && showCostAudit);
+  const costAuditQuery = useQuery({
+    queryKey: ["sku-cost-audit", { skuId: sku?.id }],
+    queryFn: () => listCostAudit(sku!.id),
+    enabled: costAuditEnabled,
+  });
+  const costAudit = (costAuditEnabled && costAuditQuery.data) || [];
+  const costAuditLoading = costAuditQuery.isFetching;
 
   useEffect(() => {
     if (sku && (open || embedded)) {
@@ -302,59 +313,8 @@ export function SkuPriceEditor({
     }
     if (!open && !embedded) {
       setForm(emptyForm);
-      setCostAudit([]);
     }
   }, [sku, open, embedded]);
-
-  useEffect(() => {
-    if ((!open && !embedded) || readOnly) {
-      return;
-    }
-    let cancelled = false;
-    listSuppliers()
-      .then((data) => {
-        if (!cancelled) {
-          setSuppliers(data);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSuppliers([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, embedded, readOnly]);
-
-  useEffect(() => {
-    if ((!open && !embedded) || !sku || !showCostAudit) {
-      return;
-    }
-    let cancelled = false;
-    setCostAuditLoading(true);
-    listCostAudit(sku.id)
-      .then((rows) => {
-        if (!cancelled) {
-          setCostAudit(rows);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled && err instanceof ApiError && err.status === 403) {
-          setCostAudit([]);
-        } else if (!cancelled) {
-          setCostAudit([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setCostAuditLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, embedded, sku, showCostAudit]);
 
   function updateTier(tier: TierKey, basis: PriceBasis, value: string) {
     setForm((current) => {

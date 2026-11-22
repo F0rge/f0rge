@@ -14,7 +14,8 @@ import {
   TextInput,
 } from "@carbon/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { BooksHistory } from "@/components/books-history";
 import { KpiStrip } from "@/components/kpi-strip";
@@ -40,6 +41,7 @@ import {
   type PaymentOpenDocument,
   type PaymentSummary,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { partialPaymentError } from "@/lib/payment-status";
 import { workspaceIdentity } from "@/lib/record-workspace";
@@ -133,33 +135,19 @@ export default function PaymentsPage() {
 function PaymentsContent() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
+  const client = useQueryClient();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [summary, setSummary] = useState<PaymentSummary | null | undefined>();
-  const [error, setError] = useState<string | null>(null);
+  const summaryQuery = useQuery({ queryKey: ["payments", "summary"], queryFn: getPaymentSummary, enabled: Boolean(user) });
+  const summary: PaymentSummary | null | undefined = summaryQuery.isError ? null : summaryQuery.data;
+  const { error, setError } = usePageError(summaryQuery.error, "Failed to load payment totals.");
   const [notice, setNotice] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [voiding, setVoiding] = useState<Payment | null>(null);
 
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    getPaymentSummary()
-      .then((data) => {
-        if (!cancelled) setSummary(data);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setSummary(null);
-        setError(err instanceof Error ? err.message : "Failed to load payment totals.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, refreshKey]);
-
   function changed(message: string) {
     setNotice(message);
     setRefreshKey((value) => value + 1);
+    void client.invalidateQueries({ queryKey: ["payments", "summary"] });
   }
 
   async function handleDownload(payment: Payment) {
@@ -297,7 +285,6 @@ function RecordPaymentModal({
   onRecorded: (payment: Payment) => void;
 }) {
   const [direction, setDirection] = useState<PaymentDirection>("in");
-  const [documents, setDocuments] = useState<PaymentOpenDocument[] | null>(null);
   const [documentId, setDocumentId] = useState("");
   const [amount, setAmount] = useState("");
   const [fx, setFx] = useState("");
@@ -305,21 +292,12 @@ function RecordPaymentModal({
   const [method, setMethod] = useState<PaymentMethod>("eft");
   const [reference, setReference] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    listOpenPaymentDocuments(direction)
-      .then((items) => {
-        if (!cancelled) setDocuments(items);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load open documents.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [direction]);
+  const documentsQuery = useQuery({
+    queryKey: ["payments", "open-documents", direction],
+    queryFn: () => listOpenPaymentDocuments(direction),
+  });
+  const documents: PaymentOpenDocument[] | null = documentsQuery.data ?? null;
+  const { error, setError } = usePageError(documentsQuery.error, "Failed to load open documents.");
 
   const selected = documents?.find((item) => item.document_id === documentId);
   const foreign = !!selected && selected.currency !== "ZAR";
@@ -327,7 +305,6 @@ function RecordPaymentModal({
 
   function changeDirection(next: PaymentDirection) {
     setDirection(next);
-    setDocuments(null);
     pick("");
   }
 

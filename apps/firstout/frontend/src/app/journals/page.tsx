@@ -22,7 +22,8 @@ import {
   Tag,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { BooksHistory } from "@/components/books-history";
 import {
@@ -39,13 +40,13 @@ import {
   previewJournalImport,
   roundHalfUp,
   voidJournal,
-  type Account,
   type CreateJournalLinePayload,
   type Journal,
   type JournalImportPreview,
   type JournalListItem,
   type JournalStatus,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { localIsoDate } from "@/lib/dates";
 
@@ -123,16 +124,11 @@ function statusTagType(status: JournalStatus): "blue" | "green" | "gray" {
 export default function JournalsPage() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [journals, setJournals] = useState<JournalListItem[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
   const [entryDate, setEntryDate] = useState(localIsoDate());
   const [memo, setMemo] = useState("");
   const [createStatus, setCreateStatus] = useState<CreateStatus>("posted");
@@ -146,6 +142,24 @@ export default function JournalsPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const client = useQueryClient();
+  const journalsQuery = useQuery({
+    queryKey: ["journals", { page, pageSize }],
+    queryFn: () => listJournals({ limit: pageSize, offset: (page - 1) * pageSize }),
+    enabled: Boolean(user),
+    placeholderData: keepPreviousData,
+  });
+  const accountsQuery = useQuery({ queryKey: ["accounts"], queryFn: listAccounts, enabled: createOpen && canMutate });
+  const journals = useMemo(() => journalsQuery.data?.items ?? [], [journalsQuery.data]);
+  const total = journalsQuery.data?.total ?? 0;
+  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+  const loading = journalsQuery.isPending || journalsQuery.isFetching;
+  const loadFailure = journalsQuery.error
+    ? { error: journalsQuery.error, fallback: "Failed to load journals." }
+    : accountsQuery.error ? { error: accountsQuery.error, fallback: "Failed to load accounts." } : null;
+  const { error, setError } = usePageError(loadFailure?.error ?? null, loadFailure?.fallback ?? "");
+  const loadJournals = () => client.invalidateQueries({ queryKey: ["journals"] });
+
   const journalById = useMemo(
     () => Object.fromEntries(journals.map((entry) => [entry.id, entry])),
     [journals],
@@ -155,44 +169,6 @@ export default function JournalsPage() {
     () => accounts.filter((account) => !account.is_archived),
     [accounts],
   );
-
-  const loadJournals = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listJournals({
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      });
-      setJournals(data.items);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load journals.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize]);
-
-  const loadCreateData = useCallback(async () => {
-    try {
-      const data = await listAccounts();
-      setAccounts(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load accounts.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadJournals();
-    }
-  }, [user, loadJournals]);
-
-  useEffect(() => {
-    if (createOpen && canMutate) {
-      void loadCreateData();
-    }
-  }, [createOpen, canMutate, loadCreateData]);
 
   const totals = useMemo(() => {
     const debit = roundHalfUp(
@@ -356,10 +332,12 @@ export default function JournalsPage() {
     }
   }
 
+  // Reads the latest openViewJournal without re-running the deep link on every render.
+  const openDeepLink = useEffectEvent((journalId: string) => void openViewJournal(journalId));
   useEffect(() => {
     if (!user) return;
     const record = new URLSearchParams(window.location.search).get("record");
-    if (record) void openViewJournal(record);
+    if (record) openDeepLink(record);
   }, [user]);
 
   async function openViewJournal(journalId: string) {

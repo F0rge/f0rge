@@ -15,15 +15,14 @@ import {
   TableRow,
 } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   PO_STATUS_LABELS,
   listInventory,
   listPurchaseOrders,
-  type InventorySku,
-  type PurchaseOrderListItem,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
@@ -46,42 +45,26 @@ type TransitRow = {
 export default function TransitPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
-  const [inventory, setInventory] = useState<InventorySku[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const dataQuery = useQuery({
+    queryKey: ["transit"],
+    queryFn: async () => {
       const [orderData, inventoryData] = await Promise.all([
         listPurchaseOrders({ status: "on_water", limit: 100 }),
         listInventory(),
       ]);
-      setOrders(
-        orderData.items.filter(
+      return {
+        orders: orderData.items.filter(
           (entry) => entry.status === "on_water" || entry.status === "landed",
         ),
-      );
-      setInventory(inventoryData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load transit data.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadData();
-    }
-  }, [user, loadData]);
-
-  const onOrderSkus = useMemo(
-    () => inventory.filter((entry) => entry.on_order > 0),
-    [inventory],
-  );
+        onOrderSkus: inventoryData.filter((entry) => entry.on_order > 0),
+      };
+    },
+    enabled: Boolean(user),
+  });
+  const orders = dataQuery.data?.orders ?? [];
+  const onOrderSkus = dataQuery.data?.onOrderSkus ?? [];
+  const loading = dataQuery.isFetching;
+  const { error, setError } = usePageError(dataQuery.error, "Failed to load transit data.");
 
   const rows: TransitRow[] = orders.map((entry) => ({
     id: entry.id,

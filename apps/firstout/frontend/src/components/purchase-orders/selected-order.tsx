@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Fragment, useState } from "react";
 import { ArrowRight, Document } from "@carbon/icons-react";
 import {
   Button,
@@ -19,11 +20,11 @@ import {
   getPurchaseOrder,
   getSupplier,
   PO_STATUS_LABELS,
-  type PurchaseOrder,
   type PurchaseOrderStatus,
 } from "@/lib/api";
 import { factoryTotal, formatFactoryAmount } from "./composer-state";
 import styles from "./purchase-orders.module.css";
+import { usePageError } from "@/hooks/use-page-error";
 
 export function statusPresentation(status: PurchaseOrderStatus): {
   tone: string;
@@ -88,57 +89,31 @@ export function SelectedOrderLoading({ announce = true }: { announce?: boolean }
   );
 }
 
-/** The caller keys this panel by order ID; each request also rejects stale completions. */
+/** The caller keys this panel by order ID. */
 export function SelectedOrder({ id }: { id: string }) {
   const router = useRouter();
-  const [order, setOrder] = useState<PurchaseOrder | null>(null);
-  const [currency, setCurrency] = useState<string | null>(null);
-  const [currencyError, setCurrencyError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [retry, setRetry] = useState(0);
   const [downloading, setDownloading] = useState(false);
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setLoading(true);
-      setError(null);
-      setCurrencyError(null);
-      try {
-        const result = await getPurchaseOrder(id);
-        if (!active) return;
-        setOrder(result);
-        if (!result.is_archive && result.source_currency_known) {
-          try {
-            const supplier = await getSupplier(result.supplier_id);
-            if (active) setCurrency(supplier.default_currency || "USD");
-          } catch (reason) {
-            if (active) {
-              setCurrency(null);
-              setCurrencyError(
-                reason instanceof Error
-                  ? reason.message
-                  : "Could not load the supplier currency.",
-              );
-            }
-          }
-        }
-      } catch (reason) {
-        if (active)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "Could not load the purchase order.",
-          );
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [id, retry]);
+  const orderQuery = useQuery({
+    queryKey: ["purchase-orders", "detail", id],
+    queryFn: () => getPurchaseOrder(id),
+  });
+  const order = orderQuery.data ?? null;
+  const supplierQuery = useQuery({
+    queryKey: ["suppliers", "detail", order?.supplier_id],
+    queryFn: () => getSupplier(order!.supplier_id),
+    enabled: Boolean(order && !order.is_archive && order.source_currency_known),
+  });
+  const currency = supplierQuery.data ? supplierQuery.data.default_currency || "USD" : null;
+  const currencyError = supplierQuery.error
+    ? supplierQuery.error.message || "Could not load the supplier currency."
+    : null;
+  const loading = orderQuery.isFetching || supplierQuery.isFetching;
+  const { error, setError } = usePageError(orderQuery.error, "Could not load the purchase order.");
+  const retry = () => {
+    setError(null);
+    void orderQuery.refetch();
+    if (supplierQuery.isEnabled) void supplierQuery.refetch();
+  };
   async function packingSheet() {
     if (!order || order.is_archive || downloading) return;
     setDownloading(true);
@@ -167,7 +142,7 @@ export function SelectedOrder({ id }: { id: string }) {
           subtitle={error || "Could not load this purchase order."}
           hideCloseButton
         />
-        <Button kind="tertiary" onClick={() => setRetry((value) => value + 1)}>
+        <Button kind="tertiary" onClick={retry}>
           Try again
         </Button>
       </div>
@@ -219,7 +194,7 @@ export function SelectedOrder({ id }: { id: string }) {
               <Button
                 kind="ghost"
                 size="sm"
-                onClick={() => setRetry((value) => value + 1)}
+                onClick={retry}
               >
                 Retry currency lookup
               </Button>

@@ -25,7 +25,6 @@ import {
   Tabs,
   Tag,
 } from "@carbon/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { LoadingRegion, PageLoading } from "@/components/page-loading";
 import { ApiError } from "@/lib/api";
@@ -46,15 +45,6 @@ import styles from "./record-workspace.module.css";
 export function RecordWorkspace<T extends { id: string }>(
   props: RecordWorkspaceProps<T>,
 ) {
-  const [client] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { retry: false, refetchOnWindowFocus: false },
-          mutations: { retry: false },
-        },
-      }),
-  );
   const { user, loading } = useAuth();
   if (loading) return <PageLoading label="Loading your workspace…" kind="status" />;
   if (!user)
@@ -67,14 +57,12 @@ export function RecordWorkspace<T extends { id: string }>(
       />
     );
   return (
-    <QueryClientProvider client={client}>
-      <Suspense fallback={<PageLoading label="Loading workspace…" />}>
-        <WorkspaceContent
-          key={`${workspaceIdentity(user)}:${props.adapter.resource}`}
-          {...props}
-        />
-      </Suspense>
-    </QueryClientProvider>
+    <Suspense fallback={<PageLoading label="Loading workspace…" />}>
+      <WorkspaceContent
+        key={`${workspaceIdentity(user)}:${props.adapter.resource}`}
+        {...props}
+      />
+    </Suspense>
   );
 }
 function WorkspaceContent<T extends { id: string }>({

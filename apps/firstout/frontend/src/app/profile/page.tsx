@@ -3,13 +3,15 @@
 import { ChevronDown, ChevronRight } from "@carbon/icons-react";
 import { Button, InlineNotification, Select, SelectItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow, TextInput } from "@carbon/react";
 import { useUser } from "@clerk/nextjs";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useRef, useState, type FormEvent } from "react";
 import { AdminPageHeader } from "@/components/administration";
 import { AdminSaveActions, confirmDiscardChanges } from "@/components/admin-save-actions";
 import { ClerkAccountButton } from "@/components/clerk-account-button";
 import { ADMIN_DESTINATIONS } from "@/lib/admin-navigation";
-import { isActiveLocation, listLocations, updateProfile, type AuthUser, type Location } from "@/lib/api";
+import { isActiveLocation, updateProfile, type AuthUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { adminError } from "@/lib/staff-administration";
 import styles from "./profile.module.css";
 
@@ -22,9 +24,12 @@ function ProfileScreen({ user }: { user: AuthUser }) {
   const { user: clerkUser } = useUser();
   const [saved, setSaved] = useState(() => preferences(user));
   const [draft, setDraft] = useState(saved);
-  const [locations, setLocations] = useState<Location[] | null>(null);
-  const [locationError, setLocationError] = useState("");
-  const [locationAttempt, setLocationAttempt] = useState(0);
+  const locationsQuery = useQuery(referenceQueries.locations);
+  const locations = locationsQuery.data ?? null;
+  // A retry clears the message while it runs, as before.
+  const locationError = locationsQuery.error && !locationsQuery.isFetching
+    ? adminError(locationsQuery.error, "Could not load locations.")
+    : "";
   const [section, setSection] = useState<"preferences" | "security" | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -39,15 +44,6 @@ function ProfileScreen({ user }: { user: AuthUser }) {
     ? savedLocation ? savedLocation.name : locations || locationError ? "Default location unavailable" : "Loading default location…"
     : "No default location";
   const { label, description } = ADMIN_DESTINATIONS.profile;
-
-  useEffect(() => {
-    let active = true;
-    listLocations().then(
-      (data) => { if (active) setLocations(data); },
-      (reason: unknown) => { if (active) setLocationError(adminError(reason, "Could not load locations.")); },
-    );
-    return () => { active = false; };
-  }, [locationAttempt]);
 
   function selectSection(next: "preferences" | "security") {
     if (busy.current || !confirmDiscardChanges(dirty)) return;
@@ -112,7 +108,7 @@ function ProfileScreen({ user }: { user: AuthUser }) {
                       {locationError ? (
                         <div className={styles.retry}>
                           <InlineNotification kind="error" title="Locations unavailable" subtitle={locationError} lowContrast hideCloseButton />
-                          <Button size="sm" kind="tertiary" onClick={() => { setLocationError(""); setLocationAttempt((value) => value + 1); }}>Try again</Button>
+                          <Button size="sm" kind="tertiary" onClick={() => void locationsQuery.refetch()}>Try again</Button>
                         </div>
                       ) : null}
                       <div className={styles.fields}>

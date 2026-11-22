@@ -4,15 +4,16 @@ import { UserFollow } from "@carbon/icons-react";
 import {
   Button, InlineNotification, Stack, Tab, TabList, TabPanel, TabPanels, Tabs,
 } from "@carbon/react";
-import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/administration";
 import { PageLoading } from "@/components/page-loading";
 import { StaffMetrics } from "@/components/staff-metrics";
 import { StaffInvitationComposer } from "@/components/staff-invitation-composer";
-import { can, listLocations, listRoles, type AuthUser } from "@/lib/api";
+import { can, listRoles, type AuthUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { getOrganisationInvitations, type OrganisationInvitation } from "@/lib/organisations";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { adminError, getStaffCapacity, isOwnerRole } from "@/lib/staff-administration";
@@ -30,7 +31,7 @@ function UsersScreen({ user }: { user: AuthUser }) {
   const capacity = useQuery({ queryKey: ["staff-capacity"], queryFn: getStaffCapacity });
   const invitations = useQuery({ queryKey: ["staff-invitations"], queryFn: getOrganisationInvitations });
   const roles = useQuery({ queryKey: ["staff-roles"], queryFn: listRoles });
-  const locations = useQuery({ queryKey: ["staff-locations"], queryFn: listLocations });
+  const locations = useQuery(referenceQueries.locations);
   const roleOptions = roles.data ?? [];
   const locationOptions = locations.data ?? [];
   const actorIsOwner = isOwnerRole(user.role, roleOptions);
@@ -135,15 +136,10 @@ function UsersScreen({ user }: { user: AuthUser }) {
 }
 
 function UsersDirectory({ user }: { user: AuthUser }) {
-  const [client] = useState(() => new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
-  }));
   return (
-    <QueryClientProvider client={client}>
-      <Suspense fallback={<PageLoading label="Loading team members…" />}>
-        <UsersScreen user={user} />
-      </Suspense>
-    </QueryClientProvider>
+    <Suspense fallback={<PageLoading label="Loading team members…" />}>
+      <UsersScreen user={user} />
+    </Suspense>
   );
 }
 

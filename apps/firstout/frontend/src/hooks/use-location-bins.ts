@@ -1,39 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import { listLocationBins, type LocationBin } from "@/lib/api";
 import { activeBins, defaultBinId } from "@/lib/bin-helpers";
 
+const NO_BINS: LocationBin[] = [];
+
 export function useLocationBins(locationId: string) {
-  const [bins, setBins] = useState<LocationBin[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    if (!locationId) {
-      setBins([]);
-      setError(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      setBins(await listLocationBins(locationId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load bins.");
-      setBins([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [locationId]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const client = useQueryClient();
+  const queryKey = ["location-bins", { locationId }];
+  const query = useQuery({
+    queryKey,
+    queryFn: () => listLocationBins(locationId),
+    enabled: Boolean(locationId),
+  });
+  const bins = (locationId && !query.error && query.data) || NO_BINS;
 
   const active = useMemo(() => activeBins(bins), [bins]);
   const defaultId = useMemo(() => defaultBinId(bins), [bins]);
 
-  return { bins, activeBins: active, defaultBinId: defaultId, loading, error, reload };
+  return {
+    bins,
+    activeBins: active,
+    defaultBinId: defaultId,
+    loading: query.isFetching,
+    error: locationId && query.error ? query.error.message || "Failed to load bins." : null,
+    reload: () => client.invalidateQueries({ queryKey }),
+  };
 }

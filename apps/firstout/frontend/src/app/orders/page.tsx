@@ -21,7 +21,8 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -34,20 +35,20 @@ import {
   getSalesOrder,
   getStorefrontRefundStatus,
   isActiveLocation,
-  listLocations,
   listStorefrontHandoffs,
   listSalesOrders,
   retryStorefrontHandoff,
   requestStorefrontRefund,
   updateStorefrontCollectionStatus,
   remainderInvoiceSalesOrder,
-  type Location,
   type SalesOrderListItem,
   type StorefrontRefund,
   type StorefrontHandoff,
   type StorefrontRefundStatus,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { formatSourceAmount } from "@/lib/source-history";
 
 const TABLE_HEADERS = [
@@ -100,18 +101,12 @@ export default function OrdersPage() {
   const canRefund = user?.permissions.includes("sales.refunds") === true;
   const canCollect = canMutateDeliveries(user);
   const canReadHandoffs = canMutate || canRefund || canCollect;
-  const [orders, setOrders] = useState<SalesOrderListItem[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [locations, setLocations] = useState<Location[]>([]);
   const [confirmRow, setConfirmRow] = useState<SalesOrderListItem | null>(null);
   const [locationId, setLocationId] = useState("");
   const [holdStock, setHoldStock] = useState(true);
   const [depositAmount, setDepositAmount] = useState("");
-  const [handoffs, setHandoffs] = useState<StorefrontHandoff[]>([]);
   const [retryingHandoffId, setRetryingHandoffId] = useState<string | null>(null);
   const [collectingHandoffId, setCollectingHandoffId] = useState<string | null>(null);
   const [refundHandoff, setRefundHandoff] = useState<StorefrontHandoff | null>(null);
@@ -126,28 +121,30 @@ export default function OrdersPage() {
   const refundViewSequence = useRef(0);
   const activeRefundHandoffId = useRef<string | null>(null);
 
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
+  const client = useQueryClient();
+  const ordersQuery = useQuery({
+    queryKey: ["sales-orders", { canMutate, canReadHandoffs, page, pageSize }],
+    queryFn: async () => ({
+      page: canMutate ? await listSalesOrders({ limit: pageSize, offset: (page - 1) * pageSize }) : { items: [], total: 0 },
+      handoffs: canReadHandoffs ? (await listStorefrontHandoffs()).items : [],
+    }),
+    enabled: Boolean(user),
+    placeholderData: keepPreviousData,
+  });
+  const orders = useMemo(() => ordersQuery.data?.page.items ?? [], [ordersQuery.data]);
+  const total = ordersQuery.data?.page.total ?? 0;
+  const handoffs = ordersQuery.data?.handoffs ?? [];
+  const loading = ordersQuery.isFetching;
+  const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: Boolean(user && confirmRow) });
+  const { error, setError } = usePageError(
+    ordersQuery.error ?? locationsQuery.error,
+    ordersQuery.error ? "Failed to load orders" : "Failed to load locations",
+  );
+  const locations = useMemo(() => (locationsQuery.data ?? []).filter(isActiveLocation), [locationsQuery.data]);
+  const loadOrders = async () => {
     setError(null);
-    try {
-      if (canMutate) {
-        const pageData = await listSalesOrders({ limit: pageSize, offset: (page - 1) * pageSize });
-        setOrders(pageData.items);
-        setTotal(pageData.total);
-      } else {
-        setOrders([]);
-        setTotal(0);
-      }
-      if (canReadHandoffs) {
-        const handoffData = await listStorefrontHandoffs();
-        setHandoffs(handoffData.items);
-      } else setHandoffs([]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load orders");
-    } finally {
-      setLoading(false);
-    }
-  }, [canMutate, canReadHandoffs, page, pageSize]);
+    await client.invalidateQueries({ queryKey: ["sales-orders"] });
+  };
 
   const openRefund = (handoff: StorefrontHandoff) => {
     const sequence = ++refundViewSequence.current;
@@ -254,27 +251,6 @@ export default function OrdersPage() {
     (!refundStatus?.invoice_id || (refundStatus.invoice_refund_eligible && refundMethod === "amount" && !refundCancelOrder)) &&
     (!refundCancelOrder || selectedAmountMinor === availableRefundMinor) &&
     (refundMethod !== "lines" || selectedRefund?.valid === true);
-
-  const loadOrderForm = useCallback(async () => {
-    try {
-      const locationRows = await listLocations();
-      setLocations(locationRows.filter(isActiveLocation));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load locations");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadOrders();
-    }
-  }, [user, loadOrders]);
-
-  useEffect(() => {
-    if (user && confirmRow) {
-      void loadOrderForm();
-    }
-  }, [user, confirmRow, loadOrderForm]);
 
   const rows = useMemo(
     () =>

@@ -212,6 +212,9 @@ export function useWorkspace<T extends { id: string }>(
     void client.invalidateQueries({
       queryKey: ["record-workspace", identity, adapter.resource],
     });
+    // Resource names match the reference keys in lib/queries ("skus", "customers", ...),
+    // so editors stop showing an archived or edited record.
+    void client.invalidateQueries({ queryKey: [adapter.resource] });
   };
   return {
     query,

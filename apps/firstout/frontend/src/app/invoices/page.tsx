@@ -2,7 +2,8 @@
 
 import { Button, InlineNotification, Stack, Tag } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import { ArchiveInvoiceModal } from "@/components/archive-invoice-modal";
 import { KpiStrip } from "@/components/kpi-strip";
@@ -18,13 +19,14 @@ import {
   formatZarAmount,
   getInvoiceSummary,
   invoiceAction,
-  listSalesStaffOptions,
   type InvoiceListItem,
   type InvoiceSource,
   type InvoiceSummary,
   type SalesStaffOption,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { invoiceStatusTag } from "@/lib/payment-status";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { formatSettlementAmount } from "@/lib/source-history";
@@ -144,37 +146,17 @@ function InvoicesContent() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [colleagues, setColleagues] = useState<SalesStaffOption[]>([]);
-  const [summary, setSummary] = useState<InvoiceSummary | null | undefined>();
+  const client = useQueryClient();
+  // The filter still works without names until the colleagues arrive.
+  const colleaguesData = useQuery({ ...referenceQueries.salesStaffOptions, enabled: Boolean(user) }).data;
+  const summaryQuery = useQuery({ queryKey: ["invoices", "summary"], queryFn: getInvoiceSummary, enabled: Boolean(user) });
+  const summary: InvoiceSummary | null | undefined = summaryQuery.isError ? null : summaryQuery.data;
   const [refreshKey, setRefreshKey] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError } = usePageError(summaryQuery.error, "Failed to load invoice totals.");
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [archiving, setArchiving] = useState<InvoiceListItem | null>(null);
-  const adapter = useMemo(() => invoicesAdapter(colleagues), [colleagues]);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    getInvoiceSummary()
-      .then((totals) => { if (!cancelled) setSummary(totals); })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setSummary(null);
-        setError(err instanceof Error ? err.message : "Failed to load invoice totals.");
-      });
-    return () => { cancelled = true; };
-  }, [user, refreshKey]);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    // Keep the adapter stable after the first load; the filter still works without names.
-    listSalesStaffOptions()
-      .then((rows) => { if (!cancelled) setColleagues(rows); })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [user]);
+  const adapter = useMemo(() => invoicesAdapter(colleaguesData ?? []), [colleaguesData]);
 
   async function run(label: string, action: () => Promise<string>) {
     setBusy(true);
@@ -182,6 +164,7 @@ function InvoicesContent() {
     try {
       setNotice(await action());
       setRefreshKey((value) => value + 1);
+      void client.invalidateQueries({ queryKey: ["invoices", "summary"] });
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to ${label}.`);
     } finally {

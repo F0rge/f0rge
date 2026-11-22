@@ -3,6 +3,7 @@
 import { LoadingRegion } from "@/components/page-loading";
 import { Button, InlineNotification, SkeletonText, Stack, Tag, Tile } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CustomerPortalAccessPanel } from "@/components/customer-portal-access";
@@ -32,6 +33,7 @@ import {
   type PriceList,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { queryKeys } from "@/lib/queries";
 import { formatIsoDate } from "@/lib/customer-crm";
 import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
 
@@ -70,6 +72,7 @@ export default function CustomerDetailPage() {
   const [repriceOpen, setRepriceOpen] = useState(false);
   const [repriceBusy, setRepriceBusy] = useState(false);
   const requestId = useRef(0);
+  const client = useQueryClient();
 
   const loadCustomer = useCallback(async () => {
     const request = ++requestId.current;
@@ -117,6 +120,7 @@ export default function CustomerDetailPage() {
     try {
       const previous = customer.price_classification;
       const updated = await updateCustomer(customer.id, customerWritePayload(form, canEditCredit));
+      void client.invalidateQueries({ queryKey: queryKeys.customers });
       if (request !== requestId.current) return;
       setCustomer(updated);
       setForm(formFromCustomer(updated));
@@ -213,6 +217,7 @@ export default function CustomerDetailPage() {
               onConfirm={async () => {
                 const request = requestId.current;
                 const updated = await setCustomerArchived(customer.id, !customer.is_archived);
+                void client.invalidateQueries({ queryKey: queryKeys.customers });
                 if (request !== requestId.current) return;
                 setCustomer(updated);setForm(formFromCustomer(updated));
                 setRepriceOpen(false);

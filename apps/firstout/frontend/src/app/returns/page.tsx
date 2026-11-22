@@ -24,7 +24,8 @@ import {
 } from "@carbon/react";
 import { DocumentExport } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -38,18 +39,19 @@ import {
   getInvoice,
   isActiveLocation,
   listInvoices,
-  listLocations,
   listReturns,
   type Invoice,
   type InvoiceLine,
   type InvoiceListItem,
   type Location,
-  type StockReturnListItem,
   type StockReturnDisposition,
   type StockReturnReason,
   type StockReturnStatus,
 } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { downloadCsv } from "@/lib/csv";
 
 const TABLE_HEADERS = [
@@ -121,19 +123,16 @@ function ReturnsPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canMutate = canMutateReturns(user);
-  const [returns, setReturns] = useState<StockReturnListItem[]>([]);
-  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const client = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [invoiceId, setInvoiceId] = useState("");
   const [invoiceQuery, setInvoiceQuery] = useState("");
-  const [debouncedInvoiceQuery, setDebouncedInvoiceQuery] = useState("");
+  const debouncedInvoiceQuery = useDebouncedValue(invoiceQuery);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [locationId, setLocationId] = useState("");
+  // null until staff pick one: the default return location.
+  const [locationChoice, setLocationId] = useState<string | null>(null);
   const [reason, setReason] = useState<StockReturnReason | "">("");
   const [disposition, setDisposition] = useState<StockReturnDisposition>("write_off");
   const [notes, setNotes] = useState("");
@@ -141,68 +140,36 @@ function ReturnsPageContent() {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
   const invoicePrefillConsumed = useRef(false);
 
-  const loadReturns = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listReturns({
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      });
-      setReturns(data.items);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load returns.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize]);
+  const returnsQuery = useQuery({
+    queryKey: ["returns", { page, pageSize }],
+    queryFn: () => listReturns({ limit: pageSize, offset: (page - 1) * pageSize }),
+    enabled: Boolean(user),
+    placeholderData: keepPreviousData,
+  });
+  const returns = useMemo(() => returnsQuery.data?.items ?? [], [returnsQuery.data]);
+  const total = returnsQuery.data?.total ?? 0;
+  const loading = returnsQuery.isPending || returnsQuery.isFetching;
 
-  const loadCreateData = useCallback(async () => {
-    try {
-      const locationData = await listLocations();
-      const active = locationData.filter(isActiveLocation);
-      setLocations(active);
-      setLocationId((current) => current || defaultLocationId(active));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load locations.");
-    }
-  }, []);
+  const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: createOpen && canMutate });
+  const locations = useMemo(() => (locationsQuery.data ?? []).filter(isActiveLocation), [locationsQuery.data]);
+  const locationId = locationChoice ?? defaultLocationId(locations);
 
-  useEffect(() => {
-    if (user) {
-      void loadReturns();
-    }
-  }, [user, loadReturns]);
+  const invoiceOptionsQuery = useQuery({
+    queryKey: ["returns", "invoice-options", debouncedInvoiceQuery],
+    queryFn: () => listInvoices({ limit: 25, q: debouncedInvoiceQuery || undefined }),
+    enabled: createOpen && canMutate,
+    placeholderData: keepPreviousData,
+  });
+  const invoiceOptions = useMemo(
+    () => (invoiceOptionsQuery.data?.items ?? []).map(invoiceToOption),
+    [invoiceOptionsQuery.data],
+  );
 
-  useEffect(() => {
-    if (createOpen && canMutate) {
-      void loadCreateData();
-    }
-  }, [createOpen, canMutate, loadCreateData]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedInvoiceQuery(invoiceQuery), 300);
-    return () => clearTimeout(timer);
-  }, [invoiceQuery]);
-
-  useEffect(() => {
-    if (!createOpen || !canMutate) {
-      return;
-    }
-    let cancelled = false;
-    void listInvoices({ limit: 25, q: debouncedInvoiceQuery || undefined }).then((data) => {
-      if (!cancelled) {
-        setInvoiceOptions(data.items.map(invoiceToOption));
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [createOpen, canMutate, debouncedInvoiceQuery]);
+  const loadFailure = returnsQuery.error ?? locationsQuery.error;
+  const { error, setError } = usePageError(loadFailure, returnsQuery.error ? "Failed to load returns." : "Failed to load locations.");
+  const loadReturns = () => client.invalidateQueries({ queryKey: ["returns"] });
 
   const selectedInvoiceOption = useMemo(
     () => invoiceOptions.find((option) => option.id === invoiceId) ?? null,
@@ -261,7 +228,7 @@ function ReturnsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [invoiceId]);
+  }, [invoiceId, setError]);
 
   const selectedLines = useMemo(() => {
     if (!selectedInvoice) {
@@ -306,7 +273,7 @@ function ReturnsPageContent() {
     setReason("");
     setDisposition("write_off");
     setNotes("");
-    setLocationId(defaultLocationId(locations));
+    setLocationId(null);
   }
 
   async function handleCreate() {

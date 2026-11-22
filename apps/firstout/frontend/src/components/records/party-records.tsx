@@ -12,7 +12,7 @@ import {
   TableRow,
   Tag,
 } from "@carbon/react";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { LoadingRegion, LoadingTableRows } from "@/components/page-loading";
 import {
@@ -20,7 +20,6 @@ import {
   listPartyAddresses,
   listPartyContacts,
   type PartyAddress,
-  type PartyContact,
   type PartyKind,
 } from "@/lib/api";
 
@@ -47,37 +46,21 @@ export function PartyRecordsLoading({ announce = true }: { announce?: boolean })
 
 /** Every address and contact stored for a customer or supplier (imported from Cin7). */
 export function PartyRecords({ kind, id }: { kind: PartyKind; id: string }) {
-  const [addresses, setAddresses] = useState<PartyAddress[]>([]);
-  const [contacts, setContacts] = useState<PartyContact[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all([listPartyAddresses(kind, id), listPartyContacts(kind, id)])
-      .then(([nextAddresses, nextContacts]) => {
-        if (!cancelled) {
-          setAddresses(nextAddresses);
-          setContacts(nextContacts);
-        }
-      })
-      .catch((err: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        // An API without these routes (older deploy) hides the section instead of erroring.
-        if (err instanceof ApiError && err.status === 404) {
-          setUnavailable(true);
-          return;
-        }
-        setError(err instanceof Error ? err.message : "Failed to load addresses and contacts.");
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => {
-      cancelled = true;
-    };
-  }, [kind, id]);
+  const records = useQuery({
+    queryKey: ["party-records", { kind, id }],
+    queryFn: async () => {
+      const [addresses, contacts] = await Promise.all([listPartyAddresses(kind, id), listPartyContacts(kind, id)]);
+      return { addresses, contacts };
+    },
+  });
+  const addresses = records.data?.addresses ?? [];
+  const contacts = records.data?.contacts ?? [];
+  // An API without these routes (older deploy) hides the section instead of erroring.
+  const unavailable = records.error instanceof ApiError && records.error.status === 404;
+  const error = records.error && !unavailable
+    ? records.error.message || "Failed to load addresses and contacts."
+    : null;
+  const loading = records.isPending;
 
   if (unavailable) {
     return null;

@@ -17,7 +17,7 @@ import {
   TableRow,
   Tag,
 } from "@carbon/react";
-import { QueryClient, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageLoading } from "@/components/page-loading";
@@ -46,7 +46,6 @@ export default function AuditPage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [client] = useState(() => new QueryClient());
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const activity = useQuery(
     {
@@ -68,9 +67,7 @@ export default function AuditPage() {
           q: query,
         }),
       enabled: Boolean(user),
-      retry: false,
     },
-    client,
   );
   const events = activity.data?.items ?? [];
 
