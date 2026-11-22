@@ -98,3 +98,11 @@ They are below the audit gate's `high` threshold, but Next's own `next build`
 check stopped on them. The root override and the four app pins are now 16.4.6
 (latest stable, no advisories); the lockfile changed only `next` and `@next/*`.
 16.4.6 compresses route handler responses automatically.
+
+## DasKasas Medusa 2.22.7
+
+Medusa now uses GraphQL 17 and Codegen 6. Its schema and merge packages
+require `@graphql-tools/utils` 13.x, while Codegen requires 12.x.
+Separate overrides pin the fixed 12.1.0 and 13.2.2 releases in their
+respective ranges. The existing CI guard checks every installed copy and
+exercises Medusa's schema generator from the commerce workspace.

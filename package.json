@@ -28,7 +28,8 @@
       "lodash": "4.18.1"
     },
     "nanoid": "3.3.18",
-    "@graphql-tools/utils": "12.0.3",
+    "@graphql-tools/utils@^12": "12.1.0",
+    "@graphql-tools/utils@^13": "13.2.2",
     "proxy-addr": "2.0.8",
     "source-map-js": "1.2.2",
     "follow-redirects": "1.16.2",

@@ -4,25 +4,26 @@
 // Exercise the fixed public packages and the real Medusa consumer after npm ci.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { createRequire } = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const expected = {
-  '@graphql-tools/utils': '12.0.3',
-  'proxy-addr': '2.0.8',
-  sharp: '0.35.5',
-  'source-map-js': '1.2.2',
+  '@graphql-tools/utils': ['12.1.0', '13.2.2'],
+  'proxy-addr': ['2.0.8'],
+  sharp: ['0.35.5'],
+  'source-map-js': ['1.2.2'],
 };
 
-function installedCopies(name, version) {
+function installedCopies(name, versions) {
   const entries = Object.entries(lock.packages).filter(([p]) =>
     p === `node_modules/${name}` || p.endsWith(`/node_modules/${name}`));
   assert.ok(entries.length, `lockfile has no ${name} copies`);
   const installed = [];
   for (const [relative, entry] of entries) {
-    assert.equal(entry.version, version, `${relative} must use the fixed version`);
+    assert.ok(versions.includes(entry.version), `${relative} must use a fixed version (${versions.join(", ")})`);
     assert.ok(entry.resolved.startsWith(`https://registry.npmjs.org/${name}/-/`),
       `${relative} must resolve to the official npm release`);
     assert.ok(entry.integrity?.startsWith('sha512-'), `${relative} must retain integrity`);
@@ -30,7 +31,7 @@ function installedCopies(name, version) {
     assert.ok(fs.existsSync(directory), `${relative} is missing; run the full npm ci first`);
     const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
     assert.equal(metadata.name, name);
-    assert.equal(metadata.version, version, `${relative} installed version differs from lock`);
+    assert.equal(metadata.version, entry.version, `${relative} installed version differs from lock`);
     installed.push(directory);
   }
   assert.ok(installed.length, `${name} is not installed; run npm ci first`);
@@ -60,8 +61,8 @@ function boundedSourceMapProbe(directory) {
 }
 
 async function main() {
-  for (const [name, version] of Object.entries(expected)) {
-    for (const directory of installedCopies(name, version)) {
+  for (const [name, versions] of Object.entries(expected)) {
+    for (const directory of installedCopies(name, versions)) {
       if (name === '@graphql-tools/utils') {
         const utils = require(directory);
         const call = Function.prototype.call;
@@ -94,11 +95,13 @@ async function main() {
     }
   }
 
-  // Medusa 2.21.1 still uses Codegen 4 with utils ^10; verify its actual API seam.
-  const medusaUtils = require('@medusajs/utils');
-  const { buildSchema } = require('graphql');
-  const { makeExecutableSchema } = require('@graphql-tools/schema');
-  const { mergeTypeDefs } = require('@graphql-tools/merge');
+  const commerceRequire = createRequire(path.join(root, 'apps/storefront/commerce/package.json'));
+  const medusaUtilsPath = commerceRequire.resolve('@medusajs/utils');
+  const medusaRequire = createRequire(medusaUtilsPath);
+  const medusaUtils = commerceRequire('@medusajs/utils');
+  const { buildSchema } = medusaRequire('graphql');
+  const { makeExecutableSchema } = medusaRequire('@graphql-tools/schema');
+  const { mergeTypeDefs } = medusaRequire('@graphql-tools/merge');
   const definitions = mergeTypeDefs(['type Query { item: Item }', 'type Item { id: ID!, title: String! }']);
   const executable = makeExecutableSchema({typeDefs: definitions});
   assert.ok(executable.getQueryType().getFields().item);

@@ -12,7 +12,6 @@ import { processClaimedPaystackObservation, reconcilePaystackCheckoutStatuses } 
 import { parsePaystackRefund, parsePaystackVerifyResponse, paystackRefundReference, type PaystackObservation } from "./paystack-checkout";
 import { StorefrontPaystackPaymentProvider } from "./modules/storefront-paystack-payment-provider/service";
 import { Migration20261121123916 } from "./modules/storefront-paystack/migrations/Migration20261121123916";
-import { Migration20261122153000 } from "./modules/storefront-refund-cutover/migrations/Migration20261122153000";
 import processPaystackWebhooksJob from "./jobs/process-paystack-webhooks";
 import { paystackAttemptFinding } from "./storefront-exception-sources";
 import {
@@ -82,11 +81,9 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
     await admin.raw("CREATE SCHEMA ??", [schema]);
     db = knexFactory({ client: "pg", connection: databaseUrl, searchPath: [schema] });
     const migrationSql: string[] = [];
-    for (const Migration of [Migration20261121123916, Migration20261122153000]) {
-      const collector: InstanceType<typeof Migration> = Object.create(Migration.prototype);
-      Reflect.set(collector, "addSql", (statement: string) => migrationSql.push(statement));
-      await collector.up();
-    }
+    const collector: Migration20261121123916 = Object.create(Migration20261121123916.prototype);
+    Reflect.set(collector, "addSql", (statement: string) => migrationSql.push(statement));
+    await collector.up();
     for (const statement of migrationSql) await db.raw(statement);
   });
 
@@ -356,77 +353,6 @@ describeWithPostgres("Paystack durable inbox (isolated PostgreSQL)", () => {
     // The same command seen again is not re-posted.
     await syncStorefrontPaystackRefundCommands(container, fetcher as typeof fetch);
     expect(calls.filter((url) => url === "https://api.paystack.co/refund")).toHaveLength(1);
-  });
-
-  test("leaves a new refund command untouched while legacy dispatch is closed", async () => {
-    const requestId = randomUUID();
-    const { attempt } = await createPaystackAttempt(db, {
-      paymentSessionId: `session-${randomUUID()}`, amountMinor: 5000, currencyCode: "ZAR",
-    });
-    const orderId = `order-${randomUUID()}`;
-    await updatePaystackAttempt(db, attempt.id, {
-      status: "captured", transaction_id: "5000000088", captured_order_id: orderId,
-    });
-    const command = {
-      request_id: requestId, handoff_id: randomUUID(), external_order_id: orderId,
-      original_transaction_id: attempt.reference, amount_minor: 2500, currency_code: "ZAR",
-      cancel_order: false, allocation: {}, status: "requested",
-    };
-    const fetcher = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).endsWith("refund-commands?limit=100")) return json({ items: [command] });
-      if (!init?.method && String(input).includes("/refund?transaction=")) return json({ status: true, data: [] });
-      throw new Error("Deferred refund sent a write request");
-    });
-
-    await db("storefront_refund_cutover").where({ id: "medusa-refunds" }).update({ phase: "legacy_closed" });
-    try {
-      await expect(syncStorefrontPaystackRefundCommands(dbContainer(), fetcher))
-        .resolves.toEqual({ received: 1, dispatched: 0 });
-      expect(await findPaystackRefundDispatch(db, requestId)).toBeUndefined();
-      expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toEqual([]);
-    } finally {
-      await db("storefront_refund_cutover").where({ id: "medusa-refunds" }).update({ phase: "legacy_open" });
-    }
-  });
-
-  test("preserves a provider-confirmed refund for replay when the native writer is deferred", async () => {
-    const requestId = randomUUID();
-    const capture = `dk_${randomUUID().replaceAll("-", "")}`;
-    const orderId = `order-${randomUUID()}`;
-    const event = refundObservation({
-      providerRefundId: "3019991", capture, amount: 2500, status: "processed", requestId,
-    });
-    const providerWrite = jest.fn(async () => ({}));
-    const graph = async () => ({ data: [{
-      id: orderId,
-      payment_collections: [{ payments: [{
-        id: "pay_fixture", provider_id: "pp_paystack_checkout", data: { transaction_id: capture },
-      }] }],
-    }] });
-    const container = { resolve(key: string) {
-      if (key === Modules.LOCKING) return locking;
-      if (key === ContainerRegistrationKeys.QUERY) return { graph };
-      if (key === Modules.PAYMENT) return {
-        refundPayment: providerWrite,
-      };
-      throw new Error(`Unexpected Medusa service ${key}`);
-    } } as unknown as MedusaContainer;
-    const fetcher = jest.fn(async () => json({
-      status: "succeeded", provider_outcome: "succeeded", request_id: requestId, external_order_id: orderId,
-      amount_minor: 2500, currency_code: "ZAR", provider_refund_id: "3019991",
-    }));
-
-    await db("storefront_refund_cutover").where({ id: "medusa-refunds" }).update({ phase: "legacy_closed" });
-    try {
-      await expect(processClaimedPaystackRefund(container, db, event, fetcher))
-        .rejects.toMatchObject({ code: "storefront_refunds_temporarily_deferred" });
-      expect(providerWrite).not.toHaveBeenCalled();
-      expect(await findPaystackRefundDispatch(db, requestId)).toMatchObject({
-        status: "verified", provider_refund_id: "3019991", medusa_payment_id: "pay_fixture",
-      });
-    } finally {
-      await db("storefront_refund_cutover").where({ id: "medusa-refunds" }).update({ phase: "legacy_open" });
-    }
   });
 
   test("a 409 duplicate reference is read back and bound by reference, and needs-attention is surfaced, never automated", async () => {

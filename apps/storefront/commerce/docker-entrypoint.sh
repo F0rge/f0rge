@@ -13,11 +13,22 @@ if [ "${1:-}" = "$0" ]; then shift; fi
 static_dir="/app/apps/storefront/commerce/.medusa/server/static"
 mkdir -p "$static_dir"
 chown -R node:node "$static_dir"
-if [ "$#" -eq 0 ]; then
-  set -- node /app/node_modules/.bin/medusa start
+medusa_bin=/app/apps/storefront/commerce/node_modules/.bin/medusa
+if [ ! -f "$medusa_bin" ]; then
+  medusa_bin=/app/node_modules/.bin/medusa
 fi
-if [ "$1" = release ]; then
-  su-exec node node /app/node_modules/.bin/medusa db:migrate
-  exec su-exec node node /app/node_modules/.bin/medusa exec ./src/scripts/bootstrap-storefront.js
-fi
+cutover_script=./src/scripts/refund-cutover-release.js
+case "${1:-start}" in
+  start)
+    if [ "$#" -gt 0 ]; then shift; fi
+    su-exec node node "$cutover_script" assert-ready
+    set -- node "$medusa_bin" start "$@"
+    ;;
+  release)
+    su-exec node node "$cutover_script" close
+    su-exec node node "$medusa_bin" db:migrate
+    su-exec node node "$medusa_bin" exec ./src/scripts/bootstrap-storefront.js
+    exec su-exec node node "$cutover_script" ready
+    ;;
+esac
 exec su-exec node "$@"
