@@ -107,9 +107,6 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
         payment_providers: paymentProviders,
       }] },
     });
-    await createTaxRegionsWorkflow(container).run({
-      input: [{ country_code: "za", provider_id: "tp_system" }],
-    });
   }
   for (const region of regions) {
     if (region.currency_code === "zar") {

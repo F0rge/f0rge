@@ -38,7 +38,9 @@ A Project is deployable when its `project.json` has this block. Its App is its `
 
 `host` is `railway` or `pi`. Only `name` is required per service; it is the service's name on Railway or the application's name in Coolify. One Project can back several services, all running the same Artifact.
 
-The block also carries what CI needs to build and check the Artifact: `check.port` (required), and optionally `check.path`, `check.migrate`, `check.postgres`, `check.redis`, `check.env`, `build.context` and `build.args`. [`image.mjs`](../scripts/image.mjs) documents them; `npx nx run <project>:image` runs the same build and check locally. Build arguments are public.
+Railway runs `preDeployCommand` and `startCommand` without a shell, so `&&`, `|` and `$VAR` are not interpreted: DasKasas commerce's `migrate && bootstrap` ran only the migrate, and the Release still succeeded. Put several steps in the image (DasKasas commerce: `docker-entrypoint.sh release`) or write `/bin/sh -c '…'`. The CI image check splits these commands into words without a shell too, and `check.migrateOutput` fails it when a line the pre-deploy step must print is missing.
+
+The block also carries what CI needs to build and check the Artifact: `check.port` (required), and optionally `check.path`, `check.migrate`, `check.migrateOutput`, `check.postgres`, `check.redis`, `check.env`, `build.context` and `build.args`. [`image.mjs`](../scripts/image.mjs) documents them; `npx nx run <project>:image` runs the same build and check locally. Build arguments are public.
 
 ## Release or roll back by hand
 
@@ -48,7 +50,9 @@ gh workflow run cd.yml -f app=<app> -f commit=<sha>
 
 Use it for a first Release, a redeploy or a rollback. `<app>` is `firstout`, `marrow`, `daskasas` or `envmon`. `<sha>` is a full commit that CI built on `main`; the run fails if any of the App's Artifacts is missing at that commit. The App's GitHub environment holds its tokens and shows its deploy history.
 
-Rolling back by hand across a migration runs the older commit's `preDeployCommand` against the newer schema. If that fails, the Release fails and each service is put back on the image it ran before.
+Rolling back by hand across a migration runs the older image's migrations against the newer schema. If that fails, the Release fails and each service is put back on the image it ran before.
+
+A manual run reads each `project.json` deploy block from the workflow's ref (normally `main`), not from `<sha>`. So the commands sent are the current ones, whatever commit is released. Releasing a DasKasas commerce commit from before its entrypoint gained `release` mode therefore fails its pre-deploy step and is rolled back.
 
 ## Switching an App at its Host
 
