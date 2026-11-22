@@ -164,8 +164,10 @@ public key to test direct cart denial. Run `npx nx run daskasas-web:e2e`
 against the disposable live stack. See `docs/746-live-walkthrough.md`.
 
 DasKasas uses published Medusa Store API products. The home page
-leads to `/shop` and its category pages, `/shop/<handle>`. The availability
-filter and the sort order are page state and do not change the URL. Product pages show the selected variant's
+leads to `/shop` and its category pages, `/shop/<handle>`. Shop all keeps
+category, price, availability and sort in the URL. Product cards let shoppers
+swipe or use arrow controls to browse the displayed variant’s photos.
+Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
 Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
 Firstout decides which pieces are on the shop and in which category: with
@@ -206,8 +208,8 @@ apply to pages wrapped in `.content` until each is rebuilt. Tailwind generates t
 utilities through `web/postcss.config.mjs`; `tailwindcss` and `@tailwindcss/postcss`
 are declared at the existing locked 4.3.2 versions in this workspace.
 Typography uses a local system sans-serif stack, without a remote font
-request. The wordmark uses the bundled Instrument Serif. The home page hero uses
-`web/public/hero-sofas.jpg`; its selected pieces are the first published Medusa
+request. The wordmark uses the bundled Instrument Serif. The approved homepage and
+category photos live under `web/public/merchandising/`. Selected pieces are the first published Medusa
 products, with a tile naming the piece when it has no photo. The local demo assets
 are not substituted for live merchandise. Showroom facts in the footer and on the
 home page come from `web/src/lib/showroom.ts`, not the owner policy document.

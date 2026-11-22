@@ -37,6 +37,8 @@ const productSchema = z.object({
     (tokens) => !tokens || new Set(tokens).size === tokens.length,
     "Gallery photo tokens must be distinct",
   ),
+  // Opt-in only. An older source omits the field; null explicitly removes a setting photo.
+  setting_photo_token: photoToken.nullable().optional(),
   dimensions_cm: z.object({
     width: centimetres, depth: centimetres, height: centimetres, diameter: centimetres,
   }).strict().nullable().optional(),
@@ -44,7 +46,11 @@ const productSchema = z.object({
   // One of the four shop categories, from Firstout's mapping. Absent (auto-publish off, or an
   // older Firstout) means categories are left alone.
   shop_category: z.enum(shopCategoryHandles).optional(),
-}).strict();
+}).strict().refine(
+  ({ gallery_photo_tokens: studio, setting_photo_token: setting }) =>
+    !setting || (studio !== undefined && !studio.includes(setting)),
+  { path: ["setting_photo_token"], message: "A setting photo requires three distinct studio photos" },
+);
 
 const responseSchema = z.object({
   company_id: z.string().uuid(),

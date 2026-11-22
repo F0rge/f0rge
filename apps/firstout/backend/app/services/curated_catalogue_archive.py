@@ -67,7 +67,7 @@ def read_catalogue_archive(file: BinaryIO) -> ReviewedCatalogue:
             images: dict[str, bytes] = {}
             for photo in photos:
                 data = archive.read(photo.filename)
-                _validate_jpeg(data)
+                validate_jpeg(data)
                 if hashlib.sha256(data).hexdigest() != photo.sha256:
                     raise ValidationError(
                         f"Photo checksum differs from the manifest: {photo.filename}"
@@ -88,7 +88,7 @@ def read_catalogue_archive(file: BinaryIO) -> ReviewedCatalogue:
         raise ValidationError("The catalogue archive or its image data is unreadable") from exc
 
 
-def _validate_jpeg(data: bytes) -> None:
+def validate_jpeg(data: bytes) -> None:
     with Image.open(io.BytesIO(data), formats=["JPEG"]) as image:
         if image.width * image.height > 16_000_000:
             raise ValidationError("JPG photos must have no more than 16 megapixels")

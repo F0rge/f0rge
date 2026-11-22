@@ -104,7 +104,7 @@ async function opsGet(path: string): Promise<{ response: Response; companyId: st
 }
 
 async function fetchOpsProducts(): Promise<OpsProductsResponse> {
-  const { response, companyId } = await opsGet("/products?catalogue_version=2");
+  const { response, companyId } = await opsGet("/products?catalogue_version=2&include_setting_photo=true");
   return parseOpsProducts(await response.json(), companyId);
 }
 
@@ -431,11 +431,19 @@ async function syncVariantPhoto(
 async function syncReviewedGallery(
   container: MedusaContainer, product: PhotoProduct, variant: PhotoVariant, row: OpsProduct, useAsProductHero: boolean,
 ): Promise<void> {
-  const tokens = row.gallery_photo_tokens || [];
+  const studioTokens = row.gallery_photo_tokens || [];
   const images = product.images || [];
   const owned = images.filter((image) => image.metadata?.[PHOTO_SOURCE_METADATA_KEY] === row.source_sku_id);
   const findImage = (slot: number, token: string) => owned.find((image) =>
     image.metadata?.[PHOTO_SLOT_METADATA_KEY] === slot && image.metadata?.[PHOTO_TOKEN_METADATA_KEY] === token);
+  const previousTokens = variant.metadata?.[GALLERY_TOKENS_METADATA_KEY];
+  const previousSetting = Array.isArray(previousTokens) ? previousTokens[3] : undefined;
+  // An older Firstout may omit the field and cannot serve slot four. Retain a
+  // previously verified setting only if its image is still attached.
+  const retainedSetting = typeof previousSetting === "string" && findImage(4, previousSetting)
+    ? previousSetting : undefined;
+  const setting = row.setting_photo_token === undefined ? retainedSetting : row.setting_photo_token;
+  const tokens = setting && !studioTokens.includes(setting) ? [...studioTokens, setting] : studioTokens;
   const missing = tokens.map((token, index) => ({ token, slot: index + 1 }))
     .filter(({ token, slot }) => !findImage(slot, token));
   const toUpload = await Promise.all(missing.map(async ({ token, slot }) => {

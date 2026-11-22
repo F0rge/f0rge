@@ -40,6 +40,7 @@ class OpsProductResponse(BaseModel):
     dimensions_cm: Optional[OpsCatalogueDimensions] = None
     piece_count: Optional[int] = None
     gallery_photo_tokens: Optional[list[str]] = None
+    setting_photo_token: Optional[str] = None
 
 
 class OpsProductsResponse(BaseModel):

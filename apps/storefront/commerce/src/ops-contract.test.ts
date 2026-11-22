@@ -53,6 +53,23 @@ test("v2 accepts ordered catalogue fields without internal notes or zero prices"
   expect(() => request({ ...row, notes: "internal" })).toThrow();
 });
 
+test("an opted-in setting photo has its own token after the three distinct studio photos", () => {
+  const row = contract.products[0];
+  const studio = ["a", "b", "c"].map((letter) => letter.repeat(64));
+  const setting = "d".repeat(64);
+  const read = (overrides: Record<string, unknown>) => parseOpsProducts({
+    ...contract, products: [{ ...row, ...overrides }],
+  }, contract.company_id).products[0];
+
+  expect(read({ gallery_photo_tokens: studio, setting_photo_token: setting }).setting_photo_token).toBe(setting);
+  expect(read({ gallery_photo_tokens: studio }).setting_photo_token).toBeUndefined();
+  expect(read({ setting_photo_token: null }).setting_photo_token).toBeNull();
+  expect(() => read({ setting_photo_token: setting })).toThrow();
+  expect(() => read({ gallery_photo_tokens: studio, setting_photo_token: studio[0] })).toThrow();
+  expect(() => read({ gallery_photo_tokens: studio, setting_photo_token: "unverified" })).toThrow();
+  expect(() => read({ gallery_photo_tokens: [...studio, setting] })).toThrow();
+});
+
 test("validates finite made-to-order offers and rejects an inverted promise range", () => {
   const offer = {
     id: "bcd2f5d4-237b-43fb-a152-bef10a6a3eaa",

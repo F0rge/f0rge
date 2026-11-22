@@ -23,6 +23,7 @@ from app.permissions import STOCK_COST_VIEW
 from app.services.permissions import PermissionService
 from app.schemas.sku import (
     SKU_DETAIL_FIELDS,
+    SKU_SETTING_PHOTO_SLOT,
     SkuCreate,
     SkuListPage,
     SkuResponse,
@@ -454,13 +455,12 @@ class SkuService:
         if sku is None:
             raise NotFoundError("SKU photo not found")
 
-        storage_key = (
-            sku.gallery_photo_keys[slot - 1]
-            if sku.gallery_photo_keys
-            else sku.photo_storage_key
-            if slot == 1
-            else None
-        )
+        if slot == SKU_SETTING_PHOTO_SLOT:
+            storage_key = sku.setting_photo_storage_key if sku.gallery_photo_keys else None
+        elif sku.gallery_photo_keys:
+            storage_key = sku.gallery_photo_keys[slot - 1]
+        else:
+            storage_key = sku.photo_storage_key if slot == 1 else None
         if not storage_key:
             raise NotFoundError("SKU photo not found")
         try:
@@ -562,7 +562,11 @@ class SkuService:
             photo_storage_key=(
                 sku.gallery_photo_keys[0] if sku.gallery_photo_keys else sku.photo_storage_key
             ),
-            gallery_photo_count=len(sku.gallery_photo_keys or ()),
+            gallery_photo_count=(
+                len(sku.gallery_photo_keys) + int(bool(sku.setting_photo_storage_key))
+                if sku.gallery_photo_keys
+                else 0
+            ),
             **{field: getattr(sku, field) for field in SKU_DETAIL_FIELDS},
             stockist_ex_vat=sku.stockist_ex_vat,
             stockist_inc_vat=inc_vat_or_none(sku.stockist_ex_vat, vat_rate),

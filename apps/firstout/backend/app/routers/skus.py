@@ -19,7 +19,14 @@ from app.dependencies.auth import (
     require_owner,
 )
 from app.schemas.curated_catalogue import CuratedCatalogueResult
-from app.schemas.sku import SkuCreate, SkuListPage, SkuResponse, SkuUnitCostPage, SkuUpdate
+from app.schemas.sku import (
+    SKU_SETTING_PHOTO_SLOT,
+    SkuCreate,
+    SkuListPage,
+    SkuResponse,
+    SkuUnitCostPage,
+    SkuUpdate,
+)
 from app.schemas.sku_bom import SkuBomLineResponse, SkuBomReplace
 from app.services.sku_bom import SkuBomService
 from app.services.curated_catalogue import CuratedCatalogueService
@@ -97,6 +104,11 @@ async def create_sku(
                         "properties": {
                             "archive": {"type": "string", "format": "binary"},
                             "dry_run": {"type": "boolean", "default": True},
+                            "scope": {
+                                "type": "string",
+                                "enum": ["catalogue", "sku"],
+                                "default": "catalogue",
+                            },
                         },
                     }
                 }
@@ -122,17 +134,20 @@ async def import_curated_catalogue(
 
     try:
         form = await MultiPartParser(
-            request.headers, upload_chunks(), max_files=1, max_fields=1, max_part_size=1024
+            request.headers, upload_chunks(), max_files=1, max_fields=2, max_part_size=1024
         ).parse()
     except MultiPartException as exc:
         raise ValidationError(exc.message) from exc
     try:
         archive = form.get("archive")
         dry_run = form.get("dry_run", "true")
+        scope = form.get("scope", "catalogue")
         if not isinstance(archive, ParsedUploadFile) or dry_run not in ("true", "false"):
             raise ValidationError("Provide an archive file and a true or false dry_run value")
+        if scope != "catalogue" and scope != "sku":
+            raise ValidationError("Specify catalogue or sku as the import scope")
         return await CuratedCatalogueService(db).import_archive(
-            archive.file, user_id=user_id, dry_run=dry_run == "true"
+            archive.file, user_id=user_id, dry_run=dry_run == "true", scope=scope
         )
     finally:
         await form.close()
@@ -179,7 +194,7 @@ async def upload_sku_photo(
 @skus_router.get("/{sku_id}/photo", response_model=None)
 async def get_sku_photo(
     sku_id: uuid.UUID,
-    slot: int = Query(default=1, ge=1, le=3),
+    slot: int = Query(default=1, ge=1, le=SKU_SETTING_PHOTO_SLOT),
     _: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ) -> Response:

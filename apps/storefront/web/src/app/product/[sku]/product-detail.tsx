@@ -24,10 +24,10 @@ function formatPrice(variant?: MedusaVariant): string {
   return amount == null ? "Price unavailable" : formatCustomerPrice(amount, variant?.calculated_price?.currency_code);
 }
 
-export function ProductDetail({ product }: { product: StoreProduct }) {
+export function ProductDetail({ product, initialVariantId }: { product: StoreProduct; initialVariantId?: string }) {
   const attentionRef = useProductAttention(product.id);
   const { choice, capture } = useStorefrontAnalytics();
-  const [variantId, setVariantId] = useState(product.variants[0]?.id);
+  const [variantId, setVariantId] = useState(initialVariantId ?? product.variants[0]?.id);
   const variant = product.variants.find((candidate) => candidate.id === variantId) ?? product.variants[0];
   const options = productVariantOptions(product);
   const choices = variantChoices(variant);
@@ -97,7 +97,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
         <div data-main-image className="relative aspect-square overflow-hidden rounded-xl bg-muted">
           {image
             ? <img key={image} src={image} alt={`${product.title}${variant?.title && variant.title !== "Default" ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={800} fetchPriority="high" className="size-full object-contain" />
-            : <PieceImage product={product} />}
+            : <PieceImage product={{ title: product.title }} />}
         </div>
         <p className="sr-only" aria-live="polite">{imagePosition ? `Image ${imagePosition} of ${gallery.length} for ${product.title}` : `No photo yet for ${product.title}`}</p>
         {gallery.length > 1 && <div role="group" aria-label="Product images" className="grid grid-cols-4 gap-4">{gallery.map((url, index) => <Button key={url} type="button" variant="ghost" aria-label={`Show image ${index + 1} of ${gallery.length}`} aria-pressed={url === image} onClick={() => {

@@ -2812,6 +2812,14 @@
                   "dry_run": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "catalogue",
+                      "sku"
+                    ],
+                    "default": "catalogue"
                   }
                 },
                 "type": "object",
@@ -3050,7 +3058,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 3,
+              "maximum": 4,
               "minimum": 1,
               "default": 1,
               "title": "Slot"
@@ -3202,6 +3210,16 @@
             }
           },
           {
+            "name": "include_setting_photo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Setting Photo"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -3282,7 +3300,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 3,
+              "maximum": 4,
               "minimum": 1,
               "default": 1,
               "title": "Slot"
@@ -25743,6 +25761,17 @@
               }
             ],
             "title": "Gallery Photo Tokens"
+          },
+          "setting_photo_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setting Photo Token"
           }
         },
         "type": "object",
@@ -25763,7 +25792,8 @@
           "shop_category",
           "dimensions_cm",
           "piece_count",
-          "gallery_photo_tokens"
+          "gallery_photo_tokens",
+          "setting_photo_token"
         ],
         "title": "OpsProductResponse"
       },

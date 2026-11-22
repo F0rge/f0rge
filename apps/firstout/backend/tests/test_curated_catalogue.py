@@ -33,10 +33,11 @@ def _jpeg(red: int) -> bytes:
 
 def _bundle(
     *edited: tuple[str, str, tuple[bytes, bytes, bytes]],
-    retained: tuple[str, str],
+    retained: tuple[str, str] | None = None,
     wrong_digest: bool = False,
     extra_file: bool = False,
     colour_names: dict[str, str] | None = None,
+    retain_setting: bool = False,
 ) -> bytes:
     package = io.BytesIO()
     variants = []
@@ -69,9 +70,12 @@ def _bundle(
                     gallery=gallery,
                 )
             )
+            if retain_setting:
+                skus[-1]["retain_current_photo_as_setting"] = True
             colour = (colour_names or {}).get(code, code)
             variants.append({"sku_id": sku_id, "options": {"Colour": colour}})
-        skus.append({"sku_id": retained[0], "our_ref": retained[1]})
+        if retained is not None:
+            skus.append({"sku_id": retained[0], "our_ref": retained[1]})
         if extra_file:
             archive.writestr("../unsafe.jpg", _jpeg(30))
         archive.writestr(
@@ -160,11 +164,14 @@ async def test_apply_is_scoped_repeatable_and_adds_gallery_to_only_the_opt_in_fe
     original_image = await owner_client.get(f"{FEED}/{retained_id}/photo", headers=headers)
     assert original_image.status_code == 200
 
-    async def import_file(data: bytes, *, apply: bool = False):
+    async def import_file(data: bytes, *, apply: bool = False, scope: str | None = None):
+        fields = {"dry_run": "false" if apply else "true"}
+        if scope is not None:
+            fields["scope"] = scope
         return await owner_client.post(
             IMPORT,
             files={"archive": ("review.zip", data, "application/zip")},
-            data={"dry_run": "false" if apply else "true"},
+            data=fields,
         )
 
     denied = await import_file(_bundle(first, second, retained=(excluded_id, "WRONG")), apply=True)
@@ -277,6 +284,93 @@ async def test_apply_is_scoped_repeatable_and_adds_gallery_to_only_the_opt_in_fe
     assert retained_row["dimensions_cm"] is None
     assert retained_row["piece_count"] is None
 
+    studio_photos = (_jpeg(86), _jpeg(94), _jpeg(102))
+    single = _bundle((retained_id, "RETAINED", studio_photos), retain_setting=True)
+    same_as_setting = (retained_id, "RETAINED", (original_image.content, *studio_photos[:2]))
+    legacy_sku = await async_db.get(Sku, UUID(retained_id), populate_existing=True)
+    assert legacy_sku is not None and legacy_sku.photo_storage_key
+    legacy_storage_key = legacy_sku.photo_storage_key
+
+    # A scope selection mistake cannot replace the workspace catalogue with this archive.
+    assert (await import_file(single, apply=True)).status_code == 400
+    assert (await import_file(package, apply=True, scope="sku")).status_code == 400
+    excluded_gallery = _bundle((excluded_id, "EXCLUDED", studio_photos), retain_setting=True)
+    assert (await import_file(excluded_gallery, apply=True, scope="sku")).status_code == 400
+    missing_original = _bundle((second_id, "ORANGE", studio_photos), retain_setting=True)
+    assert (await import_file(missing_original, scope="sku")).status_code == 400
+    for apply in (False, True):
+        duplicate = await import_file(
+            _bundle(same_as_setting, retain_setting=True), apply=apply, scope="sku"
+        )
+        assert duplicate.status_code == 400 and "distinct" in duplicate.text
+    preview = await import_file(single, scope="sku")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["gallery_images"] == 4
+    assert not list(tmp_path.rglob("setting/*.jpg"))
+    assert (
+        await owner_client.get(f"{FEED}/{retained_id}/photo?slot=4", headers=headers)
+    ).status_code == 404
+
+    for _ in range(2):
+        applied = await import_file(single, apply=True, scope="sku")
+        assert applied.status_code == 200, applied.text
+        assert applied.json()["gallery_images"] == 4
+    reread = await async_db.get(Sku, UUID(retained_id), populate_existing=True)
+    assert reread is not None and reread.photo_storage_key == legacy_storage_key
+    assert Path(legacy_storage_key).read_bytes() == original_image.content
+    assert len(list(tmp_path.rglob("setting/*.jpg"))) == 1
+    # Even later reviews that leave the setting alone cannot duplicate it in studio.
+    for scope in ("catalogue", "sku"):
+        for apply in (False, True):
+            duplicate = await import_file(_bundle(same_as_setting), scope=scope, apply=apply)
+            assert duplicate.status_code == 400 and "distinct" in duplicate.text
+
+    opted_in_feed = (
+        await owner_client.get(
+            f"{FEED}?catalogue_version=2&include_setting_photo=true", headers=headers
+        )
+    ).json()
+    products = {row["sku"]: row for row in opted_in_feed["products"]}
+    assert set(products) == {"CHERRY", "ORANGE", "RETAINED"}
+    assert products["CHERRY"]["product_group_id"] == products["ORANGE"]["product_group_id"]
+    assert products["CHERRY"]["product_group_id"] == red["product_group_id"]
+    assert products["CHERRY"]["setting_photo_token"] is None
+    updated_sku = products["RETAINED"]
+    assert updated_sku["name"] == "Arched Chair"
+    assert updated_sku["setting_photo_token"] == hashlib.sha256(original_image.content).hexdigest()
+    assert updated_sku["gallery_photo_tokens"] == [
+        hashlib.sha256(photo).hexdigest() for photo in studio_photos
+    ]
+    for query in ("catalogue_version=2", "include_setting_photo=true"):
+        legacy_feed = (await owner_client.get(f"{FEED}?{query}", headers=headers)).json()
+        assert all("setting_photo_token" not in row for row in legacy_feed["products"])
+
+    for slot, photo in enumerate((*studio_photos, original_image.content), start=1):
+        response = await owner_client.get(
+            f"{FEED}/{retained_id}/photo?slot={slot}", headers=headers
+        )
+        assert response.status_code == 200 and response.content == photo
+        staff = await owner_client.get(f"/api/v1/skus/{retained_id}/photo?slot={slot}")
+        assert staff.status_code == 200 and staff.content == photo
+    assert (await owner_client.get(f"/api/v1/skus/{retained_id}")).json()[
+        "gallery_photo_count"
+    ] == 4
+    assert (
+        await owner_client.get(f"{FEED}/{excluded_id}/photo?slot=4", headers=headers)
+    ).status_code == 404
+
+    # Editing a selected member's studio gallery does not unlink the member.
+    grouped_update = await import_file(
+        _bundle((second_id, "ORANGE", studio_photos)), apply=True, scope="sku"
+    )
+    assert grouped_update.status_code == 200, grouped_update.text
+    updated_group_feed = (
+        await owner_client.get(f"{FEED}?catalogue_version=2", headers=headers)
+    ).json()
+    orange = next(row for row in updated_group_feed["products"] if row["sku"] == "ORANGE")
+    assert orange["product_group_id"] == red["product_group_id"]
+    assert orange["options"] == {"Colour": "ORANGE"}
+
 
 @pytest.mark.asyncio
 async def test_buyer_cannot_preflight_or_apply_workspace_catalogue(
@@ -285,10 +379,11 @@ async def test_buyer_cannot_preflight_or_apply_workspace_catalogue(
     email = "curated-catalogue-buyer@example.com"
     await create_test_staff(owner_client, email=email, role="buyer")
     assert (await authenticate_as(owner_client, email)).status_code == 200
-    for dry_run in ("true", "false"):
-        response = await owner_client.post(
-            IMPORT,
-            files={"archive": ("review.zip", b"invalid zip", "application/zip")},
-            data={"dry_run": dry_run},
-        )
-        assert response.status_code == 403
+    for scope in ("catalogue", "sku"):
+        for dry_run in ("true", "false"):
+            response = await owner_client.post(
+                IMPORT,
+                files={"archive": ("review.zip", b"invalid zip", "application/zip")},
+                data={"dry_run": dry_run, "scope": scope},
+            )
+            assert response.status_code == 403

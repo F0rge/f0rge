@@ -20,6 +20,7 @@ from app.schemas.quantity import Quantity
 
 SKU_DIMENSION_FIELDS = ("width_cm", "depth_cm", "height_cm", "diameter_cm")
 SKU_DETAIL_FIELDS = (*SKU_DIMENSION_FIELDS, "notes", "piece_count")
+SKU_SETTING_PHOTO_SLOT = 4
 SkuDimension = Annotated[Decimal, Field(gt=0, max_digits=8, decimal_places=2, allow_inf_nan=False)]
 
 

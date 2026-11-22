@@ -8368,6 +8368,8 @@ export interface components {
             piece_count: number | null;
             /** Gallery Photo Tokens */
             gallery_photo_tokens: string[] | null;
+            /** Setting Photo Token */
+            setting_photo_token: string | null;
         };
         /** OpsProductsResponse */
         OpsProductsResponse: {
@@ -14988,6 +14990,11 @@ export interface operations {
                     archive: string;
                     /** @default true */
                     dry_run?: boolean;
+                    /**
+                     * @default catalogue
+                     * @enum {string}
+                     */
+                    scope?: "catalogue" | "sku";
                 };
             };
         };
@@ -15245,6 +15252,7 @@ export interface operations {
         parameters: {
             query?: {
                 catalogue_version?: number;
+                include_setting_photo?: boolean;
             };
             header?: {
                 authorization?: string | null;

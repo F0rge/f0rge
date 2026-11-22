@@ -767,11 +767,17 @@ export function skuPhotoUrl(id: string, slot?: number): string {
 }
 
 export type CuratedCatalogueResult = Schema["CuratedCatalogueResult"];
+export type CuratedCatalogueScope = "catalogue" | "sku";
 
-export function uploadCuratedCatalogue(archive: File, dryRun: boolean): Promise<CuratedCatalogueResult> {
+export function uploadCuratedCatalogue(
+  archive: File,
+  dryRun: boolean,
+  scope: CuratedCatalogueScope = "catalogue",
+): Promise<CuratedCatalogueResult> {
   const form = new FormData();
   form.append("archive", archive);
   form.append("dry_run", String(dryRun));
+  if (scope === "sku") form.append("scope", scope);
   return apiUpload<CuratedCatalogueResult>("/skus/curated-catalogue", form);
 }
 
