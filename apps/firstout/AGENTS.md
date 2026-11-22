@@ -2,6 +2,8 @@
 
 # Firstout — Agent Instructions
 
+Firstout's own decisions are in [`docs/adr/`](docs/adr/) and its vocabulary in [`CONTEXT.md`](CONTEXT.md); they are canonical for this app alongside the repo-wide register.
+
 Gauteng furniture retailer back office (stock, books, till). Sibling app next to Marrow. **Never** nest this under `apps/marrow/`. **Never** a new repo.
 
 Use the repository [agent guide](../../docs/agents/README.md) and [shared protocol](../../docs/agents/protocol.md). From the repo root, run `node scripts/agents/agents.mjs route <repo-relative-path...>` for the primary and reviewers. The [manifest](../../docs/agents/manifest.json) owns routing, including model/migration, server-contract, test-harness and runtime-infrastructure exceptions.
