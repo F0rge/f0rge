@@ -143,6 +143,9 @@ class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
         nullable=True,
     )
     price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Unit cost of goods the sale booked for this line, so a return restocks at that cost.
+    # None when no single cost applies (kits, part-picked lines, books invoices, older sales).
+    unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
     # Snapshot from the till sale. Later catalogue changes do not determine restock eligibility.
     till_no_stock_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")

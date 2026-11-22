@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
+from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,26 @@ from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.cost_audit import CostAuditService
 from app.services.location_bins import LocationBinService
 from app.services.quantities import exact_quantity
+from app.services.vat import CENT
 from f0rge_core.exceptions import ConflictError, ValidationError
+
+
+@dataclass(frozen=True)
+class StockCost:
+    """Quantity of stock at one unit cost: what a movement took off the shelf, or a held line.
+
+    Cost of goods is ``total_zar``, rounded once half-up to the cent, so a hold, its release,
+    its completion and a later return all book the same number for the same stock.
+    """
+
+    qty: Decimal
+    unit_cost_zar: Optional[Decimal]
+
+    @property
+    def total_zar(self) -> Decimal:
+        if self.unit_cost_zar is None:
+            raise ValidationError("unit cost required")
+        return (self.unit_cost_zar * self.qty).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 class StockMovementService:
@@ -24,20 +44,6 @@ class StockMovementService:
         self.bin_stock_crud = BinStockCRUD(db)
         self.bins = LocationBinService(db)
         self.cost_audit = CostAuditService(db)
-
-    async def apply_bin_qty_delta(
-        self,
-        sku_id: uuid.UUID,
-        location_id: uuid.UUID,
-        qty_delta: Decimal,
-        bin_id: Optional[uuid.UUID] = None,
-    ) -> Optional[LocationStock]:
-        qty_delta = exact_quantity(qty_delta)
-        if qty_delta == 0:
-            return await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
-
-        loc_stock = await self.location_stock_crud.lock_for_movement(sku_id, location_id)
-        return await self._apply_bin_qty_delta(sku_id, location_id, qty_delta, bin_id, loc_stock)
 
     async def _apply_bin_qty_delta(
         self,
@@ -139,12 +145,18 @@ class StockMovementService:
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
         qty: Decimal,
-        user_id: uuid.UUID,
+        user_id: Optional[uuid.UUID],
         source: UnitCostAuditSource,
         note: str,
         bin_id: Optional[uuid.UUID] = None,
         record_audit: bool = True,
-    ) -> LocationStock:
+    ) -> StockCost:
+        """Take ``qty`` off the shelf and return what it consumed, costed from the locked row.
+
+        Callers book cost of goods from the result, never from a separate read of the
+        location's average. ``unit_cost_zar`` is None when the location's cost is unknown.
+        Without an actor (system seeding) no cost-audit row is written.
+        """
         qty = exact_quantity(qty)
         if qty <= 0:
             raise ValidationError("Outgoing quantity must be positive")
@@ -152,14 +164,14 @@ class StockMovementService:
         if loc_stock is None or loc_stock.on_hand < qty:
             raise ConflictError("Insufficient on-hand quantity")
         old_cost = loc_stock.unit_cost_zar
-        updated = await self._apply_bin_qty_delta(
+        await self._apply_bin_qty_delta(
             sku_id,
             location_id,
             -qty,
             bin_id,
             loc_stock,
         )
-        if record_audit and old_cost is not None:
+        if record_audit and user_id is not None and old_cost is not None:
             await self.cost_audit.record(
                 sku_id=sku_id,
                 location_id=location_id,
@@ -169,7 +181,7 @@ class StockMovementService:
                 source=source,
                 note=note,
             )
-        return updated
+        return StockCost(qty, old_cost)
 
     async def apply_qty_delta(
         self,
@@ -180,10 +192,10 @@ class StockMovementService:
         source: UnitCostAuditSource,
         note: str,
         bin_id: Optional[uuid.UUID] = None,
-    ) -> Optional[LocationStock]:
+    ) -> None:
         delta = exact_quantity(delta)
         if delta == 0:
-            return await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+            return
         if delta > 0:
             loc_stock = await self.location_stock_crud.lock_for_movement(
                 sku_id,
@@ -192,7 +204,7 @@ class StockMovementService:
             unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
             if unit_cost is None:
                 raise ValidationError("unit cost required to increase stock")
-            return await self.apply_incoming_qty(
+            await self.apply_incoming_qty(
                 sku_id,
                 location_id,
                 delta,
@@ -202,7 +214,8 @@ class StockMovementService:
                 note,
                 bin_id=bin_id,
             )
-        return await self.apply_outgoing_qty(
+            return
+        await self.apply_outgoing_qty(
             sku_id,
             location_id,
             -delta,
@@ -222,7 +235,7 @@ class StockMovementService:
         note: str,
         unit_cost_zar: Optional[Decimal] = None,
         bin_id: Optional[uuid.UUID] = None,
-    ) -> Optional[LocationStock]:
+    ) -> None:
         qty = exact_quantity(qty)
         if qty < 0:
             raise ValidationError("On-hand quantity must be nonnegative")
@@ -230,14 +243,14 @@ class StockMovementService:
         current = loc_stock.on_hand if loc_stock is not None else 0
         delta = qty - current
         if delta == 0:
-            return loc_stock
+            return
         if delta > 0:
             cost = unit_cost_zar
             if cost is None and loc_stock is not None:
                 cost = loc_stock.unit_cost_zar
             if cost is None:
                 raise ValidationError("unit cost required to increase stock")
-            return await self.apply_incoming_qty(
+            await self.apply_incoming_qty(
                 sku_id,
                 location_id,
                 delta,
@@ -247,7 +260,8 @@ class StockMovementService:
                 note,
                 bin_id=bin_id,
             )
-        return await self.apply_outgoing_qty(
+            return
+        await self.apply_outgoing_qty(
             sku_id,
             location_id,
             -delta,

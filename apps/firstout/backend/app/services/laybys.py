@@ -39,7 +39,7 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.settings import SettingsService
-from app.services.stock_movements import StockMovementService
+from app.services.stock_movements import StockCost, StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.pricing import shows_prices_including_vat
 from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
@@ -156,7 +156,7 @@ class LaybysService:
 
             if data.hold_stock:
                 for line in line_models:
-                    await self.stock_movements.apply_outgoing_qty(
+                    held = await self.stock_movements.apply_outgoing_qty(
                         sku_id=line.sku_id,
                         location_id=data.location_id,
                         qty=line.qty,
@@ -164,6 +164,7 @@ class LaybysService:
                         source=UnitCostAuditSource.LAYBY,
                         note=f"Layby {layby.layby_number} hold",
                     )
+                    line.hold_unit_cost_zar = held.unit_cost_zar
 
             layby.amount_paid = data.deposit_amount
             self._refresh_status(layby)
@@ -244,17 +245,20 @@ class LaybysService:
 
             total_cogs = Decimal(0)
             cogs_parts: list[tuple[str, Decimal, Decimal]] = []
-            for line in layby.lines:
-                loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                    line.sku_id,
-                    layby.location_id,
-                )
-                if loc_stock is None or loc_stock.unit_cost_zar is None:
-                    raise ValidationError("unit cost required")
-                line_cogs = (loc_stock.unit_cost_zar * line.qty).quantize(
-                    CENT,
-                    rounding=ROUND_HALF_UP,
-                )
+            for line, invoice_line in zip(layby.lines, invoice_line_models, strict=True):
+                if layby.hold_stock:
+                    sold = await self._held_cost(layby, line)
+                else:
+                    sold = await self.stock_movements.apply_outgoing_qty(
+                        sku_id=line.sku_id,
+                        location_id=layby.location_id,
+                        qty=line.qty,
+                        user_id=user_id,
+                        source=UnitCostAuditSource.LAYBY,
+                        note=f"Layby {layby.layby_number} complete",
+                    )
+                line_cogs = sold.total_zar
+                invoice_line.unit_cost_zar = sold.unit_cost_zar
                 total_cogs += line_cogs
                 cogs_code = await self.category_posting.cogs_code_for_sku(line.sku)
                 cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
@@ -273,17 +277,6 @@ class LaybysService:
                     entry_date=issue_date,
                 )
 
-            if not layby.hold_stock:
-                for line in layby.lines:
-                    await self.stock_movements.apply_outgoing_qty(
-                        sku_id=line.sku_id,
-                        location_id=layby.location_id,
-                        qty=line.qty,
-                        user_id=user_id,
-                        source=UnitCostAuditSource.LAYBY,
-                        note=f"Layby {layby.layby_number} complete",
-                    )
-
             layby.invoice_id = invoice.id
             layby.status = LaybyStatus.COMPLETED
 
@@ -298,17 +291,14 @@ class LaybysService:
         async with unit_of_work(self.db):
             if layby.hold_stock:
                 for line in layby.lines:
-                    loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                        line.sku_id,
-                        layby.location_id,
-                    )
-                    if loc_stock is None or loc_stock.unit_cost_zar is None:
+                    held = await self._held_cost(layby, line)
+                    if held.unit_cost_zar is None:
                         raise ValidationError("unit cost required")
                     await self.stock_movements.apply_incoming_qty(
                         sku_id=line.sku_id,
                         location_id=layby.location_id,
                         qty=line.qty,
-                        unit_cost_zar=loc_stock.unit_cost_zar,
+                        unit_cost_zar=held.unit_cost_zar,
                         user_id=user_id,
                         source=UnitCostAuditSource.LAYBY,
                         note=f"Layby {layby.layby_number} cancel restock",
@@ -329,6 +319,20 @@ class LaybysService:
             layby.status = LaybyStatus.CANCELLED
 
         return self._to_response(await self._get_or_404(layby.id))
+
+    async def _held_cost(self, layby: Layby, line: LaybyLine) -> StockCost:
+        """The cost the held stock left the shelf at.
+
+        Holds without one (laybys held before this release, or held while the location's
+        cost was unknown) keep the old rule: the location's current average.
+        """
+        unit_cost = line.hold_unit_cost_zar
+        if unit_cost is None:
+            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                line.sku_id, layby.location_id
+            )
+            unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
+        return StockCost(Decimal(line.qty), unit_cost)
 
     async def _build_line_models(
         self,

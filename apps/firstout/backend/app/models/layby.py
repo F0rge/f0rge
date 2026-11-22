@@ -117,6 +117,8 @@ class LaybyLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     )
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # Hold cost: the unit cost the stock left the shelf at when the layby held it.
+    hold_unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
 
     layby: Mapped[Layby] = relationship(back_populates="lines")
     sku: Mapped["Sku"] = relationship()

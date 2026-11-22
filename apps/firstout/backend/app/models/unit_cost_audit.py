@@ -27,6 +27,7 @@ class UnitCostAuditSource(str, enum.Enum):
     SALES_ORDER = "sales_order"
     STOREFRONT = "storefront"
     TILL_PICK = "till_pick"
+    TILL = "till"
 
 
 class UnitCostAudit(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):

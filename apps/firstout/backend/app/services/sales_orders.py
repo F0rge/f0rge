@@ -52,7 +52,7 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.pricing import resolve_unit_price, shows_prices_including_vat
-from app.services.stock_movements import StockMovementService
+from app.services.stock_movements import StockCost, StockMovementService
 from app.services.suspect_price import annotate_line_warnings
 from app.services.stocktakes import StocktakeService
 from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
@@ -290,25 +290,29 @@ class SalesOrdersService:
         for line in order.lines:
             if line.held_qty <= 0 or line.hold_location_id is None:
                 continue
-            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                line.sku_id,
-                line.hold_location_id,
-            )
-            unit_cost = line.hold_unit_cost_zar
-            if unit_cost is None:
-                if loc_stock is None or loc_stock.unit_cost_zar is None:
-                    raise ValidationError("unit cost required")
-                unit_cost = loc_stock.unit_cost_zar
+            held = await self._held_cost(line)
+            if held.unit_cost_zar is None:
+                raise ValidationError("unit cost required")
             await self.stock_movements.apply_incoming_qty(
                 sku_id=line.sku_id,
                 location_id=line.hold_location_id,
                 qty=line.held_qty,
-                unit_cost_zar=unit_cost,
+                unit_cost_zar=held.unit_cost_zar,
                 user_id=user_id,
                 source=UnitCostAuditSource.SALES_ORDER,
                 note=note,
             )
             line.held_qty = 0
+
+    async def _held_cost(self, line: SalesOrderLine) -> StockCost:
+        """The cost the held stock left the shelf at; older holds without one use today's average."""
+        unit_cost = line.hold_unit_cost_zar
+        if unit_cost is None and line.hold_location_id is not None:
+            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                line.sku_id, line.hold_location_id
+            )
+            unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
+        return StockCost(Decimal(line.held_qty), unit_cost)
 
     async def _storefront_tax_snapshot(
         self, order: SalesOrder
@@ -464,32 +468,25 @@ class SalesOrdersService:
 
             total_cogs = Decimal(0)
             cogs_parts: list[tuple[str, Decimal, Decimal]] = []
-            for line in order.lines:
-                remaining = line.qty - line.held_qty
-                if remaining > 0:
+            # Order lines come first in invoice_line_models; delivery, if any, follows.
+            for line, invoice_line in zip(order.lines, invoice_line_models):
+                # A line is either held in full or not at all (_apply_hold).
+                if line.held_qty < line.qty:
                     assert order.location_id is not None
-                    await self.stock_movements.apply_outgoing_qty(
+                    sold = await self.stock_movements.apply_outgoing_qty(
                         sku_id=line.sku_id,
                         location_id=order.location_id,
-                        qty=remaining,
+                        qty=line.qty - line.held_qty,
                         user_id=user_id,
                         source=stock_source,
                         note=f"Sales order {order.so_number} remainder",
                     )
                     line.held_qty = line.qty
                     line.hold_location_id = order.location_id
-                loc_id = line.hold_location_id or order.location_id
-                unit_cost = line.hold_unit_cost_zar
-                if unit_cost is None and loc_id is not None:
-                    loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                        line.sku_id,
-                        loc_id,
-                    )
-                    if loc_stock is not None:
-                        unit_cost = loc_stock.unit_cost_zar
-                if unit_cost is None:
-                    raise ValidationError("unit cost required")
-                line_cogs = (unit_cost * line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
+                else:
+                    sold = await self._held_cost(line)
+                line_cogs = sold.total_zar
+                invoice_line.unit_cost_zar = sold.unit_cost_zar
                 total_cogs += line_cogs
                 cogs_code = await self.category_posting.cogs_code_for_sku(line.sku)
                 cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
@@ -553,7 +550,7 @@ class SalesOrdersService:
             if loc_stock is None or loc_stock.unit_cost_zar is None or on_hand < line.qty:
                 any_unheld = True
                 continue
-            await self.stock_movements.apply_outgoing_qty(
+            held = await self.stock_movements.apply_outgoing_qty(
                 sku_id=line.sku_id,
                 location_id=location_id,
                 qty=line.qty,
@@ -563,7 +560,7 @@ class SalesOrdersService:
             )
             line.held_qty = line.qty
             line.hold_location_id = location_id
-            line.hold_unit_cost_zar = loc_stock.unit_cost_zar
+            line.hold_unit_cost_zar = held.unit_cost_zar
             any_held = True
         order.hold_stock = any_held
         order.awaiting_stock = any_unheld

@@ -55,5 +55,5 @@ _Avoid_: Posting, finalising, proforma
 ### Stock
 
 **Hold cost**:
-The unit cost of stock a sales order took off its location's shelf to hold for the customer, kept so that returning or delivering that stock uses the same cost.
+The unit cost of stock a sales order or layby took off its location's shelf to hold for the customer, kept so that releasing, delivering or returning that stock uses the same cost.
 _Avoid_: Average cost, landed cost, held sale

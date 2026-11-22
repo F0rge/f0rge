@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "111_sku_curated_catalogue",
+  "target_revision": "112_sale_line_unit_cost",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -449,6 +449,10 @@
     },
     "111_sku_curated_catalogue": {
       "sha256": "addef78e7597da1d1cb00e33cc1c0cfbab134db4dbb7ed96c0f5a970ceb0381f",
+      "automatic": true
+    },
+    "112_sale_line_unit_cost": {
+      "sha256": "66e96f26a245778c2755b61d8d1d85eb6ddcb9f09228f818d2ca05767db3e664",
       "automatic": true
     }
   }

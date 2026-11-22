@@ -31,6 +31,7 @@ from app.models.quote import QuoteStatus
 from app.models.customer import Customer
 from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine
+from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.invoice import InvoiceLineResponse
 from app.schemas.till import (
     TillPriceLine,
@@ -213,8 +214,9 @@ class TillOrchestrator:
             raise ValidationError("Due date cannot be before the issue date")
 
         line_inputs: list[tuple[Sku, TillPriceLine]] = []
-        cogs_parts: list[tuple[str, Decimal, Decimal]] = []
-        stock_decrements: list[tuple[uuid.UUID, int]] = []
+        # Lines that book cost of goods: (line index, SKU, cost a pick already moved,
+        # stock this sale takes off the showroom shelf as (sku_id, qty, our_ref)).
+        costed: list[tuple[int, Sku, Decimal, list[tuple[uuid.UUID, int, str]]]] = []
         non_stock_service_sku_ids: set[uuid.UUID] = set()
         reserved: dict[uuid.UUID, int] = {}
         remainders: dict[uuid.UUID, int] = {}
@@ -225,7 +227,6 @@ class TillOrchestrator:
         for candidate in [*data.pick_ids, data.pick_id]:
             if candidate is not None and candidate not in candidate_pick_ids:
                 candidate_pick_ids.append(candidate)
-        total_cogs = Decimal(0)
         pick_id: Optional[uuid.UUID] = None
 
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in data.lines])
@@ -249,6 +250,8 @@ class TillOrchestrator:
                 non_stock_service_sku_ids.add(sku.id)
                 line_inputs.append((sku, line))
                 continue
+            line_cogs = Decimal(0)
+            decrements: list[tuple[uuid.UUID, int, str]] = []
             if existing_pick is not None:
                 line_cogs = await self._pick_cogs(existing_pick, data.location_id)
                 picks_to_link.append(existing_pick)
@@ -262,7 +265,7 @@ class TillOrchestrator:
                     pick_ids=candidate_pick_ids,
                     used_pick_ids=used_pick_ids,
                     reserved=reserved,
-                    stock_decrements=stock_decrements,
+                    stock_decrements=decrements,
                 )
                 if block is not None:
                     kit_blocks.append(block)
@@ -287,25 +290,15 @@ class TillOrchestrator:
                     # reserved for the invoice and picked from elsewhere.
                     here = min(line.qty, whole_available_quantity(max(available, 0)))
                     remainders[sku.id] = remainders.get(sku.id, 0) + line.qty - here
-                line_cogs = Decimal(0)
                 if here > 0:
-                    assert location_stock is not None
-                    if location_stock.unit_cost_zar is None:
-                        raise ConflictError(f"No unit cost for {sku.our_ref} at this location")
-                    line_cogs = (location_stock.unit_cost_zar * here).quantize(
-                        CENT,
-                        rounding=ROUND_HALF_UP,
-                    )
                     reserved[sku.id] = reserved.get(sku.id, 0) + here
-                    stock_decrements.append((sku.id, here))
+                    decrements.append((sku.id, here, sku.our_ref))
                 else:
                     # Nothing here: the line books no cost of sales until its pick is confirmed.
                     line_inputs.append((sku, line))
                     continue
 
-            total_cogs += line_cogs
-            cogs_code = await self.category_posting.cogs_code_for_sku(sku)
-            cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
+            costed.append((len(line_inputs), sku, line_cogs, decrements))
             line_inputs.append((sku, line))
 
         if kit_blocks:
@@ -384,6 +377,37 @@ class TillOrchestrator:
                     entry_date=sale_date,
                 )
 
+            # Stock leaves in the same order as before (row-lock order); cost of goods is what
+            # each movement consumed, read from its locked row.
+            total_cogs = Decimal(0)
+            cogs_parts: list[tuple[str, Decimal, Decimal]] = []
+            for index, sku, line_cogs, decrements in costed:
+                for sku_id, qty, our_ref in decrements:
+                    taken = await self.stock_movements.apply_outgoing_qty(
+                        sku_id=sku_id,
+                        location_id=data.location_id,
+                        qty=Decimal(qty),
+                        user_id=user_id,
+                        source=UnitCostAuditSource.TILL,
+                        note=f"Till sale {invoice_number}",
+                        # ponytail: the till audit row is deferred one release, so the image a
+                        # failed release rolls back to already reads "till" before anything
+                        # writes it (an unknown enum value 500s Home and cost audit). The
+                        # follow-up release flips this to True.
+                        record_audit=False,
+                    )
+                    if taken.unit_cost_zar is None:
+                        raise ConflictError(f"No unit cost for {our_ref} at this location")
+                    line_cogs += taken.total_zar
+                    invoice_line = invoice_line_models[index]
+                    if sku_id == invoice_line.sku_id and qty == invoice_line.qty:
+                        # The whole line left this shelf: a return restocks it at this cost.
+                        invoice_line.unit_cost_zar = taken.unit_cost_zar
+                total_cogs += line_cogs
+                cogs_parts.append(
+                    (await self.category_posting.cogs_code_for_sku(sku), line_cogs, Decimal(0))
+                )
+
             if total_cogs > 0:
                 await self.posting.post(
                     JournalDocumentType.INVOICE,
@@ -396,13 +420,6 @@ class TillOrchestrator:
                         ]
                     ),
                     entry_date=sale_date,
-                )
-
-            for sku_id, qty in stock_decrements:
-                await self.stock_movements.apply_bin_qty_delta(
-                    sku_id=sku_id,
-                    location_id=data.location_id,
-                    qty_delta=-qty,
                 )
 
             for pick in picks_to_link:
@@ -594,8 +611,10 @@ class TillOrchestrator:
         pick_ids: list[uuid.UUID],
         used_pick_ids: set[uuid.UUID],
         reserved: dict[uuid.UUID, int],
-        stock_decrements: list[tuple[uuid.UUID, int]],
+        stock_decrements: list[tuple[uuid.UUID, int, str]],
     ) -> tuple[Decimal, Optional[Pick], Optional[dict]]:
+        """Plan a kit line: its components leave the showroom (costed when they move, so the
+        cost returned is 0), or a matching pick already moved them (cost returned), or a block."""
         showroom_ok = True
         for bom in bom_lines:
             need = whole_component_qty(bom.qty, line_qty)
@@ -611,26 +630,14 @@ class TillOrchestrator:
                 break
 
         if showroom_ok:
-            line_cogs = Decimal(0)
             for bom in bom_lines:
                 need = whole_component_qty(bom.qty, line_qty)
                 component = await self.sku_crud.get_by_id(bom.component_sku_id)
                 if component is None:
                     raise NotFoundError("SKU not found")
-                loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                    bom.component_sku_id,
-                    location_id,
-                )
-                assert loc_stock is not None
-                if loc_stock.unit_cost_zar is None:
-                    raise ConflictError(f"No unit cost for {component.our_ref} at this location")
-                line_cogs += (loc_stock.unit_cost_zar * need).quantize(
-                    CENT,
-                    rounding=ROUND_HALF_UP,
-                )
                 reserved[bom.component_sku_id] = reserved.get(bom.component_sku_id, 0) + need
-                stock_decrements.append((bom.component_sku_id, need))
-            return line_cogs, None, None
+                stock_decrements.append((bom.component_sku_id, need, component.our_ref))
+            return Decimal(0), None, None
 
         pick = await self._matching_kit_pick(pick_ids, sku.id, line_qty, used_pick_ids)
         if pick is None:
