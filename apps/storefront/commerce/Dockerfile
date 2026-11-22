@@ -6,7 +6,7 @@ COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
 # core-flows requires uuid without declaring it. Both root and commerce pin
 # uuid 11.1.1 as a production dependency so this scoped install can load it.
 RUN npm ci --workspace=@f0rge/storefront-commerce --include-workspace-root=false
-RUN node -e "require('@medusajs/core-flows')"
+RUN cd apps/storefront/commerce && node -e "require('@medusajs/core-flows')"
 
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -39,4 +39,4 @@ COPY --from=builder --chown=node:node /app/apps/storefront/commerce ./apps/store
 WORKDIR /app/apps/storefront/commerce/.medusa/server
 EXPOSE 9000
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["node", "/app/node_modules/.bin/medusa", "start"]
+CMD ["start"]

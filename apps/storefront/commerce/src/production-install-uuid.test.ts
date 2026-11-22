@@ -34,7 +34,10 @@ test("commerce production install hoists uuid where @medusajs/core-flows can req
   // `npm ci --workspace=@f0rge/storefront-commerce --include-workspace-root=false`
   // omits root devDependencies, so a dev-only uuid@9 in that slot is absent and
   // medusa start dies with Cannot find module 'uuid'.
-  expect(lock.packages["node_modules/@medusajs/core-flows"]?.dependencies?.uuid).toBeUndefined()
+  const coreFlows = lock.packages["apps/storefront/commerce/node_modules/@medusajs/core-flows"]
+    ?? lock.packages["node_modules/@medusajs/core-flows"]
+  expect(coreFlows).toBeDefined()
+  expect(coreFlows?.dependencies?.uuid).toBeUndefined()
   expect(manifest.dependencies.uuid).toBe("11.1.1")
 
   const hoisted = lock.packages["node_modules/uuid"]
