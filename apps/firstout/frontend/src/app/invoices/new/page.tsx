@@ -42,7 +42,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { rememberedColleague } from "@/lib/sales-staff";
-import { localIsoDate } from "@/lib/till-statement";
+import { localIsoDate } from "@/lib/dates";
 
 type Loaded = {
   skus: Sku[];

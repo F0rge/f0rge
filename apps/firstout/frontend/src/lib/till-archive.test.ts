@@ -5,12 +5,15 @@ import { canResumeArchivedTillPick, isPendingTillPick, restoreTillCartSkus } fro
 
 const sku: Sku = {
   id: "kit", our_ref: "KIT", our_barcode: "KIT", name: "Kit", design: "Kit", fabric: "None", category: null,
+  width_cm: null, depth_cm: null, height_cm: null, diameter_cm: null, notes: null, piece_count: null, gallery_photo_count: 0,
   supplier_ref: null, preferred_supplier_id: null, preferred_supplier_name: null, lead_time_days: null,
   made_to_order_capacity: null, made_to_order_lead_time_min_days: null, made_to_order_lead_time_max_days: null,
   made_to_order_expires_at: null, made_to_order_offer_id: null, reorder_min: null, last_landed_cost_zar: null,
   photo_storage_key: null, stockist_ex_vat: null, stockist_inc_vat: null, wholesale_ex_vat: null, wholesale_inc_vat: null,
   decorator_ex_vat: null, decorator_inc_vat: null, retail_ex_vat: "100.00", retail_inc_vat: "115.00", carton_count: 1,
-  is_kit: true, is_sellable: true, is_archived: true, archived_at: "2026-11-15T10:00:00Z", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-11-15T10:00:00Z",
+  is_kit: true, is_sellable: true, is_archived: true, archived_at: "2026-11-15T10:00:00Z", archived_by_id: null,
+  till_no_stock_required: false, exclude_from_commission: false, storefront_hidden: false, average_unit_cost_zar: null,
+  stockist_below_cost: false, wholesale_below_cost: false, decorator_below_cost: false, retail_below_cost: false, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-11-15T10:00:00Z",
 };
 const pick = normalizePick({ id: "pick", source_type: "till", kit_sku_id: "kit", kit_qty: 2, status: "staged", invoice_id: null, customer_id: "buyer", created_at: "2026-11-15T09:00:00Z" });
 const snapshot = { locationId: "showroom", customerId: "buyer", pickId: "pick", linkedPickIds: { kit: "pick" }, lines: [{ skuId: "kit", qty: 2, discountPercent: 0 }] };

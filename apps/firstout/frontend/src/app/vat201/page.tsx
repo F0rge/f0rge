@@ -228,7 +228,6 @@ export default function Vat201Page() {
   }, [user, loadPeriods]);
 
   const canCreate = Boolean(fromDate.trim() && toDate.trim());
-  const events = selected?.events;
 
   async function handleCreate() {
     const periodFrom = fromDate.trim();
@@ -443,28 +442,6 @@ export default function Vat201Page() {
       {selected ? (
         <Stack gap={6}>
           <DraftFields draft={selected.draft} />
-          {Array.isArray(events) && events.length > 0 ? (
-            <TableContainer title="History" description="Lock and reopen events">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableHeader>Action</TableHeader>
-                    <TableHeader>At</TableHeader>
-                    <TableHeader>Reason</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {events.map((event, index) => (
-                    <TableRow key={`${event.action}-${event.at ?? event.created_at ?? index}`}>
-                      <TableCell>{event.action}</TableCell>
-                      <TableCell>{event.at ?? event.created_at ?? ""}</TableCell>
-                      <TableCell>{event.reason ?? ""}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          ) : null}
           <Stack gap={4} orientation="horizontal">
             <Button kind="secondary" onClick={() => void handleDownloadCsv()}>
               Download CSV

@@ -26,7 +26,7 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { localIsoDate } from "@/lib/till-statement";
+import { localIsoDate } from "@/lib/dates";
 
 type LineForm = { description: string; qty: number | ""; unit_amount: string };
 

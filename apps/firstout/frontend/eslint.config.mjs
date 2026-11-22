@@ -51,7 +51,7 @@ const eslintConfig = defineConfig([
     files: ["**/*.{ts,tsx,js,jsx}"],
     rules: firstoutRestrictedImports,
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", ".superdesign/**"]),
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", ".superdesign/**", "src/lib/generated/**"]),
 ]);
 
 export default eslintConfig;

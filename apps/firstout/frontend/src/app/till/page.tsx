@@ -67,7 +67,8 @@ import styles from "@/components/cart-editor.module.css";
 import { TillLoading } from "./loading-layout";
 import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
 import { TillPickList } from "./till-pick-list";
-import { localIsoDate, statementDueDate } from "@/lib/till-statement";
+import { localIsoDate } from "@/lib/dates";
+import { statementDueDate } from "@/lib/till-statement";
 import { rememberedColleague } from "@/lib/sales-staff";
 
 import {

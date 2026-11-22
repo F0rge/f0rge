@@ -25,6 +25,7 @@ import {
   type RepeatingInvoice,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { localIsoDate } from "@/lib/dates";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
 
@@ -39,10 +40,6 @@ const emptyLine = (): InvoiceLineForm => ({
   qty: 1,
   unit_ex_vat: "",
 });
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function defaultDayOfMonth(): number {
   return Math.min(new Date().getDate(), 28);
@@ -72,7 +69,7 @@ function RepeatingInvoicesContent() {
   const [customerId, setCustomerId] = useState("");
   const [name, setName] = useState("");
   const [dayOfMonth, setDayOfMonth] = useState<number | "">(defaultDayOfMonth());
-  const [nextDate, setNextDate] = useState(todayIso());
+  const [nextDate, setNextDate] = useState(localIsoDate());
   const [lines, setLines] = useState<InvoiceLineForm[]>([emptyLine()]);
 
   const customerNameById = useMemo(() => {
@@ -129,7 +126,7 @@ function RepeatingInvoicesContent() {
     setCustomerId("");
     setName("");
     setDayOfMonth(defaultDayOfMonth());
-    setNextDate(todayIso());
+    setNextDate(localIsoDate());
     setLines([emptyLine()]);
   }
 

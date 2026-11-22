@@ -12,7 +12,9 @@ export type PendingHeldOperation =
     };
 
 /** Basket contents in the shape shared by held sales and the server basket. */
-export type BasketContents = Omit<TillBasketUpdate, "version" | "operation_id">;
+export type BasketContents = Omit<TillBasketUpdate, "version" | "operation_id"> & {
+  lines: NonNullable<TillBasketUpdate["lines"]>;
+};
 
 export function cartSnapshot(source: HeldSale | TillBasket): TillCartSnapshot {
   return {

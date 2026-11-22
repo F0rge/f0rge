@@ -85,6 +85,7 @@ describe("basket conflicts", () => {
   const basket = {
     id: "b", location_id: "here", customer_id: null, note: null, pick_id: null, linked_pick_ids: {},
     lines: [], version: 3, updated_at: FREES, expires_at: null, expired_at: FREES,
+    note_printed: null, note_internal: null, sales_staff_id: null, quote_id: null,
   };
 
   it("reads the server basket from a 409 only", () => {

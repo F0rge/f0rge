@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import type { SettingsSection } from "@/lib/admin-navigation";
-import type { AppSettings, DocumentSequenceUpdate } from "@/lib/api";
+import type { AppSettings, DocumentSequence } from "@/lib/api";
 
-export type SettingsDraft = { fields: Partial<AppSettings>; sequence?: DocumentSequenceUpdate };
+export type SettingsDraft = { fields: Partial<AppSettings>; sequence?: Pick<DocumentSequence, "doc_type" | "prefix" | "padding"> };
 
 function createDraftStore() {
   const drafts = new Map<SettingsSection, SettingsDraft>();

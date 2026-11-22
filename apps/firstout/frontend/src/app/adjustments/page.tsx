@@ -59,8 +59,8 @@ function locationLabel(entry: AdjustmentSummary, locations: Location[]): string 
   return entry.location_name ?? locations.find((loc) => loc.id === entry.location_id)?.name ?? "—";
 }
 
-function historyDate(entry: AdjustmentSummary): string | undefined | null {
-  return entry.completed_at ?? entry.cancelled_at ?? entry.created_at ?? entry.started_at;
+function historyDate(entry: AdjustmentSummary): string {
+  return entry.created_at;
 }
 
 export default function AdjustmentsPage() {

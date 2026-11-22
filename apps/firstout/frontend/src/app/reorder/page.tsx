@@ -25,7 +25,7 @@ import {
   createReorderDraftPo,
   formatZarAmount,
   listReorder,
-  type PurchaseOrder,
+  type PurchaseOrderListItem,
   type ReorderRow,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -63,7 +63,7 @@ export default function ReorderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [createdPos, setCreatedPos] = useState<PurchaseOrder[]>([]);
+  const [createdPos, setCreatedPos] = useState<PurchaseOrderListItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(1);

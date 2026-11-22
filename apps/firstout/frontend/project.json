@@ -3,6 +3,7 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "sourceRoot": "apps/firstout/frontend",
+  "implicitDependencies": ["firstout-backend"],
   "targets": {
     "image": {},
     "typecheck": {
@@ -17,6 +18,14 @@
       "options": {
         "cwd": "apps/firstout/frontend",
         "command": "npm run test"
+      }
+    },
+    "codegen:check": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["firstout-backend:openapi"],
+      "options": {
+        "cwd": "apps/firstout/frontend",
+        "command": "npm run codegen:api && git diff --exit-code src/lib/generated/api-schema.ts openapi.json ../backend/openapi.json"
       }
     }
   },

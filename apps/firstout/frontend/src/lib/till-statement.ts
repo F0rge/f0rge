@@ -1,9 +1,4 @@
-/** Local calendar date as YYYY-MM-DD. */
-export function localIsoDate(date: Date = new Date()): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
+import { localIsoDate } from "./dates";
 
 /** Default due date for a statement sale: issue date + customer terms, else team terms. */
 export function statementDueDate(

@@ -12,6 +12,7 @@ const server: TillBasket = {
     { sku_id: "kit-b", qty: 2, discount_percent: "12.5000" },
   ],
   version: 4, updated_at: "2026-11-20T08:00:00Z",
+  note_printed: null, note_internal: null, sales_staff_id: null, quote_id: null, expires_at: null, expired_at: null,
 };
 
 function deferred<T>() {

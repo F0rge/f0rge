@@ -61,6 +61,7 @@ import {
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { localIsoDate } from "@/lib/dates";
 import { printHtml } from "@/lib/print-html";
 
 const TABLE_HEADERS = [
@@ -98,28 +99,24 @@ type LineForm = {
   qty: number | "";
 };
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function addMonthsIso(months: number): string {
   const date = new Date();
   date.setMonth(date.getMonth() + months);
-  return date.toISOString().slice(0, 10);
+  return localIsoDate(date);
 }
 
 function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-ZA");
 }
 
-function isOverdue(layby: LaybyListItem): boolean {
+function isOverdue(layby: Pick<LaybyListItem, "status" | "due_date">): boolean {
   if (layby.status !== "open") {
     return false;
   }
-  return layby.due_date < todayIso();
+  return layby.due_date < localIsoDate();
 }
 
-function statusLabel(layby: LaybyListItem): string {
+function statusLabel(layby: Pick<LaybyListItem, "status" | "due_date">): string {
   if (layby.status === "completed") {
     return "Completed";
   }
@@ -135,7 +132,7 @@ function statusLabel(layby: LaybyListItem): string {
   return "Active";
 }
 
-function statusTagType(layby: LaybyListItem): "blue" | "green" | "gray" | "red" {
+function statusTagType(layby: Pick<LaybyListItem, "status" | "due_date">): "blue" | "green" | "gray" | "red" {
   if (layby.status === "completed") {
     return "green";
   }

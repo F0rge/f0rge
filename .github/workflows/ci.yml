@@ -106,7 +106,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-node-workspace
-      - uses: ./.github/actions/setup-python-uv # marrow-frontend:codegen:check exports the backend's OpenAPI
+      - uses: ./.github/actions/setup-python-uv # marrow- and firstout-frontend:codegen:check export their backend's OpenAPI
       - run: npx nx affected -t lint,typecheck,test,build,codegen:check,storybook-build,container-test --exclude='*,!tag:platform:ts'
         env: # production-shaped Next builds
           API_URL: http://backend:8000

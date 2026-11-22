@@ -134,6 +134,10 @@ type QuoteSku = Pick<
   | "wholesale_ex_vat"
   | "stockist_ex_vat"
   | "decorator_ex_vat"
+  | "stockist_below_cost"
+  | "wholesale_below_cost"
+  | "decorator_below_cost"
+  | "retail_below_cost"
 >;
 
 const TIER_FIELD = {

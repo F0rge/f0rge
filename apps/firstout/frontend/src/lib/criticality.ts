@@ -1,4 +1,4 @@
-import type { SkuCriticalityReport } from "./api";
+import type { AbcClass, SkuCriticalityReport } from "./api";
 
 export function formatSharePct(value: number | string | null | undefined): string {
   const numeric = typeof value === "string" ? Number(value) : value;
@@ -14,7 +14,7 @@ export function buildCriticalitySummary(report: SkuCriticalityReport): string {
   return `Top SKU is ${topShare} of sales; ${report.sku_count_for_50pct} SKUs cover 50%; ${report.sku_count_for_80pct} cover 80%.`;
 }
 
-export function abcTagType(abcClass: "A" | "B" | "C"): "green" | "blue" | "gray" {
+export function abcTagType(abcClass: AbcClass): "green" | "blue" | "gray" {
   if (abcClass === "A") {
     return "green";
   }

@@ -47,6 +47,7 @@ import {
   type JournalStatus,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { localIsoDate } from "@/lib/dates";
 
 const TABLE_HEADERS = [
   { key: "entry_date", header: "Date" },
@@ -84,10 +85,6 @@ const emptyLine = (): JournalLineForm => ({
   debit_zar: "",
   credit_zar: "",
 });
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function amountValue(raw: string): number {
   const parsed = parsePriceInput(raw);
@@ -136,7 +133,7 @@ export default function JournalsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
-  const [entryDate, setEntryDate] = useState(todayIso());
+  const [entryDate, setEntryDate] = useState(localIsoDate());
   const [memo, setMemo] = useState("");
   const [createStatus, setCreateStatus] = useState<CreateStatus>("posted");
   const [lines, setLines] = useState<JournalLineForm[]>([emptyLine(), emptyLine()]);
@@ -215,7 +212,7 @@ export default function JournalsPage() {
   const formValid = Boolean(entryDate.trim()) && lines.length >= 2 && linesValid && balanced;
 
   function resetCreateForm() {
-    setEntryDate(todayIso());
+    setEntryDate(localIsoDate());
     setMemo("");
     setCreateStatus("posted");
     setLines([emptyLine(), emptyLine()]);

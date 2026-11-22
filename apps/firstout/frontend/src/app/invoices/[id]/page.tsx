@@ -58,12 +58,9 @@ import {
   type PaymentMethod,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { localIsoDate } from "@/lib/dates";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
 import { invoiceStatusTag, partialPaymentError } from "@/lib/payment-status";
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function hasPositiveBalance(balance: string): boolean {
   return Number(balance) > 0;
@@ -86,7 +83,7 @@ export default function InvoiceDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentDate, setPaymentDate] = useState(todayIso());
+  const [paymentDate, setPaymentDate] = useState(localIsoDate());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("eft");
   const [paymentReference, setPaymentReference] = useState("");
   const [creditOpen, setCreditOpen] = useState(false);
@@ -162,7 +159,7 @@ export default function InvoiceDetailPage() {
       return;
     }
     setPaymentAmount(invoice.balance);
-    setPaymentDate(todayIso());
+    setPaymentDate(localIsoDate());
     setPaymentReference("");
     setPaymentOpen(true);
   }
@@ -208,7 +205,7 @@ export default function InvoiceDetailPage() {
     setActionHandled(true);
     if (requestedAction === "pay" && hasPositiveBalance(invoice.balance)) {
       setPaymentAmount(invoice.balance);
-      setPaymentDate(todayIso());
+      setPaymentDate(localIsoDate());
       setPaymentReference("");
       setPaymentOpen(true);
     } else if (requestedAction === "credit" && !creditNote) {

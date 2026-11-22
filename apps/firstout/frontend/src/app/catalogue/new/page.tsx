@@ -299,7 +299,7 @@ export default function NewSkuPage() {
                     id="new-sku-our-barcode"
                     labelText="Our barcode"
                     helperText="Optional. Not the supplier's reference. Leave blank and Firstout assigns a unique value like csv:YOUR-REF."
-                    value={createForm.our_barcode}
+                    value={createForm.our_barcode ?? ""}
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, our_barcode: event.target.value }))
                     }

@@ -317,9 +317,7 @@ export function AdjustmentDraft({
           <h1 className="cds--type-productive-heading-04">Stock Adjustment</h1>
           <p className="cds--type-body-01">
             {locationName} • {ADJUSTMENT_REASON_LABELS[adjustment.reason]} • Draft
-            {adjustment.created_at || adjustment.started_at
-              ? ` • Started ${formatDateTime(adjustment.created_at ?? adjustment.started_at)}`
-              : ""}
+            {` • Started ${formatDateTime(adjustment.created_at)}`}
           </p>
         </div>
         {canMutate ? (
