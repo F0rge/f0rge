@@ -86,7 +86,7 @@ export function SkuBomEditor({
   onError,
   variant = "modal",
 }: SkuBomEditorProps) {
-  const [lines, setLines] = useState<SkuBomLineWrite[]>([]);
+  const [lines, setLines] = useState<(SkuBomLineWrite & { qty: number })[]>([]);
   const [selectedSku, setSelectedSku] = useState<Sku | null>(null);
   const [qty, setQty] = useState<number | "">(1);
   const [loading, setLoading] = useState(false);

@@ -46,6 +46,10 @@ class TaxInvoice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
+    # The VAT rate the amounts above were computed at (0.15 is 15%), kept for reprints,
+    # credit notes and conversions (Firstout ADR 0003). Every writer sets it; the
+    # database default only lets the previous release insert during a deploy (P-020).
+    vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     payment_status: Mapped[SettlementStatus] = mapped_column(
         Enum(
@@ -133,6 +137,8 @@ class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
     description: Mapped[str] = mapped_column(String(512), nullable=False)
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # Line discount % (Firstout ADR 0001). NULL on lines stored before 112: unit is net.
+    discount_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     inc_vat: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(16, 4), nullable=False)
@@ -143,6 +149,9 @@ class InvoiceLine(TenantOwnedMixin, UUIDPkMixin, Base):
         nullable=True,
     )
     price_warning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Unit cost of goods the sale booked for this line, so a return restocks at that cost.
+    # None when no single cost applies (kits, part-picked lines, books invoices, older sales).
+    unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
     # Snapshot from the till sale. Later catalogue changes do not determine restock eligibility.
     till_no_stock_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")

@@ -100,6 +100,11 @@ async def test_remainder_invoice_half_ar_held_stock_unchanged(
     inv = invoice.json()
     assert Decimal(inv["total_inc_vat"]) == Decimal("1150.00")
     assert Decimal(inv["amount_paid"]) == Decimal("575.00")
+    events = await owner_client.get(
+        "/api/v1/books-events",
+        params={"document_type": "invoice", "document_id": body["invoice_id"]},
+    )
+    assert [row["action"] for row in events.json()] == ["created"]
     on_hand_after = await _inventory_on_hand(owner_client, order["_sku_id"], order["_location_id"])
     assert on_hand_after == on_hand_held
     deposits_after = Decimal(await _account_balance(owner_client, "2300"))

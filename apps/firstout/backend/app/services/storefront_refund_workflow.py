@@ -554,6 +554,8 @@ class StorefrontRefundWorkflowService:
                         ):
                             ledger_error = "verified_refund_exceeds_return_credit"
                         else:
+                            # post() refuses a locked date too, but raising would roll back the
+                            # verified provider event; route it to review instead.
                             try:
                                 await assert_date_postable(self.db, datetime.date.today())
                             except ConflictError:

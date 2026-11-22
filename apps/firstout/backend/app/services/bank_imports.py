@@ -44,6 +44,7 @@ from app.services.settlement import cents
 from app.services.bank_csv import parse_bank_csv
 from app.services.chart_of_accounts import CODE_BANK
 from app.services.journals import JournalService
+from app.services.books_periods import assert_date_postable
 from app.services.payments import PaymentService
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -192,6 +193,7 @@ class BankImportService:
             raise ValidationError("Journal is voided")
         if journal.status != JournalStatus.POSTED:
             raise ValidationError("Journal is not posted")
+        await assert_date_postable(self.db, journal.entry_date)
 
         counterparties = [
             journal_line

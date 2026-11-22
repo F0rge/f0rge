@@ -3,7 +3,8 @@
 import { Button, InlineNotification, Stack, Tag } from "@carbon/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import { BillPaymentModal } from "@/components/bill-payment-modal";
 import { KpiStrip } from "@/components/kpi-strip";
@@ -23,6 +24,7 @@ import {
   type BillSummary,
   type Supplier,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { BILL_STATUS } from "@/lib/payment-status";
 import { workspaceIdentity } from "@/lib/record-workspace";
@@ -129,41 +131,33 @@ function BillsContent() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [summary, setSummary] = useState<BillSummary | null | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [paying, setPaying] = useState<BillListItem | null>(null);
-  const adapter = useMemo(() => billsAdapter(suppliers), [suppliers]);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
+  const client = useQueryClient();
+  const summaryQuery = useQuery({ queryKey: ["bill-summary"], queryFn: getBillSummary, enabled: Boolean(user) });
+  const suppliersQuery = useQuery({
+    queryKey: ["suppliers", "with-archived"],
     // Archived suppliers still have bills to filter by.
-    Promise.all([getBillSummary(), listSuppliers(), listSuppliers({ archived: true })])
-      .then(([totals, active, archived]) => {
-        if (cancelled) return;
-        setSummary(totals);
-        // Keep the adapter stable after the first load.
-        setSuppliers((current) =>
-          current.length ? current : [...active, ...archived].sort((a, b) => a.name.localeCompare(b.name)),
-        );
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setSummary(null);
-        setError(err instanceof Error ? err.message : "Failed to load bill totals.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, refreshKey]);
+    queryFn: async () => {
+      const [active, archived] = await Promise.all([listSuppliers(), listSuppliers({ archived: true })]);
+      return [...active, ...archived].sort((a, b) => a.name.localeCompare(b.name));
+    },
+    enabled: Boolean(user),
+    // Keep the adapter stable after the first load.
+    staleTime: Infinity,
+  });
+  const suppliers = useMemo(() => suppliersQuery.data ?? [], [suppliersQuery.data]);
+  const loadFailure = summaryQuery.error ?? suppliersQuery.error;
+  const summary: BillSummary | null | undefined = loadFailure ? null : summaryQuery.data;
+  const { error, setError } = usePageError(loadFailure, "Failed to load bill totals.");
+  const adapter = useMemo(() => billsAdapter(suppliers), [suppliers]);
 
   function changed(message: string) {
     setNotice(message);
     setRefreshKey((value) => value + 1);
+    void client.invalidateQueries({ queryKey: ["bill-summary"] });
   }
 
   async function approve(bill: BillListItem) {

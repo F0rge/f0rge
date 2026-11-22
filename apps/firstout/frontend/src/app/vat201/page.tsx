@@ -19,7 +19,8 @@ import {
   TextArea,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import {
   can,
@@ -37,6 +38,7 @@ import {
   type Vat201PeriodDetail,
   type Vat201PeriodStatus,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
@@ -126,7 +128,7 @@ function DraftFields({ draft }: { draft: Vat201Draft }) {
             </TableRow>
             <TableRow>
               <TableCell>2</TableCell>
-              <TableCell>Output tax at 15%</TableCell>
+              <TableCell>Output tax</TableCell>
               <TableCell>
                 <TextInput id="field-2" labelText="" hideLabel value={draft.output_tax} readOnly />
               </TableCell>
@@ -167,11 +169,9 @@ export default function Vat201Page() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const canReopen = can(user, "users.manage");
-  const [periods, setPeriods] = useState<Vat201Period[]>([]);
   const [selected, setSelected] = useState<Vat201PeriodDetail | null>(null);
   const [fromDate, setFromDate] = useState(() => defaultBimonthly().from);
   const [toDate, setToDate] = useState(() => defaultBimonthly().to);
-  const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [locking, setLocking] = useState(false);
@@ -179,7 +179,13 @@ export default function Vat201Page() {
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [reopening, setReopening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const client = useQueryClient();
+  const periodsQuery = useQuery({ queryKey: ["vat201-periods"], queryFn: listVat201Periods, enabled: Boolean(user) });
+  const periods = useMemo(() => periodsQuery.data ?? [], [periodsQuery.data]);
+  const loading = periodsQuery.isPending || periodsQuery.isFetching;
+  const { error, setError } = usePageError(periodsQuery.error, "Failed to load VAT201 periods.");
+  const setPeriods = (update: (current: Vat201Period[]) => Vat201Period[]) =>
+    client.setQueryData<Vat201Period[]>(["vat201-periods"], (current = []) => update(current));
 
   const periodById = useMemo(
     () => Object.fromEntries(periods.map((period) => [period.id, period])),
@@ -197,19 +203,7 @@ export default function Vat201Page() {
     [periods],
   );
 
-  const loadPeriods = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setPeriods(await listVat201Periods());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load VAT201 periods.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const selectPeriod = useCallback(async (id: string) => {
+  const selectPeriod = async (id: string) => {
     setDetailLoading(true);
     setError(null);
     try {
@@ -219,16 +213,9 @@ export default function Vat201Page() {
     } finally {
       setDetailLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadPeriods();
-    }
-  }, [user, loadPeriods]);
+  };
 
   const canCreate = Boolean(fromDate.trim() && toDate.trim());
-  const events = selected?.events;
 
   async function handleCreate() {
     const periodFrom = fromDate.trim();
@@ -443,28 +430,6 @@ export default function Vat201Page() {
       {selected ? (
         <Stack gap={6}>
           <DraftFields draft={selected.draft} />
-          {Array.isArray(events) && events.length > 0 ? (
-            <TableContainer title="History" description="Lock and reopen events">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableHeader>Action</TableHeader>
-                    <TableHeader>At</TableHeader>
-                    <TableHeader>Reason</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {events.map((event, index) => (
-                    <TableRow key={`${event.action}-${event.at ?? event.created_at ?? index}`}>
-                      <TableCell>{event.action}</TableCell>
-                      <TableCell>{event.at ?? event.created_at ?? ""}</TableCell>
-                      <TableCell>{event.reason ?? ""}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          ) : null}
           <Stack gap={4} orientation="horizontal">
             <Button kind="secondary" onClick={() => void handleDownloadCsv()}>
               Download CSV

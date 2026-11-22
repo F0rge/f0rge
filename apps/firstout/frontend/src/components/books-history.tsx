@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   listBooksEvents,
@@ -32,27 +32,13 @@ function formatWhen(iso: string): string {
 }
 
 export function BooksHistory({ documentType, documentId }: BooksHistoryProps) {
-  const [events, setEvents] = useState<BooksEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const rows = await listBooksEvents(documentType, documentId);
-      setEvents(rows);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load history.");
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [documentType, documentId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const history = useQuery({
+    queryKey: ["books-events", { documentType, documentId }],
+    queryFn: () => listBooksEvents(documentType, documentId),
+  });
+  const events: BooksEvent[] = (history.isError ? undefined : history.data) ?? [];
+  const loading = history.isPending || history.isFetching;
+  const error = history.error ? history.error.message || "Failed to load history." : null;
 
   return (
     <TableContainer title="History">

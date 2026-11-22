@@ -17,6 +17,7 @@ import {
 } from "@carbon/react";
 import { ArrowLeft, Save } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import {
@@ -25,17 +26,16 @@ import {
   createSku,
   formatPriceAmount,
   isActiveLocation,
-  listLocations,
   parsePriceInput,
   updateSku,
   uploadSkuPhoto,
   type CreateSkuPayload,
-  type Location,
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { SkuProductDetailsFields } from "@/components/sku-product-details-fields";
 import { skuDetailsFormFromSku, skuDetailsPayload, validateSkuDetails } from "@/lib/sku-details";
+import { queryKeys, referenceQueries } from "@/lib/queries";
 import { isValidCartonCount } from "@/lib/carton-helpers";
 import {
   SKU_PHOTO_ACCEPT,
@@ -83,30 +83,11 @@ export default function NewSkuPage() {
   const [openingUnitCost, setOpeningUnitCost] = useState("");
   const [openingDate, setOpeningDate] = useState("");
   const [cartonCount, setCartonCount] = useState<number | "">(1);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: canMutate });
+  const locations = (locationsQuery.data ?? []).filter(isActiveLocation);
+  const client = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!canMutate) {
-      return;
-    }
-    let cancelled = false;
-    listLocations()
-      .then((data) => {
-        if (!cancelled) {
-          setLocations(data.filter(isActiveLocation));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLocations([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canMutate]);
 
   useEffect(() => {
     if (!photoFile) {
@@ -185,6 +166,7 @@ export default function NewSkuPage() {
       }
 
       const created = await createSku(payload);
+      void client.invalidateQueries({ queryKey: queryKeys.skus });
 
       const pricePayload: UpdateSkuPricePayload = {};
       const stockist = parseOptionalIncVat(stockistIncVat, "Stockist inc VAT");
@@ -299,7 +281,7 @@ export default function NewSkuPage() {
                     id="new-sku-our-barcode"
                     labelText="Our barcode"
                     helperText="Optional. Not the supplier's reference. Leave blank and Firstout assigns a unique value like csv:YOUR-REF."
-                    value={createForm.our_barcode}
+                    value={createForm.our_barcode ?? ""}
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, our_barcode: event.target.value }))
                     }
@@ -463,9 +445,9 @@ export default function NewSkuPage() {
 
           <Tile>
             <Stack gap={5}>
-              <h2 className="cds--type-productive-heading-02">Pricing (ZAR, includes 15% VAT)</h2>
+              <h2 className="cds--type-productive-heading-02">Pricing (ZAR, includes VAT)</h2>
               <p className="cds--type-body-01">
-                Enter each price including VAT. Firstout stores the ex-VAT amount at 15%.
+                Enter each price including VAT. Firstout stores the ex-VAT amount at the team&apos;s VAT rate.
               </p>
               <Grid condensed fullWidth>
                 <Column lg={8} md={4} sm={4}>

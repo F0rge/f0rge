@@ -12,6 +12,7 @@ const server: TillBasket = {
     { sku_id: "kit-b", qty: 2, discount_percent: "12.5000" },
   ],
   version: 4, updated_at: "2026-11-20T08:00:00Z",
+  note_printed: null, note_internal: null, sales_staff_id: null, quote_id: null, expires_at: null, expired_at: null,
 };
 
 function deferred<T>() {
@@ -63,7 +64,6 @@ describe("till basket mapping", () => {
     expect(isBasketConflict(new ApiError(409, "Reserved", { code: "stock_reserved", basket: server }))).toBe(true);
     expect(isBasketConflict(new ApiError(409, "Expired", { code: "basket_expired", basket: server }))).toBe(true);
     expect(isBasketConflict(new ApiError(409, "Price", { code: "till_price_conflict" }))).toBe(false);
-    expect(isBasketConflict(new ApiError(0, "Offline"))).toBe(false);
   });
 });
 

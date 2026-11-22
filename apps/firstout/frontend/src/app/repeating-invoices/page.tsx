@@ -8,23 +8,26 @@ import {
   Stack,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import { CustomerPicker } from "@/components/customer-picker";
 import {
   canMutateBooks,
-  computeInvoicePreview,
   createRepeatingInvoice,
   formatPriceAmount,
+  formatZarAmount,
   listCustomers,
   apiFetch,
+  previewInvoicePrices,
   runRepeatingInvoice,
-  sumInvoiceLinesExVat,
   type CreateInvoiceLinePayload,
-  type CustomerCrm,
   type RepeatingInvoice,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { queryKeys, referenceQueries } from "@/lib/queries";
+import { localIsoDate } from "@/lib/dates";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
 
@@ -39,10 +42,6 @@ const emptyLine = (): InvoiceLineForm => ({
   qty: 1,
   unit_ex_vat: "",
 });
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function defaultDayOfMonth(): number {
   return Math.min(new Date().getDate(), 28);
@@ -62,9 +61,16 @@ function RepeatingInvoicesContent() {
   const [editDay, setEditDay] = useState<number | "">(1);
   const [editDate, setEditDate] = useState("");
   const [runTarget, setRunTarget] = useState<RepeatingInvoice | null>(null);
-  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
-  const [archivedCustomers, setArchivedCustomers] = useState<CustomerCrm[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const customersQuery = useQuery({ ...referenceQueries.customers, enabled: Boolean(user) });
+  const archivedQuery = useQuery({
+    queryKey: [...queryKeys.customers, { archived: true }],
+    queryFn: () => listCustomers({ archived: true }),
+    enabled: Boolean(user),
+  });
+  const customers = useMemo(() => customersQuery.data ?? [], [customersQuery.data]);
+  const archivedCustomers = useMemo(() => archivedQuery.data ?? [], [archivedQuery.data]);
+  const loadFailure = customersQuery.error ?? archivedQuery.error;
+  const { error, setError } = usePageError(loadFailure, "Failed to load repeating invoices.");
   const [success, setSuccess] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,7 +78,7 @@ function RepeatingInvoicesContent() {
   const [customerId, setCustomerId] = useState("");
   const [name, setName] = useState("");
   const [dayOfMonth, setDayOfMonth] = useState<number | "">(defaultDayOfMonth());
-  const [nextDate, setNextDate] = useState(todayIso());
+  const [nextDate, setNextDate] = useState(localIsoDate());
   const [lines, setLines] = useState<InvoiceLineForm[]>([emptyLine()]);
 
   const customerNameById = useMemo(() => {
@@ -84,38 +90,32 @@ function RepeatingInvoicesContent() {
   }, [customers, archivedCustomers]);
   const archivedCustomerIds = useMemo(() => new Set(archivedCustomers.map((customer) => customer.id)), [archivedCustomers]);
 
-  const loadSchedules = useCallback(async () => {
-    setError(null);
-    try {
-      const [customerData, archivedData] = await Promise.all([
-        listCustomers(),
-        listCustomers({ archived: true }),
-      ]);
-      setCustomers(customerData);
-      setArchivedCustomers(archivedData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load repeating invoices.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadSchedules();
-    }
-  }, [user, loadSchedules]);
-
-  const preview = useMemo(() => {
-    const subtotal = sumInvoiceLinesExVat(lines);
-    return { subtotal, ...computeInvoicePreview(subtotal) };
-  }, [lines]);
-
   const linesValid = lines.every(
     (line) =>
       line.description.trim() &&
       typeof line.qty === "number" &&
       line.qty > 0 &&
-      line.unit_ex_vat.trim(),
+      Number(line.unit_ex_vat) > 0,
   );
+  const payloadLines = lines.map(
+    (line): CreateInvoiceLinePayload => ({
+      description: line.description.trim(),
+      qty: line.qty as number,
+      unit_ex_vat: line.unit_ex_vat.trim(),
+    }),
+  );
+  // Totals as the books invoice service would price these lines today (Firstout ADR 0001).
+  // Keyed on what changes the amounts, so typing a description does not refetch.
+  const canPreview = Boolean(customerId) && linesValid;
+  const amountLines = payloadLines.map(({ qty, unit_ex_vat }) => ({ description: "Line", qty, unit_ex_vat }));
+  const previewQuery = useQuery({
+    queryKey: ["repeating-invoice-preview", customerId, amountLines],
+    queryFn: ({ signal }) => previewInvoicePrices({ customer_id: customerId, lines: amountLines }, signal),
+    enabled: canPreview,
+    placeholderData: keepPreviousData,
+  });
+  const preview = canPreview ? previewQuery.data : undefined;
+  const previewStale = previewQuery.isPlaceholderData;
   const formValid =
     Boolean(customerId) &&
     Boolean(nextDate) &&
@@ -129,7 +129,7 @@ function RepeatingInvoicesContent() {
     setCustomerId("");
     setName("");
     setDayOfMonth(defaultDayOfMonth());
-    setNextDate(todayIso());
+    setNextDate(localIsoDate());
     setLines([emptyLine()]);
   }
 
@@ -161,13 +161,7 @@ function RepeatingInvoicesContent() {
         ...(trimmedName ? { name: trimmedName } : {}),
         day_of_month: dayOfMonth,
         next_date: nextDate,
-        lines: lines.map(
-          (line): CreateInvoiceLinePayload => ({
-            description: line.description.trim(),
-            qty: line.qty as number,
-            unit_ex_vat: line.unit_ex_vat.trim(),
-          }),
-        ),
+        lines: payloadLines,
       });
       setCreateOpen(false);
       resetCreateForm();
@@ -386,12 +380,25 @@ function RepeatingInvoicesContent() {
             </Button>
           </div>
           <div className="firstout-invoice-preview">
-            <p className="cds--type-productive-heading-02">Preview (15% VAT)</p>
-            <p className="cds--type-body-01">Ex VAT: R {formatPriceAmount(preview.subtotal)}</p>
-            <p className="cds--type-body-01">VAT: R {formatPriceAmount(preview.vat)}</p>
-            <p className="cds--type-body-01">
-              <strong>Total inc VAT: R {formatPriceAmount(preview.totalIncVat)}</strong>
-            </p>
+            <p className="cds--type-productive-heading-02">Preview</p>
+            {preview ? (
+              <div style={previewStale ? { opacity: 0.5 } : undefined} aria-busy={previewStale}>
+                {previewStale ? <p role="status" className="cds--type-helper-text-01">Updating…</p> : null}
+                <p className="cds--type-body-01">Ex VAT: {formatZarAmount(preview.subtotal_ex_vat)}</p>
+                <p className="cds--type-body-01">VAT: {formatZarAmount(preview.vat_amount)}</p>
+                <p className="cds--type-body-01">
+                  <strong>Total inc VAT: {formatZarAmount(preview.total_inc_vat)}</strong>
+                </p>
+              </div>
+            ) : (
+              <p role="status" className="cds--type-helper-text-01">
+                {!canPreview
+                  ? "Choose a customer and complete the lines to see the totals."
+                  : previewQuery.isError
+                    ? previewQuery.error.message
+                    : "Working out the totals…"}
+              </p>
+            )}
           </div>
         </Stack></fieldset>
       </Modal>

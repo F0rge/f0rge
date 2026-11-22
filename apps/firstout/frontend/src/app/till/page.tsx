@@ -39,12 +39,15 @@ import {
   Scan,
   Undo,
 } from "@carbon/icons-react";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Suspense,
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
+  useReducer,
   useRef,
   useState,
   useSyncExternalStore,
@@ -54,7 +57,6 @@ import {
   CartEditor,
   mergeCartBySku,
   clampDiscount,
-  unitExVat,
   type CartLine,
 } from "@/components/cart-editor";
 import { TillScanner } from "@/components/till-scanner";
@@ -67,56 +69,46 @@ import styles from "@/components/cart-editor.module.css";
 import { TillLoading } from "./loading-layout";
 import { HeldSalesWorkspace, useHeldSales } from "./held-sales-workspace";
 import { TillPickList } from "./till-pick-list";
-import { localIsoDate, statementDueDate } from "@/lib/till-statement";
+import { localIsoDate } from "@/lib/dates";
+import { statementDueDate } from "@/lib/till-statement";
 import { rememberedColleague } from "@/lib/sales-staff";
+import { anyLineBlocked, formatDiscount, mayBePriced } from "@/lib/sale-preview";
 
 import {
   ApiError,
   can,
   canManageCustomerCredit,
   canUseTill,
-  canViewCostAudit,
   cancelPick,
   confirmPick,
   createPick,
   createTillSale,
   downloadInvoicePdf,
   getQuote,
-  getSettings,
   getSku,
   getTillBasket,
   getCustomer,
   holdTillSale,
   resumeTillHeldSale,
   listPicks,
-  exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
   isActiveLocation,
-  listCustomers,
   listInventory,
-  listLocations,
-  listPriceLists,
-  listSalesStaffOptions,
   listSkus,
   listTillReservations,
   parsePriceInput,
   previewTillPrices,
   settingsLogoUrl,
   updateTillBasket,
-  type AppSettings,
+  vatPercentLabel,
   type CustomerCrm,
-  type InventorySku,
   type HeldSale,
   type Location,
-  type PriceList,
-  type SalesStaffOption,
   type Sku,
   type PickDocument,
   type Quote,
   type TillBasket,
-  type TillPricePreview,
-  type TillPriceRequest,
   type TillSaleResult,
   type TillReservation,
   type TillTender,
@@ -127,12 +119,18 @@ import {
   isPendingTillPick,
   restoreTillCartSkus,
 } from "@/lib/till-archive";
-import { isCreditBlockMessage } from "@/lib/customer-crm";
+import { queryKeys, referenceQueries, stockQueries } from "@/lib/queries";
+import {
+  completeTillSale,
+  creditOverrideActive as isCreditOverrideActive,
+  EMPTY_SALE,
+  tillPriceRequest,
+  tillSaleReducer,
+  type TillSale,
+} from "@/lib/till-sale";
 import {
   nextTillStateAfterKitConfirm,
   openPicksHrefForKit,
-  parseKitRequiresPick,
-  salePickIds,
   type TillCartSnapshot,
   type TillKitBlock,
 } from "@/lib/till-kit-pick";
@@ -200,6 +198,8 @@ const TENDER_OPTIONS: {
 type RestoredCart = { lines: CartLine[]; customer: CustomerCrm | null };
 
 const EMPTY_BASKET: BasketContents = { linked_pick_ids: {}, lines: [] };
+const NONE: never[] = [];
+const PRICE_PREVIEW_KEY = ["till", "price-preview"] as const;
 
 async function hydrateCart(
   snapshot: TillCartSnapshot,
@@ -243,30 +243,57 @@ function TillWorkspace() {
   const { user } = useAuth();
   const canSell = canUseTill(user);
   const canDiscount = can(user, "till.discount");
-  const canViewCost = canViewCostAudit(user);
   const canOverrideCredit = canManageCustomerCredit(user);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [companySettings, setCompanySettings] = useState<AppSettings | null>(
-    null,
+  const client = useQueryClient();
+  const loaded = Boolean(user);
+  const tillData = useQueries({
+    queries: [
+      { ...referenceQueries.locations, enabled: loaded },
+      { ...referenceQueries.skus, enabled: loaded },
+      { ...stockQueries.inventory, enabled: loaded },
+      { ...referenceQueries.customers, enabled: loaded },
+      { ...referenceQueries.settings, enabled: loaded },
+      { ...stockQueries.tillPicks, enabled: loaded },
+      { ...referenceQueries.priceLists, enabled: loaded },
+    ],
+  });
+  const [locationsQuery, skusQuery, inventoryQuery, customersQuery, settingsQuery, picksQuery, priceListsQuery] = tillData;
+  const loadSucceeded = tillData.every((query) => query.data !== undefined);
+  const loadError = loadSucceeded ? null : tillData.find((query) => query.error)?.error ?? null;
+  const loading = !loadSucceeded && !loadError;
+  const allLocations = locationsQuery.data;
+  const locations = useMemo(
+    () => (allLocations ?? NONE).filter((loc: Location) => isActiveLocation(loc) && loc.type === "showroom"),
+    [allLocations],
   );
-  const [skus, setSkus] = useState<Sku[]>([]);
-  const [inventory, setInventory] = useState<InventorySku[]>([]);
-  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
-  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+  // Location types are showroom or warehouse; both count towards company stock.
+  const sellableLocationIds = useMemo<ReadonlySet<string>>(
+    () => new Set((allLocations ?? NONE).filter(isActiveLocation).map((loc: Location) => loc.id)),
+    [allLocations],
+  );
+  const allSkus = skusQuery.data;
+  const skus = useMemo(() => (allSkus ?? NONE).filter((sku: Sku) => !sku.is_archived), [allSkus]);
+  const inventory = inventoryQuery.data ?? NONE;
+  const customers = customersQuery.data ?? NONE;
+  const companySettings = settingsQuery.data ?? null;
+  const tillPicks = picksQuery.data ?? NONE;
+  const priceLists = priceListsQuery.data ?? NONE;
+  const colleaguesQuery = useQuery({ ...referenceQueries.salesStaffOptions, enabled: canSell });
+  const colleagues = colleaguesQuery.data ?? null;
+  const colleaguesError = colleaguesQuery.isError;
+  const [sale, dispatch] = useReducer(tillSaleReducer, EMPTY_SALE);
+  const edit = useCallback(
+    (change: Partial<TillSale> | ((current: TillSale) => Partial<TillSale>)) => dispatch({ type: "edit", change }),
+    [],
+  );
+  const {
+    cart, customerId, commitmentCustomer, pickId, linkedPickIds, heldNote, notePrinted, noteInternal,
+    salesStaffId, quoteId, resumedSale, kitBlocks, creditBlock, creditOverride, creditOverrideReason,
+    dueDateEdit, skuId, qty,
+  } = sale;
   const [locationId, setLocationId] = useState("");
   const [pendingShowroom, setPendingShowroom] = useState<string | null>(null);
-  const [resumedSale, setResumedSale] = useState(false);
   const [view, setView] = useState(0);
-  const [heldNote, setHeldNote] = useState("");
-  // The sale's invoice notes: printed on the invoice, and staff only.
-  const [notePrinted, setNotePrinted] = useState("");
-  const [noteInternal, setNoteInternal] = useState("");
-  // Who made the sale (commission); defaults to this device's last choice.
-  const [salesStaffId, setSalesStaffId] = useState("");
-  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
-  const [colleaguesError, setColleaguesError] = useState(false);
-  // The open quote this sale converts; kept with the basket like the colleague.
-  const [quoteId, setQuoteId] = useState("");
   const [quoteNumbers, setQuoteNumbers] = useState<Record<string, string>>({});
   // A quote fetched from the URL, waiting for an empty, ready cart.
   const [incomingQuote, setIncomingQuote] = useState<Quote | null>(null);
@@ -283,43 +310,19 @@ function TillWorkspace() {
   const heldLock = useRef(false);
   // What the till says after showing the server's basket instead of its own.
   const [basketNotice, setBasketNotice] = useState<BasketConflict | null>(null);
-  const [skuId, setSkuId] = useState("");
-  const [customerId, setCustomerId] = useState("");
-  const [qty, setQty] = useState<number | "">(1);
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [pricing, setPricing] = useState<{
-    request: TillPriceRequest;
-    attempt: number;
-    preview?: TillPricePreview;
-    error?: string;
-  } | null>(null);
-  const [pricingAttempt, setPricingAttempt] = useState(0);
   const [tender, setTender] = useState<TillTender>("statement");
-  // A typed due date belongs to the customer it was typed for; a new customer gets their terms.
-  const [dueDateEdit, setDueDateEdit] = useState<{ customerId: string; value: string } | null>(null);
   const [amountTendered, setAmountTendered] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [loadSucceeded, setLoadSucceeded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<TillSaleResult | null>(null);
   const [lastBuyerName, setLastBuyerName] = useState(WALK_IN_CUSTOMER_NAME);
+  // Remounts the cart editor after a sale so its search and page start over.
+  const [soldCount, setSoldCount] = useState(0);
   const [scanValue, setScanValue] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [creditOverride, setCreditOverride] = useState(false);
-  const [creditOverrideReason, setCreditOverrideReason] = useState("");
-  const [creditBlock, setCreditBlock] = useState<string | null>(null);
-  const [pickId, setPickId] = useState("");
-  const [linkedPickIds, setLinkedPickIds] = useState<Record<string, string>>(
-    {},
-  );
   const [confirmedPicks, setConfirmedPicks] = useState<PickDocument[]>([]);
-  const [tillPicks, setTillPicks] = useState<PickDocument[]>([]);
   const [resumePickId, setResumePickId] = useState("");
   const [resumingPick, setResumingPick] = useState(false);
-  const [commitmentCustomer, setCommitmentCustomer] =
-    useState<CustomerCrm | null>(null);
-  const [kitBlocks, setKitBlocks] = useState<TillKitBlock[]>([]);
   const [pickDraft, setPickDraft] = useState<{
     kit: TillKitBlock;
     pick: PickDocument | null;
@@ -333,8 +336,6 @@ function TillWorkspace() {
   const [cartReady, setCartReady] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  // Active showroom and warehouse locations: the stock the company can sell.
-  const [sellableLocationIds, setSellableLocationIds] = useState<ReadonlySet<string>>(() => new Set());
   const [reservations, setReservations] = useState<{ locationId: string; rows: TillReservation[] } | null>(null);
   const [reservationRevision, setReservationRevision] = useState(0);
   const refreshReservations = useCallback(() => setReservationRevision((revision) => revision + 1), []);
@@ -381,94 +382,26 @@ function TillWorkspace() {
   }), [locationId, customerId, pickId, linkedPickIds, heldNote, notePrinted, noteInternal, salesStaffId, quoteId, cart]);
 
   const applySnapshot = useCallback((snapshot: TillCartSnapshot, restored: RestoredCart) => {
-    setCart(restored.lines);
-    setCommitmentCustomer(restored.customer);
-    setCustomerId(snapshot.customerId);
+    dispatch({
+      type: "restore",
+      snapshot: { ...snapshot, salesStaffId: snapshot.salesStaffId || rememberedColleague() },
+      lines: restored.lines,
+      customer: restored.customer,
+    });
     if (snapshot.locationId) setLocationId(snapshot.locationId);
-    setPickId(snapshot.pickId);
-    setLinkedPickIds(snapshot.linkedPickIds);
-    setHeldNote(snapshot.note ?? "");
-    setNotePrinted(snapshot.notePrinted ?? "");
-    setNoteInternal(snapshot.noteInternal ?? "");
-    setSalesStaffId(snapshot.salesStaffId || rememberedColleague());
-    setQuoteId(snapshot.quoteId ?? "");
     setCartReady(true);
   }, []);
 
+  const tillDefaultId = companySettings?.default_till_location_id;
   useEffect(() => {
-    if (!canSell) return;
-    let live = true;
-    listSalesStaffOptions()
-      .then((rows) => { if (live) setColleagues(rows); })
-      .catch(() => { if (live) setColleaguesError(true); });
-    return () => { live = false; };
-  }, [canSell]);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setLoadSucceeded(false);
-    setError(null);
-    try {
-      const [
-        locationData,
-        skuData,
-        inventoryData,
-        customerData,
-        settingsData,
-        priceListData,
-        pickData,
-      ] = await Promise.all([
-        listLocations(),
-        listSkus(),
-        listInventory(),
-        listCustomers(),
-        getSettings(),
-        listPriceLists(),
-        listPicks("till"),
-      ]);
-      const showrooms = locationData.filter(
-        (loc) => isActiveLocation(loc) && loc.type === "showroom",
-      );
-      setLocations(showrooms);
-      // Location types are showroom or warehouse; both count towards company stock.
-      setSellableLocationIds(new Set(locationData.filter(isActiveLocation).map((loc) => loc.id)));
-      setCompanySettings(settingsData);
-      setSkus(skuData.filter((sku) => !sku.is_archived));
-      setTillPicks(pickData);
-      setInventory(inventoryData);
-      setCustomers(customerData);
-      setPriceLists(priceListData);
-      setLocationId((current) => {
-        if (current) {
-          return current;
-        }
-        return resolveTillLocationId(
-          showrooms,
-          user?.default_location_id,
-          settingsData.default_till_location_id,
-        );
-      });
-      setLoadSucceeded(true);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load till data.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) {
-      void loadData();
-    }
-  }, [user, loadData]);
+    if (!allLocations || companySettings === null) return;
+    setLocationId((current) => current || resolveTillLocationId(locations, user?.default_location_id, tillDefaultId));
+  }, [allLocations, companySettings, locations, tillDefaultId, user]);
 
   const inventoryBySku = useMemo(
     () => new Map(inventory.map((entry) => [entry.sku_id, entry])),
     [inventory],
   );
-  const vatRateLabel = `${companySettings?.vat_percent ?? "15"}%`;
 
   const selectedCustomer =
     customers.find((customer) => customer.id === customerId) ??
@@ -477,7 +410,7 @@ function TillWorkspace() {
   const skuOptions = skus.filter((sku) => {
     if (sku.is_archived || !sku.is_sellable || !locationId) return false;
     if (sku.till_no_stock_required && !sku.is_kit) {
-      return unitExVat(sku, selectedCustomer, priceLists) > 0;
+      return mayBePriced(sku, selectedCustomer, priceLists);
     }
     if (!sku.retail_ex_vat) return false;
     if (sku.is_kit) return true;
@@ -488,12 +421,6 @@ function TillWorkspace() {
   });
 
   const pendingTillPicks = tillPicks.filter(isPendingTillPick);
-
-  useEffect(() => {
-    setCreditOverride(false);
-    setCreditOverrideReason("");
-    setCreditBlock(null);
-  }, [customerId]);
 
   const cartQtyBySku = useMemo(() => {
     const totals = new Map<string, number>();
@@ -553,7 +480,7 @@ function TillWorkspace() {
     listPicks("till")
       .then((picks) => {
         if (!cancelled) {
-          setTillPicks(picks);
+          client.setQueryData(stockQueries.tillPicks.queryKey, picks);
           setConfirmedPicks(
             picks.filter(
               (entry) => isPendingTillPick(entry) && kitIds.has(entry.sku_id),
@@ -569,8 +496,10 @@ function TillWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [cartKitKey]);
+  }, [cartKitKey, client]);
 
+  // Reads the latest loaded data without restarting a restore when a refetch lands.
+  const hydrateLoaded = useEffectEvent((snapshot: TillCartSnapshot) => hydrateCart(snapshot, skus, tillPicks, customers));
   useEffect(() => {
     if (!canSell || !loadSucceeded || !locationId || cartReady || restoreBlocked || pendingHeld) return;
     let cancelled = false;
@@ -589,7 +518,7 @@ function TillWorkspace() {
       }
       const snapshot = cartSnapshot(basket);
       try {
-        const restored = await hydrateCart(snapshot, skus, tillPicks, customers);
+        const restored = await hydrateLoaded(snapshot);
         if (!cancelled) applySnapshot(snapshot, restored);
       } catch (failure) {
         if (!cancelled) setRestoreBlocked(true);
@@ -599,7 +528,7 @@ function TillWorkspace() {
       if (!cancelled) setError(failure instanceof Error ? failure.message : "Could not restore the saved cart.");
     });
     return () => { cancelled = true; };
-  }, [applySnapshot, canSell, cartReady, customers, loadSucceeded, locationId, pendingHeld, restoreBlocked, saver, skus, tillPicks]);
+  }, [applySnapshot, canSell, cartReady, loadSucceeded, locationId, pendingHeld, restoreBlocked, saver]);
 
   useEffect(() => {
     if (cartReady && !pendingHeld) saver.save(basketContents(currentSnapshot, tillPicks));
@@ -637,39 +566,18 @@ function TillWorkspace() {
     };
   }, [cartReady, expiresAt, pendingHeld, refreshReservations, reloadBasket, submitting]);
 
-  const priceRequest = useMemo<TillPriceRequest>(() => ({
-    ...(customerId ? { customer_id: customerId } : {}),
-    lines: cart.map((line) => ({
-      sku_id: line.sku.id,
-      qty: line.qty,
-      ...(line.discountPercent > 0 ? { discount_percent: line.discountPercent } : {}),
-    })),
-  }), [cart, customerId]);
-  const activePricing = pricing?.request === priceRequest && pricing.attempt === pricingAttempt
-    ? pricing
-    : null;
-  const pricePreview = activePricing?.preview;
-  const pricingError = activePricing?.error;
-  const refreshPrices = () => setPricingAttempt((attempt) => attempt + 1);
-
-  useEffect(() => {
-    if (!canSell || !cartReady || priceRequest.lines.length === 0) return;
-    const controller = new AbortController();
-    void previewTillPrices(priceRequest, controller.signal).then((preview) => {
-      if (!controller.signal.aborted) {
-        setPricing({ request: priceRequest, attempt: pricingAttempt, preview });
-      }
-    }).catch((err: unknown) => {
-      if (!controller.signal.aborted) {
-        setPricing({
-          request: priceRequest,
-          attempt: pricingAttempt,
-          error: err instanceof Error ? err.message : "Could not check the sale prices.",
-        });
-      }
-    });
-    return () => controller.abort();
-  }, [canSell, cartReady, priceRequest, pricingAttempt]);
+  const priceRequest = useMemo(() => tillPriceRequest(cart, customerId), [cart, customerId]);
+  const pricing = useQuery({
+    queryKey: [...PRICE_PREVIEW_KEY, priceRequest],
+    queryFn: ({ signal }) => previewTillPrices(priceRequest, signal),
+    enabled: canSell && cartReady && priceRequest.lines.length > 0,
+    // A preview holds for the request it priced, now: a cart that returns to it is priced again.
+    gcTime: 0,
+  });
+  const pricePreview = pricing.data;
+  const pricingError = pricing.error?.message;
+  /** Drop the shown preview and price the cart again. */
+  const refreshPrices = () => void client.resetQueries({ queryKey: PRICE_PREVIEW_KEY });
 
   const totalInc = Number(pricePreview?.total_inc_vat ?? 0);
   const totalIncLabel = pricePreview || !cart.length ? formatPriceAmount(totalInc) : "";
@@ -695,7 +603,7 @@ function TillWorkspace() {
       : dueDate < saleDate
         ? "The due date can't be before the issue date."
         : null;
-  const creditOverrideActive = !onStatement && canOverrideCredit && creditOverride;
+  const creditOverrideActive = isCreditOverrideActive(sale, tender, canOverrideCredit);
 
   const tenderedAmount = parsePriceInput(amountTendered) ?? totalInc;
   const changeAmount = Math.max(0, tenderedAmount - totalInc);
@@ -740,7 +648,7 @@ function TillWorkspace() {
         addQty,
         floorOnHand: (id) => availabilityFor(id).limit,
         cartQty: (id) => cartQtyBySku.get(id) ?? 0,
-        hasServicePrice: (sku) => unitExVat(sku, selectedCustomer, priceLists) > 0,
+        hasServicePrice: (sku) => mayBePriced(sku, selectedCustomer, priceLists),
       });
       if (!result.ok) {
         const scanned = skus.find((sku) => sku.our_barcode === trimmed) ??
@@ -750,12 +658,12 @@ function TillWorkspace() {
         return false;
       }
       setError(null);
-      setCart((current) => mergeCartBySku(current, result.sku, result.qty));
+      edit((current) => ({ cart: mergeCartBySku(current.cart, result.sku, result.qty) }));
       setScanValue("");
       focusScanField();
       return true;
     },
-    [availabilityFor, canSell, cartQtyBySku, cartReady, focusScanField, heldLocked, locationId, priceLists, selectedCustomer, showReserved, skus, view],
+    [availabilityFor, canSell, cartQtyBySku, cartReady, edit, focusScanField, heldLocked, locationId, priceLists, selectedCustomer, showReserved, skus, view],
   );
 
   useEffect(() => {
@@ -803,6 +711,7 @@ function TillWorkspace() {
     colleagueChosen &&
     locationId &&
     !!pricePreview &&
+    !anyLineBlocked(pricePreview) &&
     totalInc > 0 &&
     cart.length > 0 &&
     cart.every((line) => {
@@ -834,7 +743,7 @@ function TillWorkspace() {
       (!sku.till_no_stock_required && !sku.retail_ex_vat) ||
       !Number.isFinite(quantity) ||
       quantity <= 0 ||
-      unitExVat(sku, selectedCustomer, priceLists) <= 0
+      !mayBePriced(sku, selectedCustomer, priceLists)
     )
       return false;
     const needsFloorStock = requiresTillFloorStock(sku);
@@ -844,13 +753,13 @@ function TillWorkspace() {
       return false;
     }
     setError(null);
-    setCart((current) => {
+    edit(({ cart: current }) => {
       const reserved = current
         .filter((line) => line.sku.id === sku.id)
         .reduce((sum, line) => sum + line.qty, 0);
       if (needsFloorStock && quantity > limit - reserved)
-        return current;
-      return mergeCartBySku(current, sku, quantity);
+        return {};
+      return { cart: mergeCartBySku(current, sku, quantity) };
     });
     if (!sku.is_kit) focusScanField();
     return true;
@@ -860,8 +769,8 @@ function TillWorkspace() {
     key: string,
     patch: Partial<Pick<CartLine, "qty" | "discountPercent">>,
   ) {
-    setCart((current) =>
-      current.map((line) => {
+    edit(({ cart: current }) => ({
+      cart: current.map((line) => {
         if (line.key !== key) {
           return line;
         }
@@ -874,19 +783,21 @@ function TillWorkspace() {
             : line.discountPercent;
         return { ...line, qty: nextQty, discountPercent: nextDiscount };
       }),
-    );
+    }));
   }
 
   function removeCartLine(key: string) {
     const skuId = cart.find((line) => line.key === key)?.sku.id;
     if (!skuId) return;
-    setCart((current) => current.filter((line) => line.key !== key));
-    setLinkedPickIds((current) => Object.fromEntries(
-      Object.entries(current).filter(([id]) => id !== skuId),
-    ));
+    edit((current) => ({
+      cart: current.cart.filter((line) => line.key !== key),
+      linkedPickIds: Object.fromEntries(
+        Object.entries(current.linkedPickIds).filter(([id]) => id !== skuId),
+      ),
+    }));
     if (linkedPickIds[skuId] === pickId ||
         tillPicks.some((pick) => pick.id === pickId && pick.kit_sku_id === skuId)) {
-      setPickId("");
+      edit({ pickId: "" });
     }
   }
 
@@ -924,14 +835,13 @@ function TillWorkspace() {
         nextCustomerId && !customers.some((item) => item.id === nextCustomerId)
           ? await getCustomer(nextCustomerId)
           : null;
-      setCommitmentCustomer(customer);
-      setCustomerId(nextCustomerId);
-      setCart((current) => [
-        ...current,
-        { key: sku.id, sku, qty: pick.kit_qty ?? 0, discountPercent: 0 },
-      ]);
-      setLinkedPickIds((current) => ({ ...current, [sku.id]: pick.id }));
-      setPickId(pick.id);
+      edit((current) => ({
+        commitmentCustomer: customer,
+        customerId: nextCustomerId,
+        cart: [...current.cart, { key: sku.id, sku, qty: pick.kit_qty ?? 0, discountPercent: 0 }],
+        linkedPickIds: { ...current.linkedPickIds, [sku.id]: pick.id },
+        pickId: pick.id,
+      }));
       setResumePickId("");
     } catch (err) {
       setError(
@@ -985,15 +895,17 @@ function TillWorkspace() {
       const customer = customers.find((item) => item.id === quote.customer_id) ?? await getCustomer(quote.customer_id);
       if (customer.is_archived) throw new Error(`${customer.name} is archived. Restore the customer to sell this quote.`);
       const walkIn = customer.name === WALK_IN_CUSTOMER_NAME;
-      setCommitmentCustomer(walkIn ? null : customer);
-      setCustomerId(walkIn ? "" : customer.id);
-      setCart(lines);
-      setNotePrinted(quote.notes ?? "");
-      setNoteInternal(quote.internal_note ?? "");
-      if (quote.sales_staff_id && colleagues?.some((item) => item.id === quote.sales_staff_id)) {
-        setSalesStaffId(quote.sales_staff_id);
-      }
-      setQuoteId(quote.id);
+      edit({
+        commitmentCustomer: walkIn ? null : customer,
+        customerId: walkIn ? "" : customer.id,
+        cart: lines,
+        notePrinted: quote.notes ?? "",
+        noteInternal: quote.internal_note ?? "",
+        ...(quote.sales_staff_id && colleagues?.some((item) => item.id === quote.sales_staff_id)
+          ? { salesStaffId: quote.sales_staff_id }
+          : {}),
+        quoteId: quote.id,
+      });
       setQuoteNumbers((current) => ({ ...current, [quote.id]: quote.quote_number }));
       setLastSale(null);
       setView(0);
@@ -1004,7 +916,7 @@ function TillWorkspace() {
     } catch (failure: unknown) {
       setError(failure instanceof Error ? failure.message : "Could not load the quote.");
     }
-  }, [colleagues, customers, router, skus]);
+  }, [colleagues, customers, edit, router, skus]);
 
   useEffect(() => {
     // Waits for the colleague list so the quote's colleague carries over.
@@ -1032,17 +944,7 @@ function TillWorkspace() {
     reloadBasket();
     setRestoreBlocked(false);
     setLocationId(next);
-    setSkuId("");
-    setCart([]);
-    setResumedSale(false);
-    setPickId("");
-    setLinkedPickIds({});
-    setKitBlocks([]);
-    setCreditBlock(null);
-    setHeldNote("");
-    setNotePrinted("");
-    setNoteInternal("");
-    setQuoteId("");
+    dispatch({ type: "reset" });
     setHeldNotice(null);
     setBasketNotice(null);
     setHeldFocus("");
@@ -1075,7 +977,7 @@ function TillWorkspace() {
         // The server emptied the basket with the hold and released its stock.
         reloadBasket();
         refreshReservations();
-        setResumedSale(false);
+        dispatch({ type: "reset" });
         setHeldFocus(draft.id);
         setHeldNotice({ title: `${draft.reference} is on hold`, subtitle: "Choose Resume sale when you’re ready." });
         showView(1);
@@ -1089,17 +991,17 @@ function TillWorkspace() {
         const next = destination ?? await restoreHeldDestination(operation.destination);
         const snapshot = cartSnapshot(result.basket);
         const restored = await hydrateCart(snapshot, next.latestSkus, next.latestPicks, []);
-        setSkus(next.latestSkus.filter((sku) => !sku.is_archived));
-        setTillPicks(next.latestPicks);
-        setInventory(next.latestInventory);
+        client.setQueryData(queryKeys.skus, next.latestSkus);
+        client.setQueryData(stockQueries.tillPicks.queryKey, next.latestPicks);
+        client.setQueryData(queryKeys.inventory, next.latestInventory);
         saver.reset(result.basket);
         setExpiresAt(result.basket.expires_at ?? null);
         refreshReservations();
+        dispatch({ type: "reset" });
         applySnapshot(snapshot, restored);
-        setResumedSale(true);
+        edit({ resumedSale: true });
         setTender("statement");
-        setCreditOverride(false);
-        setCreditOverrideReason("");
+        // A resumed cart equal to the current one keeps its query key: price it again anyway.
         refreshPrices();
         setHeldNotice({
           title: `${operation.reference} resumed`,
@@ -1110,10 +1012,6 @@ function TillWorkspace() {
         showView(0);
       }
       setLastSale(null);
-      setSkuId("");
-      setQty(1);
-      setKitBlocks([]);
-      setCreditBlock(null);
       setRestoreBlocked(false);
       setPendingHeld(null);
       setPendingBlocked(false);
@@ -1223,86 +1121,54 @@ function TillWorkspace() {
     }
     setSubmitting(true);
     setError(null);
-    setCreditBlock(null);
-    setKitBlocks([]);
+    edit({ creditBlock: null, kitBlocks: [] });
     setLastSale(null);
     try {
-      const pickIds = salePickIds(linkedPickIds, pickId);
-      const basket = await saver.flush();
-      const result = await createTillSale({
-        location_id: locationId,
-        basket_id: basket.id,
-        basket_version: basket.version,
-        ...priceRequest,
-        price_revision: pricePreview.price_revision,
+      const outcome = await completeTillSale({ flush: () => saver.flush(), create: createTillSale }, sale, {
+        locationId,
         tender,
-        ...(onStatement ? { due_date: dueDate } : {}),
-        ...(notePrinted.trim() ? { note_printed: notePrinted.trim() } : {}),
-        ...(noteInternal.trim() ? { note_internal: noteInternal.trim() } : {}),
-        ...(colleague ? { sales_staff_id: colleague.id } : {}),
-        ...(quoteId ? { quote_id: quoteId } : {}),
-        ...(pickId ? { pick_id: pickId } : {}),
-        ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
-        ...(creditOverrideActive
-          ? {
-              credit_override: true,
-              credit_override_reason: creditOverrideReason.trim(),
-            }
-          : {}),
+        dueDate,
+        priceRevision: pricePreview.price_revision,
+        salesStaffId: colleague?.id,
+        canOverrideCredit,
       });
-      setLastBuyerName(selectedCustomer?.name ?? WALK_IN_CUSTOMER_NAME);
-      setLastSale(result);
-      setCart([]);
-      setResumedSale(false);
-      setSkuId("");
-      setCustomerId("");
-      setDueDateEdit(null);
-      setPickId("");
-      setLinkedPickIds({});
-      setKitBlocks([]);
-      setHeldNote("");
-      setNotePrinted("");
-      setNoteInternal("");
-      setQuoteId("");
-      setHeldNotice(null);
-      setBasketNotice(null);
-      // The server emptied the basket with the sale.
-      reloadBasket();
-      setQty(1);
-      await loadData();
-    } catch (err) {
-      if (isBasketConflict(err)) {
-        // Expired, reserved elsewhere or changed: show the server basket and say why.
-        reloadBasket(err);
-        return;
-      }
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Sale failed.";
-      setError(message);
-      if (
-        err instanceof ApiError && err.status === 409 &&
-        err.detail && typeof err.detail === "object" &&
-        "code" in err.detail && err.detail.code === "till_price_conflict"
-      ) {
-        refreshPrices();
-      }
-      if (
-        err instanceof ApiError &&
-        err.status === 409 &&
-        isCreditBlockMessage(err.message)
-      ) {
-        setCreditBlock(err.message);
-      }
-      if (err instanceof ApiError && err.status === 409) {
-        const parsed = parseKitRequiresPick(err.detail);
-        if (parsed) {
-          setKitBlocks(parsed.kits);
-          setError(null);
-        }
+      switch (outcome.kind) {
+        case "sold":
+          setLastBuyerName(selectedCustomer?.name ?? WALK_IN_CUSTOMER_NAME);
+          setLastSale(outcome.result);
+          dispatch({ type: "reset" });
+          setSoldCount((count) => count + 1);
+          setHeldNotice(null);
+          setBasketNotice(null);
+          // The server emptied the basket with the sale.
+          reloadBasket();
+          refreshReservations();
+          focusScanField();
+          try {
+            // What a sale changes: stock, picks, the buyer's balance; SKUs as the full reload did.
+            await Promise.all([queryKeys.inventory, queryKeys.picks, queryKeys.customers, queryKeys.skus]
+              .map((queryKey) => client.invalidateQueries({ queryKey }, { throwOnError: true })));
+          } catch (failure) {
+            setError(failure instanceof Error ? failure.message : "Could not refresh the till after the sale.");
+          }
+          return;
+        case "basket_conflict":
+          // Expired, reserved elsewhere or changed: show the server basket and say why.
+          reloadBasket(outcome.error);
+          return;
+        case "kit_requires_pick":
+          edit({ kitBlocks: outcome.kits });
+          return;
+        case "price_conflict":
+          setError(outcome.message);
+          refreshPrices();
+          return;
+        case "credit_block":
+          setError(outcome.message);
+          edit({ creditBlock: outcome.message });
+          return;
+        case "error":
+          setError(outcome.message);
       }
     } finally {
       setSubmitting(false);
@@ -1314,10 +1180,8 @@ function TillWorkspace() {
       { cart, pickId, linkedPickIds, blocks: kitBlocks },
       { id: confirmed.id, skuId: kit.sku_id },
     );
-    setPickId(next.pickId);
-    setLinkedPickIds(next.linkedPickIds);
-    setKitBlocks(next.blocks);
-    setTillPicks((current) => [
+    edit({ pickId: next.pickId, linkedPickIds: next.linkedPickIds, kitBlocks: next.blocks });
+    client.setQueryData(stockQueries.tillPicks.queryKey, (current: PickDocument[] = []) => [
       confirmed,
       ...current.filter((entry) => entry.id !== confirmed.id),
     ]);
@@ -1432,7 +1296,7 @@ function TillWorkspace() {
     setPendingHeld(null);
     setPendingBlocked(false);
     setOriginalAvailable(false);
-    setResumedSale(false);
+    edit({ resumedSale: false });
     setHeldNotice(null);
     setError(null);
     reloadBasket();
@@ -1499,11 +1363,11 @@ function TillWorkspace() {
         </div>
       </div>
 
-      {error ? (
+      {error || loadError ? (
         <InlineNotification
           kind="error"
           title="Error"
-          subtitle={error}
+          subtitle={error ?? loadError?.message}
           onCloseButtonClick={() => setError(null)}
           lowContrast
         />
@@ -1578,7 +1442,7 @@ function TillWorkspace() {
           title={`Loaded from ${quoteNumbers[quoteId] ?? "a quote"}.`}
           subtitle="Completing this sale marks the quote Converted and links it to the new invoice." />
         <Button kind="ghost" size="sm" href={`/quotes/${quoteId}`}>Open quote</Button>
-        <Button kind="ghost" size="sm" onClick={() => setQuoteId("")}>Unlink quote</Button>
+        <Button kind="ghost" size="sm" onClick={() => edit({ quoteId: "" })}>Unlink quote</Button>
       </div>}
       {resumedSale && cart.length > 0 && (
         <InlineNotification kind="info" lowContrast hideCloseButton title="Resumed sale"
@@ -1626,6 +1490,7 @@ function TillWorkspace() {
         <TillLoading mobileScan={mobileScan} paymentOptions={TENDER_OPTIONS} tender={tender} />
       ) : (
         <CartEditor
+          key={soldCount}
           mode="till"
           products={skuOptions}
           cart={cart}
@@ -1633,9 +1498,9 @@ function TillWorkspace() {
           onUpdateLine={updateCartLine}
           onRemoveLine={removeCartLine}
           skuId={skuId}
-          onSkuIdChange={setSkuId}
+          onSkuIdChange={(id) => edit({ skuId: id })}
           qty={qty}
-          onQtyChange={setQty}
+          onQtyChange={(value) => edit({ qty: value })}
           customers={
             commitmentCustomer?.id === customerId &&
             !customers.some((item) => item.id === customerId)
@@ -1643,25 +1508,22 @@ function TillWorkspace() {
               : customers
           }
           customerId={customerId}
-          onCustomerChange={setCustomerId}
+          onCustomerChange={(id) => edit({ customerId: id })}
           selectedCustomer={selectedCustomer}
           onAddCustomer={() => router.push("/customers")}
           onBrowseCatalogue={() => router.push("/catalogue")}
-          priceLists={priceLists}
           preview={pricePreview}
           pricingError={pricingError}
           onRetryPricing={refreshPrices}
-          vatRateLabel={vatRateLabel}
           canDiscount={canDiscount}
-          canViewCost={canViewCost}
           colleagues={colleagues}
           colleaguesError={colleaguesError}
           salesStaffId={salesStaffId}
-          onSalesStaffChange={setSalesStaffId}
+          onSalesStaffChange={(id) => edit({ salesStaffId: id })}
           notePrinted={notePrinted}
-          onNotePrintedChange={setNotePrinted}
+          onNotePrintedChange={(note) => edit({ notePrinted: note })}
           noteInternal={noteInternal}
-          onNoteInternalChange={setNoteInternal}
+          onNoteInternalChange={(note) => edit({ noteInternal: note })}
           searchDisabled={!locationId}
           addDisabled={!cartReady || !locationId}
           qtyMax={(sku) => sku.till_no_stock_required ? undefined : availabilityFor(sku.id).addable || undefined}
@@ -1786,7 +1648,7 @@ function TillWorkspace() {
                     id="till-pick"
                     labelText="Existing till pick"
                     value={pickId}
-                    onChange={(event) => setPickId(event.target.value)}
+                    onChange={(event) => edit({ pickId: event.target.value })}
                   >
                     <SelectItem value="" text="Select pick" />
                     {confirmedPicks.map((entry) => (
@@ -1807,7 +1669,7 @@ function TillWorkspace() {
                       id="till-credit-override"
                       labelText="Override credit hold / limit"
                       checked={creditOverride}
-                      onChange={() => setCreditOverride((current) => !current)}
+                      onChange={() => edit((current) => ({ creditOverride: !current.creditOverride }))}
                     />
                     {creditOverride ? (
                       <TextInput
@@ -1815,7 +1677,7 @@ function TillWorkspace() {
                         labelText="Override reason"
                         value={creditOverrideReason}
                         onChange={(event) =>
-                          setCreditOverrideReason(event.target.value)
+                          edit({ creditOverrideReason: event.target.value })
                         }
                       />
                     ) : null}
@@ -1848,7 +1710,7 @@ function TillWorkspace() {
                       min={saleDate}
                       value={dueDate}
                       onChange={(event) =>
-                        setDueDateEdit({ customerId, value: event.target.value })
+                        edit({ dueDateEdit: { customerId, value: event.target.value } })
                       }
                       invalid={Boolean(dueDateError)}
                       invalidText={dueDateError ?? undefined}
@@ -1963,6 +1825,7 @@ function TillWorkspace() {
                         ? "Unit incl. VAT"
                         : "Unit excl. VAT"}
                     </TableHeader>
+                    <TableHeader>Discount</TableHeader>
                     <TableHeader>Ex VAT</TableHeader>
                     <TableHeader>VAT</TableHeader>
                     <TableHeader>Inc VAT</TableHeader>
@@ -1987,13 +1850,10 @@ function TillWorkspace() {
                       <TableCell>{line.qty}</TableCell>
                       <TableCell>
                         {formatZarAmount(
-                          lastSale.prices_include_vat
-                            ? formatPriceAmount(
-                                exVatToIncVat(Number(line.unit_ex_vat)),
-                              )
-                            : line.unit_ex_vat,
+                          lastSale.prices_include_vat ? line.unit_inc_vat : line.unit_ex_vat,
                         )}
                       </TableCell>
+                      <TableCell>{formatDiscount(line.discount_percent)}</TableCell>
                       <TableCell>{formatZarAmount(line.ex_vat)}</TableCell>
                       <TableCell>{formatZarAmount(line.vat_amount)}</TableCell>
                       <TableCell>{formatZarAmount(line.inc_vat)}</TableCell>
@@ -2008,7 +1868,7 @@ function TillWorkspace() {
                 Subtotal ex VAT: {formatZarAmount(lastSale.subtotal_ex_vat)}
               </p>
               <p>
-                VAT ({vatRateLabel}): {formatZarAmount(lastSale.vat_amount)}
+                VAT ({vatPercentLabel(lastSale.vat_rate)}): {formatZarAmount(lastSale.vat_amount)}
               </p>
               <p>
                 <strong>

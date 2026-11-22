@@ -139,7 +139,7 @@ class TransferService:
 
         now = datetime.datetime.utcnow()
         for line in sorted(transfer.lines, key=lambda line: (line.sku_id, line.id)):
-            stock = await self.stock_movements.apply_outgoing_qty(
+            consumed = await self.stock_movements.apply_outgoing_qty(
                 sku_id=line.sku_id,
                 location_id=from_location.id,
                 qty=line.qty_dispatched,
@@ -149,9 +149,9 @@ class TransferService:
                 bin_id=line.from_bin_id,
                 record_audit=False,
             )
-            if stock.unit_cost_zar is None:
+            if consumed.unit_cost_zar is None:
                 raise ConflictError("Source location has no unit cost for this SKU")
-            line.unit_cost_zar = stock.unit_cost_zar
+            line.unit_cost_zar = consumed.unit_cost_zar
         transfer.status = TransferStatus.IN_TRANSIT
         transfer.dispatched_at = now
         transfer.dispatched_by_user_id = user_id

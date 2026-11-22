@@ -11,7 +11,8 @@ import {
   Stack,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import {
   canMutateCatalogue,
@@ -19,8 +20,8 @@ import {
   downloadProformaPdf,
   listSuppliers,
   type Proforma,
-  type Supplier,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
@@ -48,27 +49,13 @@ function ProformasContent() {
   const { user } = useAuth();
   const canMutate = canMutateCatalogue(user);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const suppliersQuery = useQuery({ queryKey: ["suppliers"], queryFn: () => listSuppliers(), enabled: createOpen && canMutate });
+  const suppliers = suppliersQuery.data ?? [];
+  const { error, setError } = usePageError(suppliersQuery.error, "Failed to load suppliers.");
   const [form, setForm] = useState<ProformaForm>(emptyForm);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const loadSuppliers = useCallback(async () => {
-    try {
-      const data = await listSuppliers();
-      setSuppliers(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load suppliers.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (createOpen && canMutate) {
-      void loadSuppliers();
-    }
-  }, [createOpen, canMutate, loadSuppliers]);
 
   function resetForm() {
     setForm(emptyForm);

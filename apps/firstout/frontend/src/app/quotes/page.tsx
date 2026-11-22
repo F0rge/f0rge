@@ -2,7 +2,8 @@
 
 import { Button, InlineNotification, Stack, Tag } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import {
   RecordDetail,
@@ -16,11 +17,10 @@ import {
   downloadQuotePdf,
   duplicateQuote,
   formatZarAmount,
-  listSalesStaffOptions,
   type QuoteListItem,
-  type SalesStaffOption,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { QUOTE_STATES, isQuoteOpen, quoteStateInfo } from "@/lib/quote-state";
 import { workspaceIdentity } from "@/lib/record-workspace";
 
@@ -34,18 +34,10 @@ function QuotesContent() {
   const { user } = useAuth();
   const canMutate = canMutateQuotes(user);
   const canSell = canUseTill(user);
-  const [colleagues, setColleagues] = useState<SalesStaffOption[]>([]);
+  // ponytail: the filter lists active colleagues; past ones still show in the column.
+  const colleagues = useQuery(referenceQueries.salesStaffOptions).data ?? [];
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    // ponytail: the filter lists active colleagues; past ones still show in the column.
-    listSalesStaffOptions()
-      .then((rows) => { if (live) setColleagues(rows); })
-      .catch(() => undefined);
-    return () => { live = false; };
-  }, []);
 
   async function run(action: () => Promise<void>, failure: string) {
     setBusy(true);

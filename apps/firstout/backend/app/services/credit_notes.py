@@ -27,8 +27,13 @@ from app.services.chart_of_accounts import (
 )
 from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
 from app.services.sales_staff import SalesStaffService
-from app.services.pricing import format_pdf_unit, pdf_unit_basis_note, pdf_unit_header
-from app.services.books_periods import assert_date_postable
+from app.services.pricing import (
+    customer_price_warning,
+    format_pdf_discount,
+    format_pdf_unit,
+    pdf_unit_basis_note,
+    pdf_unit_header,
+)
 from app.services.settings import SettingsService
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -72,8 +77,6 @@ class CreditNoteService:
         if existing is not None:
             raise ConflictError("This invoice has already been credited")
 
-        await assert_date_postable(self.db, datetime.date.today())
-
         async with unit_of_work(self.db):
             credit_note = await self._create_and_post(
                 invoice=invoice,
@@ -98,17 +101,21 @@ class CreditNoteService:
         lines = []
         for line in invoice.lines:
             description = line.description
-            if line.price_warning:
-                description = f"{description} — {line.price_warning}"
+            printed_warning = customer_price_warning(line.price_warning)
+            if printed_warning:
+                description = f"{description} — {printed_warning}"
             sku = await self.sku_crud.get_by_id(line.sku_id) if line.sku_id else None
             lines.append(
                 DocumentLine(
                     description=description,
                     qty=str(line.qty),
-                    unit=format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
+                    unit=format_pdf_unit(
+                        line.unit_ex_vat, invoice.prices_include_vat, credit_note.vat_rate
+                    ),
                     ex_vat=f"{line.ex_vat:.2f}",
                     vat=f"{line.vat_amount:.2f}",
                     inc_vat=f"{line.inc_vat:.2f}",
+                    discount=format_pdf_discount(line.discount_percent),
                     sku_ref=sku.our_ref if sku is not None else None,
                 )
             )
@@ -130,6 +137,7 @@ class CreditNoteService:
             lines=lines,
             subtotal_ex_vat=f"{credit_note.subtotal_ex_vat:.2f}",
             vat_amount=f"{credit_note.vat_amount:.2f}",
+            vat_rate=credit_note.vat_rate,
             total=f"{credit_note.total_inc_vat:.2f}",
             unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
             unit_header=pdf_unit_header(invoice.prices_include_vat),
@@ -156,7 +164,6 @@ class CreditNoteService:
         sales_splits: list[tuple[Optional[uuid.UUID], Decimal]],
     ) -> CreditNote:
         """Create and post a credit note inside the caller's unit_of_work."""
-        await assert_date_postable(self.db, datetime.date.today())
         return await self._create_and_post(
             invoice=invoice,
             reason=reason,
@@ -184,6 +191,8 @@ class CreditNoteService:
             subtotal_ex_vat=subtotal_ex_vat,
             vat_amount=vat_amount,
             total_inc_vat=total_inc_vat,
+            # A credit note reverses VAT at the invoice's rate, never today's (ADR 0003).
+            vat_rate=invoice.vat_rate,
         )
         await self.crud.add_and_flush(credit_note)
         sales_parts: list[tuple[str, Decimal, Decimal]] = []
@@ -226,6 +235,7 @@ class CreditNoteService:
             subtotal_ex_vat=credit_note.subtotal_ex_vat,
             vat_amount=credit_note.vat_amount,
             total_inc_vat=credit_note.total_inc_vat,
+            vat_rate=credit_note.vat_rate,
             created_at=credit_note.created_at,
             updated_at=credit_note.updated_at,
         )

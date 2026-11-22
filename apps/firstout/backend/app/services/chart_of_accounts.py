@@ -12,6 +12,7 @@ from app.crud.category_account_map import CategoryAccountMapCRUD
 from app.models.account import Account, AccountType, default_tax_treatment
 from app.models.category_account_map import CategoryAccountMap
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
+from app.services.books_periods import assert_date_postable
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -203,7 +204,13 @@ class LedgerPostingService:
         entry_date: Optional[datetime.date] = None,
         source: Optional[str] = None,
     ) -> JournalEntry:
-        """Post a balanced journal. Each line: (account_code, debit_zar, credit_zar)."""
+        """Post a balanced journal. Each line: (account_code, debit_zar, credit_zar).
+
+        The one seam for system postings: it refuses an unbalanced entry
+        (``ValidationError``) and an entry dated in a locked books period
+        (``ConflictError``, HTTP 409), before writing anything. Callers stage inside
+        their ``unit_of_work``, so a refusal rolls back the whole document.
+        """
         total_debit = Decimal(0)
         total_credit = Decimal(0)
         for _, debit, credit in lines:
@@ -213,12 +220,15 @@ class LedgerPostingService:
         if total_debit != total_credit:
             raise ValidationError("Journal entry must balance")
 
+        entry_date = entry_date or datetime.date.today()
+        await assert_date_postable(self.db, entry_date)
+
         entry = JournalEntry(
             document_type=document_type,
             document_id=document_id,
             memo=memo,
             status=JournalStatus.POSTED,
-            entry_date=entry_date or datetime.date.today(),
+            entry_date=entry_date,
             source=source,
         )
         await self.account_crud.add_and_flush(entry)

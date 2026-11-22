@@ -143,6 +143,10 @@ office is down. When Firstout returns, reconcile provider, order, stock, and
 capacity on this same exception queue before reopening. Do not create a
 parallel queue.
 
+If Firstout answers a handoff with 503 because the payment date falls in a
+locked books period, nothing was recorded and the handoff keeps retrying:
+reopen that period in Firstout and the next retry records the order.
+
 ## Restart and replay
 
 | Event | Safe result |

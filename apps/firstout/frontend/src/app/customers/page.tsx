@@ -13,6 +13,7 @@ import {
   Tag,
 } from "@carbon/react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
 import {
@@ -52,6 +53,7 @@ import {
   type CustomerDuplicateMatch,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { queryKeys } from "@/lib/queries";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import {
   formatIsoDate,
@@ -80,7 +82,13 @@ function CustomersScreen() {
   const { user } = useAuth();
   const allowed = canMutateCustomers(user);
   const canEditCredit = canManageCustomerCredit(user);
-  const [refreshKey, refresh] = useState(0);
+  const client = useQueryClient();
+  const [refreshKey, setRefreshKey] = useState(0);
+  // Editors cache customers; a write here refreshes them too.
+  const refresh = () => {
+    setRefreshKey((value) => value + 1);
+    void client.invalidateQueries({ queryKey: queryKeys.customers });
+  };
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CustomerCrm | null>(null);
   const [form, setForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
@@ -118,7 +126,7 @@ function CustomersScreen() {
         const previousClassification = editing.price_classification;
         const updated = await updateCustomer(editing.id, payload);
         close();
-        refresh((value) => value + 1);
+        refresh();
         if (
           previousClassification !== updated.price_classification &&
           (updated.draft_quote_count ?? 0) +
@@ -143,7 +151,7 @@ function CustomersScreen() {
         await createCustomer(payload);
         close();
         setForm({ ...emptyCustomerForm });
-        refresh((value) => value + 1);
+        refresh();
       }
     } catch (err) {
       if (!editing && err instanceof ApiError && err.status === 409) {
@@ -177,7 +185,7 @@ function CustomersScreen() {
     try {
       await repriceCustomerDrafts(reprice.id);
       setReprice(null);
-      refresh((value) => value + 1);
+      refresh();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not reprice drafts.",

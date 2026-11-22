@@ -73,9 +73,31 @@ def shows_prices_including_vat(customer: Optional[Customer]) -> bool:
     return classification_of(customer) == RETAIL_CLASSIFICATION
 
 
-def format_pdf_unit(unit_ex: Decimal, including_vat: bool) -> str:
+def format_pdf_unit(unit_ex: Decimal, including_vat: bool, vat_rate: Decimal) -> str:
     # The basis lives in the column header (pdf_unit_header), as on the invoice screen.
-    return f"{ex_to_inc(unit_ex) if including_vat else unit_ex:.2f}"
+    # ``vat_rate`` is the document's stored rate.
+    return f"{ex_to_inc(unit_ex, vat_rate) if including_vat else unit_ex:.2f}"
+
+
+def format_pdf_discount(discount_percent: Optional[Decimal]) -> Optional[str]:
+    # None is a line stored before line discounts were kept: its unit is already net.
+    return f"{discount_percent:.2f}%" if discount_percent else None
+
+
+def price_list_missing_note(list_name: str, our_ref: str) -> str:
+    """Staff-only: the customer's price list has no entry for this SKU."""
+    return f"No price in {list_name} for {our_ref}."
+
+
+_PRICE_LIST_MISSING_NOTE = re.compile(r"^No price in .+? for \S+\.\s*")
+
+
+def customer_price_warning(warning: Optional[str]) -> Optional[str]:
+    """A line's price warning as a customer may see it (PDF, portal): without the
+    staff-only price-list note, which names an internal list."""
+    if warning is None:
+        return None
+    return _PRICE_LIST_MISSING_NOTE.sub("", warning, count=1).strip() or None
 
 
 def pdf_unit_header(including_vat: bool) -> str:

@@ -8,20 +8,18 @@ import {
   TextInput,
   Toggle,
 } from "@carbon/react";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
-import { workspaceIdentity } from "@/lib/record-workspace";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   PRICE_CLASSIFICATIONS,
   apiFetch,
-  listPriceLists,
   type CreateCustomerPayload,
   type CustomerCrm,
   type PriceClassification,
   type PriceList,
 } from "@/lib/api";
-import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
+import { queryKeys, referenceQueries } from "@/lib/queries";
+import { isCin7GeneratedPriceList } from "@/lib/price-lists";
 
 export const emptyCustomerForm: CreateCustomerPayload = {
   name: "",
@@ -142,45 +140,19 @@ export function CustomerFormFields({
   disabled?: boolean;
   showCreditFields?: boolean;
 }) {
-  const { user } = useAuth();
-  const identity = workspaceIdentity(user);
-  const key = `${identity}:${form.price_list_id ?? ""}`;
-  const [listResult, setListResult] = useState<{
-    key: string;
-    items: PriceList[];
-  } | null>(null);
-  const priceLists = listResult?.key === key ? listResult.items : [];
-
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all([
-      listPriceLists(),
-      form.price_list_id
-        ? apiFetch<PriceList>(`/price-lists/${form.price_list_id}`).catch(
-            () => null,
-          )
-        : Promise.resolve(null),
-    ])
-      .then(([lists, assigned]) => {
-        if (!cancelled) {
-          setListResult({
-            key,
-            items:
-              assigned && !lists.some((entry) => entry.id === assigned.id)
-                ? [...lists, assigned]
-                : lists,
-          });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setListResult({ key, items: [] });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [key, form.price_list_id]);
+  const lists = useQuery(referenceQueries.priceLists);
+  // The assigned list may be archived and so missing from the list above.
+  const assigned = useQuery({
+    queryKey: [...queryKeys.priceLists, { id: form.price_list_id }],
+    queryFn: () => apiFetch<PriceList>(`/price-lists/${form.price_list_id}`).catch(() => null),
+    enabled: Boolean(form.price_list_id),
+  });
+  const extra = assigned.data;
+  const priceLists = !lists.data || (form.price_list_id && assigned.isPending)
+    ? []
+    : extra && !lists.data.some((entry) => entry.id === extra.id)
+      ? [...lists.data, extra]
+      : lists.data;
 
   const creditLimitValue =
     form.credit_limit === "" || form.credit_limit == null

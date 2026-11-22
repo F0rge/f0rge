@@ -558,7 +558,10 @@ async def test_till_on_hold_customer_conflicts(
         },
     )
     assert sale.status_code == 409
-    assert sale.json()["detail"] == "Customer is on hold"
+    assert sale.json()["detail"] == {
+        "code": "customer_credit_blocked",
+        "message": "Customer is on hold",
+    }
 
 
 async def test_till_over_credit_limit_conflicts(
@@ -589,7 +592,10 @@ async def test_till_over_credit_limit_conflicts(
         },
     )
     assert sale.status_code == 409
-    assert sale.json()["detail"] == "Customer exceeds credit limit"
+    assert sale.json()["detail"] == {
+        "code": "customer_credit_blocked",
+        "message": "Customer exceeds credit limit",
+    }
 
 
 async def test_till_credit_override_owner_records_books_note(

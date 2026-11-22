@@ -6,13 +6,14 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@carbon/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import metrics from "@/components/staff-metrics.module.css";
 import {
-  ApiError, can, getCommissionReport, listSalesStaffOptions, updateInvoiceSalesStaff,
-  type CommissionReport, type CommissionRow, type SalesStaffOption,
+  ApiError, can, getCommissionReport, updateInvoiceSalesStaff, type CommissionRow,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { downloadCsv } from "@/lib/csv";
 import { COMMISSION_CSV_HEADERS, commissionCsvRows, recentMonths, zar } from "@/lib/sales-staff";
 
@@ -23,28 +24,15 @@ function CommissionScreen({ canAssign }: { canAssign: boolean }) {
   const [months] = useState(() => recentMonths());
   const [month, setMonth] = useState(months[0].value);
   // Keyed by month so a month change shows loading until its own report arrives.
-  const [result, setResult] = useState<{ month: string; report?: CommissionReport; error?: string } | null>(null);
+  const reportQuery = useQuery({ queryKey: ["commission", month], queryFn: () => getCommissionReport(month) });
   const [openKey, setOpenKey] = useState<string | null>(null);
-  const [colleagues, setColleagues] = useState<SalesStaffOption[]>([]);
+  const colleagues = useQuery({ ...referenceQueries.salesStaffOptions, enabled: canAssign }).data ?? [];
   const [notice, setNotice] = useState("");
   const [assignError, setAssignError] = useState("");
 
-  const [reloads, setReloads] = useState(0);
-  const current = result?.month === month ? result : null;
-  const report = current?.report ?? null;
-  const error = current?.error ?? "";
-
-  useEffect(() => {
-    let live = true;
-    getCommissionReport(month).then(
-      (loaded) => { if (live) setResult({ month, report: loaded }); },
-      (err: unknown) => { if (live) setResult({ month, error: message(err, "Could not load the commission report.") }); },
-    );
-    return () => { live = false; };
-  }, [month, reloads]);
-  useEffect(() => {
-    if (canAssign) listSalesStaffOptions().then(setColleagues).catch(() => setColleagues([]));
-  }, [canAssign]);
+  const report = reportQuery.data ?? null;
+  const error = reportQuery.error ? message(reportQuery.error, "Could not load the commission report.") : "";
+  const reload = () => void reportQuery.refetch();
 
   const label = months.find((item) => item.value === month)?.label ?? month;
   const all = report ? [...report.rows, report.unattributed] : [];
@@ -56,7 +44,7 @@ function CommissionScreen({ canAssign }: { canAssign: boolean }) {
     try {
       await updateInvoiceSalesStaff(invoiceId, staffId);
       setNotice(`${invoiceNumber} now counts for ${colleagues.find((item) => item.id === staffId)?.name ?? "the colleague"}.`);
-      setReloads((count) => count + 1);
+      reload();
     } catch (err) {
       setAssignError(message(err, "Could not assign the invoice."));
     }
@@ -87,7 +75,7 @@ function CommissionScreen({ canAssign }: { canAssign: boolean }) {
       {error ? (
         <Stack gap={3}>
           <InlineNotification lowContrast kind="error" title="Commission report unavailable" subtitle={error} hideCloseButton />
-          <div><Button kind="tertiary" size="sm" onClick={() => setReloads((count) => count + 1)}>Retry</Button></div>
+          <div><Button kind="tertiary" size="sm" onClick={() => reload()}>Retry</Button></div>
         </Stack>
       ) : !report ? (
         <DataTableSkeleton aria-label="Loading commission" columnCount={8} rowCount={3} showHeader={false} showToolbar={false} />

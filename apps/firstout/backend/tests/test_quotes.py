@@ -280,14 +280,20 @@ async def test_only_owner_can_change_quote_unit_price(
         json={"customer_id": customer_id, "lines": [{**line, "unit_ex_vat": "750.00"}]},
     )
     assert denied.status_code == 403
-    assert denied.json()["detail"] == "Only the owner can change the unit price for QT-OWNER"
+    assert (
+        denied.json()["detail"]
+        == "Price override permission (sales.price_override) required for QT-OWNER"
+    )
 
     till_edit = await async_client.patch(
         f"/api/v1/quotes/{quote_id}",
         json={"lines": [{**line, "unit_ex_vat": "700.00"}]},
     )
     assert till_edit.status_code == 403
-    assert till_edit.json()["detail"] == "Only the owner can change the unit price for QT-OWNER"
+    assert (
+        till_edit.json()["detail"]
+        == "Price override permission (sales.price_override) required for QT-OWNER"
+    )
 
     till_keep = await async_client.patch(
         f"/api/v1/quotes/{quote_id}",
@@ -340,7 +346,8 @@ async def test_only_owner_can_change_quote_unit_price(
     )
     assert warehouse_price.status_code == 403
     assert (
-        warehouse_price.json()["detail"] == "Only the owner can change the unit price for QT-OWNER"
+        warehouse_price.json()["detail"]
+        == "Price override permission (sales.price_override) required for QT-OWNER"
     )
     await _relogin_owner(owner_client)
 
@@ -398,7 +405,10 @@ async def test_quote_line_discount_by_role(async_client, owner_client, async_db)
         },
     )
     assert till_price.status_code == 403
-    assert till_price.json()["detail"] == "Only the owner can change the unit price for QT-DISC"
+    assert (
+        till_price.json()["detail"]
+        == "Price override permission (sales.price_override) required for QT-DISC"
+    )
     till_edit = await async_client.patch(
         f"/api/v1/quotes/{quote_id}",
         json={"lines": [{**line, "discount_percent": "5"}]},
@@ -424,7 +434,8 @@ async def test_quote_line_discount_by_role(async_client, owner_client, async_db)
     )
     assert warehouse_price.status_code == 403
     assert (
-        warehouse_price.json()["detail"] == "Only the owner can change the unit price for QT-DISC"
+        warehouse_price.json()["detail"]
+        == "Price override permission (sales.price_override) required for QT-DISC"
     )
 
     for slug, email, password in (
@@ -439,7 +450,7 @@ async def test_quote_line_discount_by_role(async_client, owner_client, async_db)
         )
         assert denied.status_code == 403
         assert denied.json()["detail"] == (
-            "Only the owner, till, or warehouse can change the discount for QT-DISC"
+            "Discount permission (till.discount) required for QT-DISC"
         )
         plain = await async_client.post(
             "/api/v1/quotes",
@@ -448,19 +459,24 @@ async def test_quote_line_discount_by_role(async_client, owner_client, async_db)
         assert plain.status_code == 201, plain.text
         assert Decimal(plain.json()["lines"][0]["discount_percent"]) == Decimal("0.00")
         assert Decimal(plain.json()["lines"][0]["unit_ex_vat"]) == Decimal("1000.00")
-        wiped = await async_client.patch(
+        # Keeping the saved discount needs no authority; giving a new one does.
+        kept = await async_client.patch(
             f"/api/v1/quotes/{quote_id}",
-            json={"lines": [{**line, "discount_percent": "0"}]},
+            json={"lines": [{**line, "discount_percent": "5"}]},
         )
-        assert wiped.status_code == 403
-        assert wiped.json()["detail"] == (
-            "Only the owner, till, or warehouse can change the discount for QT-DISC"
+        assert kept.status_code == 200, kept.text
+        raised = await async_client.patch(
+            f"/api/v1/quotes/{quote_id}",
+            json={"lines": [{**line, "discount_percent": "7"}]},
         )
+        assert raised.status_code == 403
 
     await _relogin_owner(owner_client)
     accepted = await owner_client.post(f"/api/v1/quotes/{quote_id}/accept", json={})
     assert accepted.status_code == 200, accepted.text
-    assert Decimal(accepted.json()["lines"][0]["unit_ex_vat"]) == Decimal("712.50")
+    # The order keeps the list unit and the discount, not a discounted unit (ADR 0001).
+    assert Decimal(accepted.json()["lines"][0]["unit_ex_vat"]) == Decimal("750.00")
+    assert Decimal(accepted.json()["lines"][0]["discount_percent"]) == Decimal("5.00")
     assert Decimal(accepted.json()["subtotal_ex_vat"]) == Decimal("712.50")
     stored = await owner_client.get(f"/api/v1/quotes/{quote_id}")
     assert Decimal(stored.json()["lines"][0]["unit_ex_vat"]) == Decimal("750.00")

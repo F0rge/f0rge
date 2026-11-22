@@ -15,6 +15,7 @@ import {
   TextInput,
 } from "@carbon/react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -23,7 +24,6 @@ import {
   createIntakeSku,
   createSupplier,
   extractProforma,
-  listSkus,
   listSuppliers,
   suggestIntakeSku,
   type IntakeCharge,
@@ -32,6 +32,7 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { queryKeys, referenceQueries } from "@/lib/queries";
 
 type DraftLine = {
   supplier_code: string;
@@ -44,6 +45,8 @@ type DraftLine = {
   confidence: number | null;
   flags: string[];
 };
+
+const NO_SKUS: Sku[] = [];
 
 type SkuDraft = {
   our_ref: string;
@@ -104,8 +107,10 @@ export default function ReadProformaPage() {
   const [supplierVat, setSupplierVat] = useState("");
   const [supplierAddress, setSupplierAddress] = useState("");
   const [hint, setHint] = useState("");
-  const [catalogue, setCatalogue] = useState<Sku[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const client = useQueryClient();
+  // A failed load leaves the pickers empty, as before.
+  const catalogue = useQuery({ ...referenceQueries.skus, enabled: canMutate }).data ?? NO_SKUS;
+  const suppliers = useQuery({ queryKey: ["suppliers"], queryFn: () => listSuppliers(), enabled: canMutate }).data ?? [];
   const [skuOpen, setSkuOpen] = useState(false);
   const [skuLine, setSkuLine] = useState<number | null>(null);
   const [skuDraft, setSkuDraft] = useState<SkuDraft>(emptySku);
@@ -119,18 +124,6 @@ export default function ReadProformaPage() {
       }
     };
   }, [previewUrl]);
-
-  useEffect(() => {
-    if (!canMutate) {
-      return;
-    }
-    listSkus()
-      .then(setCatalogue)
-      .catch(() => setCatalogue([]));
-    listSuppliers()
-      .then(setSuppliers)
-      .catch(() => setSuppliers([]));
-  }, [canMutate]);
 
   const skuItems = useMemo(
     () =>
@@ -196,7 +189,8 @@ export default function ReadProformaPage() {
         vat_number: supplierVat.trim() || null,
         address: supplierAddress.trim() || null,
       });
-      setSuppliers((current) => [...current, created]);
+      client.setQueryData<Supplier[]>(["suppliers"], (current = []) => [...current, created]);
+      void client.invalidateQueries({ queryKey: ["suppliers"] });
       setSupplierId(created.id);
       setCreateNewSupplier(false);
     } catch (err) {
@@ -272,7 +266,8 @@ export default function ReadProformaPage() {
         match_reason: `New SKU ${created.sku.our_ref}.`,
         confidence: 1,
       });
-      setCatalogue((current) => [...current, created.sku]);
+      client.setQueryData<Sku[]>(queryKeys.skus, (current = []) => [...current, created.sku]);
+      void client.invalidateQueries({ queryKey: queryKeys.skus });
       setSkuOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create that SKU.");

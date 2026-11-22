@@ -19,7 +19,8 @@ import {
   TextArea,
 } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import {
   canMutateBooks,
@@ -28,9 +29,10 @@ import {
   formatZarAmount,
   listCreditNotes,
   listInvoices,
-  type CreditNote,
   type InvoiceListItem,
 } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
@@ -73,80 +75,50 @@ export default function CreditNotesPage() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
-  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
-  const [creditedInvoiceIds, setCreditedInvoiceIds] = useState<Set<string>>(() => new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const client = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [invoiceId, setInvoiceId] = useState("");
   const [invoiceQuery, setInvoiceQuery] = useState("");
-  const [debouncedInvoiceQuery, setDebouncedInvoiceQuery] = useState("");
+  const debouncedInvoiceQuery = useDebouncedValue(invoiceQuery);
   const [reason, setReason] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
 
-  const loadCreditNotes = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listCreditNotes({
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      });
-      setCreditNotes(data.items);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load credit notes.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize]);
+  const creditNotesQuery = useQuery({
+    queryKey: ["credit-notes", { page, pageSize }],
+    queryFn: () => listCreditNotes({ limit: pageSize, offset: (page - 1) * pageSize }),
+    enabled: Boolean(user),
+    placeholderData: keepPreviousData,
+  });
+  const creditNotes = useMemo(() => creditNotesQuery.data?.items ?? [], [creditNotesQuery.data]);
+  const total = creditNotesQuery.data?.total ?? 0;
+  const loading = creditNotesQuery.isPending || creditNotesQuery.isFetching;
 
+  const optionsQuery = useQuery({
+    queryKey: ["credit-notes", "invoice-options", debouncedInvoiceQuery],
+    queryFn: async () => {
+      const [invoicePage, creditPage] = await Promise.all([
+        listInvoices({ limit: 25, q: debouncedInvoiceQuery || undefined }),
+        listCreditNotes({ limit: 100 }),
+      ]);
+      return {
+        creditedInvoiceIds: new Set(creditPage.items.map((entry) => entry.invoice_id)),
+        invoiceOptions: invoicePage.items
+          .filter((invoice) => !creditPage.items.some((cn) => cn.invoice_id === invoice.id))
+          .map(invoiceToOption),
+      };
+    },
+    enabled: createOpen && canMutate,
+    placeholderData: keepPreviousData,
+  });
+  const invoiceOptions = useMemo(() => optionsQuery.data?.invoiceOptions ?? [], [optionsQuery.data]);
+  const creditedInvoiceIds = useMemo(() => optionsQuery.data?.creditedInvoiceIds ?? new Set<string>(), [optionsQuery.data]);
 
-  useEffect(() => {
-    if (user) {
-      void loadCreditNotes();
-    }
-  }, [user, loadCreditNotes]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedInvoiceQuery(invoiceQuery), 300);
-    return () => clearTimeout(timer);
-  }, [invoiceQuery]);
-
-  useEffect(() => {
-    if (!createOpen || !canMutate) {
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [invoicePage, creditPage] = await Promise.all([
-          listInvoices({ limit: 25, q: debouncedInvoiceQuery || undefined }),
-          listCreditNotes({ limit: 100 }),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setCreditedInvoiceIds(new Set(creditPage.items.map((entry) => entry.invoice_id)));
-        setInvoiceOptions(
-          invoicePage.items
-            .filter((invoice) => !creditPage.items.some((cn) => cn.invoice_id === invoice.id))
-            .map(invoiceToOption),
-        );
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load invoices.");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [createOpen, canMutate, debouncedInvoiceQuery]);
+  const { error, setError } = usePageError(
+    creditNotesQuery.error ?? optionsQuery.error,
+    creditNotesQuery.error ? "Failed to load credit notes." : "Failed to load invoices.",
+  );
 
   const availableInvoices = useMemo(
     () => invoiceOptions.filter((option) => !creditedInvoiceIds.has(option.id)),
@@ -179,7 +151,7 @@ export default function CreditNotesPage() {
       });
       setCreateOpen(false);
       resetCreateForm();
-      await loadCreditNotes();
+      await client.invalidateQueries({ queryKey: ["credit-notes"] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to issue credit note.");
     } finally {

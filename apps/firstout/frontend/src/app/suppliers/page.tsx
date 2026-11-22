@@ -11,7 +11,8 @@ import {
   TextArea,
   TextInput,
 } from "@carbon/react";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   RecordDetail,
   RecordDetails,
@@ -28,7 +29,6 @@ import {
   canMutateCatalogue,
   createSupplier,
   getSupplierLeadTimes,
-  type SupplierLeadTimeRow,
   type CreateSupplierPayload,
   type Supplier,
 } from "@/lib/api";
@@ -50,34 +50,17 @@ export default function SuppliersPage() {
 function SuppliersScreen() {
   const { user } = useAuth();
   const allowed = canMutateCatalogue(user);
-  const identity = workspaceIdentity(user);
-  const [leadResult, setLeadResult] = useState<{
-    identity: string;
-    rows: SupplierLeadTimeRow[];
-    failed?: boolean;
-  } | null>(null);
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    getSupplierLeadTimes()
-      .then((report) => {
-        if (!cancelled) setLeadResult({ identity, rows: report.rows });
-      })
-      .catch(() => {
-        if (!cancelled) setLeadResult({ identity, rows: [], failed: true });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [identity, user]);
-  const leadTimes = supplierLeadTimeById(
-    leadResult?.identity === identity ? leadResult.rows : [],
-  );
+  const lead = useQuery({
+    queryKey: ["supplier-lead-times"],
+    queryFn: getSupplierLeadTimes,
+    enabled: Boolean(user),
+  });
+  const leadTimes = supplierLeadTimeById(lead.data?.rows ?? []);
   const observedLead = (id: string) =>
-    leadResult?.identity !== identity
-      ? "Loading…"
-      : leadResult.failed
-        ? "Unavailable"
+    lead.isError
+      ? "Unavailable"
+      : !lead.data
+        ? "Loading…"
         : formatObservedMedianLine(leadTimes.get(id));
   const [refreshKey, refresh] = useState(0);
   const [open, setOpen] = useState(false);

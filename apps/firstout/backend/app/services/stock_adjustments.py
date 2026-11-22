@@ -200,7 +200,7 @@ class StockAdjustmentService:
                     )
                     increase_total += amount
                 else:
-                    await self.stock_movements.apply_outgoing_qty(
+                    taken = await self.stock_movements.apply_outgoing_qty(
                         sku_id=line.sku_id,
                         location_id=adjustment.location_id,
                         qty=-line.qty_delta,
@@ -208,6 +208,7 @@ class StockAdjustmentService:
                         source=UnitCostAuditSource.ADJUSTMENT,
                         note=note,
                     )
+                    amount = taken.total_zar
                     if adjustment.reason == StockAdjustmentReason.COUNT_FIX:
                         expense_code = await self.category_posting.count_var_code_for_sku(line.sku)
                     else:

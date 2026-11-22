@@ -26,6 +26,13 @@ class LaybyCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class LaybyPreviewRequest(BaseModel):
+    """Price a layby cart exactly as creating it would, without saving."""
+
+    customer_id: uuid.UUID
+    lines: list[LaybyLineCreate] = Field(min_length=1)
+
+
 class LaybyPaymentCreate(BaseModel):
     amount: Decimal = Field(gt=0)
     tender: Literal["cash", "card"]
@@ -91,6 +98,8 @@ class LaybyResponse(BaseModel):
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal
+    # The rate the amounts use (0.15 is 15%), stored with the document (ADR 0003).
+    vat_rate: Decimal
     amount_paid: Decimal
     balance: Decimal
     notes: Optional[str]

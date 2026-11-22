@@ -3,6 +3,7 @@
 ## Contexts
 
 - [Delivery](./.github/CONTEXT.md): how a change on `main` becomes a running App
+- [Firstout](./apps/firstout/CONTEXT.md): how the furniture back office prices, taxes and records a sale
 
 ## Relationships
 

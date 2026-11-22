@@ -1,5 +1,6 @@
 import type { Quote, QuoteState } from "./api";
-import { localIsoDate, statementDueDate } from "./till-statement";
+import { localIsoDate } from "./dates";
+import { statementDueDate } from "./till-statement";
 
 export const QUOTE_VALID_DAYS = 14;
 

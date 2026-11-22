@@ -2,6 +2,8 @@
 
 # Firstout — Agent Instructions
 
+Firstout's own decisions are in [`docs/adr/`](docs/adr/) and its vocabulary in [`CONTEXT.md`](CONTEXT.md); they are canonical for this app alongside the repo-wide register.
+
 Gauteng furniture retailer back office (stock, books, till). Sibling app next to Marrow. **Never** nest this under `apps/marrow/`. **Never** a new repo.
 
 Use the repository [agent guide](../../docs/agents/README.md) and [shared protocol](../../docs/agents/protocol.md). From the repo root, run `node scripts/agents/agents.mjs route <repo-relative-path...>` for the primary and reviewers. The [manifest](../../docs/agents/manifest.json) owns routing, including model/migration, server-contract, test-harness and runtime-infrastructure exceptions.
@@ -75,17 +77,17 @@ For local authentication, copy `apps/firstout/backend/.env.example` to `.env` an
 
 Authorisation is a **permission catalog**, not role-tuple checks. `users.role` is a string slug matching `roles.slug`. Five built-in roles are **presets**. Owner is immutable (`is_system`, `is_owner_preset`); `has_permission` short-circuits for owner. Custom roles are named bundles (`POST /api/v1/roles`). Clerk establishes identity; the local permission catalog remains authoritative.
 
-**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `books.mutate`, `books.journals`.
+**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `sales.price_override`, `books.mutate`, `books.journals`.
 
 | Preset | Keys |
 |--------|------|
 | **owner** | all catalog keys; cannot strip; cannot demote last owner |
 | **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view` |
-| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.quotes`, `sales.deliveries` (no `stock.cost.view`, no till). `sales.quotes` also allows mark-sent, accept, cancel, and hold stock. |
+| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.quotes`, `sales.deliveries`, `till.discount` (no `stock.cost.view`, no `till.sell`). `sales.quotes` also allows mark-sent, accept, cancel, and hold stock. |
 | **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers` (no `stock.cost.view`) |
 | **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view` (no `till.sell`) |
 
-`GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Any till line `discount_percent > 0` requires `till.discount`.
+`GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Every sale document prices through Sale line pricing (`services/sale_line_pricing.py`, [ADR 0001](docs/adr/0001-one-price-rule-for-sale-documents.md)). A new or changed line discount on any of them needs `till.discount`, capped by `max_till_discount_percent` unless the user has `users.manage` (409 otherwise); a unit price other than the resolved one needs `sales.price_override`, held only by the owner preset ([ADR 0002](docs/adr/0002-discount-and-price-override-authority.md)).
 
 Reads (list/get/PDF/reports) stay **any authenticated** unless noted. Mutate keys below replace the old owner\|warehouse\|… matrices.
 
@@ -252,7 +254,7 @@ Extends the existing `customers` table (no second customer entity). Books invoic
 
 **List filters** (AND): `GET /customers?overdue=&active_layby=&on_hold=` — `overdue` = `overdue_invoices_count > 0`, `active_layby` = `active_laybys_count > 0`.
 
-**Till / books credit gate:** named customer `on_hold` → 409 `"Customer is on hold"`; `credit_limit` set and `open_invoices_zar + sale/invoice total_inc_vat > credit_limit` → 409 `"Customer exceeds credit limit"`. Walk-in is skipped. Override keys on till (and books invoice create): `credit_override` + non-empty `credit_override_reason`. Override allowed only with `users.manage` OR `po.raise` (403 otherwise; 400 if override without reason). Audit on the invoice `books_events` CREATED row: `note` = `credit override: {reason}` (no new books action enum).
+**Till / books credit gate:** named customer `on_hold`, or `credit_limit` set and `open_invoices_zar + sale/invoice total_inc_vat > credit_limit` → 409 `{"code": "customer_credit_blocked", "message": "Customer is on hold" | "Customer exceeds credit limit"}` on till sales and books invoice create. Walk-in is skipped. Override keys on till (and books invoice create): `credit_override` + non-empty `credit_override_reason`. Override allowed only with `users.manage` OR `po.raise` (403 otherwise; 400 if override without reason). Audit on the invoice `books_events` CREATED row: `note` = `credit override: {reason}` (no new books action enum).
 
 | Action | Permission |
 |--------|------------|

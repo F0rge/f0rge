@@ -32,6 +32,7 @@ import {
 } from "@carbon/react";
 import { Barcode } from "@carbon/icons-react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
 import { WorkspaceBulkDialog } from "@/components/record-workspace/workspace-bulk-dialog";
@@ -56,6 +57,7 @@ import {
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { queryKeys } from "@/lib/queries";
 import { isValidCartonCount, skuCartonCount } from "@/lib/carton-helpers";
 import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
 import { canToggleShopVisibility, SHOP_HIDDEN_HELP, setSkuShopHidden } from "@/lib/shop-visibility";
@@ -133,6 +135,13 @@ export default function SkuDetailPage() {
   const [lifecycleAction, setLifecycleAction] = useState<"archive" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const client = useQueryClient();
+  // Editors elsewhere price against the shared SKU list; a write here makes it stale.
+  const skusChanged = () => {
+    void client.invalidateQueries({ queryKey: queryKeys.skus });
+    // The price editor's cost audit is keyed on the SKU id alone.
+    void client.invalidateQueries({ queryKey: ["sku-cost-audit"] });
+  };
 
   const loadSku = useCallback(async () => {
     setLoading(true);
@@ -184,6 +193,7 @@ export default function SkuDetailPage() {
       };
       const updated = await updateSku(sku.id, payload);
       setSku(updated);
+      skusChanged();
       setIdentityForm(identityFormFromSku(updated));
       setSuccess("SKU identity saved.");
     } catch (err) {
@@ -206,6 +216,7 @@ export default function SkuDetailPage() {
     setSuccess(null);
     try {
       setSku(await setSkuShopHidden(sku.id, hidden));
+      skusChanged();
       setSuccess(hidden ? "Hidden from the shop." : "No longer hidden from the shop.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update shop visibility.");
@@ -224,6 +235,7 @@ export default function SkuDetailPage() {
     try {
       const updated = await uploadSkuPhoto(sku.id, photoFile);
       setSku(updated);
+      skusChanged();
       setPhotoFile(null);
       setSuccess("Photo uploaded.");
     } catch (err) {
@@ -540,7 +552,7 @@ export default function SkuDetailPage() {
                   saving={priceSaving}
                   onSavingChange={setPriceSaving}
                   onClose={() => {}}
-                  onSaved={loadSku}
+                  onSaved={async () => { skusChanged(); await loadSku(); }}
                   onError={setError}
                 />
               </Tile>
@@ -639,7 +651,7 @@ export default function SkuDetailPage() {
                 variant="section"
                 canMutate={canMutate}
                 onClose={() => {}}
-                onSaved={loadSku}
+                onSaved={async () => { skusChanged(); await loadSku(); }}
                 onError={setError}
               />
             </TabPanel>
@@ -661,7 +673,7 @@ export default function SkuDetailPage() {
           operation={{ action: lifecycleAction, label: lifecycleAction === "restore" ? "Restore" : "Archive", count: 1, selection: { ids: [sku.id] } }}
           fields={[]}
           onClose={() => setLifecycleAction(null)}
-          onComplete={(message) => { setSuccess(message); void loadSku(); }}
+          onComplete={(message) => { setSuccess(message); skusChanged(); void loadSku(); }}
         />
       )}
     </Stack>

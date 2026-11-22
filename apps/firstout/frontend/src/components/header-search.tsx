@@ -2,20 +2,17 @@
 
 import { Search, Theme } from "@carbon/react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
+
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 import { searchAdminDestinations } from "@/lib/admin-navigation";
-import { searchAll, type AuthUser, type SearchResponse } from "@/lib/api";
+import { searchAll, type AuthUser } from "@/lib/api";
 
 type HeaderSearchProps = {
   className?: string;
   administrationUser?: AuthUser | null;
-};
-
-type RecordSearch = {
-  term: string;
-  results?: SearchResponse;
-  error?: string;
 };
 
 export function HeaderSearch({ className, administrationUser }: HeaderSearchProps) {
@@ -23,33 +20,19 @@ export function HeaderSearch({ className, administrationUser }: HeaderSearchProp
   const panel = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const [query, setQuery] = useState("");
-  const [recordSearch, setRecordSearch] = useState<RecordSearch>();
   const [open, setOpen] = useState(false);
   const term = query.trim();
-  const currentSearch = recordSearch?.term === term ? recordSearch : undefined;
-  const results = currentSearch?.results;
+  const searched = useDebouncedValue(term, 250);
+  const search = useQuery({
+    queryKey: ["search", { term: searched }],
+    queryFn: ({ signal }) => searchAll(searched, signal),
+    enabled: Boolean(searched),
+  });
+  // Only answers for what is typed now count; older terms read as still searching.
+  const current = searched === term;
+  const results = current ? search.data : undefined;
+  const searchError = current && search.error ? search.error.message || "Search failed." : undefined;
   const panelOpen = open && !!term;
-
-  useEffect(() => {
-    if (!term) return;
-
-    const request = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const results = await searchAll(term, request.signal);
-        if (!request.signal.aborted) setRecordSearch({ term, results });
-      } catch (reason) {
-        if (!request.signal.aborted) {
-          setRecordSearch({ term, error: reason instanceof Error ? reason.message : "Search failed." });
-        }
-      }
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timer);
-      request.abort();
-    };
-  }, [term]);
 
   const groups = [
     { label: "Administration", hits: searchAdminDestinations(term, administrationUser) },
@@ -139,8 +122,8 @@ export function HeaderSearch({ className, administrationUser }: HeaderSearchProp
               </section>
             ))}
             <div role="status">
-              {!currentSearch && !groups.length && <p className="firstout-header-search__empty">Searching…</p>}
-              {currentSearch?.error && <p className="firstout-header-search__empty">{currentSearch.error}</p>}
+              {!results && !searchError && !groups.length && <p className="firstout-header-search__empty">Searching…</p>}
+              {searchError && <p className="firstout-header-search__empty">{searchError}</p>}
               {results && !groups.length && <p className="firstout-header-search__empty">No matches for “{term}”.</p>}
             </div>
           </div>

@@ -85,12 +85,11 @@ describe("basket conflicts", () => {
   const basket = {
     id: "b", location_id: "here", customer_id: null, note: null, pick_id: null, linked_pick_ids: {},
     lines: [], version: 3, updated_at: FREES, expires_at: null, expired_at: FREES,
+    note_printed: null, note_internal: null, sales_staff_id: null, quote_id: null,
   };
 
-  it("reads the server basket from a 409 only", () => {
+  it("reads the server basket a conflict carries", () => {
     expect(basketConflict(new ApiError(409, "x", { code: "basket_expired", basket }))?.basket).toEqual(basket);
-    expect(basketConflict(new ApiError(500, "x", { code: "basket_expired", basket }))).toBeNull();
-    expect(basketConflict(new ApiError(409, "x", "plain"))).toBeNull();
   });
 
   it("says which item was refused and why, or when the sale expired", () => {

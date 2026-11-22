@@ -69,6 +69,10 @@ class Layby(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # The VAT rate the amounts above were computed at (0.15 is 15%), kept for reprints,
+    # credit notes and conversions (Firstout ADR 0003). Every writer sets it; the
+    # database default only lets the previous release insert during a deploy (P-020).
+    vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
@@ -117,6 +121,8 @@ class LaybyLine(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     )
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # Hold cost: the unit cost the stock left the shelf at when the layby held it.
+    hold_unit_cost_zar: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
 
     layby: Mapped[Layby] = relationship(back_populates="lines")
     sku: Mapped["Sku"] = relationship()

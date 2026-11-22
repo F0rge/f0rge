@@ -136,8 +136,6 @@ class PaymentService:
         if amount > remaining:
             raise ValidationError(overpayment_message(remaining, "ZAR", invoice.invoice_number))
 
-        await assert_date_postable(self.db, data.paid_on)
-
         payment = Payment(
             payment_number="",
             direction=PaymentDirection.IN,
@@ -229,8 +227,6 @@ class PaymentService:
             journal_lines.append((CODE_FX, diff, Decimal(0)))
         elif diff < 0:
             journal_lines.append((CODE_FX, Decimal(0), abs(diff)))
-
-        await assert_date_postable(self.db, data.paid_on)
 
         payment = Payment(
             payment_number="",

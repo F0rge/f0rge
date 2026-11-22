@@ -21,7 +21,8 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import {
   ACCOUNT_TYPES,
@@ -42,6 +43,7 @@ import {
   type TaxTreatment,
   type UpsertCategoryMapPayload,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
@@ -97,12 +99,8 @@ export default function ChartOfAccountsPage() {
 function ChartOfAccountsContent() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const [maps, setMaps] = useState<CategoryMap[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateAccountPayload>(emptyCreateForm);
@@ -116,28 +114,23 @@ function ChartOfAccountsContent() {
   const [saving, setSaving] = useState(false);
   const [mapSearch, setMapSearch] = useState("");
 
+  const client = useQueryClient();
+  const ledgerQuery = useQuery({
+    queryKey: ["ledger"],
+    queryFn: async () => {
+      const [accounts, maps] = await Promise.all([listAccounts(), listCategoryMaps()]);
+      return { accounts, maps };
+    },
+    enabled: Boolean(user),
+  });
+  const accounts = useMemo(() => ledgerQuery.data?.accounts ?? [], [ledgerQuery.data]);
+  const maps = useMemo(() => ledgerQuery.data?.maps ?? [], [ledgerQuery.data]);
+  const loading = ledgerQuery.isPending || ledgerQuery.isFetching;
+  const { error, setError } = usePageError(ledgerQuery.error, "Failed to load ledger.");
+  const loadLedger = () => client.invalidateQueries({ queryKey: ["ledger"] });
+
   const incomeAccounts = useMemo(() => accountsOfType(accounts, "income"), [accounts]);
   const expenseAccounts = useMemo(() => accountsOfType(accounts, "expense"), [accounts]);
-
-  const loadLedger = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [accountData, mapData] = await Promise.all([listAccounts(), listCategoryMaps()]);
-      setAccounts(accountData);
-      setMaps(mapData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load ledger.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadLedger();
-    }
-  }, [user, loadLedger]);
 
   const filteredMaps = useMemo(() => {
     const query = mapSearch.trim().toLowerCase();

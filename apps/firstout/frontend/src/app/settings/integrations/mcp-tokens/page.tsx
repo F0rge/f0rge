@@ -6,7 +6,7 @@ import {
   OverflowMenu, OverflowMenuItem, Stack, Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow, DataTableSkeleton, Tag,
 } from "@carbon/react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/administration";
 import { PageLoading } from "@/components/page-loading";
@@ -207,18 +207,11 @@ function TokenRow({
   );
 }
 
-function ScopedTokenDirectory({ organisation }: { organisation: string }) {
-  const [client] = useState(() => new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
-  }));
-  return <QueryClientProvider client={client}><TokenDirectory organisation={organisation} /></QueryClientProvider>;
-}
-
 export default function McpTokensPage() {
   const { user, loading } = useAuth();
   if (loading) return <PageLoading label="Loading MCP tokens…" />;
   if (!user) {
     return <InlineNotification kind="error" title="Sign in required" subtitle="Sign in to manage your personal MCP tokens." hideCloseButton />;
   }
-  return <ScopedTokenDirectory key={workspaceIdentity(user)} organisation={user.team.name} />;
+  return <TokenDirectory key={workspaceIdentity(user)} organisation={user.team.name} />;
 }

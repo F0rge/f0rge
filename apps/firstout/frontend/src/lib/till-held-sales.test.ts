@@ -10,6 +10,7 @@ const held: HeldSale = {
   customer_name: "Example", held_by_name: "Staff", held_at: "2026-11-19T16:00:00Z", expires_at: "2026-11-19T19:00:00Z",
   version: 3, note: "Collect this afternoon", estimated_total_inc_vat: "115.00",
   pick_id: null, linked_pick_ids: { service: "pick" },
+  note_printed: null, note_internal: null, sales_staff_id: null, quote_id: null,
   lines: [{
     sku_id: "service", sku_code: "SERVICE", sku_name: "Service", qty: 2,
     discount_percent: "12.50", estimated_total_inc_vat: "115.00",

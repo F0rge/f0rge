@@ -127,6 +127,10 @@ class InvoiceLineResponse(BaseModel):
     description: str
     qty: int
     unit_ex_vat: Decimal
+    # The unit at the document's stored VAT rate, half-up, as the PDF prints it.
+    unit_inc_vat: Decimal
+    # Line discount %. None on lines stored before it was kept: their unit is already net.
+    discount_percent: Optional[Decimal] = None
     ex_vat: Decimal
     inc_vat: Decimal
     vat_amount: Decimal
@@ -180,6 +184,8 @@ class InvoiceResponse(BaseModel):
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal
+    # The rate the amounts use (0.15 is 15%), stored with the document (ADR 0003).
+    vat_rate: Decimal
     amount_paid: Decimal
     balance: Decimal
     payment_status: Literal["unpaid", "partially_paid", "paid", "unknown"]

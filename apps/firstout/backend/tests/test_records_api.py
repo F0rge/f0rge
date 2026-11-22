@@ -61,6 +61,7 @@ async def _load(async_db: AsyncSession) -> None:
                     )
                 ],
                 **amounts,
+                vat_rate=0.15,
             ),
             ArchiveCreditNote(
                 document_number="CR-9001",

@@ -43,7 +43,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { formatSettlementAmount } from "@/lib/source-history";
 import { BILL_STATUS } from "@/lib/payment-status";
-import { localIsoDate } from "@/lib/till-statement";
+import { localIsoDate } from "@/lib/dates";
 
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;

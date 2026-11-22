@@ -21,6 +21,7 @@ import {
   Toggle,
 } from "@carbon/react";
 import { ChevronDown, ChevronUp, Close } from "@carbon/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -40,6 +41,7 @@ import {
 import { LabelSettings } from "@/app/settings/label-settings";
 import { DocumentTemplateSettings } from "@/app/settings/document-template";
 import { useAuth } from "@/lib/auth";
+import { queryKeys } from "@/lib/queries";
 import { AdminDirectoryLinks, AdminPageHeader } from "@/components/administration";
 import { PageLoading } from "@/components/page-loading";
 import { ADMIN_DESTINATIONS, SETTINGS_SECTIONS, findSettingsSection, type SettingsSection } from "@/lib/admin-navigation";
@@ -73,7 +75,8 @@ function SettingsForm({ section }: { section: SettingsSection }) {
   const canMutate = canMutateSettings(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const drafts = useSettingsDrafts();
-  const [vatPercent, setVatPercent] = useState("15");
+  const client = useQueryClient();
+  const [vatPercent, setVatPercent] = useState("");
   const [currency, setCurrency] = useState("ZAR");
   const [legalName, setLegalName] = useState("");
   const [tradingName, setTradingName] = useState("");
@@ -225,6 +228,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
           return;
       }
       const updated = await updateSettings(patch);
+      void client.invalidateQueries({ queryKey: queryKeys.settings });
       if (drafts.get(section) === submittedDraft) drafts.set(section);
       applySettings(updated);
       setNotice(updated.warning ?? "Settings saved.");
@@ -243,6 +247,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
     setNotice(null);
     try {
       const updated = await uploadCompanyLogo(file);
+      void client.invalidateQueries({ queryKey: queryKeys.settings });
       setSettings(updated);
       setHasLogo(updated.has_logo);
       setLogoVersion((version) => version + 1);
@@ -552,7 +557,7 @@ function SettingsForm({ section }: { section: SettingsSection }) {
                   <NumberInput
                     id="vat-percent"
                     label="VAT rate (%)"
-                    helperText="Locked default is 15%. Owner may adjust for what-if only."
+                    helperText="Changes apply to new documents; existing documents keep the rate they were priced at."
                     value={vatPercent}
                     min={0}
                     max={100}

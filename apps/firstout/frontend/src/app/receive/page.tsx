@@ -17,7 +17,8 @@ import {
   Tag,
 } from "@carbon/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useEffect, useState } from "react";
 
 import { LocationBinFields } from "@/components/bin-select";
 import { useLocationBins } from "@/hooks/use-location-bins";
@@ -33,14 +34,10 @@ import {
   listPurchaseOrders,
   listSkus,
   receivePurchaseOrder,
-  type InventorySku,
-  type Location,
-  type PurchaseOrder,
-  type PurchaseOrderListItem,
-  type Sku,
 } from "@/lib/api";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { formatExpectedCartons } from "@/lib/carton-helpers";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { formatQuantity } from "@/lib/quantity";
 
@@ -49,23 +46,16 @@ function ReceivePageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canRecv = canReceive(user);
-  const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [inventory, setInventory] = useState<InventorySku[]>([]);
-  const [skus, setSkus] = useState<Sku[]>([]);
   const [poId, setPoId] = useState("");
-  const [locationId, setLocationId] = useState("");
-  const [defaultReceiveLocationId, setDefaultReceiveLocationId] = useState<string | null>(null);
+  // null until the user picks; then their choice wins while it is still an active location.
+  const [chosenLocationId, setLocationId] = useState<string | null>(null);
   const [binId, setBinId] = useState("");
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const client = useQueryClient();
+  const dataQuery = useQuery({
+    queryKey: ["receive"],
+    queryFn: async () => {
       const [orderData, locationData, inventoryData, skuData, settingsData] = await Promise.all([
         listPurchaseOrders({ status: "landed", limit: 100 }),
         listLocations(),
@@ -73,34 +63,29 @@ function ReceivePageContent() {
         listSkus({ lifecycle: "all" }),
         getSettings(),
       ]);
-      const activeLocations = locationData.filter(isActiveLocation);
-      setOrders(orderData.items.filter((order) => !order.is_archive));
-      setLocations(activeLocations);
-      setInventory(inventoryData);
-      setSkus(skuData);
-      const teamDefault = settingsData.default_receive_location_id;
-      setDefaultReceiveLocationId(teamDefault);
-      setLocationId((current) => {
-        if (current && activeLocations.some((entry) => entry.id === current)) {
-          return current;
-        }
-        if (teamDefault && activeLocations.some((entry) => entry.id === teamDefault)) {
-          return teamDefault;
-        }
-        return "";
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load receive data.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadData();
-    }
-  }, [user, loadData]);
+      return {
+        orders: orderData.items.filter((order) => !order.is_archive),
+        locations: locationData.filter(isActiveLocation),
+        inventory: inventoryData,
+        skus: skuData,
+        defaultReceiveLocationId: settingsData.default_receive_location_id,
+      };
+    },
+    enabled: Boolean(user),
+  });
+  const orders = dataQuery.data?.orders ?? [];
+  const locations = dataQuery.data?.locations ?? [];
+  const inventory = dataQuery.data?.inventory ?? [];
+  const skus = dataQuery.data?.skus ?? [];
+  const defaultReceiveLocationId = dataQuery.data?.defaultReceiveLocationId ?? null;
+  const locationId =
+    chosenLocationId !== null && (chosenLocationId === "" || locations.some((entry) => entry.id === chosenLocationId))
+      ? chosenLocationId
+      : defaultReceiveLocationId && locations.some((entry) => entry.id === defaultReceiveLocationId)
+        ? defaultReceiveLocationId
+        : "";
+  const loading = dataQuery.isFetching;
+  const { error, setError } = usePageError(dataQuery.error, "Failed to load receive data.");
 
   useEffect(() => {
     const prefilled = searchParams.get("po");
@@ -116,30 +101,13 @@ function ReceivePageContent() {
   }, [locationId, defaultBinId]);
 
   const selectedPoSummary = orders.find((entry) => entry.id === poId);
-  const [selectedPoDetail, setSelectedPoDetail] = useState<PurchaseOrder | null>(null);
+  const poDetailQuery = useQuery({
+    queryKey: ["purchase-orders", "detail", poId],
+    queryFn: () => getPurchaseOrder(poId),
+    enabled: Boolean(poId),
+  });
+  const selectedPoDetail = (poId && poDetailQuery.data) || null;
   const formValid = Boolean(selectedPoSummary && !selectedPoSummary.is_archive && locationId);
-
-  useEffect(() => {
-    if (!poId) {
-      setSelectedPoDetail(null);
-      return;
-    }
-    let cancelled = false;
-    void getPurchaseOrder(poId)
-      .then((po) => {
-        if (!cancelled) {
-          setSelectedPoDetail(po);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSelectedPoDetail(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [poId]);
 
   async function handleReceive() {
     if (!canRecv || !formValid) {
@@ -161,13 +129,8 @@ function ReceivePageContent() {
       );
       setPoId("");
       setBinId("");
-      setLocationId(
-        defaultReceiveLocationId &&
-          locations.some((entry) => entry.id === defaultReceiveLocationId)
-          ? defaultReceiveLocationId
-          : "",
-      );
-      await loadData();
+      setLocationId(null);
+      await client.invalidateQueries({ queryKey: ["receive"] });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError(err.message);

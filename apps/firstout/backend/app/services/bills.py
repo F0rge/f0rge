@@ -29,7 +29,6 @@ from app.schemas.bill import (
 )
 from app.schemas.page import Page, PageParams
 from app.services.books_events import BooksEventService
-from app.services.books_periods import assert_date_postable
 from app.services.chart_of_accounts import CODE_AP, CODE_INVENTORY, LedgerPostingService
 from app.services.document_intake.extract import (
     MAX_UPLOAD_BYTES,
@@ -124,8 +123,6 @@ class BillService:
     ) -> BillResponse:
         await require_active_supplier(self.db, data.supplier_id)
         approved = data.approval_status == BillApprovalStatus.APPROVED.value
-        if approved:
-            await assert_date_postable(self.db, data.issue_date)
 
         currency = SupplierService.normalize_currency(data.currency)
         fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
@@ -216,7 +213,6 @@ class BillService:
         bill = await self._load(bill_id, operational=True, for_update=True)
         if bill.approval_status == BillApprovalStatus.APPROVED:
             raise ValidationError("This bill is already approved")
-        await assert_date_postable(self.db, bill.issue_date)
         async with unit_of_work(self.db):
             bill.approval_status = BillApprovalStatus.APPROVED
             await self._post(bill)

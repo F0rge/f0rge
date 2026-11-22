@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import {
   canViewCostAudit,
@@ -43,41 +44,16 @@ export function CostAuditPanel({ skuOptions = [], pinnedSkuId = null }: CostAudi
   const canView = canViewCostAudit(user);
   const isPinned = Boolean(pinnedSkuId);
   const [skuId, setSkuId] = useState(pinnedSkuId ?? "");
-  const [entries, setEntries] = useState<UnitCostAuditEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadAudit = useCallback(async (targetSkuId: string) => {
-    if (!targetSkuId) {
-      setEntries([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const rows = await listCostAudit(targetSkuId);
-      setEntries(rows);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load cost audit");
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (pinnedSkuId) {
-      setSkuId(pinnedSkuId);
-    }
-  }, [pinnedSkuId]);
-
   const activeSkuId = isPinned ? (pinnedSkuId ?? "") : skuId;
 
-  useEffect(() => {
-    if (canView && activeSkuId) {
-      void loadAudit(activeSkuId);
-    }
-  }, [canView, activeSkuId, loadAudit]);
+  const audit = useQuery({
+    queryKey: ["cost-audit", activeSkuId],
+    queryFn: () => listCostAudit(activeSkuId),
+    enabled: canView && Boolean(activeSkuId),
+  });
+  const entries: UnitCostAuditEntry[] = (audit.isError ? undefined : audit.data) ?? [];
+  const loading = audit.isFetching;
+  const error = audit.error ? audit.error.message || "Failed to load cost audit" : null;
 
   if (!canView) {
     return null;

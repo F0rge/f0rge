@@ -1,4 +1,4 @@
-import { ApiError, type TillBasket, type TillBasketUpdate } from "./api";
+import { conflictCode, type TillBasket, type TillBasketUpdate } from "./api";
 import { basketContents, cartSnapshot, isUncertainHeldResponse, type BasketContents } from "./till-held-sales";
 
 /** Equal keys mean the server already holds these contents. Linked-pick order is not significant. */
@@ -13,10 +13,7 @@ const BASKET_CONFLICTS = new Set(["basket_version_conflict", "basket_changed", "
  * being sold or held, refused stock another sale reserved, or expired and was emptied.
  */
 export function isBasketConflict(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 409 && Boolean(
-    error.detail && typeof error.detail === "object" && "code" in error.detail &&
-    typeof error.detail.code === "string" && BASKET_CONFLICTS.has(error.detail.code),
-  );
+  return BASKET_CONFLICTS.has(conflictCode(error) ?? "");
 }
 
 export type SavedBasket = { id: string; version: number };

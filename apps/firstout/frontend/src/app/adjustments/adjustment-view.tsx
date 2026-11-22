@@ -31,7 +31,7 @@ export function AdjustmentView({
   inventory,
   onBack,
 }: AdjustmentViewProps) {
-  const date = adjustment.completed_at ?? adjustment.created_at ?? adjustment.started_at;
+  const date = adjustment.created_at;
   return (
     <Stack gap={6}>
       <div className="firstout-page-header">

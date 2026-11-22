@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Optional
 
 from fastapi.responses import Response
@@ -13,10 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.crud.customer import CustomerCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import TeamCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
-from app.models.journal import JournalDocumentType
 from app.models.sales_staff import SalesStaff
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import (
@@ -33,25 +30,18 @@ from app.schemas.invoice import (
 )
 from app.schemas.page import Page, PageParams
 from app.schemas.payment import PaymentCreate
-from app.schemas.till import TillPriceLine, TillPricePreview, TillSaleLineCreate
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.services.books_events import BooksEventService
-from app.services.books_periods import assert_date_postable
-from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
-from app.services.chart_of_accounts import (
-    CODE_AR,
-    CODE_VAT,
-    LedgerPostingService,
-)
 from app.services.document_pdf import DocumentData, DocumentLine, DocumentParty
-from app.services.payment_terms import compute_due_date
 from app.services.party_archive import require_active_customer
 from app.services.sellability import assert_sku_sellable
 from app.services.sku_archive import SkuArchiveService
 from app.services.archive_documents import assert_operational_document
 from app.services.payments import PaymentService
 from app.services.pricing import (
-    classification_of,
+    customer_price_warning,
+    format_pdf_discount,
     format_pdf_unit,
     pdf_unit_basis_note,
     pdf_unit_header,
@@ -61,7 +51,8 @@ from app.services.suspect_price import annotate_line_warnings
 from app.services.sales_staff import SalesStaffService
 from app.services.settings import SettingsService
 from app.services.settlement import SettlementStatus, cents
-from app.services.till_pricing import TillPricing
+from app.services.sale_line_pricing import PricingAuthority, SaleLinePricing, SaleLineRequest
+from app.services.tax_invoice_issue import TaxInvoiceIssue
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -73,8 +64,6 @@ class InvoiceService:
         self.crud = TaxInvoiceCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.customer_crud = CustomerCRUD(db)
-        self.posting = LedgerPostingService(db)
-        self.category_posting = CategoryPostingService(db)
         self.events = BooksEventService(db)
         self.credit = CustomerCreditService(db)
 
@@ -207,11 +196,10 @@ class InvoiceService:
             await self.crud.commit_refresh(invoice)
         return await self.get(invoice_id, user_id)
 
-    async def preview(self, data: InvoicePreviewRequest, user_id: uuid.UUID) -> TillPricePreview:
+    async def preview(self, data: InvoicePreviewRequest, user_id: uuid.UUID) -> SalePricePreview:
         """The cart's prices and totals exactly as creating the invoice would store them."""
-        await self._require_discounts(data.lines, user_id, await self._team_settings())
         customer = await require_active_customer(self.db, data.customer_id)
-        _, preview = await self._price_lines(customer, data.lines)
+        _, preview = await self._price_lines(customer, data.lines, user_id, enforce=False)
         return preview
 
     async def create_manual(self, data: ManualInvoiceCreate, user_id: uuid.UUID) -> InvoiceResponse:
@@ -229,21 +217,14 @@ class InvoiceService:
         on_account: bool = False,
         payment: Optional[InvoicePaymentCreate] = None,
     ) -> InvoiceResponse:
-        # First-use settings initialization commits. Do it before catalogue locks
-        # so active-SKU validation stays locked through the invoice write.
-        team_settings = await self._team_settings()
-        await self._require_discounts(data.lines, user_id, team_settings)
         await SkuArchiveService(self.db).lock_skus(
             [line.sku_id for line in data.lines if line.sku_id is not None]
         )
         customer = await require_active_customer(self.db, data.customer_id)
-        await assert_date_postable(self.db, data.issue_date)
 
-        line_models, priced = await self._price_lines(customer, data.lines)
-        subtotal = priced.subtotal_ex_vat
-        vat_total = priced.vat_amount
+        line_models, priced = await self._price_lines(customer, data.lines, user_id, enforce=True)
         total_inc = priced.total_inc_vat
-        if subtotal <= 0:
+        if priced.subtotal_ex_vat <= 0:
             raise ValidationError("Invoice total must be positive")
 
         override_note = await self.credit.assert_allowed(
@@ -254,53 +235,21 @@ class InvoiceService:
             user_id=user_id,
         )
 
-        due_date = data.due_date or compute_due_date(data.issue_date, customer, team_settings)
-
         async with unit_of_work(self.db):
-            invoice_number = await self.crud.get_next_invoice_number()
-            invoice = TaxInvoice(
-                invoice_number=invoice_number,
-                customer_id=data.customer_id,
+            invoice = await TaxInvoiceIssue(self.db).issue(
+                customer=customer,
                 issue_date=data.issue_date,
-                due_date=due_date,
-                subtotal_ex_vat=subtotal,
-                vat_amount=vat_total,
-                total_inc_vat=total_inc,
-                amount_paid=Decimal(0),
+                due_date=data.due_date,
+                lines=line_models,
+                vat_rate=priced.vat_rate,
                 prices_include_vat=shows_prices_including_vat(customer),
+                memo="Tax invoice",
+                actor_user_id=user_id,
+                event_note=override_note,
+                sales_staff_id=data.sales_staff_id,
                 on_account=on_account,
                 note_printed=data.note_printed,
                 note_internal=data.note_internal,
-                sales_staff_id=data.sales_staff_id,
-                lines=line_models,
-            )
-            await self.crud.add_and_flush(invoice)
-            sales_parts: list[tuple[str, Decimal, Decimal]] = []
-            for line in line_models:
-                sku = None
-                if line.sku_id is not None:
-                    sku = await self.sku_crud.get_by_id(line.sku_id)
-                sales_code = await self.category_posting.sales_code_for_sku(sku)
-                sales_parts.append((sales_code, Decimal(0), line.ex_vat))
-            await self.posting.post(
-                JournalDocumentType.INVOICE,
-                invoice.id,
-                f"Tax invoice {invoice_number}",
-                self.category_posting.collapse(
-                    [
-                        (CODE_AR, total_inc, Decimal(0)),
-                        *sales_parts,
-                        (CODE_VAT, Decimal(0), vat_total),
-                    ]
-                ),
-                entry_date=invoice.issue_date,
-            )
-            await self.events.record(
-                BooksDocumentType.INVOICE,
-                invoice.id,
-                BooksEventAction.CREATED,
-                actor_user_id=user_id,
-                note=override_note,
             )
             if payment is not None:
                 # Same transaction: a refused payment leaves no invoice behind.
@@ -335,16 +284,20 @@ class InvoiceService:
             if sku is not None and sku.carton_count > 1:
                 cartons = line.qty * sku.carton_count
                 description = f"{description} - Ships in {cartons} cartons"
-            if line.price_warning:
-                description = f"{description} — {line.price_warning}"
+            printed_warning = customer_price_warning(line.price_warning)
+            if printed_warning:
+                description = f"{description} — {printed_warning}"
             lines.append(
                 DocumentLine(
                     description=description,
                     qty=str(line.qty),
-                    unit=format_pdf_unit(line.unit_ex_vat, invoice.prices_include_vat),
+                    unit=format_pdf_unit(
+                        line.unit_ex_vat, invoice.prices_include_vat, invoice.vat_rate
+                    ),
                     ex_vat=f"{line.ex_vat:.2f}",
                     vat=f"{line.vat_amount:.2f}",
                     inc_vat=f"{line.inc_vat:.2f}",
+                    discount=format_pdf_discount(line.discount_percent),
                     sku_ref=sku.our_ref if sku is not None else None,
                 )
             )
@@ -370,6 +323,7 @@ class InvoiceService:
             lines=lines,
             subtotal_ex_vat=f"{invoice.subtotal_ex_vat:.2f}",
             vat_amount=f"{invoice.vat_amount:.2f}",
+            vat_rate=invoice.vat_rate,
             total=f"{invoice.total_inc_vat:.2f}",
             payments=[("Paid", f"{invoice.amount_paid:.2f}"), ("Balance owing", f"{balance:.2f}")],
             unit_basis_note=pdf_unit_basis_note(invoice.prices_include_vat),
@@ -386,105 +340,56 @@ class InvoiceService:
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def _price_lines(
-        self, customer, lines: list[InvoiceLineCreate]
-    ) -> tuple[list[InvoiceLine], TillPricePreview]:
-        """Catalogue lines are priced as the till prices them; free-text lines use their unit.
-
-        The preview lists only the SKU lines, in order; its totals include every line.
-        """
-        # Only catalogue-priced lines need the customer's price policy.
-        pricing: Optional[TillPricing] = None
-        models: list[InvoiceLine] = []
-        sku_lines: list[TillPriceLine] = []
-        before_ex = before_inc = Decimal(0)
-        for index, line in enumerate(lines):
+        self,
+        customer,
+        lines: list[InvoiceLineCreate],
+        user_id: Optional[uuid.UUID],
+        *,
+        enforce: bool,
+    ) -> tuple[list[InvoiceLine], SalePricePreview]:
+        """Price every line through Sale line pricing; a free-text line charges its own unit."""
+        requests = []
+        for line in lines:
             sku = None
             if line.sku_id is not None:
                 sku = await self.sku_crud.get_by_id(line.sku_id)
                 if sku is None:
                     raise NotFoundError("SKU not found")
                 assert_sku_sellable(sku)
-            if line.unit_ex_vat is None:
-                assert sku is not None  # the schema requires a unit or a SKU
-                pricing = pricing or await TillPricing.for_customer(self.db, customer)
-                priced = await pricing.line(
-                    sku,
-                    TillSaleLineCreate(
-                        sku_id=sku.id, qty=line.qty, discount_percent=line.discount_percent
-                    ),
-                )
-            else:
-                # A free-text line, or a SKU line at a unit price typed by staff.
-                before = line.unit_ex_vat * line.qty
-                net = (before * (100 - line.discount_percent) / 100).quantize(
-                    CENT, rounding=ROUND_HALF_UP
-                )
-                gross = ex_to_inc(net)
-                priced = TillPriceLine.model_construct(
-                    sku_id=line.sku_id,
+            requests.append(
+                SaleLineRequest(
+                    sku=sku,
                     qty=line.qty,
                     discount_percent=line.discount_percent,
                     unit_ex_vat=line.unit_ex_vat,
-                    before_discount_ex_vat=before,
-                    ex_vat=net,
-                    vat_amount=gross - net,
-                    inc_vat=gross,
-                    source="manual",
-                    price_warning=None,
-                )
-            if sku is not None:
-                sku_lines.append(priced)
-            before_ex += priced.before_discount_ex_vat
-            before_inc += ex_to_inc(priced.before_discount_ex_vat)
-            models.append(
-                InvoiceLine(
-                    description=line.description,
-                    qty=line.qty,
-                    # As at the till: the stored unit is after the line discount.
-                    unit_ex_vat=(priced.ex_vat / line.qty).quantize(CENT, rounding=ROUND_HALF_UP),
-                    ex_vat=priced.ex_vat,
-                    inc_vat=priced.inc_vat,
-                    vat_amount=priced.vat_amount,
-                    sort_order=index,
-                    sku_id=line.sku_id,
-                    price_warning=priced.price_warning,
                 )
             )
-        subtotal = sum((model.ex_vat for model in models), Decimal(0))
-        vat = sum((model.vat_amount for model in models), Decimal(0))
-        return models, TillPricePreview(
-            classification=classification_of(customer),
-            price_list_name=pricing.price_list_name if pricing else None,
-            prices_include_vat=shows_prices_including_vat(customer),
-            before_discount_ex_vat=before_ex,
-            before_discount_inc_vat=before_inc,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat,
-            total_inc_vat=subtotal + vat,
-            lines=sku_lines,
-            price_revision="",
+        pricing = await SaleLinePricing.for_customer(
+            self.db,
+            customer,
+            await PricingAuthority.of(self.db, user_id),
+            enforce_required_list=True,
         )
-
-    async def _require_discounts(
-        self, lines: list[InvoiceLineCreate], user_id: Optional[uuid.UUID], team_settings
-    ) -> None:
-        # Imported here: the till imports invoice models and services at load time.
-        from app.services.till_orchestrator import TillOrchestrator
-
-        await TillOrchestrator(self.db).require_discounts(
-            InvoicePreviewRequest.model_construct(lines=lines),
-            user_id,
-            team_settings.max_till_discount_percent,
-        )
+        preview = await pricing.price(requests, enforce=enforce)
+        models = [
+            InvoiceLine(
+                description=line.description,
+                qty=line.qty,
+                unit_ex_vat=priced.unit_ex_vat,
+                discount_percent=priced.discount_percent,
+                ex_vat=priced.ex_vat,
+                inc_vat=priced.inc_vat,
+                vat_amount=priced.vat_amount,
+                sort_order=index,
+                sku_id=line.sku_id,
+                price_warning=priced.price_warning,
+            )
+            for index, (line, priced) in enumerate(zip(lines, preview.lines, strict=True))
+        ]
+        return models, preview
 
     async def _staff_names(self) -> dict[uuid.UUID, str]:
         return dict((await self.db.execute(select(SalesStaff.id, SalesStaff.name))).tuples().all())
-
-    async def _team_settings(self):
-        team = await TeamCRUD(self.db).get_first()
-        if team is None:
-            raise NotFoundError("Team not found")
-        return await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
 
     @staticmethod
     def _to_list_item(
@@ -544,12 +449,15 @@ class InvoiceService:
             if invoice.sales_staff_id
             else None,
             prices_include_vat=invoice.prices_include_vat,
+            vat_rate=invoice.vat_rate,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,
                     description=line.description,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    unit_inc_vat=ex_to_inc(line.unit_ex_vat, invoice.vat_rate),
+                    discount_percent=line.discount_percent,
                     ex_vat=line.ex_vat,
                     inc_vat=_response_money(invoice, line.inc_vat),
                     vat_amount=_response_money(invoice, line.vat_amount),
@@ -568,7 +476,7 @@ class InvoiceService:
             self.db,
             response.lines,
             viewer_user_id=viewer_user_id,
-            prices_include_vat=invoice.prices_include_vat,
+            inclusive_vat_rate=invoice.vat_rate if invoice.prices_include_vat else None,
         )
         return response
 

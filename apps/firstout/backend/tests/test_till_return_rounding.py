@@ -39,7 +39,9 @@ async def test_till_return_preserves_posted_line_rounding(
     assert response.status_code == 201, response.text
     sale = response.json()
     sale_line = sale["lines"][0]
-    assert Decimal(sale_line["unit_ex_vat"]) == Decimal("90.50")
+    # The list unit and the discount, not a discounted unit (ADR 0001).
+    assert Decimal(sale_line["unit_ex_vat"]) == Decimal("100.55")
+    assert Decimal(sale_line["discount_percent"]) == Decimal("10")
     assert Decimal(sale_line["ex_vat"]) == Decimal("271.49")
     assert Decimal(sale_line["vat_amount"]) == Decimal("40.72")
     assert Decimal(sale_line["inc_vat"]) == Decimal("312.21")

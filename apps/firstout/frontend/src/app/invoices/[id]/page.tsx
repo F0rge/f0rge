@@ -25,6 +25,7 @@ import {
   TextInput,
 } from "@carbon/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
 import { ArchiveInvoiceModal } from "@/components/archive-invoice-modal";
@@ -36,8 +37,6 @@ import {
   createCreditNote,
   createPayment,
   downloadInvoicePdf,
-  exVatToIncVat,
-  formatPriceAmount,
   formatZarAmount,
   getCustomer,
   getInvoice,
@@ -48,22 +47,20 @@ import {
   updateInvoiceNote,
   updateInvoiceSalesStaff,
   listPayments,
-  listSalesStaffOptions,
+  vatPercentLabel,
   type AppSettings,
   type CreditNote,
   type CustomerCrm,
   type Invoice,
   type Payment,
-  type SalesStaffOption,
   type PaymentMethod,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
+import { formatDiscount } from "@/lib/sale-preview";
+import { localIsoDate } from "@/lib/dates";
 import { formatArchiveCurrency, formatSettlementAmount } from "@/lib/source-history";
 import { invoiceStatusTag, partialPaymentError } from "@/lib/payment-status";
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function hasPositiveBalance(balance: string): boolean {
   return Number(balance) > 0;
@@ -86,7 +83,7 @@ export default function InvoiceDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentDate, setPaymentDate] = useState(todayIso());
+  const [paymentDate, setPaymentDate] = useState(localIsoDate());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("eft");
   const [paymentReference, setPaymentReference] = useState("");
   const [creditOpen, setCreditOpen] = useState(false);
@@ -95,7 +92,7 @@ export default function InvoiceDetailPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
-  const [colleagues, setColleagues] = useState<SalesStaffOption[] | null>(null);
+  const colleagues = useQuery({ ...referenceQueries.salesStaffOptions, enabled: canMutate }).data ?? null;
   const [colleagueSaving, setColleagueSaving] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [actionHandled, setActionHandled] = useState(false);
@@ -162,7 +159,7 @@ export default function InvoiceDetailPage() {
       return;
     }
     setPaymentAmount(invoice.balance);
-    setPaymentDate(todayIso());
+    setPaymentDate(localIsoDate());
     setPaymentReference("");
     setPaymentOpen(true);
   }
@@ -208,7 +205,7 @@ export default function InvoiceDetailPage() {
     setActionHandled(true);
     if (requestedAction === "pay" && hasPositiveBalance(invoice.balance)) {
       setPaymentAmount(invoice.balance);
-      setPaymentDate(todayIso());
+      setPaymentDate(localIsoDate());
       setPaymentReference("");
       setPaymentOpen(true);
     } else if (requestedAction === "credit" && !creditNote) {
@@ -235,10 +232,6 @@ export default function InvoiceDetailPage() {
       setActionLoading(false);
     }
   }
-
-  useEffect(() => {
-    if (canMutate) listSalesStaffOptions().then(setColleagues).catch(() => setColleagues(null));
-  }, [canMutate]);
 
   async function handleSalesColleague(staffId: string) {
     if (!invoice) return;
@@ -331,7 +324,11 @@ export default function InvoiceDetailPage() {
                 ))}
               </div>
               <TableContainer title="Line items">
-                <LoadingTableRows columns={["Description", "Qty", "Unit", "Ex VAT", "VAT", "Inc VAT"]} />
+                <LoadingTableRows
+                  columns={invoice?.is_archive
+                    ? ["Description", "Qty", "Ex VAT", "VAT", "Inc VAT"]
+                    : ["Description", "Qty", "Unit", "Discount", "Ex VAT", "VAT", "Inc VAT"]}
+                />
               </TableContainer>
               <div className="firstout-tax-invoice__totals" aria-hidden="true">
                 <SkeletonText paragraph lineCount={3} width="10rem" />
@@ -519,8 +516,9 @@ export default function InvoiceDetailPage() {
                 {!invoice.is_archive ? <TableHeader>
                   {invoice.prices_include_vat ? "Unit incl. VAT" : "Unit excl. VAT"}
                 </TableHeader> : null}
+                {!invoice.is_archive ? <TableHeader>Discount</TableHeader> : null}
                 <TableHeader>Ex VAT</TableHeader>
-                <TableHeader>{invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}</TableHeader>
+                <TableHeader>{invoice.is_archive ? "VAT" : `VAT (${vatPercentLabel(invoice.vat_rate)})`}</TableHeader>
                 <TableHeader>Inc VAT</TableHeader>
               </TableRow>
             </TableHead>
@@ -540,10 +538,11 @@ export default function InvoiceDetailPage() {
                   {!invoice.is_archive ? <TableCell>
                     {formatZarAmount(
                       invoice.prices_include_vat
-                        ? formatPriceAmount(exVatToIncVat(Number(line.unit_ex_vat)))
+                        ? line.unit_inc_vat
                         : line.unit_ex_vat,
                     )}
                   </TableCell> : null}
+                  {!invoice.is_archive ? <TableCell>{formatDiscount(line.discount_percent)}</TableCell> : null}
                   <TableCell>{formatInvoiceAmount(line.ex_vat)}</TableCell>
                   <TableCell>{formatInvoiceAmount(line.vat_amount)}</TableCell>
                   <TableCell>{formatInvoiceAmount(line.inc_vat)}</TableCell>
@@ -557,7 +556,7 @@ export default function InvoiceDetailPage() {
             Subtotal ex VAT: {formatInvoiceAmount(invoice.subtotal_ex_vat)}
           </p>
           <p className="cds--type-body-01">
-            {invoice.is_archive ? "VAT" : `VAT (${companySettings?.vat_percent ?? "15"}%)`}: {formatInvoiceAmount(invoice.vat_amount)}
+            {invoice.is_archive ? "VAT" : `VAT (${vatPercentLabel(invoice.vat_rate)})`}: {formatInvoiceAmount(invoice.vat_amount)}
           </p>
           <p className="cds--type-productive-heading-02">
             Total: {formatInvoiceAmount(invoice.total_inc_vat)}

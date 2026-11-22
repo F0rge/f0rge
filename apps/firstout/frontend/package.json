@@ -8,7 +8,9 @@
     "start": "next start --port 3003",
     "typecheck": "node ../../../node_modules/@typescript/native/bin/tsc --noEmit",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "codegen:api": "openapi-typescript openapi.json --default-non-nullable false -o src/lib/generated/api-schema.ts",
+    "codegen:check": "npm run codegen:api && git diff --exit-code src/lib/generated/api-schema.ts openapi.json"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.73.0",
@@ -28,6 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

@@ -274,7 +274,10 @@ async def test_migration_roundtrip_preserves_staff_and_grants(rls_database_url):
         ).all()
         assert before == after
         assert membership == (team_id, "warehouse", False, True)
-        assert grants_before == grants_after
+        # 112 deliberately grants till.discount to the built-in warehouse role (ADR 0002).
+        assert sorted(map(tuple, grants_after)) == sorted(
+            [*map(tuple, grants_before), ("warehouse", "till.discount")]
+        )
         assert (
             await conn.scalar(
                 sa.text(
@@ -422,6 +425,7 @@ async def test_duplicate_sku_invoice_keys_and_authenticated_uuid_idor(tenant_dat
                 subtotal_ex_vat=100,
                 vat_amount=15,
                 total_inc_vat=115,
+                vat_rate=0.15,
                 amount_paid=0,
             )
             session.add(invoice)

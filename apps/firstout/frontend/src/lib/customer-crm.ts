@@ -1,12 +1,5 @@
 import { formatZarAmount, type CustomerCrm } from "@/lib/api";
 
-export const CUSTOMER_ON_HOLD_MESSAGE = "Customer is on hold";
-export const CUSTOMER_CREDIT_LIMIT_MESSAGE = "Customer exceeds credit limit";
-
-export function isCreditBlockMessage(message: string): boolean {
-  return message === CUSTOMER_ON_HOLD_MESSAGE || message === CUSTOMER_CREDIT_LIMIT_MESSAGE;
-}
-
 export function formatIsoDate(iso: string | null | undefined): string {
   if (!iso) {
     return "—";

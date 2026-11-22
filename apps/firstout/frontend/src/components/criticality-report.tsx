@@ -18,6 +18,7 @@ import {
 import {
   downloadSkuCriticalityCsv,
   formatZarAmount,
+  type AbcClass,
   type SkuCriticalityReport,
 } from "@/lib/api";
 import { abcTagType, buildCriticalitySummary, formatSharePct } from "@/lib/criticality";
@@ -51,7 +52,7 @@ type CriticalityReportProps = {
   onCsvError: (message: string) => void;
 };
 
-function AbcTag({ abcClass }: { abcClass: "A" | "B" | "C" }) {
+function AbcTag({ abcClass }: { abcClass: AbcClass }) {
   return (
     <Tag type={abcTagType(abcClass)} size="sm">
       {abcClass}

@@ -21,7 +21,8 @@ import {
   Tag,
   TextArea,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import { BinSelect } from "@/components/bin-select";
 import { useLocationBins } from "@/hooks/use-location-bins";
@@ -42,12 +43,12 @@ import {
   listTransfers,
   receiveTransfer,
   type InventorySku,
-  type Location,
   type Sku,
   type Transfer,
   type TransferStatus,
 } from "@/lib/api";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 import { formatQuantity, isQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 
@@ -165,55 +166,49 @@ export default function TransfersPage() {
   const canCancelInTransit = can(user, "users.manage");
 
   const [tab, setTab] = useState<ListTab>("draft");
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [skus, setSkus] = useState<Sku[]>([]);
-  const [inventory, setInventory] = useState<InventorySku[]>([]);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([newDraftLine()]);
   const [inboundFilter, setInboundFilter] = useState("");
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const client = useQueryClient();
+  const dataQuery = useQuery({
+    queryKey: ["transfers"],
+    queryFn: async () => {
       const [locationData, skuData, inventoryData, transferData] = await Promise.all([
         listLocations(),
         listSkus({ lifecycle: "all" }),
         listInventory(),
         listTransfers(),
       ]);
-      setLocations(locationData.filter(isActiveLocation));
-      setSkus(skuData);
-      setInventory(inventoryData);
-      setTransfers(transferData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load transfers.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadData();
-    }
-  }, [user, loadData]);
+      return {
+        locations: locationData.filter(isActiveLocation),
+        skus: skuData,
+        inventory: inventoryData,
+        transfers: transferData,
+      };
+    },
+    enabled: Boolean(user),
+  });
+  const locations = dataQuery.data?.locations ?? [];
+  const skus = dataQuery.data?.skus ?? [];
+  const transfers = dataQuery.data?.transfers ?? [];
+  const loading = dataQuery.isFetching;
+  const { error, setError } = usePageError(dataQuery.error, "Failed to load transfers.");
+  const reload = async () => {
+    await client.invalidateQueries({ queryKey: ["transfers"] });
+  };
 
   const { activeBins: fromBins, defaultBinId: fromDefaultBinId } =
     useLocationBins(fromLocationId);
   const { activeBins: toBins, defaultBinId: toDefaultBinId } = useLocationBins(toLocationId);
 
   const inventoryBySku = useMemo(
-    () => new Map(inventory.map((entry) => [entry.sku_id, entry])),
-    [inventory],
+    () => new Map((dataQuery.data?.inventory ?? []).map((entry) => [entry.sku_id, entry])),
+    [dataQuery.data],
   );
 
   const destinationOptions = locations.filter((loc) => loc.id !== fromLocationId);
@@ -275,7 +270,7 @@ export default function TransfersPage() {
       setLines([newDraftLine()]);
       setNotes("");
       setTab("draft");
-      await loadData();
+      await reload();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 409 || err.status === 400)) {
         setError(err.message);
@@ -293,7 +288,7 @@ export default function TransfersPage() {
     setSuccess(null);
     try {
       setSuccess(await work());
-      await loadData();
+      await reload();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 409 || err.status === 400 || err.status === 403)) {
         setError(err.message);

@@ -1,4 +1,4 @@
-import { ApiError, type InventorySku, type TillBasket, type TillBlockingReservation, type TillReservation } from "./api";
+import { conflictCode, type ApiError, type InventorySku, type TillBasket, type TillBlockingReservation, type TillReservation } from "./api";
 
 const clock = new Intl.DateTimeFormat("en-ZA", {
   hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Johannesburg",
@@ -134,10 +134,7 @@ export type BasketConflict = {
 };
 
 export function basketConflict(error: unknown): BasketConflict | null {
-  if (!(error instanceof ApiError) || error.status !== 409) return null;
-  const detail = error.detail;
-  if (!detail || typeof detail !== "object" || !("code" in detail) || typeof detail.code !== "string") return null;
-  return detail as BasketConflict;
+  return conflictCode(error) ? (error as ApiError).detail as BasketConflict : null;
 }
 
 /** What the till says after adopting the server basket from a conflict. */

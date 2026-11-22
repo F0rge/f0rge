@@ -20,7 +20,6 @@ from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.models.pick import Pick, PickSourceType, PickStatus
 from app.models.books_event import BooksDocumentType, BooksEventAction
@@ -30,11 +29,11 @@ from app.models.payment import Payment, PaymentDirection
 from app.models.quote import QuoteStatus
 from app.models.customer import Customer
 from app.models.sku import Sku
-from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.models.tax_invoice import InvoiceLine
+from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.invoice import InvoiceLineResponse
+from app.schemas.sale_line_pricing import SaleLinePrice, SalePricePreview
 from app.schemas.till import (
-    TillPriceLine,
-    TillPricePreview,
     TillPriceRequest,
     TillSaleCreate,
     TillSaleLocationStock,
@@ -44,13 +43,11 @@ from app.services.sku_bom import whole_component_qty
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
-from app.services.payment_terms import compute_due_date
 from app.services.stock_movements import StockMovementService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_BANK,
     CODE_INVENTORY,
-    CODE_VAT,
     LedgerPostingService,
 )
 from app.services.stocktakes import StocktakeService
@@ -63,16 +60,13 @@ from app.services.till_kit_pick import (
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from app.exceptions import (
     BasketExpiredSignal,
-    ForbiddenError,
     KitRequiresPickError,
     TillPriceConflictError,
 )
-from app.permissions import TILL_DISCOUNT, USERS_MANAGE
-from app.services.permissions import PermissionService
-from app.services.books_periods import assert_date_postable
-from app.services.till_pricing import TillPricing
+from app.services.sale_line_pricing import PricingAuthority, SaleLinePricing, SaleLineRequest
+from app.services.tax_invoice_issue import TaxInvoiceIssue
 from app.services.suspect_price import annotate_line_warnings
-from app.services.vat import CENT
+from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -93,21 +87,6 @@ class TillOrchestrator:
         self.bom_crud = SkuBomLineCRUD(db)
         self.pick_crud = PickCRUD(db)
 
-    async def require_discounts(
-        self, request: TillPriceRequest, user_id: uuid.UUID | None, max_discount: Decimal | None
-    ) -> None:
-        """Line discounts need till.discount; above the team maximum, users.manage too."""
-        if user_id is None or not any(line.discount_percent > 0 for line in request.lines):
-            return
-        permissions = PermissionService(self.db)
-        if not await permissions.has_permission(user_id, TILL_DISCOUNT):
-            raise ForbiddenError("Till discount permission required")
-        if max_discount is not None and any(
-            line.discount_percent > max_discount for line in request.lines
-        ):
-            if not await permissions.has_permission(user_id, USERS_MANAGE):
-                raise ConflictError(f"Discount exceeds maximum allowed ({max_discount}%)")
-
     async def _active_customer(self, request: TillPriceRequest) -> Customer:
         if request.customer_id is None:
             customer = await self._get_walk_in_customer()
@@ -119,11 +98,14 @@ class TillOrchestrator:
         return customer
 
     async def _price_cart(
-        self, request: TillPriceRequest, customer: Customer
-    ) -> tuple[list[Sku], TillPricePreview]:
-        pricing = await TillPricing.for_customer(self.db, customer)
+        self,
+        request: TillPriceRequest,
+        customer: Customer,
+        user_id: Optional[uuid.UUID],
+        *,
+        enforce: bool,
+    ) -> tuple[list[Sku], SalePricePreview]:
         skus = []
-        priced_lines = []
         for line in request.lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
@@ -131,21 +113,26 @@ class TillOrchestrator:
             if sku.is_sellable is False:
                 assert_sku_sellable(sku)
             skus.append(sku)
-            priced_lines.append(await pricing.line(sku, line))
-        return skus, pricing.preview(priced_lines)
+        pricing = await SaleLinePricing.for_customer(
+            self.db,
+            customer,
+            await PricingAuthority.of(self.db, user_id),
+            enforce_required_list=True,
+        )
+        preview = await pricing.price(
+            [
+                SaleLineRequest(sku=sku, qty=line.qty, discount_percent=line.discount_percent)
+                for sku, line in zip(skus, request.lines, strict=True)
+            ],
+            enforce=enforce,
+        )
+        return skus, preview
 
     async def preview_prices(
         self, request: TillPriceRequest, user_id: uuid.UUID
-    ) -> TillPricePreview:
-        team = await TeamCRUD(self.db).get_first()
-        if team is None:
-            raise NotFoundError("Team not found")
-        settings = await TeamSettingsCRUD(self.db).get_by_team_id(team.id)
-        await self.require_discounts(
-            request, user_id, settings.max_till_discount_percent if settings else None
-        )
+    ) -> SalePricePreview:
         customer = await self._active_customer(request)
-        _, preview = await self._price_cart(request, customer)
+        _, preview = await self._price_cart(request, customer, user_id, enforce=False)
         return preview
 
     async def create_sale(
@@ -156,11 +143,6 @@ class TillOrchestrator:
         team = await TeamCRUD(self.db).get_first()
         if team is None:
             raise NotFoundError("Team not found")
-        settings_crud = TeamSettingsCRUD(self.db)
-        settings = await settings_crud.get_by_team_id(team.id)
-        await self.require_discounts(
-            data, user_id, settings.max_till_discount_percent if settings else None
-        )
 
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         from app.crud.location import LocationCRUD
@@ -213,11 +195,11 @@ class TillOrchestrator:
         sale_date = datetime.date.today()
         if data.due_date is not None and data.due_date < sale_date:
             raise ValidationError("Due date cannot be before the issue date")
-        await assert_date_postable(self.db, sale_date)
 
-        line_inputs: list[tuple[Sku, TillPriceLine]] = []
-        cogs_parts: list[tuple[str, Decimal, Decimal]] = []
-        stock_decrements: list[tuple[uuid.UUID, int]] = []
+        line_inputs: list[tuple[Sku, SaleLinePrice]] = []
+        # Lines that book cost of goods: (line index, SKU, cost a pick already moved,
+        # stock this sale takes off the showroom shelf as (sku_id, qty, our_ref)).
+        costed: list[tuple[int, Sku, Decimal, list[tuple[uuid.UUID, int, str]]]] = []
         non_stock_service_sku_ids: set[uuid.UUID] = set()
         reserved: dict[uuid.UUID, int] = {}
         remainders: dict[uuid.UUID, int] = {}
@@ -228,11 +210,10 @@ class TillOrchestrator:
         for candidate in [*data.pick_ids, data.pick_id]:
             if candidate is not None and candidate not in candidate_pick_ids:
                 candidate_pick_ids.append(candidate)
-        total_cogs = Decimal(0)
         pick_id: Optional[uuid.UUID] = None
 
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in data.lines])
-        skus, preview = await self._price_cart(data, customer)
+        skus, preview = await self._price_cart(data, customer, user_id, enforce=True)
         if data.price_revision is not None and data.price_revision != preview.price_revision:
             raise TillPriceConflictError(
                 "Prices changed. Review the new total before completing the sale."
@@ -252,6 +233,8 @@ class TillOrchestrator:
                 non_stock_service_sku_ids.add(sku.id)
                 line_inputs.append((sku, line))
                 continue
+            line_cogs = Decimal(0)
+            decrements: list[tuple[uuid.UUID, int, str]] = []
             if existing_pick is not None:
                 line_cogs = await self._pick_cogs(existing_pick, data.location_id)
                 picks_to_link.append(existing_pick)
@@ -265,7 +248,7 @@ class TillOrchestrator:
                     pick_ids=candidate_pick_ids,
                     used_pick_ids=used_pick_ids,
                     reserved=reserved,
-                    stock_decrements=stock_decrements,
+                    stock_decrements=decrements,
                 )
                 if block is not None:
                     kit_blocks.append(block)
@@ -290,45 +273,31 @@ class TillOrchestrator:
                     # reserved for the invoice and picked from elsewhere.
                     here = min(line.qty, whole_available_quantity(max(available, 0)))
                     remainders[sku.id] = remainders.get(sku.id, 0) + line.qty - here
-                line_cogs = Decimal(0)
                 if here > 0:
-                    assert location_stock is not None
-                    if location_stock.unit_cost_zar is None:
-                        raise ConflictError(f"No unit cost for {sku.our_ref} at this location")
-                    line_cogs = (location_stock.unit_cost_zar * here).quantize(
-                        CENT,
-                        rounding=ROUND_HALF_UP,
-                    )
                     reserved[sku.id] = reserved.get(sku.id, 0) + here
-                    stock_decrements.append((sku.id, here))
+                    decrements.append((sku.id, here, sku.our_ref))
                 else:
                     # Nothing here: the line books no cost of sales until its pick is confirmed.
                     line_inputs.append((sku, line))
                     continue
 
-            total_cogs += line_cogs
-            cogs_code = await self.category_posting.cogs_code_for_sku(sku)
-            cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
+            costed.append((len(line_inputs), sku, line_cogs, decrements))
             line_inputs.append((sku, line))
 
         if kit_blocks:
             raise KitRequiresPickError(kit_blocks)
 
         subtotal = preview.subtotal_ex_vat
-        vat_total = preview.vat_amount
         total_inc = preview.total_inc_vat
         invoice_line_models: list[InvoiceLine] = []
-        sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
         for index, (sku, line) in enumerate(line_inputs):
-            discounted_unit = (line.ex_vat / line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
-            sales_code = await self.category_posting.sales_code_for_sku(sku)
-            sales_parts.append((sales_code, Decimal(0), line.ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=sku.name,
                     qty=line.qty,
-                    unit_ex_vat=discounted_unit,
+                    unit_ex_vat=line.unit_ex_vat,
+                    discount_percent=line.discount_percent,
                     ex_vat=line.ex_vat,
                     inc_vat=line.inc_vat,
                     vat_amount=line.vat_amount,
@@ -347,45 +316,24 @@ class TillOrchestrator:
                 customer, total_inc, credit_override=data.credit_override
             )
 
-        team_settings = await settings_crud.get_or_create_for_team(team.id)
-        due_date = data.due_date or compute_due_date(sale_date, customer, team_settings)
-
         async with unit_of_work(self.db):
-            invoice_number = await self.invoice_crud.get_next_invoice_number()
-
-            invoice = TaxInvoice(
-                invoice_number=invoice_number,
-                customer_id=customer.id,
+            invoice = await TaxInvoiceIssue(self.db).issue(
+                customer=customer,
                 issue_date=sale_date,
-                due_date=due_date,
-                subtotal_ex_vat=subtotal,
-                vat_amount=vat_total,
-                total_inc_vat=total_inc,
-                amount_paid=Decimal(0),
+                due_date=data.due_date,
+                lines=invoice_line_models,
+                vat_rate=preview.vat_rate,
                 prices_include_vat=preview.prices_include_vat,
+                memo="Till tax invoice",
+                actor_user_id=user_id,
+                event_note=override_note,
+                sales_staff_id=data.sales_staff_id,
                 on_account=on_account,
                 note_printed=data.note_printed,
                 note_internal=data.note_internal,
-                sales_staff_id=data.sales_staff_id,
                 source="till",
-                lines=invoice_line_models,
             )
-
-            await self.invoice_crud.add_and_flush(invoice)
-
-            await self.posting.post(
-                JournalDocumentType.INVOICE,
-                invoice.id,
-                f"Till tax invoice {invoice_number}",
-                self.category_posting.collapse(
-                    [
-                        (CODE_AR, total_inc, Decimal(0)),
-                        *sales_parts,
-                        (CODE_VAT, Decimal(0), vat_total),
-                    ]
-                ),
-                entry_date=sale_date,
-            )
+            invoice_number = invoice.invoice_number
 
             payment: Optional[Payment] = None
             if not on_account:
@@ -413,6 +361,37 @@ class TillOrchestrator:
                     entry_date=sale_date,
                 )
 
+            # Stock leaves in the same order as before (row-lock order); cost of goods is what
+            # each movement consumed, read from its locked row.
+            total_cogs = Decimal(0)
+            cogs_parts: list[tuple[str, Decimal, Decimal]] = []
+            for index, sku, line_cogs, decrements in costed:
+                for sku_id, qty, our_ref in decrements:
+                    taken = await self.stock_movements.apply_outgoing_qty(
+                        sku_id=sku_id,
+                        location_id=data.location_id,
+                        qty=Decimal(qty),
+                        user_id=user_id,
+                        source=UnitCostAuditSource.TILL,
+                        note=f"Till sale {invoice_number}",
+                        # ponytail: the till audit row is deferred one release, so the image a
+                        # failed release rolls back to already reads "till" before anything
+                        # writes it (an unknown enum value 500s Home and cost audit). The
+                        # follow-up release flips this to True.
+                        record_audit=False,
+                    )
+                    if taken.unit_cost_zar is None:
+                        raise ConflictError(f"No unit cost for {our_ref} at this location")
+                    line_cogs += taken.total_zar
+                    invoice_line = invoice_line_models[index]
+                    if sku_id == invoice_line.sku_id and qty == invoice_line.qty:
+                        # The whole line left this shelf: a return restocks it at this cost.
+                        invoice_line.unit_cost_zar = taken.unit_cost_zar
+                total_cogs += line_cogs
+                cogs_parts.append(
+                    (await self.category_posting.cogs_code_for_sku(sku), line_cogs, Decimal(0))
+                )
+
             if total_cogs > 0:
                 await self.posting.post(
                     JournalDocumentType.INVOICE,
@@ -425,13 +404,6 @@ class TillOrchestrator:
                         ]
                     ),
                     entry_date=sale_date,
-                )
-
-            for sku_id, qty in stock_decrements:
-                await self.stock_movements.apply_bin_qty_delta(
-                    sku_id=sku_id,
-                    location_id=data.location_id,
-                    qty_delta=-qty,
                 )
 
             for pick in picks_to_link:
@@ -456,13 +428,6 @@ class TillOrchestrator:
                     invoice.id, customer.id, remainders, user_id
                 )
                 pick_id = till_pick.id
-            await self.events.record(
-                BooksDocumentType.INVOICE,
-                invoice.id,
-                BooksEventAction.CREATED,
-                actor_user_id=user_id,
-                note=override_note,
-            )
             if payment is not None:
                 await self.events.record(
                     BooksDocumentType.PAYMENT,
@@ -503,12 +468,15 @@ class TillOrchestrator:
             vat_amount=reloaded.vat_amount.quantize(CENT),
             total_inc_vat=reloaded.total_inc_vat.quantize(CENT),
             prices_include_vat=reloaded.prices_include_vat,
+            vat_rate=reloaded.vat_rate,
             lines=[
                 InvoiceLineResponse(
                     id=line.id,
                     description=line.description,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    unit_inc_vat=ex_to_inc(line.unit_ex_vat, reloaded.vat_rate),
+                    discount_percent=line.discount_percent,
                     ex_vat=line.ex_vat,
                     inc_vat=line.inc_vat.quantize(CENT),
                     vat_amount=line.vat_amount.quantize(CENT),
@@ -529,7 +497,7 @@ class TillOrchestrator:
             self.db,
             sale.lines,
             viewer_user_id=user_id,
-            prices_include_vat=reloaded.prices_include_vat,
+            inclusive_vat_rate=reloaded.vat_rate if reloaded.prices_include_vat else None,
         )
         return sale
 
@@ -630,8 +598,10 @@ class TillOrchestrator:
         pick_ids: list[uuid.UUID],
         used_pick_ids: set[uuid.UUID],
         reserved: dict[uuid.UUID, int],
-        stock_decrements: list[tuple[uuid.UUID, int]],
+        stock_decrements: list[tuple[uuid.UUID, int, str]],
     ) -> tuple[Decimal, Optional[Pick], Optional[dict]]:
+        """Plan a kit line: its components leave the showroom (costed when they move, so the
+        cost returned is 0), or a matching pick already moved them (cost returned), or a block."""
         showroom_ok = True
         for bom in bom_lines:
             need = whole_component_qty(bom.qty, line_qty)
@@ -647,26 +617,14 @@ class TillOrchestrator:
                 break
 
         if showroom_ok:
-            line_cogs = Decimal(0)
             for bom in bom_lines:
                 need = whole_component_qty(bom.qty, line_qty)
                 component = await self.sku_crud.get_by_id(bom.component_sku_id)
                 if component is None:
                     raise NotFoundError("SKU not found")
-                loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                    bom.component_sku_id,
-                    location_id,
-                )
-                assert loc_stock is not None
-                if loc_stock.unit_cost_zar is None:
-                    raise ConflictError(f"No unit cost for {component.our_ref} at this location")
-                line_cogs += (loc_stock.unit_cost_zar * need).quantize(
-                    CENT,
-                    rounding=ROUND_HALF_UP,
-                )
                 reserved[bom.component_sku_id] = reserved.get(bom.component_sku_id, 0) + need
-                stock_decrements.append((bom.component_sku_id, need))
-            return line_cogs, None, None
+                stock_decrements.append((bom.component_sku_id, need, component.our_ref))
+            return Decimal(0), None, None
 
         pick = await self._matching_kit_pick(pick_ids, sku.id, line_qty, used_pick_ids)
         if pick is None:

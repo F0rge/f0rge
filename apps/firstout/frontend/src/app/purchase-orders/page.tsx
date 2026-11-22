@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useDeferredValue, useEffect, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useDeferredValue, useState } from "react";
 import {
   Add,
   CheckmarkFilled,
@@ -79,46 +80,30 @@ type Counts = Record<
   number
 >;
 function OrderOverview({
-  refresh,
   onFilter,
 }: {
-  refresh: number;
   onFilter: (status: StatusFilter) => void;
 }) {
-  const [counts, setCounts] = useState<Counts | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setError(null);
-      try {
-        const pages = await Promise.all(
-          activeStatuses.map((status) =>
-            listPurchaseOrders({ status, limit: 1 }),
-          ),
-        );
-        if (active)
-          setCounts({
-            pending_approval: pages[0].total,
-            open: pages[1].total,
-            on_water: pages[2].total,
-            landed: pages[3].total,
-          });
-      } catch (reason) {
-        if (active)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "Could not load order totals.",
-          );
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [refresh, retry]);
+  const countsQuery = useQuery({
+    queryKey: ["purchase-orders", "counts"],
+    queryFn: async (): Promise<Counts> => {
+      const pages = await Promise.all(
+        activeStatuses.map((status) =>
+          listPurchaseOrders({ status, limit: 1 }),
+        ),
+      );
+      return {
+        pending_approval: pages[0].total,
+        open: pages[1].total,
+        on_water: pages[2].total,
+        landed: pages[3].total,
+      };
+    },
+  });
+  const counts = countsQuery.data ?? null;
+  const error = countsQuery.error
+    ? countsQuery.error.message || "Could not load order totals."
+    : null;
   const cards: {
     label: string;
     value: number | undefined;
@@ -176,7 +161,7 @@ function OrderOverview({
           <Button
             kind="ghost"
             size="sm"
-            onClick={() => setRetry((value) => value + 1)}
+            onClick={() => void countsQuery.refetch()}
           >
             Retry totals
           </Button>
@@ -253,61 +238,40 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const createRequested = searchParams.get("new") === "1";
-  const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState<number | null>(null);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [needsSkus, setNeedsSkus] = useState(false);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [refresh, setRefresh] = useState(0);
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await listPurchaseOrders({
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
-          status: status === "all" ? undefined : status,
-          needs_skus: needsSkus,
-          q: deferredQuery,
-        });
-        if (!active) return;
-        setOrders(response.items);
-        setTotal(response.total);
-        setSelectedId((current) =>
-          response.items.some((order) => order.id === current)
-            ? current
-            : response.items[0]?.id || null,
-        );
-      } catch (reason) {
-        if (active) {
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "Could not load purchase orders.",
-          );
-          setOrders([]);
-          setTotal(0);
-          setSelectedId(null);
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [page, pageSize, status, needsSkus, deferredQuery, refresh]);
+  const [chosenId, setSelectedId] = useState<string | null>(null);
+  const client = useQueryClient();
+  const ordersQuery = useQuery({
+    queryKey: ["purchase-orders", "list", { page, pageSize, status, needsSkus, q: deferredQuery }],
+    queryFn: () =>
+      listPurchaseOrders({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        status: status === "all" ? undefined : status,
+        needs_skus: needsSkus,
+        q: deferredQuery,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const loading = ordersQuery.isFetching;
+  const error = ordersQuery.error
+    ? ordersQuery.error.message || "Could not load purchase orders."
+    : null;
+  const orders: PurchaseOrderListItem[] = (!error && ordersQuery.data?.items) || [];
+  const total = error ? 0 : (ordersQuery.data?.total ?? null);
+  // Keep the chosen order while a page loads; afterwards fall back to the first row.
+  const selectedId =
+    loading || orders.some((order) => order.id === chosenId)
+      ? chosenId
+      : orders[0]?.id || null;
+  const refresh = () => void client.invalidateQueries({ queryKey: ["purchase-orders"] });
   function filter(next: StatusFilter) {
     setStatus(next);
     setQuery("");
@@ -335,7 +299,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
     setNeedsSkus(false);
     setPage(1);
     setSelectedId(order.id);
-    setRefresh((value) => value + 1);
+    refresh();
   }
   return (
     <div className={styles.stack}>
@@ -376,7 +340,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
           onCloseButtonClick={() => setSuccess(null)}
         />
       )}
-      <OrderOverview refresh={refresh} onFilter={filter} />
+      <OrderOverview onFilter={filter} />
       {error && (
         <div className={styles.stack}>
           <InlineNotification
@@ -388,7 +352,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
           />
           <Button
             kind="tertiary"
-            onClick={() => setRefresh((value) => value + 1)}
+            onClick={refresh}
           >
             Try again
           </Button>
@@ -563,7 +527,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
           </TableContainer>
         </section>
         {selectedId ? (
-          <SelectedOrder key={`${selectedId}:${refresh}`} id={selectedId} />
+          <SelectedOrder key={selectedId} id={selectedId} />
         ) : loading ? (
           <SelectedOrderLoading announce={false} />
         ) : (

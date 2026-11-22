@@ -1063,3 +1063,33 @@ async def test_late_already_paid_order_is_recorded_after_sku_archive(
     assert await async_db.scalar(select(func.count()).select_from(OpsCommerceOrder)) == 1
     await async_db.refresh(sku)
     assert sku.is_archived is True
+
+
+@pytest.mark.asyncio
+async def test_paid_order_captured_in_locked_books_period_is_retryable_and_writes_nothing(
+    owner_client,
+    async_db,
+    ops_headers,
+):
+    from tests.test_books_periods import _create_books_period
+
+    payload, _ = await _paid_order_payload(owner_client, fixture_tag="books-locked")
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    period = await _create_books_period(owner_client, "2026-09-01", "2026-09-30")
+    locked = await owner_client.post(f"/api/v1/books-periods/{period['id']}/lock")
+    assert locked.status_code == 200
+
+    async def counts() -> tuple[int, int, int]:
+        return (
+            await async_db.scalar(select(func.count()).select_from(SalesOrder)),
+            await async_db.scalar(select(func.count()).select_from(OpsCommerceOrder)),
+            await async_db.scalar(select(func.count()).select_from(JournalEntry)),
+        )
+
+    before = await counts()
+    resp = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    # 503, not 409: the storefront retries with backoff instead of marking it terminal.
+    assert resp.status_code == 503, resp.text
+    assert await counts() == before

@@ -6,34 +6,33 @@ import { useAuth as useClerkAuth, useClerk } from "@clerk/nextjs";
 import { ArrowRight, Enterprise } from "@carbon/icons-react";
 import { Button, InlineNotification, SkeletonText, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tile } from "@carbon/react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { OrganisationForm } from "./organisation-form";
 import { activateWorkspace } from "@/lib/workspace-activation";
-import { createOrganisation, getSignupIdentity, getSignupStatus, organisationDestination, tenantSubdomainsEnabled, type CreateOrganisation, type Organisation, type SignupIdentity, type SignupStatus } from "@/lib/organisations";
+import { createOrganisation, getSignupIdentity, getSignupStatus, organisationDestination, tenantSubdomainsEnabled, type CreateOrganisation, type Organisation } from "@/lib/organisations";
+import { usePageError } from "@/hooks/use-page-error";
 
 export function OrganisationOnboarding() {
   const { isLoaded, isSignedIn } = useClerkAuth();
   const clerk = useClerk();
-  const [identity, setIdentity] = useState<SignupIdentity | null>(null);
-  const [status, setStatus] = useState<SignupStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<Organisation | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const [selectedTab, setSelectedTab] = useState(0);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const createTab = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    let cancelled = false;
-    Promise.all([getSignupIdentity(), getSignupStatus()])
-      .then(([who, available]) => { if (!cancelled) { setIdentity(who); setStatus(available); setError(null); } })
-      .catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to load your organisations."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [isLoaded, isSignedIn, attempt]);
+  const signup = useQuery({
+    queryKey: ["signup"],
+    queryFn: async () => {
+      const [identity, status] = await Promise.all([getSignupIdentity(), getSignupStatus()]);
+      return { identity, status };
+    },
+    enabled: Boolean(isLoaded && isSignedIn),
+  });
+  const identity = signup.data?.identity ?? null;
+  const status = signup.data?.status ?? null;
+  const loading = signup.isPending || signup.isFetching;
+  const { error, setError } = usePageError(signup.error, "Unable to load your organisations.");
 
   async function openOrganisation(organisation: Organisation, settings = false) {
     setSubmitting(true);
@@ -116,7 +115,7 @@ export function OrganisationOnboarding() {
       <Button kind="ghost" size="sm" disabled={submitting} onClick={() => void clerk.signOut({ redirectUrl: "/clerk-login" })}>Sign out</Button>
     </div>
     {error ? <InlineNotification kind="error" title="We couldn’t finish that" subtitle={error} hideCloseButton lowContrast /> : null}
-    {!identity ? <Button kind="secondary" onClick={() => { setLoading(true); setAttempt((value) => value + 1); }}>Try again</Button> : <>
+    {!identity ? <Button kind="secondary" onClick={() => void signup.refetch()}>Try again</Button> : <>
       {created ? <Tile><Stack gap={4}>
         <h2 className="cds--type-productive-heading-03">{created.name} is created</h2>
         <p>Your business is ready. Continue to add your logo and invite staff.</p>

@@ -176,6 +176,7 @@ payment_summary
 post_journal
 preview_auto_match
 preview_invoice_prices
+preview_layby_prices
 preview_pick
 preview_quote_prices
 preview_till_prices

@@ -1,17 +1,20 @@
 "use client";
 
 import { Button, Checkbox, ComboBox, InlineNotification, Modal, NumberInput, Stack, TextInput } from "@carbon/react";
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { RecordDetail, RecordDetails, RecordWorkspace, type RecordWorkspaceAdapter } from "@/components/record-workspace";
 import {
   canMutateCatalogue, createPriceList, deletePriceListItem, formatPriceAmount,
-  listSkus, updatePriceList, upsertPriceListItem, type PriceList, type Sku,
+  updatePriceList, upsertPriceListItem, type PriceList, type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { isCin7GeneratedPriceList } from "@/lib/quote-sku-price";
+import { queryKeys, referenceQueries } from "@/lib/queries";
+import { isCin7GeneratedPriceList } from "@/lib/price-lists";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { PriceListItems } from "./price-list-items";
 import styles from "./price-lists.module.css";
+import { usePageError } from "@/hooks/use-page-error";
 
 function skuLabel(item: Sku | null): string {
   return item ? `${item.our_ref} — ${item.name}` : "";
@@ -26,27 +29,23 @@ function PriceListsContent() {
   const { user } = useAuth();
   const canMutate = canMutateCatalogue(user);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createRequirePrice, setCreateRequirePrice] = useState(false);
   const [editing, setEditing] = useState<PriceList | null>(null);
   const [detailName, setDetailName] = useState("");
   const [detailRequirePrice, setDetailRequirePrice] = useState(false);
-  const [skus, setSkus] = useState<Sku[]>([]);
   const [skuId, setSkuId] = useState("");
   const [unitExVat, setUnitExVat] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
   const [itemBusy, setItemBusy] = useState(false);
   const editingId = editing?.id;
 
-  useEffect(() => {
-    if (!editingId || !canMutate) return;
-    let cancelled = false;
-    void listSkus().then((items) => { if (!cancelled) setSkus(items); })
-      .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : "Could not load products."); });
-    return () => { cancelled = true; };
-  }, [editingId, canMutate]);
+  const client = useQueryClient();
+  const skusQuery = useQuery({ ...referenceQueries.skus, enabled: Boolean(editingId && canMutate) });
+  const skus = skusQuery.data ?? [];
+  // A product load failure only matters inside the editor that needs the products.
+  const { error, setError } = usePageError(editing ? skusQuery.error : null, "Could not load products.");
 
   const adapter: RecordWorkspaceAdapter<PriceList> = {
     resource: "price-lists", title: "Price lists", singular: "price list", breadcrumb: "Catalogue management",
@@ -68,6 +67,7 @@ function PriceListsContent() {
 
   function acceptUpdate(item: PriceList) {
     setEditing(item); setRefreshKey((value) => value + 1);
+    void client.invalidateQueries({ queryKey: queryKeys.priceLists });
   }
 
   async function handleCreate() {
@@ -76,6 +76,7 @@ function PriceListsContent() {
     try {
       await createPriceList({ name: createName.trim(), till_require_listed_price: createRequirePrice });
       setCreateOpen(false); setCreateName(""); setCreateRequirePrice(false); setRefreshKey((value) => value + 1);
+      void client.invalidateQueries({ queryKey: queryKeys.priceLists });
     } catch (err) { setError(err instanceof Error ? err.message : "Could not create price list."); }
     finally { setSaving(false); }
   }

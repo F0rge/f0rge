@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from collections.abc import Awaitable, Callable
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,9 +19,6 @@ from app.crud.ops_commerce_orders import OpsCommerceOrdersCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sales_order import SalesOrderCRUD
 from app.crud.sku import SkuCRUD
-from app.crud.tax_invoice import TaxInvoiceCRUD
-from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import TeamCRUD
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
 from app.models.ops_commerce_order import OpsCommerceOrder
@@ -33,11 +30,12 @@ from app.models.sales_order import (
     SalesOrderPayment,
     SalesOrderStatus,
 )
-from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.models.tax_invoice import InvoiceLine
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.ops_commerce_order import StorefrontPaidOrder
 from app.schemas.page import Page, PageParams
 from app.schemas.quote import QuoteAccept
+from app.schemas.sale_line_pricing import SalePricePreview
 from app.schemas.sales_order import (
     SalesOrderConfirm,
     SalesOrderCreate,
@@ -47,22 +45,25 @@ from app.schemas.sales_order import (
     SalesOrderPaymentResponse,
     SalesOrderResponse,
 )
-from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
-    CODE_AR,
     CODE_BANK,
     CODE_DEPOSITS,
     CODE_INVENTORY,
-    CODE_VAT,
     LedgerPostingService,
 )
-from app.services.payment_terms import compute_due_date
-from app.services.pricing import resolve_unit_price, shows_prices_including_vat
-from app.services.stock_movements import StockMovementService
+from app.services.pricing import shows_prices_including_vat
+from app.services.sale_line_pricing import (
+    PricingAuthority,
+    SaleLinePricing,
+    SaleLineRequest,
+    document_totals,
+    line_amounts,
+)
+from app.services.stock_movements import StockCost, StockMovementService
 from app.services.suspect_price import annotate_line_warnings
 from app.services.stocktakes import StocktakeService
-from app.services.vat import CENT, discounted_unit_ex, ex_to_inc
+from app.services.tax_invoice_issue import Deposits, TaxInvoiceIssue
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -77,7 +78,6 @@ class SalesOrdersService:
         self.location_crud = LocationCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.location_stock_crud = LocationStockCRUD(db)
-        self.invoice_crud = TaxInvoiceCRUD(db)
         self.stock_movements = StockMovementService(db)
         self.stocktakes = StocktakeService(db)
         self.posting = LedgerPostingService(db)
@@ -113,19 +113,17 @@ class SalesOrdersService:
     ) -> SalesOrderResponse:
         customer = await self._require_customer(data.customer_id)
         assert_customer_active(customer)
-        line_models, subtotal, vat_amount, total_inc = await self._build_line_models(
-            customer,
-            data.lines,
-        )
+        line_models, priced = await self._build_line_models(customer, data.lines, user_id)
         order = SalesOrder(
             so_number="",
             customer_id=customer.id,
             hold_stock=False,
             awaiting_stock=False,
             status=SalesOrderStatus.DRAFT,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_amount,
-            total_inc_vat=total_inc,
+            subtotal_ex_vat=priced.subtotal_ex_vat,
+            vat_amount=priced.vat_amount,
+            total_inc_vat=priced.total_inc_vat,
+            vat_rate=priced.vat_rate,
             amount_paid=Decimal(0),
             notes=data.notes,
             prices_include_vat=shows_prices_including_vat(customer),
@@ -146,23 +144,25 @@ class SalesOrdersService:
         existing = await self.crud.get_by_quote_id(quote.id)
         if existing is not None:
             raise ConflictError("Quote already has a sales order")
-        line_models = []
-        for line in quote.lines:
-            notes = line.notes
-            if line.discount_percent > 0:
-                discount_note = f"{line.discount_percent:.2f}% line discount"
-                notes = f"{notes}; {discount_note}" if notes else discount_note
-            line_models.append(
-                SalesOrderLine(
-                    sku_id=line.sku_id,
-                    qty=line.qty,
-                    unit_ex_vat=discounted_unit_ex(line.unit_ex_vat, line.discount_percent),
-                    description=line.description,
-                    notes=notes,
-                    price_warning=line.price_warning,
-                    held_qty=0,
-                )
+        # The quote's list unit, discount and VAT rate carry over; the order totals its own
+        # lines with the one line rule, so its invoice adds up to what the order charged.
+        line_models = [
+            SalesOrderLine(
+                sku_id=line.sku_id,
+                qty=line.qty,
+                unit_ex_vat=line.unit_ex_vat,
+                discount_percent=line.discount_percent,
+                description=line.description,
+                notes=line.notes,
+                price_warning=line.price_warning,
+                held_qty=0,
             )
+            for line in quote.lines
+        ]
+        subtotal, vat_amount, total_inc = document_totals(
+            ((line.unit_ex_vat, line.qty, line.discount_percent) for line in line_models),
+            quote.vat_rate,
+        )
         order = SalesOrder(
             so_number="",
             customer_id=quote.customer_id,
@@ -171,9 +171,10 @@ class SalesOrdersService:
             hold_stock=False,
             awaiting_stock=False,
             status=SalesOrderStatus.OPEN,
-            subtotal_ex_vat=quote.subtotal_ex_vat,
-            vat_amount=quote.vat_amount,
-            total_inc_vat=quote.total_inc_vat,
+            subtotal_ex_vat=subtotal,
+            vat_amount=vat_amount,
+            total_inc_vat=total_inc,
+            vat_rate=quote.vat_rate,
             prices_include_vat=quote.prices_include_vat,
             amount_paid=Decimal(0),
             notes=quote.notes,
@@ -297,25 +298,29 @@ class SalesOrdersService:
         for line in order.lines:
             if line.held_qty <= 0 or line.hold_location_id is None:
                 continue
-            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                line.sku_id,
-                line.hold_location_id,
-            )
-            unit_cost = line.hold_unit_cost_zar
-            if unit_cost is None:
-                if loc_stock is None or loc_stock.unit_cost_zar is None:
-                    raise ValidationError("unit cost required")
-                unit_cost = loc_stock.unit_cost_zar
+            held = await self._held_cost(line)
+            if held.unit_cost_zar is None:
+                raise ValidationError("unit cost required")
             await self.stock_movements.apply_incoming_qty(
                 sku_id=line.sku_id,
                 location_id=line.hold_location_id,
                 qty=line.held_qty,
-                unit_cost_zar=unit_cost,
+                unit_cost_zar=held.unit_cost_zar,
                 user_id=user_id,
                 source=UnitCostAuditSource.SALES_ORDER,
                 note=note,
             )
             line.held_qty = 0
+
+    async def _held_cost(self, line: SalesOrderLine) -> StockCost:
+        """The cost the held stock left the shelf at; older holds without one use today's average."""
+        unit_cost = line.hold_unit_cost_zar
+        if unit_cost is None and line.hold_location_id is not None:
+            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                line.sku_id, line.hold_location_id
+            )
+            unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
+        return StockCost(Decimal(line.held_qty), unit_cost)
 
     async def _storefront_tax_snapshot(
         self, order: SalesOrder
@@ -383,20 +388,16 @@ class SalesOrdersService:
         if tax_snapshot is not None:
             stock_source = UnitCostAuditSource.STOREFRONT
         issue_date = datetime.date.today()
-        await assert_date_postable(self.db, issue_date)
 
         invoice_line_models: list[InvoiceLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)
         total_inc = Decimal(0)
-        sales_parts: list[tuple[str, Decimal, Decimal]] = []
         for index, line in enumerate(order.lines):
             if tax_snapshot is None:
-                ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(
-                    CENT, rounding=ROUND_HALF_UP
+                ex_vat, line_vat, inc_vat = line_amounts(
+                    line.unit_ex_vat, line.qty, line.discount_percent, order.vat_rate
                 )
-                inc_vat = ex_to_inc(ex_vat)
-                line_vat = inc_vat - ex_vat
             else:
                 if len(tax_snapshot) != len(order.lines) + 1:
                     raise ValidationError("Storefront tax snapshot does not match order lines")
@@ -406,13 +407,12 @@ class SalesOrdersService:
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat
-            sales_code = await self.category_posting.sales_code_for_sku(line.sku)
-            sales_parts.append((sales_code, Decimal(0), ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=line.description,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    discount_percent=line.discount_percent,
                     ex_vat=ex_vat,
                     inc_vat=inc_vat,
                     vat_amount=line_vat,
@@ -430,7 +430,8 @@ class SalesOrdersService:
                 subtotal += delivery_ex
                 vat_total += delivery_vat
                 total_inc += delivery_inc
-                sales_parts.append(("4000", Decimal(0), delivery_ex))
+                # ponytail: delivery has no SKU, so it posts to CODE_SALES ("4000"), as it
+                # always has; a delivery income account is its own decision.
                 invoice_line_models.append(
                     InvoiceLine(
                         description="Storefront delivery",
@@ -450,13 +451,6 @@ class SalesOrdersService:
             ):
                 raise ValidationError("Storefront tax snapshot does not match the paid order")
 
-        team = await TeamCRUD(self.db).get_first()
-        if team is None:
-            raise NotFoundError("Team not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
-        due_date = compute_due_date(issue_date, order.customer, team_settings)
-        deposit_total = order.amount_paid
-
         outgoing_needed = [line for line in order.lines if line.held_qty < line.qty]
         if outgoing_needed:
             location_id = order.location_id
@@ -465,73 +459,42 @@ class SalesOrdersService:
             await self.stocktakes.assert_location_unlocked(location_id)
 
         async with unit_of_work(self.db):
-            invoice_number = await self.invoice_crud.get_next_invoice_number()
-            invoice = TaxInvoice(
-                invoice_number=invoice_number,
-                customer_id=order.customer_id,
+            invoice = await TaxInvoiceIssue(self.db).issue(
+                customer=order.customer,
                 issue_date=issue_date,
-                due_date=due_date,
-                subtotal_ex_vat=subtotal,
-                vat_amount=vat_total,
-                total_inc_vat=total_inc,
-                amount_paid=deposit_total,
-                prices_include_vat=order.prices_include_vat,
                 lines=invoice_line_models,
-            )
-            await self.invoice_crud.add_and_flush(invoice)
-            await self.posting.post(
-                JournalDocumentType.INVOICE,
-                invoice.id,
-                f"Sales order tax invoice {invoice_number}",
-                self.category_posting.collapse(
-                    [
-                        (CODE_AR, total_inc, Decimal(0)),
-                        *sales_parts,
-                        (CODE_VAT, Decimal(0), vat_total),
-                    ]
+                vat_rate=order.vat_rate,
+                prices_include_vat=order.prices_include_vat,
+                memo="Sales order tax invoice",
+                actor_user_id=user_id,
+                deposits=Deposits(
+                    source_id=order.id,
+                    memo=f"Apply sales order deposits {order.so_number}",
+                    amount=order.amount_paid,
                 ),
-                entry_date=issue_date,
             )
-            if deposit_total > 0:
-                await self.posting.post(
-                    JournalDocumentType.PAYMENT,
-                    order.id,
-                    f"Apply sales order deposits {order.so_number}",
-                    [
-                        (CODE_DEPOSITS, deposit_total, Decimal(0)),
-                        (CODE_AR, Decimal(0), deposit_total),
-                    ],
-                    entry_date=issue_date,
-                )
 
             total_cogs = Decimal(0)
             cogs_parts: list[tuple[str, Decimal, Decimal]] = []
-            for line in order.lines:
-                remaining = line.qty - line.held_qty
-                if remaining > 0:
+            # Order lines come first in invoice_line_models; delivery, if any, follows.
+            for line, invoice_line in zip(order.lines, invoice_line_models):
+                # A line is either held in full or not at all (_apply_hold).
+                if line.held_qty < line.qty:
                     assert order.location_id is not None
-                    await self.stock_movements.apply_outgoing_qty(
+                    sold = await self.stock_movements.apply_outgoing_qty(
                         sku_id=line.sku_id,
                         location_id=order.location_id,
-                        qty=remaining,
+                        qty=line.qty - line.held_qty,
                         user_id=user_id,
                         source=stock_source,
                         note=f"Sales order {order.so_number} remainder",
                     )
                     line.held_qty = line.qty
                     line.hold_location_id = order.location_id
-                loc_id = line.hold_location_id or order.location_id
-                unit_cost = line.hold_unit_cost_zar
-                if unit_cost is None and loc_id is not None:
-                    loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                        line.sku_id,
-                        loc_id,
-                    )
-                    if loc_stock is not None:
-                        unit_cost = loc_stock.unit_cost_zar
-                if unit_cost is None:
-                    raise ValidationError("unit cost required")
-                line_cogs = (unit_cost * line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
+                else:
+                    sold = await self._held_cost(line)
+                line_cogs = sold.total_zar
+                invoice_line.unit_cost_zar = sold.unit_cost_zar
                 total_cogs += line_cogs
                 cogs_code = await self.category_posting.cogs_code_for_sku(line.sku)
                 cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
@@ -595,7 +558,7 @@ class SalesOrdersService:
             if loc_stock is None or loc_stock.unit_cost_zar is None or on_hand < line.qty:
                 any_unheld = True
                 continue
-            await self.stock_movements.apply_outgoing_qty(
+            held = await self.stock_movements.apply_outgoing_qty(
                 sku_id=line.sku_id,
                 location_id=location_id,
                 qty=line.qty,
@@ -605,7 +568,7 @@ class SalesOrdersService:
             )
             line.held_qty = line.qty
             line.hold_location_id = location_id
-            line.hold_unit_cost_zar = loc_stock.unit_cost_zar
+            line.hold_unit_cost_zar = held.unit_cost_zar
             any_held = True
         order.hold_stock = any_held
         order.awaiting_stock = any_unheld
@@ -645,37 +608,37 @@ class SalesOrdersService:
         self,
         customer,
         lines,
-    ) -> tuple[list[SalesOrderLine], Decimal, Decimal, Decimal]:
+        user_id: Optional[uuid.UUID],
+    ) -> tuple[list[SalesOrderLine], SalePricePreview]:
         await SkuArchiveService(self.db).lock_skus([line.sku_id for line in lines])
-        models: list[SalesOrderLine] = []
-        subtotal = Decimal(0)
-        vat_total = Decimal(0)
-        total_inc = Decimal(0)
+        skus = []
         for line in lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
             assert_sku_sellable(sku)
-            resolved = await resolve_unit_price(self.db, sku, customer)
-            unit_ex = resolved.unit_ex_vat
-            ex_vat = (Decimal(line.qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
-            subtotal += ex_vat
-            vat_total += line_vat
-            total_inc += inc_vat
-            models.append(
-                SalesOrderLine(
-                    sku_id=sku.id,
-                    qty=line.qty,
-                    unit_ex_vat=unit_ex,
-                    description=sku.name,
-                    notes=getattr(line, "notes", None),
-                    price_warning=resolved.warning,
-                    held_qty=0,
-                )
+            skus.append(sku)
+        pricing = await SaleLinePricing.for_customer(
+            self.db, customer, await PricingAuthority.of(self.db, user_id)
+        )
+        # Sales order lines carry no discount or price override.
+        priced = await pricing.price(
+            [SaleLineRequest(sku=sku, qty=line.qty) for sku, line in zip(skus, lines, strict=True)]
+        )
+        models = [
+            SalesOrderLine(
+                sku_id=sku.id,
+                qty=line.qty,
+                unit_ex_vat=price.unit_ex_vat,
+                discount_percent=price.discount_percent,
+                description=sku.name,
+                notes=getattr(line, "notes", None),
+                price_warning=price.price_warning,
+                held_qty=0,
             )
-        return models, subtotal, vat_total, total_inc
+            for sku, line, price in zip(skus, lines, priced.lines, strict=True)
+        ]
+        return models, priced
 
     async def _require_customer(self, customer_id: uuid.UUID):
         customer = await self.customer_crud.get_by_id(customer_id)
@@ -758,6 +721,7 @@ class SalesOrdersService:
             subtotal_ex_vat=order.subtotal_ex_vat,
             vat_amount=order.vat_amount,
             total_inc_vat=order.total_inc_vat,
+            vat_rate=order.vat_rate,
             amount_paid=order.amount_paid,
             balance=balance,
             notes=order.notes,
@@ -770,6 +734,7 @@ class SalesOrdersService:
                     name=line.sku.name,
                     qty=line.qty,
                     unit_ex_vat=line.unit_ex_vat,
+                    discount_percent=line.discount_percent,
                     description=line.description,
                     notes=line.notes,
                     price_warning=line.price_warning,
@@ -794,6 +759,6 @@ class SalesOrdersService:
             self.db,
             response.lines,
             viewer_user_id=viewer_user_id,
-            prices_include_vat=order.prices_include_vat,
+            inclusive_vat_rate=order.vat_rate if order.prices_include_vat else None,
         )
         return response

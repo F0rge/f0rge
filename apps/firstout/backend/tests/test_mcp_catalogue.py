@@ -384,6 +384,9 @@ def _runner_app(hits):
             raise HTTPException(409, "Owner access required")
         if name == "payload":
             return JSONResponse({"detail": {"code": "kit", "skus": ["A"]}}, status_code=409)
+        if name == "coded":
+            detail = {"code": "customer_credit_blocked", "message": "Customer is on hold"}
+            return JSONResponse({"detail": detail}, status_code=409)
         if name == "crash":
             raise RuntimeError("database password is hunter2")
         if name == "slow":
@@ -434,6 +437,7 @@ async def test_route_answers_map_to_denial_refusal_unknown_and_size_limit(monkey
         "Owner access required",
     )
     assert (await answer("payload")).error == '{"code":"kit","skus":["A"]}'
+    assert (await answer("coded", "POST")).error == "Customer is on hold"
     crash = await answer("crash", "POST")
     assert (crash.audit, crash.status, crash.error) == ("failed", None, UNKNOWN_OUTCOME)
     assert (await answer("crash")).error == READ_FAILED

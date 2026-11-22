@@ -82,9 +82,7 @@ function lineStatus(line: BankImportLine, journals: JournalListItem[]): string {
     return `Matched ${line.matched_payment_number ?? ""}`.trim();
   }
   if (line.matched_journal_id) {
-    const number =
-      line.matched_journal_number ??
-      journals.find((journal) => journal.id === line.matched_journal_id)?.journal_number;
+    const number = journals.find((journal) => journal.id === line.matched_journal_id)?.journal_number;
     return number ? `Matched ${number}` : "Matched journal";
   }
   if (line.suggested_payment_number) {

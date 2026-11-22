@@ -17,16 +17,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.stock_reservation import StockReservationCRUD
 from app.models.journal import JournalDocumentType
-from app.models.pick import Pick, PickSourceType, PickStatus
+from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from app.models.stock_reservation import HOLDER_INVOICE, StockReservation
+from app.models.tax_invoice import InvoiceLine
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import CODE_INVENTORY, LedgerPostingService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
-from app.services.vat import CENT
 from f0rge_core.exceptions import ConflictError
+
+UNIT_COST = Decimal("0.0001")  # invoice_lines.unit_cost_zar is Numeric(18, 4)
 
 
 def is_invoice_reserved(pick: Pick) -> bool:
@@ -78,31 +80,45 @@ class TillInvoicePick:
     async def deduct(self, pick: Pick, user_id: uuid.UUID) -> None:
         """Deduct every allocation at its source with COGS there, then release the reservations.
 
-        Every source is checked before anything is posted, so a short source changes nothing.
+        Every source is checked before anything moves; the caller's transaction rolls back
+        a source with no unit cost.
         """
         assert pick.invoice is not None
         today = datetime.date.today()
+        # post() only runs when cost of goods > 0; this also stops zero-cost stock moving.
         await assert_date_postable(self.db, today)
         stocks = LocationStockCRUD(self.db)
         category_posting = CategoryPostingService(self.db)
-        movements: list[tuple[uuid.UUID, uuid.UUID, int]] = []
-        cogs_parts: list[tuple[str, Decimal, Decimal]] = []
-        total_cogs = Decimal(0)
-        consumed: dict[uuid.UUID, int] = {}
+        movements: list[tuple[PickLine, PickAllocation]] = []
         for line in pick.lines:
             for alloc in line.allocations:
                 await StocktakeService(self.db).assert_location_unlocked(alloc.location_id)
-                where = f"{line.sku.our_ref} at {alloc.location.name}"
                 stock = await stocks.get_by_sku_and_location(line.sku_id, alloc.location_id)
                 if stock is None or stock.on_hand < alloc.qty:
-                    raise ConflictError(f"Insufficient stock for {where}")
-                if stock.unit_cost_zar is None:
-                    raise ConflictError(f"No unit cost for {where}")
-                cogs = (stock.unit_cost_zar * alloc.qty).quantize(CENT, rounding=ROUND_HALF_UP)
-                total_cogs += cogs
-                cogs_parts.append((await category_posting.cogs_code_for_sku(line.sku), cogs, 0))
-                movements.append((line.sku_id, alloc.location_id, alloc.qty))
-                consumed[line.sku_id] = consumed.get(line.sku_id, 0) + alloc.qty
+                    raise ConflictError(
+                        f"Insufficient stock for {line.sku.our_ref} at {alloc.location.name}"
+                    )
+                movements.append((line, alloc))
+
+        cogs_parts: list[tuple[str, Decimal, Decimal]] = []
+        total_cogs = Decimal(0)
+        consumed: dict[uuid.UUID, tuple[int, Decimal]] = {}
+        for line, alloc in movements:
+            taken = await StockMovementService(self.db).apply_outgoing_qty(
+                sku_id=line.sku_id,
+                location_id=alloc.location_id,
+                qty=alloc.qty,
+                user_id=user_id,
+                source=UnitCostAuditSource.TILL_PICK,
+                note=f"Till pick {pick.number} confirm",
+            )
+            if taken.unit_cost_zar is None:
+                raise ConflictError(f"No unit cost for {line.sku.our_ref} at {alloc.location.name}")
+            cogs = taken.total_zar
+            total_cogs += cogs
+            cogs_parts.append((await category_posting.cogs_code_for_sku(line.sku), cogs, 0))
+            qty, cost = consumed.get(line.sku_id, (0, Decimal(0)))
+            consumed[line.sku_id] = (qty + alloc.qty, cost + cogs)
 
         if total_cogs > 0:
             await LedgerPostingService(self.db).post(
@@ -112,18 +128,24 @@ class TillInvoicePick:
                 category_posting.collapse([*cogs_parts, (CODE_INVENTORY, Decimal(0), total_cogs)]),
                 entry_date=today,
             )
-        for sku_id, location_id, qty in movements:
-            await StockMovementService(self.db).apply_outgoing_qty(
-                sku_id=sku_id,
-                location_id=location_id,
-                qty=qty,
-                user_id=user_id,
-                source=UnitCostAuditSource.TILL_PICK,
-                note=f"Till pick {pick.number} confirm",
-            )
+        for sku_id, (qty, cost) in consumed.items():
+            # A line the showroom had none of comes wholly from this pick. A line it part-filled
+            # has two costs and keeps none (a return falls back to the location's average).
+            lines = (
+                await self.db.scalars(
+                    select(InvoiceLine).where(
+                        InvoiceLine.invoice_id == pick.invoice_id,
+                        InvoiceLine.sku_id == sku_id,
+                        InvoiceLine.unit_cost_zar.is_(None),
+                    )
+                )
+            ).all()
+            if len(lines) == 1 and lines[0].qty == qty:
+                # 4 dp is within 0.00005 a unit, so for qty < 100 a full return books these cents.
+                lines[0].unit_cost_zar = (cost / qty).quantize(UNIT_COST, rounding=ROUND_HALF_UP)
 
         held = await StockReservationCRUD(self.db).held_by((HOLDER_INVOICE, pick.invoice_id))
-        for sku_id, qty in consumed.items():
+        for sku_id, (qty, _) in consumed.items():
             row = held.get(sku_id)
             if row is None:
                 continue

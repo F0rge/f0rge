@@ -19,6 +19,7 @@ from app.config import settings
 from app.database import async_session_maker, tenant_session  # noqa: F401 — fixture compatibility
 from app.models.team import Team
 from app.exceptions import (
+    CustomerCreditBlockedError,
     DocumentLlmUnconfiguredError,
     RecordWorkspaceUnconfiguredError,
     McpTokensUnconfiguredError,
@@ -203,6 +204,7 @@ async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
     if isinstance(
         exc,
         (
+            CustomerCreditBlockedError,
             HeldResumeTargetChangedError,
             KitRequiresPickError,
             TillBasketConflictError,

@@ -33,7 +33,7 @@ from app.schemas.stock_return import (
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import CODE_INVENTORY, LedgerPostingService
 from app.services.credit_notes import CreditNoteService
-from app.services.stock_movements import StockMovementService
+from app.services.stock_movements import StockCost, StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.till_invoice_pick import TillInvoicePick
 from app.services.vat import CENT
@@ -165,13 +165,17 @@ class StockReturnsService:
                     invoice_line = invoice_lines_by_id[line.invoice_line_id]
                     sku_id = invoice_line.sku_id
                     assert sku_id is not None
-                    loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                        sku_id,
-                        stock_return.location_id,
-                    )
-                    if loc_stock is None or loc_stock.unit_cost_zar is None:
-                        raise ValidationError("unit cost required")
-                    unit_cost = loc_stock.unit_cost_zar
+                    # Back on the shelf at the cost the sale booked; sales without one (older,
+                    # kits, part-picked lines) keep the old rule, the location's current average.
+                    unit_cost = invoice_line.unit_cost_zar
+                    if unit_cost is None:
+                        loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                            sku_id,
+                            stock_return.location_id,
+                        )
+                        unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
+                    restocked = StockCost(Decimal(line.qty), unit_cost)
+                    line_cogs = restocked.total_zar
                     await self.stock_movements.apply_incoming_qty(
                         sku_id=sku_id,
                         location_id=stock_return.location_id,
@@ -181,7 +185,6 @@ class StockReturnsService:
                         source=UnitCostAuditSource.RETURN,
                         note=f"Return {stock_return.return_number} restock",
                     )
-                    line_cogs = (unit_cost * line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
                     total_cogs += line_cogs
                     cogs_code = await self.category_posting.cogs_code_for_sku(line.sku)
                     cogs_parts.append((cogs_code, Decimal(0), line_cogs))

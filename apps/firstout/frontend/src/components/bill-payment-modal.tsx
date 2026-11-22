@@ -6,7 +6,7 @@ import { useState } from "react";
 import { PaymentMethodFields } from "@/components/payment-method-fields";
 import { createPayment, type BillListItem, type Payment, type PaymentMethod } from "@/lib/api";
 import { partialPaymentError } from "@/lib/payment-status";
-import { localIsoDate } from "@/lib/till-statement";
+import { localIsoDate } from "@/lib/dates";
 
 /** Record a payment out against one approved bill, from the bills list or a bill page. */
 export function BillPaymentModal({

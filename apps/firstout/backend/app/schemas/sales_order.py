@@ -40,6 +40,8 @@ class SalesOrderLineResponse(BaseModel):
     name: str
     qty: int
     unit_ex_vat: Decimal
+    # Line discount %. None on lines stored before it was kept: their unit is already net.
+    discount_percent: Optional[Decimal] = None
     description: str
     notes: Optional[str]
     price_warning: Optional[str] = None
@@ -106,6 +108,8 @@ class SalesOrderResponse(BaseModel):
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal
+    # The rate the amounts use (0.15 is 15%), stored with the document (ADR 0003).
+    vat_rate: Decimal
     amount_paid: Decimal
     balance: Decimal
     notes: Optional[str]

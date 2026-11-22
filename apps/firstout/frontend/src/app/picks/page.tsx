@@ -19,20 +19,21 @@ import {
   Tag,
 } from "@carbon/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
   canMutatePicks,
   createPick,
   listPicks,
-  listSkus,
   previewPick,
-  type PickDocument,
   type PickPreview,
   type Sku,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { referenceQueries } from "@/lib/queries";
 import { PICK_STATUS_LABELS, pickStatusTagType } from "@/lib/picks";
 
 const TABLE_HEADERS = [
@@ -75,40 +76,21 @@ function PicksPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canMutate = canMutatePicks(user);
-  const [picks, setPicks] = useState<PickDocument[]>([]);
-  const [skus, setSkus] = useState<Sku[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [skuId, setSkuId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
-  const [preview, setPreview] = useState<PickPreview | null>(null);
   const prefillConsumed = useRef(false);
 
-  const kits = useMemo(() => skus.filter((sku) => sku.is_kit), [skus]);
+  const picksQuery = useQuery({ queryKey: ["picks"], queryFn: () => listPicks(), enabled: Boolean(user) });
+  const skusQuery = useQuery({ ...referenceQueries.skus, enabled: Boolean(user) });
+  const picks = useMemo(() => picksQuery.data ?? [], [picksQuery.data]);
+  const loading = picksQuery.isPending || skusQuery.isPending || picksQuery.isFetching || skusQuery.isFetching;
+  const loadFailure = picksQuery.error ?? skusQuery.error;
+  const { error, setError } = usePageError(loadFailure, "Failed to load picks.");
+  const kits = useMemo(() => (skusQuery.data ?? []).filter((sku) => sku.is_kit), [skusQuery.data]);
   const selectedSku = kits.find((sku) => sku.id === skuId) ?? null;
   const numericQty = typeof qty === "number" ? qty : 0;
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [pickData, skuData] = await Promise.all([listPicks(), listSkus()]);
-      setPicks(pickData);
-      setSkus(skuData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load picks.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadData();
-    }
-  }, [user, loadData]);
 
   useEffect(() => {
     if (!canMutate || prefillConsumed.current) {
@@ -130,27 +112,14 @@ function PicksPageContent() {
     router.replace(qs ? `/picks?${qs}` : "/picks");
   }, [canMutate, searchParams, router]);
 
-  useEffect(() => {
-    if (!createOpen || !skuId || numericQty < 1) {
-      setPreview(null);
-      return;
-    }
-    let cancelled = false;
-    previewPick({ sku_id: skuId, qty: numericQty })
-      .then((data) => {
-        if (!cancelled) {
-          setPreview(data);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPreview(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [createOpen, skuId, numericQty]);
+  const previewEnabled = createOpen && Boolean(skuId) && numericQty >= 1;
+  const previewQuery = useQuery({
+    queryKey: ["picks", "preview", { skuId, qty: numericQty }],
+    queryFn: () => previewPick({ sku_id: skuId, qty: numericQty }),
+    enabled: previewEnabled,
+    placeholderData: keepPreviousData,
+  });
+  const preview: PickPreview | null = previewEnabled && !previewQuery.isError ? previewQuery.data ?? null : null;
 
   const pickById = useMemo(
     () => Object.fromEntries(picks.map((entry) => [entry.id, entry])),

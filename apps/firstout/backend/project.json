@@ -35,6 +35,17 @@
     "sync": {
       "executor": "@nxlv/python:sync",
       "options": {}
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/firstout/backend",
+        "command": "uv run --locked python scripts/export_openapi.py"
+      },
+      "outputs": [
+        "{projectRoot}/openapi.json",
+        "{workspaceRoot}/apps/firstout/frontend/openapi.json"
+      ]
     }
   },
   "tags": ["platform:py", "scope:firstout"],

@@ -32,12 +32,11 @@ from app.schemas.held_sale import (
     HeldSaleResume,
     HeldSaleResumeResult,
 )
-from app.schemas.till import TillSaleLineCreate
 from app.services.party_archive import assert_customer_active
 from app.services.record_workspace_filters import payload_hash
 from app.services.sellability import assert_sku_sellable
 from app.services.stock_availability import StockAvailability
-from app.services.till_pricing import TillPricing
+from app.services.sale_line_pricing import PricingAuthority, SaleLinePricing, SaleLineRequest
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -296,7 +295,12 @@ class HeldSaleService:
         pricing = None
         if customer is not None:
             try:
-                pricing = await TillPricing.for_customer(self.db, customer)
+                pricing = await SaleLinePricing.for_customer(
+                    self.db,
+                    customer,
+                    await PricingAuthority.of(self.db, actor_id),
+                    enforce_required_list=True,
+                )
             except (ConflictError, ValidationError):
                 pass
         lines: list[HeldSaleLine] = []
@@ -304,14 +308,17 @@ class HeldSaleService:
             sku = skus[line.sku_id]
             estimate = None
             if pricing is not None:
+                # An estimate only: the sale is priced and authorised again when completed.
                 try:
-                    priced = await pricing.line(
-                        sku,
-                        TillSaleLineCreate(
-                            sku_id=line.sku_id, qty=line.qty, discount_percent=line.discount_percent
-                        ),
+                    priced = await pricing.price(
+                        [
+                            SaleLineRequest(
+                                sku=sku, qty=line.qty, discount_percent=line.discount_percent
+                            )
+                        ],
+                        enforce=False,
                     )
-                    estimate = priced.inc_vat
+                    estimate = priced.total_inc_vat
                 except (ConflictError, ValidationError):
                     pass
             lines.append(

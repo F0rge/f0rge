@@ -5,13 +5,15 @@ import { ArrowRight, Catalog, DocumentExport, DocumentImport, Printer } from "@c
 import { Button, InlineNotification, Link, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tag } from "@carbon/react";
 import JsBarcode from "jsbarcode";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { CatalogueSkuEditor } from "@/components/catalogue-sku-editor";
 import { SKU_DIMENSIONS, SKU_DIMENSION_FIELDS } from "@/lib/sku-details";
 import { RecordDetail, RecordDetails, RecordWorkspace, type RecordWorkspaceAdapter, type WorkspaceField } from "@/components/record-workspace";
 import { StaffImage } from "@/components/staff-image";
-import { canMutateCatalogue, canViewCostAudit, formatZarAmount, getSkuLeadTimes, listSkuUnitCosts, listSkusPage, listSuppliers, skuPhotoUrl, type Sku, type SkuLeadTimeRow, type Supplier } from "@/lib/api";
+import { canMutateCatalogue, canViewCostAudit, formatZarAmount, getSkuLeadTimes, listSkuUnitCosts, listSkusPage, listSuppliers, skuPhotoUrl, type Sku } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { queryKeys } from "@/lib/queries";
 import { skuCartonCount } from "@/lib/carton-helpers";
 import { loadCatalogueSelection } from "@/lib/catalogue-workspace";
 import { downloadCsv } from "@/lib/csv";
@@ -52,15 +54,31 @@ function CatalogueScreen() {
   const allowed = canMutateCatalogue(user);
   const canViewCost = canViewCostAudit(user);
   const [refreshKey, refresh] = useState(0);
-  const [metadataReload, reloadMetadata] = useState(0);
   const [editing, setEditing] = useState<Sku | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [metadataReady, setMetadataReady] = useState(false);
-  const [metadataError, setMetadataError] = useState<string | null>(null);
-  const [leadTimes, setLeadTimes] = useState<SkuLeadTimeRow[]>([]);
-  const [costs, setCosts] = useState<Map<string, string>>(new Map());
-  const [costState, setCostState] = useState<"loading" | "ready" | "failed">(canViewCost ? "loading" : "ready");
+  const client = useQueryClient();
+  const options = useQuery({
+    queryKey: ["catalogue", "options"],
+    queryFn: async () => {
+      const [items, page] = await Promise.all([listSuppliers(), listSkusPage({ limit: 1, lifecycle: "all" })]);
+      return { suppliers: items, categories: page.categories };
+    },
+  });
+  const categories = options.data?.categories ?? [];
+  const suppliers = options.data?.suppliers ?? [];
+  const metadataReady = Boolean(options.data);
+  const metadataError = options.error ? "Supplier and category options could not be loaded. Existing products remain available; retry before editing." : null;
+  const leadTimes = useQuery({ queryKey: ["catalogue", "lead-times"], queryFn: getSkuLeadTimes });
+  const unitCosts = useQuery({
+    queryKey: ["catalogue", "unit-costs"],
+    queryFn: async () => {
+      const result = await listSkuUnitCosts({ lifecycle: "all" });
+      return new Map<string, string>(result.items.flatMap((row) => row.unit_cost_zar === null ? [] : [[row.sku_id, row.unit_cost_zar]]));
+    },
+    enabled: canViewCost,
+  });
+  const costs = (!unitCosts.error && unitCosts.data) || new Map<string, string>();
+  const costState: "loading" | "ready" | "failed" = !canViewCost ? "ready" : unitCosts.error ? "failed" : unitCosts.data ? "ready" : "loading";
+  const reloadMetadata = () => void client.invalidateQueries({ queryKey: ["catalogue"] });
   const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
@@ -73,23 +91,7 @@ function CatalogueScreen() {
       router.replace(`/catalogue?${next}`, { scroll: false });
     }
   }, [params, router]);
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all([listSuppliers(), listSkusPage({ limit: 1, lifecycle: "all" })])
-      .then(([items, page]) => { if (!cancelled) { setSuppliers(items); setCategories(page.categories); setMetadataError(null); setMetadataReady(true); } })
-      .catch(() => { if (!cancelled) setMetadataError("Supplier and category options could not be loaded. Existing products remain available; retry before editing."); });
-    void getSkuLeadTimes().then((report) => { if (!cancelled) setLeadTimes(report.rows); }).catch(() => { if (!cancelled) setLeadTimes([]); });
-    return () => { cancelled = true; };
-  }, [metadataReload, refreshKey]);
-  useEffect(() => {
-    if (!canViewCost) return;
-    let cancelled = false;
-    void listSkuUnitCosts({ lifecycle: "all" }).then((result) => {
-      if (!cancelled) { setCosts(new Map(result.items.flatMap((row) => row.unit_cost_zar === null ? [] : [[row.sku_id, row.unit_cost_zar]]))); setCostState("ready"); }
-    }).catch(() => { if (!cancelled) { setCosts(new Map()); setCostState("failed"); } });
-    return () => { cancelled = true; };
-  }, [canViewCost, refreshKey, metadataReload]);
-  const leadById = skuLeadTimeById(leadTimes);
+  const leadById = skuLeadTimeById((!leadTimes.error && leadTimes.data?.rows) || []);
   async function exportCatalogue(query: WorkspaceQuery, ids?: string[]) {
     const rows = await loadCatalogueSelection(query, ids);
     const report = canViewCost ? await listSkuUnitCosts({ lifecycle: "all" }).catch(() => null) : null;
@@ -135,7 +137,7 @@ function CatalogueScreen() {
     {(actionError || success) && <InlineNotification kind={actionError ? "error" : "success"} title={actionError ? "Action failed" : "SKU updated"} subtitle={actionError ?? success ?? ""} lowContrast onCloseButtonClick={() => { setActionError(null); setSuccess(null); }} />}
     {metadataError && <InlineNotification kind="warning" title="Catalogue options unavailable" subtitle={metadataError} lowContrast hideCloseButton />}
     {costState === "failed" && canViewCost && <InlineNotification kind="warning" title="Costs unavailable" subtitle="Products are shown without unit costs." lowContrast hideCloseButton />}
-    {(metadataError || costState === "failed") && <Button kind="ghost" size="sm" onClick={() => reloadMetadata((value) => value + 1)}>Retry catalogue options and costs</Button>}
+    {(metadataError || costState === "failed") && <Button kind="ghost" size="sm" onClick={reloadMetadata}>Retry catalogue options and costs</Button>}
     <RecordWorkspace adapter={adapter} refreshKey={refreshKey}
       onCreate={allowed ? () => router.push("/catalogue/new") : undefined} createLabel="New SKU"
       onEdit={allowed ? (item) => setEditing(item) : undefined}
@@ -168,7 +170,7 @@ function CatalogueScreen() {
         <Button kind="tertiary" size="sm" renderIcon={Printer} onClick={() => { void printSkuLabels([sku]).catch((err: unknown) => setActionError(err instanceof Error ? err.message : "Could not print label.")); }}>Print label</Button>
       </Stack>}
     />
-    {editing && allowed && !editing.is_archived && metadataReady && !metadataError && <CatalogueSkuEditor key={editing.id} sku={editing} suppliers={suppliers} categories={categories} unitCost={canViewCost ? (costs.get(editing.id) ?? null) : undefined} costLoading={costState === "loading"} onClose={() => setEditing(null)} onSaved={(updated) => { setSuccess(`${updated.name} has been saved.`); refresh((value) => value + 1); }} />}
+    {editing && allowed && !editing.is_archived && metadataReady && !metadataError && <CatalogueSkuEditor key={editing.id} sku={editing} suppliers={suppliers} categories={categories} unitCost={canViewCost ? (costs.get(editing.id) ?? null) : undefined} costLoading={costState === "loading"} onClose={() => setEditing(null)} onSaved={(updated) => { setSuccess(`${updated.name} has been saved.`); refresh((value) => value + 1); reloadMetadata(); void client.invalidateQueries({ queryKey: queryKeys.skus }); }} />}
   </>;
 }
 export default function CataloguePage() {

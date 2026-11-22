@@ -1,3 +1,5 @@
+import type { components } from "./generated/api-schema";
+import { localIsoDate } from "./dates";
 import { staffFetch } from "./staff-fetch";
 import { downloadApiFile } from "./download";
 import {
@@ -12,66 +14,30 @@ import {
   type UpdatePickPayload,
 } from "./picks";
 
+/** Server shapes, generated from the backend's OpenAPI document (`npm run codegen:api`). */
+type Schema = components["schemas"];
+/** A server `str` field whose values the UI relies on; the backend types it as plain str. */
+type WithLiteral<T, K extends keyof T, V extends T[K]> = Omit<T, K> & { [P in K]: V };
+
 export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
 /** Role slug — five presets plus custom slugs from GET /roles. */
 export type UserRole = string;
 
-export type Team = {
-  id: string;
-  name: string;
-};
+export type Team = Schema["TeamBrief"];
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  role: UserRole;
-  permissions: string[];
-  team: Team;
-  display_name: string | null;
-  default_location_id: string | null;
-};
+export type AuthUser = Schema["MeResponse"];
 
-export type User = {
-  id: string;
-  email: string;
-  display_name: string;
-  role: UserRole;
-  is_disabled: boolean;
-  team_id: string;
-  team: Team;
-  default_location_id: string | null;
-};
+export type User = Schema["UserResponse"];
 
-export type Role = {
-  id: string;
-  slug: string;
-  name: string;
-  is_system: boolean;
-  is_owner_preset: boolean;
-  permissions: string[];
-};
+export type Role = Schema["RoleResponse"];
 
-export type RoleCreatePayload = {
-  name: string;
-  permissions: string[];
-};
+export type RoleCreatePayload = Schema["RoleCreate"];
 
-export type RoleUpdatePayload = {
-  name?: string;
-  permissions?: string[];
-};
+export type RoleUpdatePayload = Schema["RoleUpdate"];
 
-export type UpdateUserPayload = {
-  role?: UserRole;
-  display_name?: string;
-  is_disabled?: boolean;
-  default_location_id?: string | null;
-};
+export type UpdateUserPayload = Schema["UserUpdate"];
 
-export type UpdateProfilePayload = {
-  display_name?: string;
-  default_location_id?: string | null;
-};
+export type UpdateProfilePayload = Schema["ProfileUpdate"];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -83,6 +49,15 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+/** The `code` of a 409 the server explained with `{ code, message, ... }`; null for any other failure. */
+export function conflictCode(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const detail = error.detail;
+  return detail && typeof detail === "object" && "code" in detail && typeof detail.code === "string"
+    ? detail.code
+    : null;
 }
 
 export type Page<T> = { items: T[]; total: number };
@@ -315,6 +290,18 @@ export const USER_ROLES: { value: PresetRole; label: string }[] = [
 ];
 
 export {
+  displayPrice,
+  exVatToIncVat,
+  formatFxGainLoss,
+  formatPriceAmount,
+  formatZarAmount,
+  incVatToExVat,
+  parsePriceInput,
+  roundHalfUp,
+  vatPercentLabel,
+} from "./money";
+
+export {
   can,
   canManageCustomerCredit,
   canManageLocations,
@@ -350,27 +337,13 @@ export type {
   UpdatePickPayload,
 } from "./picks";
 
-export type LocationType = "warehouse" | "showroom";
+export type LocationType = Schema["LocationType"];
 
-export type Location = {
-  id: string;
-  name: string;
-  type: LocationType;
-  is_archived: boolean;
-  archived_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type Location = Schema["LocationResponse"];
 
-export type CreateLocationPayload = {
-  name: string;
-  type: LocationType;
-};
+export type CreateLocationPayload = Schema["LocationCreate"];
 
-export type UpdateLocationPayload = {
-  name?: string;
-  is_archived?: boolean;
-};
+export type UpdateLocationPayload = Schema["LocationUpdate"];
 
 export function listLocations(): Promise<Location[]> {
   return apiFetch<Location[]>("/locations");
@@ -399,40 +372,15 @@ export function isActiveLocation(loc: Location): boolean {
   return !loc.is_archived;
 }
 
-export type LocationBin = {
-  id: string;
-  location_id: string;
-  code: string;
-  row_code: string;
-  bay: number;
-  level: number;
-  is_default: boolean;
-  is_archived: boolean;
-  archived_at: string | null;
-};
+export type LocationBin = Schema["LocationBinResponse"];
 
-export type CreateLocationBinPayload = {
-  row_code: string;
-  bay: number;
-  level: number;
-};
+export type CreateLocationBinPayload = Schema["BinCreate"];
 
-export type LocationBinGridPayload = {
-  rows: string[];
-  bays: number;
-  levels: number;
-};
+export type LocationBinGridPayload = Schema["BinGridCreate"];
 
-export type UpdateLocationBinPayload = {
-  is_archived?: boolean;
-  is_default?: boolean;
-};
+export type UpdateLocationBinPayload = Schema["BinUpdate"];
 
-export type InventoryBinOnHand = {
-  bin_id: string;
-  code: string;
-  on_hand: number;
-};
+export type InventoryBinOnHand = Schema["BinOnHandResponse"];
 
 export function listLocationBins(locationId: string): Promise<LocationBin[]> {
   return apiFetch<LocationBin[]>(`/locations/${locationId}/bins`);
@@ -498,25 +446,11 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export type Supplier = {
-  id: string;
-  name: string;
-  default_currency: string;
-  is_archived: boolean;
-  vat_number: string | null;
-  address: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type Supplier = Schema["SupplierResponse"];
 
-export type CreateSupplierPayload = {
-  name: string;
-  default_currency?: string;
-  vat_number?: string | null;
-  address?: string | null;
-};
+export type CreateSupplierPayload = Schema["SupplierCreate"];
 
-export type ArchiveCounts = { active: number; archived: number };
+export type ArchiveCounts = Schema["PartyArchiveCounts"];
 
 export function listSuppliers(filters?: { archived?: boolean }): Promise<Supplier[]> {
   const query = typeof filters?.archived === "boolean" ? `?archived=${filters.archived}` : "";
@@ -541,37 +475,15 @@ export function createSupplier(payload: CreateSupplierPayload): Promise<Supplier
   });
 }
 
-export type PriceListItem = {
-  sku_id: string;
-  our_ref: string;
-  unit_ex_vat: string;
-  below_average_cost?: boolean;
-};
+export type PriceListItem = Schema["PriceListItemResponse"];
 
-export type PriceList = {
-  id: string;
-  is_archived?: boolean;
-  till_require_listed_price?: boolean;
-  name: string;
-  items: PriceListItem[];
-  created_at: string;
-  updated_at: string;
-};
+export type PriceList = Schema["PriceListResponse"];
 
-export type CreatePriceListPayload = {
-  name: string;
-  till_require_listed_price?: boolean;
-};
+export type CreatePriceListPayload = Schema["PriceListCreate"];
 
-export type UpdatePriceListPayload = {
-  name: string;
-  till_require_listed_price?: boolean;
-};
+export type UpdatePriceListPayload = Schema["PriceListUpdate"];
 
-export type UpsertPriceListItemPayload = {
-  sku_id: string;
-  unit_ex_vat: string;
-};
+export type UpsertPriceListItemPayload = Schema["PriceListItemUpsert"];
 
 export function listPriceLists(): Promise<PriceList[]> {
   return apiFetch<PriceList[]>("/price-lists");
@@ -613,18 +525,7 @@ export function deletePriceListItem(priceListId: string, skuId: string): Promise
   });
 }
 
-export type Proforma = {
-  id: string;
-  is_archived?: boolean;
-  supplier_id: string;
-  supplier_name: string;
-  invoice_number: string;
-  invoice_date: string;
-  currency: string;
-  pdf_storage_key: string;
-  created_at: string;
-  updated_at: string;
-};
+export type Proforma = Schema["ProformaResponse"];
 
 export type CreateProformaPayload = {
   supplier_id: string;
@@ -654,61 +555,17 @@ export async function downloadProformaPdf(id: string, invoiceNumber: string): Pr
   await downloadApiFile(`/api/v1/proformas/${id}/file`, `${invoiceNumber}.pdf`);
 }
 
-export type IntakeFlag = { code: string; message: string };
+export type IntakeFlag = Schema["ReviewFlag"];
 
-export type IntakeSupplierMatch = {
-  supplier_id: string | null;
-  name: string;
-  vat_number: string | null;
-  address: string | null;
-  confidence: number;
-  reason: string;
-};
+export type IntakeSupplierMatch = Schema["SupplierMatchOut"];
 
-export type IntakeSkuMatch = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  confidence: number;
-  reason: string;
-};
+export type IntakeSkuMatch = Schema["SkuMatchOut"];
 
-export type IntakeCharge = { description: string; amount: string };
+export type IntakeCharge = Schema["ChargeOut"];
 
-export type IntakeReviewedLine = {
-  supplier_code: string | null;
-  description: string;
-  qty: string;
-  qty_whole: number | null;
-  unit_price: string;
-  discount_percent: string | null;
-  discount_amount: string | null;
-  net_unit_price: string;
-  vat_rate: string | null;
-  vat_amount: string | null;
-  line_total: string | null;
-  match: IntakeSkuMatch | null;
-  alternatives: IntakeSkuMatch[];
-  flags: IntakeFlag[];
-};
+export type IntakeReviewedLine = Schema["ReviewedLine"];
 
-export type ProformaReview = {
-  supplier: IntakeSupplierMatch;
-  supplier_candidates: IntakeSupplierMatch[];
-  document_number: string;
-  document_date: string | null;
-  currency: string;
-  payment_terms: string | null;
-  deposit: string | null;
-  lines: IntakeReviewedLine[];
-  charges: IntakeCharge[];
-  subtotal: string | null;
-  vat_total: string | null;
-  total: string | null;
-  computed_total: string;
-  flags: IntakeFlag[];
-  usage: { model: string; prompt_tokens: number; completion_tokens: number; total_tokens: number };
-};
+export type ProformaReview = Schema["ProformaReview"];
 
 export type ProformaConfirmLine = {
   supplier_code?: string | null;
@@ -741,10 +598,7 @@ export type ProformaConfirmPayload = {
   submit_for_approval?: boolean;
 };
 
-export type ProformaConfirmResult = {
-  proforma: Proforma;
-  purchase_order: { id: string; po_number: string; status: string; proforma_id: string | null };
-};
+export type ProformaConfirmResult = Schema["ProformaConfirmResponse"];
 
 export function extractProforma(file: File): Promise<ProformaReview> {
   const formData = new FormData();
@@ -762,18 +616,7 @@ export function confirmProforma(
   return apiUpload<ProformaConfirmResult>("/document-intake/proformas/confirm", formData);
 }
 
-export type SkuSuggestion = {
-  our_ref: string;
-  our_barcode: string;
-  name: string;
-  design: string;
-  fabric: string;
-  supplier_ref: string | null;
-  category: string | null;
-  cost_price: string | null;
-  vat_rate: string | null;
-  source: string;
-};
+export type SkuSuggestion = Schema["SkuSuggestion"];
 
 export function suggestIntakeSku(payload: {
   description: string;
@@ -808,149 +651,15 @@ export function createIntakeSku(payload: {
   });
 }
 
-export type SkuProductDetails = {
-  width_cm?: number | null;
-  depth_cm?: number | null;
-  height_cm?: number | null;
-  diameter_cm?: number | null;
-  piece_count?: number | null;
-  notes?: string | null;
-};
+export type Sku = Schema["SkuResponse"];
 
-export type Sku = SkuProductDetails & {
-  gallery_photo_count?: number;
-  id: string;
-  is_archived: boolean;
-  archived_at?: string | null;
-  archived_by_id?: string | null;
-  our_ref: string;
-  our_barcode: string;
-  name: string;
-  design: string;
-  fabric: string;
-  category: string | null;
-  supplier_ref: string | null;
-  preferred_supplier_id: string | null;
-  preferred_supplier_name: string | null;
-  lead_time_days: number | null;
-  made_to_order_capacity: number | null;
-  made_to_order_lead_time_min_days: number | null;
-  made_to_order_lead_time_max_days: number | null;
-  made_to_order_expires_at: string | null;
-  made_to_order_offer_id: string | null;
-  reorder_min: number | null;
-  last_landed_cost_zar: string | null;
-  photo_storage_key: string | null;
-  stockist_ex_vat: string | null;
-  stockist_inc_vat: string | null;
-  wholesale_ex_vat: string | null;
-  wholesale_inc_vat: string | null;
-  decorator_ex_vat: string | null;
-  decorator_inc_vat: string | null;
-  retail_ex_vat: string | null;
-  retail_inc_vat: string | null;
-  average_unit_cost_zar?: string | null;
-  stockist_below_cost?: boolean;
-  wholesale_below_cost?: boolean;
-  decorator_below_cost?: boolean;
-  retail_below_cost?: boolean;
-  carton_count: number;
-  is_kit: boolean;
-  is_sellable: boolean;
-  till_no_stock_required?: boolean;
-  /** Delivery, installation and similar: no sales commission. */
-  exclude_from_commission?: boolean;
-  storefront_hidden?: boolean;
-  created_at: string;
-  updated_at: string;
-};
+export type SkuProductDetails = Partial<
+  Pick<Sku, "width_cm" | "depth_cm" | "height_cm" | "diameter_cm" | "piece_count" | "notes">
+>;
 
-export type UpdateSkuPricePayload = SkuProductDetails & {
-  our_ref?: string;
-  our_barcode?: string;
-  name?: string;
-  design?: string;
-  fabric?: string;
-  category?: string | null;
-  stockist_ex_vat?: string | number | null;
-  stockist_inc_vat?: string | number | null;
-  wholesale_ex_vat?: string | number | null;
-  wholesale_inc_vat?: string | number | null;
-  decorator_ex_vat?: string | number | null;
-  decorator_inc_vat?: string | number | null;
-  retail_ex_vat?: string | number | null;
-  retail_inc_vat?: string | number | null;
-  preferred_supplier_id?: string | null;
-  lead_time_days?: number | null;
-  made_to_order_capacity?: number | null;
-  made_to_order_lead_time_min_days?: number | null;
-  made_to_order_lead_time_max_days?: number | null;
-  made_to_order_expires_at?: string | null;
-  reorder_min?: number | null;
-  supplier_ref?: string | null;
-  carton_count?: number;
-  is_sellable?: boolean;
-  till_no_stock_required?: boolean;
-  /** Delivery, installation and similar: no sales commission. */
-  exclude_from_commission?: boolean;
-  storefront_hidden?: boolean;
-};
+export type UpdateSkuPricePayload = Schema["SkuUpdate"];
 
-const VAT_MULTIPLIER = 1.15;
-
-/** Round to cents using ROUND_HALF_UP (ties away from zero). */
-export function roundHalfUp(value: number, decimals = 2): number {
-  const factor = 10 ** decimals;
-  const scaled = value * factor;
-  return (Math.sign(scaled) * Math.round(Math.abs(scaled))) / factor;
-}
-
-export function exVatToIncVat(ex: number): number {
-  return roundHalfUp(ex * VAT_MULTIPLIER, 2);
-}
-
-export function incVatToExVat(inc: number): number {
-  return roundHalfUp(inc / VAT_MULTIPLIER, 2);
-}
-
-export function formatPriceAmount(value: number): string {
-  return value.toFixed(2);
-}
-
-export function parsePriceInput(value: string): number | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-  return parsed;
-}
-
-export function displayPrice(value: string | null | undefined): string {
-  return value ?? "—";
-}
-
-export type CreateSkuPayload = SkuProductDetails & {
-  our_ref: string;
-  our_barcode?: string;
-  name: string;
-  design: string;
-  fabric: string;
-  category?: string;
-  supplier_ref?: string;
-  opening_location_id?: string;
-  opening_qty?: number;
-  opening_unit_cost_zar?: string;
-  opening_date?: string;
-  carton_count?: number;
-  is_sellable?: boolean;
-  till_no_stock_required?: boolean;
-  /** Delivery, installation and similar: no sales commission. */
-  exclude_from_commission?: boolean;
-};
+export type CreateSkuPayload = Schema["SkuCreate"];
 
 export type SkuListParams = {
   lifecycle?: "active" | "archived" | "all";
@@ -961,12 +670,9 @@ export type SkuListParams = {
   preferred_supplier_id?: string;
 };
 
-export type SkuListPage = Page<Sku> & { categories: string[] };
+export type SkuListPage = Schema["SkuListPage"];
 
-export type SkuUnitCost = {
-  sku_id: string;
-  unit_cost_zar: string | null;
-};
+export type SkuUnitCost = Schema["SkuUnitCostItem"];
 
 function skuListQuery(options?: SkuListParams): string {
   const params = new URLSearchParams();
@@ -1060,13 +766,7 @@ export function skuPhotoUrl(id: string, slot?: number): string {
   return `/api/v1/skus/${id}/photo${slot ? `?slot=${slot}` : ""}`;
 }
 
-export type CuratedCatalogueResult = {
-  applied: boolean;
-  selected_skus: number;
-  gallery_images: number;
-  groups: number;
-  held_without_price: string[];
-};
+export type CuratedCatalogueResult = Schema["CuratedCatalogueResult"];
 
 export function uploadCuratedCatalogue(archive: File, dryRun: boolean): Promise<CuratedCatalogueResult> {
   const form = new FormData();
@@ -1075,23 +775,11 @@ export function uploadCuratedCatalogue(archive: File, dryRun: boolean): Promise<
   return apiUpload<CuratedCatalogueResult>("/skus/curated-catalogue", form);
 }
 
-export type SkuBomLine = {
-  id: string;
-  parent_sku_id: string;
-  component_sku_id: string;
-  qty: number;
-  created_at: string;
-  updated_at: string;
-};
+export type SkuBomLine = Schema["SkuBomLineResponse"];
 
-export type SkuBomLineWrite = {
-  component_sku_id: string;
-  qty: number;
-};
+export type SkuBomLineWrite = Schema["SkuBomLineWrite"];
 
-export type ReplaceSkuBomPayload = {
-  lines: SkuBomLineWrite[];
-};
+export type ReplaceSkuBomPayload = Schema["SkuBomReplace"];
 
 export function listSkuBom(skuId: string): Promise<SkuBomLine[]> {
   return apiFetch<SkuBomLine[]>(`/skus/${skuId}/bom`);
@@ -1106,42 +794,15 @@ export function replaceSkuBom(skuId: string, payload: ReplaceSkuBomPayload): Pro
 
 export type CatalogueImportFileKind = "inventory" | "soh";
 
-export type CatalogueImportError = {
-  file: CatalogueImportFileKind;
-  row: number;
-  message: string;
-};
+export type CatalogueImportError = Schema["CatalogueImportRowError"];
 
-export type CatalogueImportInventoryPreview = {
-  headers: string[];
-  suggested_map: Record<string, string>;
-  applied_map: Record<string, string>;
-  sample_row: Record<string, string> | null;
-  row_count: number;
-  create_count: number;
-  update_count: number;
-};
+export type CatalogueImportInventoryPreview = Schema["CatalogueImportFilePreview"];
 
-export type CatalogueImportSohPreview = {
-  headers: string[];
-  suggested_map: Record<string, string>;
-  applied_map: Record<string, string>;
-  sample_row: Record<string, string> | null;
-  row_count: number;
-};
+export type CatalogueImportSohPreview = Schema["CatalogueImportSohPreview"];
 
-export type CatalogueImportPreview = {
-  ok: boolean;
-  errors: CatalogueImportError[];
-  inventory: CatalogueImportInventoryPreview;
-  soh: CatalogueImportSohPreview | null;
-};
+export type CatalogueImportPreview = Schema["CatalogueImportPreviewResponse"];
 
-export type CatalogueImportCommit = {
-  created_skus: number;
-  updated_skus: number;
-  soh_rows: number;
-};
+export type CatalogueImportCommit = Schema["CatalogueImportCommitResponse"];
 
 export function previewCatalogueImport(formData: FormData): Promise<CatalogueImportPreview> {
   return apiUpload<CatalogueImportPreview>("/imports/preview", formData);
@@ -1152,128 +813,31 @@ export function commitCatalogueImport(formData: FormData): Promise<CatalogueImpo
 }
 
 
-export type PurchaseOrderStatus =
-  | "pending_approval"
-  | "rejected"
-  | "open"
-  | "on_water"
-  | "landed"
-  | "received";
+export type PurchaseOrderStatus = Schema["PurchaseOrderStatus"];
 
-export type PoLine = {
-  id: string;
-  sku_id: string | null;
-  our_ref: string | null;
-  our_barcode: string | null;
-  name: string;
-  fabric: string | null;
-  supplier_code: string | null;
-  description: string | null;
-  notes: string | null;
-  needs_sku: boolean;
-  qty: number;
-  factory_unit_amount: string | null;
-  source_cost: string | null;
-  source_total: string | null;
-  unit_cost_zar: string | null;
-};
+export type PoLine = Schema["PoLineResponse"];
 
-export type LandingBill = {
-  kind: string;
-  invoice_number: string;
-  amount: string;
-  currency: string;
-};
+export type LandingBill = Schema["LandingBillResponse"];
 
-export type PurchaseOrderListItem = {
-  id: string;
-  is_archive: boolean;
-  source_amounts_known: boolean;
-  source_currency_known: boolean;
-  po_number: string;
-  status: PurchaseOrderStatus;
-  supplier_id: string;
-  supplier_name: string;
-  proforma_id: string | null;
-  supplier_ref: string | null;
-  notes: string | null;
-  fx_to_zar: string | null;
-  line_count: number;
-  needs_sku_count: number;
-  received_location_id: string | null;
-  ordered_at: string | null;
-  on_water_at: string | null;
-  landed_at: string | null;
-  received_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type PurchaseOrderListItem = WithLiteral<
+  Schema["PurchaseOrderListItem"],
+  "status",
+  PurchaseOrderStatus
+>;
 
-export type PurchaseOrder = PurchaseOrderListItem & {
-  lines: PoLine[];
-  bills: LandingBill[];
-};
+export type PurchaseOrder = WithLiteral<Schema["PurchaseOrderResponse"], "status", PurchaseOrderStatus>;
 
-export type CreatePoLinePayload = {
-  sku_id?: string | null;
-  supplier_code?: string | null;
-  description?: string | null;
-  notes?: string | null;
-  qty: number;
-  factory_unit_amount: string;
-};
+export type CreatePoLinePayload = Schema["PoLineCreate"];
 
-export type CreatePurchaseOrderPayload = {
-  supplier_id: string;
-  proforma_id?: string;
-  supplier_ref?: string | null;
-  notes?: string | null;
-  submit_for_approval?: boolean;
-  lines: CreatePoLinePayload[];
-};
+export type CreatePurchaseOrderPayload = Schema["PurchaseOrderCreate"];
 
-export type PurchaseOrderLineWrite = {
-  id?: string;
-  sku_id?: string | null;
-  supplier_code?: string | null;
-  description?: string | null;
-  notes?: string | null;
-  qty: number;
-  factory_unit_amount: string;
-};
+export type PurchaseOrderLineWrite = Schema["PoLineWrite"];
 
-export type PurchaseOrderLinesUpdate = {
-  supplier_ref?: string | null;
-  notes?: string | null;
-  lines: PurchaseOrderLineWrite[];
-};
+export type PurchaseOrderLinesUpdate = Schema["PurchaseOrderLinesUpdate"];
 
-export type PoLineSkuCreate = {
-  our_ref: string;
-  our_barcode: string;
-  name: string;
-  design: string;
-  fabric: string;
-  category?: string | null;
-};
+export type PoLineSkuCreate = Schema["PoLineSkuCreate"];
 
-export type InventorySku = {
-  sku_id: string;
-  is_archived: boolean;
-  our_ref: string;
-  name: string;
-  on_order: number;
-  on_hand: number;
-  sellable: boolean;
-  unit_cost_zar: string | null;
-  locations: {
-    location_id: string;
-    location_name: string;
-    on_hand: number;
-    unit_cost_zar: string | null;
-    bins: InventoryBinOnHand[];
-  }[];
-};
+export type InventorySku = Schema["InventorySkuResponse"];
 
 export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   pending_approval: "Pending approval",
@@ -1284,87 +848,27 @@ export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   received: "Received",
 };
 
-export type TillTender = "statement" | "cash" | "card" | "deposit" | "eft";
+export type TillTender = Schema["TillSaleCreate"]["tender"];
 
-export type TillSaleLinePayload = {
-  sku_id: string;
-  qty: number;
-  discount_percent?: number;
-};
+export type TillSaleLinePayload = Schema["TillSaleLineCreate"];
 
-export type HeldSaleCreate = {
-  id: string;
-  location_id: string;
-  customer_id?: string;
-  lines: TillSaleLinePayload[];
-  pick_id?: string;
-  linked_pick_ids?: Record<string, string>;
-  note?: string | null;
-  note_printed?: string | null;
-  note_internal?: string | null;
-  sales_staff_id?: string | null;
-  /** The open quote this sale converts. */
-  quote_id?: string | null;
-  basket_id?: string;
-};
+export type HeldSaleCreate = Schema["HeldSaleCreate"];
 
 /** The signed-in user's open till basket for one showroom. */
-export type TillBasket = {
-  id: string;
-  location_id: string;
-  customer_id: string | null;
-  note: string | null;
-  /** The sale's invoice notes, kept with the cart until it is sold. */
-  note_printed?: string | null;
-  note_internal?: string | null;
-  sales_staff_id?: string | null;
-  /** The open quote this sale converts. */
-  quote_id?: string | null;
-  pick_id: string | null;
-  linked_pick_ids: Record<string, string>;
-  lines: { sku_id: string; qty: number; discount_percent: string }[];
-  version: number;
-  updated_at: string;
-  /** While it has lines: when the sale and its reservations lapse unless changed. */
-  expires_at?: string | null;
-  /** Set when expiry last emptied the basket, so the till can say so. */
-  expired_at?: string | null;
-};
+export type TillBasket = Schema["TillBasket"];
 
 /** The soonest-freeing reservation on a SKU; names the showroom, never the person. */
-export type TillBlockingReservation = {
-  location_id: string;
-  location_name: string;
-  holder_kind: "basket" | "held_sale" | "invoice";
-  expires_at: string | null;
-};
+export type TillBlockingReservation = Schema["BlockingReservation"];
 
 /** Stock reserved by holders other than the caller's own basket. */
-export type TillReservation = {
-  sku_id: string;
-  reserved_by_others: number;
-  blocking: TillBlockingReservation | null;
-};
+export type TillReservation = Schema["TillReservation"];
 
 export function listTillReservations(locationId: string, signal?: AbortSignal): Promise<TillReservation[]> {
   return apiFetch(`/till/reservations?location_id=${encodeURIComponent(locationId)}`, { signal });
 }
 
 /** Whole-basket replace; a stale version is rejected with basket_version_conflict. */
-export type TillBasketUpdate = {
-  version: number;
-  operation_id: string;
-  customer_id?: string;
-  note?: string | null;
-  note_printed?: string | null;
-  note_internal?: string | null;
-  sales_staff_id?: string | null;
-  /** The open quote this sale converts. */
-  quote_id?: string | null;
-  pick_id?: string;
-  linked_pick_ids?: Record<string, string>;
-  lines: TillSaleLinePayload[];
-};
+export type TillBasketUpdate = Schema["TillBasketUpdate"];
 
 export function getTillBasket(locationId: string): Promise<TillBasket> {
   return apiFetch(`/till/basket?location_id=${encodeURIComponent(locationId)}`);
@@ -1374,43 +878,9 @@ export function updateTillBasket(id: string, payload: TillBasketUpdate): Promise
   return apiFetch(`/till/basket/${id}`, { method: "PUT", body: JSON.stringify(payload) });
 }
 
-export type HeldSale = {
-  id: string;
-  reference: string;
-  location_id: string;
-  customer_id: string | null;
-  customer_name: string;
-  held_by_name: string;
-  held_at: string;
-  /** ISO UTC; the stock stays reserved until then, then the sale is deleted. */
-  expires_at: string;
-  version: number;
-  note: string | null;
-  note_printed?: string | null;
-  note_internal?: string | null;
-  sales_staff_id?: string | null;
-  /** The open quote this sale converts. */
-  quote_id?: string | null;
-  estimated_total_inc_vat: string | null;
-  pick_id: string | null;
-  linked_pick_ids: Record<string, string>;
-  lines: {
-    sku_id: string;
-    sku_code: string;
-    sku_name: string;
-    qty: number;
-    discount_percent: string;
-    estimated_total_inc_vat: string | null;
-  }[];
-};
+export type HeldSale = Schema["HeldSale"];
 
-export type HeldSaleResume = {
-  location_id: string;
-  operation_id: string;
-  version: number;
-  current?: HeldSaleCreate;
-  basket_id?: string;
-};
+export type HeldSaleResume = Schema["HeldSaleResume"];
 
 export function listHeldSales(locationId: string, signal?: AbortSignal): Promise<HeldSale[]> {
   return apiFetch(`/till/held-sales?location_id=${encodeURIComponent(locationId)}`, { signal });
@@ -1447,81 +917,19 @@ export function deleteTillHeldSales(locationId: string, ids: string[], all: bool
   });
 }
 
-export type TillPriceRequest = {
-  lines: TillSaleLinePayload[];
-  customer_id?: string;
-};
+export type TillPriceRequest = Schema["TillPriceRequest"];
 
-export type TillPricePreview = {
-  classification: PriceClassification;
-  price_list_name: string | null;
-  prices_include_vat: boolean;
-  before_discount_ex_vat: string;
-  before_discount_inc_vat: string;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  lines: {
-    sku_id: string;
-    unit_ex_vat: string;
-    ex_vat: string;
-    inc_vat: string;
-    source: string;
-    price_warning: string | null;
-  }[];
-  price_revision: string;
-};
+// The server's Sale line pricing preview, shared by the till, quotes, invoices and laybys.
+export type SalePricePreview = Schema["SalePricePreview"];
 
-export type TillSalePayload = TillPriceRequest & {
-  location_id: string;
-  tender: TillTender;
-  /** Statement sales only; defaults to issue date + payment terms. */
-  due_date?: string;
-  price_revision?: string;
-  pick_id?: string;
-  pick_ids?: string[];
-  credit_override?: boolean;
-  credit_override_reason?: string;
-  basket_id?: string;
-  basket_version?: number;
-  /** Printed on the tax invoice. */
-  note_printed?: string;
-  /** Staff only; never printed. */
-  note_internal?: string;
-  /** Required when the business has an active sales colleague. */
-  sales_staff_id?: string;
-  /** The open quote this sale converts; marked converted with the sale. */
-  quote_id?: string;
-};
+export type SaleLinePrice = Schema["SaleLinePrice"];
 
-export type TillSaleResult = {
-  invoice_id: string;
-  /** Draft till pick for the units reserved against the invoice; null when the showroom had them all. */
-  pick_id: string | null;
-  invoice_number: string;
-  /** Null for a statement sale: no payment is recorded at the till. */
-  payment_id: string | null;
-  payment_number: string | null;
-  tender: TillTender;
-  issue_date: string;
-  due_date: string | null;
-  on_account: boolean;
-  /** The quote this sale converted. */
-  quote_number?: string | null;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  prices_include_vat: boolean;
-  lines: InvoiceLine[];
-  location: {
-    location_id: string;
-    location_name: string;
-    on_hand: number;
-  };
-};
+export type TillSalePayload = Schema["TillSaleCreate"];
 
-export function previewTillPrices(payload: TillPriceRequest, signal: AbortSignal): Promise<TillPricePreview> {
-  return apiFetch<TillPricePreview>("/till/price-preview", {
+export type TillSaleResult = Schema["TillSaleResponse"];
+
+export function previewTillPrices(payload: TillPriceRequest, signal: AbortSignal): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/till/price-preview", {
     method: "POST",
     body: JSON.stringify(payload),
     signal,
@@ -1628,53 +1036,17 @@ export function listInventory(): Promise<InventorySku[]> {
   return apiFetch<InventorySku[]>("/inventory");
 }
 
-export type TransferStatus = "draft" | "in_transit" | "received" | "cancelled";
+export type TransferStatus = Schema["TransferStatus"];
 
-export type TransferLine = {
-  id: string;
-  sku_id: string;
-  sku_our_ref: string;
-  sku_name: string;
-  qty_dispatched: number;
-  qty_received: number | null;
-  from_bin_id: string | null;
-  to_bin_id: string | null;
-};
+export type TransferLine = Schema["TransferLineResponse"];
 
-export type Transfer = {
-  id: string;
-  transfer_number: string;
-  status: TransferStatus;
-  from_location_id: string;
-  from_location_name: string;
-  to_location_id: string;
-  to_location_name: string;
-  notes: string | null;
-  dispatched_at: string | null;
-  received_at: string | null;
-  received_display_name: string | null;
-  lines: TransferLine[];
-  created_at: string;
-  updated_at: string;
-};
+export type Transfer = Schema["TransferResponse"];
 
-export type TransferLinePayload = {
-  sku_id: string;
-  qty: number;
-  from_bin_id?: string;
-  to_bin_id?: string;
-};
+export type TransferLinePayload = Schema["TransferLineCreate"];
 
-export type CreateTransferPayload = {
-  from_location_id: string;
-  to_location_id: string;
-  notes?: string;
-  lines: TransferLinePayload[];
-};
+export type CreateTransferPayload = Schema["TransferCreate"];
 
-export type TransferReceivePayload = {
-  lines: { line_id: string; qty_received: number }[];
-};
+export type TransferReceivePayload = Schema["TransferReceive"];
 
 export const TRANSFER_STATUS_LABELS: Record<TransferStatus, string> = {
   draft: "Draft",
@@ -1819,33 +1191,13 @@ export async function downloadPickPdf(id: string, _pickNumber: string): Promise<
   await downloadApiFile(`/api/v1/picks/${id}/pdf`, `${_pickNumber}.pdf`, "open");
 }
 
-export type StocktakeStatus = "in_progress" | "completed" | "cancelled";
+export type StocktakeStatus = Schema["StocktakeStatus"];
 
-export type StocktakeLine = {
-  id: string;
-  sku_id: string;
-  our_ref: string;
-  our_barcode: string;
-  name: string;
-  category: string | null;
-  expected_qty: number;
-  counted_qty: number | null;
-  variance: number | null;
-};
+export type StocktakeLine = Schema["StocktakeLineResponse"];
 
-export type StocktakeSummary = {
-  id: string;
-  location_id: string;
-  location_name: string;
-  status: StocktakeStatus;
-  category: string | null;
-  started_at: string;
-  completed_at: string | null;
-};
+export type StocktakeSummary = Schema["StocktakeResponse"];
 
-export type Stocktake = StocktakeSummary & {
-  lines: StocktakeLine[];
-};
+export type Stocktake = Schema["StocktakeResponse"];
 
 export const STOCKTAKE_STATUS_LABELS: Record<StocktakeStatus, string> = {
   in_progress: "In progress",
@@ -1905,38 +1257,15 @@ export function cancelStocktake(id: string): Promise<Stocktake> {
   return apiFetch<Stocktake>(`/stocktakes/${id}/cancel`, { method: "POST" });
 }
 
-export type AdjustmentReason = "opening" | "damage" | "theft" | "count_fix" | "write_off";
+export type AdjustmentReason = Schema["StockAdjustmentReason"];
 
-export type AdjustmentStatus = "draft" | "completed" | "cancelled";
+export type AdjustmentStatus = Schema["StockAdjustmentStatus"];
 
-export type AdjustmentLine = {
-  id: string;
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  qty_delta: number;
-  unit_cost_zar: string | null;
-  current_qty?: number;
-  new_qty?: number;
-};
+export type AdjustmentLine = Schema["StockAdjustmentLineResponse"];
 
-export type AdjustmentSummary = {
-  id: string;
-  location_id: string;
-  location_name?: string;
-  reason: AdjustmentReason;
-  notes?: string | null;
-  status: AdjustmentStatus;
-  created_at?: string;
-  started_at?: string;
-  completed_at?: string | null;
-  cancelled_at?: string | null;
-  lines?: AdjustmentLine[];
-};
+export type AdjustmentSummary = Schema["StockAdjustmentResponse"];
 
-export type Adjustment = AdjustmentSummary & {
-  lines: AdjustmentLine[];
-};
+export type Adjustment = Schema["StockAdjustmentResponse"];
 
 export const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
   opening: "Opening Stock (Equity)",
@@ -1960,17 +1289,9 @@ export const ADJUSTMENT_STATUS_LABELS: Record<AdjustmentStatus, string> = {
   cancelled: "Cancelled",
 };
 
-export type CreateAdjustmentPayload = {
-  location_id: string;
-  reason: AdjustmentReason;
-  notes?: string;
-};
+export type CreateAdjustmentPayload = Schema["StockAdjustmentCreate"];
 
-export type CreateAdjustmentLinePayload = {
-  sku_id: string;
-  qty_delta: number;
-  unit_cost_zar?: string;
-};
+export type CreateAdjustmentLinePayload = Schema["StockAdjustmentLineCreate"];
 
 export function listAdjustments(): Promise<AdjustmentSummary[]> {
   return apiFetch<AdjustmentSummary[]>("/adjustments");
@@ -1999,7 +1320,7 @@ export function addAdjustmentLine(
   adjustmentId: string,
   payload: CreateAdjustmentLinePayload,
 ): Promise<AdjustmentLine> {
-  const cost = payload.unit_cost_zar?.trim();
+  const cost = payload.unit_cost_zar == null ? "" : String(payload.unit_cost_zar).trim();
   const body: CreateAdjustmentLinePayload = {
     sku_id: payload.sku_id,
     qty_delta: payload.qty_delta,
@@ -2044,38 +1365,15 @@ export function cancelAdjustment(id: string): Promise<Adjustment> {
   return apiFetch<Adjustment>(`/adjustments/${id}/cancel`, { method: "POST" });
 }
 
-export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
+export type AccountType = Schema["AccountType"];
 
-export type TaxTreatment = "none" | "vat15";
+export type TaxTreatment = Schema["TaxTreatment"];
 
-export type Account = {
-  id: string;
-  code: string;
-  name: string;
-  type: AccountType;
-  is_system: boolean;
-  is_archived: boolean;
-  is_bank: boolean;
-  tax_treatment: TaxTreatment;
-  balance_zar: string;
-  created_at: string;
-  updated_at: string;
-};
+export type Account = Schema["AccountResponse"];
 
-export type CreateAccountPayload = {
-  code: string;
-  name: string;
-  type: AccountType;
-  tax_treatment?: TaxTreatment;
-  is_bank?: boolean;
-};
+export type CreateAccountPayload = Schema["AccountCreate"];
 
-export type UpdateAccountPayload = {
-  name?: string;
-  is_archived?: boolean;
-  tax_treatment?: TaxTreatment;
-  is_bank?: boolean;
-};
+export type UpdateAccountPayload = Schema["AccountUpdate"];
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "asset", label: "Asset" },
@@ -2086,7 +1384,7 @@ export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 ];
 
 export const TAX_TREATMENTS: { value: TaxTreatment; label: string }[] = [
-  { value: "vat15", label: "VAT 15%" },
+  { value: "vat15", label: "VAT at the team's rate" },
   { value: "none", label: "None" },
 ];
 
@@ -2116,22 +1414,9 @@ export function updateAccount(id: string, payload: UpdateAccountPayload): Promis
   });
 }
 
-export type CategoryMap = {
-  id: string;
-  category: string;
-  sales_code: string;
-  cogs_code: string;
-  stock_adj_code: string;
-  count_var_code: string;
-};
+export type CategoryMap = Schema["CategoryAccountMapResponse"];
 
-export type UpsertCategoryMapPayload = {
-  category: string;
-  sales_code: string;
-  cogs_code: string;
-  stock_adj_code: string;
-  count_var_code: string;
-};
+export type UpsertCategoryMapPayload = Schema["CategoryAccountMapUpsert"];
 
 export function listCategoryMaps(): Promise<CategoryMap[]> {
   return apiFetch<CategoryMap[]>("/category-maps");
@@ -2144,108 +1429,33 @@ export function upsertCategoryMap(payload: UpsertCategoryMapPayload): Promise<Ca
   });
 }
 
-export type InvoiceLine = {
-  id: string;
-  description: string;
-  qty: number;
-  unit_ex_vat: string;
-  ex_vat: string;
-  inc_vat: string;
-  vat_amount: string;
-  sort_order: number;
-  sku_id?: string | null;
-  price_warning?: string | null;
-  suspect_price_warning?: string | null;
-  till_no_stock_required?: boolean;
-  /** Delivery, installation and similar: no sales commission. */
-  exclude_from_commission?: boolean;
-};
+export type InvoiceLine = Schema["InvoiceLineResponse"];
 
-export type InvoiceListItem = {
-  id: string;
-  is_archive: boolean;
-  invoice_number: string;
-  customer_id: string;
-  customer_name: string;
-  issue_date: string;
-  due_date?: string | null;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  amount_paid: string;
-  balance: string;
-  payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
-  /** Issued unpaid on account; reads "On statement" until a payment is recorded. */
-  on_account: boolean;
-  source: InvoiceSource;
-  status: InvoiceStatus;
-  /** Hidden from the default list by staff; still in the books, VAT and reports. */
-  is_archived: boolean;
-  archived_at: string | null;
-  /** The colleague credited with the sale. */
-  sales_staff_id?: string | null;
-  sales_staff_name?: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type InvoiceListItem = Schema["InvoiceListItem"];
 
 /** Where an invoice was made; Cin7 history is "imported". */
 export type InvoiceSource = "till" | "manual" | "imported";
 /** Settlement as filtered in the list; "unknown" for Cin7 history. */
 export type InvoiceStatus = "paid" | "partially_paid" | "unpaid" | "on_statement" | "overdue" | "unknown";
 
-export type Invoice = InvoiceListItem & {
-  /** Printed on the tax invoice. */
-  note_printed?: string | null;
-  /** Staff only; never printed. */
-  note_internal?: string | null;
-  prices_include_vat: boolean;
-  lines: InvoiceLine[];
-};
+export type Invoice = Schema["InvoiceResponse"];
 
-export type CreateInvoiceLinePayload = {
-  description: string;
-  qty: number;
-  unit_ex_vat?: string;
-  sku_id?: string;
-  /** Percent off the line, priced like the till. */
-  discount_percent?: string;
-};
+export type CreateInvoiceLinePayload = Schema["InvoiceLineCreate"];
 
-export type CreateInvoicePayload = {
-  customer_id: string;
-  issue_date: string;
-  lines: CreateInvoiceLinePayload[];
-  note_printed?: string | null;
-  note_internal?: string | null;
-  /** Defaults to the issue date plus the customer's terms. */
-  due_date?: string;
-  sales_staff_id?: string | null;
-  /** Already paid: records one payment of the total. Absent means on account. */
-  payment?: { tender: PaymentMethod; reference?: string; paid_on: string } | null;
-};
+export type CreateInvoicePayload = Schema["ManualInvoiceCreate"];
 
-export type InvoiceSummary = {
-  outstanding_zar: string;
-  outstanding_count: number;
-  overdue_zar: string;
-  overdue_count: number;
-  on_statement_zar: string;
-  on_statement_count: number;
-  paid_this_month_zar: string;
-  paid_this_month_count: number;
-};
+export type InvoiceSummary = Schema["InvoiceSummary"];
 
 export function getInvoiceSummary(): Promise<InvoiceSummary> {
   return apiFetch<InvoiceSummary>("/invoices/summary");
 }
 
-/** The invoice cart priced as creating it would; `lines` lists only the SKU lines, in order. */
+/** The invoice cart priced as creating it would: one preview line per request line, in order. */
 export function previewInvoicePrices(
   payload: { customer_id: string; lines: CreateInvoiceLinePayload[] },
   signal: AbortSignal,
-): Promise<TillPricePreview> {
-  return apiFetch<TillPricePreview>("/invoices/preview", {
+): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/invoices/preview", {
     method: "POST",
     body: JSON.stringify(payload),
     signal,
@@ -2296,25 +1506,11 @@ export function updateInvoiceSalesStaff(id: string, salesStaffId: string | null)
   });
 }
 
-export type SalesStaff = {
-  id: string;
-  name: string;
-  short_name: string | null;
-  /** Percent, e.g. "2.50". */
-  commission_rate: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
+export type SalesStaff = Schema["SalesStaffResponse"];
 
 export type SalesStaffOption = Pick<SalesStaff, "id" | "name" | "short_name">;
 
-export type SalesStaffPayload = {
-  name?: string;
-  short_name?: string | null;
-  commission_rate?: string;
-  is_active?: boolean;
-};
+export type SalesStaffPayload = Schema["SalesStaffCreate"];
 
 export function listSalesStaff(status: "active" | "inactive" | "all" = "all"): Promise<SalesStaff[]> {
   return apiFetch<SalesStaff[]>(`/sales-staff?status=${status}`);
@@ -2329,7 +1525,7 @@ export function createSalesStaff(payload: SalesStaffPayload): Promise<SalesStaff
   return apiFetch<SalesStaff>("/sales-staff", { method: "POST", body: JSON.stringify(payload) });
 }
 
-export function updateSalesStaff(id: string, payload: SalesStaffPayload): Promise<SalesStaff> {
+export function updateSalesStaff(id: string, payload: Schema["SalesStaffUpdate"]): Promise<SalesStaff> {
   return apiFetch<SalesStaff>(`/sales-staff/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
 }
 
@@ -2338,47 +1534,11 @@ export function deleteSalesStaff(id: string): Promise<void> {
   return apiFetch<void>(`/sales-staff/${id}`, { method: "DELETE" });
 }
 
-export type CommissionDocument = {
-  kind: "invoice" | "credit_note";
-  id: string;
-  number: string;
-  invoice_id: string;
-  invoice_number: string;
-  issue_date: string;
-  customer_name: string;
-  commissionable_ex_vat: string;
-  excluded_ex_vat: string;
-};
+export type CommissionDocument = Schema["CommissionDocument"];
 
-export type CommissionRow = {
-  /** null: the unattributed bucket. */
-  sales_staff_id: string | null;
-  name: string;
-  short_name: string | null;
-  is_active: boolean;
-  commission_rate: string;
-  invoice_count: number;
-  commissionable_ex_vat: string;
-  excluded_ex_vat: string;
-  credit_deductions: string;
-  net_commissionable: string;
-  commission: string;
-  documents: CommissionDocument[];
-};
+export type CommissionRow = Schema["CommissionRow"];
 
-export type CommissionReport = {
-  month: string;
-  from_date: string;
-  to_date: string;
-  rows: CommissionRow[];
-  unattributed: CommissionRow;
-  invoice_count: number;
-  commissionable_ex_vat: string;
-  excluded_ex_vat: string;
-  credit_deductions: string;
-  net_commissionable: string;
-  commission: string;
-};
+export type CommissionReport = Schema["CommissionReport"];
 
 /** month: YYYY-MM. */
 export function getCommissionReport(month: string): Promise<CommissionReport> {
@@ -2386,39 +1546,13 @@ export function getCommissionReport(month: string): Promise<CommissionReport> {
 }
 
 
-export type RepeatingInvoiceLine = {
-  id: string;
-  description: string;
-  qty: number;
-  unit_ex_vat: string;
-  sort_order: number;
-};
+export type RepeatingInvoiceLine = Schema["RepeatingInvoiceLineResponse"];
 
-export type RepeatingInvoice = {
-  id: string;
-  customer_id: string;
-  name: string | null;
-  day_of_month: number;
-  next_date: string;
-  is_active: boolean;
-  created_by: string | null;
-  lines: RepeatingInvoiceLine[];
-  created_at: string;
-  updated_at: string;
-};
+export type RepeatingInvoice = Schema["RepeatingInvoiceResponse"];
 
-export type CreateRepeatingInvoicePayload = {
-  customer_id: string;
-  name?: string;
-  day_of_month: number;
-  next_date: string;
-  lines: CreateInvoiceLinePayload[];
-};
+export type CreateRepeatingInvoicePayload = Schema["RepeatingInvoiceCreate"];
 
-export type RepeatingInvoiceRun = {
-  schedule: RepeatingInvoice;
-  invoice: Invoice;
-};
+export type RepeatingInvoiceRun = Schema["RepeatingInvoiceRunResponse"];
 
 export function listRepeatingInvoices(): Promise<RepeatingInvoice[]> {
   return apiFetch<RepeatingInvoice[]>("/repeating-invoices");
@@ -2443,25 +1577,9 @@ export async function downloadInvoicePdf(id: string, invoiceNumber: string): Pro
   await downloadApiFile(`/api/v1/invoices/${id}/pdf`, `${invoiceNumber}.pdf`);
 }
 
-export type CreditNote = {
-  id: string;
-  credit_note_number: string;
-  invoice_id: string;
-  invoice_number: string;
-  customer_email?: string | null;
-  reason: string | null;
-  issue_date: string;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  created_at: string;
-  updated_at: string;
-};
+export type CreditNote = Schema["CreditNoteResponse"];
 
-export type CreateCreditNotePayload = {
-  invoice_id: string;
-  reason?: string;
-};
+export type CreateCreditNotePayload = Schema["CreditNoteCreate"];
 
 export function listCreditNotes(params?: ListParams): Promise<Page<CreditNote>> {
   return apiFetch<Page<CreditNote>>(`/credit-notes?${buildListQuery(params)}`);
@@ -2482,14 +1600,7 @@ export async function downloadLaybyPdf(id: string, laybyNumber: string): Promise
   await downloadApiFile(`/api/v1/laybys/${id}/pdf`, `${laybyNumber}.pdf`);
 }
 
-export type BillLine = {
-  id: string;
-  description: string;
-  qty: number;
-  unit_amount: string;
-  amount_foreign: string;
-  sort_order: number;
-};
+export type BillLine = Schema["BillLineResponse"];
 
 export type BillApprovalStatus = "draft" | "awaiting_approval" | "approved";
 
@@ -2503,79 +1614,17 @@ export type BillStatus =
   | "paid"
   | "unknown";
 
-export type BillAttachment = {
-  id: string;
-  filename: string;
-  content_type: string;
-  uploaded_at: string;
-  uploaded_by_id: string | null;
-  /** The previous release's single file: download only. */
-  read_only: boolean;
-};
+export type BillAttachment = Schema["BillAttachmentResponse"];
 
-export type BillListItem = {
-  id: string;
-  is_archive: boolean;
-  bill_number: string;
-  supplier_id: string;
-  supplier_name: string;
-  supplier_ref: string;
-  issue_date: string;
-  due_date: string | null;
-  currency: string;
-  fx_to_zar: string;
-  fx_rate_known: boolean;
-  amount_foreign: string;
-  amount_zar: string;
-  amount_paid_zar: string;
-  amount_paid_foreign: string;
-  balance_zar: string;
-  balance_foreign: string;
-  payment_status: "unpaid" | "partially_paid" | "paid" | "unknown";
-  approval_status: BillApprovalStatus;
-  status: BillStatus;
-  is_archived: boolean;
-  archived_at: string | null;
-  notes: string | null;
-  attachment_count: number;
-  purchase_order_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type BillListItem = Schema["BillListItem"];
 
-export type Bill = BillListItem & {
-  lines: BillLine[];
-  attachments: BillAttachment[];
-};
+export type Bill = Schema["BillResponse"];
 
-export type BillSummary = {
-  owing_zar: string;
-  owing_count: number;
-  overdue_zar: string;
-  overdue_count: number;
-  due_soon_zar: string;
-  due_soon_count: number;
-  awaiting_approval_count: number;
-  draft_count: number;
-};
+export type BillSummary = Schema["BillSummary"];
 
-export type CreateBillLinePayload = {
-  description: string;
-  qty: number;
-  unit_amount: string;
-};
+export type CreateBillLinePayload = Schema["BillLineCreate"];
 
-export type CreateBillPayload = {
-  supplier_id: string;
-  supplier_ref: string;
-  issue_date: string;
-  due_date?: string;
-  currency: string;
-  fx_to_zar?: string;
-  notes?: string;
-  approval_status: BillApprovalStatus;
-  lines: CreateBillLinePayload[];
-};
+export type CreateBillPayload = Schema["BillCreate"];
 
 export function createBill(payload: CreateBillPayload): Promise<Bill> {
   return apiFetch<Bill>("/bills", {
@@ -2633,31 +1682,7 @@ export type PaymentDirection = "in" | "out";
 
 export type PaymentMethod = "eft" | "card" | "cash" | "other";
 
-export type Payment = {
-  id: string;
-  payment_number: string;
-  direction: PaymentDirection;
-  invoice_id: string | null;
-  bill_id: string | null;
-  amount: string;
-  currency: string;
-  fx_to_zar: string;
-  amount_zar: string;
-  fx_gain_loss_zar: string;
-  paid_on: string;
-  /** Payment method; till payments may also be "deposit". */
-  tender: PaymentMethod | "deposit" | null;
-  reference: string | null;
-  party_name: string | null;
-  document_number: string | null;
-  is_reconciled: boolean;
-  reconciled_at: string | null;
-  is_voided: boolean;
-  voided_at: string | null;
-  void_reason: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type Payment = Schema["PaymentResponse"];
 
 type PaymentMethodPayload = {
   tender?: PaymentMethod;
@@ -2681,26 +1706,9 @@ export type CreatePaymentOutPayload = PaymentMethodPayload & {
   paid_on: string;
 };
 
-export type PaymentOpenDocument = {
-  kind: "invoice" | "bill";
-  document_id: string;
-  number: string;
-  contact_name: string;
-  issue_date: string;
-  currency: string;
-  fx_to_zar: string;
-  outstanding_foreign: string;
-  outstanding_zar: string;
-};
+export type PaymentOpenDocument = Schema["PaymentOpenDocument"];
 
-export type PaymentSummary = {
-  received_this_month_zar: string;
-  received_this_month_count: number;
-  paid_this_month_zar: string;
-  paid_this_month_count: number;
-  unreconciled_count: number;
-  unreconciled_net_zar: string;
-};
+export type PaymentSummary = Schema["PaymentSummary"];
 
 export function listOpenPaymentDocuments(
   direction: PaymentDirection,
@@ -2719,26 +1727,17 @@ export function voidPayment(id: string, reason: string): Promise<Payment> {
   });
 }
 
-export type CreatePaymentPayload = CreatePaymentInPayload | CreatePaymentOutPayload;
+export type CreatePaymentPayload = Schema["PaymentCreate"];
 
 export function listPayments(params?: ListParams): Promise<Page<Payment>> {
   return apiFetch<Page<Payment>>(`/payments?${buildListQuery(params)}`);
 }
 
-export type BooksDocumentType = "invoice" | "bill" | "payment" | "journal";
+export type BooksDocumentType = Schema["BooksDocumentType"];
 
-export type BooksEventAction = "created" | "posted" | "voided" | "updated";
+export type BooksEventAction = Schema["BooksEventAction"];
 
-export type BooksEvent = {
-  id: string;
-  document_type: BooksDocumentType;
-  document_id: string;
-  action: BooksEventAction;
-  actor_user_id: string | null;
-  actor_email: string | null;
-  note: string | null;
-  created_at: string;
-};
+export type BooksEvent = Schema["BooksEventResponse"];
 
 export function listBooksEvents(
   documentType: BooksDocumentType,
@@ -2762,7 +1761,7 @@ export async function downloadPaymentPdf(id: string, paymentNumber: string): Pro
   await downloadApiFile(`/api/v1/payments/${id}/pdf`, `${paymentNumber}.pdf`);
 }
 
-export type JournalStatus = "draft" | "posted" | "voided";
+export type JournalStatus = Schema["JournalStatus"];
 
 export type JournalDocumentType =
   | "invoice"
@@ -2772,46 +1771,15 @@ export type JournalDocumentType =
   | "stock_adjustment"
   | "manual";
 
-export type JournalLine = {
-  id: string;
-  account_id: string;
-  account_code: string;
-  account_name: string;
-  debit_zar: string;
-  credit_zar: string;
-};
+export type JournalLine = Schema["JournalLineResponse"];
 
-export type Journal = {
-  id: string;
-  document_type: JournalDocumentType;
-  document_id: string;
-  memo: string | null;
-  status: JournalStatus;
-  source: string | null;
-  journal_number: string | null;
-  entry_date: string;
-  voided_by_id: string | null;
-  debit_total_zar: string;
-  credit_total_zar: string;
-  lines: JournalLine[];
-  created_at: string;
-};
+export type Journal = Schema["JournalResponse"];
 
-export type CreateJournalLinePayload = {
-  account_id: string;
-  debit_zar: string;
-  credit_zar: string;
-};
+export type CreateJournalLinePayload = Schema["JournalLineCreate"];
 
-export type CreateJournalPayload = {
-  entry_date: string;
-  memo?: string;
-  source?: string;
-  status?: "draft" | "posted";
-  lines: CreateJournalLinePayload[];
-};
+export type CreateJournalPayload = Schema["JournalCreate"];
 
-export type JournalListItem = Omit<Journal, "lines">;
+export type JournalListItem = Schema["JournalListItem"];
 
 export function listJournals(params?: ListParams): Promise<Page<JournalListItem>> {
   return apiFetch<Page<JournalListItem>>(`/journals?${buildListQuery(params)}`);
@@ -2853,27 +1821,11 @@ export function voidJournal(id: string): Promise<Journal> {
   return apiFetch<Journal>(`/journals/${id}/void`, { method: "POST" });
 }
 
-export type JournalImportRowError = {
-  row: number;
-  message: string;
-};
+export type JournalImportRowError = Schema["JournalImportRowError"];
 
-export type JournalImportPreviewLine = {
-  row: number;
-  account_code: string;
-  debit_zar: string;
-  credit_zar: string;
-};
+export type JournalImportPreviewLine = Schema["JournalImportPreviewLine"];
 
-export type JournalImportPreview = {
-  lines: JournalImportPreviewLine[];
-  errors: JournalImportRowError[];
-  balanced: boolean;
-  debit_total: string;
-  credit_total: string;
-  entry_date: string | null;
-  narration: string;
-};
+export type JournalImportPreview = Schema["JournalImportPreviewResponse"];
 
 export function previewJournalImport(file: File): Promise<JournalImportPreview> {
   const formData = new FormData();
@@ -2887,220 +1839,43 @@ export function commitJournalImport(file: File): Promise<Journal> {
   return apiUpload<Journal>("/journal-imports/commit", formData);
 }
 
-export function formatZarAmount(value: string | null | undefined): string {
-  if (!value) {
-    return "—";
-  }
-  return `R ${value}`;
-}
+export type BankDocumentSuggestion = Schema["BankDocumentSuggestion"];
 
-export function sumInvoiceLinesExVat(
-  lines: { qty: number | ""; unit_ex_vat: string }[],
-): number {
-  return lines.reduce((sum, line) => {
-    if (typeof line.qty !== "number" || line.qty <= 0) {
-      return sum;
-    }
-    const unit = parsePriceInput(line.unit_ex_vat);
-    if (unit === null || unit <= 0) {
-      return sum;
-    }
-    return sum + line.qty * unit;
-  }, 0);
-}
+export type BankLineAllocation = Schema["BankLineAllocationResponse"];
 
-export function computeInvoicePreview(subtotalExVat: number): {
-  vat: number;
-  totalIncVat: number;
-} {
-  const vat = roundHalfUp(subtotalExVat * 0.15, 2);
-  const totalIncVat = roundHalfUp(subtotalExVat + vat, 2);
-  return { vat, totalIncVat };
-}
+export type BankImportLine = Schema["BankImportLineResponse"];
 
-export function formatFxGainLoss(value: string): string {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount === 0) {
-    return "R 0.00";
-  }
-  const prefix = amount > 0 ? "Gain " : "Loss ";
-  return `${prefix}R ${Math.abs(amount).toFixed(2)}`;
-}
+export type AutoMatchPreviewItem = Schema["AutoMatchPreviewItem"];
 
-export type BankDocumentSuggestion = {
-  kind: "invoice" | "bill";
-  document_id: string;
-  document_number: string;
-  contact_name: string;
-  outstanding_zar: string;
-  confidence: number;
-  reason: string;
-  auto_match: boolean;
-};
+export type BankRule = Schema["BankRuleResponse"];
 
-export type BankLineAllocation = {
-  payment_id: string;
-  payment_number?: string | null;
-  amount_zar: string;
-  document_number?: string | null;
-};
+export type CreateBankRulePayload = Schema["BankRuleCreate"];
 
-export type BankImportLine = {
-  id: string;
-  import_id?: string;
-  transaction_date: string;
-  description: string;
-  reference: string | null;
-  amount_zar: string;
-  matched_payment_id: string | null;
-  matched_journal_id: string | null;
-  matched_payment_number: string | null;
-  matched_journal_number?: string | null;
-  suggested_payment_id: string | null;
-  suggested_payment_number: string | null;
-  suggested_rule_id?: string | null;
-  suggested_rule_pattern?: string | null;
-  suggested_account_code?: string | null;
-  suggested_account_name?: string | null;
-  document_suggestions?: BankDocumentSuggestion[];
-  allocations?: BankLineAllocation[];
-};
+export type UpdateBankRulePayload = Schema["BankRuleUpdate"];
 
-export type AutoMatchPreviewItem = {
-  import_id: string;
-  line_id: string;
-  transaction_date: string;
-  description: string;
-  amount_zar: string;
-  kind: "invoice" | "bill";
-  document_id: string;
-  document_number: string;
-  contact_name: string;
-  confidence: number;
-  reason: string;
-};
+export type BankImport = Schema["BankImportResponse"];
 
-export type BankRule = {
-  id: string;
-  bank_account_id: string;
-  pattern: string;
-  target_account_id: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
+export type BankImportSummary = Schema["BankImportSummary"];
 
-export type CreateBankRulePayload = {
-  bank_account_id: string;
-  pattern: string;
-  target_account_id: string;
-};
-
-export type UpdateBankRulePayload = {
-  pattern?: string;
-  target_account_id?: string;
-  is_active?: boolean;
-};
-
-export type BankImport = {
-  id: string;
-  filename: string;
-  line_count: number;
-  account_id: string;
-  account_code: string;
-  account_name: string;
-  lines: BankImportLine[];
-  created_at: string;
-  updated_at: string;
-};
-
-export type BankImportSummary = {
-  id: string;
-  filename: string;
-  line_count: number;
-  matched_count: number;
-  unmatched_count: number;
-  account_id: string;
-  account_code: string;
-  account_name: string;
-  created_at: string;
-};
-
-export type BankUnmatchedCount = {
-  account_id: string;
-  account_code: string;
-  account_name: string;
-  unmatched_count: number;
-};
+export type BankUnmatchedCount = Schema["BankUnmatchedCount"];
 
 export type BankMatchTarget = { payment_id: string } | { journal_id: string };
 
-export type AgedBucket = {
-  label: string;
-  amount_zar: string;
-};
+export type AgedBucket = Schema["AgedBucket"];
 
-export type AgedLine = {
-  document_number: string;
-  contact_name: string;
-  issue_date: string;
-  balance_zar: string;
-  days_outstanding: number;
-  bucket: string;
-};
+export type AgedLine = Schema["AgedLine"];
 
-export type AgedReport = {
-  as_of: string;
-  total_zar: string;
-  buckets: AgedBucket[];
-  lines: AgedLine[];
-};
+export type AgedReport = Schema["AgedReport"];
 
-export type ProfitLossLine = {
-  code: string;
-  name: string;
-  amount_zar: string;
-};
+export type ProfitLossLine = Schema["ProfitLossLine"];
 
-export type ProfitLossReport = {
-  from_date: string;
-  to_date: string;
-  income: ProfitLossLine[];
-  expenses: ProfitLossLine[];
-  total_income_zar: string;
-  total_expenses_zar: string;
-  net_profit_zar: string;
-};
+export type ProfitLossReport = Schema["ProfitLossReport"];
 
-export type BalanceSheetLine = {
-  code: string;
-  name: string;
-  type: string;
-  balance_zar: string;
-};
+export type BalanceSheetLine = Schema["BalanceSheetLine"];
 
-export type BalanceSheetReport = {
-  as_of: string;
-  assets: BalanceSheetLine[];
-  liabilities: BalanceSheetLine[];
-  equity_zar: string;
-  total_assets_zar: string;
-  total_liabilities_zar: string;
-};
+export type BalanceSheetReport = Schema["BalanceSheetReport"];
 
-export type Vat201Draft = {
-  period_from: string;
-  period_to: string;
-  vendor_name: string;
-  vendor_vat_number: string;
-  standard_rated_supplies_ex_vat: string;
-  output_tax: string;
-  input_tax: string;
-  net_vat_payable: string;
-  invoice_count: number;
-  credit_note_count: number;
-  disclaimer: string;
-};
+export type Vat201Draft = Schema["Vat201Draft"];
 
 export function listBankImports(): Promise<BankImportSummary[]> {
   return apiFetch<BankImportSummary[]>("/bank-imports");
@@ -3241,10 +2016,6 @@ export function recodeLine(
   });
 }
 
-function reportTodayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function reportMonthStartIso(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
@@ -3255,25 +2026,25 @@ function requireIsoDate(value: string, fallback: string): string {
 }
 
 export function getAgedAr(asOf: string): Promise<AgedReport> {
-  const date = requireIsoDate(asOf, reportTodayIso());
+  const date = requireIsoDate(asOf, localIsoDate());
   return apiFetch<AgedReport>(`/reports/aged-ar?as_of=${encodeURIComponent(date)}`);
 }
 
 export function getAgedAp(asOf: string): Promise<AgedReport> {
-  const date = requireIsoDate(asOf, reportTodayIso());
+  const date = requireIsoDate(asOf, localIsoDate());
   return apiFetch<AgedReport>(`/reports/aged-ap?as_of=${encodeURIComponent(date)}`);
 }
 
 export function getProfitLoss(fromDate: string, toDate: string): Promise<ProfitLossReport> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   return apiFetch<ProfitLossReport>(
     `/reports/profit-loss?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 
 export function getBalanceSheet(asOf: string): Promise<BalanceSheetReport> {
-  const date = requireIsoDate(asOf, reportTodayIso());
+  const date = requireIsoDate(asOf, localIsoDate());
   return apiFetch<BalanceSheetReport>(
     `/reports/balance-sheet?as_of=${encodeURIComponent(date)}`,
   );
@@ -3281,7 +2052,7 @@ export function getBalanceSheet(asOf: string): Promise<BalanceSheetReport> {
 
 export function getVat201Draft(fromDate: string, toDate: string): Promise<Vat201Draft> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   return apiFetch<Vat201Draft>(
     `/reports/vat201?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
@@ -3289,7 +2060,7 @@ export function getVat201Draft(fromDate: string, toDate: string): Promise<Vat201
 
 export async function downloadVat201Csv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/vat201/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     `vat201-draft-${from}-to-${to}.csv`,
@@ -3298,43 +2069,20 @@ export async function downloadVat201Csv(fromDate: string, toDate: string): Promi
 
 export async function downloadVat201Pdf(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/vat201/pdf?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     `vat201-draft-${from}-to-${to}.pdf`,
   );
 }
 
-export type Vat201PeriodStatus = "draft" | "due" | "locked";
+export type Vat201PeriodStatus = Schema["Vat201PeriodStatus"];
 
-export type Vat201Period = {
-  id: string;
-  period_from: string;
-  period_to: string;
-  status: Vat201PeriodStatus;
-  locked_at: string | null;
-  locked_by_user_id: string | null;
-  reopen_reason: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type Vat201Period = Schema["Vat201PeriodResponse"];
 
-export type Vat201PeriodEvent = {
-  action: string;
-  created_at?: string;
-  at?: string;
-  reason?: string | null;
-};
+export type Vat201PeriodDetail = Schema["Vat201PeriodDetailResponse"];
 
-export type Vat201PeriodDetail = Vat201Period & {
-  draft: Vat201Draft;
-  events?: Vat201PeriodEvent[];
-};
-
-export type CreateVat201PeriodPayload = {
-  period_from: string;
-  period_to: string;
-};
+export type CreateVat201PeriodPayload = Schema["Vat201PeriodCreate"];
 
 export function listVat201Periods(): Promise<Vat201Period[]> {
   return apiFetch<Vat201Period[]>("/vat201/periods");
@@ -3395,131 +2143,35 @@ export function downloadVat201PeriodPdf(id: string): Promise<void> {
   return downloadVat201PeriodFile(id, "pdf");
 }
 
-export type StockValuationLine = {
-  location_id: string;
-  location_name: string;
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  on_hand: number;
-  unit_cost_zar: string | null;
-  value_zar: string;
-};
+export type StockValuationLine = Schema["StockValuationLine"];
 
-export type StockValuationReport = {
-  total_on_hand: number;
-  total_value_zar: string;
-  lines: StockValuationLine[];
-};
+export type StockValuationReport = Schema["StockValuationReport"];
 
-export type AgedStockLine = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  location_id: string;
-  location_name: string;
-  on_hand: number;
-  value_zar: string;
-  days: number;
-  bucket: string;
-};
+export type AgedStockLine = Schema["AgedStockLine"];
 
-export type AgedStockBucket = {
-  bucket: string;
-  label: string;
-  qty: number;
-  value_zar: string;
-  lines: AgedStockLine[];
-};
+export type AgedStockBucket = Schema["AgedStockBucket"];
 
-export type AgedStockReport = {
-  buckets: AgedStockBucket[];
-  total_qty: number;
-  total_value_zar: string;
-};
+export type AgedStockReport = Schema["AgedStockReport"];
 
-export type SalesBySkuLine = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  qty: number;
-  ex_vat_zar: string;
-  inc_vat_zar: string;
-};
+export type SalesBySkuLine = Schema["SalesBySkuLine"];
 
-export type SalesBySkuReport = {
-  from_date: string;
-  to_date: string;
-  lines: SalesBySkuLine[];
-  total_qty: number;
-  total_ex_vat_zar: string;
-  total_inc_vat_zar: string;
-};
+export type SalesBySkuReport = Schema["SalesBySkuReport"];
 
-export type SalesVatReport = {
-  from_date: string;
-  to_date: string;
-  invoice_count: number;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  amount_paid: string;
-};
+export type SalesVatReport = Schema["SalesVatReport"];
 
-export type TrialBalanceLine = {
-  code: string;
-  name: string;
-  debit_zar: string;
-  credit_zar: string;
-};
+export type TrialBalanceLine = Schema["TrialBalanceLine"];
 
-export type TrialBalanceReport = {
-  as_of: string;
-  lines: TrialBalanceLine[];
-  total_debit_zar: string;
-  total_credit_zar: string;
-};
+export type TrialBalanceReport = Schema["TrialBalanceReport"];
 
-export type JournalReportLine = {
-  account_code: string;
-  account_name: string;
-  debit_zar: string;
-  credit_zar: string;
-};
+export type JournalReportLine = Schema["JournalReportLine"];
 
-export type JournalReportEntry = {
-  entry_date: string;
-  journal_number: string | null;
-  document_type: JournalDocumentType;
-  source: string | null;
-  memo: string | null;
-  status: JournalStatus;
-  lines: JournalReportLine[];
-};
+export type JournalReportEntry = Schema["JournalReportEntry"];
 
-export type JournalReport = {
-  from_date: string;
-  to_date: string;
-  source: string | null;
-  entries: JournalReportEntry[];
-};
+export type JournalReport = Schema["JournalReport"];
 
-export type CashSummaryAccount = {
-  code: string;
-  name: string;
-  cash_in_zar: string;
-  cash_out_zar: string;
-  net_zar: string;
-};
+export type CashSummaryAccount = Schema["CashSummaryAccount"];
 
-export type CashSummaryReport = {
-  from_date: string;
-  to_date: string;
-  accounts: CashSummaryAccount[];
-  total_cash_in_zar: string;
-  total_cash_out_zar: string;
-  total_net_zar: string;
-};
+export type CashSummaryReport = Schema["CashSummaryReport"];
 
 export function getStockValuation(): Promise<StockValuationReport> {
   return apiFetch<StockValuationReport>("/reports/stock-valuation");
@@ -3531,7 +2183,7 @@ export function getAgedStock(): Promise<AgedStockReport> {
 
 export function getSalesBySku(fromDate: string, toDate: string): Promise<SalesBySkuReport> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   return apiFetch<SalesBySkuReport>(
     `/reports/sales-by-sku?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
@@ -3539,74 +2191,34 @@ export function getSalesBySku(fromDate: string, toDate: string): Promise<SalesBy
 
 export function getSalesVat(fromDate: string, toDate: string): Promise<SalesVatReport> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   return apiFetch<SalesVatReport>(
     `/reports/sales-vat?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 
-export type SkuCriticalityLine = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  category: string | null;
-  qty: number;
-  value_zar: string;
-  share_pct: number;
-  cumulative_pct: number;
-  abc_class: "A" | "B" | "C";
-  hits_50pct_band: boolean;
-  is_a: boolean;
-};
+export type AbcClass = "A" | "B" | "C";
 
-export type SkuCriticalityCategoryLine = {
-  category: string;
-  qty: number;
-  value_zar: string;
-  share_pct: number;
-  cumulative_pct: number;
-  abc_class: "A" | "B" | "C";
-};
+export type SkuCriticalityLine = WithLiteral<Schema["SkuCriticalityLine"], "abc_class", AbcClass>;
 
-export type SkuCriticalityReport = {
-  from_date: string;
-  to_date: string;
-  sku_count_for_50pct: number;
-  sku_count_for_80pct: number;
-  top_sku_share_pct: number;
+export type SkuCriticalityCategoryLine = WithLiteral<Schema["SkuCriticalityCategoryLine"], "abc_class", AbcClass>;
+
+export type SkuCriticalityReport = Omit<Schema["SkuCriticalityReport"], "lines" | "categories"> & {
   lines: SkuCriticalityLine[];
   categories: SkuCriticalityCategoryLine[];
 };
 
 export function getSkuCriticality(fromDate: string, toDate: string): Promise<SkuCriticalityReport> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   return apiFetch<SkuCriticalityReport>(
     `/reports/sku-criticality?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 
-export type SupplierLeadTimeRow = {
-  supplier_id: string;
-  supplier_name: string;
-  n: number;
-  median_days: number;
-  median_last_3_days: number;
-  median_water_days: number | null;
-  p90_days: number | null;
-};
+export type SupplierLeadTimeRow = Schema["SupplierLeadTimeLine"];
 
-export type SkuLeadTimeRow = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  manual_lead_time_days: number | null;
-  n: number;
-  median_days: number;
-  median_last_3_days: number;
-  median_water_days: number | null;
-  p90_days: number | null;
-};
+export type SkuLeadTimeRow = Schema["SkuLeadTimeLine"];
 
 export type SupplierLeadTimesReport = {
   rows: SupplierLeadTimeRow[];
@@ -3616,40 +2228,27 @@ export type SkuLeadTimesReport = {
   rows: SkuLeadTimeRow[];
 };
 
-function normalizeLeadTimeRows<T>(
-  payload: { rows?: T[]; lines?: T[] } | T[],
-): T[] {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-  return payload.rows ?? payload.lines ?? [];
-}
-
 export async function getSupplierLeadTimes(): Promise<SupplierLeadTimesReport> {
-  const payload = await apiFetch<
-    { rows?: SupplierLeadTimeRow[]; lines?: SupplierLeadTimeRow[] } | SupplierLeadTimeRow[]
-  >("/reports/supplier-lead-times");
-  return { rows: normalizeLeadTimeRows(payload) };
+  const payload = await apiFetch<Schema["SupplierLeadTimesReport"]>("/reports/supplier-lead-times");
+  return { rows: payload.lines };
 }
 
 export async function getSkuLeadTimes(): Promise<SkuLeadTimesReport> {
-  const payload = await apiFetch<
-    { rows?: SkuLeadTimeRow[]; lines?: SkuLeadTimeRow[] } | SkuLeadTimeRow[]
-  >("/reports/sku-lead-times");
-  return { rows: normalizeLeadTimeRows(payload) };
+  const payload = await apiFetch<Schema["SkuLeadTimesReport"]>("/reports/sku-lead-times");
+  return { rows: payload.lines };
 }
 
 export async function downloadStockValuationCsv(): Promise<void> {
-  await downloadApiFile("/api/v1/reports/stock-valuation/csv", `stock-valuation-${reportTodayIso()}.csv`);
+  await downloadApiFile("/api/v1/reports/stock-valuation/csv", `stock-valuation-${localIsoDate()}.csv`);
 }
 
 export async function downloadAgedStockCsv(): Promise<void> {
-  await downloadApiFile("/api/v1/reports/aged-stock/csv", `aged-stock-${reportTodayIso()}.csv`);
+  await downloadApiFile("/api/v1/reports/aged-stock/csv", `aged-stock-${localIsoDate()}.csv`);
 }
 
 export async function downloadSalesBySkuCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/sales-by-sku/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     `sales-by-sku-${from}-to-${to}.csv`,
@@ -3658,7 +2257,7 @@ export async function downloadSalesBySkuCsv(fromDate: string, toDate: string): P
 
 export async function downloadSkuCriticalityCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/sku-criticality/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     `sku-criticality-${from}-to-${to}.csv`,
@@ -3667,7 +2266,7 @@ export async function downloadSkuCriticalityCsv(fromDate: string, toDate: string
 
 export async function downloadSalesVatCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/sales-vat/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     `sales-vat-${from}-to-${to}.csv`,
@@ -3675,16 +2274,16 @@ export async function downloadSalesVatCsv(fromDate: string, toDate: string): Pro
 }
 
 export async function downloadSupplierLeadTimesCsv(): Promise<void> {
-  await downloadApiFile("/api/v1/reports/supplier-lead-times/csv", `supplier-lead-times-${reportTodayIso()}.csv`);
+  await downloadApiFile("/api/v1/reports/supplier-lead-times/csv", `supplier-lead-times-${localIsoDate()}.csv`);
 }
 
 export async function downloadSkuLeadTimesCsv(): Promise<void> {
-  await downloadApiFile("/api/v1/reports/sku-lead-times/csv", `sku-lead-times-${reportTodayIso()}.csv`);
+  await downloadApiFile("/api/v1/reports/sku-lead-times/csv", `sku-lead-times-${localIsoDate()}.csv`);
 }
 
 function journalsReportQuery(fromDate: string, toDate: string, source?: string): string {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   const params = new URLSearchParams({ from, to });
   const trimmed = source?.trim();
   if (trimmed) {
@@ -3694,7 +2293,7 @@ function journalsReportQuery(fromDate: string, toDate: string, source?: string):
 }
 
 export function getTrialBalance(asOf: string): Promise<TrialBalanceReport> {
-  const date = requireIsoDate(asOf, reportTodayIso());
+  const date = requireIsoDate(asOf, localIsoDate());
   return apiFetch<TrialBalanceReport>(
     `/reports/trial-balance?as_of=${encodeURIComponent(date)}`,
   );
@@ -3710,14 +2309,14 @@ export function getJournalsReport(
 
 export function getCashSummary(fromDate: string, toDate: string): Promise<CashSummaryReport> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   return apiFetch<CashSummaryReport>(
     `/reports/cash-summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 
 export async function downloadTrialBalanceCsv(asOf: string): Promise<void> {
-  const date = requireIsoDate(asOf, reportTodayIso());
+  const date = requireIsoDate(asOf, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/trial-balance/csv?as_of=${encodeURIComponent(date)}`,
     `trial-balance-${date}.csv`,
@@ -3730,7 +2329,7 @@ export async function downloadJournalsCsv(
   source?: string,
 ): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/journals/csv?${journalsReportQuery(fromDate, toDate, source)}`,
     `journals-${from}-to-${to}.csv`,
@@ -3739,7 +2338,7 @@ export async function downloadJournalsCsv(
 
 export async function downloadCashSummaryCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
-  const to = requireIsoDate(toDate, reportTodayIso());
+  const to = requireIsoDate(toDate, localIsoDate());
   await downloadApiFile(
     `/api/v1/reports/cash-summary/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     `cash-summary-${from}-to-${to}.csv`,
@@ -3748,120 +2347,29 @@ export async function downloadCashSummaryCsv(fromDate: string, toDate: string): 
 
 export type HomeAttentionKind = "low_stock" | "stocktake" | "returns" | "layby" | "bank";
 
-export type HomeAttentionItem = {
-  kind: HomeAttentionKind;
-  title: string;
-  detail: string;
-  status: string;
-  href: string;
-};
+export type HomeAttentionItem = WithLiteral<Schema["HomeAttentionItem"], "kind", HomeAttentionKind>;
 
-export type HomeMovementItem = {
-  source: string;
-  title: string;
-  detail: string;
-  created_at: string;
-};
+export type HomeMovementItem = Schema["HomeRecentMovement"];
 
-export type HomeSummary = {
-  on_order_qty: number;
-  on_order_value_zar: string;
-  on_hand_qty: number;
-  on_hand_value_zar: string;
-  home_currency: string;
-  aged_stock_value_zar: string;
-  open_laybys_count: number;
-  open_laybys_balance_zar: string;
-  low_stock_count: number;
-  open_returns_count: number;
+export type HomeSummary = Omit<Schema["HomeSummaryResponse"], "needs_attention"> & {
   needs_attention: HomeAttentionItem[];
-  recent_movements: HomeMovementItem[];
 };
 
-export type SkuSearchHit = {
-  id: string;
-  our_ref: string;
-  our_barcode: string;
-  name: string;
-};
+export type SkuSearchHit = Schema["SkuSearchHit"];
 
-export type PurchaseOrderSearchHit = {
-  id: string;
-  po_number: string;
-  status: string;
-  supplier_name: string;
-};
+export type PurchaseOrderSearchHit = Schema["PurchaseOrderSearchHit"];
 
-export type InvoiceSearchHit = {
-  id: string;
-  invoice_number: string;
-  customer_name: string;
-};
+export type InvoiceSearchHit = Schema["InvoiceSearchHit"];
 
-export type SearchResponse = {
-  q: string;
-  skus: SkuSearchHit[];
-  purchase_orders: PurchaseOrderSearchHit[];
-  invoices: InvoiceSearchHit[];
-};
+export type SearchResponse = Schema["SearchResponse"];
 
-export type DocumentSequence = {
-  doc_type: string;
-  prefix: string;
-  padding: number;
-  next_value: number;
-};
+export type DocumentSequence = Schema["DocumentSequenceResponse"];
 
-export type DocumentSequenceUpdate = {
-  doc_type: string;
-  prefix?: string;
-  padding?: number;
-};
+export type DocumentSequenceUpdate = Schema["DocumentSequenceUpdateItem"];
 
-export type AppSettings = import("./label-settings").LabelSettings & {
-  vat_rate: string;
-  vat_percent: string;
-  home_currency: string;
-  defaults_locked: boolean;
-  warning: string | null;
-  always_prefer_warehouse: boolean;
-  pick_priority: string[];
-  legal_name: string;
-  trading_name: string | null;
-  address: string;
-  vat_number: string;
-  cipc_number: string | null;
-  bank_name: string | null;
-  bank_account: string | null;
-  bank_branch_code: string | null;
-  has_logo: boolean;
-  max_till_discount_percent: string | null;
-  po_approval_threshold_zar: string | null;
-  /** Historical read-only value; session duration is managed by Clerk. */
-  session_ttl_hours: number;
-  payment_terms_days: number;
-  default_receive_location_id: string | null;
-  default_till_location_id: string | null;
-  /** Company-wide sale hold time in whole hours (1..24). */
-  till_hold_hours: number;
-  document_sequences: DocumentSequence[];
-};
+export type AppSettings = Schema["SettingsResponse"];
 
-export type UnitCostAuditEntry = {
-  id: string;
-  sku_id: string;
-  location_id: string | null;
-  location_name: string | null;
-  po_id: string | null;
-  old_cost_zar: string | null;
-  new_cost_zar: string;
-  changed_by_user_id: string;
-  changed_by_email: string;
-  changed_by_display_name: string | null;
-  source: string;
-  note: string | null;
-  created_at: string;
-};
+export type UnitCostAuditEntry = Schema["UnitCostAuditResponse"];
 
 function withPickSettings(raw: AppSettings): AppSettings {
   const pick = normalizePickSettings(raw);
@@ -3969,24 +2477,11 @@ export async function previewDocumentTemplate(
   return response.blob();
 }
 
-export type BooksPeriodStatus = "open" | "locked";
+export type BooksPeriodStatus = Schema["BooksPeriodStatus"];
 
-export type BooksPeriod = {
-  id: string;
-  period_from: string;
-  period_to: string;
-  status: BooksPeriodStatus;
-  locked_at: string | null;
-  locked_by_user_id: string | null;
-  reopen_reason: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type BooksPeriod = Schema["BooksPeriodResponse"];
 
-export type CreateBooksPeriodPayload = {
-  period_from: string;
-  period_to: string;
-};
+export type CreateBooksPeriodPayload = Schema["BooksPeriodCreate"];
 
 export function listBooksPeriods(): Promise<BooksPeriod[]> {
   return apiFetch<BooksPeriod[]>("/books-periods");
@@ -4021,17 +2516,7 @@ export function reopenBooksPeriod(id: string, reason: string): Promise<BooksPeri
 
 export type AuditSource = "books" | "cost" | "mcp";
 
-export type AuditEvent = {
-  at: string;
-  source: AuditSource;
-  origin?: "firstout" | "mcp" | null;
-  token_id?: string | null;
-  operation_id?: string | null;
-  record_id?: string | null;
-  actor: string;
-  summary: string;
-  href: string | null;
-};
+export type AuditEvent = Schema["AuditEventItem"];
 
 export function listAuditEvents(params?: {
   limit?: number;
@@ -4065,52 +2550,19 @@ export function correctUnitCost(
   });
 }
 
-export type StockReturnReason = "damaged" | "unwanted" | "wrong_item" | "other";
+export type StockReturnReason = Schema["StockReturnReason"];
 
-export type StockReturnDisposition = "restock" | "write_off";
+export type StockReturnDisposition = Schema["StockReturnDisposition"];
 
-export type StockReturnStatus = "draft" | "completed" | "cancelled";
+export type StockReturnStatus = Schema["StockReturnStatus"];
 
-export type StockReturnLine = {
-  id: string;
-  invoice_line_id: string;
-  sku_id: string | null;
-  description: string;
-  qty: number;
-  unit_ex_vat: string;
-};
+export type StockReturnLine = Schema["StockReturnLineResponse"];
 
-export type StockReturn = {
-  id: string;
-  return_number: string;
-  invoice_id: string;
-  invoice_number: string;
-  location_id: string;
-  location_name: string;
-  credit_note_id: string | null;
-  reason: StockReturnReason;
-  disposition: StockReturnDisposition;
-  status: StockReturnStatus;
-  notes: string | null;
-  lines: StockReturnLine[];
-  created_at: string;
-  updated_at: string;
-};
+export type StockReturn = Schema["StockReturnResponse"];
 
-export type CreateStockReturnLinePayload = {
-  invoice_line_id: string;
-  sku_id?: string;
-  qty: number;
-};
+export type CreateStockReturnLinePayload = Schema["StockReturnLineCreate"];
 
-export type CreateStockReturnPayload = {
-  invoice_id: string;
-  location_id: string;
-  reason: StockReturnReason;
-  disposition: StockReturnDisposition;
-  notes?: string;
-  lines: CreateStockReturnLinePayload[];
-};
+export type CreateStockReturnPayload = Schema["StockReturnCreate"];
 
 export const RETURN_REASON_LABELS: Record<StockReturnReason, string> = {
   damaged: "Damaged",
@@ -4131,7 +2583,7 @@ export const RETURN_DISPOSITION_LABELS: Record<StockReturnDisposition, string> =
   write_off: "Write-off",
 };
 
-export type StockReturnListItem = Omit<StockReturn, "lines">;
+export type StockReturnListItem = Schema["StockReturnListItem"];
 
 export function listReturns(params?: ListParams): Promise<Page<StockReturnListItem>> {
   return apiFetch<Page<StockReturnListItem>>(`/returns?${buildListQuery(params)}`);
@@ -4167,74 +2619,23 @@ export function cancelReturn(id: string): Promise<StockReturn> {
   return apiFetch<StockReturn>(`/returns/${id}/cancel`, { method: "POST" });
 }
 
-export type LaybyStatus = "open" | "ready" | "completed" | "cancelled";
+export type LaybyStatus = Schema["LaybyStatus"];
 
 export type LaybyTender = "cash" | "card";
 
-export type LaybyLine = {
-  id: string;
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  qty: number;
-  unit_ex_vat: string;
-};
+export type LaybyLine = Schema["LaybyLineResponse"];
 
-export type LaybyPayment = {
-  id: string;
-  amount: string;
-  tender: LaybyTender;
-  paid_on: string;
-};
+export type LaybyPayment = Schema["LaybyPaymentResponse"];
 
-export type LaybyListItem = {
-  id: string;
-  layby_number: string;
-  customer_id: string;
-  customer_name: string;
-  customer_email?: string | null;
-  location_id: string;
-  location_name: string;
-  invoice_id: string | null;
-  due_date: string;
-  hold_stock: boolean;
-  status: LaybyStatus;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  amount_paid: string;
-  balance: string;
-  notes: string | null;
-  items_label: string;
-  created_at: string;
-  updated_at: string;
-};
+export type LaybyListItem = Schema["LaybyListItem"];
 
-export type Layby = LaybyListItem & {
-  lines: LaybyLine[];
-  payments: LaybyPayment[];
-};
+export type Layby = Schema["LaybyResponse"];
 
-export type CreateLaybyLinePayload = {
-  sku_id: string;
-  qty: number;
-};
+export type CreateLaybyLinePayload = Schema["LaybyLineCreate"];
 
-export type CreateLaybyPayload = {
-  customer_id: string;
-  location_id: string;
-  due_date: string;
-  hold_stock: boolean;
-  deposit_amount: string;
-  tender: LaybyTender;
-  lines: CreateLaybyLinePayload[];
-  notes?: string;
-};
+export type CreateLaybyPayload = Schema["LaybyCreate"];
 
-export type AddLaybyPaymentPayload = {
-  amount: string;
-  tender: LaybyTender;
-};
+export type AddLaybyPaymentPayload = Schema["LaybyPaymentCreate"];
 
 export function listLaybys(params?: ListParams): Promise<Page<LaybyListItem>> {
   return apiFetch<Page<LaybyListItem>>(`/laybys?${buildListQuery(params)}`);
@@ -4264,6 +2665,18 @@ export function createLayby(payload: CreateLaybyPayload): Promise<Layby> {
   });
 }
 
+/** The layby cart priced exactly as creating it would. */
+export function previewLaybyPrices(
+  payload: Schema["LaybyPreviewRequest"],
+  signal?: AbortSignal,
+): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/laybys/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
 export function addLaybyPayment(id: string, payload: AddLaybyPaymentPayload): Promise<Layby> {
   return apiFetch<Layby>(`/laybys/${id}/payments`, {
     method: "POST",
@@ -4279,137 +2692,31 @@ export function cancelLayby(id: string): Promise<Layby> {
   return apiFetch<Layby>(`/laybys/${id}/cancel`, { method: "POST" });
 }
 
-export type QuoteStatus = "draft" | "sent" | "accepted" | "expired" | "cancelled" | "converted";
+export type QuoteStatus = Schema["QuoteStatus"];
 /** What staff see: open quotes past their date read as expired. */
 export type QuoteState = "open" | "expired" | "converted" | "accepted" | "cancelled";
 
-export type QuoteLine = {
-  id: string;
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  qty: number;
-  unit_ex_vat: string;
-  discount_percent: string;
-  description: string;
-  notes: string | null;
-  price_warning?: string | null;
-  suspect_price_warning?: string | null;
-};
+export type QuoteLine = Schema["QuoteLineResponse"];
 
-type QuoteFields = {
-  id: string;
-  quote_number: string;
-  customer_id: string;
-  customer_name: string;
-  status: QuoteStatus;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  /** Printed on the quote. */
-  notes: string | null;
-  sales_staff_id: string | null;
-  issue_date: string;
-  valid_until: string | null;
-  converted_invoice_id: string | null;
-  converted_invoice_number: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type QuoteListItem = WithLiteral<Schema["QuoteListItem"], "state", QuoteState>;
 
-export type QuoteListItem = QuoteFields & {
-  sales_staff_name: string | null;
-  /** Converted at the till or accepted as an order: read-only. */
-  is_converted: boolean;
-  state: QuoteState;
-  item_count: number;
-  items_label: string;
-};
+export type Quote = Schema["QuoteResponse"];
 
-export type Quote = QuoteFields & {
-  /** Staff only. Never printed. */
-  internal_note: string | null;
-  prices_include_vat: boolean;
-  lines: QuoteLine[];
-};
+export type QuoteLinePayload = Schema["QuoteLineCreate"];
 
-export type QuoteLinePayload = {
-  sku_id: string;
-  qty: number;
-  notes?: string;
-  unit_ex_vat?: string;
-  discount_percent?: string | number;
-};
+export type CreateQuotePayload = Schema["QuoteCreate"];
 
-export type CreateQuotePayload = {
-  customer_id: string;
-  lines: QuoteLinePayload[];
-  notes?: string | null;
-  internal_note?: string | null;
-  valid_until?: string | null;
-  sales_staff_id?: string | null;
-};
+export type AcceptQuotePayload = Schema["QuoteAccept"];
 
-export type AcceptQuotePayload = {
-  location_id?: string;
-  hold_stock?: boolean;
-  deposit?: { amount: string; tender: "cash" | "eft" };
-};
+export type SalesOrderStatus = Schema["SalesOrderStatus"];
 
-export type SalesOrderStatus = "draft" | "open" | "awaiting_stock" | "invoiced" | "cancelled";
+export type SalesOrderLine = Schema["SalesOrderLineResponse"];
 
-export type SalesOrderLine = {
-  id: string;
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  qty: number;
-  unit_ex_vat: string;
-  description: string;
-  notes: string | null;
-  price_warning?: string | null;
-  suspect_price_warning?: string | null;
-  held_qty: number;
-  hold_location_id: string | null;
-};
+export type SalesOrderPayment = Schema["SalesOrderPaymentResponse"];
 
-export type SalesOrderPayment = {
-  id: string;
-  amount: string;
-  tender: "cash" | "eft";
-  paid_on: string;
-};
+export type SalesOrderListItem = Schema["SalesOrderListItem"];
 
-export type SalesOrderListItem = {
-  id: string;
-  is_archive: boolean;
-  source_amounts_known: boolean;
-  source_currency_known: boolean;
-  so_number: string;
-  customer_id: string;
-  customer_name: string;
-  quote_id: string | null;
-  location_id: string | null;
-  location_name: string | null;
-  invoice_id: string | null;
-  hold_stock: boolean;
-  awaiting_stock: boolean;
-  status: SalesOrderStatus;
-  subtotal_ex_vat: string;
-  vat_amount: string;
-  total_inc_vat: string;
-  amount_paid: string;
-  balance: string;
-  notes: string | null;
-  items_label: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type SalesOrder = SalesOrderListItem & {
-  lines: SalesOrderLine[];
-  payments: SalesOrderPayment[];
-};
+export type SalesOrder = Schema["SalesOrderResponse"];
 
 export function listQuotes(params?: ListParams): Promise<Page<QuoteListItem>> {
   return apiFetch<Page<QuoteListItem>>(`/quotes?${buildListQuery(params)}`);
@@ -4453,8 +2760,8 @@ export function deleteQuote(id: string): Promise<void> {
 export function previewQuotePrices(
   payload: { customer_id: string; lines: QuoteLinePayload[]; quote_id?: string },
   signal: AbortSignal,
-): Promise<TillPricePreview> {
-  return apiFetch<TillPricePreview>("/quotes/preview", {
+): Promise<SalePricePreview> {
+  return apiFetch<SalePricePreview>("/quotes/preview", {
     method: "POST",
     body: JSON.stringify(payload),
     signal,
@@ -4516,31 +2823,7 @@ export type StorefrontFulfillmentStatus =
   | "collected"
   | "cancelled";
 
-export type StorefrontHandoff = {
-  id: string;
-  external_order_id: string;
-  correlation_id: string;
-  status: "pending" | "processing" | "stock_conflict" | "imported" | "failed";
-  failure_code: string | null;
-  attempt_count: number;
-  last_attempt_at: string | null;
-  imported_at: string | null;
-  sales_order_id: string;
-  payment_journal_id: string;
-  fulfillment_type: StorefrontFulfillmentType;
-  fulfillment_status: StorefrontFulfillmentStatus;
-  fulfillment_revision: number;
-  lines: {
-    external_line_id: string;
-    title: string;
-    sku: string;
-    quantity: number;
-    unit_ex_minor_zar: number;
-    total_minor_zar: number;
-  }[];
-  created_at: string;
-  updated_at: string;
-};
+export type StorefrontHandoff = Schema["StorefrontHandoffResponse"];
 
 export function listStorefrontHandoffs(): Promise<{ items: StorefrontHandoff[] }> {
   return apiFetch<{ items: StorefrontHandoff[] }>("/storefront/orders");
@@ -4560,53 +2843,11 @@ export function updateStorefrontCollectionStatus(
   });
 }
 
-export type StorefrontRefund = {
-  id: string;
-  handoff_id: string | null;
-  amount_minor: number;
-  provider_amount_minor: number | null;
-  currency_code: string;
-  allocation: Record<string, number>;
-  selected_lines: Record<string, number>;
-  cancel_order: boolean;
-  status: "requested" | "dispatching" | "unknown" | "pending" | "succeeded" | "failed" | "needs_review";
-  provider_refund_id: string | null;
-  provider_result_code: string | null;
-  failure_code: string | null;
-  signature_verified: boolean;
-  financial_journal_id: string | null;
-  created_at: string;
-  completed_at: string | null;
-};
+export type StorefrontRefund = Schema["StorefrontRefundResponse"];
 
-export type StorefrontRefundStatus = {
-  captured_amount_minor: number;
-  confirmed_refund_minor: number;
-  reserved_refund_minor: number;
-  available_refund_minor: number;
-  invoice_id: string | null;
-  invoice_refund_eligible: boolean;
-  invoice_refund_available_minor: number;
-  sales_order_amount_paid: string;
-  line_balances: {
-    external_line_id: string;
-    title: string;
-    sku: string;
-    original_quantity: number;
-    remaining_quantity: number;
-    original_amount_minor: number;
-    remaining_amount_minor: number;
-  }[];
-  items: StorefrontRefund[];
-};
+export type StorefrontRefundStatus = Schema["StorefrontRefundStatusResponse"];
 
-export type StorefrontRefundRequest = {
-  idempotency_key: string;
-  cancel_order: boolean;
-} & (
-  | { amount_minor: number; selected_lines?: never }
-  | { amount_minor?: never; selected_lines: { external_line_id: string; quantity: number }[] }
-);
+export type StorefrontRefundRequest = Schema["StorefrontRefundRequest"];
 
 export function getStorefrontRefundStatus(handoffId: string): Promise<StorefrontRefundStatus> {
   return apiFetch<StorefrontRefundStatus>(`/storefront/orders/${handoffId}/refunds`);
@@ -4622,23 +2863,9 @@ export function requestStorefrontRefund(
   });
 }
 
-export type PortalMe = {
-  access_id: string;
-  organisation_id: string;
-  id: string;
-  email: string;
-  customer_id: string;
-  customer_name: string;
-  price_tier: string;
-};
+export type PortalMe = Schema["PortalMeResponse"];
 
-export type PortalCatalogueItem = {
-  id: string;
-  our_ref: string;
-  name: string;
-  unit_ex_vat: string;
-  unit_inc_vat: string;
-};
+export type PortalCatalogueItem = Schema["PortalCatalogueItem"];
 
 export type PortalAccess = {
   id: string;
@@ -4702,9 +2929,9 @@ export function revokeCustomerPortalAccess(customerId: string, accessId: string)
   return apiFetch(`/customers/${customerId}/portal-access/${accessId}`, { method: "DELETE" });
 }
 
-export type CustomerType = "retail" | "trade";
+export type CustomerType = Schema["CustomerCrmResponse"]["customer_type"];
 
-export type PriceClassification = "Stockist" | "Wholesale" | "Decorator" | "Retail";
+export type PriceClassification = NonNullable<Schema["CustomerCrmCreate"]["price_classification"]>;
 
 export const PRICE_CLASSIFICATIONS: PriceClassification[] = [
   "Stockist",
@@ -4713,34 +2940,7 @@ export const PRICE_CLASSIFICATIONS: PriceClassification[] = [
   "Retail",
 ];
 
-export type CustomerCrm = {
-  id: string;
-  name: string;
-  is_archived: boolean;
-  email: string | null;
-  phone: string | null;
-  vat_number: string | null;
-  billing_address: string | null;
-  customer_type: CustomerType;
-  price_classification: PriceClassification;
-  price_tier: string;
-  draft_quote_count?: number;
-  draft_sales_order_count?: number;
-  open_invoices_count: number;
-  open_invoices_zar: string;
-  overdue_invoices_count: number;
-  overdue_invoices_zar: string;
-  active_laybys_count: number;
-  active_laybys_zar: string;
-  last_purchase_date: string | null;
-  credit_limit: string | null;
-  on_hold: boolean;
-  on_hold_reason: string | null;
-  payment_terms_days: number | null;
-  price_list_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type CustomerCrm = Schema["CustomerCrmResponse"];
 
 export type CustomerListFilters = {
   archived?: boolean;
@@ -4750,14 +2950,7 @@ export type CustomerListFilters = {
   q?: string;
 };
 
-export type CustomerDuplicateMatch = {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  matched_fields: Array<"name" | "email" | "phone">;
-  is_archived: boolean;
-};
+export type CustomerDuplicateMatch = Schema["CustomerDuplicateMatch"];
 
 export type CreateCustomerPayload = {
   name: string;
@@ -4855,10 +3048,11 @@ export function getCustomer(id: string): Promise<CustomerCrm> {
   return apiFetch<CustomerCrm>(`/customers/${id}`);
 }
 
+/** POST /customers ignores the credit fields (CustomerCrmCreate has none); only PATCH applies them. */
 function buildCustomerPayload(
   payload: CreateCustomerPayload | UpdateCustomerPayload,
-): CreateCustomerPayload | UpdateCustomerPayload {
-  const body: CreateCustomerPayload | UpdateCustomerPayload = {};
+): Schema["CustomerCrmUpdate"] {
+  const body: Schema["CustomerCrmUpdate"] = {};
   if ("name" in payload && payload.name !== undefined) {
     body.name = payload.name.trim();
   }
@@ -4932,59 +3126,19 @@ export function repriceCustomerDrafts(
   return apiFetch(`/customers/${id}/reprice-drafts`, { method: "POST" });
 }
 
-export type DeliveryStatus = "draft" | "packed" | "loaded" | "delivered" | "cancelled";
+export type DeliveryStatus = Schema["DeliveryStatus"];
 
-export type DeliverySourceType = "invoice" | "layby" | "sales_order";
+export type DeliverySourceType = Schema["DeliverySourceType"];
 
-export type DeliveryLine = {
-  id: string;
-  sku_id: string | null;
-  description: string;
-  qty: number;
-};
+export type DeliveryLine = Schema["DeliveryLineResponse"];
 
-export type DeliveryListItem = {
-  id: string;
-  delivery_number: string;
-  source_type: DeliverySourceType;
-  invoice_id: string | null;
-  invoice_number: string | null;
-  layby_id: string | null;
-  layby_number: string | null;
-  sales_order_id?: string | null;
-  so_number?: string | null;
-  customer_name: string;
-  location_id: string;
-  location_name: string;
-  status: DeliveryStatus;
-  delivery_date: string | null;
-  carton_count?: number | null;
-  loaded_at?: string | null;
-  tracking_number?: string | null;
-  carrier?: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type DeliveryListItem = Schema["DeliveryListItem"];
 
-export type Delivery = DeliveryListItem & {
-  lines: DeliveryLine[];
-};
+export type Delivery = Schema["DeliveryResponse"];
 
-export type CreateDeliveryPayload = {
-  source_type: DeliverySourceType;
-  invoice_id?: string;
-  layby_id?: string;
-  sales_order_id?: string;
-  location_id: string;
-  notes?: string;
-};
+export type CreateDeliveryPayload = Schema["DeliveryCreate"];
 
-export type CompleteDeliveryPayload = {
-  delivery_date?: string;
-  tracking_number?: string;
-  carrier?: string;
-};
+export type CompleteDeliveryPayload = Schema["DeliveryComplete"];
 
 export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   draft: "Draft",
@@ -5076,21 +3230,10 @@ export function isInvoiceFullyPaid(invoice: InvoiceListItem): boolean {
   return invoice.payment_status === "paid";
 }
 
-export type ReorderRow = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  reorder_min: number;
-  on_hand: number;
-  on_order: number;
-  suggested_qty: number;
-  preferred_supplier_id: string | null;
-  preferred_supplier_name: string | null;
-  last_landed_cost_zar: string | null;
-};
+export type ReorderRow = Schema["ReorderItemResponse"];
 
-export type CreateReorderDraftPoResponse = {
-  purchase_orders: PurchaseOrder[];
+export type CreateReorderDraftPoResponse = Omit<Schema["ReorderDraftPoResponse"], "purchase_orders"> & {
+  purchase_orders: PurchaseOrderListItem[];
 };
 
 export function listReorder(): Promise<ReorderRow[]> {
@@ -5106,31 +3249,9 @@ export function createReorderDraftPo(skuIds: string[]): Promise<CreateReorderDra
 
 // --- Imported records (Cin7): party detail, supplier prices, history, stock by bin ---
 
-export type PartyAddress = {
-  id: string;
-  address_type: string | null;
-  is_default: boolean;
-  line1: string | null;
-  line2: string | null;
-  city: string | null;
-  state: string | null;
-  postcode: string | null;
-  country: string | null;
-};
+export type PartyAddress = Schema["AddressResponse"];
 
-export type PartyContact = {
-  id: string;
-  name: string | null;
-  job_title: string | null;
-  phone: string | null;
-  mobile: string | null;
-  fax: string | null;
-  email: string | null;
-  website: string | null;
-  comment: string | null;
-  is_default: boolean;
-  include_in_emails: boolean;
-};
+export type PartyContact = Schema["ContactResponse"];
 
 export type PartyKind = "customers" | "suppliers";
 
@@ -5142,61 +3263,13 @@ export function listPartyContacts(kind: PartyKind, id: string): Promise<PartyCon
   return apiFetch<PartyContact[]>(`/${kind}/${id}/contacts`);
 }
 
-export type SupplierPriceRow = {
-  id: string;
-  supplier_id: string;
-  supplier_name: string;
-  sku_id: string;
-  our_ref: string;
-  sku_name: string;
-  supplier_sku: string | null;
-  currency: string;
-  latest_price: string | null;
-  fixed_price: string | null;
-};
+export type SupplierPriceRow = Schema["SupplierPriceRow"];
 
-export type SalesHistoryRow = {
-  kind: "invoice" | "credit_note";
-  document_id: string;
-  document_number: string;
-  issue_date: string;
-  customer_id: string | null;
-  customer_name: string | null;
-  sku_id: string | null;
-  our_ref: string | null;
-  description: string;
-  qty: string;
-  ex_vat: string;
-  vat_amount: string;
-  inc_vat: string;
-};
+export type SalesHistoryRow = Schema["SalesHistoryRow"];
 
-export type PurchaseHistoryRow = {
-  bill_id: string;
-  bill_number: string;
-  issue_date: string;
-  supplier_id: string;
-  supplier_name: string;
-  description: string;
-  qty: number;
-  currency: string;
-  unit_amount: string | null;
-  amount_foreign: string | null;
-  fx_rate_known: boolean;
-  bill_amount_zar: string | null;
-};
+export type PurchaseHistoryRow = Schema["PurchaseHistoryRow"];
 
-export type StockByBinRow = {
-  is_archived: boolean;
-  location_id: string;
-  location_name: string;
-  bin_id: string;
-  bin_code: string;
-  sku_id: string;
-  our_ref: string;
-  sku_name: string;
-  on_hand: number;
-};
+export type StockByBinRow = Schema["StockByBinRow"];
 
 type RecordFilters = Record<string, string | undefined>;
 

@@ -68,7 +68,7 @@ async def test_inc_to_ex_round_half_up(owner_client: AsyncClient) -> None:
     assert resp.json()["retail_ex_vat"] == "2173.91"
 
 
-async def test_vat_rate_is_fifteen_percent(owner_client: AsyncClient) -> None:
+async def test_catalogue_prices_convert_at_the_team_rate(owner_client: AsyncClient) -> None:
     sku = await _create_sku(owner_client, "VAT15")
     resp = await owner_client.patch(
         f"/api/v1/skus/{sku['id']}",
@@ -76,7 +76,17 @@ async def test_vat_rate_is_fifteen_percent(owner_client: AsyncClient) -> None:
     )
     assert resp.status_code == 200
     assert resp.json()["wholesale_inc_vat"] == "115.00"
-    assert resp.json()["wholesale_inc_vat"] != "114.00"
+
+    # ADR 0003: no hard-coded rate; the catalogue follows the team's setting today.
+    settings = await owner_client.patch("/api/v1/settings", json={"vat_rate": "0.16"})
+    assert settings.status_code == 200, settings.text
+    resp = await owner_client.patch(
+        f"/api/v1/skus/{sku['id']}",
+        json={"retail_inc_vat": "1160.00"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["wholesale_inc_vat"] == "116.00"
+    assert resp.json()["retail_ex_vat"] == "1000.00"
 
 
 async def test_unauthenticated_patch_returns_401(

@@ -65,10 +65,7 @@ import {
   type TrialBalanceReport,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { localIsoDate } from "@/lib/dates";
 
 function monthStartIso(): string {
   const now = new Date();
@@ -159,9 +156,9 @@ function ReportLoading({ title, columns, sections = [title] }: {
 
 export default function ReportsPage() {
   const { user } = useAuth();
-  const [asOf, setAsOf] = useState(todayIso());
+  const [asOf, setAsOf] = useState(localIsoDate());
   const [fromDate, setFromDate] = useState(monthStartIso());
-  const [toDate, setToDate] = useState(todayIso());
+  const [toDate, setToDate] = useState(localIsoDate());
   const [journalSource, setJournalSource] = useState("");
   const journalSourceRef = useRef(journalSource);
   journalSourceRef.current = journalSource;
@@ -185,9 +182,9 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadReports = useCallback(async () => {
-    const effectiveAsOf = asOf.trim() || todayIso();
+    const effectiveAsOf = asOf.trim() || localIsoDate();
     const effectiveFrom = fromDate.trim() || monthStartIso();
-    const effectiveTo = toDate.trim() || todayIso();
+    const effectiveTo = toDate.trim() || localIsoDate();
 
     if (!asOf.trim()) setAsOf(effectiveAsOf);
     if (!fromDate.trim()) setFromDate(effectiveFrom);

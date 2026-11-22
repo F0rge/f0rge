@@ -11,9 +11,10 @@ const member: User = {
   team_id: "workspace-id",
   team: { id: "workspace-id", name: "Workspace" },
   default_location_id: "old-location",
+  can_edit_display_name: true,
 };
 const edit = {
-  display_name: member.display_name,
+  display_name: "Staff member",
   role: "buyer",
   default_location_id: "old-location",
 };

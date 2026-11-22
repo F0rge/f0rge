@@ -18,10 +18,10 @@ from app.schemas.customer_portal import (
     PortalUserCreate,
 )
 from app.schemas.sales_order import SalesOrderCreate, SalesOrderLineCreate, SalesOrderResponse
-from app.services.pricing import resolve_unit_ex_vat
+from app.services.pricing import customer_price_warning, resolve_unit_ex_vat
 from app.services.portal_identity import PortalPrincipal
 from app.services.sales_orders import SalesOrdersService
-from app.services.vat import ex_to_inc
+from app.services.vat import current_vat_rate, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, UnauthorizedError, ValidationError
 
 CUSTOMER_COOKIE_NAME = "firstout_customer_session"
@@ -66,6 +66,7 @@ class CustomerPortalService:
     async def catalogue(self, portal_user_id: uuid.UUID) -> list[PortalCatalogueItem]:
         user = await self._require_user(portal_user_id)
         skus = await self.sku_crud.list_all()
+        vat_rate = await current_vat_rate(self.db)
         items: list[PortalCatalogueItem] = []
         for sku in skus:
             if sku.is_archived or not sku.is_sellable:
@@ -80,7 +81,7 @@ class CustomerPortalService:
                     our_ref=sku.our_ref,
                     name=sku.name,
                     unit_ex_vat=unit_ex,
-                    unit_inc_vat=ex_to_inc(unit_ex),
+                    unit_inc_vat=ex_to_inc(unit_ex, vat_rate),
                 )
             )
         return items
@@ -92,8 +93,10 @@ class CustomerPortalService:
     ) -> SalesOrderResponse:
         user = await self._require_user(portal_user_id)
         if user.customer.on_hold:
+            # Not CustomerCreditBlockedError: its code offers a staff credit override, which a
+            # trade customer cannot give themselves.
             raise ConflictError("Customer is on hold")
-        return await self.orders.create_draft(
+        order = await self.orders.create_draft(
             SalesOrderCreate(
                 customer_id=user.customer_id,
                 lines=[
@@ -104,11 +107,12 @@ class CustomerPortalService:
             ),
             user_id=None,
         )
+        return _for_customer(order)
 
     async def list_orders(self, portal_user_id: uuid.UUID) -> list[SalesOrderResponse]:
         user = await self._require_user(portal_user_id)
         rows = await self.orders.crud.list_for_customer(user.customer_id)
-        return [await self.orders._to_response(row) for row in rows]
+        return [_for_customer(await self.orders._to_response(row)) for row in rows]
 
     async def _require_user(self, portal_user_id: uuid.UUID) -> CustomerPortalUser:
         user = await self.crud.get_by_id(portal_user_id)
@@ -135,3 +139,11 @@ class CustomerPortalService:
             customer_name=user.customer.name,
             price_tier=user.customer.price_tier,
         )
+
+
+def _for_customer(order: SalesOrderResponse) -> SalesOrderResponse:
+    """Staff-only warnings (suspect prices, the price-list note) stay off the portal."""
+    for line in order.lines:
+        line.price_warning = customer_price_warning(line.price_warning)
+        line.suspect_price_warning = None
+    return order

@@ -23,6 +23,7 @@ import {
   Tag,
   TextInput,
 } from "@carbon/react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -37,7 +38,6 @@ import {
   cancelLayby,
   canMutateLaybys,
   completeLayby,
-  computeInvoicePreview,
   createCustomer,
   createLayby,
   findCustomerDuplicates,
@@ -47,10 +47,8 @@ import {
   getCustomer,
   getLayby,
   isActiveLocation,
-  listCustomers,
   listLaybys,
-  listLocations,
-  listSkus,
+  previewLaybyPrices,
   roundHalfUp,
   type CustomerCrm,
   type CustomerDuplicateMatch,
@@ -58,10 +56,13 @@ import {
   type LaybyListItem,
   type LaybyTender,
   type Location,
-  type Sku,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { queryKeys, referenceQueries } from "@/lib/queries";
+import { localIsoDate } from "@/lib/dates";
 import { printHtml } from "@/lib/print-html";
+import { mayBePriced } from "@/lib/sale-preview";
 
 const TABLE_HEADERS = [
   { key: "layby_number", header: "Reference" },
@@ -75,7 +76,6 @@ const TABLE_HEADERS = [
   { key: "actions", header: "Action" },
 ] as const;
 
-const VAT_RATE_LABEL = "15%";
 const SUGGESTED_DEPOSIT_RATE = 0.2;
 
 type StatusFilter = "all" | "active" | "overdue" | "ready";
@@ -98,28 +98,24 @@ type LineForm = {
   qty: number | "";
 };
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function addMonthsIso(months: number): string {
   const date = new Date();
   date.setMonth(date.getMonth() + months);
-  return date.toISOString().slice(0, 10);
+  return localIsoDate(date);
 }
 
 function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-ZA");
 }
 
-function isOverdue(layby: LaybyListItem): boolean {
+function isOverdue(layby: Pick<LaybyListItem, "status" | "due_date">): boolean {
   if (layby.status !== "open") {
     return false;
   }
-  return layby.due_date < todayIso();
+  return layby.due_date < localIsoDate();
 }
 
-function statusLabel(layby: LaybyListItem): string {
+function statusLabel(layby: Pick<LaybyListItem, "status" | "due_date">): string {
   if (layby.status === "completed") {
     return "Completed";
   }
@@ -135,7 +131,7 @@ function statusLabel(layby: LaybyListItem): string {
   return "Active";
 }
 
-function statusTagType(layby: LaybyListItem): "blue" | "green" | "gray" | "red" {
+function statusTagType(layby: Pick<LaybyListItem, "status" | "due_date">): "blue" | "green" | "gray" | "red" {
   if (layby.status === "completed") {
     return "green";
   }
@@ -224,19 +220,6 @@ function printLaybyReceipt(layby: Layby): void {
 </html>`);
 }
 
-function sumLinesExVat(lines: LineForm[], skusById: Map<string, Sku>): number {
-  return lines.reduce((sum, line) => {
-    if (!line.sku_id || typeof line.qty !== "number" || line.qty <= 0) {
-      return sum;
-    }
-    const sku = skusById.get(line.sku_id);
-    if (!sku?.retail_ex_vat) {
-      return sum;
-    }
-    return sum + line.qty * Number(sku.retail_ex_vat);
-  }, 0);
-}
-
 function LaybysLoading({ route = false }: { route?: boolean }) {
   const table = (
     <PageLoading
@@ -272,12 +255,7 @@ function LaybysPageContent() {
   const searchParams = useSearchParams();
   const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const canMutate = canMutateLaybys(user);
-  const [laybys, setLaybys] = useState<LaybyListItem[]>([]);
-  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [skus, setSkus] = useState<Sku[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const client = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [selectedLayby, setSelectedLayby] = useState<Layby | null>(null);
@@ -299,32 +277,58 @@ function LaybysPageContent() {
   const [paymentTender, setPaymentTender] = useState<LaybyTender>("cash");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [customerSearchQ, setCustomerSearchQ] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
 
-  useEffect(() => {
-    if (!customerFilter) {
-      setCustomerSearchQ(undefined);
-      return;
-    }
-    let cancelled = false;
-    void getCustomer(customerFilter)
-      .then((customer) => {
-        if (!cancelled) {
-          setCustomerSearchQ(customer.name);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCustomerSearchQ(undefined);
-        }
+  const customerFilterQuery = useQuery({
+    queryKey: [...queryKeys.customers, "detail", customerFilter],
+    queryFn: () => getCustomer(customerFilter),
+    enabled: Boolean(customerFilter),
+  });
+  const customerSearchQ = customerFilter ? customerFilterQuery.data?.name : undefined;
+
+  const laybysQuery = useQuery({
+    queryKey: ["laybys", { page, pageSize, q: searchQuery.trim() || customerSearchQ, statusFilter }],
+    queryFn: async () => {
+      const q = searchQuery.trim() || customerSearchQ;
+      const data = await listLaybys({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        q: q || undefined,
+        status: laybyListStatus(statusFilter),
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [customerFilter]);
+      let items = data.items;
+      if (statusFilter === "overdue" || statusFilter === "active") {
+        items = items.filter((entry) => matchesStatusFilter(entry, statusFilter));
+      }
+      return { items, total: data.total };
+    },
+    enabled: Boolean(user),
+    placeholderData: keepPreviousData,
+  });
+  const laybys = useMemo(() => laybysQuery.data?.items ?? [], [laybysQuery.data]);
+  const total = laybysQuery.data?.total ?? 0;
+  const loading = laybysQuery.isPending || laybysQuery.isFetching;
+
+  const formDataEnabled = createOpen && canMutate;
+  const customersQuery = useQuery({ ...referenceQueries.customers, enabled: formDataEnabled });
+  const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: formDataEnabled });
+  const skusQuery = useQuery({ ...referenceQueries.skus, enabled: formDataEnabled });
+  const priceListsQuery = useQuery({ ...referenceQueries.priceLists, enabled: formDataEnabled });
+  const customers = customersQuery.data ?? [];
+  const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
+  const layByCustomer = customers.find((entry) => entry.id === customerId);
+  const skus = useMemo(
+    () => (skusQuery.data ?? []).filter(
+      (sku) => sku.is_sellable && mayBePriced(sku, layByCustomer, priceListsQuery.data ?? []),
+    ),
+    [layByCustomer, priceListsQuery.data, skusQuery.data],
+  );
+
+  const loadFailure =
+    laybysQuery.error ?? customersQuery.error ?? locationsQuery.error ?? skusQuery.error ?? priceListsQuery.error;
+  const { error, setError } = usePageError(loadFailure, laybysQuery.error ? "Failed to load laybys." : "Failed to load layby form data.");
+  const loadLaybys = () => client.invalidateQueries({ queryKey: ["laybys"] });
 
   useEffect(() => {
     setPage(1);
@@ -342,81 +346,37 @@ function LaybysPageContent() {
 
   const dueDate = durationMonths === "3" ? addMonthsIso(3) : addMonthsIso(6);
 
-  const subtotalExVat = sumLinesExVat(lines, skusById);
-  const preview = computeInvoicePreview(subtotalExVat);
-  const suggestedDeposit = roundHalfUp(preview.totalIncVat * SUGGESTED_DEPOSIT_RATE, 2);
-  const numericDeposit = typeof depositAmount === "number" ? depositAmount : 0;
-  const remainingBalance = Math.max(roundHalfUp(preview.totalIncVat - numericDeposit, 2), 0);
-  const durationCount = durationMonths === "3" ? 3 : 6;
-  const monthlyInstallment = roundHalfUp(remainingBalance / durationCount, 2);
-
-  const validLines = lines
+  const validLines = useMemo(() => lines
     .map((line) => {
       if (!line.sku_id || typeof line.qty !== "number" || line.qty <= 0) {
         return null;
       }
       return { sku_id: line.sku_id, qty: line.qty };
     })
-    .filter((line): line is { sku_id: string; qty: number } => line !== null);
+    .filter((line): line is { sku_id: string; qty: number } => line !== null), [lines]);
+
+  // The server prices the layby exactly as creating it would (Firstout ADR 0001).
+  const canPreview = Boolean(customerId) && validLines.length > 0;
+  const previewQuery = useQuery({
+    queryKey: ["layby-preview", customerId, validLines],
+    queryFn: ({ signal }) => previewLaybyPrices({ customer_id: customerId, lines: validLines }, signal),
+    enabled: canPreview,
+    placeholderData: keepPreviousData,
+  });
+  const preview = canPreview ? previewQuery.data : undefined;
+  // Figures from the previous request, shown dimmed until the new prices arrive.
+  const previewStale = previewQuery.isPlaceholderData;
+  const totalIncVat = Number(preview?.total_inc_vat ?? 0);
+  // ponytail: deposit plan arithmetic on the server's total; the server re-checks deposit <= total.
+  const suggestedDeposit = roundHalfUp(totalIncVat * SUGGESTED_DEPOSIT_RATE, 2);
+  const numericDeposit = typeof depositAmount === "number" ? depositAmount : 0;
+  const remainingBalance = Math.max(roundHalfUp(totalIncVat - numericDeposit, 2), 0);
+  const durationCount = durationMonths === "3" ? 3 : 6;
+  const monthlyInstallment = roundHalfUp(remainingBalance / durationCount, 2);
 
   const createFormValid = Boolean(
-    customerId && locationId && validLines.length > 0 && subtotalExVat > 0 && numericDeposit >= 0,
+    customerId && locationId && preview && !previewQuery.isPlaceholderData && numericDeposit >= 0,
   );
-
-  const loadLaybys = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const q = searchQuery.trim() || customerSearchQ;
-      const data = await listLaybys({
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-        q: q || undefined,
-        status: laybyListStatus(statusFilter),
-      });
-      let items = data.items;
-      if (statusFilter === "overdue" || statusFilter === "active") {
-        items = items.filter((entry) => matchesStatusFilter(entry, statusFilter));
-      }
-      setLaybys(items);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load laybys.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, searchQuery, statusFilter, customerSearchQ]);
-
-  const loadCreateData = useCallback(async () => {
-    try {
-      const [customerData, locationData, skuData] = await Promise.all([
-        listCustomers(),
-        listLocations(),
-        listSkus(),
-      ]);
-      setCustomers(customerData);
-      setLocations(locationData);
-      setSkus(skuData.filter((sku) => sku.is_sellable && sku.retail_ex_vat));
-      const active = locationData.filter(isActiveLocation);
-      const showrooms = active.filter((entry) => entry.type === "showroom");
-      setLocationId((current) => current || defaultLocationId(showrooms.length > 0 ? showrooms : active));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load layby form data.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadLaybys();
-    }
-  }, [user, loadLaybys]);
-
-
-  useEffect(() => {
-    if (createOpen && canMutate) {
-      void loadCreateData();
-    }
-  }, [createOpen, canMutate, loadCreateData]);
 
   useEffect(() => {
     if (!locationOptions.some((entry) => entry.id === locationId)) {
@@ -475,7 +435,8 @@ function LaybysPageContent() {
         }
       }
       const created = await createCustomer({ name });
-      setCustomers((current) => [...current, created]);
+      client.setQueryData<CustomerCrm[]>(queryKeys.customers, (current = []) => [...current, created]);
+      void client.invalidateQueries({ queryKey: queryKeys.customers });
       setCustomerId(created.id);
       setNewCustomerName("");
       closeCustomerDuplicates();
@@ -924,11 +885,33 @@ function LaybysPageContent() {
             ))}
           </Select>
 
-          {subtotalExVat > 0 ? (
+          {canPreview && previewQuery.isError ? (
+            <InlineNotification
+              kind="error"
+              title="Could not price the layby"
+              subtitle={previewQuery.error.message}
+              hideCloseButton
+              lowContrast
+            />
+          ) : null}
+          {canPreview && !preview && previewQuery.isPending ? (
+            <p role="status" className="cds--type-body-01">Pricing the layby…</p>
+          ) : null}
+          {preview ? (
             <Stack gap={3}>
-              <p className="cds--type-body-01">
-                Total inc VAT ({VAT_RATE_LABEL}):{" "}
-                <strong>{formatZarAmount(formatPriceAmount(preview.totalIncVat))}</strong>
+              {previewStale ? (
+                <p role="status" className="cds--type-helper-text-01">Updating prices…</p>
+              ) : null}
+              {preview.lines.flatMap((line, index) =>
+                [line.price_warning, line.suspect_price_warning].filter(Boolean).map((warning, which) => (
+                  <p key={`${index}-${which}`} className="cds--type-helper-text-01">
+                    {skusById.get(line.sku_id ?? "")?.our_ref}: {warning}
+                  </p>
+                )),
+              )}
+              <p className="cds--type-body-01" style={previewStale ? { opacity: 0.5 } : undefined}>
+                Total inc VAT ({preview.classification}{preview.price_list_name ? ` · ${preview.price_list_name}` : ""}):{" "}
+                <strong>{formatZarAmount(preview.total_inc_vat)}</strong>
               </p>
               <p className="cds--type-body-01">
                 Suggested deposit (20%):{" "}

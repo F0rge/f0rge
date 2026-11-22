@@ -19,7 +19,8 @@ import {
   TextArea,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import {
   can,
@@ -31,6 +32,7 @@ import {
   type BooksPeriod,
   type BooksPeriodStatus,
 } from "@/lib/api";
+import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
@@ -74,16 +76,25 @@ export default function BooksPeriodsPage() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const canReopen = can(user, "users.manage");
-  const [periods, setPeriods] = useState<BooksPeriod[]>([]);
   const [fromDate, setFromDate] = useState(() => defaultMonthRange().from);
   const [toDate, setToDate] = useState(() => defaultMonthRange().to);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lockingId, setLockingId] = useState<string | null>(null);
   const [reopenPeriod, setReopenPeriod] = useState<BooksPeriod | null>(null);
   const [reopenReason, setReopenReason] = useState("");
   const [reopening, setReopening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const client = useQueryClient();
+  const periodsQuery = useQuery({
+    queryKey: ["books-periods"],
+    queryFn: async () =>
+      [...(await listBooksPeriods())].sort((a, b) => a.period_from.localeCompare(b.period_from)),
+    enabled: Boolean(user),
+  });
+  const periods = useMemo(() => periodsQuery.data ?? [], [periodsQuery.data]);
+  const loading = periodsQuery.isPending || periodsQuery.isFetching;
+  const { error, setError } = usePageError(periodsQuery.error, "Failed to load books periods.");
+  const setPeriods = (update: (current: BooksPeriod[]) => BooksPeriod[]) =>
+    client.setQueryData<BooksPeriod[]>(["books-periods"], (current = []) => update(current));
 
   const periodById = useMemo(
     () => Object.fromEntries(periods.map((period) => [period.id, period])),
@@ -101,27 +112,6 @@ export default function BooksPeriodsPage() {
       })),
     [periods],
   );
-
-  const loadPeriods = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await listBooksPeriods();
-      setPeriods(
-        [...data].sort((a, b) => a.period_from.localeCompare(b.period_from)),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load books periods.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      void loadPeriods();
-    }
-  }, [user, loadPeriods]);
 
   const canCreate = Boolean(fromDate.trim() && toDate.trim());
 
