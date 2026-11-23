@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import uuid
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional, Union
 
 from fastapi import UploadFile
@@ -26,16 +26,22 @@ from app.schemas.sku import (
     SKU_SETTING_PHOTO_SLOT,
     SkuCreate,
     SkuListPage,
+    SkuPricePreviewChanges,
+    SkuPricePreviewRequest,
+    SkuPricePreviewResponse,
     SkuResponse,
     SkuUnitCostItem,
     SkuUnitCostPage,
     SkuUpdate,
 )
 from app.services.inventory import InventoryService
+from app.services.pricing import resolve_classification_price
+from app.services.sale_line_pricing import line_amounts
 from app.services.sku_barcode import csv_style_barcode
 from app.services.stock_movements import StockMovementService
 from app.services.suspect_price import average_costs_by_sku_id, tier_price_below_cost
 from app.services.vat import (
+    CENT,
     current_vat_rate,
     inc_to_ex,
     inc_vat_or_none,
@@ -50,7 +56,7 @@ from f0rge_db.crud import unit_of_work
 from f0rge_storage.images import resize_image
 
 
-# Stored ex VAT. Inc-VAT inputs use the same 15% conversion as wholesale and retail.
+# Stored ex VAT. Inc-VAT inputs convert at the team's current rate.
 _PRICE_COLUMNS = (
     ("stockist_ex_vat", "stockist_ex_vat", "stockist_inc_vat"),
     ("wholesale_ex_vat", "wholesale_ex_vat", "wholesale_inc_vat"),
@@ -59,31 +65,26 @@ _PRICE_COLUMNS = (
 )
 
 
-def _apply_stored_ex_vat(
-    sku: Sku,
-    data: SkuUpdate,
-    fields_set: set[str],
-    *,
-    column: str,
-    ex_field: str,
-    inc_field: str,
+def _sku_price_updates(
+    data: Union[SkuUpdate, SkuPricePreviewChanges],
     vat_rate: Decimal,
-) -> None:
-    if ex_field in fields_set and inc_field in fields_set:
-        raise ValidationError(f"Cannot set both {ex_field} and {inc_field}")
-    if ex_field in fields_set:
-        value = getattr(data, ex_field)
-        if value is not None:
-            validate_non_negative_price(value, ex_field)
-        setattr(sku, column, value)
-        return
-    if inc_field in fields_set:
-        value = getattr(data, inc_field)
-        if value is None:
-            setattr(sku, column, None)
-        else:
-            validate_non_negative_price(value, inc_field)
-            setattr(sku, column, inc_to_ex(value, vat_rate))
+) -> dict[str, Optional[Decimal]]:
+    updates: dict[str, Optional[Decimal]] = {}
+    fields_set = data.model_fields_set
+    for column, ex_field, inc_field in _PRICE_COLUMNS:
+        if ex_field in fields_set and inc_field in fields_set:
+            raise ValidationError(f"Cannot set both {ex_field} and {inc_field}")
+        if ex_field in fields_set:
+            value = getattr(data, ex_field)
+            if value is not None:
+                validate_non_negative_price(value, ex_field)
+            updates[column] = value
+        elif inc_field in fields_set:
+            value = getattr(data, inc_field)
+            if value is not None:
+                validate_non_negative_price(value, inc_field)
+            updates[column] = inc_to_ex(value, vat_rate) if value is not None else None
+    return updates
 
 
 def _blank_to_none(value: Optional[str]) -> Optional[str]:
@@ -172,6 +173,29 @@ class SkuService:
         if sku is None:
             raise NotFoundError("SKU not found")
         return (await self._to_responses([sku], user_id))[0]
+
+    async def price_preview(
+        self, sku_id: uuid.UUID, data: SkuPricePreviewRequest
+    ) -> SkuPricePreviewResponse:
+        sku = await self.crud.get_by_id(sku_id)
+        if sku is None:
+            raise NotFoundError("SKU not found")
+        vat_rate = await current_vat_rate(self.db)
+        updates = _sku_price_updates(data.price_changes, vat_rate)
+        retail = updates.get("retail_ex_vat")
+        if retail is not None and retail > Decimal("9999999999.99"):
+            raise ValidationError("Retail price exceeds the maximum supported price")
+        resolved = resolve_classification_price(sku, data.classification, price_updates=updates)
+        unit = resolved.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
+        subtotal, vat, total = line_amounts(unit, data.quantity, None, vat_rate)
+        return SkuPricePreviewResponse(
+            vat_rate=vat_rate,
+            unit_ex_vat=unit,
+            subtotal_ex_vat=subtotal,
+            vat_amount=vat,
+            total_inc_vat=total,
+            source=resolved.source,
+        )
 
     async def update(
         self, sku_id: uuid.UUID, data: SkuUpdate, user_id: Optional[uuid.UUID] = None
@@ -328,16 +352,8 @@ class SkuService:
         # Catalogue prices convert at the team's rate today (ADR 0003). Known limit, not
         # fixed here (ADR 0001): R999 incl. → R868.70 excl. → R999.01 incl.
         vat_rate = await current_vat_rate(self.db)
-        for column, ex_field, inc_field in _PRICE_COLUMNS:
-            _apply_stored_ex_vat(
-                sku,
-                data,
-                fields_set,
-                column=column,
-                ex_field=ex_field,
-                inc_field=inc_field,
-                vat_rate=vat_rate,
-            )
+        for column, amount in _sku_price_updates(data, vat_rate).items():
+            setattr(sku, column, amount)
 
         try:
             await self.crud.commit_refresh(sku)

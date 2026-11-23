@@ -98,6 +98,7 @@ EXCLUDED_TAGS: dict[str, str] = {
 # Path prefix -> why MCP leaves it out, for routes inside a tag that is otherwise offered.
 EXCLUDED_PATHS: dict[str, str] = {
     "/api/v1/skus/curated-catalogue": "files",
+    "/api/v1/skus/{sku_id}/price-preview": "ui-preview",
     # Customer portal logins, invitations and access grants.
     "/api/v1/customers/{customer_id}/portal-": "identity",
 }

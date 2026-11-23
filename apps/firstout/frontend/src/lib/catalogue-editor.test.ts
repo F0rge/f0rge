@@ -28,9 +28,9 @@ const sku: Parameters<typeof catalogueFormFromSku>[0] = {
   carton_count: 1,
   till_no_stock_required: false,
   reorder_min: null,
-  stockist_inc_vat: null,
-  wholesale_inc_vat: null,
-  decorator_inc_vat: null,
+  stockist_ex_vat: null,
+  wholesale_ex_vat: null,
+  decorator_ex_vat: null,
   retail_inc_vat: null,
 };
 
@@ -84,14 +84,15 @@ describe("catalogue update payload", () => {
     });
   });
 
-  it("sends only the edited VAT-inclusive tier so the API owns ex-VAT calculation", () => {
-    const existing = { ...sku, retail_inc_vat: "9995.00" };
+  it("sends the edited basis for trade and retail without sending unchanged tiers", () => {
+    const existing = { ...sku, stockist_ex_vat: "1999.00", retail_inc_vat: "9995.00" };
     expect(
       buildCatalogueUpdate(existing, {
         ...catalogueFormFromSku(existing),
+        stockist_ex_vat: "2099",
         retail_inc_vat: "10995.50",
       }),
-    ).toEqual({ retail_inc_vat: "10995.50" });
+    ).toEqual({ stockist_ex_vat: "2099", retail_inc_vat: "10995.50" });
     expect(
       buildCatalogueUpdate(existing, {
         ...catalogueFormFromSku(existing),

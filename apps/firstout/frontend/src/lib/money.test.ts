@@ -22,6 +22,11 @@ describe("VAT conversions", () => {
     }
   });
 
+  it("keeps VAT calculations exact near a cent at large prices", () => {
+    expect(exVatToIncVat(1_000_000_008.33, "0.0006")).toBe(1_000_600_008.33);
+    expect(incVatToExVat(1_000_600_008.33, "0.0006")).toBe(1_000_000_008.33);
+  });
+
   it("label the rate as a percentage", () => {
     expect(vatPercentLabel("0.1500")).toBe("15%");
     expect(vatPercentLabel("0.1550")).toBe("15.5%");

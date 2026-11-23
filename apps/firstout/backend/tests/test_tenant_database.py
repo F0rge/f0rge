@@ -406,6 +406,7 @@ async def test_duplicate_sku_invoice_keys_and_authenticated_uuid_idor(tenant_dat
                 name="Synthetic SKU",
                 design="Same design",
                 fabric="Same fabric",
+                retail_ex_vat=100,
             )
             session.add_all([user, customer, sku])
             await session.flush()
@@ -460,6 +461,14 @@ async def test_duplicate_sku_invoice_keys_and_authenticated_uuid_idor(tenant_dat
             foreign = await client.get(f"/api/v1/skus/{skus[b]}")
             assert foreign.status_code == 404, foreign.text
             assert str(skus[b]) not in foreign.text
+            scenario = {"classification": "Retail", "quantity": 1}
+            own_preview = await client.post(f"/api/v1/skus/{skus[a]}/price-preview", json=scenario)
+            assert own_preview.status_code == 200, own_preview.text
+            foreign_preview = await client.post(
+                f"/api/v1/skus/{skus[b]}/price-preview", json=scenario
+            )
+            assert foreign_preview.status_code == 404, foreign_preview.text
+            assert str(skus[b]) not in foreign_preview.text
     finally:
         if previous is None:
             app.dependency_overrides.pop(get_db, None)

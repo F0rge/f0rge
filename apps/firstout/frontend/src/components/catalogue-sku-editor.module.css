@@ -150,12 +150,6 @@
   background: transparent;
   border-bottom-color: transparent;
 }
-.helper {
-  margin-top: 20px;
-  color: var(--cds-text-secondary);
-  font-size: 11px;
-  line-height: 16px;
-}
 .summary {
   padding: 20px;
   background: #fff;

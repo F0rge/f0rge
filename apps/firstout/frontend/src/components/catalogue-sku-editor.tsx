@@ -15,16 +15,17 @@ import {
   Tag,
   TextInput,
 } from "@carbon/react";
+import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { formatZarAmount, updateSku, type Sku, type Supplier } from "@/lib/api";
+import { SkuPriceFields } from "@/components/sku-price-fields";
 import { SkuProductDetailsFields } from "@/components/sku-product-details-fields";
 import {
   buildCatalogueUpdate,
   catalogueFormFromSku,
   catalogueSaveFailure,
   CATALOGUE_FIELD_TABS,
-  CATALOGUE_PRICE_FIELDS,
   firstCatalogueError,
   validateCatalogueForm,
   type CatalogueEditorErrors,
@@ -32,6 +33,8 @@ import {
   type CatalogueEditorForm,
   type CatalogueEditorTextField,
 } from "@/lib/catalogue-editor";
+import { referenceQueries } from "@/lib/queries";
+import { RETAIL_SKU_PRICE_TIER, skuPricePair, validateSkuPriceForm } from "@/lib/sku-price-form";
 
 import styles from "./catalogue-sku-editor.module.css";
 
@@ -42,15 +45,9 @@ type CatalogueSkuEditorProps = {
   /** Undefined: no cost permission; null: cost unavailable. */
   unitCost: string | null | undefined;
   costLoading?: boolean;
+  startOnPricing?: boolean;
   onClose: () => void;
   onSaved: (sku: Sku) => void;
-};
-
-const priceLabels = {
-  stockist_inc_vat: "Stockist price",
-  wholesale_inc_vat: "Wholesale price",
-  decorator_inc_vat: "Decorator price",
-  retail_inc_vat: "Retail price",
 };
 
 /** Mount with key={sku.id}; the form remains intact after any failed PATCH. */
@@ -60,21 +57,24 @@ export function CatalogueSkuEditor({
   categories,
   unitCost,
   costLoading = false,
+  startOnPricing = false,
   onClose,
   onSaved,
 }: CatalogueSkuEditorProps) {
   const [form, setForm] = useState(() => catalogueFormFromSku(sku));
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(startOnPricing ? 1 : 0);
   const [submitted, setSubmitted] = useState(false);
   const [serverErrors, setServerErrors] = useState<CatalogueEditorErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const vatSettings = useQuery(referenceQueries.settings);
+  const vatRate = vatSettings.data?.vat_rate;
   const payload = buildCatalogueUpdate(sku, form);
   const dirty = Object.keys(payload).length > 0;
   const errors = {
-    ...(submitted ? validateCatalogueForm(form) : {}),
+    ...(submitted ? validateCatalogueForm(form, vatRate) : validateSkuPriceForm(form, vatRate)),
     ...serverErrors,
   };
   const categoryOptions = [
@@ -118,7 +118,7 @@ export function CatalogueSkuEditor({
       onClose();
       return;
     }
-    const validation = validateCatalogueForm(form);
+    const validation = validateCatalogueForm(form, vatRate);
     setSubmitted(true);
     setServerErrors({});
     setFailure(null);
@@ -178,7 +178,7 @@ export function CatalogueSkuEditor({
         discardOpen ? "UNSAVED CHANGES" : `CATALOGUE / ${sku.our_ref}`
       }
       modalHeading={discardOpen ? "Discard your changes?" : "Edit SKU"}
-      selectorPrimaryFocus="#catalogue-edit-name"
+      selectorPrimaryFocus={startOnPricing ? "#catalogue-edit-stockist_ex_vat" : "#catalogue-edit-name"}
       preventCloseOnClickOutside
       shouldSubmitOnEnter={false}
       onRequestClose={requestClose}
@@ -318,15 +318,12 @@ export function CatalogueSkuEditor({
                   <TabPanel>
                     <div className={styles.heading}>
                       <h3>Pricing</h3>
-                      <p>
-                        Sale prices are in South African rand and include VAT.
-                      </p>
                     </div>
                     {unitCost !== undefined && (
                       <div className={styles.cost}>
                         <TextInput
                           id="catalogue-edit-cost"
-                          labelText="Unit cost (ZAR)"
+                          labelText="Unit cost excl. VAT (ZAR)"
                           value={
                             costLoading
                               ? "Loading…"
@@ -340,20 +337,17 @@ export function CatalogueSkuEditor({
                         <Information size={18} />
                       </div>
                     )}
-                    <div className={styles.fields}>
-                      {CATALOGUE_PRICE_FIELDS.map((price) =>
-                        field(
-                          price,
-                          `${priceLabels[price]} (ZAR)`,
-                          "Includes VAT. Leave blank if not set.",
-                          true,
-                        ),
-                      )}
-                    </div>
-                    <p className={styles.helper}>
-                      Changing a sale price also updates its ex-VAT value. Other
-                      price tiers remain unchanged.
-                    </p>
+                    <SkuPriceFields
+                      idPrefix="catalogue-edit"
+                      sku={sku}
+                      form={form}
+                      errors={errors}
+                      vatRate={vatRate}
+                      retryVatRate={vatSettings.isLoadingError ? () => void vatSettings.refetch() : undefined}
+                      canViewCost={unitCost !== undefined}
+                      disabled={saving}
+                      onChange={update}
+                    />
                   </TabPanel>
                   <TabPanel>
                     <div className={styles.heading}>
@@ -433,7 +427,10 @@ export function CatalogueSkuEditor({
                 <strong>
                   {form.retail_inc_vat.trim() &&
                   Number.isFinite(Number(form.retail_inc_vat))
-                    ? formatZarAmount(form.retail_inc_vat)
+                    ? formatZarAmount(
+                        skuPricePair(sku, RETAIL_SKU_PRICE_TIER, form.retail_inc_vat, vatRate, false).savedRetail
+                          ?? form.retail_inc_vat.trim(),
+                      )
                     : "—"}
                 </strong>
               </div>
