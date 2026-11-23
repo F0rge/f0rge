@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
+import pytest
 from tests.conftest import authenticate_as, create_test_staff
 
 from httpx import AsyncClient
@@ -298,3 +301,119 @@ async def test_both_ex_and_inc_stockist_returns_validation_error(
         json={"stockist_ex_vat": "100.00", "stockist_inc_vat": "115.00"},
     )
     assert resp.status_code == 400
+
+
+async def test_price_preview_uses_saved_stockist_and_prices_the_draft_per_line(
+    owner_client: AsyncClient,
+) -> None:
+    sku = await _create_sku(owner_client, "PREVIEW")
+    sku_url = f"/api/v1/skus/{sku['id']}"
+    saved = await owner_client.patch(sku_url, json={"stockist_ex_vat": "2099.00"})
+    assert saved.status_code == 200, saved.text
+    request = {"classification": "Stockist", "quantity": 1}
+
+    preview = await owner_client.post(f"{sku_url}/price-preview", json=request)
+    assert preview.status_code == 200, preview.text
+    assert Decimal(preview.json()["vat_rate"]) == Decimal("0.15")
+    assert preview.json() == {
+        "vat_rate": preview.json()["vat_rate"],
+        "unit_ex_vat": "2099.00",
+        "subtotal_ex_vat": "2099.00",
+        "vat_amount": "314.85",
+        "total_inc_vat": "2413.85",
+        "source": "stockist",
+    }
+
+    draft = await owner_client.post(
+        f"{sku_url}/price-preview",
+        json={**request, "quantity": 3, "price_changes": {"stockist_ex_vat": "0.03"}},
+    )
+    assert draft.status_code == 200, draft.text
+    assert draft.json()["subtotal_ex_vat"] == "0.09"
+    assert draft.json()["vat_amount"] == "0.01"
+    assert draft.json()["total_inc_vat"] == "0.10"
+    reloaded = await owner_client.get(sku_url)
+    assert reloaded.json()["stockist_ex_vat"] == "2099.00"
+    assert reloaded.json()["updated_at"] == saved.json()["updated_at"]
+
+
+async def test_price_preview_honours_clear_and_retail_conversion_at_the_team_rate(
+    owner_client: AsyncClient,
+) -> None:
+    sku = await _create_sku(owner_client, "PREVIEW-RETAIL")
+    sku_url = f"/api/v1/skus/{sku['id']}"
+    prices = await owner_client.patch(
+        sku_url, json={"wholesale_ex_vat": "100.00", "retail_ex_vat": "250.00"}
+    )
+    assert prices.status_code == 200, prices.text
+    settings = await owner_client.patch("/api/v1/settings", json={"vat_rate": "0.16"})
+    assert settings.status_code == 200, settings.text
+    request = {"classification": "Wholesale", "quantity": 2}
+    updates = {"wholesale_ex_vat": None, "retail_inc_vat": "116.00"}
+
+    preview = await owner_client.post(
+        f"{sku_url}/price-preview", json={**request, "price_changes": updates}
+    )
+    assert preview.status_code == 200, preview.text
+    assert Decimal(preview.json()["vat_rate"]) == Decimal("0.16")
+    assert preview.json()["source"] == "retail_fallback"
+    assert preview.json()["unit_ex_vat"] == "100.00"
+    assert preview.json()["subtotal_ex_vat"] == "200.00"
+    assert preview.json()["vat_amount"] == "32.00"
+    assert preview.json()["total_inc_vat"] == "232.00"
+    reloaded = await owner_client.get(sku_url)
+    assert reloaded.json()["wholesale_ex_vat"] == "100.00"
+    assert reloaded.json()["retail_ex_vat"] == "250.00"
+
+    saved = await owner_client.patch(sku_url, json=updates)
+    assert saved.status_code == 200, saved.text
+    preview_after_save = await owner_client.post(f"{sku_url}/price-preview", json=request)
+    assert preview_after_save.status_code == 200, preview_after_save.text
+    assert preview_after_save.json() == preview.json()
+
+
+async def test_price_preview_is_available_to_staff_with_catalogue_read_access(
+    async_client: AsyncClient, owner_client: AsyncClient
+) -> None:
+    sku = await _create_sku(owner_client, "PREVIEW-PERMISSION")
+    sku_url = f"/api/v1/skus/{sku['id']}"
+    payload = {
+        "classification": "Decorator",
+        "quantity": 1,
+        "price_changes": {"decorator_ex_vat": "100.00"},
+    }
+    async_client.cookies.clear()
+    async_client.headers.pop("Authorization", None)
+    unauthenticated = await async_client.post(f"{sku_url}/price-preview", json=payload)
+    assert unauthenticated.status_code == 401
+
+    email = "warehouse-price-preview@example.com"
+    await create_test_staff(owner_client, email=email, role="warehouse")
+    assert (await authenticate_as(async_client, email)).status_code == 200
+    preview = await async_client.post(f"{sku_url}/price-preview", json=payload)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["source"] == "decorator"
+    assert preview.json()["total_inc_vat"] == "115.00"
+    patch = await async_client.patch(sku_url, json=payload["price_changes"])
+    assert patch.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("overrides", "status"),
+    [
+        ({}, 400),
+        ({"quantity": 0}, 422),
+        ({"quantity": 1000}, 422),
+        ({"quantity": 1.5}, 422),
+        ({"price_changes": {"stockist_ex_vat": "-1.00"}}, 422),
+        ({"price_changes": {"stockist_ex_vat": "1.001"}}, 422),
+        ({"price_changes": {"stockist_inc_vat": "115.00"}}, 422),
+    ],
+)
+async def test_price_preview_rejects_unavailable_or_invalid_amounts(
+    owner_client: AsyncClient, overrides: dict, status: int
+) -> None:
+    sku = await _create_sku(owner_client, "PREVIEW-INVALID")
+    request = {"classification": "Stockist", "quantity": 1, **overrides}
+    preview = await owner_client.post(f"/api/v1/skus/{sku['id']}/price-preview", json=request)
+    assert preview.status_code == status, preview.text

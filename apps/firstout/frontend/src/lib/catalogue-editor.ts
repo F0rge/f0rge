@@ -1,12 +1,6 @@
 import { ApiError, type Sku, type UpdateSkuPricePayload } from "./api";
 import { skuDetailsFormFromSku, skuDetailsPayload, validateSkuDetails } from "./sku-details";
-
-export const CATALOGUE_PRICE_FIELDS = [
-  "stockist_inc_vat",
-  "wholesale_inc_vat",
-  "decorator_inc_vat",
-  "retail_inc_vat",
-] as const;
+import { buildSkuPriceChanges, skuPriceFormFromSku, validateSkuPriceForm } from "./sku-price-form";
 
 export const CATALOGUE_FIELD_TABS = {
   name: 0,
@@ -22,9 +16,9 @@ export const CATALOGUE_FIELD_TABS = {
   diameter_cm: 0,
   piece_count: 0,
   notes: 0,
-  stockist_inc_vat: 1,
-  wholesale_inc_vat: 1,
-  decorator_inc_vat: 1,
+  stockist_ex_vat: 1,
+  wholesale_ex_vat: 1,
+  decorator_ex_vat: 1,
   retail_inc_vat: 1,
   preferred_supplier_id: 2,
   supplier_ref: 2,
@@ -46,6 +40,7 @@ type EditableSku = Pick<Sku, CatalogueEditorField>;
 export function catalogueFormFromSku(sku: EditableSku): CatalogueEditorForm {
   return {
     ...skuDetailsFormFromSku(sku),
+    ...skuPriceFormFromSku(sku),
     name: sku.name,
     design: sku.design,
     fabric: sku.fabric,
@@ -53,10 +48,6 @@ export function catalogueFormFromSku(sku: EditableSku): CatalogueEditorForm {
     our_barcode: sku.our_barcode,
     category: sku.category ?? "",
     till_no_stock_required: sku.till_no_stock_required ?? false,
-    stockist_inc_vat: sku.stockist_inc_vat ?? "",
-    wholesale_inc_vat: sku.wholesale_inc_vat ?? "",
-    decorator_inc_vat: sku.decorator_inc_vat ?? "",
-    retail_inc_vat: sku.retail_inc_vat ?? "",
     preferred_supplier_id: sku.preferred_supplier_id ?? "",
     supplier_ref: sku.supplier_ref ?? "",
     lead_time_days:
@@ -68,8 +59,12 @@ export function catalogueFormFromSku(sku: EditableSku): CatalogueEditorForm {
 
 export function validateCatalogueForm(
   form: CatalogueEditorForm,
+  vatRate?: string,
 ): CatalogueEditorErrors {
-  const errors: CatalogueEditorErrors = validateSkuDetails(form);
+  const errors: CatalogueEditorErrors = {
+    ...validateSkuDetails(form),
+    ...validateSkuPriceForm(form, vatRate),
+  };
   for (const field of [
     "name",
     "design",
@@ -87,16 +82,6 @@ export function validateCatalogueForm(
   ] as const) {
     if (form[field].trim().length > 64)
       errors[field] = "Use no more than 64 characters.";
-  }
-  for (const field of CATALOGUE_PRICE_FIELDS) {
-    const value = form[field].trim();
-    if (
-      value &&
-      (!/^\d+(?:\.\d{1,2})?$/.test(value) || !Number.isFinite(Number(value)))
-    ) {
-      errors[field] =
-        "Enter a price of 0 or more with up to 2 decimal places, or leave blank.";
-    }
   }
   for (const field of [
     "lead_time_days",
@@ -124,7 +109,10 @@ export function buildCatalogueUpdate(
   sku: EditableSku,
   form: CatalogueEditorForm,
 ): UpdateSkuPricePayload {
-  const payload: UpdateSkuPricePayload = skuDetailsPayload(form, sku);
+  const payload: UpdateSkuPricePayload = {
+    ...skuDetailsPayload(form, sku),
+    ...buildSkuPriceChanges(sku, form),
+  };
   if (form.till_no_stock_required !== (sku.till_no_stock_required ?? false)) {
     payload.till_no_stock_required = form.till_no_stock_required;
   }
@@ -152,13 +140,6 @@ export function buildCatalogueUpdate(
   }
   if (Number(form.carton_count) !== sku.carton_count)
     payload.carton_count = Number(form.carton_count);
-  for (const field of CATALOGUE_PRICE_FIELDS) {
-    const value = form[field].trim() ? Number(form[field]) : null;
-    const original = sku[field] === null ? null : Number(sku[field]);
-    // The API derives the matching ex-VAT value atomically, using decimal HALF_UP.
-    if (value !== original)
-      payload[field] = value === null ? null : form[field].trim();
-  }
   return payload;
 }
 

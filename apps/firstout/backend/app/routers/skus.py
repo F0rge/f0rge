@@ -23,6 +23,8 @@ from app.schemas.sku import (
     SKU_SETTING_PHOTO_SLOT,
     SkuCreate,
     SkuListPage,
+    SkuPricePreviewRequest,
+    SkuPricePreviewResponse,
     SkuResponse,
     SkuUnitCostPage,
     SkuUpdate,
@@ -160,6 +162,16 @@ async def get_sku(
     service: SkuService = Depends(get_sku_service),
 ):
     return await service.get(sku_id, user_id)
+
+
+@skus_router.post("/{sku_id}/price-preview", response_model=SkuPricePreviewResponse)
+async def preview_sku_price(
+    sku_id: uuid.UUID,
+    body: SkuPricePreviewRequest,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: SkuService = Depends(get_sku_service),
+) -> SkuPricePreviewResponse:
+    return await service.price_preview(sku_id, body)
 
 
 @skus_router.patch("/{sku_id}", response_model=SkuResponse)

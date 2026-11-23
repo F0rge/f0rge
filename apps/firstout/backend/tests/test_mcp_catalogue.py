@@ -63,7 +63,8 @@ def test_every_api_operation_is_offered_or_excluded_with_a_reason():
     )
     # A new router must be added to TABS or to an exclusion table before it ships.
     assert [key for key, reason in reasons.items() if reason == UNCLASSIFIED] == []
-    assert set(reasons.values()) == {None, "identity", "files", "non-staff"}
+    assert set(reasons.values()) == {None, "identity", "files", "non-staff", "ui-preview"}
+    assert reasons["POST", "/api/v1/skus/{sku_id}/price-preview"] == "ui-preview"
     offered = {key for key, reason in reasons.items() if reason is None}
     assert offered == {
         (action.route.method, action.route.path) for action in ROUTE_ACTIONS.values()

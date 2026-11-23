@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-import { listSkus, listSkusPage, listSkuUnitCosts } from "./api";
+import { listSkus, listSkusPage, listSkuUnitCosts, previewSkuPrice } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -40,4 +40,30 @@ it("keeps supplier, search and category scope aligned for pages, costs and expor
   expect(urls[1].searchParams.get("offset")).toBe("100");
   expect(urls[2].searchParams.has("limit")).toBe(false);
   expect(urls[2].searchParams.has("offset")).toBe(false);
+});
+
+it("sends an explicit cleared tier to the SKU invoice preview", async () => {
+  const result = {
+    source: "retail_fallback",
+    vat_rate: "0.1500",
+    unit_ex_vat: "2000.00",
+    subtotal_ex_vat: "4000.00",
+    vat_amount: "600.00",
+    total_inc_vat: "4600.00",
+  };
+  const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify(result)));
+  vi.stubGlobal("fetch", fetch);
+  const signal = new AbortController().signal;
+
+  await expect(previewSkuPrice("sku-1", {
+    classification: "Stockist",
+    quantity: 2,
+    price_changes: { stockist_ex_vat: null },
+  }, signal)).resolves.toEqual(result);
+
+  expect(fetch).toHaveBeenCalledExactlyOnceWith("/api/v1/skus/sku-1/price-preview", expect.objectContaining({
+    method: "POST",
+    body: '{"classification":"Stockist","quantity":2,"price_changes":{"stockist_ex_vat":null}}',
+    signal,
+  }));
 });

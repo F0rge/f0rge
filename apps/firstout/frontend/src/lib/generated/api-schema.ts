@@ -820,6 +820,23 @@ export interface paths {
         patch: operations["update_sku_api_v1_skus__sku_id__patch"];
         trace?: never;
     };
+    "/api/v1/skus/{sku_id}/price-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Sku Price */
+        post: operations["preview_sku_price_api_v1_skus__sku_id__price_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skus/{sku_id}/photo": {
         parameters: {
             query?: never;
@@ -10782,6 +10799,46 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** SkuPricePreviewChanges */
+        SkuPricePreviewChanges: {
+            /** Stockist Ex Vat */
+            stockist_ex_vat?: number | string | null;
+            /** Wholesale Ex Vat */
+            wholesale_ex_vat?: number | string | null;
+            /** Decorator Ex Vat */
+            decorator_ex_vat?: number | string | null;
+            /** Retail Inc Vat */
+            retail_inc_vat?: number | string | null;
+        };
+        /** SkuPricePreviewRequest */
+        SkuPricePreviewRequest: {
+            /**
+             * Classification
+             * @enum {string}
+             */
+            classification: "Stockist" | "Wholesale" | "Decorator" | "Retail";
+            /** Quantity */
+            quantity: number;
+            price_changes?: components["schemas"]["SkuPricePreviewChanges"];
+        };
+        /** SkuPricePreviewResponse */
+        SkuPricePreviewResponse: {
+            /** Vat Rate */
+            vat_rate: string;
+            /** Unit Ex Vat */
+            unit_ex_vat: string;
+            /** Subtotal Ex Vat */
+            subtotal_ex_vat: string;
+            /** Vat Amount */
+            vat_amount: string;
+            /** Total Inc Vat */
+            total_inc_vat: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "stockist" | "wholesale" | "decorator" | "retail" | "retail_fallback";
+        };
         /** SkuResponse */
         SkuResponse: {
             /** Width Cm */
@@ -15101,6 +15158,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkuResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_sku_price_api_v1_skus__sku_id__price_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sku_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkuPricePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkuPricePreviewResponse"];
                 };
             };
             /** @description Validation Error */

@@ -659,6 +659,9 @@ export type SkuProductDetails = Partial<
 
 export type UpdateSkuPricePayload = Schema["SkuUpdate"];
 
+export type SkuPricePreviewRequest = Schema["SkuPricePreviewRequest"];
+export type SkuPricePreviewResponse = Schema["SkuPricePreviewResponse"];
+
 export type CreateSkuPayload = Schema["SkuCreate"];
 
 export type SkuListParams = {
@@ -755,6 +758,18 @@ export function updateSku(id: string, payload: UpdateSkuPricePayload): Promise<S
   return apiFetch<Sku>(`/skus/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function previewSkuPrice(
+  id: string,
+  payload: SkuPricePreviewRequest,
+  signal?: AbortSignal,
+): Promise<SkuPricePreviewResponse> {
+  return apiFetch<SkuPricePreviewResponse>(`/skus/${id}/price-preview`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
   });
 }
 

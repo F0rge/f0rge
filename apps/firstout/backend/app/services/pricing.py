@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
@@ -145,12 +146,24 @@ async def resolve_unit_price(
             if positive_list is not None:
                 return ResolvedUnitPrice(positive_list, None, "price_list")
 
-    tier_amount = _positive(getattr(sku, _TIER_ATTR[classification], None))
+    return resolve_classification_price(sku, classification)
+
+
+def resolve_classification_price(
+    sku: Sku,
+    classification: str,
+    *,
+    price_updates: Optional[Mapping[str, Optional[Decimal]]] = None,
+) -> ResolvedUnitPrice:
+    """Resolve catalogue tiers, with optional ex-VAT changes for a SKU preview."""
+    updates = price_updates or {}
+    tier_field = _TIER_ATTR[classification]
+    tier_amount = _positive(updates.get(tier_field, getattr(sku, tier_field, None)))
     if tier_amount is not None:
         return ResolvedUnitPrice(tier_amount, None, classification.lower())
 
     if classification != RETAIL_CLASSIFICATION:
-        retail = _positive(getattr(sku, "retail_ex_vat", None))
+        retail = _positive(updates.get("retail_ex_vat", getattr(sku, "retail_ex_vat", None)))
         if retail is not None:
             warning = f"{classification} price is missing for {sku.our_ref}; using Retail price"
             return ResolvedUnitPrice(retail, warning, "retail_fallback")

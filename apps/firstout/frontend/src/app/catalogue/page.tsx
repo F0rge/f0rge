@@ -21,14 +21,9 @@ import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { type WorkspaceQuery } from "@/lib/record-workspace-api";
 import { printSkuLabels } from "@/lib/sku-label-print";
+import { SKU_PRICE_TIERS } from "@/lib/sku-price-form";
 import styles from "./page.module.css";
 
-const priceTiers = [
-  { key: "stockist_inc_vat", label: "Stockist" },
-  { key: "wholesale_inc_vat", label: "Wholesale" },
-  { key: "decorator_inc_vat", label: "Decorator" },
-  { key: "retail_inc_vat", label: "Retail" },
-] as const;
 const leadDays = (days: number | null) => days === null ? "—" : `${days} days`;
 const money = (value: string | null | undefined) => value === null || value === undefined || value === "" ? "—" : formatZarAmount(value);
 
@@ -54,7 +49,7 @@ function CatalogueScreen() {
   const allowed = canMutateCatalogue(user);
   const canViewCost = canViewCostAudit(user);
   const [refreshKey, refresh] = useState(0);
-  const [editing, setEditing] = useState<Sku | null>(null);
+  const [editing, setEditing] = useState<{ sku: Sku; startOnPricing?: boolean } | null>(null);
   const client = useQueryClient();
   const options = useQuery({
     queryKey: ["catalogue", "options"],
@@ -140,7 +135,7 @@ function CatalogueScreen() {
     {(metadataError || costState === "failed") && <Button kind="ghost" size="sm" onClick={reloadMetadata}>Retry catalogue options and costs</Button>}
     <RecordWorkspace adapter={adapter} refreshKey={refreshKey}
       onCreate={allowed ? () => router.push("/catalogue/new") : undefined} createLabel="New SKU"
-      onEdit={allowed ? (item) => setEditing(item) : undefined}
+      onEdit={allowed ? (item) => setEditing({ sku: item }) : undefined}
       loadingDetails={{
         tabs: ["Overview", "Pricing"],
         fields: ["Retail price (incl. VAT)", "Sales setting", ...(canViewCost ? ["Unit cost"] : []), "Preferred supplier", "Supplier ref", "Planned lead time", "Observed lead time", "Cartons", "Reorder minimum"],
@@ -164,13 +159,43 @@ function CatalogueScreen() {
             </RecordDetails>
             <ProductBarcode value={sku.our_barcode} />
           </Stack></TabPanel>
-          <TabPanel><RecordDetails>{priceTiers.map((tier) => <RecordDetail key={tier.key} label={`${tier.label} (incl. VAT)`}>{money(sku[tier.key])}</RecordDetail>)}</RecordDetails></TabPanel>
+          <TabPanel>
+            <Stack gap={4}>
+              <RecordDetails>
+                {SKU_PRICE_TIERS.map((tier) => (
+                  <RecordDetail key={tier.field} label={`${tier.label} (${tier.field === "retail_inc_vat" ? "incl." : "excl."} VAT)`}>
+                    {money(sku[tier.field])}
+                  </RecordDetail>
+                ))}
+              </RecordDetails>
+              {allowed && adapter.canEdit?.(sku) && (
+                <div><Button kind="tertiary" size="sm" onClick={() => setEditing({ sku, startOnPricing: true })}>Edit prices</Button></div>
+              )}
+            </Stack>
+          </TabPanel>
         </TabPanels></Tabs>
         <Link href={`/catalogue/${sku.id}`} renderIcon={ArrowRight}>Open full SKU details</Link>
         <Button kind="tertiary" size="sm" renderIcon={Printer} onClick={() => { void printSkuLabels([sku]).catch((err: unknown) => setActionError(err instanceof Error ? err.message : "Could not print label.")); }}>Print label</Button>
       </Stack>}
     />
-    {editing && allowed && !editing.is_archived && metadataReady && !metadataError && <CatalogueSkuEditor key={editing.id} sku={editing} suppliers={suppliers} categories={categories} unitCost={canViewCost ? (costs.get(editing.id) ?? null) : undefined} costLoading={costState === "loading"} onClose={() => setEditing(null)} onSaved={(updated) => { setSuccess(`${updated.name} has been saved.`); refresh((value) => value + 1); reloadMetadata(); void client.invalidateQueries({ queryKey: queryKeys.skus }); }} />}
+    {editing && allowed && !editing.sku.is_archived && metadataReady && !metadataError && (
+      <CatalogueSkuEditor
+        key={editing.sku.id}
+        sku={editing.sku}
+        startOnPricing={editing.startOnPricing}
+        suppliers={suppliers}
+        categories={categories}
+        unitCost={canViewCost ? (costs.get(editing.sku.id) ?? null) : undefined}
+        costLoading={costState === "loading"}
+        onClose={() => setEditing(null)}
+        onSaved={(updated) => {
+          setSuccess(`${updated.name} has been saved.`);
+          refresh((value) => value + 1);
+          reloadMetadata();
+          void client.invalidateQueries({ queryKey: queryKeys.skus });
+        }}
+      />
+    )}
   </>;
 }
 export default function CataloguePage() {

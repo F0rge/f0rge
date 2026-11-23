@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import (
     BaseModel,
@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 
+from app.schemas.customer_crm import PriceClassification
 from app.schemas.quantity import Quantity
 
 
@@ -115,6 +116,40 @@ class SkuUpdate(SkuDetails):
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
     carton_count: Optional[int] = Field(default=None, ge=1)
+
+
+SkuTradePriceInput = Annotated[
+    Decimal, Field(ge=0, max_digits=12, decimal_places=2, allow_inf_nan=False)
+]
+SkuRetailPriceInput = Annotated[
+    Decimal, Field(ge=0, max_digits=13, decimal_places=2, allow_inf_nan=False)
+]
+
+
+class SkuPricePreviewChanges(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stockist_ex_vat: Optional[SkuTradePriceInput] = None
+    wholesale_ex_vat: Optional[SkuTradePriceInput] = None
+    decorator_ex_vat: Optional[SkuTradePriceInput] = None
+    retail_inc_vat: Optional[SkuRetailPriceInput] = None
+
+
+class SkuPricePreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    classification: PriceClassification
+    quantity: int = Field(ge=1, le=999, strict=True)
+    price_changes: SkuPricePreviewChanges = Field(default_factory=SkuPricePreviewChanges)
+
+
+class SkuPricePreviewResponse(BaseModel):
+    vat_rate: Decimal
+    unit_ex_vat: Decimal
+    subtotal_ex_vat: Decimal
+    vat_amount: Decimal
+    total_inc_vat: Decimal
+    source: Literal["stockist", "wholesale", "decorator", "retail", "retail_fallback"]
 
 
 class SkuResponse(SkuDetails):

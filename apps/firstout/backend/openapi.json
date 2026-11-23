@@ -2983,6 +2983,59 @@
         }
       }
     },
+    "/api/v1/skus/{sku_id}/price-preview": {
+      "post": {
+        "tags": [
+          "skus"
+        ],
+        "summary": "Preview Sku Price",
+        "operationId": "preview_sku_price_api_v1_skus__sku_id__price_preview_post",
+        "parameters": [
+          {
+            "name": "sku_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sku Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkuPricePreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkuPricePreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/skus/{sku_id}/photo": {
       "post": {
         "tags": [
@@ -32959,6 +33012,157 @@
           "reason"
         ],
         "title": "SkuMatchOut"
+      },
+      "SkuPricePreviewChanges": {
+        "properties": {
+          "stockist_ex_vat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,10}|(?=[\\d.]{1,13}0*$)\\d{0,10}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stockist Ex Vat"
+          },
+          "wholesale_ex_vat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,10}|(?=[\\d.]{1,13}0*$)\\d{0,10}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wholesale Ex Vat"
+          },
+          "decorator_ex_vat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,10}|(?=[\\d.]{1,13}0*$)\\d{0,10}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decorator Ex Vat"
+          },
+          "retail_inc_vat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,11}|(?=[\\d.]{1,14}0*$)\\d{0,11}\\.\\d{0,2}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Inc Vat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SkuPricePreviewChanges"
+      },
+      "SkuPricePreviewRequest": {
+        "properties": {
+          "classification": {
+            "type": "string",
+            "enum": [
+              "Stockist",
+              "Wholesale",
+              "Decorator",
+              "Retail"
+            ],
+            "title": "Classification"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 999.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "price_changes": {
+            "$ref": "#/components/schemas/SkuPricePreviewChanges"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "classification",
+          "quantity"
+        ],
+        "title": "SkuPricePreviewRequest"
+      },
+      "SkuPricePreviewResponse": {
+        "properties": {
+          "vat_rate": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Rate"
+          },
+          "unit_ex_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Ex Vat"
+          },
+          "subtotal_ex_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Subtotal Ex Vat"
+          },
+          "vat_amount": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vat Amount"
+          },
+          "total_inc_vat": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Inc Vat"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "stockist",
+              "wholesale",
+              "decorator",
+              "retail",
+              "retail_fallback"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vat_rate",
+          "unit_ex_vat",
+          "subtotal_ex_vat",
+          "vat_amount",
+          "total_inc_vat",
+          "source"
+        ],
+        "title": "SkuPricePreviewResponse"
       },
       "SkuResponse": {
         "properties": {

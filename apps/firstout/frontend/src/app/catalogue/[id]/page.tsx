@@ -128,8 +128,8 @@ export default function SkuDetailPage() {
   const [identityForm, setIdentityForm] = useState<SkuIdentityForm>(emptyIdentityForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailTab, setDetailTab] = useState(0);
   const [identitySaving, setIdentitySaving] = useState(false);
-  const [priceSaving, setPriceSaving] = useState(false);
   const [shopSaving, setShopSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [lifecycleAction, setLifecycleAction] = useState<"archive" | "restore" | null>(null);
@@ -139,7 +139,6 @@ export default function SkuDetailPage() {
   // Editors elsewhere price against the shared SKU list; a write here makes it stale.
   const skusChanged = () => {
     void client.invalidateQueries({ queryKey: queryKeys.skus });
-    // The price editor's cost audit is keyed on the SKU id alone.
     void client.invalidateQueries({ queryKey: ["sku-cost-audit"] });
   };
 
@@ -248,8 +247,6 @@ export default function SkuDetailPage() {
       setPhotoUploading(false);
     }
   }
-
-  const unitCostZar = inventoryRow?.unit_cost_zar ?? null;
 
   if (loading || (sku !== null && sku.id !== params.id)) {
     return (
@@ -371,7 +368,7 @@ export default function SkuDetailPage() {
       ) : null}
 
       {sku ? (
-        <Tabs>
+        <Tabs selectedIndex={detailTab} onChange={({ selectedIndex }) => setDetailTab(selectedIndex)}>
           <TabList aria-label="SKU detail">
             <Tab>Identity</Tab>
             <Tab>Prices</Tab>
@@ -542,18 +539,21 @@ export default function SkuDetailPage() {
             <TabPanel>
               <Tile>
                 <SkuPriceEditor
+                  key={sku.id}
                   sku={sku}
-                  open
-                  embedded
+                  active={detailTab === 1}
                   readOnly={!canMutate}
-                  showCostAudit={false}
-                  unitCostZar={unitCostZar}
+                  canViewCost={canViewCost}
                   observedLeadTime={observedLeadTime}
-                  saving={priceSaving}
-                  onSavingChange={setPriceSaving}
-                  onClose={() => {}}
-                  onSaved={async () => { skusChanged(); await loadSku(); }}
-                  onError={setError}
+                  onSaved={(updated) => {
+                    setSku(updated);
+                    skusChanged();
+                    setSuccess("SKU changes saved.");
+                  }}
+                  onError={(message) => {
+                    setError(message);
+                    setSuccess(null);
+                  }}
                 />
               </Tile>
             </TabPanel>

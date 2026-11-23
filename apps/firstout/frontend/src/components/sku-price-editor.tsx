@@ -1,61 +1,27 @@
 "use client";
 
-import {
-  Button,
-  Checkbox,
-  DataTable,
-  InlineNotification,
-  Select,
-  SelectItem,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TextInput,
-} from "@carbon/react";
+import { Accordion, AccordionItem, Button, Checkbox, InlineNotification, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 
-import {
-  ApiError,
-  displayPrice,
-  exVatToIncVat,
-  formatPriceAmount,
-  incVatToExVat,
-  listCostAudit,
-  listSuppliers,
-  parsePriceInput,
-  updateSku,
-  type Sku,
-  type SkuLeadTimeRow,
-  type UpdateSkuPricePayload,
-} from "@/lib/api";
+import { SkuInvoicePreview } from "@/components/sku-invoice-preview";
+import { SkuPriceFields } from "@/components/sku-price-fields";
+import { listSuppliers, updateSku, type Sku, type SkuLeadTimeRow, type UpdateSkuPricePayload } from "@/lib/api";
+import { catalogueSaveFailure } from "@/lib/catalogue-editor";
 import { formatObservedMedianLine } from "@/lib/lead-times";
+import { formatZarAmount } from "@/lib/money";
 import { referenceQueries } from "@/lib/queries";
+import {
+  buildSkuPriceChanges,
+  skuPriceFormFromSku,
+  validateSkuPriceForm,
+  type SkuPriceErrors,
+  type SkuPriceForm,
+} from "@/lib/sku-price-form";
 
-type PriceBasis = "ex" | "inc";
-
-const PRICE_TIERS = [
-  { key: "stockist", label: "Stockist", exField: "stockist_ex_vat", incField: "stockist_inc_vat" },
-  { key: "wholesale", label: "Wholesale", exField: "wholesale_ex_vat", incField: "wholesale_inc_vat" },
-  { key: "decorator", label: "Decorator", exField: "decorator_ex_vat", incField: "decorator_inc_vat" },
-  { key: "retail", label: "Retail", exField: "retail_ex_vat", incField: "retail_inc_vat" },
-] as const;
-
-type TierKey = (typeof PRICE_TIERS)[number]["key"];
-
-type TierForm = {
-  ex: string;
-  inc: string;
-  lastEdited: PriceBasis | null;
-};
+import styles from "./sku-price-editor.module.css";
 
 type EditorFormState = {
-  prices: Record<TierKey, TierForm>;
   preferredSupplierId: string;
   supplierRef: string;
   leadTimeDays: string;
@@ -67,49 +33,14 @@ type EditorFormState = {
   excludeFromCommission: boolean;
 };
 
-function emptyPrices(): Record<TierKey, TierForm> {
-  return {
-    stockist: { ex: "", inc: "", lastEdited: null },
-    wholesale: { ex: "", inc: "", lastEdited: null },
-    decorator: { ex: "", inc: "", lastEdited: null },
-    retail: { ex: "", inc: "", lastEdited: null },
-  };
-}
-
 type SkuPriceEditorProps = {
-  sku: Sku | null;
-  open: boolean;
+  sku: Sku;
+  active: boolean;
   readOnly: boolean;
-  showCostAudit: boolean;
-  unitCostZar: string | null;
+  canViewCost: boolean;
   observedLeadTime?: Pick<SkuLeadTimeRow, "median_days" | "n"> | null;
-  saving: boolean;
-  onSavingChange: (saving: boolean) => void;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-  onError: (message: string) => void;
-  /** When true, renders as an embeddable section (no close/cancel chrome). */
-  embedded?: boolean;
-};
-
-const COST_AUDIT_HEADERS = [
-  { key: "created_at", header: "Date" },
-  { key: "source", header: "Source" },
-  { key: "new_cost_zar", header: "New cost (ZAR)" },
-  { key: "location_name", header: "Location" },
-] as const;
-
-const emptyForm: EditorFormState = {
-  prices: emptyPrices(),
-  preferredSupplierId: "",
-  supplierRef: "",
-  leadTimeDays: "",
-  madeToOrderCapacity: "",
-  madeToOrderMinDays: "",
-  madeToOrderMaxDays: "",
-  madeToOrderExpiresAt: "",
-  reorderMin: "",
-  excludeFromCommission: false,
+  onSaved: (sku: Sku) => void;
+  onError: (message: string | null) => void;
 };
 
 function localDateTimeInput(value: string | null): string {
@@ -121,28 +52,6 @@ function localDateTimeInput(value: string | null): string {
 
 function formFromSku(sku: Sku): EditorFormState {
   return {
-    prices: {
-      stockist: {
-        ex: sku.stockist_ex_vat ?? "",
-        inc: sku.stockist_inc_vat ?? "",
-        lastEdited: null,
-      },
-      wholesale: {
-        ex: sku.wholesale_ex_vat ?? "",
-        inc: sku.wholesale_inc_vat ?? "",
-        lastEdited: null,
-      },
-      decorator: {
-        ex: sku.decorator_ex_vat ?? "",
-        inc: sku.decorator_inc_vat ?? "",
-        lastEdited: null,
-      },
-      retail: {
-        ex: sku.retail_ex_vat ?? "",
-        inc: sku.retail_inc_vat ?? "",
-        lastEdited: null,
-      },
-    },
     preferredSupplierId: sku.preferred_supplier_id ?? "",
     supplierRef: sku.supplier_ref ?? "",
     leadTimeDays: sku.lead_time_days !== null ? String(sku.lead_time_days) : "",
@@ -207,17 +116,8 @@ function madeToOrderFormChanged(sku: Sku, form: EditorFormState): boolean {
     form.madeToOrderExpiresAt !== localDateTimeInput(sku.made_to_order_expires_at);
 }
 
-function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
+function buildSettingsUpdate(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
   const payload: UpdateSkuPricePayload = {};
-
-  for (const tier of PRICE_TIERS) {
-    const edited = form.prices[tier.key];
-    if (edited.lastEdited === "ex") {
-      payload[tier.exField] = edited.ex.trim() || null;
-    } else if (edited.lastEdited === "inc") {
-      payload[tier.incField] = edited.inc.trim() || null;
-    }
-  }
 
   const preferredSupplierId = form.preferredSupplierId.trim();
   if (preferredSupplierId !== (sku.preferred_supplier_id ?? "")) {
@@ -255,137 +155,61 @@ function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
   return payload;
 }
 
-function hasFormEdits(sku: Sku, form: EditorFormState): boolean {
-  if (PRICE_TIERS.some((tier) => form.prices[tier.key].lastEdited !== null)) {
-    return true;
-  }
-  if (form.preferredSupplierId.trim() !== (sku.preferred_supplier_id ?? "")) {
-    return true;
-  }
-  if (form.supplierRef.trim() !== (sku.supplier_ref ?? "")) {
-    return true;
-  }
-  if (parseLeadTimeDays(form.leadTimeDays) !== sku.lead_time_days) {
-    return true;
-  }
-  if (parseReorderMin(form.reorderMin) !== sku.reorder_min) {
-    return true;
-  }
-  if (form.excludeFromCommission !== !!sku.exclude_from_commission) {
-    return true;
-  }
-  return madeToOrderFormChanged(sku, form);
-}
-
 export function SkuPriceEditor({
   sku,
-  open,
+  active,
   readOnly,
-  showCostAudit,
-  unitCostZar,
-  observedLeadTime = null,
-  saving,
-  onSavingChange,
-  onClose,
+  canViewCost,
+  observedLeadTime,
   onSaved,
   onError,
-  embedded = false,
 }: SkuPriceEditorProps) {
-  const [form, setForm] = useState<EditorFormState>(emptyForm);
-  const visible = open || embedded;
+  const [priceDraft, setPriceDraft] = useState<Partial<SkuPriceForm>>({});
+  const [settingsDraft, setSettingsDraft] = useState<Partial<EditorFormState>>({});
+  const [serverErrors, setServerErrors] = useState<SkuPriceErrors>({});
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const suppliersQuery = useQuery({
     queryKey: ["suppliers", "list"],
     queryFn: () => listSuppliers(),
-    enabled: visible && !readOnly,
+    enabled: active && !readOnly,
   });
   const suppliers = suppliersQuery.data ?? [];
-  const costAuditEnabled = Boolean(visible && sku && showCostAudit);
-  const costAuditQuery = useQuery({
-    queryKey: ["sku-cost-audit", { skuId: sku?.id }],
-    queryFn: () => listCostAudit(sku!.id),
-    enabled: costAuditEnabled,
-  });
-  const costAudit = (costAuditEnabled && costAuditQuery.data) || [];
-  // The inc/ex pairing uses the team's VAT rate (ADR 0003); price fields wait for it.
-  const settingsQuery = useQuery(referenceQueries.settings);
-  const vatRate = settingsQuery.data?.vat_rate;
-  const costAuditLoading = costAuditQuery.isFetching;
+  const vatSettings = useQuery({ ...referenceQueries.settings, enabled: active });
+  const vatRate = vatSettings.data?.vat_rate;
 
-  useEffect(() => {
-    if (sku && (open || embedded)) {
-      setForm(formFromSku(sku));
-    }
-    if (!open && !embedded) {
-      setForm(emptyForm);
-    }
-  }, [sku, open, embedded]);
-
-  function updateTier(tier: TierKey, basis: PriceBasis, value: string) {
-    setForm((current) => {
-      const parsed = parsePriceInput(value);
-      const paired =
-        parsed === null || !vatRate
-          ? ""
-          : formatPriceAmount(basis === "ex" ? exVatToIncVat(parsed, vatRate) : incVatToExVat(parsed, vatRate));
-      return {
-        ...current,
-        prices: {
-          ...current.prices,
-          [tier]: {
-            ex: basis === "ex" ? value : paired,
-            inc: basis === "inc" ? value : paired,
-            lastEdited: basis,
-          },
-        },
-      };
-    });
-  }
-
-  const hasEdits = sku ? hasFormEdits(sku, form) : false;
+  const form = { ...formFromSku(sku), ...settingsDraft };
+  const prices = { ...skuPriceFormFromSku(sku), ...priceDraft };
+  const priceErrors = validateSkuPriceForm(prices, vatRate);
+  const priceChanges = buildSkuPriceChanges(sku, prices);
+  const invalidPrices = Object.keys(priceErrors).length > 0;
+  const madeToOrderChanged = madeToOrderFormChanged(sku, form);
   const madeToOrderError = readOnly ? null : madeToOrderFormError(form);
-  const invalidMadeToOrderEdit = !!sku && madeToOrderFormChanged(sku, form) && madeToOrderError !== null;
+  const invalidMadeToOrder = madeToOrderChanged && madeToOrderError !== null;
+  const payload = invalidMadeToOrder ? {} : { ...buildSettingsUpdate(sku, form), ...priceChanges };
+  const hasEdits = Object.keys(payload).length > 0;
 
   async function handleSave() {
-    if (!sku || readOnly) {
-      return;
-    }
-    const payload = buildPayload(sku, form);
-    if (Object.keys(payload).length === 0) {
-      if (!embedded) {
-        onClose();
-      }
-      return;
-    }
+    if (readOnly || savingRef.current || !hasEdits || invalidPrices || invalidMadeToOrder) return;
 
-    onSavingChange(true);
+    savingRef.current = true;
+    setSaving(true);
+    setServerErrors({});
+    onError(null);
     try {
-      await updateSku(sku.id, payload);
-      if (!embedded) {
-        onClose();
-      }
-      await onSaved();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        onError(err.message);
-      } else {
-        onError(err instanceof Error ? err.message : "Failed to save prices.");
-      }
+      const updated = await updateSku(sku.id, payload);
+      setPriceDraft({});
+      setSettingsDraft({});
+      onSaved(updated);
+    } catch (error) {
+      const failure = catalogueSaveFailure(error);
+      setServerErrors(failure.fields);
+      onError(failure.message);
     } finally {
-      onSavingChange(false);
+      savingRef.current = false;
+      setSaving(false);
     }
   }
-
-  if ((!open && !embedded) || !sku) {
-    return null;
-  }
-
-  const costAuditRows = costAudit.map((entry) => ({
-    id: entry.id,
-    created_at: new Date(entry.created_at).toLocaleDateString("en-ZA"),
-    source: entry.source,
-    new_cost_zar: entry.new_cost_zar,
-    location_name: entry.location_name ?? "—",
-  }));
 
   const preferredSupplierLabel =
     sku.preferred_supplier_name ??
@@ -393,300 +217,229 @@ export function SkuPriceEditor({
     "—";
 
   return (
-    <section
-      className={embedded ? undefined : "cds--layer-01"}
-      style={
-        embedded
-          ? undefined
-          : {
-              padding: "1.5rem",
-              border: "1px solid var(--cds-border-subtle-01, #e0e0e0)",
-              maxWidth: "48rem",
-            }
-      }
-      aria-labelledby={embedded ? undefined : "sku-price-editor-heading"}
-    >
-      <Stack gap={5}>
-        {!embedded ? (
-          <div>
-            <h2 id="sku-price-editor-heading" className="cds--type-productive-heading-03">
-              {readOnly ? "SKU prices" : "Edit prices"}
-            </h2>
-            <p className="cds--type-body-01">
-              <strong>{sku.our_ref}</strong> — {sku.name}
-            </p>
-          </div>
-        ) : null}
-        {showCostAudit && unitCostZar ? (
-          <InlineNotification
-            kind="info"
-            title="Unit cost"
-            subtitle={`Landed unit cost from inventory: ${displayPrice(unitCostZar)} ZAR`}
-            hideCloseButton
-            lowContrast
+    <Stack gap={6}>
+      <div className={styles.pricing}>
+        <Stack gap={4}>
+          <h2 className="cds--type-productive-heading-03">SKU prices</h2>
+          {canViewCost && sku.average_unit_cost_zar != null && (
+            <p className="cds--type-body-01">Average unit cost · {formatZarAmount(sku.average_unit_cost_zar)} excl. VAT</p>
+          )}
+          <SkuPriceFields
+            idPrefix="sku-price"
+            sku={sku}
+            form={prices}
+            errors={{ ...priceErrors, ...serverErrors }}
+            vatRate={vatRate}
+            retryVatRate={vatSettings.isLoadingError ? () => void vatSettings.refetch() : undefined}
+            canViewCost={canViewCost}
+            readOnly={readOnly}
+            disabled={saving}
+            onChange={(field, value) => {
+              setPriceDraft((current) => ({ ...current, [field]: value }));
+              setServerErrors((current) => ({ ...current, [field]: undefined }));
+            }}
           />
-        ) : null}
-        {showCostAudit ? (
-          <TextInput
-            id="sku-last-landed-cost"
-            labelText="Last landed cost"
-            value={
-              sku.last_landed_cost_zar
-                ? `${displayPrice(sku.last_landed_cost_zar)} ZAR`
-                : "—"
-            }
-            readOnly
-          />
-        ) : null}
-        {readOnly ? (
-          <>
-            <TextInput
-              id="sku-preferred-supplier-readonly"
-              labelText="Preferred supplier"
-              value={preferredSupplierLabel}
-              readOnly
-            />
-            <TextInput
-              id="sku-supplier-ref-readonly"
-              labelText="Supplier ref"
-              value={form.supplierRef || "—"}
-              readOnly
-            />
-            <TextInput
-              id="sku-lead-time-readonly"
-              labelText="Lead time (days)"
-              value={form.leadTimeDays ? `${form.leadTimeDays} days` : "—"}
-              readOnly
-            />
-            <TextInput
-              id="sku-observed-lead-time-readonly"
-              labelText="Observed median"
-              value={formatObservedMedianLine(observedLeadTime ?? undefined)}
-              readOnly
-            />
-            <TextInput
-              id="sku-reorder-min-readonly"
-              labelText="Reorder min"
-              value={form.reorderMin || "—"}
-              readOnly
-            />
-            <TextInput
-              id="sku-made-to-order-readonly"
-              labelText="Made-to-order allowance"
-              value={sku.made_to_order_capacity === null ? "—" : `${sku.made_to_order_capacity} units`}
-              readOnly
-            />
-            <TextInput
-              id="sku-made-to-order-lead-time-readonly"
-              labelText="Confirmed made-to-order lead time"
-              value={sku.made_to_order_lead_time_min_days === null || sku.made_to_order_lead_time_max_days === null
-                ? "—" : `${sku.made_to_order_lead_time_min_days}–${sku.made_to_order_lead_time_max_days} days`}
-              readOnly
-            />
-            <TextInput
-              id="sku-made-to-order-expiry-readonly"
-              labelText="Made-to-order offer expiry"
-              value={sku.made_to_order_expires_at ? new Date(sku.made_to_order_expires_at).toLocaleString("en-ZA") : "—"}
-              readOnly
-            />
-          </>
-        ) : (
-          <>
-            <Select
-              id="sku-preferred-supplier"
-              labelText="Preferred supplier"
-              value={form.preferredSupplierId}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  preferredSupplierId: event.target.value,
-                }))
-              }
-            >
-              <SelectItem value="" text="None" />
-              {suppliers.map((entry) => (
-                <SelectItem key={entry.id} value={entry.id} text={entry.name} />
-              ))}
-            </Select>
-            <TextInput
-              id="sku-supplier-ref"
-              labelText="Supplier ref"
-              helperText="Supplier's reference — not our barcode"
-              value={form.supplierRef}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, supplierRef: event.target.value }))
-              }
-            />
-            <TextInput
-              id="sku-lead-time-days"
-              labelText="Lead time (days)"
-              helperText="Leave blank for none"
-              value={form.leadTimeDays}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, leadTimeDays: event.target.value }))
-              }
-            />
-            <TextInput
-              id="sku-observed-lead-time"
-              labelText="Observed median"
-              helperText="From completed POs — not written to lead time"
-              value={formatObservedMedianLine(observedLeadTime ?? undefined)}
-              readOnly
-            />
-            <TextInput
-              id="sku-reorder-min"
-              labelText="Reorder min"
-              helperText="Minimum stock level; leave blank to clear"
-              value={form.reorderMin}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, reorderMin: event.target.value }))
-              }
-            />
-            <TextInput
-              id="sku-made-to-order-capacity"
-              type="number"
-              min={0}
-              step={1}
-              labelText="Made-to-order allowance (units)"
-              helperText="Finite quantity available after physical stock is gone. Changing the allowance starts a new allocation."
-              value={form.madeToOrderCapacity}
-              onChange={(event) => setForm((current) => ({ ...current, madeToOrderCapacity: event.target.value }))}
-            />
-            <TextInput
-              id="sku-made-to-order-min-days"
-              type="number"
-              min={1}
-              step={1}
-              labelText="Minimum lead time (days)"
-              value={form.madeToOrderMinDays}
-              onChange={(event) => setForm((current) => ({ ...current, madeToOrderMinDays: event.target.value }))}
-            />
-            <TextInput
-              id="sku-made-to-order-max-days"
-              type="number"
-              min={1}
-              step={1}
-              labelText="Maximum lead time (days)"
-              value={form.madeToOrderMaxDays}
-              onChange={(event) => setForm((current) => ({ ...current, madeToOrderMaxDays: event.target.value }))}
-            />
-            <TextInput
-              id="sku-made-to-order-expires-at"
-              type="datetime-local"
-              labelText="Made-to-order offer expires"
-              helperText="The offer must expire in the future. Clear all four fields to disable it."
-              value={form.madeToOrderExpiresAt}
-              onChange={(event) => setForm((current) => ({ ...current, madeToOrderExpiresAt: event.target.value }))}
-            />
-            {madeToOrderError && (madeToOrderFormChanged(sku, form) || madeToOrderError !== "Set the allowance, both lead-time bounds, and expiry together.") &&
-              <InlineNotification kind="error" title="Made-to-order offer needs attention" subtitle={madeToOrderError} hideCloseButton lowContrast />}
-          </>
-        )}
-        {!readOnly && settingsQuery.isError && !vatRate ? (
-          <InlineNotification
-            kind="error"
-            title="Could not load the team's VAT rate"
-            subtitle="Prices can't be edited until it loads."
-            hideCloseButton
-            lowContrast
-          >
-            <Button kind="tertiary" size="sm" onClick={() => void settingsQuery.refetch()}>
-              Try again
-            </Button>
-          </InlineNotification>
-        ) : null}
-        {PRICE_TIERS.map((tier) => (
-          <div key={tier.key} style={{ display: "grid", gap: "1rem" }}>
-            <TextInput
-              id={`sku-${tier.key}-ex-vat`}
-              labelText={`${tier.label} ex-VAT`}
-              helperText="Stored ex VAT. The inc-VAT price follows at the team's VAT rate as you type."
-              value={form.prices[tier.key].ex}
-              readOnly={readOnly || !vatRate}
-              onChange={(event) => updateTier(tier.key, "ex", event.target.value)}
-            />
-            <TextInput
-              id={`sku-${tier.key}-inc-vat`}
-              labelText={`${tier.label} inc-VAT`}
-              value={form.prices[tier.key].inc}
-              readOnly={readOnly || !vatRate}
-              onChange={(event) => updateTier(tier.key, "inc", event.target.value)}
-            />
-          </div>
-        ))}
-        <div>
-          <h3 className="cds--type-productive-heading-02">Commission</h3>
-          <Checkbox
-            id="sku-exclude-from-commission"
-            labelText="Exclude from commission"
-            helperText="Tick for products that shouldn't earn sales commission, such as delivery and installation. Applies to sales from when you save; invoices already issued keep their commission."
-            checked={form.excludeFromCommission}
-            disabled={readOnly}
-            onChange={(_, { checked }) => setForm((current) => ({ ...current, excludeFromCommission: checked }))}
-          />
-        </div>
-        {showCostAudit ? (
-          <div>
-            <h3 className="cds--type-productive-heading-02">Cost history</h3>
-            {costAuditLoading ? (
-              <p className="cds--type-body-01">Loading cost history…</p>
-            ) : costAuditRows.length === 0 ? null : (
-              <DataTable rows={costAuditRows} headers={[...COST_AUDIT_HEADERS]}>
-                {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                  <TableContainer title="Cost audit">
-                    <Table {...getTableProps()} size="sm">
-                      <TableHead>
-                        <TableRow>
-                          {headers.map((header) => (
-                            <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                              {header.header}
-                            </TableHeader>
-                          ))}
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {tableRows.map((row) => (
-                          <TableRow {...getRowProps({ row })} key={row.id}>
-                            {row.cells.map((cell) => (
-                              <TableCell key={cell.id}>{cell.value}</TableCell>
-                            ))}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </DataTable>
-            )}
-          </div>
-        ) : null}
-        {!readOnly || !embedded ? (
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+        </Stack>
+        <SkuInvoicePreview
+          skuId={sku.id}
+          skuRevision={sku.updated_at}
+          active={active}
+          vatRate={vatRate}
+          priceChanges={invalidPrices ? null : priceChanges}
+        />
+      </div>
+      <Accordion>
+        <AccordionItem title="Supply &amp; ordering">
+          <Stack gap={4}>
             {readOnly ? (
-              embedded ? null : (
-                <Button type="button" kind="secondary" onClick={onClose}>
-                  Close
-                </Button>
-              )
+              <>
+                <TextInput
+                  id="sku-preferred-supplier-readonly"
+                  labelText="Preferred supplier"
+                  value={preferredSupplierLabel}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-supplier-ref-readonly"
+                  labelText="Supplier ref"
+                  value={form.supplierRef || "—"}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-lead-time-readonly"
+                  labelText="Lead time (days)"
+                  value={form.leadTimeDays ? `${form.leadTimeDays} days` : "—"}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-observed-lead-time-readonly"
+                  labelText="Observed median"
+                  value={formatObservedMedianLine(observedLeadTime ?? undefined)}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-reorder-min-readonly"
+                  labelText="Reorder min"
+                  value={form.reorderMin || "—"}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-made-to-order-readonly"
+                  labelText="Made-to-order allowance"
+                  value={sku.made_to_order_capacity === null ? "—" : `${sku.made_to_order_capacity} units`}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-made-to-order-lead-time-readonly"
+                  labelText="Confirmed made-to-order lead time"
+                  value={sku.made_to_order_lead_time_min_days === null || sku.made_to_order_lead_time_max_days === null
+                    ? "—" : `${sku.made_to_order_lead_time_min_days}–${sku.made_to_order_lead_time_max_days} days`}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-made-to-order-expiry-readonly"
+                  labelText="Made-to-order offer expiry"
+                  value={sku.made_to_order_expires_at ? new Date(sku.made_to_order_expires_at).toLocaleString("en-ZA") : "—"}
+                  readOnly
+                />
+              </>
             ) : (
               <>
-                <Button
-                  type="button"
-                  disabled={saving || !hasEdits || invalidMadeToOrderEdit}
-                  onClick={() => void handleSave()}
+                <Select
+                  id="sku-preferred-supplier"
+                  disabled={saving}
+                  labelText="Preferred supplier"
+                  value={form.preferredSupplierId}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      preferredSupplierId: event.target.value,
+                    }))
+                  }
                 >
-                  {saving ? "Saving…" : "Save"}
-                </Button>
-                {!embedded ? (
-                  <Button type="button" kind="secondary" disabled={saving} onClick={onClose}>
-                    Cancel
-                  </Button>
-                ) : null}
+                  <SelectItem value="" text="None" />
+                  {sku.preferred_supplier_id && !suppliers.some((supplier) => supplier.id === sku.preferred_supplier_id) && (
+                    <SelectItem value={sku.preferred_supplier_id} text={preferredSupplierLabel} />
+                  )}
+                  {suppliers.map((entry) => (
+                    <SelectItem key={entry.id} value={entry.id} text={entry.name} />
+                  ))}
+                </Select>
+                <TextInput
+                  id="sku-supplier-ref"
+                  disabled={saving}
+                  labelText="Supplier ref"
+                  helperText="Supplier's reference — not our barcode"
+                  value={form.supplierRef}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({ ...current, supplierRef: event.target.value }))
+                  }
+                />
+                <TextInput
+                  id="sku-lead-time-days"
+                  disabled={saving}
+                  labelText="Lead time (days)"
+                  helperText="Leave blank for none"
+                  value={form.leadTimeDays}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({ ...current, leadTimeDays: event.target.value }))
+                  }
+                />
+                <TextInput
+                  id="sku-observed-lead-time"
+                  labelText="Observed median"
+                  helperText="From completed POs — not written to lead time"
+                  value={formatObservedMedianLine(observedLeadTime ?? undefined)}
+                  readOnly
+                />
+                <TextInput
+                  id="sku-reorder-min"
+                  disabled={saving}
+                  labelText="Reorder min"
+                  helperText="Minimum stock level; leave blank to clear"
+                  value={form.reorderMin}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({ ...current, reorderMin: event.target.value }))
+                  }
+                />
+                <TextInput
+                  id="sku-made-to-order-capacity"
+                  disabled={saving}
+                  type="number"
+                  min={0}
+                  step={1}
+                  labelText="Made-to-order allowance (units)"
+                  helperText="Finite quantity available after physical stock is gone. Changing the allowance starts a new allocation."
+                  value={form.madeToOrderCapacity}
+                  onChange={(event) => setSettingsDraft((current) => ({ ...current, madeToOrderCapacity: event.target.value }))}
+                />
+                <TextInput
+                  id="sku-made-to-order-min-days"
+                  disabled={saving}
+                  type="number"
+                  min={1}
+                  step={1}
+                  labelText="Minimum lead time (days)"
+                  value={form.madeToOrderMinDays}
+                  onChange={(event) => setSettingsDraft((current) => ({ ...current, madeToOrderMinDays: event.target.value }))}
+                />
+                <TextInput
+                  id="sku-made-to-order-max-days"
+                  disabled={saving}
+                  type="number"
+                  min={1}
+                  step={1}
+                  labelText="Maximum lead time (days)"
+                  value={form.madeToOrderMaxDays}
+                  onChange={(event) => setSettingsDraft((current) => ({ ...current, madeToOrderMaxDays: event.target.value }))}
+                />
+                <TextInput
+                  id="sku-made-to-order-expires-at"
+                  disabled={saving}
+                  type="datetime-local"
+                  labelText="Made-to-order offer expires"
+                  helperText="The offer must expire in the future. Clear all four fields to disable it."
+                  value={form.madeToOrderExpiresAt}
+                  onChange={(event) => setSettingsDraft((current) => ({ ...current, madeToOrderExpiresAt: event.target.value }))}
+                />
+                {madeToOrderError && !invalidMadeToOrder && madeToOrderError !== "Set the allowance, both lead-time bounds, and expiry together." &&
+                  <InlineNotification kind="error" title="Made-to-order offer needs attention" subtitle={madeToOrderError} hideCloseButton lowContrast />}
               </>
             )}
-          </div>
-        ) : null}
-      </Stack>
-    </section>
+            <div>
+              <h3 className="cds--type-productive-heading-02">Commission</h3>
+              <Checkbox
+                id="sku-exclude-from-commission"
+                labelText="Exclude from commission"
+                helperText="Tick for products that shouldn't earn sales commission, such as delivery and installation. Applies to sales from when you save; invoices already issued keep their commission."
+                checked={form.excludeFromCommission}
+                disabled={readOnly || saving}
+                onChange={(_, { checked }) => setSettingsDraft((current) => ({ ...current, excludeFromCommission: checked }))}
+              />
+            </div>
+          </Stack>
+        </AccordionItem>
+      </Accordion>
+      {invalidMadeToOrder && (
+        <InlineNotification
+          kind="error"
+          title="Made-to-order offer needs attention"
+          subtitle={madeToOrderError}
+          hideCloseButton
+          lowContrast
+        />
+      )}
+      {!readOnly && (
+        <div>
+          <Button
+            type="button"
+            disabled={saving || !hasEdits || invalidPrices || invalidMadeToOrder}
+            onClick={() => void handleSave()}
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      )}
+    </Stack>
   );
 }

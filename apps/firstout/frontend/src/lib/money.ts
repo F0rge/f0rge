@@ -15,13 +15,28 @@ export function roundHalfUp(value: number, decimals = 2): number {
   return (Math.sign(scaled) * Math.round(Math.abs(scaled))) / factor;
 }
 
-/** `rate` is a VAT rate as the API sends it, e.g. "0.1500". */
+const VAT_SCALE = BigInt(10_000);
+const TWO = BigInt(2);
+
+/** Team VAT rates have four decimal places and SKU price inputs are in cents. */
+function vatFactor(rate: string): bigint {
+  return VAT_SCALE + BigInt(Math.round(Number(rate) * Number(VAT_SCALE)));
+}
+
+/** Integer conversion matches Decimal HALF_UP even near a cent at large prices. */
+function convertVat(amount: number, numerator: bigint, denominator: bigint): number {
+  const cents = Math.round(Math.abs(amount) * 100);
+  if (!Number.isSafeInteger(cents)) return Number.NaN;
+  const converted = (BigInt(cents) * numerator + denominator / TWO) / denominator;
+  return (Math.sign(amount) * Number(converted)) / 100;
+}
+
 export function exVatToIncVat(ex: number, rate: string): number {
-  return roundHalfUp(ex * (1 + Number(rate)), 2);
+  return convertVat(ex, vatFactor(rate), VAT_SCALE);
 }
 
 export function incVatToExVat(inc: number, rate: string): number {
-  return roundHalfUp(inc / (1 + Number(rate)), 2);
+  return convertVat(inc, VAT_SCALE, vatFactor(rate));
 }
 
 /** "0.1500" -> "15%". */
