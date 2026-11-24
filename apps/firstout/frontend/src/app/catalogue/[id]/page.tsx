@@ -295,8 +295,9 @@ export default function SkuDetailPage() {
             Back to catalogue
           </Button>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginTop: "0.5rem" }}>
-            {sku?.photo_storage_key ? (
+            {sku && (sku.photo_storage_key || sku.gallery_photo_count > 0) ? (
               <StaffImage
+                key={sku.photo_storage_key ?? sku.id}
                 src={skuPhotoUrl(sku.id)}
                 alt={sku.name}
                 width={80}
@@ -383,7 +384,7 @@ export default function SkuDetailPage() {
                   <h2 className="cds--type-productive-heading-03">Identity</h2>
                   {canMutate && !sku.photo_storage_key ? (
                     <div>
-                      <p className="cds--type-label-01">Product photo</p>
+                      <p className="cds--type-label-01">Primary product photo</p>
                       {photoFile ? (
                         <FileUploaderItem
                           name={photoFile.name}
@@ -414,13 +415,14 @@ export default function SkuDetailPage() {
                         </Button>
                       ) : null}
                     </div>
-                  ) : sku.photo_storage_key ? (
-                    <div role="group" aria-label="Product photos" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+                  ) : null}
+                  {sku.photo_storage_key || sku.gallery_photo_count > 0 ? (
+                    <div key={sku.photo_storage_key ?? sku.id} role="group" aria-label="Product photos" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
                       {Array.from({ length: sku.gallery_photo_count || 1 }, (_, index) => (
                         <StaffImage
                           key={index}
                           src={skuPhotoUrl(sku.id, sku.gallery_photo_count ? index + 1 : undefined)}
-                          alt={`${sku.name}, ${index ? `alternate view ${index}` : "main photo"}`}
+                          alt={`${sku.name}, photo ${index + 1} of ${sku.gallery_photo_count || 1}`}
                           width={160}
                           height={160}
                           style={{ objectFit: "contain" }}

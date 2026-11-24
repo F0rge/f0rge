@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline_revision": "089_merge_record_workspaces",
-  "target_revision": "115_sku_setting_photo",
+  "target_revision": "116_sku_detail_photo",
   "revisions": {
     "001_stub": {
       "sha256": "7483762ff30abeded02a2990580a74d21fba5f27f1707d410dd33da803858925",
@@ -465,6 +465,10 @@
     },
     "115_sku_setting_photo": {
       "sha256": "3ee44c29e245f7c782d8194e45eac66675623ab458af9b2a5ce11b73d3818d95",
+      "automatic": true
+    },
+    "116_sku_detail_photo": {
+      "sha256": "9f4309c6ef843eeb3440a9133f7c2ded8b31dc13cd2ba3b10e7d9ae7ef77f7a9",
       "automatic": true
     }
   }

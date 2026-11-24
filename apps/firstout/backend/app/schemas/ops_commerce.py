@@ -41,6 +41,7 @@ class OpsProductResponse(BaseModel):
     piece_count: Optional[int] = None
     gallery_photo_tokens: Optional[list[str]] = None
     setting_photo_token: Optional[str] = None
+    detail_photo_token: Optional[str] = None
 
 
 class OpsProductsResponse(BaseModel):

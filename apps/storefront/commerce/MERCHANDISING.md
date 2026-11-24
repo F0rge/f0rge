@@ -12,8 +12,14 @@ set.
 Each approved variant carries its own stock, price, centimetre measurements,
 piece count and three reviewed studio images. The first image is its hero.
 The sync verifies all three image hashes and attaches the files in source
-order before publishing the product. Variants without a reviewed gallery keep
-their existing catalogue data. Internal Firstout notes stay in Firstout.
+order before publishing the product. Firstout can append a room setting and a
+material close-up to a reviewed variant. The shop shows the studio images,
+then the setting, then the close-up when present. The setting is served from
+slot 4 and the close-up from slot 5. A close-up works without a setting. If a
+supplemental image fails to sync, a previously verified studio gallery can
+stay published while the sync retries. Variants without a reviewed studio
+gallery keep their existing catalogue data. Internal Firstout notes stay in
+Firstout.
 
 Each visible product needs a priced, available variant. An out-of-stock
 variant in that family remains visible as an option, with purchases disabled.
@@ -149,6 +155,12 @@ What the shop does not require:
   publishes.
 
 ## Photos from Firstout
+
+The version 2 feed uses opt-in query parameters for the supplemental images.
+An older Firstout can omit an unsupported field. DasKasas retains the last
+verified asset for that slot when it is still attached. An explicit null
+removes that asset. Media updates preserve the curated selection and leave
+pricing and stock to their existing sync.
 
 Staff add a SKU's photo in Firstout, not in Medusa Admin. The Ops feed carries a
 `photo_token` for each SKU, or null when it has none. A feed without the field

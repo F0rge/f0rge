@@ -57,6 +57,12 @@ class CuratedCatalogueService:
         await self._require_owner(user_id)
         reviewed = await asyncio.to_thread(read_catalogue_archive, file)
         manifest = reviewed.manifest
+        if scope == "photos":
+            return await self._update_supplemental_photos(
+                team_id, user_id, reviewed, dry_run=dry_run
+            )
+        if any(row.supplemental_photos() for row in manifest.skus):
+            raise ValidationError("Use the supplemental photos scope to upload these photos")
         if scope == "sku":
             return await self._update_selected_sku(team_id, user_id, reviewed, dry_run=dry_run)
         if any(row.retain_current_photo_as_setting for row in manifest.skus):
@@ -94,6 +100,80 @@ class CuratedCatalogueService:
             ) from exc
         return receipt
 
+    async def _update_supplemental_photos(
+        self,
+        team_id: uuid.UUID,
+        user_id: uuid.UUID,
+        reviewed: ReviewedCatalogue,
+        *,
+        dry_run: bool,
+    ) -> CuratedCatalogueResult:
+        manifest = reviewed.manifest
+        if manifest.groups or any(not row.supplemental_photos() for row in manifest.skus):
+            raise ValidationError(
+                "Supplemental photos require one or two photos per SKU and no variant groups"
+            )
+        skus = await self._catalogue_skus(team_id, manifest, scope="photos")
+        legacy_primaries = await self._read_legacy_primary_digests(skus)
+        self._validate_supplemental_photos(manifest, skus, legacy_primaries)
+        if dry_run:
+            return self._receipt(reviewed, skus, applied=False)
+
+        # Finish storage I/O before locking SKU records. After taking the locks,
+        # revalidate the legacy photo references and current gallery digests.
+        keys = await self._stage_supplemental_photos(reviewed)
+        async with unit_of_work(self.db):
+            await SkuArchiveService(self.db).lock_skus([row.sku_id for row in manifest.skus])
+            await self._require_owner(user_id)
+            skus = await self._catalogue_skus(team_id, manifest, scope="photos")
+            self._validate_supplemental_photos(manifest, skus, legacy_primaries)
+            for row in manifest.skus:
+                sku = skus[row.sku_id]
+                if setting_key := keys[row.sku_id].get("setting"):
+                    sku.setting_photo_storage_key = setting_key
+                if detail_key := keys[row.sku_id].get("detail"):
+                    sku.detail_photo_storage_key = detail_key
+            return self._receipt(reviewed, skus, applied=True)
+
+    @staticmethod
+    async def _read_legacy_primary_digests(
+        skus: dict[uuid.UUID, Sku],
+    ) -> dict[uuid.UUID, tuple[str, str]]:
+        digests = {}
+        for sku in skus.values():
+            key = sku.photo_storage_key
+            if sku.gallery_photo_keys or not key:
+                continue
+            try:
+                primary = await asyncio.to_thread(read_bytes, key)
+            except FileNotFoundError as exc:
+                raise ValidationError(f"SKU primary photo is unavailable: {sku.our_ref}") from exc
+            digests[sku.id] = key, hashlib.sha256(primary).hexdigest()
+        return digests
+
+    @staticmethod
+    def _validate_supplemental_photos(
+        manifest: CuratedCatalogueManifest,
+        skus: dict[uuid.UUID, Sku],
+        legacy_primaries: dict[uuid.UUID, tuple[str, str]],
+    ) -> None:
+        for row in manifest.skus:
+            sku = skus[row.sku_id]
+            retained = {PurePosixPath(key).stem for key in sku.gallery_photo_keys or ()}
+            primary_key = None if sku.gallery_photo_keys else sku.photo_storage_key or None
+            captured_key, digest = legacy_primaries.get(row.sku_id, (None, None))
+            if primary_key != captured_key:
+                raise ConflictError(f"SKU primary photo changed during import: {row.our_ref}")
+            if digest is not None:
+                retained.add(digest)
+            if row.setting_photo is None and sku.setting_photo_storage_key:
+                retained.add(PurePosixPath(sku.setting_photo_storage_key).stem)
+            if row.detail_photo is None and sku.detail_photo_storage_key:
+                retained.add(PurePosixPath(sku.detail_photo_storage_key).stem)
+            incoming = [photo.sha256 for photo in row.supplemental_photos().values()]
+            if len(incoming) != len(set(incoming)) or retained.intersection(incoming):
+                raise ValidationError(f"Gallery photos must be distinct: {row.our_ref}")
+
     async def _update_selected_sku(
         self,
         team_id: uuid.UUID,
@@ -115,13 +195,15 @@ class CuratedCatalogueService:
                 setting_key,
                 row,
                 preserved=setting_key == sku.setting_photo_storage_key,
+                detail_key=sku.detail_photo_storage_key,
             )
         if dry_run:
             return self._receipt(
                 reviewed,
                 {sku.id: sku},
                 applied=False,
-                setting_photos=int(bool(setting_key or sku.setting_photo_storage_key)),
+                retained_photos=int(bool(setting_key or sku.setting_photo_storage_key))
+                + int(bool(sku.detail_photo_storage_key)),
             )
 
         # Staged studio photos are immutable. The setting source is resolved again under
@@ -138,17 +220,19 @@ class CuratedCatalogueService:
                     row,
                     setting_key,
                     preserved=setting_key == sku.setting_photo_storage_key,
+                    detail_key=sku.detail_photo_storage_key,
                 )
             self._write_reviewed_details(sku, row, gallery_keys[row.sku_id])
             return self._receipt(
                 reviewed,
                 {sku.id: sku},
                 applied=True,
-                setting_photos=int(bool(sku.setting_photo_storage_key)),
+                retained_photos=int(bool(sku.setting_photo_storage_key))
+                + int(bool(sku.detail_photo_storage_key)),
             )
 
     async def _selected_sku(self, team_id: uuid.UUID, manifest: CuratedCatalogueManifest) -> Sku:
-        skus = await self._catalogue_skus(team_id, manifest, include_current_selection=False)
+        skus = await self._catalogue_skus(team_id, manifest, scope="sku")
         sku = skus[manifest.skus[0].sku_id]
         if not sku.storefront_catalogue_selected or sku.storefront_hidden:
             raise ValidationError("A single SKU update requires an existing curated storefront SKU")
@@ -164,11 +248,11 @@ class CuratedCatalogueService:
         team_id: uuid.UUID,
         manifest: CuratedCatalogueManifest,
         *,
-        include_current_selection: bool = True,
+        scope: CuratedCatalogueScope = "catalogue",
     ) -> dict[uuid.UUID, Sku]:
         selected_ids = [row.sku_id for row in manifest.skus]
         selection = Sku.id.in_(selected_ids)
-        if include_current_selection:
+        if scope == "catalogue":
             selection = or_(selection, Sku.storefront_catalogue_selected.is_(True))
         skus = {
             sku.id: sku
@@ -189,10 +273,15 @@ class CuratedCatalogueService:
                 raise ValidationError(f"SKU identifier or code does not match: {row.our_ref}")
             if sku.is_archived or not sku.is_sellable:
                 raise ValidationError(f"SKU must be active and sellable: {row.our_ref}")
-            if _category(sku) not in SHOP_CATEGORIES:
+            if scope != "photos" and _category(sku) not in SHOP_CATEGORIES:
                 raise ValidationError(f"SKU has no storefront category: {row.our_ref}")
             if sku.setting_photo_storage_key:
                 _validate_setting_distinct(row, PurePosixPath(sku.setting_photo_storage_key).stem)
+            if sku.detail_photo_storage_key and any(
+                photo.sha256 == PurePosixPath(sku.detail_photo_storage_key).stem
+                for photo in row.gallery or ()
+            ):
+                raise ValidationError("The detail photo must be distinct from the studio photos")
         for group in manifest.groups:
             if len({SHOP_CATEGORIES[_category(skus[row.sku_id])] for row in group.variants}) != 1:
                 raise ValidationError(
@@ -206,12 +295,12 @@ class CuratedCatalogueService:
         skus: dict[uuid.UUID, Sku],
         *,
         applied: bool,
-        setting_photos: int = 0,
+        retained_photos: int = 0,
     ) -> CuratedCatalogueResult:
         return CuratedCatalogueResult(
             applied=applied,
             selected_skus=len(reviewed.manifest.skus),
-            gallery_images=len(reviewed.images) + setting_photos,
+            gallery_images=len(reviewed.images) + retained_photos,
             groups=len(reviewed.manifest.groups),
             held_without_price=sorted(
                 row.our_ref
@@ -241,6 +330,26 @@ class CuratedCatalogueService:
 
         rows = [row for row in reviewed.manifest.skus if row.gallery is not None]
         return dict(await asyncio.gather(*(stage_row(row) for row in rows)))
+
+    @staticmethod
+    async def _stage_supplemental_photos(
+        reviewed: ReviewedCatalogue,
+    ) -> dict[uuid.UUID, dict[str, str]]:
+        semaphore = asyncio.Semaphore(8)
+
+        async def stage_row(row: ReviewedSku) -> tuple[uuid.UUID, dict[str, str]]:
+            async with semaphore:
+                return row.sku_id, {
+                    role: await asyncio.to_thread(
+                        _store_reviewed_photo,
+                        f"skus/{row.sku_id}/{role}/{photo.sha256}.jpg",
+                        reviewed.images[photo.filename],
+                        photo.sha256,
+                    )
+                    for role, photo in row.supplemental_photos().items()
+                }
+
+        return dict(await asyncio.gather(*(stage_row(row) for row in reviewed.manifest.skus)))
 
     @staticmethod
     def _write_reviewed_details(sku: Sku, row: ReviewedSku, gallery: list[str]) -> None:
@@ -347,7 +456,9 @@ def _validate_setting_distinct(row: ReviewedSku, digest: str) -> None:
         raise ValidationError("The retained setting photo must be distinct from the studio photos")
 
 
-def _read_setting_photo(key: str, row: ReviewedSku, *, preserved: bool) -> tuple[bytes, str]:
+def _read_setting_photo(
+    key: str, row: ReviewedSku, *, preserved: bool, detail_key: str | None
+) -> tuple[bytes, str]:
     try:
         data = read_bytes(key)
         if len(data) > 5 * 1024 * 1024:
@@ -359,11 +470,15 @@ def _read_setting_photo(key: str, row: ReviewedSku, *, preserved: bool) -> tuple
     if preserved and digest != PurePosixPath(key).stem:
         raise ConflictError("The retained setting photo did not match its checksum")
     _validate_setting_distinct(row, digest)
+    if detail_key and digest == PurePosixPath(detail_key).stem:
+        raise ValidationError("The retained setting photo must be distinct from the detail photo")
     return data, digest
 
 
-def _preserve_setting_photo(row: ReviewedSku, key: str, *, preserved: bool) -> str:
-    data, digest = _read_setting_photo(key, row, preserved=preserved)
+def _preserve_setting_photo(
+    row: ReviewedSku, key: str, *, preserved: bool, detail_key: str | None
+) -> str:
+    data, digest = _read_setting_photo(key, row, preserved=preserved, detail_key=detail_key)
     if preserved:
         return key
     return _store_reviewed_photo(f"skus/{row.sku_id}/setting/{digest}.jpg", data, digest)

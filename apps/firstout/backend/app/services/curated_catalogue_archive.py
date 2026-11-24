@@ -58,12 +58,14 @@ def read_catalogue_archive(file: BinaryIO) -> ReviewedCatalogue:
                 raise ValidationError("The unpacked catalogue exceeds 64 MiB")
 
             manifest = CuratedCatalogueManifest.model_validate_json(archive.read("manifest.json"))
-            photos = [photo for sku in manifest.skus for photo in sku.gallery or ()]
+            photos = [
+                photo
+                for sku in manifest.skus
+                for photo in (*(sku.gallery or ()), *sku.supplemental_photos().values())
+            ]
             photo_names = {photo.filename for photo in photos}
             if len(photo_names) != len(photos) or names != photo_names | {"manifest.json"}:
-                raise ValidationError(
-                    "Archive files must match the ordered galleries in the manifest"
-                )
+                raise ValidationError("Archive files must match the photos in the manifest")
             images: dict[str, bytes] = {}
             for photo in photos:
                 data = archive.read(photo.filename)

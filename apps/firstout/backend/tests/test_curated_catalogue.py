@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.sku import Sku
 from app.models.team import Team
-from app.services.curated_catalogue_archive import read_catalogue_archive
+from app.services.curated_catalogue import CuratedCatalogueService
+from app.services.curated_catalogue_archive import ReviewedCatalogue, read_catalogue_archive
 from tests.conftest import authenticate_as, create_test_staff
 
 
@@ -93,6 +94,26 @@ def _bundle(
     return package.getvalue()
 
 
+def _photo_bundle(*items: tuple[str, str, dict[str, bytes]]) -> bytes:
+    package = io.BytesIO()
+    skus = []
+    with ZipFile(package, "w") as archive:
+        for sku_id, code, photos in items:
+            row: dict[str, object] = {"sku_id": sku_id, "our_ref": code}
+            for role, image in photos.items():
+                filename = f"{code}-{role}.jpg"
+                archive.writestr(filename, image)
+                row[f"{role}_photo"] = {
+                    "filename": filename,
+                    "sha256": hashlib.sha256(image).hexdigest(),
+                }
+            skus.append(row)
+        archive.writestr(
+            "manifest.json", json.dumps({"schema_version": 1, "skus": skus, "groups": []})
+        )
+    return package.getvalue()
+
+
 @pytest.mark.no_db
 def test_archive_checks_bytes_and_rejects_paths() -> None:
     first = (str(uuid4()), "FIRST", (_jpeg(37), _jpeg(54), _jpeg(71)))
@@ -104,6 +125,217 @@ def test_archive_checks_bytes_and_rejects_paths() -> None:
         read_catalogue_archive(io.BytesIO(_bundle(first, retained=retained, wrong_digest=True)))
     with pytest.raises(ValidationError, match="unsupported"):
         read_catalogue_archive(io.BytesIO(_bundle(first, retained=retained, extra_file=True)))
+
+
+@pytest.mark.asyncio
+async def test_supplemental_photos_keep_studio_and_selection_and_use_distinct_ops_slots(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    company_id = (await async_db.execute(select(Team.id))).scalar_one()
+    monkeypatch.setattr(settings, "ops_commerce_company_id", str(company_id))
+    monkeypatch.setattr(settings, "ops_commerce_token", "supplemental-test-token")
+    monkeypatch.setattr(settings, "ops_commerce_allowed_host", "test")
+    monkeypatch.setattr(settings, "ops_commerce_auto_publish_enabled", True)
+    monkeypatch.setattr(settings, "bucket_name", None)
+    monkeypatch.setattr(settings, "storage_dir", str(tmp_path))
+    headers = {
+        "Authorization": "Bearer supplemental-test-token",
+        "X-Ops-Company-ID": str(company_id),
+    }
+
+    async def create(code: str, *, primary: bytes | None = None) -> str:
+        response = await owner_client.post(
+            "/api/v1/skus",
+            json={
+                "our_ref": code,
+                "name": code,
+                "design": code,
+                "fabric": "Leather",
+                "category": "Armchairs",
+            },
+        )
+        assert response.status_code == 201, response.text
+        sku_id = response.json()["id"]
+        priced = await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"retail_ex_vat": "1200"})
+        assert priced.status_code == 200, priced.text
+        if primary is not None:
+            uploaded = await owner_client.post(
+                f"/api/v1/skus/{sku_id}/photo",
+                files={"photo": ("primary.jpg", primary, "image/jpeg")},
+            )
+            assert uploaded.status_code == 200, uploaded.text
+        return sku_id
+
+    async def import_photos(package: bytes, *, apply: bool = False, scope: str = "photos"):
+        return await owner_client.post(
+            IMPORT,
+            files={"archive": ("review.zip", package, "application/zip")},
+            data={"dry_run": "false" if apply else "true", "scope": scope},
+        )
+
+    async def staff_photo(sku_id: str, slot: int):
+        return await owner_client.get(f"/api/v1/skus/{sku_id}/photo?slot={slot}")
+
+    async def shop_photo(sku_id: str, slot: int):
+        return await owner_client.get(f"{FEED}/{sku_id}/photo?slot={slot}", headers=headers)
+
+    listed = await create("LISTED")
+    private = await create("PRIVATE", primary=_jpeg(12))
+    no_primary = await create("NO-PRIMARY")
+    views = (_jpeg(20), _jpeg(45), _jpeg(80))
+    detail, setting, private_setting = (_jpeg(106), _jpeg(140), _jpeg(170))
+    selected = await import_photos(
+        _bundle((listed, "LISTED", views)), apply=True, scope="catalogue"
+    )
+    assert selected.status_code == 200, selected.text
+    private_primary = (await staff_photo(private, 1)).content
+
+    detail_only = _photo_bundle((listed, "LISTED", {"detail": detail}))
+    batch = _photo_bundle(
+        (listed, "LISTED", {"detail": detail}),
+        (private, "PRIVATE", {"setting": private_setting}),
+        (no_primary, "NO-PRIMARY", {"setting": private_setting}),
+    )
+    for incorrect_scope in ("catalogue", "sku"):
+        denied = await import_photos(batch, apply=True, scope=incorrect_scope)
+        assert denied.status_code == 400, denied.text
+    denied = await import_photos(
+        _photo_bundle(
+            (listed, "LISTED", {"detail": detail}),
+            (no_primary, "WRONG-CODE", {"setting": private_setting}),
+        ),
+        apply=True,
+    )
+    assert denied.status_code == 400, denied.text
+    preview = await import_photos(batch)
+    assert preview.status_code == 200, preview.text
+    assert preview.json() == {
+        "applied": False,
+        "selected_skus": 3,
+        "gallery_images": 3,
+        "groups": 0,
+        "held_without_price": [],
+    }
+    assert not list(tmp_path.rglob("detail/*.jpg"))
+    assert not list(tmp_path.rglob("setting/*.jpg"))
+
+    applied = await import_photos(batch, apply=True)
+    assert applied.status_code == 200, applied.text
+    assert applied.json() == {**preview.json(), "applied": True}
+    repeated = await import_photos(detail_only, apply=True)
+    assert repeated.status_code == 200, repeated.text
+    assert len(list(tmp_path.rglob("detail/*.jpg"))) == 1
+    assert (await staff_photo(private, 1)).content == private_primary
+    assert (await staff_photo(private, 2)).content == private_setting
+    assert (await shop_photo(private, 4)).status_code == 404
+    secondary_only = (await owner_client.get(f"/api/v1/skus/{no_primary}")).json()
+    assert secondary_only["photo_storage_key"] is None
+    assert secondary_only["gallery_photo_count"] == 1
+    assert (await staff_photo(no_primary, 1)).content == private_setting
+    assert (await shop_photo(no_primary, 1)).status_code == 404
+    legacy_upload = await owner_client.post(
+        f"/api/v1/skus/{no_primary}/photo",
+        files={"photo": ("new-primary.jpg", _jpeg(54), "image/jpeg")},
+    )
+    assert legacy_upload.status_code == 200, legacy_upload.text
+    assert legacy_upload.json()["gallery_photo_count"] == 2
+    assert (await staff_photo(no_primary, 2)).content == private_setting
+    assert (await shop_photo(no_primary, 1)).status_code == 404
+    assert (await staff_photo(listed, 4)).content == detail
+    assert (await staff_photo(listed, 5)).status_code == 404
+    assert (await shop_photo(listed, 4)).status_code == 404
+    assert (await shop_photo(listed, 5)).content == detail
+
+    denied = await import_photos(_photo_bundle((listed, "LISTED", {"setting": detail})), apply=True)
+    assert denied.status_code == 400, denied.text
+    duplicate_gallery = await import_photos(
+        _photo_bundle((listed, "LISTED", {"setting": views[0]})), apply=True
+    )
+    assert duplicate_gallery.status_code == 400, duplicate_gallery.text
+    appended = await import_photos(
+        _photo_bundle((listed, "LISTED", {"setting": setting})), apply=True
+    )
+    assert appended.status_code == 200, appended.text
+    assert (await staff_photo(listed, 4)).content == setting
+    assert (await staff_photo(listed, 5)).content == detail
+    assert (await shop_photo(listed, 4)).content == setting
+    assert (await shop_photo(listed, 5)).content == detail
+    sku = (await owner_client.get(f"/api/v1/skus/{listed}")).json()
+    assert sku["gallery_photo_count"] == 5
+    assert sku["name"] == "Arched Chair"
+    assert sku["retail_ex_vat"] == "1200.00"
+
+    baseline = (
+        await owner_client.get(
+            f"{FEED}?catalogue_version=2&include_setting_photo=true", headers=headers
+        )
+    ).json()["products"]
+    extended = (
+        await owner_client.get(
+            f"{FEED}?catalogue_version=2&include_setting_photo=true&include_detail_photo=true",
+            headers=headers,
+        )
+    ).json()["products"]
+    assert [row["sku"] for row in extended] == ["LISTED"]
+    assert "detail_photo_token" not in baseline[0]
+    assert extended[0]["setting_photo_token"] == hashlib.sha256(setting).hexdigest()
+    assert extended[0]["detail_photo_token"] == hashlib.sha256(detail).hexdigest()
+    assert extended[0]["gallery_photo_tokens"] == [
+        hashlib.sha256(image).hexdigest() for image in views
+    ]
+
+
+@pytest.mark.asyncio
+async def test_supplemental_apply_conflicts_if_a_primary_photo_arrives_during_staging(
+    owner_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    code = "PRIMARY-RACE"
+    created = await owner_client.post(
+        "/api/v1/skus",
+        json={"our_ref": code, "name": code, "design": code, "fabric": "Leather"},
+    )
+    assert created.status_code == 201, created.text
+    sku_url = f"/api/v1/skus/{created.json()['id']}"
+    setting = _jpeg(112)
+    package = _photo_bundle((created.json()["id"], code, {"setting": setting}))
+    original_stage = CuratedCatalogueService._stage_supplemental_photos
+
+    async def stage_with_primary_upload(reviewed: ReviewedCatalogue):
+        staged = await original_stage(reviewed)
+        uploaded = await owner_client.post(
+            f"{sku_url}/photo",
+            files={"photo": ("primary.jpg", _jpeg(65), "image/jpeg")},
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        return staged
+
+    async def apply():
+        return await owner_client.post(
+            IMPORT,
+            files={"archive": ("review.zip", package, "application/zip")},
+            data={"dry_run": "false", "scope": "photos"},
+        )
+
+    with monkeypatch.context() as before_lock:
+        before_lock.setattr(
+            CuratedCatalogueService,
+            "_stage_supplemental_photos",
+            staticmethod(stage_with_primary_upload),
+        )
+        conflicted = await apply()
+    assert conflicted.status_code == 409, conflicted.text
+    assert "SKU primary photo changed during import" in conflicted.text
+    after_conflict = (await owner_client.get(sku_url)).json()
+    assert after_conflict["photo_storage_key"] is not None
+    assert after_conflict["gallery_photo_count"] == 0
+    assert (await owner_client.get(f"{sku_url}/photo?slot=2")).status_code == 404
+
+    retried = await apply()
+    assert retried.status_code == 200, retried.text
+    assert (await owner_client.get(f"{sku_url}/photo?slot=2")).content == setting
 
 
 @pytest.mark.asyncio

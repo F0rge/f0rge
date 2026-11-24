@@ -104,7 +104,9 @@ async function opsGet(path: string): Promise<{ response: Response; companyId: st
 }
 
 async function fetchOpsProducts(): Promise<OpsProductsResponse> {
-  const { response, companyId } = await opsGet("/products?catalogue_version=2&include_setting_photo=true");
+  const { response, companyId } = await opsGet(
+    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true",
+  );
   return parseOpsProducts(await response.json(), companyId);
 }
 
@@ -332,6 +334,8 @@ const PHOTO_TOKEN_METADATA_KEY = "firstout_photo_token";
 const PHOTO_SOURCE_METADATA_KEY = "firstout_source_sku_id";
 const PHOTO_SLOT_METADATA_KEY = "firstout_gallery_slot";
 const GALLERY_TOKENS_METADATA_KEY = "firstout_gallery_photo_tokens";
+const SETTING_PHOTO_SLOT = 4;
+const DETAIL_PHOTO_SLOT = 5;
 
 type PhotoImage = { id: string; url: string; metadata?: Record<string, unknown> | null };
 type PhotoVariant = {
@@ -437,15 +441,25 @@ async function syncReviewedGallery(
   const findImage = (slot: number, token: string) => owned.find((image) =>
     image.metadata?.[PHOTO_SLOT_METADATA_KEY] === slot && image.metadata?.[PHOTO_TOKEN_METADATA_KEY] === token);
   const previousTokens = variant.metadata?.[GALLERY_TOKENS_METADATA_KEY];
-  const previousSetting = Array.isArray(previousTokens) ? previousTokens[3] : undefined;
-  // An older Firstout may omit the field and cannot serve slot four. Retain a
-  // previously verified setting only if its image is still attached.
-  const retainedSetting = typeof previousSetting === "string" && findImage(4, previousSetting)
-    ? previousSetting : undefined;
-  const setting = row.setting_photo_token === undefined ? retainedSetting : row.setting_photo_token;
-  const tokens = setting && !studioTokens.includes(setting) ? [...studioTokens, setting] : studioTokens;
-  const missing = tokens.map((token, index) => ({ token, slot: index + 1 }))
-    .filter(({ token, slot }) => !findImage(slot, token));
+  // An older Firstout may omit a supplemental slot. Reuse its previous
+  // verified image when still attached to the product.
+  const retainedToken = (slot: number): string | null => {
+    const token = Array.isArray(previousTokens) ? previousTokens[slot - 1] : undefined;
+    return typeof token === "string" && findImage(slot, token) ? token : null;
+  };
+  const settingCandidate = row.setting_photo_token === undefined ? retainedToken(SETTING_PHOTO_SLOT) : row.setting_photo_token;
+  const detailCandidate = row.detail_photo_token === undefined ? retainedToken(DETAIL_PHOTO_SLOT) : row.detail_photo_token;
+  // The source's explicitly supplied tokens take precedence over retained
+  // assets if the same image is now used in a different slot.
+  const setting = settingCandidate && !studioTokens.includes(settingCandidate) && settingCandidate !== row.detail_photo_token
+    ? settingCandidate : null;
+  const detail = detailCandidate && !studioTokens.includes(detailCandidate) && detailCandidate !== setting
+    ? detailCandidate : null;
+  const tokens: (string | null)[] = [...studioTokens];
+  if (setting || detail) tokens.push(setting);
+  if (detail) tokens.push(detail);
+  const slots = tokens.flatMap((token, index) => token ? [{ token, slot: index + 1 }] : []);
+  const missing = slots.filter(({ token, slot }) => !findImage(slot, token));
   const toUpload = await Promise.all(missing.map(async ({ token, slot }) => {
     const { response } = await opsGet(`/products/${row.source_sku_id}/photo?slot=${slot}`);
     const bytes = await readJpeg(response);
@@ -481,7 +495,7 @@ async function syncReviewedGallery(
     product.images = [...images, ...owned.filter((image) => !images.some(({ id }) => id === image.id))];
   }
 
-  const ordered = tokens.map((token, index) => findImage(index + 1, token)!);
+  const ordered = slots.map(({ slot, token }) => findImage(slot, token)!);
   const urls = ordered.map((image) => image.url);
   const newIds = new Set(ordered.map((image) => image.id));
   const linkedIds = new Set((variant.images || []).map((image) => image.id));
@@ -514,6 +528,18 @@ async function syncReviewedGallery(
   }
 }
 
+function hasVerifiedStudioGallery(product: PhotoProduct, variant: PhotoVariant, row: OpsProduct): boolean {
+  const studioTokens = row.gallery_photo_tokens;
+  const urls = variant.metadata?.suitable_image_urls;
+  if (!studioTokens?.length || !Array.isArray(urls)) return false;
+  const linkedIds = new Set((variant.images || []).map(({ id }) => id));
+  return studioTokens.every((token, index) => product.images?.some((image) =>
+    image.url === urls[index] && linkedIds.has(image.id) &&
+    image.metadata?.[PHOTO_SOURCE_METADATA_KEY] === row.source_sku_id &&
+    image.metadata?.[PHOTO_SLOT_METADATA_KEY] === index + 1 &&
+    image.metadata?.[PHOTO_TOKEN_METADATA_KEY] === token));
+}
+
 /**
  * Only missing photo revisions are uploaded. A curated SKU is ready for
  * publication when all its reviewed images are attached in the approved order.
@@ -544,6 +570,8 @@ export async function syncFirstoutPhotos(container: MedusaContainer, source: Ops
           await syncVariantPhoto(container, product, variant, row.source_sku_id, row.photo_token);
         }
       } catch (error) {
+        // An optional photo can retry while the verified studio gallery stays visible.
+        if (hasVerifiedStudioGallery(product, variant, row)) ready.add(row.source_sku_id);
         logger.warn(`Firstout photo for SKU ${sourceSkuId} was not synced and will be retried: ${error instanceof Error ? error.message : String(error)}`);
       }
     }

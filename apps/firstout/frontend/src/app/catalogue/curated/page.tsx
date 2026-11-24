@@ -25,6 +25,43 @@ import { useAuth } from "@/lib/auth";
 
 const MAX_ARCHIVE_BYTES = 40 * 1024 * 1024;
 
+const scopeCopy = {
+  catalogue: {
+    help: "Replace the storefront selection with the reviewed catalogue.",
+    archive: "Approved catalogue archive",
+    apply: "Apply catalogue",
+    confirmation: "Apply the approved catalogue?",
+    preview: "Catalogue ready to apply",
+    success: "Catalogue applied in Firstout",
+  },
+  sku: {
+    help: "Update one selected storefront SKU and its gallery.",
+    archive: "Approved SKU archive",
+    apply: "Apply SKU update",
+    confirmation: "Apply the approved SKU update?",
+    preview: "SKU update ready to apply",
+    success: "SKU updated in Firstout",
+  },
+  photos: {
+    help: "Add or replace setting and material detail photos for existing SKUs.",
+    archive: "Approved photo archive",
+    apply: "Apply photo update",
+    confirmation: "Apply the approved photos?",
+    preview: "Photo update ready to apply",
+    success: "Photos updated in Firstout",
+  },
+} satisfies Record<CuratedCatalogueScope, Record<string, string>>;
+
+function receiptText(scope: CuratedCatalogueScope, result: CuratedCatalogueResult): string {
+  if (scope === "sku") return `One SKU and ${result.gallery_images} gallery photos.`;
+  if (scope === "photos") {
+    const photos = result.gallery_images === 1 ? "photo" : "photos";
+    const skus = result.selected_skus === 1 ? "SKU" : "SKUs";
+    return `${result.gallery_images} ${photos} for ${result.selected_skus} ${skus}.`;
+  }
+  return `${result.selected_skus} selected SKUs, ${result.gallery_images} gallery photos and ${result.groups} variant groups.`;
+}
+
 export default function CuratedCataloguePage() {
   const { user, loading } = useAuth();
   const [archive, setArchive] = useState<File | null>(null);
@@ -34,8 +71,7 @@ export default function CuratedCataloguePage() {
   const [stage, setStage] = useState<"preview" | "apply" | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const pending = useRef(false);
-  const singleSku = scope === "sku";
-  const applyLabel = singleSku ? "Apply SKU update" : "Apply catalogue";
+  const copy = scopeCopy[scope];
 
   function chooseArchive(file: File | null) {
     setResult(null);
@@ -83,11 +119,13 @@ export default function CuratedCataloguePage() {
             <Select
               id="curated-catalogue-scope"
               labelText="Import scope"
-              helperText={singleSku ? "Update one selected storefront SKU and its gallery." : "Replace the storefront selection with the reviewed catalogue."}
+              helperText={copy.help}
               value={scope}
               disabled={stage !== null}
               onChange={(event) => {
-                setScope(event.target.value === "sku" ? "sku" : "catalogue");
+                const nextScope = event.target.value;
+                if (nextScope !== "catalogue" && nextScope !== "sku" && nextScope !== "photos") return;
+                setScope(nextScope);
                 setResult(null);
                 setError("");
                 setConfirmOpen(false);
@@ -95,10 +133,11 @@ export default function CuratedCataloguePage() {
             >
               <SelectItem value="catalogue" text="Entire catalogue" />
               <SelectItem value="sku" text="Single SKU" />
+              <SelectItem value="photos" text="Setting and detail photos" />
             </Select>
             <FileUploader
               accept={[".zip", "application/zip"]}
-              labelTitle={singleSku ? "Approved SKU archive" : "Approved catalogue archive"}
+              labelTitle={copy.archive}
               labelDescription="ZIP up to 40 MiB."
               buttonLabel="Choose ZIP"
               filenameStatus="edit"
@@ -111,12 +150,8 @@ export default function CuratedCataloguePage() {
             {error && <InlineNotification kind="error" title="Catalogue upload failed" subtitle={error} hideCloseButton />}
             {result && <InlineNotification
               kind={result.applied ? "success" : "info"}
-              title={singleSku
-                ? result.applied ? "SKU updated in Firstout" : "SKU update ready to apply"
-                : result.applied ? "Catalogue applied in Firstout" : "Catalogue ready to apply"}
-              subtitle={singleSku
-                ? `One SKU and ${result.gallery_images} gallery photos.`
-                : `${result.selected_skus} selected SKUs, ${result.gallery_images} gallery photos and ${result.groups} variant groups.`}
+              title={result.applied ? copy.success : copy.preview}
+              subtitle={receiptText(scope, result)}
               hideCloseButton
             />}
             {result?.held_without_price.length ? (
@@ -135,7 +170,7 @@ export default function CuratedCataloguePage() {
                 type="button"
                 disabled={!result || result.applied || stage !== null}
                 onClick={() => setConfirmOpen(true)}
-              >{applyLabel}</Button>
+              >{copy.apply}</Button>
             </div>
           </Stack>
         </Tile>
@@ -143,17 +178,21 @@ export default function CuratedCataloguePage() {
       {confirmOpen && result && <Modal
         open
         danger
-        modalHeading={singleSku ? "Apply the approved SKU update?" : "Apply the approved catalogue?"}
-        primaryButtonText={stage === "apply" ? "Applying…" : applyLabel}
+        modalHeading={copy.confirmation}
+        primaryButtonText={stage === "apply" ? "Applying…" : copy.apply}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={stage === "apply"}
         preventCloseOnClickOutside
         onRequestClose={() => { if (stage === null) setConfirmOpen(false); }}
         onRequestSubmit={() => void upload(false)}
       >
-        <p>{singleSku
-          ? "Apply the reviewed details and gallery to one SKU in this workspace. The shop uses them after synchronization."
-          : `Apply the reviewed archive for ${result.selected_skus} SKUs to this Firstout workspace. The shop uses the new selection after synchronization.`}</p>
+        {scope === "photos" ? (
+          <p>Apply the photos in this archive. They appear on published products after synchronization.</p>
+        ) : scope === "sku" ? (
+          <p>Apply the reviewed details and gallery to one SKU in this workspace. The shop uses them after synchronization.</p>
+        ) : (
+          <p>Apply the reviewed archive for {result.selected_skus} SKUs to this Firstout workspace. The shop uses the new selection after synchronization.</p>
+        )}
       </Modal>}
     </Stack>
   );

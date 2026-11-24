@@ -231,7 +231,7 @@ test("curated projection verifies and orders three SKU images, stores typed deta
   const photo = jest.fn((_sku: string, slot: number | null) => jpeg(bytes[(slot || 0) - 1]));
   state.photo = photo;
   await syncFirstout(container);
-  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/products?catalogue_version=2&include_setting_photo=true"), expect.anything());
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true"), expect.anything());
   expect(existing.status).toBe("published");
   expect(existing.title).toBe("Approved table");
   expect(outside).toMatchObject({ status: "published", collection_id: "pcol_staff", sales_channels: [{ id: "sc_other" }] });
@@ -287,6 +287,88 @@ test("a curated product waits for a verified gallery and recovers on the next co
   expect(variant.metadata?.suitable_image_urls).toEqual(gallery.slice(0, 3));
   expect(existing.images?.map((image) => image.url)).not.toContain(gallery[3]);
   expect(photo).toHaveBeenCalledTimes(8);
+});
+
+test("reconciles a slot-five detail independently from setting photos and preserves the hero", async () => {
+  const bytes = [1, 2, 3, 4, 5].map((slot) => new Uint8Array([0xff, 0xd8, 0xff, slot]));
+  const tokens = bytes.map((body) => createHash("sha256").update(body).digest("hex"));
+  const existing = stagedTable();
+  const studio = { ...table, gallery_photo_tokens: tokens.slice(0, 3) };
+  const detail = { ...studio, detail_photo_token: tokens[4] };
+  const { state, container } = fakeMedusa([existing], [detail]);
+  state.curated = true;
+  const photo = jest.fn((_id: string, slot: number | null) => jpeg(bytes[(slot || 0) - 1]));
+  state.photo = photo;
+  await syncFirstout(container);
+
+  const variant = existing.variants![0];
+  const gallery = variant.metadata?.suitable_image_urls as string[];
+  expect(gallery.map((url) => url.slice(-6))).toEqual(["-1.jpg", "-2.jpg", "-3.jpg", "-5.jpg"]);
+  expect(variant.metadata?.firstout_gallery_photo_tokens).toEqual([...tokens.slice(0, 3), null, tokens[4]]);
+  expect(photo.mock.calls.map(([, slot]) => slot)).toEqual([1, 2, 3, 5]);
+
+  state.feed = [{ ...studio, setting_photo_token: tokens[3] }];
+  await syncFirstout(container);
+  const withSetting = variant.metadata?.suitable_image_urls as string[];
+  expect(withSetting.map((url) => url.slice(-6))).toEqual(["-1.jpg", "-2.jpg", "-3.jpg", "-4.jpg", "-5.jpg"]);
+  expect(withSetting[4]).toBe(gallery[3]);
+  expect(variant.metadata?.firstout_gallery_photo_tokens).toEqual(tokens);
+  expect(photo.mock.calls.map(([, slot]) => slot)).toEqual([1, 2, 3, 5, 4]);
+
+  state.feed = [studio]; // An older provider cannot refer to either supplemental slot.
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual(withSetting);
+  expect(photo).toHaveBeenCalledTimes(5);
+
+  state.feed = [{ ...studio, setting_photo_token: null }];
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual(gallery);
+  expect(existing.images?.map((image) => image.url)).not.toContain(withSetting[3]);
+
+  bytes[4] = new Uint8Array([0xff, 0xd8, 0xff, 0x25]);
+  state.feed = [{ ...studio, detail_photo_token: createHash("sha256").update(bytes[4]).digest("hex") }];
+  await syncFirstout(container);
+  const replaced = variant.metadata?.suitable_image_urls as string[];
+  expect(replaced.slice(0, 3)).toEqual(gallery.slice(0, 3));
+  expect(replaced[3]).not.toBe(gallery[3]);
+  expect(existing.images?.map((image) => image.url)).not.toContain(gallery[3]);
+  expect(photo.mock.calls.map(([, slot]) => slot)).toEqual([1, 2, 3, 5, 4, 5]);
+
+  state.feed = [{ ...studio, detail_photo_token: null }];
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual(gallery.slice(0, 3));
+  expect(existing.images?.map((image) => image.url)).not.toContain(replaced[3]);
+  expect(existing.images?.map((image) => image.id)).toContain("img_staff");
+  expect(variant.thumbnail).toBe(gallery[0]);
+  expect(existing.thumbnail).toBe(gallery[0]);
+});
+
+test("a failed supplemental download keeps a verified studio gallery published while the sync retries", async () => {
+  const bytes = [1, 2, 3, 4, 5].map((slot) => new Uint8Array([0xff, 0xd8, 0xff, slot]));
+  const tokens = bytes.map((body) => createHash("sha256").update(body).digest("hex"));
+  const existing = stagedTable();
+  const studio = { ...table, gallery_photo_tokens: tokens.slice(0, 3) };
+  const { calls, state, container, logger } = fakeMedusa([existing], [studio]);
+  state.curated = true;
+  const photo = jest.fn((_id: string, slot: number | null) => jpeg(bytes[(slot || 0) - 1]));
+  state.photo = photo;
+  await syncFirstout(container);
+  const variant = existing.variants![0];
+  const gallery = variant.metadata?.suitable_image_urls;
+  expect(existing.status).toBe("published");
+
+  state.feed = [{ ...studio, detail_photo_token: tokens[4] }];
+  photo.mockImplementationOnce(() => jpeg(bytes[0]));
+  await syncFirstout(container);
+  expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Firstout gallery changed during download"));
+  expect(existing.status).toBe("published");
+  expect(variant.metadata?.suitable_image_urls).toEqual(gallery);
+  expect(calls.filter((call) => call.workflow === "uploadFilesWorkflow")).toHaveLength(1);
+
+  await syncFirstout(container);
+  expect(existing.status).toBe("published");
+  expect(photo.mock.calls.map(([, slot]) => slot)).toEqual([1, 2, 3, 5, 5]);
+  expect(variant.metadata?.suitable_image_urls).toEqual([...(gallery as string[]), expect.stringMatching(/-5\.jpg$/)]);
 });
 
 test("a selected legacy-only product keeps its custom title and images while an omitted unpriced SKU stays off the shop", async () => {

@@ -30,7 +30,9 @@ const money = (value: string | null | undefined) => value === null || value === 
 function ProductImage({ sku }: { sku: Sku }) {
   return <span className={styles.image}>
     <Catalog size={24} aria-hidden="true" />
-    {sku.photo_storage_key && <StaffImage src={skuPhotoUrl(sku.id)} alt="" width={44} height={44} />}
+    {(sku.photo_storage_key || sku.gallery_photo_count > 0) && (
+      <StaffImage src={skuPhotoUrl(sku.id)} alt="" width={44} height={44} />
+    )}
   </span>;
 }
 function ProductBarcode({ value }: { value: string }) {

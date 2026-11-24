@@ -24,7 +24,7 @@ from app.schemas.ops_commerce_order import (
     StorefrontRefundProviderEventResponse,
     StorefrontRefundResponse,
 )
-from app.schemas.sku import SKU_SETTING_PHOTO_SLOT
+from app.schemas.sku import SKU_DETAIL_PHOTO_SLOT
 from app.services.ops_commerce import OpsCommerceService
 from app.services.storefront_refund_workflow import StorefrontRefundWorkflowService
 
@@ -40,6 +40,7 @@ async def list_products(
     request: Request,
     catalogue_version: int = Query(default=1, ge=1, le=2),
     include_setting_photo: bool = False,
+    include_detail_photo: bool = False,
     authorization: Optional[str] = Header(default=None),
     x_ops_company_id: Optional[str] = Header(default=None),
     service: OpsCommerceService = Depends(get_ops_commerce_service),
@@ -50,6 +51,7 @@ async def list_products(
         request_host=request.url.hostname or "",
         catalogue_version=catalogue_version,
         include_setting_photo=include_setting_photo,
+        include_detail_photo=include_detail_photo,
     )
 
 
@@ -57,7 +59,7 @@ async def list_products(
 async def product_photo(
     source_sku_id: uuid.UUID,
     request: Request,
-    slot: int = Query(default=1, ge=1, le=SKU_SETTING_PHOTO_SLOT),
+    slot: int = Query(default=1, ge=1, le=SKU_DETAIL_PHOTO_SLOT),
     authorization: Optional[str] = Header(default=None),
     x_ops_company_id: Optional[str] = Header(default=None),
     service: OpsCommerceService = Depends(get_ops_commerce_service),

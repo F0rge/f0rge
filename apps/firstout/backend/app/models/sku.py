@@ -54,6 +54,7 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     gallery_photo_keys: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
     setting_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    detail_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     width_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
     depth_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
     height_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))

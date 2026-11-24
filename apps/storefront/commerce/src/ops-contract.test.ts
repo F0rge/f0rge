@@ -70,6 +70,25 @@ test("an opted-in setting photo has its own token after the three distinct studi
   expect(() => read({ gallery_photo_tokens: [...studio, setting] })).toThrow();
 });
 
+test("a material detail photo can follow the studio gallery even without a setting photo", () => {
+  const studio = ["a", "b", "c"].map((letter) => letter.repeat(64));
+  const setting = "d".repeat(64);
+  const detail = "e".repeat(64);
+  const read = (fields: Record<string, unknown>) => parseOpsProducts({
+    ...contract, products: [{ ...contract.products[0], ...fields }],
+  }, contract.company_id).products[0];
+
+  expect(read({ gallery_photo_tokens: studio, detail_photo_token: detail }).detail_photo_token).toBe(detail);
+  expect(read({ gallery_photo_tokens: studio, setting_photo_token: setting, detail_photo_token: detail }))
+    .toMatchObject({ setting_photo_token: setting, detail_photo_token: detail });
+  expect(read({ gallery_photo_tokens: studio }).detail_photo_token).toBeUndefined();
+  expect(read({ detail_photo_token: null }).detail_photo_token).toBeNull();
+  expect(() => read({ detail_photo_token: detail })).toThrow();
+  expect(() => read({ gallery_photo_tokens: studio, detail_photo_token: studio[2] })).toThrow();
+  expect(() => read({ gallery_photo_tokens: studio, setting_photo_token: setting, detail_photo_token: setting })).toThrow();
+  expect(() => read({ gallery_photo_tokens: studio, detail_photo_token: "unverified" })).toThrow();
+});
+
 test("validates finite made-to-order offers and rejects an inverted promise range", () => {
   const offer = {
     id: "bcd2f5d4-237b-43fb-a152-bef10a6a3eaa",
