@@ -37,8 +37,9 @@ const productSchema = z.object({
     (tokens) => !tokens || new Set(tokens).size === tokens.length,
     "Gallery photo tokens must be distinct",
   ),
-  // Opt-in only. An older source omits the field; null explicitly removes a setting photo.
+  // Opt-in only. An older source omits these fields. Null removes the corresponding photo.
   setting_photo_token: photoToken.nullable().optional(),
+  detail_photo_token: photoToken.nullable().optional(),
   dimensions_cm: z.object({
     width: centimetres, depth: centimetres, height: centimetres, diameter: centimetres,
   }).strict().nullable().optional(),
@@ -50,6 +51,10 @@ const productSchema = z.object({
   ({ gallery_photo_tokens: studio, setting_photo_token: setting }) =>
     !setting || (studio !== undefined && !studio.includes(setting)),
   { path: ["setting_photo_token"], message: "A setting photo requires three distinct studio photos" },
+).refine(
+  ({ gallery_photo_tokens: studio, setting_photo_token: setting, detail_photo_token: detail }) =>
+    !detail || (studio !== undefined && !studio.includes(detail) && detail !== setting),
+  { path: ["detail_photo_token"], message: "A detail photo requires three distinct studio photos and differs from the setting photo" },
 );
 
 const responseSchema = z.object({

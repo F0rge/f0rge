@@ -18,9 +18,9 @@ from app.dependencies.auth import (
     require_catalogue_mutate,
     require_owner,
 )
-from app.schemas.curated_catalogue import CuratedCatalogueResult
+from app.schemas.curated_catalogue import CURATED_CATALOGUE_SCOPES, CuratedCatalogueResult
 from app.schemas.sku import (
-    SKU_SETTING_PHOTO_SLOT,
+    SKU_DETAIL_PHOTO_SLOT,
     SkuCreate,
     SkuListPage,
     SkuPricePreviewRequest,
@@ -108,7 +108,7 @@ async def create_sku(
                             "dry_run": {"type": "boolean", "default": True},
                             "scope": {
                                 "type": "string",
-                                "enum": ["catalogue", "sku"],
+                                "enum": list(CURATED_CATALOGUE_SCOPES),
                                 "default": "catalogue",
                             },
                         },
@@ -146,8 +146,8 @@ async def import_curated_catalogue(
         scope = form.get("scope", "catalogue")
         if not isinstance(archive, ParsedUploadFile) or dry_run not in ("true", "false"):
             raise ValidationError("Provide an archive file and a true or false dry_run value")
-        if scope != "catalogue" and scope != "sku":
-            raise ValidationError("Specify catalogue or sku as the import scope")
+        if scope != "catalogue" and scope != "sku" and scope != "photos":
+            raise ValidationError("Specify catalogue, sku, or photos as the import scope")
         return await CuratedCatalogueService(db).import_archive(
             archive.file, user_id=user_id, dry_run=dry_run == "true", scope=scope
         )
@@ -206,7 +206,7 @@ async def upload_sku_photo(
 @skus_router.get("/{sku_id}/photo", response_model=None)
 async def get_sku_photo(
     sku_id: uuid.UUID,
-    slot: int = Query(default=1, ge=1, le=SKU_SETTING_PHOTO_SLOT),
+    slot: int = Query(default=1, ge=1, le=SKU_DETAIL_PHOTO_SLOT),
     _: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ) -> Response:

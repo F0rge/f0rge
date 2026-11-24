@@ -8387,6 +8387,8 @@ export interface components {
             gallery_photo_tokens: string[] | null;
             /** Setting Photo Token */
             setting_photo_token: string | null;
+            /** Detail Photo Token */
+            detail_photo_token: string | null;
         };
         /** OpsProductsResponse */
         OpsProductsResponse: {
@@ -15051,7 +15053,7 @@ export interface operations {
                      * @default catalogue
                      * @enum {string}
                      */
-                    scope?: "catalogue" | "sku";
+                    scope?: "catalogue" | "sku" | "photos";
                 };
             };
         };
@@ -15345,6 +15347,7 @@ export interface operations {
             query?: {
                 catalogue_version?: number;
                 include_setting_photo?: boolean;
+                include_detail_photo?: boolean;
             };
             header?: {
                 authorization?: string | null;

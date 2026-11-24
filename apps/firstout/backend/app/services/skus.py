@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import hashlib
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
+from pathlib import PurePosixPath
 from typing import Optional, Union
 
 from fastapi import UploadFile
@@ -23,7 +25,6 @@ from app.permissions import STOCK_COST_VIEW
 from app.services.permissions import PermissionService
 from app.schemas.sku import (
     SKU_DETAIL_FIELDS,
-    SKU_SETTING_PHOTO_SLOT,
     SkuCreate,
     SkuListPage,
     SkuPricePreviewChanges,
@@ -454,6 +455,14 @@ class SkuService:
             raise ValidationError(
                 "That file isn't a readable image. Use a JPEG, PNG, or WebP."
             ) from exc
+        if sku.setting_photo_storage_key or sku.detail_photo_storage_key:
+            digest = hashlib.sha256(image_bytes).hexdigest()
+            if any(
+                PurePosixPath(key).stem == digest
+                for key in (sku.setting_photo_storage_key, sku.detail_photo_storage_key)
+                if key
+            ):
+                raise ValidationError("The primary photo must be distinct from the gallery photos")
         relative_path = f"skus/{sku_id}.jpg"
         try:
             storage_key = await asyncio.to_thread(save_bytes, relative_path, image_bytes)
@@ -471,16 +480,11 @@ class SkuService:
         if sku is None:
             raise NotFoundError("SKU photo not found")
 
-        if slot == SKU_SETTING_PHOTO_SLOT:
-            storage_key = sku.setting_photo_storage_key if sku.gallery_photo_keys else None
-        elif sku.gallery_photo_keys:
-            storage_key = sku.gallery_photo_keys[slot - 1]
-        else:
-            storage_key = sku.photo_storage_key if slot == 1 else None
-        if not storage_key:
+        keys = _staff_photo_storage_keys(sku)
+        if not 1 <= slot <= len(keys):
             raise NotFoundError("SKU photo not found")
         try:
-            data = await asyncio.to_thread(read_bytes, storage_key)
+            data = await asyncio.to_thread(read_bytes, keys[slot - 1])
         except FileNotFoundError as exc:
             raise NotFoundError("SKU photo not found") from exc
         return Response(content=data, media_type="image/jpeg")
@@ -549,6 +553,7 @@ class SkuService:
         decorator_below_cost: bool = False,
         retail_below_cost: bool = False,
     ) -> SkuResponse:
+        photo_keys = _staff_photo_storage_keys(sku)
         return SkuResponse(
             is_sellable=sku.is_sellable,
             till_no_stock_required=sku.till_no_stock_required,
@@ -579,8 +584,10 @@ class SkuService:
                 sku.gallery_photo_keys[0] if sku.gallery_photo_keys else sku.photo_storage_key
             ),
             gallery_photo_count=(
-                len(sku.gallery_photo_keys) + int(bool(sku.setting_photo_storage_key))
+                len(photo_keys)
                 if sku.gallery_photo_keys
+                or sku.setting_photo_storage_key
+                or sku.detail_photo_storage_key
                 else 0
             ),
             **{field: getattr(sku, field) for field in SKU_DETAIL_FIELDS},
@@ -636,3 +643,10 @@ class SkuService:
         if "our_ref" in lowered:
             raise ConflictError("A SKU with this our_ref already exists") from exc
         raise ConflictError("SKU already exists") from exc
+
+
+def _staff_photo_storage_keys(sku: Sku) -> tuple[str, ...]:
+    studio = sku.gallery_photo_keys or [sku.photo_storage_key]
+    return tuple(
+        key for key in (*studio, sku.setting_photo_storage_key, sku.detail_photo_storage_key) if key
+    )

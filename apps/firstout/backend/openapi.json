@@ -2817,7 +2817,8 @@
                     "type": "string",
                     "enum": [
                       "catalogue",
-                      "sku"
+                      "sku",
+                      "photos"
                     ],
                     "default": "catalogue"
                   }
@@ -3111,7 +3112,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 4,
+              "maximum": 5,
               "minimum": 1,
               "default": 1,
               "title": "Slot"
@@ -3273,6 +3274,16 @@
             }
           },
           {
+            "name": "include_detail_photo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Detail Photo"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -3353,7 +3364,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 4,
+              "maximum": 5,
               "minimum": 1,
               "default": 1,
               "title": "Slot"
@@ -25825,6 +25836,17 @@
               }
             ],
             "title": "Setting Photo Token"
+          },
+          "detail_photo_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Photo Token"
           }
         },
         "type": "object",
@@ -25846,7 +25868,8 @@
           "dimensions_cm",
           "piece_count",
           "gallery_photo_tokens",
-          "setting_photo_token"
+          "setting_photo_token",
+          "detail_photo_token"
         ],
         "title": "OpsProductResponse"
       },

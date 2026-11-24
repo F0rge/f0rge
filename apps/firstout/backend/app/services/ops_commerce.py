@@ -53,7 +53,7 @@ from app.schemas.ops_commerce_order import (
     StorefrontOrderStatusItem,
     StorefrontOrderStatusResponse,
 )
-from app.schemas.sku import SKU_SETTING_PHOTO_SLOT
+from app.schemas.sku import SKU_DETAIL_PHOTO_SLOT, SKU_SETTING_PHOTO_SLOT
 from app.services.storefront_fulfillment import StorefrontFulfillmentService
 from app.services.books_periods import BooksPeriodLockedError
 from app.services.chart_of_accounts import (
@@ -88,6 +88,7 @@ class OpsCommerceService:
         request_host: str,
         catalogue_version: int = 1,
         include_setting_photo: bool = False,
+        include_detail_photo: bool = False,
     ) -> OpsProductsResponse:
         company_id = await self._authorize(
             authorization=authorization,
@@ -152,6 +153,15 @@ class OpsCommerceService:
                         if catalogue_version == 2 and include_setting_photo
                         else {}
                     ),
+                    **(
+                        {
+                            "detail_photo_token": PurePosixPath(sku.detail_photo_storage_key).stem
+                            if sku.gallery_photo_keys and sku.detail_photo_storage_key
+                            else None,
+                        }
+                        if catalogue_version == 2 and include_detail_photo
+                        else {}
+                    ),
                 )
                 for sku in snapshots
             ],
@@ -183,6 +193,8 @@ class OpsCommerceService:
         snapshot = snapshots[0]
         if slot == SKU_SETTING_PHOTO_SLOT:
             key = snapshot.setting_photo_storage_key if snapshot.gallery_photo_keys else None
+        elif slot == SKU_DETAIL_PHOTO_SLOT:
+            key = snapshot.detail_photo_storage_key if snapshot.gallery_photo_keys else None
         elif snapshot.gallery_photo_keys:
             key = snapshot.gallery_photo_keys[slot - 1]
         else:

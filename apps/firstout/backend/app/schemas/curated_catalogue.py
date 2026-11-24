@@ -15,7 +15,9 @@ ApprovedText = Annotated[
 ArchiveFilename = Annotated[
     str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.jpg$")
 ]
-CuratedCatalogueScope = Literal["catalogue", "sku"]
+CuratedCatalogueScope = Literal["catalogue", "sku", "photos"]
+CURATED_CATALOGUE_SCOPES = ("catalogue", "sku", "photos")
+SUPPLEMENTAL_PHOTO_FIELDS = frozenset({"setting_photo", "detail_photo"})
 
 
 class ReviewedPhoto(BaseModel):
@@ -34,9 +36,28 @@ class ReviewedSku(SkuDetails):
     fabric: Optional[ApprovedText] = None
     gallery: Optional[tuple[ReviewedPhoto, ReviewedPhoto, ReviewedPhoto]] = None
     retain_current_photo_as_setting: bool = Field(default=False, strict=True)
+    setting_photo: Optional[ReviewedPhoto] = None
+    detail_photo: Optional[ReviewedPhoto] = None
+
+    def supplemental_photos(self) -> dict[str, ReviewedPhoto]:
+        return {
+            role: photo
+            for role, photo in (("setting", self.setting_photo), ("detail", self.detail_photo))
+            if photo is not None
+        }
 
     @model_validator(mode="after")
     def preserve_or_replace_gallery(self) -> ReviewedSku:
+        if self.model_fields_set & SUPPLEMENTAL_PHOTO_FIELDS:
+            if self.model_fields_set != {
+                "sku_id",
+                "our_ref",
+                *(f"{role}_photo" for role in self.supplemental_photos()),
+            }:
+                raise ValueError(
+                    "Supplemental photo rows allow only SKU identifiers and new photos"
+                )
+            return self
         # Identity-only selections keep the existing SKU data and gallery.
         if self.gallery is None and self.model_fields_set - {"sku_id", "our_ref"}:
             raise ValueError("SKU edits require a reviewed three-photo gallery")
