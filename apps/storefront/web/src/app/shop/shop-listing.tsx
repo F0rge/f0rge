@@ -125,7 +125,7 @@ export function ShopListing({ pieces, categoryId, shopAll }: { pieces: ListedPie
 
         {shown.length > 0
           ? <ul aria-label="Pieces" className="grid grid-cols-2 gap-x-2.5 gap-y-[22px] md:grid-cols-3 md:gap-x-5 md:gap-y-9">
-            {shown.map((piece) => <ProductCard key={`${piece.id}:${piece.variant?.id}`} piece={piece} initialVariantId={piece.variant?.id} />)}
+            {shown.map((piece, index) => <ProductCard key={piece.id} piece={piece} initialVariantId={piece.variant?.id} eager={index < 3} />)}
           </ul>
           : <div className="py-12 text-center">
             <h2 className="text-lg font-medium">No pieces found</h2>

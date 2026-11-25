@@ -6,14 +6,17 @@ import Image from "next/image";
 import { Button, cn } from "@f0rge/ui";
 import { TrackedProductLink } from "./analytics/tracked-product-link";
 import { PieceImage } from "./piece-image";
-import { cardAlert, showSwatches, type CardAlert } from "@/lib/card-alert";
+import { cardAlert, finishChoices, startVariant, type CardAlert } from "@/lib/card-alert";
 import type { ListedPiece } from "@/lib/medusa";
 import { formatZar } from "@/lib/order-money";
 import { variantHref } from "@/lib/shop-filters";
 
 // One observer marks cards as seen so their alert bar and struck price animate in (CSS in app/style.css).
+// <html data-card-motion> is what hides them until then, so a failed bundle or no IntersectionObserver leaves them visible.
 let seenObserver: IntersectionObserver | undefined;
 function watchSeen(card: HTMLElement) {
+  if (typeof IntersectionObserver === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+  document.documentElement.setAttribute("data-card-motion", "");
   seenObserver ??= new IntersectionObserver((entries) => {
     entries.filter((entry) => entry.isIntersecting).forEach((entry, index) => {
       (entry.target as HTMLElement).style.setProperty("--card-delay", `${index * 0.08}s`);
@@ -51,11 +54,13 @@ function PhotoCount({ count, position, dark, inBar }: { count: number; position:
   </span>;
 }
 
-function Photos({ piece, images, href, alert }: { piece: ListedPiece; images: string[]; href: string; alert: CardAlert | null }) {
+function Photos({ piece, images, href, alert, eager }: { piece: ListedPiece; images: string[]; href: string; alert: CardAlert | null; eager: boolean }) {
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
   const dragged = useRef(false);
   const [position, setPosition] = useState(0);
+  // Announced only after the shopper moves; nothing scrolls the track on its own.
+  const [announcement, setAnnouncement] = useState("");
   const multiple = images.length > 1;
   const dark = alert?.kind === "sale";
 
@@ -94,7 +99,11 @@ function Photos({ piece, images, href, alert }: { piece: ListedPiece; images: st
         className="flex size-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] motion-safe:scroll-smooth [&::-webkit-scrollbar]:hidden"
         onScroll={(event) => {
           const element = event.currentTarget;
-          if (element.clientWidth) setPosition(Math.round(element.scrollLeft / element.clientWidth));
+          if (!element.clientWidth) return;
+          const next = Math.round(element.scrollLeft / element.clientWidth);
+          if (next === position) return;
+          setPosition(next);
+          setAnnouncement(`Photo ${next + 1} of ${images.length}`);
         }}
         onKeyDown={(event) => {
           if (!multiple || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
@@ -127,9 +136,10 @@ function Photos({ piece, images, href, alert }: { piece: ListedPiece; images: st
         }}
       >
         {link(images.map((url, index) => <Image key={url} src={url} alt={`${piece.title}, photo ${index + 1} of ${images.length}`}
-          unoptimized loading="lazy" draggable={false} width={800} height={1000}
+          unoptimized loading={eager && index === 0 ? "eager" : "lazy"} fetchPriority={index > 0 ? "low" : eager ? "high" : undefined} draggable={false} width={800} height={1000}
           className="size-full flex-none snap-start snap-always object-contain select-none" />), "flex size-full cursor-pointer")}
       </div>}
+    {multiple && <span aria-live="polite" className="sr-only">{announcement}</span>}
     {alert && <div data-alert-bar className={cn(
       "pointer-events-none absolute inset-x-2 bottom-2 flex h-[30px] items-center justify-between gap-2 rounded-[calc(var(--radius)*.8)] px-2.5 text-[11px] font-semibold tracking-[.02em] shadow-[0_2px_10px_rgb(0_0_0/.08)] backdrop-blur-md backdrop-saturate-[1.3] md:inset-x-3 md:bottom-3 md:h-9 md:px-3 md:text-xs",
       dark ? "bg-primary/80 text-gold" : "bg-background/75 text-foreground")}>
@@ -150,35 +160,47 @@ function Photos({ piece, images, href, alert }: { piece: ListedPiece; images: st
 }
 
 /** The shop card (approved design E2 · Caption): photo with an optional alert bar, finish dots, then name and price. */
-export function ProductCard({ piece, initialVariantId, featured = false }: { piece: ListedPiece; initialVariantId?: string; featured?: boolean }) {
+export function ProductCard({ piece, initialVariantId, featured = false, eager = false }: {
+  piece: ListedPiece;
+  initialVariantId?: string;
+  featured?: boolean;
+  /** Load the first photo eagerly: cards in the first row. */
+  eager?: boolean;
+}) {
   const card = useRef<HTMLLIElement>(null);
-  const start = piece.variants.find((variant) => variant.id === initialVariantId) ?? piece.variants[0];
-  const [shown, setShown] = useState(start);
-  useEffect(() => card.current && typeof IntersectionObserver !== "undefined" ? watchSeen(card.current) : undefined, []);
+  const start = startVariant(piece, initialVariantId);
+  // The shopper's finish choice, by id, so a new filter result neither remounts the card nor loses the choice.
+  const [chosen, setChosen] = useState<string>();
+  const shown = piece.variants.find(({ id }) => id === chosen) ?? start;
+  useEffect(() => {
+    if (card.current) return watchSeen(card.current);
+  }, []);
 
+  const finishes = finishChoices(piece);
   const alert = cardAlert(piece, shown);
   const sale = alert?.kind === "sale";
-  const href = shown === start ? piece.href : variantHref(piece.href, shown.id);
+  const changed = shown?.id !== start?.id;
+  const href = piece.variants.length > 1 && shown ? variantHref(piece.href, shown.id) : piece.href;
   const nameLink = <TrackedProductLink href={href} productId={piece.id} className="underline-offset-3 hover:underline">{piece.title}</TrackedProductLink>;
 
   return <li ref={card} data-product-card className={cn("min-w-0", featured && "col-span-full md:grid md:grid-cols-[2fr_3fr] md:items-center md:gap-10")}>
     <div className="group/media relative aspect-[4/5] overflow-hidden rounded-[var(--radius)] bg-muted has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-ring">
-      <Photos key={shown?.id} piece={piece} images={shown?.images ?? []} href={href} alert={alert} />
-      {showSwatches(piece) && <div role="group" aria-label="Finishes" className="absolute top-2 right-2 flex rounded-full bg-background/90 px-[3px] py-px shadow-[0_1px_3px_rgb(0_0_0/.12)] md:top-3 md:right-3 md:px-1 md:py-0.5">
-        {piece.variants.map((variant) => <button key={variant.id} type="button" aria-pressed={variant === shown} aria-label={variant.name} title={variant.name}
-          style={{ "--swatch": variant.swatch } as CSSProperties} onClick={() => setShown(variant)}
-          className="relative size-[22px] cursor-pointer rounded-full before:absolute before:inset-1 before:rounded-full before:bg-(--swatch) before:shadow-[inset_0_0_0_1px_rgb(0_0_0/.15)] focus-visible:outline-2 focus-visible:outline-ring aria-pressed:before:inset-[5px] aria-pressed:before:shadow-[inset_0_0_0_1px_rgb(0_0_0/.15),0_0_0_1.5px_#fff,0_0_0_2.75px_var(--foreground)] md:size-6" />)}
+      <Photos key={shown?.id} piece={piece} images={shown?.images ?? []} href={href} alert={alert} eager={eager} />
+      {finishes.length > 0 && <div role="group" aria-label={`Finishes of ${piece.title}`} className="absolute top-2 right-2 flex rounded-full bg-background/90 px-[3px] py-px shadow-[0_1px_3px_rgb(0_0_0/.12)] md:top-3 md:right-3 md:px-1 md:py-0.5">
+        {finishes.map(({ swatch, name, variant }) => <button key={swatch} type="button" aria-pressed={shown?.swatch === swatch} aria-label={name} title={name}
+          style={{ "--swatch": swatch } as CSSProperties} onClick={() => setChosen(variant.id)}
+          className="relative size-6 cursor-pointer rounded-full before:absolute before:inset-[5px] before:rounded-full before:bg-(--swatch) before:shadow-[inset_0_0_0_1px_rgb(0_0_0/.15)] focus-visible:outline-2 focus-visible:outline-ring aria-pressed:before:inset-1.5 aria-pressed:before:shadow-[inset_0_0_0_1px_rgb(0_0_0/.15),0_0_0_1.5px_#fff,0_0_0_2.75px_var(--foreground)]" />)}
       </div>}
     </div>
     <div className={cn("grid gap-0.5 pt-2.5 md:pt-3.5", featured && "md:gap-2 md:pt-0")}>
       <h3 className={cn("line-clamp-2 text-[15px]/5 font-medium md:text-base/6", featured && "md:text-2xl/8")}>{nameLink}</h3>
       <p className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm/5 tabular-nums md:text-[15px]/[22px]", featured && "md:text-lg")}>
-        {sale && shown.was != null
+        {sale && shown?.was != null
           ? <><span className="font-semibold"><span className="sr-only">Now </span>{shown.priceLabel}</span>
             <s data-strike className="relative text-[.9em] text-muted-foreground no-underline after:absolute after:inset-x-[-1px] after:top-[52%] after:h-px after:origin-left after:bg-current">
               <span className="sr-only">Was </span>{formatZar(shown.was)}
             </s></>
-          : <span className="font-medium">{shown === start ? piece.priceLabel : shown.priceLabel}</span>}
+          : <span className="font-medium">{changed && shown ? shown.priceLabel : piece.priceLabel}</span>}
       </p>
       {featured && <TrackedProductLink href={href} productId={piece.id} impression={false}
         className="mt-4 hidden h-9 w-1/2 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 md:inline-flex">

@@ -2,6 +2,9 @@
 
 Revision ID: 117_sku_swatch_hex
 Revises: 116_sku_detail_photo
+
+Downgrade drops the column, so colours staff entered in Firstout are lost for good;
+upgrading again only re-guesses them from the SKU text.
 """
 
 from __future__ import annotations
@@ -35,6 +38,14 @@ _COLOURS = (
     (r"latte", "#c3a98c"),
     (r"moc[ch]a", "#6b4f3f"),
     (r"rust", "#9a4e2f"),
+    (r"terracotta", "#b0603f"),
+    (r"red", "#8e2f2c"),
+    (r"beige", "#cdbca1"),
+    (r"natural", "#cbb595"),
+    (r"oak", "#b08d62"),
+    (r"teak", "#8a5a35"),
+    (r"walnut", "#5c4033"),
+    (r"brown", "#6e5240"),
     (r"yellow|mustard", "#c9a23a"),
     (r"green|sage|olive", "#5e6e55"),
     (r"pink|blush", "#d4b2aa"),
@@ -49,6 +60,8 @@ _FINISHES = (
     (r"brushed gold", "#b09a6c"),
     (r"gold|gld|gilded", "#b8955a"),
     (r"brass", "#a6894f"),
+    (r"copper", "#a8653c"),
+    (r"bronze", "#8a6a3e"),
     (r"silver|silve|slv|sil|chrome|s-s|s-steel|stainless|alum(?:inium)?", "#b9bbbd"),
     (r"acrylic", "#dde3e4"),
 )
@@ -103,7 +116,8 @@ def upgrade() -> None:
             if (hex_ := sku_swatch(row.fabric, row.design, row.name))
         ]
         if updates:
-            # Bump updated_at so the storefront feed revision moves for coloured SKUs.
+            # The storefront sync picks up the swatch from its catalogue-metadata diff either
+            # way; bumping updated_at only also re-pushes revision-gated fields (SKU code, prices).
             bind.execute(
                 sa.text(
                     "UPDATE skus SET swatch_hex = :hex, updated_at = timezone('utc', now()) "

@@ -144,6 +144,14 @@ function fakeMedusa(products: FakeProduct[], feed: OpsProduct[]) {
       }
       return [];
     },
+    createProductVariantsWorkflow: (input) => {
+      const created = (input.product_variants as (FakeVariant & { product_id: string; options: Record<string, string> })[]).map((variant) => ({
+        ...variant, id: `variant_${variant.sku}`,
+        options: Object.entries(variant.options).map(([title, value]) => ({ value, option: { title } })),
+      }));
+      for (const variant of created) byIds({ id: variant.product_id })[0]?.variants?.push(variant);
+      return created;
+    },
     batchLinkProductsToCategoryWorkflow: (input) => {
       for (const product of byIds({ id: [...input.add as string[], ...input.remove as string[]] })) {
         const current = (product.categories || []) as { id: string }[];
@@ -686,4 +694,35 @@ test("the finish colour reaches variant metadata only when changed, clears to nu
 
   expect(existing.tags).toEqual([{ id: "ptag_new", value: "just-arrived" }]);
   expect(calls.filter((call) => call.workflow === "updateProductsWorkflow" && "tags" in (call.input.update as object))).toEqual([]);
+});
+
+test("a new product and a new variant on an existing product carry the finish colour", async () => {
+  const { calls, container } = fakeMedusa([], [{ ...table, swatch_hex: "#9b9592" }]);
+  await syncFirstout(container);
+  const created = calls.find((call) => call.workflow === "createProductsWorkflow")?.input as
+    { products: { variants: { metadata: Record<string, unknown> }[] }[] };
+  expect(created.products[0].variants[0].metadata.swatch_hex).toBe("#9b9592");
+
+  const charcoal = { ...base, source_sku_id: "da9cdb14-9126-408d-a3bd-ab8352d2d810", sku: "ARC-CHAR", options: { Colour: "Charcoal" }, swatch_hex: "#36454f" };
+  const group: FakeProduct = {
+    id: "prod_arc", external_id: `firstout-group-${base.product_group_id}`, status: "draft", metadata: {}, options: [{ title: "Colour" }],
+    variants: [{ id: "variant_sand", sku: "ARC-SAND", allow_backorder: false, options: [{ value: "Sand", option: { title: "Colour" } }],
+      metadata: { source_sku_id: base.source_sku_id, source_revision: base.revision, source_observed_at: base.observed_at } }],
+  };
+  const second = fakeMedusa([group], [base, charcoal]);
+  await syncFirstout(second.container);
+  const added = second.calls.find((call) => call.workflow === "createProductVariantsWorkflow")?.input as
+    { product_variants: { sku: string; metadata: Record<string, unknown> }[] };
+  expect(added.product_variants).toEqual([expect.objectContaining({ sku: "ARC-CHAR", metadata: expect.objectContaining({ swatch_hex: "#36454f" }) })]);
+});
+
+test("an uncoloured variant is not rewritten just because Firstout now reports a null colour", async () => {
+  const existing = stagedTable();
+  const { calls, state, container } = fakeMedusa([existing], [table]);
+  await syncFirstout(container); // Settles the fixture; an older Firstout sends no colour.
+  const settled = calls.filter((call) => call.workflow === "updateProductVariantsWorkflow").length;
+  state.feed = [{ ...table, swatch_hex: null }];
+  await syncFirstout(container);
+  expect(calls.filter((call) => call.workflow === "updateProductVariantsWorkflow")).toHaveLength(settled);
+  expect(existing.variants![0].metadata).not.toHaveProperty("swatch_hex");
 });

@@ -904,7 +904,8 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<{ snapsho
       const commitmentsChanged = remainingPending.length !== pending.length;
       const projectionChanged = variant.metadata?.source_projected_quantity !== projected || commitmentsChanged;
       const catalogue = syncedCatalogueMetadata(row);
-      const catalogueChanged = Object.entries(catalogue).some(([key, value]) => JSON.stringify(value) !== JSON.stringify(variant.metadata?.[key]));
+      // A missing key and null both mean "none", so uncoloured variants are not rewritten once.
+      const catalogueChanged = Object.entries(catalogue).some(([key, value]) => JSON.stringify(value ?? null) !== JSON.stringify(variant.metadata?.[key] ?? null));
       // Reservation consumption/cancellation can change independently of the
       // source revision. Rebase stock on every accepted projection.
       await writeStock(container, variant.id, locations[0].id, projected);

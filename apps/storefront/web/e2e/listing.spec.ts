@@ -91,6 +91,7 @@ test('desktop card arrows and keyboard keep the shopper on the listing', async (
   await chair.hover()
   await next.click()
   await expect.poll(() => photoInView(photos)).toBe(1)
+  await expect(chair.getByText('Photo 2 of 2')).toHaveAttribute('aria-live', 'polite')
   await expect(next).toBeDisabled()
   await photos.press('ArrowLeft')
   await expect.poll(() => photoInView(photos)).toBe(0)
@@ -126,16 +127,20 @@ test('each card shows at most one alert, and finish dots switch the photos, pric
   await expect(grid(page)).not.toContainText('In stock')
 
   const table = card(page, 'Umbra Dining Table')
-  const finishes = table.getByRole('group', { name: 'Finishes' })
-  await expect(finishes.getByRole('button')).toHaveCount(3)
+  // One dot per colour: both gold sizes share a dot, which opens the gold size in stock.
+  const finishes = table.getByRole('group', { name: 'Finishes of Umbra Dining Table' })
+  await expect(finishes.getByRole('button')).toHaveCount(2)
   await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'true')
-  await finishes.getByRole('button', { name: 'Gold / 160 cm' }).click()
-  await expect(finishes.getByRole('button', { name: 'Gold / 160 cm' })).toHaveAttribute('aria-pressed', 'true')
+  await finishes.getByRole('button', { name: 'Gold', exact: true }).click()
+  await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'false')
   await expect(table.getByRole('img', { name: 'Umbra Dining Table, photo 1 of 1' })).toHaveAttribute('src', '/demo/arc-front.jpg')
   await expect(table).toContainText(/R\s37\s000,00/)
   for (const link of await table.getByRole('link').all()) await expect(link).toHaveAttribute('href', /\?variant=variant_umbra_gold_small$/)
-  await expect(card(page, 'Tilda Sofa').getByRole('group', { name: 'Finishes' })).toHaveCount(0)
+  // A new filter result keeps the card (and the shopper's finish) rather than remounting it.
+  await page.getByRole('complementary', { name: 'Filters' }).getByRole('checkbox', { name: /^In stock/ }).check()
+  await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(card(page, 'Tilda Sofa').getByRole('group', { name: /^Finishes/ })).toHaveCount(0)
 })
 
 test.describe('touch product cards', () => {

@@ -3,7 +3,7 @@ import type { ListedPiece, ListedVariant } from "./medusa";
 import { readShopFilters, shopFacetCount, shopMatches, writeShopFilters } from "./shop-filters";
 
 const variant = (id: string, price: number, availability: ListedVariant["availability"]): ListedVariant => ({
-  id, name: id, price, priceLabel: `R${price}`, was: null, swatch: null, availability, images: [`/${id}.jpg`],
+  id, name: id, options: [], price, priceLabel: `R${price}`, was: null, swatch: null, availability, images: [`/${id}.jpg`],
 });
 
 const pieces: ListedPiece[] = [{

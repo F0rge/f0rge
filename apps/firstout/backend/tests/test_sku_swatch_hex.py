@@ -64,7 +64,6 @@ async def test_swatch_hex_is_normalised_validated_and_cleared(owner_client: Asyn
     assert cleared.json()["swatch_hex"] is None
 
 
-@pytest.mark.asyncio
 async def test_feed_sends_swatch_hex_only_when_requested(
     owner_client: AsyncClient,
     async_db: AsyncSession,
@@ -86,14 +85,14 @@ async def test_feed_sends_swatch_hex_only_when_requested(
     route = "/api/v1/ops-commerce/v1/products"
     headers = {"Authorization": "Bearer test-ops-token", "X-Ops-Company-ID": str(company_id)}
 
-    # Absent by default: an older strict commerce contract rejects unknown keys.
-    default = (await owner_client.get(route, headers=headers)).json()["products"][0]
-    assert "swatch_hex" not in default
+    async def feed_row(query: str = "") -> dict:
+        response = await owner_client.get(f"{route}{query}", headers=headers)
+        assert response.status_code == 200
+        return next(row for row in response.json()["products"] if row["source_sku_id"] == sku_id)
 
-    opted = await owner_client.get(f"{route}?include_swatch=true", headers=headers)
-    assert opted.status_code == 200
-    assert opted.json()["products"][0]["swatch_hex"] == "#9b9592"
+    # Absent by default: an older strict commerce contract rejects unknown keys.
+    assert "swatch_hex" not in await feed_row()
+    assert (await feed_row("?include_swatch=true"))["swatch_hex"] == "#9b9592"
 
     await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"swatch_hex": None})
-    cleared = (await owner_client.get(f"{route}?include_swatch=true", headers=headers)).json()
-    assert cleared["products"][0]["swatch_hex"] is None
+    assert (await feed_row("?include_swatch=true"))["swatch_hex"] is None

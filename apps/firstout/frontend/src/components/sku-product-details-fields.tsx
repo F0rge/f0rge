@@ -22,6 +22,8 @@ export function SkuProductDetailsFields({
   disabled?: boolean;
   onChange: (field: keyof SkuDetailsForm, value: string) => void;
 }) {
+  const typed = form.swatch_hex.trim().toLowerCase();
+  const swatch = SKU_SWATCH_PATTERN.test(typed) ? typed : null;
   return (
     <Stack gap={5}>
       <Grid condensed fullWidth>
@@ -61,7 +63,6 @@ export function SkuProductDetailsFields({
             labelText="Swatch colour"
             helperText="The finish dot on the DasKasas shop, as # and six hex digits. Leave blank for none."
             placeholder="#9b9592"
-            maxLength={7}
             value={form.swatch_hex}
             invalid={Boolean(errors.swatch_hex)}
             invalidText={errors.swatch_hex}
@@ -72,10 +73,10 @@ export function SkuProductDetailsFields({
           <input
             type="color"
             aria-label="Pick swatch colour"
-            value={SKU_SWATCH_PATTERN.test(form.swatch_hex.trim().toLowerCase()) ? form.swatch_hex.trim().toLowerCase() : "#ffffff"}
+            value={swatch ?? "#808080"}
             disabled={readOnly || disabled}
             onChange={(event) => onChange("swatch_hex", event.target.value)}
-            className={styles.picker}
+            className={swatch ? styles.picker : `${styles.picker} ${styles.blank}`}
           />
           {!readOnly && (
             <Button

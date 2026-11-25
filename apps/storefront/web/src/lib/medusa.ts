@@ -230,6 +230,8 @@ export function saleOriginal(variant: MedusaVariant): number | null {
 export type ListedVariant = {
   id: string;
   name: string;
+  /** Option values, such as ["Gold", "160 cm"]. */
+  options: string[];
   price: number | null;
   priceLabel: string;
   /** The pre-sale price while a sale price list applies. */
@@ -255,7 +257,7 @@ export function listedPiece(product: StoreProduct): ListedPiece {
     priceLabel: fromPrice(product),
     justArrived: !!product.tags?.some(({ value }) => value === "just-arrived"),
     variants: product.variants.map((variant) => ({
-      id: variant.id, name: variant.title || variant.sku || product.title,
+      id: variant.id, name: variant.title || variant.sku || product.title, options: (variant.options ?? []).map(({ value }) => value),
       price: variant.calculated_price?.calculated_amount ?? null, priceLabel: priceLabel(variant),
       was: saleOriginal(variant), swatch: swatchHex(variant.metadata?.swatch_hex),
       availability: variantAvailability(variant), images: selectedImages(product, variant),

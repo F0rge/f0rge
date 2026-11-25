@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from alembic import command
+from alembic.config import Config
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -39,9 +41,25 @@ CASES = [
     (("", "", "Cascais Rd. D Tbl Wht - Grey 150 x 74"), "#f1efea"),
     (("", "", "Avanzi L-Shape Sofa Gunmetal Grey"), "#4d5054"),
     (("", "", "Biles Swivel Chr Fab 88-88-82cm"), None),
+    (("", "", "Oslo Bed Natural Oak"), "#cbb595"),
+    (("", "", "Rio Sideboard Walnut & Brass"), "#5c4033"),
+    (("", "", "Bali Teak Bench"), "#8a5a35"),
+    (("", "", "Lyon Armchair Beige Boucle"), "#cdbca1"),
+    (("", "", "Fez Ottoman Brown Leather"), "#6e5240"),
+    (("", "", "Siena Chair Terracotta Velvet"), "#b0603f"),
+    (("", "", "Roma Chair Red - Gold Legs"), "#8e2f2c"),
+    (("", "", "Tula Lamp Copper"), "#a8653c"),
+    (("", "", "Bronze & Silver Side Table"), "#8a6a3e"),
+    (("", "", "Bedford Credenza"), None),
     (("Velvet Navy", "Alexa Grey", "Alexa White"), "#27314a"),
     (("Solo 111", "Hathaway Taupe", "Hathaway Black"), "#8c7f70"),
 ]
+
+
+def _upgrade_on(connection: sa.Connection, revision: str) -> None:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.attributes["connection"] = connection
+    command.upgrade(config, revision)
 
 
 @pytest.mark.parametrize(("fields", "expected"), CASES)
@@ -91,7 +109,20 @@ async def test_backfill_reaches_each_team_under_forced_rls(second_postgres_url: 
             await conn.execute(sa.text("ALTER TABLE skus FORCE ROW LEVEL SECURITY"))
 
         owner_url = make_url(url).set(username=role, password=password)
-        migrate(owner_url.render_as_string(hide_password=False), SWATCH)
+        # In-process like the release runner, which keeps using this transaction afterwards,
+        # so the tenant setting must be reset before the migration hands it back.
+        owner = create_async_engine(owner_url, poolclass=NullPool)
+        try:
+            async with owner.begin() as conn:
+                await conn.run_sync(_upgrade_on, SWATCH)
+                assert await conn.scalar(
+                    sa.text("SELECT current_setting('app.tenant_id', true)")
+                ) in (
+                    "",
+                    None,
+                )
+        finally:
+            await owner.dispose()
 
         async with admin.connect() as conn:
             rows = (

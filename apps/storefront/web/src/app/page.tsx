@@ -62,7 +62,7 @@ function SelectedPieces({ products }: { products: StoreProduct[] }) {
       <Link href="/shop" className="text-sm font-medium underline-offset-4 hover:underline">Shop all</Link>
     </div>
     <ul className="grid grid-cols-2 gap-x-2.5 gap-y-[22px] md:gap-x-5 md:gap-y-9 lg:grid-cols-4">
-      {pieces.map((piece, index) => <ProductCard key={piece.id} piece={piece} featured={index === 0} />)}
+      {pieces.map((piece, index) => <ProductCard key={piece.id} piece={piece} featured={index === 0} eager={index === 0} />)}
     </ul>
   </section>;
 }

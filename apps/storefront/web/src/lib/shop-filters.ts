@@ -74,7 +74,7 @@ export function shopMatches(pieces: ListedPiece[], filters: ShopFilters): ShopMa
   for (const piece of pieces) {
     if (filters.categories.length && !piece.categories?.some(({ handle }) => filters.categories.some((selected) => selected === handle))) continue;
     if (!hasVariantFilter) {
-      matches.push({ ...piece, variant: piece.variants[0] });
+      matches.push(piece);
       continue;
     }
     const variant = piece.variants.find(({ price, availability }) => availability !== null &&

@@ -23,3 +23,17 @@
   background: none;
   cursor: pointer;
 }
+
+/* No colour yet: a dashed empty well instead of the picker's placeholder colour.
+   Separate rules, because an unknown vendor pseudo-element drops the whole selector list. */
+.blank {
+  border-style: dashed;
+}
+
+.blank::-webkit-color-swatch {
+  opacity: 0;
+}
+
+.blank::-moz-color-swatch {
+  opacity: 0;
+}

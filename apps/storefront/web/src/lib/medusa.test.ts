@@ -35,15 +35,15 @@ describe("listed piece", () => {
       id: "prod_simone", handle: "firstout-group-51632a5c-8dfc-55d5-9d12-b1e05f4ac5ee", title: "Simone King Bed", description: null,
       tags: [{ value: "bedroom" }, { value: "just-arrived" }],
       variants: [
-        variant({ metadata: { swatch_hex: "#9b9592" }, calculated_price: price(25_000, 29_600, "sale") }),
+        variant({ metadata: { swatch_hex: "#9b9592" }, calculated_price: price(25_000, 29_600, "sale"), options: [{ id: "opt_val_grey", value: "Grey velvet" }] }),
         variant({ id: "variant_simone_gold", title: "Gold velvet", metadata: { swatch_hex: "#B8902E" } }),
       ],
     };
     const piece = listedPiece(product);
     expect(piece.justArrived).toBe(true);
-    expect(piece.variants.map(({ name, was, swatch }) => ({ name, was, swatch }))).toEqual([
-      { name: "Grey velvet", was: 29_600, swatch: "#9b9592" },
-      { name: "Gold velvet", was: null, swatch: null },
+    expect(piece.variants.map(({ name, options, was, swatch }) => ({ name, options, was, swatch }))).toEqual([
+      { name: "Grey velvet", options: ["Grey velvet"], was: 29_600, swatch: "#9b9592" },
+      { name: "Gold velvet", options: [], was: null, swatch: null },
     ]);
     expect(listedPiece({ ...product, tags: undefined }).justArrived).toBe(false);
   });

@@ -81,15 +81,17 @@ body:has(#main-content [data-storefront-not-found]) [data-storefront-brand-link]
 .error-state button { margin: 1rem 1rem 0 0; }
 
 /* Product card alerts (components/product-card.tsx): the bar slides up and the old price is struck through once the card is
-   in view. They start hidden only while scripts run and motion is allowed, so the resting state is always visible. */
-@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
-  [data-product-card]:not([data-seen]) [data-alert-bar] { translate: 0 calc(100% + 14px); }
-  [data-product-card]:not([data-seen]) [data-strike]::after { scale: 0 1; }
+   in view. The card script sets <html data-card-motion> only when it can mark cards as seen and motion is allowed,
+   so without it (no JS, a failed bundle, reduced motion) the resting state is always visible. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-card-motion] [data-product-card]:not([data-seen]) [data-alert-bar] { translate: 0 calc(100% + 14px); }
+  [data-card-motion] [data-product-card]:not([data-seen]) [data-strike]::after { scale: 0 1; }
 }
 [data-product-card][data-seen] [data-alert-bar] { animation: card-bar-up .7s cubic-bezier(.2, .8, .2, 1) var(--card-delay, 0s) both; }
 [data-product-card][data-seen] [data-strike]::after { animation: card-strike .5s cubic-bezier(.6, 0, .2, 1) calc(var(--card-delay, 0s) + .35s) both; }
-[data-alert-roll] { animation: card-roll 6s cubic-bezier(.7, 0, .3, 1) infinite; }
-[data-alert-spark] { animation: card-twinkle 2.6s ease-in-out infinite; }
+/* Twice through "% off", "Save R…", "% off", resting on the percentage. */
+[data-alert-roll] { animation: card-roll 6s cubic-bezier(.7, 0, .3, 1) 2 forwards; }
+[data-alert-spark] { animation: card-twinkle 2.6s ease-in-out 3; }
 @keyframes card-bar-up { from { translate: 0 calc(100% + 14px); } }
 @keyframes card-strike { from { scale: 0 1; } }
 @keyframes card-roll { 0%, 40% { translate: 0 0; } 50%, 90% { translate: 0 -100%; } 100% { translate: 0 -200%; } }
