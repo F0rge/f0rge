@@ -4,7 +4,12 @@ const CANONICAL_HOMEPAGE = "https://www.daskasas.co.za/";
 const SITE_NAME = "DasKasas";
 export const ORGANIZATION_LOGO_PATH = "/apple-icon";
 
-export function homepageStructuredData(env: Record<string, string | undefined> = process.env): string | null {
+// Next.js inlines the public canonical URL at build time. Deployment guards are read at runtime.
+export function homepageStructuredData(env: Record<string, string | undefined> = {
+  RAILWAY_ENVIRONMENT_NAME: process.env.RAILWAY_ENVIRONMENT_NAME,
+  STOREFRONT_PRIVATE_PREVIEW: process.env.STOREFRONT_PRIVATE_PREVIEW,
+  NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+}): string | null {
   if (env.RAILWAY_ENVIRONMENT_NAME !== "production" || env.STOREFRONT_PRIVATE_PREVIEW !== "off") return null;
   const homepage = URL.parse(env.NEXT_PUBLIC_BASE_URL || "");
   if (!homepage || homepage.href !== CANONICAL_HOMEPAGE) return null;
