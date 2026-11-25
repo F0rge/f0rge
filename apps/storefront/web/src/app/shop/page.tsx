@@ -4,7 +4,7 @@ import { Listing } from "./listing";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Shop furniture",
-  description: "Browse the DasKasas furniture collection, from sofas and armchairs to dining tables, bedroom furniture, and coffee and console tables.",
+  description: "Browse sofas and armchairs, dining and bedroom furniture, and coffee and console tables at DasKasas. Filter by price and availability.",
   alternates: { canonical: "/shop" },
 };
 

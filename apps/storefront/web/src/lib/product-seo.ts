@@ -12,11 +12,13 @@ const SCHEMA = "https://schema.org";
 const HTML_ENTITIES: Record<string, string> = {
   amp: "&", nbsp: " ", quot: '"', apos: "'", "#39": "'", "#34": '"',
 };
-const VARIANT_PROPERTIES: Record<string, "color" | "size" | "material" | "pattern" | undefined> = {
-  color: "color", colour: "color", size: "size", material: "material", pattern: "pattern",
-  "upholstery colour": "color", "upholstery color": "color", "upholstery material": "material",
-  "frame finish": "color", "metal finish": "color",
-};
+const VARIANT_PROPERTIES = new Map([
+  ["color", "color"], ["colour", "color"], ["size", "size"], ["material", "material"], ["pattern", "pattern"],
+  ["upholstery color", "color"], ["upholstery colour", "color"], ["upholstery material", "material"],
+]);
+const CHOICE_LIST = new Intl.ListFormat("en-ZA", { type: "disjunction" });
+const DIMENSION_WORDS = { width: "wide", depth: "deep", height: "high", diameter: "diameter", length: "long" };
+type Dimension = keyof typeof DIMENSION_WORDS;
 
 function publicText(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -33,21 +35,53 @@ function sentence(value: string): string {
   return /[.!?]$/.test(value) ? value : `${value}.`;
 }
 
-function shortDescription(value: string): string {
-  if (value.length <= MAX_DESCRIPTION_LENGTH) return value;
-  const prefix = value.slice(0, MAX_DESCRIPTION_LENGTH - 1);
+function shortDescription(value: string, maxLength = MAX_DESCRIPTION_LENGTH): string {
+  if (value.length <= maxLength) return value;
+  const prefix = value.slice(0, maxLength - 1);
   return `${prefix.replace(/\s+\S*$/, "").trimEnd().replace(/[,;:]$/, "")}…`;
+}
+
+function publishedDimensions(product: StoreProduct, variant?: MedusaVariant) {
+  const measured = variant?.metadata?.dimensions_cm;
+  const unit = measured ? "cm" : product.metadata?.dimension_unit;
+  if (unit !== "cm" && unit !== "mm") return [];
+  const measurements: [Dimension, number | null | undefined][] = measured
+    ? [["diameter", measured.diameter], ["width", measured.width], ["depth", measured.depth], ["height", measured.height]]
+    : [["length", variant?.length ?? product.length], ["width", variant?.width ?? product.width], ["height", variant?.height ?? product.height]];
+  const dimensions = measurements.flatMap(([axis, value]) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? [{ axis, value, unit }] : []);
+  return measured || dimensions.length === measurements.length ? dimensions : [];
+}
+
+function sizeDescription(product: StoreProduct): string | null {
+  const [first, ...others] = product.variants.map((variant) => publishedDimensions(product, variant));
+  const shared = (first ?? publishedDimensions(product)).filter(({ axis, value, unit }) =>
+    others.every((measurements) => measurements.some((measurement) =>
+      measurement.axis === axis && measurement.value === value && measurement.unit === unit)));
+  if (!shared.length) return null;
+  if (shared.length === 3 && shared.every(({ axis }) => axis !== "diameter")) {
+    return `${shared.map(({ value }) => value).join(" × ")} ${shared[0].unit}`;
+  }
+  return shared.map(({ axis, value, unit }) => `${value} ${unit} ${DIMENSION_WORDS[axis]}`).join(", ");
+}
+
+function optionDescriptions(product: StoreProduct): string[] {
+  return productVariantOptions(product).flatMap(({ title, availableValues }) => {
+    const label = publicText(title);
+    const values = [...new Set(availableValues.flatMap((value) => publicText(value) ?? []))];
+    if (!label || values.length < 2) return [];
+    const excerpt = CHOICE_LIST.format(values.slice(0, 3));
+    return [values.length <= 3 ? `${label}: ${excerpt}` : `${label} options include ${excerpt}`];
+  });
 }
 
 export function productMetaDescription(product: StoreProduct): string | undefined {
   const name = publicText(product.title);
   if (!name) return undefined;
-  const override = publicText(product.metadata?.seo_description);
-  const catalogueCopy = publicText(product.description);
   const title = sentence(name).toLowerCase();
-  const copy = [override, catalogueCopy].find((candidate) => candidate && sentence(candidate).toLowerCase() !== title);
-  if (copy) {
-    const description = copy.toLowerCase().includes(name.toLowerCase()) ? copy : `${sentence(name)} ${copy}`;
+  const override = publicText(product.metadata?.seo_description);
+  if (override && sentence(override).toLowerCase() !== title) {
+    const description = override.toLowerCase().includes(name.toLowerCase()) ? override : `${sentence(name)} ${override}`;
     return shortDescription(sentence(description));
   }
 
@@ -55,23 +89,55 @@ export function productMetaDescription(product: StoreProduct): string | undefine
   const category = publicText(product.categories?.[0]?.name);
   const material = publicText(variant?.material || product.material);
   const sku = publicText(product.variants[0]?.sku);
+  const size = sizeDescription(product);
+  const copy = publicText(product.description);
   const facts = [
-    category && `Collection: ${category}`,
+    size && `Dimensions: ${size}`,
+    ...optionDescriptions(product),
     material && `Material: ${material}`,
-    sku && `${variant ? "SKU" : "First option SKU"}: ${sku}`,
-  ].filter(Boolean).join(" · ");
-  return shortDescription(`Explore ${name} at DasKasas.${facts ? ` ${sentence(facts)}` : ""}`);
+    category && `${category} collection`,
+  ];
+  const hasCatalogueCopy = copy != null && sentence(copy).toLowerCase() !== title;
+  const lead = hasCatalogueCopy
+    ? sentence(copy.toLowerCase().includes(name.toLowerCase()) ? copy : `${sentence(name)} ${copy}`)
+    : `Explore ${name} at DasKasas.`;
+  const skuText = sku && !lead.includes(sku) ? ` SKU ${sku}.` : "";
+  const identifier = skuText.length < MAX_DESCRIPTION_LENGTH / 2 ? skuText : "";
+  const limit = MAX_DESCRIPTION_LENGTH - identifier.length;
+  let description = shortDescription(lead, limit);
+  if (!hasCatalogueCopy) {
+    for (const fact of facts) {
+      if (!fact) continue;
+      const extended = `${description} ${sentence(fact)}`;
+      if (extended.length <= limit) description = extended;
+    }
+  }
+  return `${description}${identifier}`;
 }
 
-function publicImages(product: StoreProduct, variant: MedusaVariant): string[] {
+function publicImages(product: StoreProduct, variant: MedusaVariant, canonicalUrl: string): string[] {
   return selectedImages(product, variant).flatMap((image) => {
-    const relative = image.startsWith("/") && !image.startsWith("//") && !image.includes("\\");
-    const url = relative ? URL.parse(image, CANONICAL_HOMEPAGE) : URL.parse(image);
+    if (image.startsWith("//") || image.includes("\\")) return [];
+    const url = image.startsWith("/") ? URL.parse(image, canonicalUrl) : URL.parse(image);
     if (!url || url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return [];
+    if (url.origin === CANONICAL_HOMEPAGE.slice(0, -1) && url.pathname.startsWith("/demo/")) return [];
     const host = url.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
     if (!host.includes(".") || isIP(host) || /\.(?:local|localhost|internal|lan|test|invalid)$/.test(host)) return [];
     return [url.href];
   });
+}
+
+function offerAvailability(variant: MedusaVariant): "InStock" | "BackOrder" | "OutOfStock" | null {
+  const quantity = variant.inventory_quantity;
+  if (typeof quantity === "number" && Number.isSafeInteger(quantity) && quantity > 0) return "InStock";
+  const madeToOrder = variant.metadata?.made_to_order_offer;
+  if (offerLive(madeToOrder)) {
+    return Number.isSafeInteger(madeToOrder.remaining_capacity) &&
+      Number.isSafeInteger(madeToOrder.min_lead_time_days) && madeToOrder.min_lead_time_days > 0 &&
+      Number.isSafeInteger(madeToOrder.max_lead_time_days) && madeToOrder.max_lead_time_days >= madeToOrder.min_lead_time_days
+      ? "BackOrder" : null;
+  }
+  return quantity === 0 ? "OutOfStock" : null;
 }
 
 function variantOffer(variant: MedusaVariant, url: string, sku: string | null) {
@@ -81,19 +147,7 @@ function variantOffer(variant: MedusaVariant, url: string, sku: string | null) {
   const minor = zarMinorUnits(amount);
   if (minor === null || minor <= 0 || minor / 100 !== amount) return undefined;
 
-  const quantity = variant.inventory_quantity;
-  const madeToOrder = variant.metadata?.made_to_order_offer;
-  let availability: "InStock" | "BackOrder" | "OutOfStock" | undefined;
-  if (typeof quantity === "number" && Number.isSafeInteger(quantity) && quantity > 0) {
-    availability = "InStock";
-  } else if (offerLive(madeToOrder)) {
-    const { remaining_capacity: capacity, min_lead_time_days: min, max_lead_time_days: max } = madeToOrder;
-    if (Number.isSafeInteger(capacity) && Number.isSafeInteger(min) && min > 0 && Number.isSafeInteger(max) && max >= min) {
-      availability = "BackOrder";
-    }
-  } else if (Number.isSafeInteger(quantity)) {
-    availability = "OutOfStock";
-  }
+  const availability = offerAvailability(variant);
   if (!availability) return undefined;
   return { "@type": "Offer", price: amount, priceCurrency: "ZAR", availability: `${SCHEMA}/${availability}`, url };
 }
@@ -108,13 +162,14 @@ function variantProduct(
   const choices = variantChoices(variant);
   const options = axes.flatMap(({ id, title }) => {
     const value = publicText(choices[id]);
-    return value ? [{ key: VARIANT_PROPERTIES[title.toLowerCase()], name: title, value }] : [];
+    return value ? [{ key: VARIANT_PROPERTIES.get(title.trim().toLowerCase()), name: title, value }] : [];
   });
   const values = options.map(({ value }) => value);
   const properties = Object.fromEntries(options.flatMap(({ key, value }) => key ? [[key, value]] : []));
-  const otherOptions = options.flatMap(({ key, name, value }) => key ? [] : [{ "@type": "PropertyValue", name, value }]);
+  const otherOptions = options.flatMap(({ key, name, value }) =>
+    key ? [] : [{ "@type": "PropertyValue", name, value }]);
   const sku = publicText(variant.sku);
-  const images = publicImages(product, variant);
+  const images = publicImages(product, variant, canonicalUrl);
   const material = publicText(variant.material || product.material);
   const offers = variantOffer(variant, url.href, sku);
   return {
@@ -144,14 +199,14 @@ export function productStructuredData(
   if (!name || !product.variants.length || (product.status != null && product.status !== "published")) return null;
 
   const canonical = new URL(path, homepage);
-  if (canonical.origin !== homepage.origin || !canonical.pathname.startsWith("/product/") || canonical.search || canonical.hash) return null;
+  if (canonical.origin !== homepage.origin || canonical.pathname !== path || canonical.search || canonical.hash) return null;
   const canonicalUrl = canonical.href;
   const description = publicText(product.description);
   const axes = productVariantOptions(product);
   if (product.variants.length > 1 && !axes.length) return null;
   const products = product.variants.map((variant) => variantProduct(product, variant, name, description, canonicalUrl, axes));
   const variesBy = [...new Set(axes.flatMap(({ title }) => {
-    const property = VARIANT_PROPERTIES[title.toLowerCase()];
+    const property = VARIANT_PROPERTIES.get(title.trim().toLowerCase());
     return property ? [`${SCHEMA}/${property}`] : [];
   }))];
   const productData = products.length === 1 ? products[0] : {
