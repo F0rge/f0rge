@@ -83,7 +83,17 @@ describe("storefront indexing", () => {
     expect(paths).toContain("/policies/paia");
     expect(paths).toContain("/help");
     expect(paths).not.toContain("/contact");
+    expect(paths).not.toContain("/apple-icon");
     expect(paths.some((path) => path.startsWith("/account") || path.startsWith("/checkout") || path.startsWith("/order"))).toBe(false);
+  });
+
+  it("lets crawlers use the organization logo only when storefront indexing is on", () => {
+    expect(robotsHeader("/apple-icon", production)).toBeNull();
+    expect(robotsHeader("/apple-icon/preview", production)).toBe("noindex, nofollow, noarchive");
+    expect(robotsHeader("/apple-icon", { ...production, STOREFRONT_INDEXING_ENABLED: "false" })).toBe("noindex, nofollow, noarchive");
+    expect(robotsHeader("/apple-icon", { ...production, STOREFRONT_PRIVATE_PREVIEW: "on" })).toBe("noindex, nofollow, noarchive");
+    ownerFacts.mockReturnValue(null);
+    expect(robotsHeader("/apple-icon", production)).toBe("noindex, nofollow, noarchive");
   });
 
   it("uses the configured public origin for canonical urls", () => {
