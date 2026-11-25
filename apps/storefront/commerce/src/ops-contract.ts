@@ -44,6 +44,9 @@ const productSchema = z.object({
     width: centimetres, depth: centimetres, height: centimetres, diameter: centimetres,
   }).strict().nullable().optional(),
   piece_count: z.number().int().positive().nullable().optional(),
+  // Opt-in finish colour for the shop card dot. Null clears it; absent (an older Firstout)
+  // leaves the stored colour alone.
+  swatch_hex: z.string().regex(/^#[0-9a-f]{6}$/).nullable().optional(),
   // One of the four shop categories, from Firstout's mapping. Absent (auto-publish off, or an
   // older Firstout) means categories are left alone.
   shop_category: z.enum(shopCategoryHandles).optional(),

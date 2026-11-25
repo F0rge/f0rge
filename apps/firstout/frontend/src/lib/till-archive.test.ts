@@ -5,7 +5,7 @@ import { canResumeArchivedTillPick, isPendingTillPick, restoreTillCartSkus } fro
 
 const sku: Sku = {
   id: "kit", our_ref: "KIT", our_barcode: "KIT", name: "Kit", design: "Kit", fabric: "None", category: null,
-  width_cm: null, depth_cm: null, height_cm: null, diameter_cm: null, notes: null, piece_count: null, gallery_photo_count: 0,
+  width_cm: null, depth_cm: null, height_cm: null, diameter_cm: null, notes: null, piece_count: null, swatch_hex: null, gallery_photo_count: 0,
   supplier_ref: null, preferred_supplier_id: null, preferred_supplier_name: null, lead_time_days: null,
   made_to_order_capacity: null, made_to_order_lead_time_min_days: null, made_to_order_lead_time_max_days: null,
   made_to_order_expires_at: null, made_to_order_offer_id: null, reorder_min: null, last_landed_cost_zar: null,

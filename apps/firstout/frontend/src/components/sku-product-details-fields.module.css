@@ -1,0 +1,25 @@
+.swatch {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.swatch > :first-child {
+  flex: 1;
+}
+
+/* Line the picker and Clear up with the text input, below its label. */
+.picker,
+.clear {
+  margin-block-start: 1.5rem;
+  flex: none;
+}
+
+.picker {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0;
+  border: 1px solid var(--cds-border-strong);
+  background: none;
+  cursor: pointer;
+}

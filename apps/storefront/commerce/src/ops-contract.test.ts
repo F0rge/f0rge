@@ -137,3 +137,16 @@ test("applies only newer source observations", () => {
   expect(shouldApplyRevision("2026-09-22T09:14:32.000001", "2026-09-22T09:14:32.000001")).toBe(false);
   expect(shouldApplyRevision("2026-09-22T09:14:00.000000", "2026-09-22T09:14:32.000001")).toBe(false);
 });
+
+test("an opted-in finish colour is lowercase #rrggbb, null clears it, absent leaves it alone", () => {
+  const read = (overrides: Record<string, unknown>) => parseOpsProducts({
+    ...contract, products: [{ ...contract.products[0], ...overrides }],
+  }, contract.company_id).products[0];
+
+  expect(read({ swatch_hex: "#9b9592" }).swatch_hex).toBe("#9b9592");
+  expect(read({ swatch_hex: null }).swatch_hex).toBeNull();
+  expect(read({}).swatch_hex).toBeUndefined();
+  for (const malformed of ["#9B9592", "9b9592", "#9b959", "#9b95920", "", "red"]) {
+    expect(() => read({ swatch_hex: malformed })).toThrow();
+  }
+});

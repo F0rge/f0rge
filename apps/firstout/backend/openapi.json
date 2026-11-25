@@ -3284,6 +3284,16 @@
             }
           },
           {
+            "name": "include_swatch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Swatch"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -25847,6 +25857,17 @@
               }
             ],
             "title": "Detail Photo Token"
+          },
+          "swatch_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swatch Hex"
           }
         },
         "type": "object",
@@ -25869,7 +25890,8 @@
           "piece_count",
           "gallery_photo_tokens",
           "setting_photo_token",
-          "detail_photo_token"
+          "detail_photo_token",
+          "swatch_hex"
         ],
         "title": "OpsProductResponse"
       },
@@ -32703,6 +32725,18 @@
             "minimum": 1.0,
             "title": "Carton Count",
             "default": 1
+          },
+          "swatch_hex": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swatch Hex"
           }
         },
         "type": "object",
@@ -33467,6 +33501,17 @@
             ],
             "title": "Category"
           },
+          "swatch_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swatch Hex"
+          },
           "photo_storage_key": {
             "anyOf": [
               {
@@ -33664,6 +33709,7 @@
           "reorder_min",
           "last_landed_cost_zar",
           "category",
+          "swatch_hex",
           "photo_storage_key",
           "gallery_photo_count",
           "stockist_ex_vat",
@@ -34375,6 +34421,18 @@
               }
             ],
             "title": "Carton Count"
+          },
+          "swatch_hex": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swatch Hex"
           }
         },
         "additionalProperties": false,
@@ -40054,6 +40112,17 @@
             ],
             "title": "Category"
           },
+          "swatch_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swatch Hex"
+          },
           "photo_storage_key": {
             "anyOf": [
               {
@@ -40266,6 +40335,7 @@
           "reorder_min",
           "last_landed_cost_zar",
           "category",
+          "swatch_hex",
           "photo_storage_key",
           "gallery_photo_count",
           "stockist_ex_vat",

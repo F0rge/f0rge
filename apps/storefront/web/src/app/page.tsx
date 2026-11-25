@@ -4,13 +4,11 @@ import Link from "next/link";
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge, Button } from "@f0rge/ui";
 import { StorefrontMotion } from "@/components/storefront-motion";
-import { ProductCardGallery } from "@/components/product-card-gallery";
+import { ProductCard } from "@/components/product-card";
 import { CategoryTiles } from "@/components/category-tiles";
-import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
 import { COLLECTION_ADDRESS, DELIVERY_DESCRIPTION } from "@/lib/checkout-fulfillment";
 import { homepageStructuredData } from "@/lib/homepage-structured-data";
-import { fromPrice, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
-import { selectedImages } from "@/lib/product-variants";
+import { listStoreProducts, listedPiece, type StoreProduct } from "@/lib/medusa";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { SHOWROOM } from "@/lib/showroom";
 
@@ -56,41 +54,16 @@ const faqs: { question: string; answer: string; returnPolicy?: true }[] = [
 
 function SelectedPieces({ products }: { products: StoreProduct[] }) {
   // ponytail: the first five pieces in Medusa's order; add a merchandised selection if the owner wants to choose.
-  const [featured, ...others] = products.slice(0, 5);
-  if (!featured) return null;
-  const featuredStock = stockLabel(featured);
+  const pieces = products.slice(0, 5).map(listedPiece);
+  if (!pieces.length) return null;
   return <section data-reveal id="selected-pieces" aria-labelledby="selected-pieces-title" className="mx-auto w-full max-w-7xl p-6">
     <div className="mb-6 flex items-end justify-between gap-4">
       <h2 id="selected-pieces-title" className="text-2xl font-bold tracking-tight md:text-3xl">Selected pieces</h2>
       <Link href="/shop" className="text-sm font-medium underline-offset-4 hover:underline">Shop all</Link>
     </div>
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-      <div data-product-card className="grid min-w-0 overflow-hidden rounded-xl border bg-card md:col-span-2 md:grid-cols-2">
-        <ProductCardGallery title={featured.title} images={selectedImages(featured, featured.variants[0])} />
-        <TrackedProductLink href={productPath(featured)} productId={featured.id} className="flex flex-col p-6 hover:underline">
-          <div className="flex-1">
-            <h3 className="text-2xl font-semibold">{featured.title}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{featuredStock}</p>
-            {(featured.material || featured.categories?.[0]?.name) && <p className="mt-4 text-muted-foreground">{featured.material || featured.categories?.[0]?.name}</p>}
-            <p className="mt-4 text-2xl font-bold">{fromPrice(featured)}</p>
-          </div>
-          <span className="mt-6 inline-flex h-9 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground sm:w-1/2">View piece</span>
-        </TrackedProductLink>
-      </div>
-      {others.map((product) => {
-        const stock = stockLabel(product);
-        return <div key={product.id} data-product-card className="min-w-0 overflow-hidden rounded-xl border bg-card">
-          <ProductCardGallery title={product.title} images={selectedImages(product, product.variants[0])} />
-          <TrackedProductLink href={productPath(product)} productId={product.id} className="block p-4 hover:underline">
-            <div className="flex items-center justify-between gap-4">
-              <h3 className="min-w-0 truncate font-medium">{product.title}</h3>
-              <span className="shrink-0 font-medium">{fromPrice(product)}</span>
-            </div>
-            {stock && <p className="mt-1 text-sm text-muted-foreground">{stock}</p>}
-          </TrackedProductLink>
-        </div>;
-      })}
-    </div>
+    <ul className="grid grid-cols-2 gap-x-2.5 gap-y-[22px] md:gap-x-5 md:gap-y-9 lg:grid-cols-4">
+      {pieces.map((piece, index) => <ProductCard key={piece.id} piece={piece} featured={index === 0} />)}
+    </ul>
   </section>;
 }
 

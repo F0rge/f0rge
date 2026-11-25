@@ -3,11 +3,11 @@ import type { ListedPiece, ListedVariant } from "./medusa";
 import { readShopFilters, shopFacetCount, shopMatches, writeShopFilters } from "./shop-filters";
 
 const variant = (id: string, price: number, availability: ListedVariant["availability"]): ListedVariant => ({
-  id, price, priceLabel: `R${price}`, availability, images: [`/${id}.jpg`],
+  id, name: id, price, priceLabel: `R${price}`, was: null, swatch: null, availability, images: [`/${id}.jpg`],
 });
 
 const pieces: ListedPiece[] = [{
-  id: "table", title: "Dining table", href: "/product/group-table", price: 7499, priceLabel: "From R7499", stockLabel: "In stock",
+  id: "table", title: "Dining table", href: "/product/group-table", price: 7499, priceLabel: "From R7499", justArrived: false,
   categories: [{ id: "dining", name: "Dining Room", handle: "dining-room" }],
   variants: [variant("gold", 7499, "made-to-order"), variant("silver", 7500, "in-stock")],
 }];
@@ -19,8 +19,8 @@ describe("shop filters", () => {
     expect(shopMatches(pieces, under)).toEqual([]);
     expect(shopFacetCount(pieces, under, "price", "7500-15000")).toBe(1);
     expect(shopMatches(pieces, { ...under, price: ["7500-15000"] })[0]).toMatchObject({
-      href: "/product/group-table?variant=silver", price: 7500, stockLabel: "In stock",
-      variant: { images: ["/silver.jpg"] },
+      href: "/product/group-table?variant=silver", price: 7500, priceLabel: "R7500",
+      variant: { images: ["/silver.jpg"] }, variants: pieces[0].variants,
     });
   });
 

@@ -1,13 +1,16 @@
 "use client";
 
-import { Column, Grid, Stack, TextArea, TextInput } from "@carbon/react";
+import { Button, Column, Grid, Stack, TextArea, TextInput } from "@carbon/react";
 import {
   SKU_DIMENSIONS,
   SKU_DIMENSION_FIELDS,
   SKU_NOTES_LIMIT,
+  SKU_SWATCH_PATTERN,
   type SkuDetailsErrors,
   type SkuDetailsForm,
 } from "@/lib/sku-details";
+
+import styles from "./sku-product-details-fields.module.css";
 
 export function SkuProductDetailsFields({
   idPrefix, form, errors, readOnly, disabled, onChange,
@@ -50,6 +53,42 @@ export function SkuProductDetailsFields({
           disabled={disabled}
           onChange={(event) => onChange("piece_count", event.target.value)}
         />
+        </Column>
+        <Column sm={4} md={8} lg={16}>
+        <div className={styles.swatch}>
+          <TextInput
+            id={`${idPrefix}-swatch_hex`}
+            labelText="Swatch colour"
+            helperText="The finish dot on the DasKasas shop, as # and six hex digits. Leave blank for none."
+            placeholder="#9b9592"
+            maxLength={7}
+            value={form.swatch_hex}
+            invalid={Boolean(errors.swatch_hex)}
+            invalidText={errors.swatch_hex}
+            readOnly={readOnly}
+            disabled={disabled}
+            onChange={(event) => onChange("swatch_hex", event.target.value)}
+          />
+          <input
+            type="color"
+            aria-label="Pick swatch colour"
+            value={SKU_SWATCH_PATTERN.test(form.swatch_hex.trim().toLowerCase()) ? form.swatch_hex.trim().toLowerCase() : "#ffffff"}
+            disabled={readOnly || disabled}
+            onChange={(event) => onChange("swatch_hex", event.target.value)}
+            className={styles.picker}
+          />
+          {!readOnly && (
+            <Button
+              kind="ghost"
+              size="md"
+              className={styles.clear}
+              disabled={disabled || !form.swatch_hex}
+              onClick={() => onChange("swatch_hex", "")}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
         </Column>
       </Grid>
       <TextArea

@@ -1,4 +1,4 @@
-import { devices, expect, test, type Page } from '@playwright/test'
+import { devices, expect, test, type Locator, type Page } from '@playwright/test'
 
 // Runs against the local Medusa fixture (e2e/analytics-medusa-fixture.mjs): one or two pieces per category,
 // one uncategorised piece (Yara Floor Lamp) and one made-to-order piece (Wren Coffee Table).
@@ -14,6 +14,9 @@ const byPrice = ['Yara Floor Lamp', 'Test chair', 'Vale Bedside Table', 'Wren Co
 const grid = (page: Page) => page.getByRole('list', { name: 'Pieces' })
 const titles = (page: Page) => grid(page).getByRole('heading', { level: 3 }).allTextContents()
 const noHorizontalScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+const card = (page: Page, title: string) => grid(page).getByRole('listitem').filter({ has: page.getByRole('heading', { level: 3, name: title, exact: true }) })
+// The photo link sits in the horizontal scroller; its index is the photo in view.
+const photoInView = (photos: Locator) => photos.evaluate((link) => Math.round(link.parentElement!.scrollLeft / link.parentElement!.clientWidth))
 
 test('the menu opens each category with only its pieces; an uncategorised piece is only in Shop all', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -45,7 +48,8 @@ test('availability filter, sort and counts agree with the grid', async ({ page }
   await inStock.uncheck()
   await madeToOrder.check()
   await expect(count).toHaveText('1 piece')
-  await expect(grid(page).getByRole('link')).toHaveText([/Wren Coffee Table.*Made to order/])
+  await expect(grid(page).getByRole('heading', { level: 3 })).toHaveText(['Wren Coffee Table'])
+  await expect(card(page, 'Wren Coffee Table')).toContainText('Made to order')
   await inStock.check()
   await expect(count).toHaveText('6 pieces')
   await filters.getByRole('button', { name: 'Clear all' }).click()
@@ -79,22 +83,59 @@ test('category and price filters combine, keep counts in sync and survive reload
 
 test('desktop card arrows and keyboard keep the shopper on the listing', async ({ page }) => {
   await page.goto('/shop')
-  const gallery = grid(page).getByRole('group', { name: 'Photos of Test chair', exact: true })
-  const first = gallery.getByRole('img', { name: 'Test chair, photo 1 of 2' })
-  const next = gallery.getByRole('button', { name: 'Next photo of Test chair' })
-  const previous = gallery.getByRole('button', { name: 'Previous photo of Test chair' })
-  await expect(first).toHaveCSS('object-fit', 'contain')
-  await expect(gallery.getByText('1 of 2')).toBeVisible()
+  const chair = card(page, 'Test chair')
+  const photos = chair.getByRole('link', { name: 'Test chair, 2 photos' })
+  const next = chair.getByRole('button', { name: 'Next photo of Test chair' })
+  const previous = chair.getByRole('button', { name: 'Previous photo of Test chair' })
+  await expect(chair.getByRole('img', { name: 'Test chair, photo 1 of 2' })).toHaveCSS('object-fit', 'contain')
+  await chair.hover()
   await next.click()
-  await expect(gallery.getByText('2 of 2')).toBeVisible()
+  await expect.poll(() => photoInView(photos)).toBe(1)
   await expect(next).toBeDisabled()
-  await gallery.getByLabel('Browse photos of Test chair with the arrow keys').press('ArrowLeft')
-  await expect(gallery.getByText('1 of 2')).toBeVisible()
+  await photos.press('ArrowLeft')
+  await expect.poll(() => photoInView(photos)).toBe(0)
   await expect(previous).toBeDisabled()
   await expect(grid(page).getByRole('button', { name: 'Next photo of Tilda Sofa' })).toHaveCount(0)
   await expect(page).toHaveURL(/\/shop$/)
-  await grid(page).getByRole('link', { name: /^Test chair/ }).click()
+  await chair.getByRole('link', { name: 'Test chair', exact: true }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Test chair')
+})
+
+test('a mouse drag swipes the photos without opening the piece', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/shop')
+  const photos = card(page, 'Test chair').getByRole('link', { name: 'Test chair, 2 photos' })
+  const box = (await photos.boundingBox())!
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(() => photoInView(photos)).toBe(1)
+  await expect(page).toHaveURL(/\/shop$/)
+})
+
+test('each card shows at most one alert, and finish dots switch the photos, price and link', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/shop')
+  const sofa = card(page, 'Tilda Sofa')
+  await expect(sofa).toContainText(/17% off, save R\s4\s000/)
+  await expect(sofa.locator('s')).toHaveText(/Was R\s22\s999,00/)
+  await expect(card(page, 'Test chair')).toContainText('Just arrived')
+  await expect(card(page, 'Wren Coffee Table')).toContainText('Made to order')
+  await expect(card(page, 'Yara Floor Lamp')).not.toContainText(/In stock|Just arrived|Made to order|% off/)
+  await expect(grid(page)).not.toContainText('In stock')
+
+  const table = card(page, 'Umbra Dining Table')
+  const finishes = table.getByRole('group', { name: 'Finishes' })
+  await expect(finishes.getByRole('button')).toHaveCount(3)
+  await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'true')
+  await finishes.getByRole('button', { name: 'Gold / 160 cm' }).click()
+  await expect(finishes.getByRole('button', { name: 'Gold / 160 cm' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(table.getByRole('img', { name: 'Umbra Dining Table, photo 1 of 1' })).toHaveAttribute('src', '/demo/arc-front.jpg')
+  await expect(table).toContainText(/R\s37\s000,00/)
+  for (const link of await table.getByRole('link').all()) await expect(link).toHaveAttribute('href', /\?variant=variant_umbra_gold_small$/)
+  await expect(card(page, 'Tilda Sofa').getByRole('group', { name: 'Finishes' })).toHaveCount(0)
 })
 
 test.describe('touch product cards', () => {
@@ -104,8 +145,8 @@ test.describe('touch product cards', () => {
     await page.goto('/shop')
     await page.getByRole('button', { name: 'Reject optional analytics' }).click()
     await expect(page.getByRole('region', { name: 'Your privacy choices' })).toBeHidden()
-    const gallery = grid(page).getByRole('group', { name: 'Photos of Test chair', exact: true })
-    const track = gallery.getByLabel('Browse photos of Test chair with the arrow keys')
+    const photos = card(page, 'Test chair').getByRole('link', { name: 'Test chair, 2 photos' })
+    const track = photos.locator('..')
     await track.evaluate((element) => element.scrollIntoView({ block: 'center' }))
     const rect = await track.boundingBox()
     expect(rect).not.toBeNull()
@@ -117,7 +158,7 @@ test.describe('touch product cards', () => {
       await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [hit(ratio)] })
     }
     await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-    await expect(gallery.getByText('2 of 2')).toBeVisible()
+    await expect.poll(() => photoInView(photos)).toBe(1)
     await expect(page).toHaveURL(/\/shop$/)
   })
 })

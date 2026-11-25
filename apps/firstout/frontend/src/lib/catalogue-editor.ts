@@ -16,6 +16,7 @@ export const CATALOGUE_FIELD_TABS = {
   diameter_cm: 0,
   piece_count: 0,
   notes: 0,
+  swatch_hex: 0,
   stockist_ex_vat: 1,
   wholesale_ex_vat: 1,
   decorator_ex_vat: 1,

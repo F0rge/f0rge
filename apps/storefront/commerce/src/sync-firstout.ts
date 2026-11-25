@@ -42,6 +42,8 @@ function syncedCatalogueMetadata(row: OpsProduct) {
   return {
     ...(row.dimensions_cm === undefined ? {} : { dimensions_cm: row.dimensions_cm }),
     ...(row.piece_count === undefined ? {} : { piece_count: row.piece_count }),
+    // Variant metadata key the storefront card reads; null once Firstout clears the colour.
+    ...(row.swatch_hex === undefined ? {} : { swatch_hex: row.swatch_hex }),
   };
 }
 
@@ -105,7 +107,7 @@ async function opsGet(path: string): Promise<{ response: Response; companyId: st
 
 async function fetchOpsProducts(): Promise<OpsProductsResponse> {
   const { response, companyId } = await opsGet(
-    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true",
+    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true&include_swatch=true",
   );
   return parseOpsProducts(await response.json(), companyId);
 }

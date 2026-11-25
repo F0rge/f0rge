@@ -133,6 +133,7 @@ function fakeMedusa(products: FakeProduct[], feed: OpsProduct[]) {
         if (update.title) product.title = update.title;
         if ("status" in update) product.status = Reflect.get(update, "status");
         if ("collection_id" in update) product.collection_id = Reflect.get(update, "collection_id");
+        if ("tags" in update) product.tags = Reflect.get(update, "tags"); // Medusa replaces the whole list.
         if (update.metadata) product.metadata = { ...(product.metadata as Record<string, unknown>), ...update.metadata };
         if (update.images) {
           product.images = update.images.map((image) => image.id
@@ -658,4 +659,31 @@ test("a published piece that leaves the feed is withdrawn", async () => {
   expect(calls).toContainEqual({ workflow: "updateProductsWorkflow", input: {
     selector: { id: ["prod_table"] }, update: { status: "draft", collection_id: null },
   } });
+});
+
+test("the finish colour reaches variant metadata only when changed, clears to null, and staff tags survive", async () => {
+  const existing: FakeProduct = { ...stagedTable(), tags: [{ id: "ptag_new", value: "just-arrived" }] };
+  const { calls, state, container } = fakeMedusa([existing], [{ ...table, swatch_hex: "#9b9592" }]);
+  const variantUpdates = () => calls.filter((call) => call.workflow === "updateProductVariantsWorkflow").length;
+
+  await syncFirstout(container);
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("&include_swatch=true"), expect.anything());
+  const variant = existing.variants![0];
+  expect(variant.metadata?.swatch_hex).toBe("#9b9592");
+  const afterFirst = variantUpdates();
+
+  await syncFirstout(container);
+  expect(variantUpdates()).toBe(afterFirst);
+
+  state.feed = [table]; // An older Firstout sends no colour: the stored one stays.
+  await syncFirstout(container);
+  expect(variant.metadata?.swatch_hex).toBe("#9b9592");
+  expect(variantUpdates()).toBe(afterFirst);
+
+  state.feed = [{ ...table, swatch_hex: null }];
+  await syncFirstout(container);
+  expect(variant.metadata?.swatch_hex).toBeNull();
+
+  expect(existing.tags).toEqual([{ id: "ptag_new", value: "just-arrived" }]);
+  expect(calls.filter((call) => call.workflow === "updateProductsWorkflow" && "tags" in (call.input.update as object))).toEqual([]);
 });

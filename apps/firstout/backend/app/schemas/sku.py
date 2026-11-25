@@ -7,8 +7,10 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
+    StringConstraints,
     field_serializer,
     field_validator,
     model_validator,
@@ -24,6 +26,20 @@ SKU_DETAIL_FIELDS = (*SKU_DIMENSION_FIELDS, "notes", "piece_count")
 SKU_SETTING_PHOTO_SLOT = 4
 SKU_DETAIL_PHOTO_SLOT = 5
 SkuDimension = Annotated[Decimal, Field(gt=0, max_digits=8, decimal_places=2, allow_inf_nan=False)]
+
+
+def _swatch_hex_input(value: object) -> object:
+    # Blank clears the colour; any case is accepted and stored lowercase (ck_skus_swatch_hex).
+    if isinstance(value, str):
+        return value.strip().lower() or None
+    return value
+
+
+# Finish colour as #rrggbb, synced to the shop as variant metadata ``swatch_hex``.
+SkuSwatchHex = Annotated[
+    Optional[Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]],
+    BeforeValidator(_swatch_hex_input),
+]
 
 
 class SkuDetails(BaseModel):
@@ -52,6 +68,7 @@ class SkuCreate(SkuDetails):
     opening_unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
     opening_date: Optional[datetime.date] = None
     carton_count: int = Field(default=1, ge=1)
+    swatch_hex: SkuSwatchHex = None
 
     @field_validator("our_barcode", mode="before")
     @classmethod
@@ -117,6 +134,7 @@ class SkuUpdate(SkuDetails):
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
     carton_count: Optional[int] = Field(default=None, ge=1)
+    swatch_hex: SkuSwatchHex = None
 
 
 SkuTradePriceInput = Annotated[
@@ -179,6 +197,7 @@ class SkuResponse(SkuDetails):
     reorder_min: Optional[int] = None
     last_landed_cost_zar: Optional[Decimal] = None
     category: Optional[str] = None
+    swatch_hex: Optional[str] = None
     photo_storage_key: Optional[str]
     gallery_photo_count: int = 0
     stockist_ex_vat: Optional[Decimal] = None

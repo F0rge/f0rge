@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ComponentProps } from "react";
 import { analyticsSurfaceForPathname, type AnalyticsSurface } from "@/lib/analytics/events";
 import { useStorefrontAnalytics } from "./analytics-provider";
 
@@ -9,11 +9,11 @@ function currentSurface(): AnalyticsSurface | null {
   return typeof window === "undefined" ? null : analyticsSurfaceForPathname(window.location.pathname);
 }
 
-export function TrackedProductLink({ href, productId, className, children }: {
+// A card with several links to one piece sends its impression from one of them (impression={false} on the others).
+export function TrackedProductLink({ href, productId, impression = true, children, ...link }: Omit<ComponentProps<typeof Link>, "href" | "onClick" | "ref"> & {
   href: string;
   productId: string;
-  className: string;
-  children: ReactNode;
+  impression?: boolean;
 }) {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const impressionSentRef = useRef(false);
@@ -21,7 +21,7 @@ export function TrackedProductLink({ href, productId, className, children }: {
 
   useEffect(() => {
     const element = linkRef.current;
-    if (!element || choice !== "accepted" || impressionSentRef.current || typeof IntersectionObserver === "undefined") return;
+    if (!element || !impression || choice !== "accepted" || impressionSentRef.current || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry || entry.intersectionRatio < 0.5 || impressionSentRef.current) return;
       const surface = currentSurface();
@@ -32,9 +32,9 @@ export function TrackedProductLink({ href, productId, className, children }: {
     }, { threshold: [0.5] });
     observer.observe(element.closest("[data-product-card]") ?? element);
     return () => observer.disconnect();
-  }, [capture, choice, productId]);
+  }, [capture, choice, impression, productId]);
 
-  return <Link ref={linkRef} href={href} className={className} onClick={() => {
+  return <Link {...link} ref={linkRef} href={href} onClick={() => {
     const surface = currentSurface();
     if (surface) capture({ name: "storefront_product_selected", properties: { product_id: productId, surface } });
   }}>
