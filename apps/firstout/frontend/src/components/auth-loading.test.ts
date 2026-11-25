@@ -2,6 +2,16 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AuthPageLoading } from "./auth-loading";
+import { WorkspaceLoader } from "./workspace-loader";
+
+it("renders the workspace mark as inline vectors and keeps its announcement visually hidden", () => {
+  const html = renderToStaticMarkup(createElement(WorkspaceLoader));
+  expect(html.match(/role="status"/g)).toHaveLength(1);
+  expect(html).toContain('<span class="firstout-sr-only">Loading your workspace…</span>');
+  expect(html).toMatch(/<svg\b[^>]*aria-hidden="true"/);
+  expect(html).toContain("<path ");
+  expect(html).not.toMatch(/<(img|image|canvas)\b/);
+});
 
 describe("Clerk page loading", () => {
   it.each([
