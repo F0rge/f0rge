@@ -51,6 +51,13 @@ describe("product meta descriptions", () => {
     })).toBe("Linden Bench has an oak seat & a low profile.");
   });
 
+  it("keeps concise editorial copy and skips an override that only repeats the title", () => {
+    expect(productMetaDescription({ ...product, metadata: { seo_description: "Hand-finished oak." } }))
+      .toBe("Linden Bench. Hand-finished oak.");
+    expect(productMetaDescription({ ...product, metadata: { seo_description: "Linden Bench." } }))
+      .toBe("Linden Bench. A slatted oak bench with a low rectangular seat. SKU LINDEN-OAK.");
+  });
+
   it("makes generated copy distinct when two catalogue pages share a title and description", () => {
     expect(productMetaDescription(product)).toBe("Linden Bench. A slatted oak bench with a low rectangular seat. SKU LINDEN-OAK.");
     expect(productMetaDescription({
@@ -199,7 +206,12 @@ describe("product structured data", () => {
       expect(result).not.toHaveProperty("variesBy");
       expect(result.hasVariant[0]).not.toHaveProperty("color");
       expect(result.hasVariant[0]).not.toHaveProperty("material");
+      expect(result.hasVariant[0].additionalProperty).toEqual([{ "@type": "PropertyValue", name: title, value: "Option A" }]);
     }
+  });
+
+  it("omits variant markup when shoppers have no varying option to select", () => {
+    expect(schema({ ...product, variants: [variant, { ...variant, id: "variant_linden_ash", sku: "LINDEN-ASH" }] })).toBeNull();
   });
 
   it("reports known zero stock without treating stale made-to-order capacity as available", () => {
@@ -218,6 +230,7 @@ describe("product structured data", () => {
     { calculated_price: { calculated_amount: 0, currency_code: "zar" } },
     { calculated_price: { calculated_amount: 4299.951, currency_code: "zar" } },
     { inventory_quantity: undefined },
+    { inventory_quantity: -1 },
     { inventory_quantity: 0, metadata: { made_to_order_offer: offer({ max_lead_time_days: 0 }) } },
     { sku: null },
   ])("omits Offer when price, SKU or availability are unverified (%o)", (overrides) => {

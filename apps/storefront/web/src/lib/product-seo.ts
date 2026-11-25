@@ -78,9 +78,11 @@ function optionDescriptions(product: StoreProduct): string[] {
 export function productMetaDescription(product: StoreProduct): string | undefined {
   const name = publicText(product.title);
   if (!name) return undefined;
+  const title = sentence(name).toLowerCase();
   const override = publicText(product.metadata?.seo_description);
-  if (override && override.split(" ").length >= 5 && override.toLowerCase() !== name.toLowerCase()) {
-    return shortDescription(sentence(override));
+  if (override && sentence(override).toLowerCase() !== title) {
+    const description = override.toLowerCase().includes(name.toLowerCase()) ? override : `${sentence(name)} ${override}`;
+    return shortDescription(sentence(description));
   }
 
   const variant = product.variants.length === 1 ? product.variants[0] : undefined;
@@ -95,7 +97,7 @@ export function productMetaDescription(product: StoreProduct): string | undefine
     material && `Material: ${material}`,
     category && `${category} collection`,
   ];
-  const hasCatalogueCopy = copy != null && copy.toLowerCase() !== name.toLowerCase();
+  const hasCatalogueCopy = copy != null && sentence(copy).toLowerCase() !== title;
   const lead = hasCatalogueCopy
     ? sentence(copy.toLowerCase().includes(name.toLowerCase()) ? copy : `${sentence(name)} ${copy}`)
     : `Explore ${name} at DasKasas.`;
@@ -160,10 +162,12 @@ function variantProduct(
   const choices = variantChoices(variant);
   const options = axes.flatMap(({ id, title }) => {
     const value = publicText(choices[id]);
-    return value ? [{ key: VARIANT_PROPERTIES.get(title.trim().toLowerCase()), value }] : [];
+    return value ? [{ key: VARIANT_PROPERTIES.get(title.trim().toLowerCase()), name: title, value }] : [];
   });
   const values = options.map(({ value }) => value);
   const properties = Object.fromEntries(options.flatMap(({ key, value }) => key ? [[key, value]] : []));
+  const otherOptions = options.flatMap(({ key, name, value }) =>
+    key ? [] : [{ "@type": "PropertyValue", name, value }]);
   const sku = publicText(variant.sku);
   const images = publicImages(product, variant, canonicalUrl);
   const material = publicText(variant.material || product.material);
@@ -178,6 +182,7 @@ function variantProduct(
     ...(images.length ? { image: images } : {}),
     ...(material ? { material } : {}),
     ...properties,
+    ...(otherOptions.length ? { additionalProperty: otherOptions } : {}),
     ...(offers ? { offers } : {}),
   };
 }
@@ -194,10 +199,11 @@ export function productStructuredData(
   if (!name || !product.variants.length || (product.status != null && product.status !== "published")) return null;
 
   const canonical = new URL(path, homepage);
-  if (canonical.pathname !== path) return null;
+  if (canonical.origin !== homepage.origin || canonical.pathname !== path || canonical.search || canonical.hash) return null;
   const canonicalUrl = canonical.href;
   const description = publicText(product.description);
   const axes = productVariantOptions(product);
+  if (product.variants.length > 1 && !axes.length) return null;
   const products = product.variants.map((variant) => variantProduct(product, variant, name, description, canonicalUrl, axes));
   const variesBy = [...new Set(axes.flatMap(({ title }) => {
     const property = VARIANT_PROPERTIES.get(title.trim().toLowerCase());

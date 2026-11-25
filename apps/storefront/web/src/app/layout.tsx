@@ -24,7 +24,7 @@ const skin = collectorSkinAttribute(currentCustomerPolicies()?.collector_skin ??
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
   title: { default: "DasKasas | Considered furniture", template: "%s | DasKasas" },
-  description: "Discover DasKasas furniture online and visit our Bedford Square showroom in Bedfordview, Johannesburg. Browse the collection and check availability.",
+  description: "Considered furniture for a home, thoughtfully yours.",
   alternates: { canonical: "/" },
   robots: { index: indexable, follow: indexable },
 };

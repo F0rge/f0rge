@@ -30,3 +30,50 @@
   letter-spacing: 0.7px;
   overflow-wrap: anywhere;
 }
+.stock {
+  padding: 16px;
+  background: var(--cds-layer-02);
+}
+.stockHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.stockHeading h3 {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.stockHeading span,
+.stockMetrics dt {
+  color: var(--cds-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.stockMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.stockMetrics > div + div {
+  padding-inline-start: 16px;
+  border-inline-start: 1px solid var(--cds-border-subtle-02);
+}
+.stockMetrics dd {
+  font-size: 28px;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.stockLocations {
+  margin-top: 12px;
+}
+.stockLocations dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 4px;
+}
+.stockLocations dd {
+  font-variant-numeric: tabular-nums;
+}

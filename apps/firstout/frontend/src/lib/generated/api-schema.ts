@@ -13079,7 +13079,7 @@ export interface components {
         /** WorkspaceQueryResponse */
         WorkspaceQueryResponse: {
             /** Items */
-            items: (components["schemas"]["SkuResponse"] | components["schemas"]["CustomerCrmResponse"] | components["schemas"]["SupplierResponse"] | components["schemas"]["PriceListResponse"] | components["schemas"]["LocationResponse"] | components["schemas"]["UserResponse"] | components["schemas"]["RoleResponse"] | components["schemas"]["AccountResponse"] | components["schemas"]["RepeatingInvoiceResponse"] | components["schemas"]["ProformaResponse"] | components["schemas"]["QuoteListItem"] | components["schemas"]["PaymentResponse"] | components["schemas"]["BillListItem"] | components["schemas"]["InvoiceListItem"])[];
+            items: (components["schemas"]["WorkspaceSkuRow"] | components["schemas"]["CustomerCrmResponse"] | components["schemas"]["SupplierResponse"] | components["schemas"]["PriceListResponse"] | components["schemas"]["LocationResponse"] | components["schemas"]["UserResponse"] | components["schemas"]["RoleResponse"] | components["schemas"]["AccountResponse"] | components["schemas"]["RepeatingInvoiceResponse"] | components["schemas"]["ProformaResponse"] | components["schemas"]["QuoteListItem"] | components["schemas"]["PaymentResponse"] | components["schemas"]["BillListItem"] | components["schemas"]["InvoiceListItem"])[];
             /** Total */
             total: number;
             counts: components["schemas"]["WorkspaceCounts"];
@@ -13096,6 +13096,154 @@ export interface components {
             /** Bulk Available */
             bulk_available: boolean;
         };
+        /** WorkspaceSkuRow */
+        WorkspaceSkuRow: {
+            /** Width Cm */
+            width_cm: number | null;
+            /** Depth Cm */
+            depth_cm: number | null;
+            /** Height Cm */
+            height_cm: number | null;
+            /** Diameter Cm */
+            diameter_cm: number | null;
+            /** Notes */
+            notes: string | null;
+            /** Piece Count */
+            piece_count: number | null;
+            /**
+             * Is Archived
+             * @default false
+             */
+            is_archived: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /** Archived By Id */
+            archived_by_id: string | null;
+            /** Is Sellable */
+            is_sellable: boolean;
+            /**
+             * Till No Stock Required
+             * @default false
+             */
+            till_no_stock_required: boolean;
+            /**
+             * Exclude From Commission
+             * @default false
+             */
+            exclude_from_commission: boolean;
+            /**
+             * Storefront Hidden
+             * @default false
+             */
+            storefront_hidden: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Our Ref */
+            our_ref: string;
+            /** Our Barcode */
+            our_barcode: string;
+            /** Name */
+            name: string;
+            /** Design */
+            design: string;
+            /** Fabric */
+            fabric: string;
+            /** Supplier Ref */
+            supplier_ref: string | null;
+            /** Preferred Supplier Id */
+            preferred_supplier_id: string | null;
+            /** Preferred Supplier Name */
+            preferred_supplier_name: string | null;
+            /** Lead Time Days */
+            lead_time_days: number | null;
+            /** Made To Order Capacity */
+            made_to_order_capacity: number | null;
+            /** Made To Order Lead Time Min Days */
+            made_to_order_lead_time_min_days: number | null;
+            /** Made To Order Lead Time Max Days */
+            made_to_order_lead_time_max_days: number | null;
+            /** Made To Order Expires At */
+            made_to_order_expires_at: string | null;
+            /** Made To Order Offer Id */
+            made_to_order_offer_id: string | null;
+            /** Reorder Min */
+            reorder_min: number | null;
+            /** Last Landed Cost Zar */
+            last_landed_cost_zar: string | null;
+            /** Category */
+            category: string | null;
+            /** Photo Storage Key */
+            photo_storage_key: string | null;
+            /**
+             * Gallery Photo Count
+             * @default 0
+             */
+            gallery_photo_count: number;
+            /** Stockist Ex Vat */
+            stockist_ex_vat: string | null;
+            /** Stockist Inc Vat */
+            stockist_inc_vat: string | null;
+            /** Wholesale Ex Vat */
+            wholesale_ex_vat: string | null;
+            /** Wholesale Inc Vat */
+            wholesale_inc_vat: string | null;
+            /** Decorator Ex Vat */
+            decorator_ex_vat: string | null;
+            /** Decorator Inc Vat */
+            decorator_inc_vat: string | null;
+            /** Retail Ex Vat */
+            retail_ex_vat: string | null;
+            /** Retail Inc Vat */
+            retail_inc_vat: string | null;
+            /** Average Unit Cost Zar */
+            average_unit_cost_zar: string | null;
+            /**
+             * Stockist Below Cost
+             * @default false
+             */
+            stockist_below_cost: boolean;
+            /**
+             * Wholesale Below Cost
+             * @default false
+             */
+            wholesale_below_cost: boolean;
+            /**
+             * Decorator Below Cost
+             * @default false
+             */
+            decorator_below_cost: boolean;
+            /**
+             * Retail Below Cost
+             * @default false
+             */
+            retail_below_cost: boolean;
+            /** Carton Count */
+            carton_count: number;
+            /**
+             * Is Kit
+             * @default false
+             */
+            is_kit: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** On Hand */
+            on_hand: string;
+            /** On Order */
+            on_order: string;
+            /** Stock Locations */
+            stock_locations: components["schemas"]["WorkspaceStockLocation"][];
+        };
         /** WorkspaceSort */
         WorkspaceSort: {
             /** Field */
@@ -13106,6 +13254,18 @@ export interface components {
              * @enum {string}
              */
             direction?: "asc" | "desc";
+        };
+        /** WorkspaceStockLocation */
+        WorkspaceStockLocation: {
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Location Name */
+            location_name: string;
+            /** On Hand */
+            on_hand: string;
         };
     };
     responses: never;

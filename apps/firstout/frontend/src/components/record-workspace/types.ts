@@ -60,6 +60,8 @@ export interface RecordWorkspaceProps<T extends { id: string }> {
   onEdit?: (item: T) => void;
   modalDetails?: boolean;
   listTitle?: string;
+  /** Render an action above the inline inspector's scrolling content. */
+  renderDetailsHeader?: (item: T) => ReactNode;
   renderDetails: (item: T, context: RecordWorkspaceContext) => ReactNode;
   loadingDetails?: { tabs: readonly string[]; fields: readonly string[] };
   headerActions?: ReactNode;

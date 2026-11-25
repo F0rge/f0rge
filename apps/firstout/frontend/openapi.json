@@ -39673,7 +39673,7 @@
             "items": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/SkuResponse"
+                  "$ref": "#/components/schemas/WorkspaceSkuRow"
                 },
                 {
                   "$ref": "#/components/schemas/CustomerCrmResponse"
@@ -39774,6 +39774,523 @@
         ],
         "title": "WorkspaceQueryResponse"
       },
+      "WorkspaceSkuRow": {
+        "properties": {
+          "width_cm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Cm"
+          },
+          "depth_cm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth Cm"
+          },
+          "height_cm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Cm"
+          },
+          "diameter_cm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diameter Cm"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "piece_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Piece Count"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived",
+            "default": false
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "archived_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived By Id"
+          },
+          "is_sellable": {
+            "type": "boolean",
+            "title": "Is Sellable"
+          },
+          "till_no_stock_required": {
+            "type": "boolean",
+            "title": "Till No Stock Required",
+            "default": false
+          },
+          "exclude_from_commission": {
+            "type": "boolean",
+            "title": "Exclude From Commission",
+            "default": false
+          },
+          "storefront_hidden": {
+            "type": "boolean",
+            "title": "Storefront Hidden",
+            "default": false
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "our_ref": {
+            "type": "string",
+            "title": "Our Ref"
+          },
+          "our_barcode": {
+            "type": "string",
+            "title": "Our Barcode"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "design": {
+            "type": "string",
+            "title": "Design"
+          },
+          "fabric": {
+            "type": "string",
+            "title": "Fabric"
+          },
+          "supplier_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Ref"
+          },
+          "preferred_supplier_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Supplier Id"
+          },
+          "preferred_supplier_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Supplier Name"
+          },
+          "lead_time_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Time Days"
+          },
+          "made_to_order_capacity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made To Order Capacity"
+          },
+          "made_to_order_lead_time_min_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made To Order Lead Time Min Days"
+          },
+          "made_to_order_lead_time_max_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made To Order Lead Time Max Days"
+          },
+          "made_to_order_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made To Order Expires At"
+          },
+          "made_to_order_offer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made To Order Offer Id"
+          },
+          "reorder_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reorder Min"
+          },
+          "last_landed_cost_zar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Landed Cost Zar"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "photo_storage_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Storage Key"
+          },
+          "gallery_photo_count": {
+            "type": "integer",
+            "title": "Gallery Photo Count",
+            "default": 0
+          },
+          "stockist_ex_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stockist Ex Vat"
+          },
+          "stockist_inc_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stockist Inc Vat"
+          },
+          "wholesale_ex_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wholesale Ex Vat"
+          },
+          "wholesale_inc_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wholesale Inc Vat"
+          },
+          "decorator_ex_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decorator Ex Vat"
+          },
+          "decorator_inc_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decorator Inc Vat"
+          },
+          "retail_ex_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Ex Vat"
+          },
+          "retail_inc_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Inc Vat"
+          },
+          "average_unit_cost_zar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Unit Cost Zar"
+          },
+          "stockist_below_cost": {
+            "type": "boolean",
+            "title": "Stockist Below Cost",
+            "default": false
+          },
+          "wholesale_below_cost": {
+            "type": "boolean",
+            "title": "Wholesale Below Cost",
+            "default": false
+          },
+          "decorator_below_cost": {
+            "type": "boolean",
+            "title": "Decorator Below Cost",
+            "default": false
+          },
+          "retail_below_cost": {
+            "type": "boolean",
+            "title": "Retail Below Cost",
+            "default": false
+          },
+          "carton_count": {
+            "type": "integer",
+            "title": "Carton Count"
+          },
+          "is_kit": {
+            "type": "boolean",
+            "title": "Is Kit",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "on_hand": {
+            "type": "string",
+            "title": "On Hand"
+          },
+          "on_order": {
+            "type": "string",
+            "title": "On Order"
+          },
+          "stock_locations": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceStockLocation"
+            },
+            "type": "array",
+            "title": "Stock Locations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "width_cm",
+          "depth_cm",
+          "height_cm",
+          "diameter_cm",
+          "notes",
+          "piece_count",
+          "is_archived",
+          "archived_at",
+          "archived_by_id",
+          "is_sellable",
+          "till_no_stock_required",
+          "exclude_from_commission",
+          "storefront_hidden",
+          "id",
+          "our_ref",
+          "our_barcode",
+          "name",
+          "design",
+          "fabric",
+          "supplier_ref",
+          "preferred_supplier_id",
+          "preferred_supplier_name",
+          "lead_time_days",
+          "made_to_order_capacity",
+          "made_to_order_lead_time_min_days",
+          "made_to_order_lead_time_max_days",
+          "made_to_order_expires_at",
+          "made_to_order_offer_id",
+          "reorder_min",
+          "last_landed_cost_zar",
+          "category",
+          "photo_storage_key",
+          "gallery_photo_count",
+          "stockist_ex_vat",
+          "stockist_inc_vat",
+          "wholesale_ex_vat",
+          "wholesale_inc_vat",
+          "decorator_ex_vat",
+          "decorator_inc_vat",
+          "retail_ex_vat",
+          "retail_inc_vat",
+          "average_unit_cost_zar",
+          "stockist_below_cost",
+          "wholesale_below_cost",
+          "decorator_below_cost",
+          "retail_below_cost",
+          "carton_count",
+          "is_kit",
+          "created_at",
+          "updated_at",
+          "on_hand",
+          "on_order",
+          "stock_locations"
+        ],
+        "title": "WorkspaceSkuRow"
+      },
       "WorkspaceSort": {
         "properties": {
           "field": {
@@ -39798,6 +40315,30 @@
           "field"
         ],
         "title": "WorkspaceSort"
+      },
+      "WorkspaceStockLocation": {
+        "properties": {
+          "location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Location Id"
+          },
+          "location_name": {
+            "type": "string",
+            "title": "Location Name"
+          },
+          "on_hand": {
+            "type": "string",
+            "title": "On Hand"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location_id",
+          "location_name",
+          "on_hand"
+        ],
+        "title": "WorkspaceStockLocation"
       }
     }
   }

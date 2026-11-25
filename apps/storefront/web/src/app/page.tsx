@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
@@ -14,6 +15,11 @@ import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@
 import { SHOWROOM } from "@/lib/showroom";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "DasKasas | Furniture Store in Bedfordview" },
+  description: "Shop sofas, armchairs, dining tables and bedroom furniture online, or visit the DasKasas showroom at Bedford Square.",
+};
 
 const faqs: { question: string; answer: string; returnPolicy?: true }[] = [
   {

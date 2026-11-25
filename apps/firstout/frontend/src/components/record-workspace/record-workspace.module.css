@@ -375,6 +375,20 @@
   background: var(--cds-layer-01);
   border-top: 3px solid var(--cds-border-interactive);
 }
+.inspectorWithHeader {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.inspectorHeader {
+  flex: none;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+.inspectorScroll {
+  min-height: 0;
+  overflow: auto;
+}
 .inspectorLabel {
   display: flex;
   align-items: center;
