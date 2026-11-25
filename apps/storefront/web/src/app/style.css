@@ -71,6 +71,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 .error-state button { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; height: auto; border: 1px solid var(--primary); border-radius: 999px; background: var(--primary); color: #fff; padding: .9rem 1.4rem; font: 13px var(--sans); text-decoration: none; cursor: pointer; }
 .error-state { min-height: 55vh; }
 .error-state h1 { max-width: 14ch; }
+body:has(#main-content [data-storefront-not-found]) [data-storefront-brand-link] { display: none; }
 .error-state > p:not(.eyebrow) { color: var(--muted-foreground); }
 .error-state button { margin: 1rem 1rem 0 0; }
 

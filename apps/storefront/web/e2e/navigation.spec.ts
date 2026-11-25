@@ -64,6 +64,9 @@ for (const width of [390, 320]) {
     await page.keyboard.press('Enter')
     const dialog = page.getByRole('dialog', { name: /^DasKasas$/i })
     await expect(dialog).toBeVisible()
+    const logo = dialog.locator('img')
+    await expect(logo).toBeVisible()
+    await expect(logo).toHaveAttribute('src', '/brand/dk-champagne.png')
     await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true)
     const mobileNav = dialog.getByRole('navigation', { name: 'Mobile navigation' })
     await expect(mobileNav.getByRole('link')).toHaveText([...menu.map(([label]) => label), 'Account'])
@@ -87,6 +90,41 @@ for (const width of [390, 320]) {
     await dialog.getByRole('button', { name: 'Close', exact: true }).click()
     await expect(dialog).toBeHidden()
     await expect(trigger).toBeFocused()
+  })
+}
+
+for (const { path, width } of [
+  { path: '/missing-storefront-page', width: 1440 },
+  { path: '/shop/nonexistent-category', width: 390 },
+]) {
+  test(`the 404 at ${path} hides page branding until recovery`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const response = await page.goto(path)
+    expect(response?.status()).toBe(404)
+    const main = page.getByRole('main')
+    await expect(main.getByRole('heading', { name: 'We can’t find this piece.' })).toBeVisible()
+    await expect(main.getByText('DasKasas', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'DasKasas home', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Bag, 0 items' })).toBeVisible()
+
+    if (width === 390) {
+      await page.getByRole('button', { name: 'Open menu' }).click()
+      const drawer = page.getByRole('dialog', { name: 'DasKasas' })
+      await expect(drawer.locator('img')).toHaveAttribute('src', '/brand/dk-champagne.png')
+      await expect(drawer.getByRole('navigation', { name: 'Mobile navigation' })).toBeVisible()
+      await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+    } else {
+      await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible()
+    }
+
+    await main.getByRole('link', { name: /^Explore all pieces/ }).click()
+    await expect(page).toHaveURL(/\/shop$/)
+    await expectLogoOnlyHomeLink(page)
+    const footerBrand = page.getByRole('contentinfo').getByRole('link', { name: 'DasKasas home' })
+    await expect(footerBrand.locator('img')).toHaveCount(2)
+    const footerWordmark = footerBrand.locator('img[src="/brand/daskasas-geometric.png"]')
+    await footerWordmark.scrollIntoViewIfNeeded()
+    await expect.poll(() => footerWordmark.evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth)).toBeGreaterThan(0)
   })
 }
 
