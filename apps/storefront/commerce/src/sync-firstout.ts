@@ -42,6 +42,8 @@ function syncedCatalogueMetadata(row: OpsProduct) {
   return {
     ...(row.dimensions_cm === undefined ? {} : { dimensions_cm: row.dimensions_cm }),
     ...(row.piece_count === undefined ? {} : { piece_count: row.piece_count }),
+    // Variant metadata key the storefront card reads; null once Firstout clears the colour.
+    ...(row.swatch_hex === undefined ? {} : { swatch_hex: row.swatch_hex }),
   };
 }
 
@@ -105,7 +107,7 @@ async function opsGet(path: string): Promise<{ response: Response; companyId: st
 
 async function fetchOpsProducts(): Promise<OpsProductsResponse> {
   const { response, companyId } = await opsGet(
-    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true",
+    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true&include_swatch=true",
   );
   return parseOpsProducts(await response.json(), companyId);
 }
@@ -902,7 +904,8 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<{ snapsho
       const commitmentsChanged = remainingPending.length !== pending.length;
       const projectionChanged = variant.metadata?.source_projected_quantity !== projected || commitmentsChanged;
       const catalogue = syncedCatalogueMetadata(row);
-      const catalogueChanged = Object.entries(catalogue).some(([key, value]) => JSON.stringify(value) !== JSON.stringify(variant.metadata?.[key]));
+      // A missing key and null both mean "none", so uncoloured variants are not rewritten once.
+      const catalogueChanged = Object.entries(catalogue).some(([key, value]) => JSON.stringify(value ?? null) !== JSON.stringify(variant.metadata?.[key] ?? null));
       // Reservation consumption/cancellation can change independently of the
       // source revision. Rebase stock on every accepted projection.
       await writeStock(container, variant.id, locations[0].id, projected);

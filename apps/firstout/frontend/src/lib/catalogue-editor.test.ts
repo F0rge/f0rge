@@ -21,6 +21,7 @@ const sku: Parameters<typeof catalogueFormFromSku>[0] = {
   diameter_cm: null,
   notes: null,
   piece_count: null,
+  swatch_hex: null,
   category: null,
   preferred_supplier_id: null,
   supplier_ref: null,

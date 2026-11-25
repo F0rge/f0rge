@@ -6,6 +6,8 @@
 
 @theme inline {
   --font-serif: var(--daskasas-serif), ui-serif, Georgia, serif;
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
 }
 
 /* Approved mockup palette (apps/storefront/docs/mockup-2026-11-21). */
@@ -34,6 +36,9 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  /* Brass for card alerts: gold on ink, gold-deep on white. */
+  --gold: oklch(0.86 0.09 85);
+  --gold-deep: oklch(0.56 0.09 72);
   --radius: 0.625rem;
   --font-sans: var(--sans);
   --font-geist-mono: var(--sans);
@@ -74,6 +79,23 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 body:has(#main-content [data-storefront-not-found]) [data-storefront-brand-link] { display: none; }
 .error-state > p:not(.eyebrow) { color: var(--muted-foreground); }
 .error-state button { margin: 1rem 1rem 0 0; }
+
+/* Product card alerts (components/product-card.tsx): the bar slides up and the old price is struck through once the card is
+   in view. The card script sets <html data-card-motion> only when it can mark cards as seen and motion is allowed,
+   so without it (no JS, a failed bundle, reduced motion) the resting state is always visible. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-card-motion] [data-product-card]:not([data-seen]) [data-alert-bar] { translate: 0 calc(100% + 14px); }
+  [data-card-motion] [data-product-card]:not([data-seen]) [data-strike]::after { scale: 0 1; }
+}
+[data-product-card][data-seen] [data-alert-bar] { animation: card-bar-up .7s cubic-bezier(.2, .8, .2, 1) var(--card-delay, 0s) both; }
+[data-product-card][data-seen] [data-strike]::after { animation: card-strike .5s cubic-bezier(.6, 0, .2, 1) calc(var(--card-delay, 0s) + .35s) both; }
+/* Twice through "% off", "Save R…", "% off", resting on the percentage. */
+[data-alert-roll] { animation: card-roll 6s cubic-bezier(.7, 0, .3, 1) 2 forwards; }
+[data-alert-spark] { animation: card-twinkle 2.6s ease-in-out 3; }
+@keyframes card-bar-up { from { translate: 0 calc(100% + 14px); } }
+@keyframes card-strike { from { scale: 0 1; } }
+@keyframes card-roll { 0%, 40% { translate: 0 0; } 50%, 90% { translate: 0 -100%; } 100% { translate: 0 -200%; } }
+@keyframes card-twinkle { 50% { scale: .7; rotate: 45deg; opacity: .6; } }
 
 @media (max-width: 1050px) {
   .product-attention-region { height: 100dvh; margin-bottom: -100dvh; }

@@ -6,9 +6,8 @@ import { ListFilter } from "lucide-react";
 import { Badge, Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@f0rge/ui";
 import { Checkbox } from "@f0rge/ui/forms";
 import { countLabel } from "@/components/category-tiles";
-import { ProductCardGallery } from "@/components/product-card-gallery";
+import { ProductCard } from "@/components/product-card";
 import { SearchResultsTracker } from "@/components/analytics/search-results-tracker";
-import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
 import type { ListedPiece } from "@/lib/medusa";
 import { SHOP_CATEGORIES } from "@/lib/shop-categories";
 import { AVAILABILITY_OPTIONS, PRICE_BANDS, SORT_OPTIONS, availableShopAvailability, readShopFilters, shopFacetCount, shopMatches, writeShopFilters, type ShopFilters, type SortKey } from "@/lib/shop-filters";
@@ -125,17 +124,8 @@ export function ShopListing({ pieces, categoryId, shopAll }: { pieces: ListedPie
         </div>
 
         {shown.length > 0
-          ? <ul aria-label="Pieces" className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((piece, index) => <li key={piece.id} data-product-card className="min-w-0 overflow-hidden rounded-xl border bg-card">
-              <ProductCardGallery key={piece.variant?.id} title={piece.title} images={piece.variant?.images ?? []} prioritizeFirstImage={index === 0} />
-              <TrackedProductLink href={piece.href} productId={piece.id} className="flex items-center justify-between gap-4 p-4 hover:underline">
-                <h3 className="line-clamp-2 min-w-0 font-medium">{piece.title}</h3>
-                <div className="text-right">
-                  <p className="font-medium whitespace-nowrap">{piece.priceLabel}</p>
-                  <p className="text-sm text-muted-foreground">{piece.stockLabel}</p>
-                </div>
-              </TrackedProductLink>
-            </li>)}
+          ? <ul aria-label="Pieces" className="grid grid-cols-2 gap-x-2.5 gap-y-[22px] md:grid-cols-3 md:gap-x-5 md:gap-y-9">
+            {shown.map((piece, index) => <ProductCard key={piece.id} piece={piece} initialVariantId={piece.variant?.id} eager={index < 3} />)}
           </ul>
           : <div className="py-12 text-center">
             <h2 className="text-lg font-medium">No pieces found</h2>

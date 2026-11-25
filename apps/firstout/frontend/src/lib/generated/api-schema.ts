@@ -8389,6 +8389,8 @@ export interface components {
             setting_photo_token: string | null;
             /** Detail Photo Token */
             detail_photo_token: string | null;
+            /** Swatch Hex */
+            swatch_hex: string | null;
         };
         /** OpsProductsResponse */
         OpsProductsResponse: {
@@ -10680,6 +10682,8 @@ export interface components {
              * @default 1
              */
             carton_count?: number;
+            /** Swatch Hex */
+            swatch_hex?: string | null;
         };
         /** SkuCriticalityCategoryLine */
         SkuCriticalityCategoryLine: {
@@ -10920,6 +10924,8 @@ export interface components {
             last_landed_cost_zar: string | null;
             /** Category */
             category: string | null;
+            /** Swatch Hex */
+            swatch_hex: string | null;
             /** Photo Storage Key */
             photo_storage_key: string | null;
             /**
@@ -11122,6 +11128,8 @@ export interface components {
             retail_inc_vat?: number | string | null;
             /** Carton Count */
             carton_count?: number | null;
+            /** Swatch Hex */
+            swatch_hex?: string | null;
         };
         /** StaffCapacity */
         StaffCapacity: {
@@ -13175,6 +13183,8 @@ export interface components {
             last_landed_cost_zar: string | null;
             /** Category */
             category: string | null;
+            /** Swatch Hex */
+            swatch_hex: string | null;
             /** Photo Storage Key */
             photo_storage_key: string | null;
             /**
@@ -15508,6 +15518,7 @@ export interface operations {
                 catalogue_version?: number;
                 include_setting_photo?: boolean;
                 include_detail_photo?: boolean;
+                include_swatch?: boolean;
             };
             header?: {
                 authorization?: string | null;

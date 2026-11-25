@@ -19,6 +19,8 @@ const SORTS = {
   "price-desc": { label: "Price, high to low", compare: (a: ShopMatch, b: ShopMatch) => (b.price ?? -Infinity) - (a.price ?? -Infinity) },
 } as const;
 
+export const variantHref = (href: string, variantId: string) => `${href.split("?")[0]}?variant=${encodeURIComponent(variantId)}`;
+
 export type SortKey = keyof typeof SORTS;
 type PriceBand = (typeof PRICE_BANDS)[number]["value"];
 type CategoryHandle = ShopCategory["handle"];
@@ -31,9 +33,7 @@ export type ShopFilters = {
 };
 
 type Search = Pick<URLSearchParams, "getAll" | "get">;
-type ShopMatch = Pick<ListedPiece, "id" | "title" | "href" | "price" | "priceLabel" | "stockLabel"> & {
-  variant?: ListedVariant;
-};
+export type ShopMatch = ListedPiece & { variant?: ListedVariant };
 
 export const SORT_OPTIONS = Object.entries(SORTS).map(([value, { label }]) => ({ value, label }));
 const isSort = (value: string | null): value is SortKey => value !== null && Object.hasOwn(SORTS, value);
@@ -74,7 +74,7 @@ export function shopMatches(pieces: ListedPiece[], filters: ShopFilters): ShopMa
   for (const piece of pieces) {
     if (filters.categories.length && !piece.categories?.some(({ handle }) => filters.categories.some((selected) => selected === handle))) continue;
     if (!hasVariantFilter) {
-      matches.push({ ...piece, variant: piece.variants[0] });
+      matches.push(piece);
       continue;
     }
     const variant = piece.variants.find(({ price, availability }) => availability !== null &&
@@ -82,9 +82,8 @@ export function shopMatches(pieces: ListedPiece[], filters: ShopFilters): ShopMa
       (!prices.length || (price !== null && prices.some(({ min, max }) => price >= min && price < max))));
     if (!variant) continue;
     matches.push({
-      id: piece.id, title: piece.title, price: variant.price, priceLabel: variant.priceLabel,
-      stockLabel: AVAILABILITY_OPTIONS.find(({ value }) => value === variant.availability)?.label ?? "Out of stock",
-      href: piece.variants.length > 1 ? `${piece.href}?variant=${encodeURIComponent(variant.id)}` : piece.href,
+      ...piece, price: variant.price, priceLabel: variant.priceLabel,
+      href: piece.variants.length > 1 ? variantHref(piece.href, variant.id) : piece.href,
       variant,
     });
   }

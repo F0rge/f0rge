@@ -655,7 +655,7 @@ export type Sku = Schema["SkuResponse"];
 export type WorkspaceSkuRow = Schema["WorkspaceSkuRow"];
 
 export type SkuProductDetails = Partial<
-  Pick<Sku, "width_cm" | "depth_cm" | "height_cm" | "diameter_cm" | "piece_count" | "notes">
+  Pick<Sku, "width_cm" | "depth_cm" | "height_cm" | "diameter_cm" | "piece_count" | "notes" | "swatch_hex">
 >;
 
 export type UpdateSkuPricePayload = Schema["SkuUpdate"];

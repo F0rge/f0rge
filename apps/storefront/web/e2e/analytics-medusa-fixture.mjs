@@ -2,12 +2,16 @@ import { createServer } from 'node:http'
 
 const port = Number(process.env.STOREFRONT_ANALYTICS_MEDUSA_PORT || 9011)
 const category = (handle, name) => [{ id: `cat_${handle}`, name, handle }]
-const variant = (id, sku, amount, inventory, metadata = null) => ({
+// `was` puts the variant on a sale price list, as Medusa reports it.
+const variant = (id, sku, amount, inventory, metadata = null, was = null) => ({
   id, sku, title: 'Default', inventory_quantity: inventory, options: [], metadata,
-  calculated_price: { calculated_amount: amount, currency_code: 'zar' },
+  calculated_price: {
+    calculated_amount: amount, original_amount: was ?? amount, currency_code: 'zar',
+    calculated_price: { price_list_type: was ? 'sale' : null },
+  },
 })
-const piece = ({ uuid, id, title, image, extraImages = [], categories = [], variants, ...details }) => ({
-  ...details, id, handle: `firstout-${uuid}`, title, description: `${title}, local browser fixture.`, status: 'published',
+const piece = ({ uuid, id, title, image, extraImages = [], categories = [], tags = [], variants, ...details }) => ({
+  ...details, id, tags: tags.map((value) => ({ id: `tag_${value}`, value })), handle: `firstout-${uuid}`, title, description: `${title}, local browser fixture.`, status: 'published',
   thumbnail: image ?? null, images: [image, ...extraImages].filter(Boolean).map((url, index) => ({ id: `img_${id}_${index}`, url })),
   categories, collection: { id: 'col_on_sale', title: 'On Sale', handle: 'on-sale' }, variants,
 })
@@ -16,9 +20,10 @@ const options = [
   { id: 'opt_umbra_colour', title: 'Colour', values: ['Silver', 'Gold', 'Bronze'].map((value) => ({ id: value, value })) },
   { id: 'opt_umbra_size', title: 'Size', values: ['160 cm', '200 cm'].map((value) => ({ id: value, value })) },
 ]
+const swatches = { Silver: '#c0c0c0', Gold: '#b8902e', Bronze: '#8c5a2b' }
 function umbraVariant(id, sku, colour, size, amount, inventory, urls) {
   return {
-    ...variant(id, sku, amount, inventory, { suitable_image_urls: urls }),
+    ...variant(id, sku, amount, inventory, { suitable_image_urls: urls, swatch_hex: swatches[colour] }),
     title: `${colour} / ${size}`,
     options: [colour, size].map((value, index) => ({ id: `${id}_${index}`, option_id: options[index].id, value })),
     images: urls.map((url) => ({ id: url, url })).reverse(),
@@ -35,8 +40,8 @@ function products() {
     },
   }
   return [
-    piece({ uuid: '11111111-1111-4111-8111-111111111111', id: 'prod_test_chair', title: 'Test chair', image: '/demo/arc-front.jpg', extraImages: ['/demo/arc-angle.jpg'], categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_test_chair', 'TEST-CHAIR', 2400, 1)] }),
-    piece({ uuid: '22222222-2222-4222-8222-222222222222', id: 'prod_tilda_sofa', title: 'Tilda Sofa', image: '/hero-sofas.jpg', material: 'Bouclé', length: 220, width: 95, height: 80, metadata: { dimension_unit: 'cm' }, categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_tilda_sofa', 'TILDA-SOFA', 18999, 2)] }),
+    piece({ uuid: '11111111-1111-4111-8111-111111111111', id: 'prod_test_chair', title: 'Test chair', image: '/demo/arc-front.jpg', extraImages: ['/demo/arc-angle.jpg'], tags: ['just-arrived'], categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_test_chair', 'TEST-CHAIR', 2400, 1)] }),
+    piece({ uuid: '22222222-2222-4222-8222-222222222222', id: 'prod_tilda_sofa', title: 'Tilda Sofa', image: '/hero-sofas.jpg', material: 'Bouclé', length: 220, width: 95, height: 80, metadata: { dimension_unit: 'cm' }, categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_tilda_sofa', 'TILDA-SOFA', 18999, 2, null, 22999)] }),
     piece({ uuid: 'group-33333333-3333-4333-8333-333333333333', id: 'prod_umbra_table', title: 'Umbra Dining Table', image: '/demo/arc-angle.jpg', categories: category('dining-room', 'Dining Room'), options, variants: [
       umbraVariant('variant_umbra_table', 'UMBRA-TABLE', 'Silver', '200 cm', 34773.92, 1, ['/demo/arc-angle.jpg', '/demo/arc-detail.jpg']),
       umbraVariant('variant_umbra_gold_large', 'UMBRA-GOLD-200', 'Gold', '200 cm', 36500, 0, ['/hero-sofas.jpg']),

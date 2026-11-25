@@ -1,5 +1,5 @@
 import "server-only";
-import { formatCustomerPrice } from "./order-money";
+import { formatCustomerPrice, isZarCurrency } from "./order-money";
 import { offerLive } from "./made-to-order";
 import { selectedImages } from "./product-variants";
 
@@ -45,13 +45,20 @@ export type MedusaVariant = {
     care_instructions?: string;
     made_to_order_offer?: MadeToOrderOffer | null;
     storefront_made_to_order_offer?: MadeToOrderOffer | null;
+    swatch_hex?: string | null;
   } | null;
   material?: string | null;
   length?: number | null;
   width?: number | null;
   height?: number | null;
   inventory_quantity?: number;
-  calculated_price?: { calculated_amount: number; currency_code: string };
+  // Medusa BaseCalculatedPriceSet; calculated_price.price_list_type is "sale" for a sale price list.
+  calculated_price?: {
+    calculated_amount: number;
+    original_amount?: number | null;
+    currency_code: string;
+    calculated_price?: { price_list_type?: string | null } | null;
+  };
 };
 
 export type StoreProduct = {
@@ -74,12 +81,13 @@ export type StoreProduct = {
   height?: number | null;
   variants: MedusaVariant[];
   categories?: { id: string; name: string; handle: string }[];
+  tags?: { value: string }[];
   status?: string;
 };
 
 const baseUrl = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000";
 const publishableKey = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY;
-const productFields = "id,handle,title,description,thumbnail,material,length,width,height,metadata,*images,*options,*options.values,*categories,*variants,*variants.images,*variants.options,+variants.inventory_quantity,*variants.calculated_price,+variants.material,+variants.length,+variants.width,+variants.height,+variants.metadata";
+const productFields = "id,handle,title,description,thumbnail,material,length,width,height,metadata,*images,*options,*options.values,*categories,*tags,*variants,*variants.images,*variants.options,+variants.inventory_quantity,*variants.calculated_price,+variants.material,+variants.length,+variants.width,+variants.height,+variants.metadata";
 
 async function storeFetch<T>(path: string): Promise<T> {
   if (!publishableKey) throw new Error("Medusa publishable key is missing");
@@ -115,13 +123,19 @@ function publicProduct(product: StoreProduct): StoreProduct {
       seo_description: product.metadata?.seo_description,
     },
     categories: (product.categories || []).map(({ id, name, handle }) => ({ id, name, handle })),
+    tags: (product.tags || []).map(({ value }) => ({ value })),
     variants: (product.variants || []).map((variant) => ({
       id: variant.id, sku: variant.sku, title: variant.title, thumbnail: variant.thumbnail,
       images: (variant.images || []).map(({ id, url }) => ({ id, url })),
       options: (variant.options || []).map(({ id, value, option_id, option }) => ({ id, value, option_id, option: option ? { id: option.id, title: option.title } : null })),
       material: variant.material, length: variant.length, width: variant.width, height: variant.height,
       inventory_quantity: variant.inventory_quantity,
-      calculated_price: variant.calculated_price,
+      calculated_price: variant.calculated_price && {
+        calculated_amount: variant.calculated_price.calculated_amount,
+        original_amount: variant.calculated_price.original_amount,
+        currency_code: variant.calculated_price.currency_code,
+        calculated_price: { price_list_type: variant.calculated_price.calculated_price?.price_list_type ?? null },
+      },
       metadata: {
         suitable_image_urls: variant.metadata?.suitable_image_urls,
         dimensions_cm: variant.metadata?.dimensions_cm,
@@ -129,6 +143,7 @@ function publicProduct(product: StoreProduct): StoreProduct {
         lead_time_days: variant.metadata?.lead_time_days,
         care_instructions: variant.metadata?.care_instructions,
         made_to_order_offer: variant.metadata?.storefront_made_to_order_offer as MadeToOrderOffer | null | undefined,
+        swatch_hex: swatchHex(variant.metadata?.swatch_hex),
       },
     })),
   };
@@ -194,22 +209,34 @@ export function fromPrice(product: StoreProduct): string {
   return `${new Set(prices).size > 1 ? "From " : ""}${priceLabel(lowestPricedVariant(product.variants))}`;
 }
 
-export function stockLabel(product: StoreProduct): string {
-  const variants = product.variants.map(variantAvailability);
-  if (variants.includes("in-stock")) return "In stock";
-  return variants.includes("made-to-order") ? "Made to order" : "Out of stock";
-}
-
 export type Availability = "in-stock" | "made-to-order";
 function variantAvailability(variant: MedusaVariant): Availability | null {
   if ((variant.inventory_quantity ?? 0) > 0) return "in-stock";
   return offerLive(variant.metadata?.made_to_order_offer) ? "made-to-order" : null;
 }
 
+// Only a lowercase #rrggbb reaches the page; it is written into a style.
+export function swatchHex(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/.test(value) ? value : null;
+}
+
+// The pre-sale price, only when a sale price list sets a lower ZAR price.
+export function saleOriginal(variant: MedusaVariant): number | null {
+  const price = variant.calculated_price;
+  if (!price || price.calculated_price?.price_list_type !== "sale" || !isZarCurrency(price.currency_code)) return null;
+  return price.original_amount != null && price.original_amount > price.calculated_amount ? price.original_amount : null;
+}
+
 export type ListedVariant = {
   id: string;
+  name: string;
+  /** Option values, such as ["Gold", "160 cm"]. */
+  options: string[];
   price: number | null;
   priceLabel: string;
+  /** The pre-sale price while a sale price list applies. */
+  was: number | null;
+  swatch: string | null;
   availability: Availability | null;
   images: string[];
 };
@@ -219,7 +246,7 @@ export type ListedPiece = Pick<StoreProduct, "id" | "title" | "categories"> & {
   href: string;
   price: number | null;
   priceLabel: string;
-  stockLabel: string;
+  justArrived: boolean;
   variants: ListedVariant[];
 };
 
@@ -227,9 +254,12 @@ export function listedPiece(product: StoreProduct): ListedPiece {
   return {
     id: product.id, title: product.title, categories: product.categories, href: productPath(product),
     price: lowestPricedVariant(product.variants)?.calculated_price?.calculated_amount ?? null,
-    priceLabel: fromPrice(product), stockLabel: stockLabel(product),
+    priceLabel: fromPrice(product),
+    justArrived: !!product.tags?.some(({ value }) => value === "just-arrived"),
     variants: product.variants.map((variant) => ({
-      id: variant.id, price: variant.calculated_price?.calculated_amount ?? null, priceLabel: priceLabel(variant),
+      id: variant.id, name: variant.title || variant.sku || product.title, options: (variant.options ?? []).map(({ value }) => value),
+      price: variant.calculated_price?.calculated_amount ?? null, priceLabel: priceLabel(variant),
+      was: saleOriginal(variant), swatch: swatchHex(variant.metadata?.swatch_hex),
       availability: variantAvailability(variant), images: selectedImages(product, variant),
     })),
   };

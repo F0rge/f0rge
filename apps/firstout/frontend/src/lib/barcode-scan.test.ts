@@ -17,6 +17,7 @@ const sku: Sku = {
   diameter_cm: null,
   notes: null,
   piece_count: null,
+  swatch_hex: null,
   gallery_photo_count: 0,
   category: null,
   supplier_ref: null,

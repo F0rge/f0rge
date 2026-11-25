@@ -41,6 +41,7 @@ async def list_products(
     catalogue_version: int = Query(default=1, ge=1, le=2),
     include_setting_photo: bool = False,
     include_detail_photo: bool = False,
+    include_swatch: bool = False,
     authorization: Optional[str] = Header(default=None),
     x_ops_company_id: Optional[str] = Header(default=None),
     service: OpsCommerceService = Depends(get_ops_commerce_service),
@@ -52,6 +53,7 @@ async def list_products(
         catalogue_version=catalogue_version,
         include_setting_photo=include_setting_photo,
         include_detail_photo=include_detail_photo,
+        include_swatch=include_swatch,
     )
 
 

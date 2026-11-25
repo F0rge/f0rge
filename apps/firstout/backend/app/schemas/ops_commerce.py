@@ -42,6 +42,8 @@ class OpsProductResponse(BaseModel):
     gallery_photo_tokens: Optional[list[str]] = None
     setting_photo_token: Optional[str] = None
     detail_photo_token: Optional[str] = None
+    # Lowercase #rrggbb finish colour, or null. Sent only when the request opts in.
+    swatch_hex: Optional[str] = None
 
 
 class OpsProductsResponse(BaseModel):

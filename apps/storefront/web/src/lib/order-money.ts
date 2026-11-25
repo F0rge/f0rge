@@ -13,6 +13,11 @@ export function formatZar(value: number | string | null | undefined): string {
   return new Intl.NumberFormat("en-ZA", { style: "currency", currency: ZAR }).format(amount);
 }
 
+/** Whole rand, rounded down (a saving is never overstated). */
+export function formatWholeZar(value: number): string {
+  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: ZAR, maximumFractionDigits: 0 }).format(Math.floor(value));
+}
+
 /**
  * Formats a customer-facing price in ZAR.
  * A non-ZAR currency code is refused so a foreign amount is not relabelled as rand.

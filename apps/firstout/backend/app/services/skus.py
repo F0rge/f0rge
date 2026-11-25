@@ -272,6 +272,9 @@ class SkuService:
         if "category" in fields_set:
             sku.category = data.category
 
+        if "swatch_hex" in fields_set:
+            sku.swatch_hex = data.swatch_hex
+
         if "preferred_supplier_id" in fields_set:
             if data.preferred_supplier_id is not None:
                 supplier = await self.supplier_crud.get_by_id(data.preferred_supplier_id)
@@ -406,6 +409,7 @@ class SkuService:
             fabric=data.fabric,
             supplier_ref=data.supplier_ref,
             category=data.category,
+            swatch_hex=data.swatch_hex,
             carton_count=data.carton_count,
             **{field: getattr(data, field) for field in SKU_DETAIL_FIELDS},
         )
@@ -580,6 +584,7 @@ class SkuService:
             reorder_min=sku.reorder_min,
             last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
+            swatch_hex=sku.swatch_hex,
             photo_storage_key=(
                 sku.gallery_photo_keys[0] if sku.gallery_photo_keys else sku.photo_storage_key
             ),

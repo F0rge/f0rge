@@ -55,6 +55,8 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     gallery_photo_keys: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
     setting_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     detail_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Finish colour as lowercase #rrggbb, shown as a dot on storefront product cards.
+    swatch_hex: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
     width_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
     depth_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
     height_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
@@ -109,6 +111,9 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
             name="ck_skus_positive_dimensions",
         ),
         CheckConstraint("piece_count >= 1", name="ck_skus_positive_piece_count"),
+        CheckConstraint(
+            "swatch_hex IS NULL OR swatch_hex ~ '^#[0-9a-f]{6}$'", name="ck_skus_swatch_hex"
+        ),
         CheckConstraint(
             "cardinality(gallery_photo_keys) = 3 AND array_position(gallery_photo_keys, NULL) IS NULL",
             name="ck_skus_three_gallery_photos",

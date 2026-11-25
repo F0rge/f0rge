@@ -89,6 +89,7 @@ class OpsCommerceService:
         catalogue_version: int = 1,
         include_setting_photo: bool = False,
         include_detail_photo: bool = False,
+        include_swatch: bool = False,
     ) -> OpsProductsResponse:
         company_id = await self._authorize(
             authorization=authorization,
@@ -162,6 +163,8 @@ class OpsCommerceService:
                         if catalogue_version == 2 and include_detail_photo
                         else {}
                     ),
+                    # Opt-in: the strict commerce contract rejects keys an older sync does not know.
+                    **({"swatch_hex": sku.swatch_hex} if include_swatch else {}),
                 )
                 for sku in snapshots
             ],

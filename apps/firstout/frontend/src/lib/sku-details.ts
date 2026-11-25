@@ -11,6 +11,8 @@ export const SKU_DIMENSIONS = Object.keys(SKU_DIMENSION_FIELDS) as DimensionFiel
 export type SkuDetailsForm = Record<keyof SkuProductDetails, string>;
 export type SkuDetailsErrors = Partial<Record<keyof SkuDetailsForm, string>>;
 export const SKU_NOTES_LIMIT = 4000;
+/** The DasKasas finish dot: lowercase #rrggbb, or blank for none. */
+export const SKU_SWATCH_PATTERN = /^#[0-9a-f]{6}$/;
 
 export function skuDetailsFormFromSku(sku: SkuProductDetails): SkuDetailsForm {
   return {
@@ -20,6 +22,7 @@ export function skuDetailsFormFromSku(sku: SkuProductDetails): SkuDetailsForm {
     diameter_cm: sku.diameter_cm == null ? "" : String(sku.diameter_cm),
     piece_count: sku.piece_count == null ? "" : String(sku.piece_count),
     notes: sku.notes ?? "",
+    swatch_hex: sku.swatch_hex ?? "",
   };
 }
 
@@ -36,6 +39,8 @@ export function validateSkuDetails(form: SkuDetailsForm): SkuDetailsErrors {
     errors.piece_count = "Enter the number of pieces as a positive whole number.";
   }
   if (form.notes.trim().length > SKU_NOTES_LIMIT) errors.notes = "Use no more than 4000 characters.";
+  const swatch = form.swatch_hex.trim().toLowerCase();
+  if (swatch && !SKU_SWATCH_PATTERN.test(swatch)) errors.swatch_hex = "Enter a colour as # and six hex digits, such as #9b9592, or leave it blank.";
   return errors;
 }
 
@@ -47,5 +52,7 @@ export function skuDetailsPayload(form: SkuDetailsForm, original: SkuProductDeta
   }
   const notes = form.notes.trim() || null;
   if (notes !== (original.notes ?? null)) payload.notes = notes;
+  const swatch = form.swatch_hex.trim().toLowerCase() || null;
+  if (swatch !== (original.swatch_hex ?? null)) payload.swatch_hex = swatch;
   return payload;
 }

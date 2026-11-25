@@ -3,10 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { RotateCcw, Truck } from "lucide-react";
-import { ProductCardGallery } from "@/components/product-card-gallery";
-import { fromPrice, getStoreProduct, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
+import { ProductCard } from "@/components/product-card";
+import { getStoreProduct, listStoreProducts, listedPiece, productPath, type StoreProduct } from "@/lib/medusa";
 import { productMetaDescription, productStructuredData } from "@/lib/product-seo";
-import { selectedImages } from "@/lib/product-variants";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { COLLECTION_ADDRESS } from "@/lib/checkout-fulfillment";
 import { ProductDetail } from "./product-detail";
@@ -62,18 +61,8 @@ function RelatedPieces({ products }: { products: StoreProduct[] }) {
   return <section aria-labelledby="related-title" className="px-4 py-8 md:py-12">
     <div className="mx-auto max-w-6xl">
       <h2 id="related-title" className="mb-8 text-center text-2xl font-bold tracking-tight">More pieces</h2>
-      <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {products.map((piece) => {
-          const stock = stockLabel(piece);
-          return <li key={piece.id} className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md">
-            <ProductCardGallery title={piece.title} images={selectedImages(piece, piece.variants[0])} />
-            <Link href={productPath(piece)} className="block space-y-1 p-4 hover:underline">
-              <h3 className="line-clamp-2 text-sm leading-tight font-semibold">{piece.title}</h3>
-              <p className="text-xs text-muted-foreground">{[piece.categories?.[0]?.name, stock].filter(Boolean).join(" · ")}</p>
-              <p className="pt-2 text-lg font-bold">{fromPrice(piece)}</p>
-            </Link>
-          </li>;
-        })}
+      <ul className="grid grid-cols-2 gap-x-2.5 gap-y-[22px] md:gap-x-5 md:gap-y-9 lg:grid-cols-4">
+        {products.map((piece) => <ProductCard key={piece.id} piece={listedPiece(piece)} />)}
       </ul>
     </div>
   </section>;
