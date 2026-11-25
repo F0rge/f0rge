@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SHOP_CATEGORIES } from "@/lib/shop-categories";
 import { SHOWROOM } from "@/lib/showroom";
 import { CookieSettingsButton } from "./analytics/cookie-settings-button";
-import { Wordmark } from "./wordmark";
+import { BrandMark, Wordmark } from "./wordmark";
 
 const columns = [
   { title: "Shop", links: [{ label: "Shop all", href: "/shop" }, ...SHOP_CATEGORIES.map(({ name, href }) => ({ label: name, href }))] },
@@ -16,7 +16,10 @@ export function SiteFooter() {
   return <footer className="border-t bg-muted/50 px-4 py-8 md:py-12">
     <div className="mx-auto max-w-7xl">
       <div className="mb-8 md:mb-12">
-        <Link href="/" className="inline-block text-3xl" aria-label="DasKasas home"><Wordmark /></Link>
+        <Link href="/" className="inline-flex w-[104px] flex-col items-center gap-2" aria-label="DasKasas home" data-storefront-brand-link>
+          <BrandMark className="h-auto w-full" />
+          <Wordmark />
+        </Link>
         <p className="mt-2 max-w-md text-sm text-muted-foreground">Furniture for living and dining rooms, from our showroom in Bedford Square, Bedfordview.</p>
       </div>
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">

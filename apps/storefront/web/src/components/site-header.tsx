@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, ShoppingBag, User } from "lucide-react";
@@ -9,7 +8,7 @@ import { Badge, Button, Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigg
 import { itemCount, useBag } from "./bag";
 import { SHOP_CATEGORIES } from "@/lib/shop-categories";
 import { HeaderAuth } from "./header-auth";
-import { Wordmark } from "./wordmark";
+import { BrandMark } from "./wordmark";
 
 const links = [
   ...SHOP_CATEGORIES.map(({ name, href }) => ({ label: name, href })),
@@ -39,7 +38,10 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
           </SheetTrigger>
           <SheetContent side="left">
             <SheetHeader>
-              <SheetTitle><Wordmark className="text-2xl" /></SheetTitle>
+              <SheetTitle className="flex min-h-[27px] items-center">
+                <BrandMark className="h-auto w-12" />
+                <span className="sr-only">DasKasas</span>
+              </SheetTitle>
             </SheetHeader>
             <nav aria-label="Mobile navigation" className="grid gap-1 px-4">
               {[...links, { label: "Account", href: "/account" }].map((link) => <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)} aria-current={current(link.href)} className="rounded-md px-3 py-2.5 text-sm font-medium hover:bg-muted aria-[current=page]:bg-muted">{link.label}</Link>)}
@@ -48,16 +50,8 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
           </SheetContent>
         </Sheet>
 
-        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label="DasKasas home">
-          <Image
-            src="/brand/dk-champagne.png"
-            alt=""
-            width={384}
-            height={203}
-            unoptimized
-            loading="eager"
-            className="h-6 w-auto lg:h-[30px]"
-          />
+        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label="DasKasas home" data-storefront-brand-link>
+          <BrandMark className="h-6 w-auto lg:h-[30px]" loading="eager" />
         </Link>
 
         <nav aria-label="Main navigation" className="ml-6 hidden items-center gap-6 lg:flex">
