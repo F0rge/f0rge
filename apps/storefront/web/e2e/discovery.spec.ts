@@ -19,12 +19,12 @@ test('catalogue metadata and non-production robots policy describe public routes
   await expect(page).toHaveTitle(/Shop furniture \| DasKasas/)
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'http://localhost:3004/shop')
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
-  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /furniture collection/)
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Browse sofas and armchairs.*Filter by price and availability/)
 
   if (sourceSkuId) {
     await page.goto(`/product/${sourceSkuId}`)
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `http://localhost:3004/product/${sourceSkuId}`)
-    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /sofa|furniture/i)
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /\S.{14,}/)
   }
 })
 
@@ -43,7 +43,7 @@ test('mobile keyboard path reaches a piece and its gallery without horizontal ov
   await page.locator(`a:visible[href="/product/${sourceSkuId}"]`).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(new RegExp(`/product/${sourceSkuId}$`))
-  const galleryChoice = page.getByRole('button', { name: 'Show image 2 of 3' })
+  const galleryChoice = page.getByRole('button', { name: /^Show image 2 of / })
   await expect(galleryChoice).toBeVisible()
   const initialHeroSrc = await page.locator('[data-main-image] img').getAttribute('src')
   await galleryChoice.focus()

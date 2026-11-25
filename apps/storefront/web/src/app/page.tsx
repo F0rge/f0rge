@@ -154,7 +154,8 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="lg:col-span-5 lg:self-center xl:col-span-6">
-          <Image src="/merchandising/home-ivory-salon.webp" alt="Ivory Salon with the Avanzi sofa, Carmella armchair and Canberra coffee table" width={1672} height={941} unoptimized loading="eager" fetchPriority="high" className="aspect-video w-full object-contain" />
+          <Image src="/merchandising/home-ivory-salon.webp" alt="Ivory Salon with the Avanzi sofa, Carmella armchair and Canberra coffee table" width={1672} height={941}
+            sizes="(min-width: 1280px) 594px, (min-width: 1024px) 42vw, 100vw" loading="eager" fetchPriority="high" className="aspect-video w-full object-contain" />
         </div>
       </div>
     </section>
