@@ -3,7 +3,9 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import uuid
 from decimal import Decimal, InvalidOperation
+from typing import Optional
 
 from f0rge_core.exceptions import ValidationError
 from pydantic import BaseModel
@@ -98,8 +100,7 @@ def validate_filters(query: WorkspaceQuery, fields: dict[str, str]) -> None:
         raise ValidationError(f"Unsupported sort field: {query.sort.field}")
 
 
-def matches(row: BaseModel, condition: WorkspaceFilter, fields: dict[str, str]) -> bool:
-    value = getattr(row, condition.field, None)
+def matches(value, condition: WorkspaceFilter, fields: dict[str, str]) -> bool:
     empty = value is None or value == "" or value == []
     if condition.operator == "empty":
         return empty
@@ -125,9 +126,18 @@ def matches(row: BaseModel, condition: WorkspaceFilter, fields: dict[str, str]) 
 
 
 def filter_rows(
-    rows: list[BaseModel], query: WorkspaceQuery, fields: dict[str, str]
+    rows: list[BaseModel],
+    query: WorkspaceQuery,
+    fields: dict[str, str],
+    derived_values: Optional[dict[str, dict[uuid.UUID, Decimal]]] = None,
 ) -> list[BaseModel]:
     validate_filters(query, fields)
+
+    def get_value(row: BaseModel, field: str):
+        if derived_values is not None and field in derived_values:
+            return derived_values[field].get(row.id, Decimal(0))
+        return getattr(row, field, None)
+
     q = query.q.strip().casefold()
     result = []
     for row in rows:
@@ -137,20 +147,23 @@ def filter_rows(
             if kind == "text"
         ):
             continue
-        values = [matches(row, condition, fields) for condition in query.filters]
+        values = [
+            matches(get_value(row, condition.field), condition, fields)
+            for condition in query.filters
+        ]
         if values and not (all(values) if query.match == "all" else any(values)):
             continue
         result.append(row)
     result.sort(key=lambda row: str(row.id))
     if query.sort:
         field = query.sort.field
+
+        def sort_value(row: BaseModel):
+            value = get_value(row, field)
+            return value is None, scalar(value, fields[field]) if value is not None else ""
+
         result.sort(
-            key=lambda row: (
-                getattr(row, field, None) is None,
-                scalar(getattr(row, field), fields[field])
-                if getattr(row, field, None) is not None
-                else "",
-            ),
+            key=sort_value,
             reverse=query.sort.direction == "desc",
         )
     else:

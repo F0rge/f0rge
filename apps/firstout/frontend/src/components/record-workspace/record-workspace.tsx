@@ -25,7 +25,7 @@ import {
   Tabs,
   Tag,
 } from "@carbon/react";
-import { Suspense, useState } from "react";
+import { Suspense, useState, type PropsWithChildren, type ReactNode } from "react";
 import { LoadingRegion } from "@/components/page-loading";
 import { WorkspaceLoader } from "@/components/workspace-loader";
 import { ApiError } from "@/lib/api";
@@ -42,6 +42,25 @@ import {
   type WorkspaceOperation,
 } from "./workspace-bulk-dialog";
 import styles from "./record-workspace.module.css";
+
+function WorkspaceInspector({ header, recordId, children }: PropsWithChildren<{
+  header?: ReactNode;
+  recordId?: string;
+}>) {
+  return (
+    <aside
+      className={header ? `${styles.inspector} ${styles.inspectorWithHeader}` : styles.inspector}
+      aria-label="Selected record details"
+    >
+      {header ? (
+        <>
+          <div className={styles.inspectorHeader}>{header}</div>
+          <div key={recordId} className={styles.inspectorScroll}>{children}</div>
+        </>
+      ) : children}
+    </aside>
+  );
+}
 
 export function RecordWorkspace<T extends { id: string }>(
   props: RecordWorkspaceProps<T>,
@@ -74,6 +93,7 @@ function WorkspaceContent<T extends { id: string }>({
   listTitle,
   onEdit,
   modalDetails = false,
+  renderDetailsHeader,
   renderDetails,
   loadingDetails,
   headerActions,
@@ -531,9 +551,9 @@ function WorkspaceContent<T extends { id: string }>({
             }
           />}
         </section>
-        {!modalDetails && <aside
-          className={styles.inspector}
-          aria-label="Selected record details"
+        {!modalDetails && <WorkspaceInspector
+          header={active && renderDetailsHeader?.(active)}
+          recordId={active?.id}
         >
           {result.isPending ? (
             <LoadingRegion label={`Loading ${adapter.singular} details…`} announce={false}>
@@ -640,7 +660,7 @@ function WorkspaceContent<T extends { id: string }>({
               <p>Its details will appear here.</p>
             </div>
           )}
-        </aside>}
+        </WorkspaceInspector>}
       </div>
       {modalDetails && active && !operation && (
         <Modal

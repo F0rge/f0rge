@@ -2,7 +2,7 @@
 
 import { PageLoading } from "@/components/page-loading";
 import { ArrowRight, Catalog, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
-import { Button, InlineNotification, Link, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tag } from "@carbon/react";
+import { Accordion, AccordionItem, Button, InlineNotification, Link, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Tag } from "@carbon/react";
 import JsBarcode from "jsbarcode";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,13 +11,14 @@ import { CatalogueSkuEditor } from "@/components/catalogue-sku-editor";
 import { SKU_DIMENSIONS, SKU_DIMENSION_FIELDS } from "@/lib/sku-details";
 import { RecordDetail, RecordDetails, RecordWorkspace, type RecordWorkspaceAdapter, type WorkspaceField } from "@/components/record-workspace";
 import { StaffImage } from "@/components/staff-image";
-import { canMutateCatalogue, canViewCostAudit, formatZarAmount, getSkuLeadTimes, listSkuUnitCosts, listSkusPage, listSuppliers, skuPhotoUrl, type Sku } from "@/lib/api";
+import { canMutateCatalogue, canViewCostAudit, formatZarAmount, getSkuLeadTimes, listSkuUnitCosts, listSkusPage, listSuppliers, skuPhotoUrl, type Sku, type WorkspaceSkuRow } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { queryKeys } from "@/lib/queries";
 import { skuCartonCount } from "@/lib/carton-helpers";
 import { loadCatalogueSelection } from "@/lib/catalogue-workspace";
 import { downloadCsv } from "@/lib/csv";
 import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
+import { formatQuantity } from "@/lib/quantity";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { type WorkspaceQuery } from "@/lib/record-workspace-api";
 import { printSkuLabels } from "@/lib/sku-label-print";
@@ -26,6 +27,36 @@ import styles from "./page.module.css";
 
 const leadDays = (days: number | null) => days === null ? "—" : `${days} days`;
 const money = (value: string | null | undefined) => value === null || value === undefined || value === "" ? "—" : formatZarAmount(value);
+
+function stockQuantity(value: string | null | undefined) {
+  return value == null || value === "" ? "—" : formatQuantity(Number(value));
+}
+
+function CatalogueStockSummary({ sku }: { sku: WorkspaceSkuRow }) {
+  const locations = sku.stock_locations ?? [];
+  return (
+    <section className={styles.stock} aria-label="Stock across all locations">
+      <div className={styles.stockHeading}><h3>Stock</h3><span>All locations</span></div>
+      <dl className={styles.stockMetrics}>
+        <div><dt>On hand</dt><dd>{stockQuantity(sku.on_hand)}</dd></div>
+        <div><dt>On order</dt><dd>{stockQuantity(sku.on_order)}</dd></div>
+      </dl>
+      {locations.length > 0 && (
+        <Accordion size="sm" isFlush className={styles.stockLocations}>
+          <AccordionItem title="Stock by location">
+            <dl>
+              {locations.map((location) => (
+                <div key={location.location_id}>
+                  <dt>{location.location_name}</dt><dd>{stockQuantity(location.on_hand)}</dd>
+                </div>
+              ))}
+            </dl>
+          </AccordionItem>
+        </Accordion>
+      )}
+    </section>
+  );
+}
 
 function ProductImage({ sku }: { sku: Sku }) {
   return <span className={styles.image}>
@@ -116,12 +147,13 @@ function CatalogueScreen() {
     { key: "is_kit", label: "Kit", type: "boolean" },
     { key: "is_sellable", label: "Sellable", type: "boolean" },
   ];
-  const adapter: RecordWorkspaceAdapter<Sku> = {
+  const adapter: RecordWorkspaceAdapter<WorkspaceSkuRow> = {
     resource: "skus", title: "Catalogue", singular: "SKU", plural: "products", breadcrumb: "Catalogue management",
     description: "Find products, manage pricing and print barcode labels.", defaultSort: "name",
     columns: [
       { key: "name", label: "Product / SKU", render: (item) => item.name, sortable: true },
       { key: "category", label: "Category", render: (item) => item.category ?? "—", sortable: true },
+      { key: "on_hand", label: "On hand", render: (item) => stockQuantity(item.on_hand), numeric: true, sortable: true },
       { key: "retail_inc_vat", label: "Retail price", render: (item) => money(item.retail_inc_vat), numeric: true, sortable: true },
     ], filters, lifecycle: { activeLabel: "Active", archivedLabel: "Archived" },
     actions: allowed ? [{ key: "archive", label: "Archive" }, { key: "restore", label: "Restore" }] : [],
@@ -140,7 +172,7 @@ function CatalogueScreen() {
       onEdit={allowed ? (item) => setEditing({ sku: item }) : undefined}
       loadingDetails={{
         tabs: ["Overview", "Pricing"],
-        fields: ["Retail price (incl. VAT)", "Sales setting", ...(canViewCost ? ["Unit cost"] : []), "Preferred supplier", "Supplier ref", "Planned lead time", "Observed lead time", "Cartons", "Reorder minimum"],
+        fields: ["On hand", "On order", "Retail price (incl. VAT)", "Sales setting", ...(canViewCost ? ["Unit cost"] : []), "Preferred supplier", "Supplier ref", "Planned lead time", "Observed lead time", "Cartons", "Reorder minimum"],
       }}
       onExport={exportCatalogue}
       headerActions={allowed ? <>
@@ -148,10 +180,12 @@ function CatalogueScreen() {
         {user?.role === "owner" && <Button kind="tertiary" onClick={() => router.push("/catalogue/curated")}>DasKasas catalogue import</Button>}
       </> : undefined}
       renderSelectionActions={({ ids, query }) => <><Button kind="ghost" size="sm" renderIcon={Printer} disabled={batchBusy} onClick={() => void batchAction(query, ids, "print")}>Print labels</Button><Button kind="ghost" size="sm" renderIcon={DocumentExport} disabled={batchBusy} onClick={() => void batchAction(query, ids, "export")}>Export selected</Button></>}
+      renderDetailsHeader={(sku) => <Link href={`/catalogue/${sku.id}`} renderIcon={ArrowRight}>Open full SKU details</Link>}
       renderDetails={(sku) => <Stack gap={5}>
         {sku.is_archived && <InlineNotification kind="info" title="Archived SKU" subtitle="Restore before editing, selling or adding to a new order or kit. Stock and history remain; existing work and returns can finish. Restoring keeps the previous sales setting and does not publish online." lowContrast hideCloseButton />}
         <Tabs key={sku.id}><TabList aria-label="Product detail sections"><Tab>Overview</Tab><Tab>Pricing</Tab></TabList><TabPanels>
           <TabPanel><Stack gap={5}>
+            <CatalogueStockSummary sku={sku} />
             <RecordDetails><RecordDetail label="Retail price (incl. VAT)">{money(sku.retail_inc_vat)}</RecordDetail><RecordDetail label="Sales setting"><Tag type="gray" size="sm">{sku.is_sellable ? "Sellable" : "Not for sale"}</Tag>{sku.till_no_stock_required && <Tag type="blue" size="sm">No stock needed</Tag>}</RecordDetail>{canViewCost && <RecordDetail label="Unit cost">{costState === "loading" ? "Loading…" : costState === "failed" ? "Unavailable" : money(costs.get(sku.id))}</RecordDetail>}</RecordDetails>
             <RecordDetails><RecordDetail label="Preferred supplier">{sku.preferred_supplier_name}</RecordDetail><RecordDetail label="Supplier ref">{sku.supplier_ref}</RecordDetail><RecordDetail label="Planned lead time">{leadDays(sku.lead_time_days)}</RecordDetail><RecordDetail label="Observed lead time">{formatObservedMedianLine(leadById.get(sku.id))}</RecordDetail><RecordDetail label="Cartons">{skuCartonCount(sku)}</RecordDetail><RecordDetail label="Reorder minimum">{sku.reorder_min}</RecordDetail></RecordDetails>
             <RecordDetails>
@@ -163,6 +197,7 @@ function CatalogueScreen() {
           </Stack></TabPanel>
           <TabPanel>
             <Stack gap={4}>
+              <CatalogueStockSummary sku={sku} />
               <RecordDetails>
                 {SKU_PRICE_TIERS.map((tier) => (
                   <RecordDetail key={tier.field} label={`${tier.label} (${tier.field === "retail_inc_vat" ? "incl." : "excl."} VAT)`}>
@@ -176,7 +211,6 @@ function CatalogueScreen() {
             </Stack>
           </TabPanel>
         </TabPanels></Tabs>
-        <Link href={`/catalogue/${sku.id}`} renderIcon={ArrowRight}>Open full SKU details</Link>
         <Button kind="tertiary" size="sm" renderIcon={Printer} onClick={() => { void printSkuLabels([sku]).catch((err: unknown) => setActionError(err instanceof Error ? err.message : "Could not print label.")); }}>Print label</Button>
       </Stack>}
     />

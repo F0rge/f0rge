@@ -55,6 +55,7 @@ DEFINITIONS = {
             "is_kit": "boolean",
             "is_sellable": "boolean",
             "retail_inc_vat": "number",
+            "on_hand": "number",
         },
         frozenset(),
         ARCHIVE,
