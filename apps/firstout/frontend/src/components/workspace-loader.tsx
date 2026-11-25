@@ -17,17 +17,15 @@ export function WorkspaceLoader({ loop = true }: { loop?: boolean }) {
   const id = useId();
   const bodyRef = useRef<SVGGElement>(null);
   const apertureRef = useRef<SVGGElement>(null);
-  const rimRef = useRef<SVGPathElement>(null);
   const openingRef = useRef<SVGPathElement>(null);
   const shadowRef = useRef<SVGEllipseElement>(null);
 
   useEffect(() => {
     const body = bodyRef.current;
     const aperture = apertureRef.current;
-    const rim = rimRef.current;
     const opening = openingRef.current;
     const shadow = shadowRef.current;
-    if (!body || !aperture || !rim || !opening || !shadow) return;
+    if (!body || !aperture || !opening || !shadow) return;
 
     const draw = (time: number) => {
       const left = heldPose(time, 100, 245, 545, 710);
@@ -50,8 +48,7 @@ export function WorkspaceLoader({ loop = true }: { loop?: boolean }) {
       const height = 1 - .26 * squint - .93 * blink + .12 * reopen;
       const width = 1 + .05 * squint + .065 * blink - .025 * reopen;
       aperture.setAttribute("transform", `translate(${windowX} ${windowY}) skewY(30) scale(${width} ${height})`);
-      rim.setAttribute("d", `M-9.2 ${-10.6 + 5 * squint} L9.2 -10.6 V10.6 H-9.2Z`);
-      opening.setAttribute("d", `M-7.8 ${-9.3 + 4.6 * squint} L9.2 -9.3 V10.6 H-7.8Z`);
+      opening.setAttribute("d", `M-9.2 ${-10.6 + 5 * squint} L9.2 -10.6 V10.6 H-9.2Z`);
       shadow.setAttribute("rx", String(23 + 2 * blink - 1.5 * reopen));
       shadow.setAttribute("opacity", String(.17 + .03 * blink - .025 * reopen));
     };
@@ -87,30 +84,19 @@ export function WorkspaceLoader({ loop = true }: { loop?: boolean }) {
       <span className="firstout-sr-only">Loading your workspace…</span>
       <svg className={styles.mark} viewBox="16 16 168 168" aria-hidden="true" focusable="false">
         <defs>
-          <linearGradient id={`${id}-top`} x1="0%" y1="0%" x2="65%" y2="100%">
-            <stop stopColor="#d9d9dc" />
-            <stop offset="1" stopColor="#a9a9ae" />
-          </linearGradient>
-          <linearGradient id={`${id}-side`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop stopColor="#939397" />
-            <stop offset="1" stopColor="#626267" />
-          </linearGradient>
-          <linearGradient id={`${id}-front`} x1="0%" y1="0%" x2="82%" y2="100%">
-            <stop stopColor="#303035" />
-            <stop offset="1" stopColor="#111113" />
-          </linearGradient>
           <filter id={`${id}-shadow`} x="-30%" y="-180%" width="160%" height="460%">
             <feGaussianBlur stdDeviation="2.7" />
           </filter>
         </defs>
-        <ellipse ref={shadowRef} cx="100" cy="157" rx="23" ry="3.2" fill="#202027" opacity=".17" filter={`url(#${id}-shadow)`} />
+        <ellipse ref={shadowRef} cx="100" cy="157" rx="23" ry="3.2" fill="#161616" opacity=".17" filter={`url(#${id}-shadow)`} />
         <g ref={bodyRef}>
-          <path d="M100 100 144 74.6 144 125.4 100 150.8Z" fill={`url(#${id}-side)`} />
-          <path d="M56 74.6 100 100 100 150.8 56 125.4Z" fill={`url(#${id}-front)`} />
-          <path d="M100 49.2 144 74.6 100 100 56 74.6Z" fill={`url(#${id}-top)`} />
+          {/* Header mark colors. Its pale front needs an edge on the matching workspace background. */}
+          <path d="M100 100 144 74.6 144 125.4 100 150.8Z" fill="#6f6f6f" />
+          <path d="M56 74.6 100 100 100 150.8 56 125.4Z" fill="#f4f4f4" />
+          <path d="M56 74.6 V125.4 L100 150.8" fill="none" stroke="#c6c6c6" strokeWidth="1" />
+          <path d="M100 49.2 144 74.6 100 100 56 74.6Z" fill="#c6c6c6" />
           <g ref={apertureRef} transform="translate(78 112.7) skewY(30)">
-            <path ref={rimRef} d="M-9.2 -10.6 H9.2 V10.6 H-9.2Z" fill="#99999e" />
-            <path ref={openingRef} d="M-7.8 -9.3 H9.2 V10.6 H-7.8Z" fill="var(--cds-background, #f4f4f4)" />
+            <path ref={openingRef} d="M-9.2 -10.6 H9.2 V10.6 H-9.2Z" fill="#161616" />
           </g>
         </g>
       </svg>
