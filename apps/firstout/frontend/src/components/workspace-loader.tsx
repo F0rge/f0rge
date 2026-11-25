@@ -28,29 +28,33 @@ export function WorkspaceLoader({ loop = true }: { loop?: boolean }) {
     if (!body || !aperture || !opening || !shadow) return;
 
     const draw = (time: number) => {
-      const left = heldPose(time, 100, 245, 545, 710);
-      const upRight = heldPose(time, 545, 710, 1870, 2140);
-      const squint = heldPose(time, 790, 1010, 1210, 1330);
-      const blink = heldPose(time, 1200, 1330, 1400, 1560);
-      const reopen = heldPose(time, 1400, 1570, 1630, 1800);
+      // Catch sight of something, look away, then give it a longer second look.
+      const notice = heldPose(time, 70, 200, 415, 525);
+      const away = heldPose(time, 415, 525, 690, 930);
+      const secondLook = heldPose(time, 690, 930, 2110, 2480);
+      const brow = heldPose(time, 910, 1190, 1360, 1490);
+      const blink = heldPose(time, 1380, 1490, 1540, 1700);
+      const peek = heldPose(time, 1550, 1750, 1910, 2110);
+      const halfBlink = heldPose(time, 1910, 2010, 2045, 2190);
 
-      // The cube follows the gaze a beat later, like a small head tilt.
-      const followLeft = heldPose(time, 205, 420, 635, 900);
-      const followRight = heldPose(time, 635, 900, 2000, 2300);
-      const lift = -1.1 * followRight + 2.3 * blink - 2.8 * reopen;
-      const tilt = -1.9 * followLeft + 2.9 * followRight - 1.2 * reopen;
-      const squash = .052 * blink - .027 * reopen;
+      // The eye moves first. The cube catches up, holds its tilt, then settles.
+      const chinTurn = heldPose(time, 490, 690, 835, 1040);
+      const lean = heldPose(time, 810, 1180, 2110, 2470);
+      const settle = heldPose(time, 2240, 2470, 2480, 2700);
+      const lift = -1.9 * notice - 1.6 * lean + 3.2 * blink - 5.4 * peek + settle;
+      const tilt = 2.4 * notice - 4.2 * chinTurn + 8 * lean - 2.2 * peek - 1.6 * settle;
+      const squash = -.025 * notice + .067 * blink - .047 * peek + .015 * settle;
       body.setAttribute("transform", `translate(100 ${140 + lift}) rotate(${tilt}) scale(${1 + squash} ${1 - squash}) translate(-100 -140)`);
 
-      const gazeX = -7.4 * left + 7.5 * upRight;
+      const gazeX = 6.5 * notice - 8.1 * away + 8.4 * secondLook;
       const windowX = 78 + gazeX;
-      const windowY = 112.7 + gazeX / Math.sqrt(3) + 6.3 * left - 9.3 * upRight + 3.6 * blink;
-      const height = 1 - .26 * squint - .93 * blink + .12 * reopen;
-      const width = 1 + .05 * squint + .065 * blink - .025 * reopen;
+      const windowY = 112.7 + gazeX / Math.sqrt(3) - 6 * notice + 7.4 * away - 7.7 * secondLook + 3.6 * blink;
+      const height = 1 + .17 * notice - .22 * brow - .93 * blink + .21 * peek - .52 * halfBlink;
+      const width = 1 - .045 * notice + .045 * brow + .09 * blink - .04 * peek;
       aperture.setAttribute("transform", `translate(${windowX} ${windowY}) skewY(30) scale(${width} ${height})`);
-      opening.setAttribute("d", `M-9.2 ${-10.6 + 5 * squint} L9.2 -10.6 V10.6 H-9.2Z`);
-      shadow.setAttribute("rx", String(23 + 2 * blink - 1.5 * reopen));
-      shadow.setAttribute("opacity", String(.17 + .03 * blink - .025 * reopen));
+      opening.setAttribute("d", `M-9.2 ${-10.6 + 7 * brow} L9.2 ${-10.6 - 2.5 * brow} V10.6 H-9.2Z`);
+      shadow.setAttribute("rx", String(23 + 2.4 * blink - 3 * peek));
+      shadow.setAttribute("opacity", String(.17 + .036 * blink - .045 * peek));
     };
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
