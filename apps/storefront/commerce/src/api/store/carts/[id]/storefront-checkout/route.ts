@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import type { MedusaContainer } from "@medusajs/framework/types";
 import {
@@ -8,13 +8,25 @@ import {
   updateCartWorkflow,
 } from "@medusajs/medusa/core-flows";
 import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils";
-import { checkoutHoldForCart, withCheckoutInventoryLock } from "../../../../../checkout-holds";
+import { checkoutHoldForCart, withCheckoutInventoryLock, type FulfillmentPromiseSummary } from "../../../../../checkout-holds";
 import { deliveryZoneForAddress, deliveryZones } from "../../../../../delivery-zones";
+import { medusaAmountToMinor, minorToMajor } from "../../../../../paystack-checkout";
 import { paystackPaymentEnabled, PAYSTACK_PAYMENT_PROVIDER_ID } from "../../../../../paystack-payment-config";
-import { updateStorefrontCheckoutContact } from "../../../../../storefront-checkout-contact";
+import { updateStorefrontCheckoutContact, type CheckoutQuote } from "../../../../../storefront-checkout-contact";
+import { clearCheckoutShippingWorkflow } from "../../../../../storefront-checkout-shipping";
 import { testPaymentEnabled } from "../../../../../test-payment-config";
 
 type FulfillmentType = "delivery" | "collection";
+type CheckoutCart = {
+  id: string;
+  customer_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+  total: unknown;
+  shipping_total: unknown;
+  currency_code: string;
+  items?: { id: string; title: string; variant_id: string; quantity: number; unit_price: unknown; total: unknown }[];
+  shipping_methods?: { id: string; shipping_option_id: string }[];
+};
 type CheckoutInput = {
   email: string;
   first_name: string;
@@ -81,6 +93,75 @@ function checkoutSessionStatus(session: Record<string, unknown>): string {
   return typeof session.status === "string" ? session.status : "unknown";
 }
 
+async function readCheckoutCart(container: MedusaContainer, cartId: string): Promise<CheckoutCart> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const { data: carts } = await query.graph({
+    entity: "cart",
+    fields: ["id", "email", "customer_id", "currency_code", "total", "shipping_total", "metadata", "items.*", "items.total", "shipping_address.*", "shipping_methods.*"],
+    filters: { id: cartId },
+  });
+  const cart = carts[0] as CheckoutCart | undefined;
+  if (!cart) throw new MedusaError(MedusaError.Types.NOT_FOUND, "Bag not found");
+  return cart;
+}
+
+function quoteForCart(
+  cart: CheckoutCart,
+  fingerprint: string,
+  hold: { expires_at?: string; fulfillment_promise?: FulfillmentPromiseSummary },
+  reviewedMethods = cart.shipping_methods?.map((method) => method.id).sort() ?? [],
+): CheckoutQuote {
+  const expiresAt = hold.expires_at;
+  const amount = medusaAmountToMinor(cart.total);
+  const delivery = medusaAmountToMinor(cart.shipping_total);
+  if (amount === null || delivery === null || !cart.currency_code || !expiresAt || !cart.items?.length) {
+    throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Your order total could not be verified");
+  }
+  const secret = process.env.STOREFRONT_BFF_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Checkout is temporarily unavailable");
+  }
+  const items = cart.items.map((item) => {
+    const total = medusaAmountToMinor(item.total);
+    if (total === null || !item.title) {
+      throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Your order details could not be verified");
+    }
+    return { id: item.id, title: item.title, quantity: item.quantity, total: minorToMajor(total) };
+  });
+  const itemDetails = [...cart.items].sort((left, right) => left.id.localeCompare(right.id)).map((item) =>
+    [item.id, item.title, item.variant_id, item.quantity, medusaAmountToMinor(item.unit_price), medusaAmountToMinor(item.total)]);
+  const options = cart.shipping_methods?.map((method) => method.shipping_option_id).sort() ?? [];
+  const reviewToken = createHmac("sha256", secret).update(JSON.stringify([
+    "storefront-checkout-review-v1", cart.id, cart.customer_id ?? null, fingerprint, expiresAt,
+    hold.fulfillment_promise ?? null, itemDetails, options, reviewedMethods,
+    cart.currency_code, amount, delivery,
+  ])).digest("hex");
+  return {
+    amount: minorToMajor(amount), currency_code: cart.currency_code, delivery_amount: minorToMajor(delivery),
+    hold_expires_at: expiresAt, fulfillment_promise: hold.fulfillment_promise, items, review_token: reviewToken,
+  };
+}
+
+function matchesReviewToken(expected: string, supplied: unknown): boolean {
+  return typeof supplied === "string" && /^[a-f0-9]{64}$/.test(supplied) &&
+    /^[a-f0-9]{64}$/.test(expected) && timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(supplied, "hex"));
+}
+
+function sessionCheckout(session: Record<string, unknown>, providerId: string, fulfillmentType: FulfillmentType, expiresAt: string | undefined) {
+  const data = session.data as Record<string, unknown> | undefined;
+  return {
+    review: null,
+    session_id: session.id,
+    status: checkoutSessionStatus(session),
+    amount: session.amount,
+    currency_code: session.currency_code,
+    provider_id: providerId,
+    redirect_url: typeof data?.redirect_url === "string" ? data.redirect_url : null,
+    fulfillment_type: fulfillmentType,
+    hold_expires_at: expiresAt,
+  };
+}
+
 export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<void> {
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   try {
@@ -92,20 +173,15 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       return;
     }
     const input = checkoutInput(req.body);
-    const accessToken = (req.body as Record<string, unknown>).confirmation_token;
-    if (typeof accessToken !== "string" || !/^[A-Za-z0-9_-]{40,100}$/.test(accessToken)) {
+    const { step, confirmation_token: accessToken, review_token: reviewToken } = req.body as Record<string, unknown>;
+    if (step !== undefined && step !== "review" && step !== "payment") {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Choose a checkout step");
+    }
+    const confirmationDigest = typeof accessToken === "string" && /^[A-Za-z0-9_-]{40,100}$/.test(accessToken)
+      ? createHash("sha256").update(accessToken).digest("hex") : null;
+    if (step !== "review" && !confirmationDigest) {
       throw new MedusaError(MedusaError.Types.INVALID_DATA, "The private order confirmation token is missing");
     }
-    if (input.fulfillment_type === "delivery") {
-      const zone = deliveryZoneForAddress({
-        province: input.province,
-        city: input.city,
-        address_2: input.address_2,
-        postal_code: input.postal_code,
-      }, deliveryZones());
-      if (!zone) throw new MedusaError(MedusaError.Types.INVALID_DATA, "Delivery is not available for this Gauteng address");
-    }
-
     const result = await withCheckoutInventoryLock(req.scope, async () => {
       const cartId = req.params.id;
       const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
@@ -116,16 +192,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         throw new MedusaError(MedusaError.Types.CONFLICT, "This bag has already been checked out");
       }
       const hold = await checkoutHoldForCart(req.scope, cartId);
-      if (!hold.ready) return { review: hold.changes };
+      if (!hold.ready) return { kind: "hold-changed", changes: hold.changes } as const;
 
-      const { data: carts } = await query.graph({
-        entity: "cart",
-        fields: ["id", "email", "customer_id", "metadata", "total", "currency_code", "payment_collection.payment_sessions.id"],
-        filters: { id: cartId },
-      });
-      const cart = carts[0] as { id: string; email?: string; customer_id?: string | null; metadata?: Record<string, unknown> | null; total?: number; currency_code: string } | undefined;
-      if (!cart) throw new MedusaError(MedusaError.Types.NOT_FOUND, "Bag not found");
-      const confirmationDigest = createHash("sha256").update(accessToken).digest("hex");
+      const cart = await readCheckoutCart(req.scope, cartId);
       const checkoutFingerprint = createHash("sha256").update(JSON.stringify([
         input.email, input.first_name, input.last_name, input.phone, input.fulfillment_type,
         input.address_1, input.address_2, input.city, input.province, input.postal_code,
@@ -142,28 +211,44 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         if (cart.metadata?.storefront_checkout_sha256 !== checkoutFingerprint) {
           throw new MedusaError(MedusaError.Types.CONFLICT, "This payment attempt is already prepared. Start a new bag to change checkout details.");
         }
-        return {
-          review: null,
-          session_id: existingSession.id,
-          status: checkoutSessionStatus(existingSession),
-          amount: existingSession.amount,
-          currency_code: existingSession.currency_code,
-          provider_id: providerId,
-          redirect_url: typeof (existingSession.data as Record<string, unknown> | undefined)?.redirect_url === "string"
-            ? (existingSession.data as Record<string, unknown>).redirect_url : null,
-          fulfillment_type: input.fulfillment_type,
-          hold_expires_at: hold.expires_at,
-        };
+        // A client loaded before the release can resume an existing session.
+        if (step !== undefined) {
+          const savedQuote = cart.metadata?.storefront_checkout_review as CheckoutQuote | undefined;
+          const quote = savedQuote ?? quoteForCart(cart, checkoutFingerprint, hold);
+          if (medusaAmountToMinor(quote.amount) !== medusaAmountToMinor(existingSession.amount) ||
+              quote.currency_code !== existingSession.currency_code) {
+            throw new MedusaError(MedusaError.Types.CONFLICT, "This bag already has a payment attempt. Return to its private confirmation page for status.");
+          }
+          if (step === "review") {
+            return { kind: "review", quote: { ...quote, hold_expires_at: hold.expires_at ?? quote.hold_expires_at } } as const;
+          }
+          if (!matchesReviewToken(quote.review_token, reviewToken)) return { kind: "quote-changed" } as const;
+        }
+        return { kind: "checkout", checkout: sessionCheckout(existingSession, providerId, input.fulfillment_type, hold.expires_at) } as const;
+      }
+      let reviewedMethods: string[] | undefined;
+      if (step !== "review") {
+        if (step !== "payment" || !confirmationDigest || !cart.shipping_methods?.length ||
+            !matchesReviewToken(quoteForCart(cart, checkoutFingerprint, hold).review_token, reviewToken)) {
+          return { kind: "quote-changed" } as const;
+        }
+        // Repricing replaces the methods. Compare the result against the
+        // methods the customer actually reviewed before creating a payment.
+        reviewedMethods = cart.shipping_methods.map((method) => method.id).sort();
+      }
+      if (input.fulfillment_type === "delivery" && !deliveryZoneForAddress(input, deliveryZones())) {
+        throw new MedusaError(MedusaError.Types.INVALID_DATA, "Delivery is not available for this Gauteng address");
       }
 
       const deliveryAddress = input.fulfillment_type === "collection" ? {
         first_name: input.first_name,
         last_name: input.last_name,
-        address_1: "Collection point details will be provided with your order confirmation",
-        city: "Johannesburg",
+        address_1: "32 4th Street",
+        address_2: "Wynberg",
+        city: "Sandton",
         province: "Gauteng",
         country_code: "za",
-        postal_code: "2000",
+        postal_code: "2090",
         phone: input.phone,
       } : {
         first_name: input.first_name,
@@ -176,71 +261,70 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         postal_code: input.postal_code,
         phone: input.phone,
       };
-      const checkoutMetadata = { ...(cart.metadata || {}) };
-      delete checkoutMetadata.storefront_owner_claim;
-      if (!cart.customer_id) checkoutMetadata.storefront_claimable_version = 1;
-      else delete checkoutMetadata.storefront_claimable_version;
-      await updateCartWorkflow(req.scope).run({ input: {
-        id: cartId,
-        shipping_address: deliveryAddress,
-        metadata: {
-          ...checkoutMetadata,
-          storefront_confirmation_sha256: confirmationDigest,
-          storefront_checkout_sha256: checkoutFingerprint,
-          storefront_checkout: { fulfillment_type: input.fulfillment_type },
-        },
-      } });
-
       const optionName = input.fulfillment_type === "collection" ? "Collection" : "Gauteng delivery";
       const { data: options } = await query.graph({ entity: "shipping_option", fields: ["id", "name"], filters: { name: optionName } });
       const option = options[0] as { id: string; name: string } | undefined;
       if (!option) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "This fulfillment option is not configured");
-      await addShippingMethodToCartWorkflow(req.scope).run({ input: {
-        cart_id: cartId,
-        options: [{ id: option.id }],
-      } });
 
-      await updateStorefrontCheckoutContact(req.scope, {
-        id: cartId, email: input.email, customer_id: cart.customer_id || null,
-      });
+      // Medusa otherwise reprices the old shipping option against the new
+      // address. The previous zone can reject a valid address correction.
+      if (cart.shipping_methods?.length) {
+        await clearCheckoutShippingWorkflow(req.scope).run({
+          input: { shipping_method_ids: cart.shipping_methods.map((method) => method.id) },
+        });
+      }
+      await updateCartWorkflow(req.scope).run({ input: { id: cartId, shipping_address: deliveryAddress } });
+      await addShippingMethodToCartWorkflow(req.scope).run({ input: { cart_id: cartId, options: [{ id: option.id }] } });
+
+      const quotedCart = await readCheckoutCart(req.scope, cartId);
+      const quote = quoteForCart(quotedCart, checkoutFingerprint, hold, reviewedMethods);
+      if (step === "review") return { kind: "review", quote } as const;
+      if (!confirmationDigest || !matchesReviewToken(quote.review_token, reviewToken)) return { kind: "quote-changed" } as const;
+
       const { data: collections } = await query.graph({ entity: "cart_payment_collection", fields: ["payment_collection_id"], filters: { cart_id: cartId } });
       let collectionId = collections[0]?.payment_collection_id as string | undefined;
       if (!collectionId) {
         const { result: collection } = await createPaymentCollectionForCartWorkflow(req.scope).run({ input: { cart_id: cartId } });
         collectionId = collection.id;
       }
-      const { data: checkoutCarts } = await query.graph({
-        entity: "cart",
-        fields: ["id", "email", "customer_id", "currency_code", "total", "metadata", "items.*", "shipping_address.*", "shipping_methods.*"],
-        filters: { id: cartId },
+      const { data: [paymentCollection] } = await query.graph({
+        entity: "payment_collection", fields: ["amount", "currency_code"], filters: { id: collectionId },
       });
-      if (!checkoutCarts[0]) throw new MedusaError(MedusaError.Types.NOT_FOUND, "Bag not found");
+      if (!paymentCollection || medusaAmountToMinor(paymentCollection.amount) !== medusaAmountToMinor(quote.amount) ||
+          paymentCollection.currency_code !== quote.currency_code) {
+        return { kind: "quote-changed" } as const;
+      }
+      await updateStorefrontCheckoutContact(req.scope, {
+        id: cartId, email: input.email, customer_id: cart.customer_id || null,
+        checkout: { confirmationDigest, fingerprint: checkoutFingerprint, fulfillmentType: input.fulfillment_type, quote },
+      });
+      const checkoutSnapshot = await readCheckoutCart(req.scope, cartId);
+      if (!matchesReviewToken(quoteForCart(checkoutSnapshot, checkoutFingerprint, hold, reviewedMethods).review_token, reviewToken)) {
+        return { kind: "quote-changed" } as const;
+      }
       const { result: createdSession } = await createPaymentSessionsWorkflow(req.scope).run({
         input: { payment_collection_id: collectionId, provider_id: providerId, data: {
-          storefront_cart_id: cartId, storefront_checkout_snapshot: checkoutCarts[0],
+          storefront_cart_id: cartId, storefront_checkout_snapshot: checkoutSnapshot,
           // Paystack requires the customer's email to initialize a transaction.
           storefront_customer_email: input.email,
         } },
       });
       const session = createdSession as unknown as Record<string, unknown>;
-      const sessionData = session.data as Record<string, unknown> | undefined;
-      return {
-        review: null,
-        session_id: session.id,
-        status: checkoutSessionStatus(session),
-        amount: session.amount,
-        currency_code: session.currency_code,
-        provider_id: providerId,
-        redirect_url: typeof sessionData?.redirect_url === "string" ? sessionData.redirect_url : null,
-        fulfillment_type: input.fulfillment_type,
-        hold_expires_at: hold.expires_at,
-      };
+      return { kind: "checkout", checkout: sessionCheckout(session, providerId, input.fulfillment_type, hold.expires_at) } as const;
     });
-    if (result.review) {
-      res.status(409).json({ message: "Checkout changed. Review your bag before continuing.", changes: result.review });
+    if (result.kind === "hold-changed") {
+      res.status(409).json({ message: "Checkout changed. Review your bag before continuing.", changes: result.changes });
       return;
     }
-    res.status(200).json({ checkout: result });
+    if (result.kind === "quote-changed") {
+      res.status(409).json({ code: "checkout_review_changed", message: "Review your order total again before paying." });
+      return;
+    }
+    if (result.kind === "review") {
+      res.status(200).json({ quote: result.quote });
+      return;
+    }
+    res.status(200).json({ checkout: result.checkout });
   } catch (error) {
     const status = error instanceof MedusaError && error.type === MedusaError.Types.INVALID_DATA ? 400
       : error instanceof MedusaError && error.type === MedusaError.Types.NOT_FOUND ? 404

@@ -85,7 +85,7 @@ for (const width of [1440, 390]) {
   })
 }
 
-test('every page footer carries the showroom facts while policy pages stay free of owner contact details', async ({ page }) => {
+test('the footer carries the showroom facts and the published privacy policy names the Information Officer', async ({ page }) => {
   for (const route of ['/', '/shop', '/bag', '/policies/privacy']) {
     await page.goto(route)
     const footer = page.getByRole('contentinfo')
@@ -94,10 +94,11 @@ test('every page footer carries the showroom facts while policy pages stay free 
       await expect(footer).toContainText(fact)
     }
   }
-  // Before the owner document lands, the privacy policy names only the showroom's public email and the Information Regulator's.
-  const emails = await page.locator('article').evaluate((element) => [...new Set((element as HTMLElement).innerText.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) ?? [])])
+  const policy = page.locator('article')
+  const emails = await policy.evaluate((element) => [...new Set((element as HTMLElement).innerText.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) ?? [])])
   expect(emails).toEqual(['Cindy@daskasas.co.za', 'enquiries@inforegulator.org.za', 'POPIAComplaints@inforegulator.org.za'])
-  await expect(page.locator('article')).toContainText('[PLACEHOLDER: Information Officer email')
+  await expect(policy).toContainText('Our Information Officer is Cindy Gomes.')
+  await expect(policy).not.toContainText(/\[PLACEHOLDER:|Draft for owner/)
 })
 
 test('the footer reopens the cookie choice', async ({ page }) => {

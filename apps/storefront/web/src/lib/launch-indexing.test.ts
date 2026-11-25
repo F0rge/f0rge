@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { currentCustomerPolicies, type CustomerPolicyDocument } from "./customer-policies";
+import { currentCustomerPolicies } from "./customer-policies";
 import { canonicalUrl, catalogueIndexable, robotsHeader, sitemapPaths, storefrontIndexable } from "./launch-indexing";
 
-vi.mock("./customer-policies", async (original) => ({
-  ...await original<typeof import("./customer-policies")>(),
-  currentCustomerPolicies: vi.fn(),
-}));
+vi.mock("./customer-policies", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./customer-policies")>();
+  return {
+    ...original,
+    currentCustomerPolicies: vi.fn(original.currentCustomerPolicies),
+  };
+});
 
 const ownerFacts = vi.mocked(currentCustomerPolicies);
 
@@ -18,7 +21,7 @@ const production = {
 
 describe("storefront indexing", () => {
   beforeEach(() => {
-    ownerFacts.mockReturnValue({} as CustomerPolicyDocument);
+    ownerFacts.mockReset();
   });
 
   it("keeps the whole site noindex while the owner policy document is missing", () => {
@@ -39,6 +42,7 @@ describe("storefront indexing", () => {
   });
 
   it("allows catalogue paths only when production indexing is on", () => {
+    expect(robotsHeader("/", production)).toBeNull();
     expect(catalogueIndexable("/shop", production)).toBe(true);
     expect(catalogueIndexable("/product/chair", production)).toBe(true);
     expect(catalogueIndexable("/shop/bedroom", production)).toBe(true);
@@ -51,12 +55,10 @@ describe("storefront indexing", () => {
     expect(catalogueIndexable("/policies/returns", production)).toBe(true);
     expect(catalogueIndexable("/help", production)).toBe(true);
     expect(catalogueIndexable("/contact", production)).toBe(false);
-    expect(catalogueIndexable("/account", production)).toBe(false);
-    expect(catalogueIndexable("/account/orders/1", production)).toBe(false);
-    expect(catalogueIndexable("/checkout", production)).toBe(false);
-    expect(catalogueIndexable("/order/confirmation", production)).toBe(false);
-    expect(catalogueIndexable("/sign-in", production)).toBe(false);
-    expect(catalogueIndexable("/api/health", production)).toBe(false);
+    for (const path of ["/account", "/account/orders/1", "/bag", "/checkout", "/order/confirmation", "/sign-in", "/sign-up", "/api/health"]) {
+      expect(robotsHeader(path, production)).toBe("noindex, nofollow, noarchive");
+    }
+    expect(robotsHeader("/product/chair", { ...production, STOREFRONT_PRIVATE_PREVIEW: "on" })).toBe("noindex, nofollow, noarchive");
     expect(catalogueIndexable("/shop", {})).toBe(false);
   });
 

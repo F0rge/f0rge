@@ -10,6 +10,8 @@ import { BeforeYouPay, TERMS_ACCEPTANCE_ID } from "@/components/before-you-pay";
 import { PieceImage } from "@/components/piece-image";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import type { BagFulfillmentSummary } from "@/lib/bag-server";
+import { COLLECTION_ADDRESS, COLLECTION_INSTRUCTIONS, DELIVERY_RATES } from "@/lib/checkout-fulfillment";
 import { purchaseFeedback } from "@/lib/purchase-feedback";
 import { SHOWROOM } from "@/lib/showroom";
 
@@ -18,14 +20,38 @@ type PreparedCheckout = {
   session_id: string; status: string; amount: number; currency_code: string; fulfillment_type: Fulfillment;
   provider_id?: string; redirect_url?: string | null;
 };
+type CheckoutQuote = {
+  amount: number;
+  currency_code: string;
+  delivery_amount: number;
+  review_token: string;
+  hold_expires_at: string;
+  items: { id: string; title: string; quantity: number; total: number }[];
+  fulfillment_promise?: BagFulfillmentSummary;
+};
+type CheckoutReview = { quote: CheckoutQuote; details: Record<string, string> };
+type CheckoutResponse = { quote?: CheckoutQuote; checkout?: PreparedCheckout; message?: string; code?: string };
 type SavedAddress = { id: string; first_name?: string; last_name?: string; address_1?: string; address_2?: string; city?: string; province?: string; postal_code?: string; phone?: string };
 // Commerce answers this code (404) when neither Paystack nor the local test provider is configured. It checks
 // the provider before anything else, so no order or payment session exists when it does.
 const CARD_PAYMENT_UNAVAILABLE = "payment_unavailable";
+const deliveryRates = DELIVERY_RATES
+  .map(({ name, rate_zar_incl_vat }) => `${name}: R${Number(rate_zar_incl_vat).toLocaleString("en-GB")}`).join(" · ");
 const methods = [
-  { id: "delivery", label: "Delivery", description: "Selected Gauteng areas. The delivery charge is confirmed in your order total before payment." },
-  { id: "collection", label: "Collection", description: `Free. Collect from our showroom at Bedford Square, Bedfordview. Open ${SHOWROOM.hours.map((row) => `${row.short} ${row.time}`).join(", ")}.` },
+  { id: "delivery", label: "Delivery", description: `${deliveryRates}, VAT included. Coverage and the charge are confirmed before payment.` },
+  { id: "collection", label: "Collection", description: "Free by appointment in Wynberg, Sandton." },
 ] as const;
+
+async function requestCheckout(input: Record<string, string>) {
+  const response = await fetch("/api/checkout/prepare", {
+    method: "POST", headers: { "content-type": "application/json" }, cache: "no-store", body: JSON.stringify(input),
+  });
+  return { response, payload: await response.json() as CheckoutResponse };
+}
+
+function reviewHoldIsActive(quote: CheckoutQuote): boolean {
+  return Date.parse(quote.hold_expires_at) > Date.now();
+}
 
 // 16px text at every width so phones do not zoom into the field.
 function Field({ label, id, ...props }: ComponentProps<"input"> & { label: string; id: string }) {
@@ -56,6 +82,7 @@ export default function CheckoutPage() {
   const { bag, error: bagError, busy: bagBusy, update } = useBag();
   const startedCart = useRef("");
   const [fulfillment, setFulfillment] = useState<Fulfillment>("delivery");
+  const [review, setReview] = useState<CheckoutReview | null>(null);
   const [checkout, setCheckout] = useState<PreparedCheckout | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState("");
@@ -64,6 +91,7 @@ export default function CheckoutPage() {
   const error = checkoutError || bagError;
   const errorRef = useRef<HTMLParagraphElement>(null);
   const unavailableRef = useRef<HTMLHeadingElement>(null);
+  const reviewRef = useRef<HTMLHeadingElement>(null);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [accountAvailable, setAccountAvailable] = useState(false);
   const [saveAddress, setSaveAddress] = useState(false);
@@ -95,6 +123,7 @@ export default function CheckoutPage() {
   }, [accountAvailable, bag, capture]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   useEffect(() => { if (unavailable) unavailableRef.current?.focus(); }, [unavailable]);
+  useEffect(() => { if (review && !checkout && !unavailable) reviewRef.current?.focus(); }, [review, checkout, unavailable]);
 
   function fillSavedAddress(id: string) {
     const address = savedAddresses.find((candidate) => candidate.id === id);
@@ -105,10 +134,41 @@ export default function CheckoutPage() {
     }
   }
 
-  async function prepare(event: FormEvent<HTMLFormElement>) {
+  async function markPaymentUnavailable() {
+    capture({ name: "storefront_friction_noted", properties: { surface: "checkout", kind: "checkout_unavailable" } });
+    setUnavailable(true);
+    // Release the reservation so the pieces are not held for an order that cannot be paid.
+    await update("DELETE", "/api/bag/checkout");
+  }
+
+  async function reviewOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError("");
-    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const details = Object.fromEntries(Array.from(new FormData(event.currentTarget), ([key, value]) => [key, String(value)]));
+    details.fulfillment_type = fulfillment;
+    try {
+      const { response, payload } = await requestCheckout({ ...details, step: "review" });
+      if (payload.code === CARD_PAYMENT_UNAVAILABLE) {
+        await markPaymentUnavailable();
+        return;
+      }
+      if (!response.ok || !payload.quote) throw new Error(payload.message || "Your order could not be reviewed");
+      setReview({ details, quote: payload.quote });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Your order could not be reviewed");
+    } finally { setBusy(false); }
+  }
+
+  function editReview() {
+    setReview(null);
+    setError("");
+    requestAnimationFrame(() => formRef.current?.querySelector("input")?.focus());
+  }
+
+  async function continueToPayment() {
+    if (!review) return;
+    setBusy(true); setError("");
+    const { details: values, quote } = review;
     try {
       if (saveAddress && accountAvailable && fulfillment === "delivery") {
         const addressResponse = await fetch("/api/account/addresses", {
@@ -121,18 +181,14 @@ export default function CheckoutPage() {
           }),
         });
         if (!addressResponse.ok) throw new Error("The address could not be saved. Review it or continue without saving.");
+        setSaveAddress(false);
       }
-      const response = await fetch("/api/checkout/prepare", {
-        method: "POST", headers: { "content-type": "application/json" }, cache: "no-store", body: JSON.stringify({ ...values, fulfillment_type: fulfillment }),
-      });
-      const payload = await response.json() as { checkout?: PreparedCheckout; message?: string; code?: string };
+      const { response, payload } = await requestCheckout({ ...values, step: "payment", review_token: quote.review_token });
       if (payload.code === CARD_PAYMENT_UNAVAILABLE) {
-        capture({ name: "storefront_friction_noted", properties: { surface: "checkout", kind: "checkout_unavailable" } });
-        setUnavailable(true);
-        // Release the reservation so the pieces are not held for an order that cannot be paid.
-        await update("DELETE", "/api/bag/checkout");
+        await markPaymentUnavailable();
         return;
       }
+      if (response.status === 409) setReview(null);
       if (!response.ok || !payload.checkout) throw new Error(payload.message || "Checkout could not be prepared");
       if (bag?.id) {
         const checkoutType = accountAvailable ? "account" : "guest";
@@ -184,8 +240,10 @@ export default function CheckoutPage() {
   const held = isHeld(bag);
   const feedback = error ? purchaseFeedback(error, true) : null;
   const paystack = checkout?.provider_id === "pp_paystack_checkout";
+  const visibleReview = checkout || unavailable ? null : review;
+  const reviewHeld = visibleReview ? reviewHoldIsActive(visibleReview.quote) : false;
   return <div className="mx-auto w-full max-w-[1400px] px-4 py-10 md:px-6">
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
+    <div className={visibleReview ? "mx-auto max-w-2xl" : "grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start"}>
       <div className="min-w-0 space-y-4">
         {feedback && <p ref={errorRef} id="checkout-error" role={feedback.role} tabIndex={feedback.tabIndex} className="rounded-lg border border-destructive p-4 text-sm text-destructive outline-none">{feedback.message}</p>}
         {unavailable ? <Card data-testid="card-payment-unavailable">
@@ -228,13 +286,13 @@ export default function CheckoutPage() {
           </CardContent>
         </Card> : <Card>
           <CardHeader>
-            <CardTitle><h1 className="text-xl">Checkout</h1></CardTitle>
-            <CardDescription>Guest checkout. No account needed.</CardDescription>
+            <CardTitle>{visibleReview ? <h1 ref={reviewRef} tabIndex={-1} className="text-xl outline-none">Review your order</h1> : <h1 className="text-xl">Checkout</h1>}</CardTitle>
+            <CardDescription>{visibleReview ? "Check your details and the full price before you pay." : "Guest checkout. No account needed."}</CardDescription>
           </CardHeader>
           <CardContent>
             {!bag && !error && <p role="status">Loading your bag…</p>}
             {bag && bag.items.length === 0 && <p>Your bag is empty. <Link href="/shop" className="font-medium underline underline-offset-4">Shop all pieces</Link></p>}
-            {bag && bag.items.length > 0 && <form ref={formRef} className="grid gap-8" onSubmit={(event) => void prepare(event)}>
+            {bag && bag.items.length > 0 && <form ref={formRef} className={visibleReview ? "hidden" : "grid gap-8"} inert={busy} onSubmit={(event) => void reviewOrder(event)}>
               <fieldset className="grid min-w-0 gap-4">
                 <legend className="mb-4 font-medium">Contact</legend>
                 <Field id="checkout-email" label="Email" name="email" type="email" autoComplete="email" required maxLength={254} />
@@ -272,25 +330,75 @@ export default function CheckoutPage() {
                 <Field id="checkout-postal-code" label="Postal code" name="postal_code" inputMode="numeric" autoComplete="postal-code" pattern="[0-9]{4}" required />
                 {accountAvailable && <Checkbox checked={saveAddress} onChange={(event) => setSaveAddress(event.target.checked)} label="Save this address to your account for next time" />}
               </fieldset> : <section aria-labelledby="collection-heading" className="space-y-2 rounded-md bg-muted/50 p-4 text-sm">
-                <h2 id="collection-heading" className="font-medium">Collect from {SHOWROOM.name}</h2>
-                <address className="not-italic">{SHOWROOM.address}</address>
-                <p className="text-muted-foreground">{SHOWROOM.note}</p>
-                <ul>{SHOWROOM.hours.map((row) => <li key={row.short}>{row.days} {row.time}</li>)}</ul>
-                <p className="text-muted-foreground">We will contact you when your order is ready to collect.</p>
+                <h2 id="collection-heading" className="font-medium">Collect in Wynberg</h2>
+                <address className="not-italic">{COLLECTION_ADDRESS}</address>
+                <p className="text-muted-foreground">{COLLECTION_INSTRUCTIONS}</p>
               </section>}
 
               {/* Mantine's unlayered button reset makes buttons inherit their font, so the wrapper carries it. */}
               <div className="grid gap-3 text-sm font-medium">
-                <BeforeYouPay />
-                <Button type="submit" size="lg" className="h-12 w-full" aria-describedby={TERMS_ACCEPTANCE_ID} disabled={busy || bagBusy || !held}>{busy ? "Checking order…" : "Continue to payment"}</Button>
+                <Button type="submit" size="lg" className="h-12 w-full" disabled={busy || bagBusy || !held}>{busy ? "Checking order…" : "Review order"}</Button>
                 {!held && <p role="alert" className="font-normal">Your reservation expired. Return to your bag to review and reserve the pieces again.</p>}
               </div>
             </form>}
+            {visibleReview && <div className="grid gap-6 text-sm">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <h2 className="font-medium">Contact</h2>
+                  <p>{visibleReview.details.first_name} {visibleReview.details.last_name}</p>
+                  <p className="break-words">{visibleReview.details.email}</p>
+                  <p>{visibleReview.details.phone}</p>
+                </div>
+                <div>
+                  <h2 className="font-medium">{fulfillment === "collection" ? "Collection by appointment" : "Delivery address"}</h2>
+                  {fulfillment === "collection" ? <>
+                    <p>{COLLECTION_ADDRESS}</p>
+                    <p className="text-muted-foreground">{COLLECTION_INSTRUCTIONS}</p>
+                  </> : <>
+                    <p>{visibleReview.details.address_1}, {visibleReview.details.address_2}</p>
+                    <p>{visibleReview.details.city}, {visibleReview.details.province}, {visibleReview.details.postal_code}</p>
+                  </>}
+                </div>
+              </div>
+              <div>
+                <h2 className="mb-2 font-medium">Your pieces</h2>
+                <ul className="space-y-1">{visibleReview.quote.items.map((item) => <li key={item.id} className="flex justify-between gap-4">
+                  <span>{item.quantity} × {item.title}</span>
+                  <span className="whitespace-nowrap">{money(item.total, visibleReview.quote.currency_code)}</span>
+                </li>)}</ul>
+                {visibleReview.quote.fulfillment_promise && <p className="mt-2 text-muted-foreground">
+                  Estimated ready {promiseDates(visibleReview.quote.fulfillment_promise.estimated_from, visibleReview.quote.fulfillment_promise.estimated_by)}
+                </p>}
+              </div>
+              <dl className="space-y-2">
+                <div className="flex justify-between gap-4">
+                  <dt>Pieces, VAT included</dt>
+                  <dd>{money(visibleReview.quote.amount - visibleReview.quote.delivery_amount, visibleReview.quote.currency_code)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>{fulfillment === "collection" ? "Collection" : "Delivery, VAT included"}</dt>
+                  <dd data-testid="checkout-review-delivery">{fulfillment === "collection" ? "Free" : money(visibleReview.quote.delivery_amount, visibleReview.quote.currency_code)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t pt-2 text-base font-medium">
+                  <dt>Total to pay</dt>
+                  <dd data-testid="checkout-review-total">{money(visibleReview.quote.amount, visibleReview.quote.currency_code)}</dd>
+                </div>
+              </dl>
+              <BeforeYouPay />
+              <div className="flex flex-wrap gap-2 font-medium">
+                <Button type="button" variant="outline" disabled={busy} onClick={editReview}>Edit details</Button>
+                <Button type="button" variant="outline" disabled={busy || bagBusy} onClick={() => void releaseHold()}>Back to bag</Button>
+                <Button type="button" aria-describedby={TERMS_ACCEPTANCE_ID} disabled={busy || bagBusy || !reviewHeld} onClick={() => void continueToPayment()}>
+                  {busy ? "Preparing payment…" : "Continue to payment"}
+                </Button>
+              </div>
+              {!reviewHeld && <p role="alert">Your reservation expired. Return to your bag to reserve the pieces again.</p>}
+            </div>}
           </CardContent>
         </Card>}
       </div>
 
-      {bag && bag.items.length > 0 && <Card className="min-w-0">
+      {!visibleReview && bag && bag.items.length > 0 && <Card className="min-w-0">
         <CardHeader>
           <CardTitle><h2>Your order</h2></CardTitle>
           <CardDescription>Prices in rand, VAT included.</CardDescription>
@@ -310,9 +418,9 @@ export default function CheckoutPage() {
             <p className="text-muted-foreground">{bag.hold.fulfillment_promise.kind === "mixed" ? "All pieces will be fulfilled together when the made-to-order pieces are ready." : bag.hold.fulfillment_promise.kind === "made_to_order" ? "This order is made to order." : "All pieces are in stock."}</p>
             <p className="text-muted-foreground">Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
           </div>}
-          <BagTotals bag={bag} delivery={fulfillment === "collection" ? "Free" : DELIVERY_COST} />
-          {checkout && <div className="flex justify-between gap-4 border-t pt-2 font-medium"><span>Total to pay</span><span data-testid="checkout-total">{money(Number(checkout.amount), checkout.currency_code)}</span></div>}
-          <p className="text-xs text-muted-foreground">{fulfillment === "delivery" ? "Plus delivery, confirmed before payment. " : ""}Prices and availability are confirmed before payment.</p>
+          {checkout
+            ? <div className="flex justify-between gap-4 border-t pt-2 font-medium"><span>Total to pay</span><span data-testid="checkout-total">{money(Number(checkout.amount), checkout.currency_code)}</span></div>
+            : <BagTotals bag={bag} delivery={fulfillment === "collection" ? "Free" : DELIVERY_COST} />}
           {held && <p className="text-xs text-muted-foreground">Your pieces are reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}.</p>}
           {!checkout && !unavailable && <div className="text-sm font-medium"><Button type="button" variant="outline" className="w-full" disabled={busy || bagBusy} onClick={() => void releaseHold()}>Edit bag</Button></div>}
         </CardContent>

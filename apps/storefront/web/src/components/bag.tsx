@@ -18,7 +18,7 @@ export const promiseDates = (from: string, by: string) => {
 };
 export const itemCount = (bag: Bag | null) => bag?.items.reduce((total, item) => total + item.quantity, 0) ?? 0;
 export const isHeld = (bag: Bag | null) => bag?.hold?.status === "active" && Date.parse(bag.hold.expires_at) > Date.now();
-export const DELIVERY_NOTE = "Delivery in selected Gauteng areas, or collect from our showroom at Bedford Square, Bedfordview.";
+export const DELIVERY_NOTE = "Delivery in selected areas of Johannesburg and Pretoria, or free collection by appointment in Wynberg.";
 export const DELIVERY_COST = "Confirmed before payment";
 
 export async function bagRequest(method: string, path = "/api/bag", body?: unknown): Promise<Bag> {

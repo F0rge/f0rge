@@ -33,11 +33,13 @@ test('an in-stock piece shows its facts, caps quantity at stock and adds to the 
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Add to bag' })).toBeDisabled()
 
-  await expect(page.getByRole('region', { name: 'Delivery and returns' })).toContainText('selected Gauteng areas')
-  await expect(page.getByRole('region', { name: 'Delivery and returns' })).toContainText('confirmed in your order total before payment')
   const returns = page.getByRole('region', { name: 'Delivery and returns' })
+  await expect(returns).toContainText('selected areas of Johannesburg and Pretoria')
+  await expect(returns).toContainText('We confirm the delivery charge, including VAT, before you pay.')
+  await expect(returns).toContainText('collect for free by appointment at 32 4th Street, Wynberg')
+  await expect(article).toContainText('Free by appointment in Wynberg')
   await expect(returns).toContainText(/If you buy online, you may cancel within 7 days.+Our own policy: .+within 30 days after delivery or collection/)
-  await expect(returns.getByRole('note')).toHaveText('Draft for owner and legal review before go-live.')
+  await expect(returns.getByRole('note')).toHaveCount(0)
   expect((await relatedTitles(page))[0]).toBe('Test chair')
 })
 

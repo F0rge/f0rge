@@ -6,7 +6,7 @@ import { ProductCardGallery } from "@/components/product-card-gallery";
 import { fromPrice, getStoreProduct, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
 import { selectedImages } from "@/lib/product-variants";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
-import { SHOWROOM } from "@/lib/showroom";
+import { COLLECTION_ADDRESS } from "@/lib/checkout-fulfillment";
 import { ProductDetail } from "./product-detail";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ function DeliveryAndReturns() {
       <div className="flex flex-col items-center text-center md:items-start md:text-left">
         <div className="mb-4 flex size-12 items-center justify-center rounded-lg bg-primary/10"><Truck aria-hidden="true" className="size-6 text-primary" /></div>
         <h2 className="mb-3 text-lg font-semibold">Delivery or collection</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">We deliver in selected Gauteng areas. Delivery charges are shown in rand, including VAT, and confirmed in your order total before payment. Or collect from our showroom at {SHOWROOM.name}.</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">We deliver in selected areas of Johannesburg and Pretoria. We confirm the delivery charge, including VAT, before you pay. You can also collect for free by appointment at {COLLECTION_ADDRESS}.</p>
         <Link href="/policies/delivery" className="mt-3 inline-flex min-h-11 items-center text-sm font-medium underline-offset-4 hover:underline">Delivery and collection policy</Link>
       </div>
       <div className="flex flex-col items-center text-center md:items-start md:text-left">

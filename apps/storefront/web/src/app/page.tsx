@@ -6,6 +6,7 @@ import { StorefrontMotion } from "@/components/storefront-motion";
 import { ProductCardGallery } from "@/components/product-card-gallery";
 import { CategoryTiles } from "@/components/category-tiles";
 import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
+import { COLLECTION_ADDRESS, DELIVERY_DESCRIPTION } from "@/lib/checkout-fulfillment";
 import { fromPrice, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
 import { selectedImages } from "@/lib/product-variants";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
@@ -20,11 +21,11 @@ const faqs: { question: string; answer: string; returnPolicy?: true }[] = [
   },
   {
     question: "Do you deliver?",
-    answer: "Yes, in selected Gauteng areas. Delivery charges are shown in rand, including VAT, and confirmed in your order total before payment.",
+    answer: DELIVERY_DESCRIPTION,
   },
   {
-    question: "Can I collect from the showroom?",
-    answer: `Yes. Choose collection at checkout and collect your order from our showroom at ${SHOWROOM.address}.`,
+    question: "Where can I collect my order?",
+    answer: `Choose free collection at checkout. We’ll contact you when your order is ready to collect by appointment at ${COLLECTION_ADDRESS}.`,
   },
   {
     question: "Do I need an account to order?",

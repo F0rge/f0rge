@@ -12,12 +12,6 @@ vi.mock("@clerk/nextjs/server", () => ({
   },
 }));
 
-const ownerFacts = vi.hoisted(() => ({ document: null as object | null }));
-vi.mock("./lib/customer-policies", async (original) => ({
-  ...await original<typeof import("./lib/customer-policies")>(),
-  currentCustomerPolicies: () => ownerFacts.document,
-}));
-
 describe("Clerk and private-preview proxy composition", () => {
   const envNames = [
     "STOREFRONT_RUNTIME_KIND", "STOREFRONT_PRIVATE_PREVIEW",
@@ -31,6 +25,7 @@ describe("Clerk and private-preview proxy composition", () => {
     saved = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
     process.env.STOREFRONT_RUNTIME_KIND = "hosted";
     delete process.env.STOREFRONT_PRIVATE_PREVIEW;
+    delete process.env.STOREFRONT_INDEXING_ENABLED;
     process.env.STOREFRONT_PREVIEW_USERNAME = "preview-user";
     process.env.STOREFRONT_PREVIEW_PASSWORD = "test-preview-password-that-is-long-enough";
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_fake";
@@ -38,7 +33,6 @@ describe("Clerk and private-preview proxy composition", () => {
     process.env.STOREFRONT_CLERK_JWT_TEMPLATE = "storefront_medusa";
     clerkState.configured.mockClear();
     clerkState.invoked.mockClear();
-    ownerFacts.document = null;
     vi.resetModules();
   });
 
@@ -114,22 +108,23 @@ describe("Clerk and private-preview proxy composition", () => {
 
   it("indexes catalogue routes only when production indexing is explicitly enabled", async () => {
     process.env.STOREFRONT_PRIVATE_PREVIEW = "off";
-    process.env.STOREFRONT_INDEXING_ENABLED = "true";
     process.env.RAILWAY_ENVIRONMENT_NAME = "production";
     process.env.NEXT_PUBLIC_BASE_URL = "https://daskasas.example";
     delete process.env.STOREFRONT_PREVIEW_USERNAME;
     delete process.env.STOREFRONT_PREVIEW_PASSWORD;
+    delete process.env.CLERK_SECRET_KEY;
     const { proxy } = await import("./proxy");
     expect((await proxy(new NextRequest("https://daskasas.example/shop"), {} as never)).headers.get("x-robots-tag")).toContain("noindex");
-    ownerFacts.document = {};
-    const shop = await proxy(new NextRequest("https://daskasas.example/shop"), {} as never);
-    const category = await proxy(new NextRequest("https://daskasas.example/shop/dining-room"), {} as never);
-    expect(category.headers.get("x-robots-tag")).toBeNull();
-    const account = await proxy(new NextRequest("https://daskasas.example/account"), {} as never);
-    const checkout = await proxy(new NextRequest("https://daskasas.example/checkout"), {} as never);
-    expect(shop.headers.get("x-robots-tag")).toBeNull();
-    expect(account.headers.get("x-robots-tag")).toContain("noindex");
-    expect(checkout.headers.get("x-robots-tag")).toContain("noindex");
+    process.env.STOREFRONT_INDEXING_ENABLED = "true";
+    for (const path of ["/", "/shop", "/shop/dining-room", "/product/chair", "/policies/terms"]) {
+      const response = await proxy(new NextRequest(`https://daskasas.example${path}`), {} as never);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-robots-tag")).toBeNull();
+    }
+    for (const path of ["/account", "/bag", "/checkout", "/order/confirmation", "/sign-in", "/sign-up", "/api/health"]) {
+      const response = await proxy(new NextRequest(`https://daskasas.example${path}`), {} as never);
+      expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    }
   });
 
   it("permanently redirects old routes behind the preview gate, without indexing", async () => {

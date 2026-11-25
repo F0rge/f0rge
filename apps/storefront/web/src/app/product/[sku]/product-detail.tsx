@@ -14,8 +14,8 @@ import { pickVariant, productVariantOptions, selectedImages, variantChoices } fr
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 
 const assurances = [
-  { title: "Delivery", description: "Selected Gauteng areas" },
-  { title: "Collection", description: "Bedford Square showroom" },
+  { title: "Delivery", description: "Selected areas in Johannesburg and Pretoria" },
+  { title: "Collection", description: "Free by appointment in Wynberg" },
   { title: "Returns", description: "Change of mind within 30 days" },
 ];
 

@@ -64,7 +64,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
       <CardHeader><CardTitle><h2 className="text-xl">Fulfilment</h2></CardTitle></CardHeader>
       <CardContent className="space-y-1">
         {order.fulfillment_status ? <p role="status">{fulfillmentStatusLabel(order.fulfillment_status)}</p> : null}
-        {order.fulfillment_type === "collection" ? <p className="text-muted-foreground">Showroom collection</p> : null}
+        {order.fulfillment_type === "collection" ? <p className="text-muted-foreground">Collection</p> : null}
         {order.fulfillment_type === "delivery" ? <p className="text-muted-foreground">Delivery</p> : null}
       </CardContent>
     </Card> : null}
