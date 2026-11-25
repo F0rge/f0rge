@@ -84,7 +84,7 @@ import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { AdminBreadcrumb, AdminNavigation } from "@/components/administration";
 import adminStyles from "@/components/administration.module.css";
 import { administrationHome } from "@/lib/admin-navigation";
-import { PageLoading } from "@/components/page-loading";
+import { WorkspaceLoader } from "@/components/workspace-loader";
 import loadingStyles from "@/components/auth-loading.module.css";
 import { HeaderSearch } from "@/components/header-search";
 import {
@@ -408,7 +408,7 @@ export function AppShell({ children }: AppShellProps) {
         ) : (
           <main id="main-content" className="firstout-main">
             <AppBreadcrumb />
-            {loading ? <PageLoading kind="status" label="Loading your workspace…" /> : children}
+            {loading ? <WorkspaceLoader /> : children}
           </main>
         )}
       </Theme>

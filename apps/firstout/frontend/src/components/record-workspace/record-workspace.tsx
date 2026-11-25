@@ -26,7 +26,8 @@ import {
   Tag,
 } from "@carbon/react";
 import { Suspense, useState } from "react";
-import { LoadingRegion, PageLoading } from "@/components/page-loading";
+import { LoadingRegion } from "@/components/page-loading";
+import { WorkspaceLoader } from "@/components/workspace-loader";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -46,7 +47,7 @@ export function RecordWorkspace<T extends { id: string }>(
   props: RecordWorkspaceProps<T>,
 ) {
   const { user, loading } = useAuth();
-  if (loading) return <PageLoading label="Loading your workspace…" kind="status" />;
+  if (loading) return <WorkspaceLoader />;
   if (!user)
     return (
       <InlineNotification
@@ -57,7 +58,7 @@ export function RecordWorkspace<T extends { id: string }>(
       />
     );
   return (
-    <Suspense fallback={<PageLoading label="Loading workspace…" />}>
+    <Suspense fallback={<WorkspaceLoader loop={false} />}>
       <WorkspaceContent
         key={`${workspaceIdentity(user)}:${props.adapter.resource}`}
         {...props}
