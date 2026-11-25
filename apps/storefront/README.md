@@ -58,8 +58,10 @@ Run Medusa migrations and the first-time bootstrap script before the source sync
 DasKasas supports guest checkout for collection and configured
 Gauteng delivery. It applies the configured South African VAT rate to
 VAT-inclusive ZAR prices and calculates delivery from server-owned zone/rate
-configuration. No launch delivery rates are checked in. The included payment
-provider is a deterministic local test simulator; no real payment is taken.
+configuration. The approved delivery policy shows the VAT-inclusive Johannesburg rate of
+R1,100 and Pretoria rate of R1,300. Configure the matching zone coverage and
+rates on the commerce server before taking delivery orders. The included
+payment provider is a deterministic local test simulator that takes no real payments.
 The paid-order handoff to Firstout is implemented, but the dedicated Firstout
 Ops credential and live hosted round-trip are not yet verified.
 
@@ -177,12 +179,12 @@ is synced, and the sync assigns its category. The rule, the mapping and the
 go-live order are in `commerce/MERCHANDISING.md`.
 Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
 before launch; canonical links use it. Page metadata permits indexing only
-when `STOREFRONT_INDEXING_ENABLED=true` on a production Railway environment
-with an HTTPS origin, and only once the reviewed owner policy document exists
-(`currentCustomerPolicies()` in `web/src/lib/customer-policies.ts`). The private preview keeps that flag false, requires
-Basic Auth, and adds a no-index response header to every route. A public launch
-needs a reviewed change to the preview gate and response header. Account and
-checkout pages remain excluded from indexing.
+when the reviewed owner policy document exists
+(`currentCustomerPolicies()` in `web/src/lib/customer-policies.ts`) and the Railway
+production environment uses an HTTPS origin, `STOREFRONT_PRIVATE_PREVIEW=off`
+and `STOREFRONT_INDEXING_ENABLED=true`. Private preview requires Basic Auth
+and adds a no-index response header to every route. Account and checkout
+pages remain excluded from indexing.
 
 For discovery browser coverage, publish a representative SKU, a draft SKU,
 and a two-variant group in a disposable local environment. Set

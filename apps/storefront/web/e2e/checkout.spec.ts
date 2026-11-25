@@ -28,7 +28,7 @@ async function browserGet<T>(page: import("@playwright/test").Page, path: string
 async function openHeldCheckout(page: import("@playwright/test").Page) {
   await page.goto("/product/" + skuId);
   await page.getByRole("button", { name: "Add to bag" }).click();
-  await page.getByRole("dialog", { name: "Your bag" }).getByRole("button", { name: "Checkout" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).getByRole("button", { name: "Checkout", exact: true }).click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.getByRole("heading", { name: "Checkout", level: 1 })).toBeVisible();
 }
@@ -47,6 +47,11 @@ test("a guest collection checkout resolves after the browser closes and duplicat
     await page.getByLabel("Last name").fill("Guest");
     await page.getByLabel("Phone").fill("+27110000000");
     await page.getByLabel("Collection", { exact: true }).check();
+    await expect(page.getByRole("region", { name: "Collect in Wynberg" })).toContainText("32 4th Street, Wynberg");
+    await page.getByRole("button", { name: "Review order" }).click();
+    await expect(page.getByRole("heading", { name: "Review your order" })).toBeFocused();
+    await expect(page.getByTestId("checkout-review-delivery")).toHaveText("Free");
+    await expect(page.getByTestId("checkout-review-total")).toContainText("R");
 
     const preparedResponse = page.waitForResponse((response) => response.url().includes("/api/checkout/prepare"));
     await page.getByRole("button", { name: "Continue to payment" }).click();
@@ -157,7 +162,7 @@ test("a guest collection checkout resolves after the browser closes and duplicat
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({
             email: "changed@example.com", first_name: "Changed", last_name: "Address", phone: "+27110000009",
-            fulfillment_type: "collection",
+            fulfillment_type: "collection", step: "review",
           }),
         });
         return response.status;
@@ -172,7 +177,7 @@ test("a guest collection checkout resolves after the browser closes and duplicat
           tax_total: number;
           total: number;
           email: string;
-          address: { first_name: string; city: string } | null;
+          address: { first_name: string; address_1: string; city: string; postal_code: string } | null;
         };
       }>(confirmation, "/api/order/confirmation");
       expect(privateApi.status).toBe(200);
@@ -185,7 +190,8 @@ test("a guest collection checkout resolves after the browser closes and duplicat
       expect(persisted.order.total).toBe(persisted.order.subtotal + persisted.order.shipping_total + persisted.order.tax_total);
       expect(persisted.order.email).toBe("checkout-guest@example.com");
       expect(persisted.order.address?.first_name).toBe("Checkout");
-      expect(persisted.order.address?.city).toBe("Johannesburg");
+      expect(persisted.order.address?.address_1).toContain("32 4th Street");
+      expect(persisted.order.address?.postal_code).toBe("2090");
     } finally { await restoredContext.close(); }
   } finally {
     await database.end();
@@ -204,6 +210,7 @@ test("declined, cancelled, pending, and unknown results remain recoverable witho
     await page.getByLabel("Last name").fill("Guest");
     await page.getByLabel("Phone").fill("+27110000003");
     await page.getByLabel("Collection", { exact: true }).check();
+    await page.getByRole("button", { name: "Review order" }).click();
     await page.getByRole("button", { name: "Continue to payment" }).click();
     await expect(page.getByTestId("test-payment-panel")).toBeVisible();
     const bag = (await browserGet<{ id: string }>(page, "/api/bag")).body;
@@ -235,23 +242,47 @@ test("a configured Gauteng delivery rate is paid and saved in the order", async 
   test.skip(!skuId || !process.env.STOREFRONT_TEST_DELIVERY_CITY || !process.env.STOREFRONT_TEST_DELIVERY_SUBURB ||
     !process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE, "Set a disposable test Gauteng zone and published SKU for delivery QA");
   assertLocalCheckoutEnvironment(process.env);
+  async function reviewDelivery() {
+    await page.getByLabel("Email").fill("delivery-guest@example.com");
+    await page.getByLabel("First name").fill("Delivery");
+    await page.getByLabel("Last name").fill("Guest");
+    await page.getByLabel("Phone").fill("+27110000001");
+    await page.getByLabel("Street address").fill("1 Test Street");
+    await page.getByLabel("Suburb").fill(process.env.STOREFRONT_TEST_DELIVERY_SUBURB!);
+    await page.getByLabel("City").fill(process.env.STOREFRONT_TEST_DELIVERY_CITY!);
+    await page.getByLabel("Province").fill("Gauteng");
+    await page.getByLabel("Postal code").fill(process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE!);
+    const quoteResponse = page.waitForResponse((response) => response.url().includes("/api/checkout/prepare"));
+    await page.getByRole("button", { name: "Review order" }).click();
+    const { quote } = await (await quoteResponse).json() as { quote: { amount: number; delivery_amount: number } };
+    await expect(page.getByTestId("checkout-review-total")).toContainText("R");
+    return quote;
+  }
+
   await openHeldCheckout(page);
-  await page.getByLabel("Email").fill("delivery-guest@example.com");
-  await page.getByLabel("First name").fill("Delivery");
-  await page.getByLabel("Last name").fill("Guest");
-  await page.getByLabel("Phone").fill("+27110000001");
-  await page.getByLabel("Street address").fill("1 Test Street");
-  await page.getByLabel("Suburb").fill(process.env.STOREFRONT_TEST_DELIVERY_SUBURB!);
-  await page.getByLabel("City").fill(process.env.STOREFRONT_TEST_DELIVERY_CITY!);
-  await page.getByLabel("Province").fill("Gauteng");
-  await page.getByLabel("Postal code").fill(process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE!);
   const bagBefore = (await browserGet<{ total: number }>(page, "/api/bag")).body;
+  const firstQuote = await reviewDelivery();
+  const configuredRate = Number(process.env.STOREFRONT_TEST_DELIVERY_RATE_ZAR ?? "175");
+  expect(firstQuote.delivery_amount).toBe(configuredRate);
+  expect(firstQuote.amount - bagBefore.total).toBe(configuredRate);
+
+  // Backing out clears the provisional delivery and makes the bag editable again.
+  await page.getByRole("button", { name: "Back to bag", exact: true }).click();
+  await expect(page).toHaveURL(/\/bag$/);
+  const bagAfter = (await browserGet<{ total: number; hold: { status: string } }>(page, "/api/bag")).body;
+  expect(bagAfter.total).toBe(bagBefore.total);
+  expect(bagAfter.hold.status).toBe("cancelled");
+  await page.getByRole("main").getByRole("button", { name: "Continue to checkout" }).click();
+  await expect(page).toHaveURL(/\/checkout$/);
+  const quote = await reviewDelivery();
+  expect(quote.amount).toBe(firstQuote.amount);
+
   const preparedResponse = page.waitForResponse((response) => response.url().includes("/api/checkout/prepare"));
   await page.getByRole("button", { name: "Continue to payment" }).click();
   const prepared = await (await preparedResponse).json() as { checkout: { amount: number } };
   await expect(page.getByTestId("test-payment-panel")).toBeVisible();
   const after = await page.getByTestId("checkout-total").textContent();
-  expect(prepared.checkout.amount - bagBefore.total).toBe(175);
+  expect(prepared.checkout.amount).toBe(quote.amount);
   expect(after).toContain(new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2 }).format(prepared.checkout.amount));
   await page.getByRole("button", { name: "Simulate success" }).click();
   await expect(page.getByRole("heading", { name: "Thank you. Your order is confirmed." })).toBeVisible();
@@ -262,7 +293,7 @@ test("a configured Gauteng delivery rate is paid and saved in the order", async 
   expect(confirmation.status).toBe("captured");
   expect(confirmation.order.fulfillment_type).toBe("delivery");
   expect(confirmation.order.total).toBe(prepared.checkout.amount);
-  expect(confirmation.order.shipping_total).toBe(175);
+  expect(confirmation.order.shipping_total).toBe(configuredRate);
   expect(confirmation.order.address.address_1).toBe("1 Test Street");
   expect(confirmation.order.address.postal_code).toBe(process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE);
 });

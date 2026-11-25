@@ -15,7 +15,7 @@ vi.mock("@/lib/customer-auth", () => ({
 }));
 vi.mock("@/lib/analytics/posthog-server", () => ({ publishConfirmationOutcomes: async () => [] }));
 
-import { cartCookie, orderAccessCookie, signedCart, signedOrderAccess, verifyCart } from "@/lib/bag-server";
+import { cartCookie, orderAccessCookie, publicBag, signedCart, signedOrderAccess, verifyCart } from "@/lib/bag-server";
 import { GET, POST } from "./route";
 import { GET as confirmation } from "../order/confirmation/route";
 import { POST as openAccount } from "../account/session/route";
@@ -27,6 +27,11 @@ const completedCart = {
   metadata: { storefront_hold: { status: "active", expires_at: "2099-01-01T00:00:00.000Z" } },
 };
 const newCart = { id: "cart_new", items: [], total: 0, subtotal: 0, currency_code: "zar" };
+
+it("excludes provisional shipping from the bag's merchandise total", () => {
+  const reviewedCart = { ...newCart, total: 3700.25, subtotal: 2400.25, shipping_total: 1300 };
+  expect(publicBag(reviewedCart).total).toBe(2400.25);
+});
 
 function request(path: string, body?: unknown) {
   return new NextRequest(`http://localhost:3004${path}`, {

@@ -1,3 +1,4 @@
+import { COLLECTION_ADDRESS, COLLECTION_INSTRUCTIONS, DELIVERY_DESCRIPTION, DELIVERY_RATES } from "./checkout-fulfillment";
 import { formatZar } from "./order-money";
 import { SHOWROOM } from "./showroom";
 
@@ -25,7 +26,7 @@ export type CustomerPolicyDocument = {
   collection_location: string;
   collection_instructions: string;
   gauteng_zones: { name: string; rate_zar_incl_vat: string }[];
-  // POPIA s55 and PAIA s1 "head": the CEO or managing director, or the person they authorise in writing. Must match the Regulator registration.
+  // Use the Information Officer's name and email as registered with the Regulator.
   information_officer_name: string;
   information_officer_email: string;
   // PAIA s51(1)(a)(i): postal address and fax number of the head of the body; fax_number may say there is none.
@@ -118,9 +119,33 @@ const LINKS: Record<PolicySection, PolicyLink[]> = {
   ],
 };
 
+const APPROVED_CUSTOMER_POLICIES: CustomerPolicyDocument = {
+  legal_name: "Republic of Decor (Pty) Ltd",
+  trading_name: "DasKasas",
+  legal_status: "Private company registered in South Africa",
+  office_bearers: ["Luiz Filipe Antunes de Figueiredo"],
+  legal_service_address: COLLECTION_ADDRESS,
+  codes_of_conduct: "We do not belong to an industry body.",
+  contact_address: SHOWROOM.address,
+  support_mailbox: SHOWROOM.email,
+  phone: SHOWROOM.phones.map((phone) => phone.number).join(" or "),
+  company_registration_number: "2020/674541/07",
+  vat_registered: true,
+  vat_number: "4480294554",
+  delivery: DELIVERY_DESCRIPTION,
+  collection_location: COLLECTION_ADDRESS,
+  collection_instructions: COLLECTION_INSTRUCTIONS,
+  gauteng_zones: DELIVERY_RATES.map((rate) => ({ ...rate })),
+  information_officer_name: "Cindy Gomes",
+  information_officer_email: SHOWROOM.email,
+  postal_address: COLLECTION_ADDRESS,
+  fax_number: "None",
+  collector_skin: "Oxblood / citron",
+  distinguishes_standard_made_to_order_from_bespoke: true,
+};
+
 export function currentCustomerPolicies(): CustomerPolicyDocument | null {
-  // The owner launch pack is not in this repository. Identity, contact, delivery, and the Information Officer stay unmarked until that pack is reviewed.
-  return null;
+  return APPROVED_CUSTOMER_POLICIES;
 }
 
 function notice(): PolicyBlock {
@@ -185,17 +210,16 @@ function contactFacts(document: CustomerPolicyDocument | null): { address: strin
 }
 
 function collectionLines(document: CustomerPolicyDocument | null): string[] {
-  if (document) return [document.collection_location, document.collection_instructions];
   return [
-    `You can collect free of charge from our showroom at ${SHOWROOM.address}. ${SHOWROOM.note}`,
-    `The showroom is open ${SHOWROOM_HOURS}. We contact you when your order is ready to collect.`,
+    document?.collection_location ?? COLLECTION_ADDRESS,
+    document?.collection_instructions ?? COLLECTION_INSTRUCTIONS,
   ];
 }
 
 // CPA s49(1): terms that limit our liability or ask the customer to accept a fact. One source for the terms page and checkout.
 // None is an unusual or serious-injury risk (s49(2)), so no separate signed or ticked assent is needed.
 export const IMPORTANT_TERMS_PURPOSE = "They limit what we are responsible for, or ask you to accept certain facts.";
-const FAILED_DELIVERY = "We use a third-party courier. If nobody is available to receive a piece at the agreed time, or we cannot get access for a reason you are responsible for, we may charge the reasonable courier cost of that failed attempt where the law permits. After three failed attempts for those reasons, we may cancel the order and refund what you paid, less any permitted failed-delivery charges.";
+const FAILED_DELIVERY = "We use a third-party courier. If an agreed delivery fails because of something within your control, such as nobody being there to receive it or the courier being unable to get access, we may charge the reasonable, documented courier cost of that failed attempt if we disclosed the charge before you ordered and the law permits it. After three failed attempts for those reasons, we may cancel the order and refund what you paid, less any permitted failed-delivery charges.";
 export const IMPORTANT_TERMS = [
   "Wood, leather and natural fabrics vary: grain, knots, small cracks, live edges and colour differences are part of the material, not faults.",
   "Colours look different on screens, so visit the showroom to see a piece in person.",
@@ -204,25 +228,26 @@ export const IMPORTANT_TERMS = [
   "If we collect a change-of-mind return, you pay the collection fee we quote when you book it.",
 ] as const;
 
-// ECTA s44 allows up to 30 days for the refund. DasKasas promises seven days.
-const COOLING_OFF_REFUND_DAYS = 7;
-const COOLING_OFF_REFUND = `We refund everything you paid, including the delivery charge, within ${COOLING_OFF_REFUND_DAYS} days after you cancel.`;
+// ECTA s44 requires the refund within 30 days. The seven-day commitment is to start it.
+const COOLING_OFF_REFUND = "We initiate the full refund, including the original delivery charge, within seven calendar days of cancellation.";
+const CARD_REFUND_TIMING = "Paystack card refunds can take up to 10 business days to appear after Paystack processes them. We meet any refund deadline the law requires.";
+const STANDARD_MADE_TO_ORDER = "Standard catalogue pieces, including made-to-order pieces in standard catalogue options, qualify for online cooling-off and our 30-day change-of-mind policy on the same terms as pieces in stock.";
+const BESPOKE_CHANGE_OF_MIND = "Our change-of-mind policy excludes bespoke commissions and pieces clearly personalised or made to your individual specifications.";
 // ECTA s44(1)(a), (2): seven days to cancel from receipt, with only the direct cost of return payable.
 // ECTA s42(2)(f): no cooling-off for goods made to the consumer's specifications, clearly personalised, not returnable by nature, or likely to deteriorate.
-// Treating a chosen measurement, fabric or finish as "made to your specifications" is DasKasas's reading; no SA decision on s42(2)(f) exists (research-made-to-order-law.md §6).
 const COOLING_OFF = [
   "If you buy online, you may cancel without giving a reason within 7 days after you receive the goods. Tell us by email or phone.",
-  `${COOLING_OFF_REFUND} The only cost you may have to pay is the direct cost of returning the goods.`,
-  "This 7-day right does not apply to goods made to your specifications or clearly personalised. It also does not apply to goods that by their nature cannot be returned, or that are likely to deteriorate quickly. We treat a bespoke commission, and a piece made to a measurement, fabric or finish you chose for your order, as made to your specifications.",
+  `${COOLING_OFF_REFUND} ${CARD_REFUND_TIMING} The only cost you may have to pay is the direct cost of returning the goods.`,
+  "This 7-day right applies to standard catalogue options. It excludes goods made to your specifications or clearly personalised, goods that cannot be returned by their nature, and goods likely to deteriorate quickly.",
 ];
 
 // One-line returns summaries for Help and the home FAQ; the returns and refunds pages above and below hold the full wording.
 export const RETURNS_SUMMARY = {
-  coolingOff: "If you buy online, you may cancel within 7 days after you receive the goods and get back everything you paid, including the delivery charge (you may have to pay only the direct cost of returning them); this does not apply to goods made to your specifications or clearly personalised, or that by their nature cannot be returned or deteriorate quickly.",
+  coolingOff: `If you buy online, you may cancel within 7 days after you receive the goods. ${COOLING_OFF_REFUND} You may have to pay only the direct cost of returning them. Standard catalogue options qualify. The exceptions are goods made to your specifications or clearly personalised, goods that cannot be returned by their nature, and goods likely to deteriorate quickly.`,
   changeOfMind: "Our own policy: if you change your mind, you may return a piece within 30 days after delivery or collection, unused and in the condition it arrived in, with its labels and tags, original packaging and the invoice or delivery note.",
   howToReturn: "Contact us with your order number before sending anything back, and we agree a collection or a drop-off at the showroom.",
   changeOfMindCosts: "For a change-of-mind return we refund the price of the piece and keep the original delivery charge. If we collect it, you pay the collection fee we quote when you book; there is no fee if you bring it to the showroom.",
-  notReturnable: "Bespoke commissions, and pieces personalised or made to a measurement, fabric or finish chosen for your order, cannot be returned for a change of mind.",
+  notReturnable: BESPOKE_CHANGE_OF_MIND,
 } as const;
 
 // CPA s19(5) and s18(3): the consumer may examine goods on delivery and reject goods that do not match the order or description.
@@ -279,8 +304,8 @@ function returnBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
     paragraph("If we collect the piece, you pay a collection fee. We quote it when you book the collection, before you decide to go ahead. If you bring the piece to the showroom yourself, there is no collection fee. We refund the price of the piece. We do not refund the original delivery charge."),
     // CPA s1: "special-order goods" are procured, created or altered specifically to satisfy the consumer's requirements.
     heading("What cannot be returned for a change of mind"),
-    paragraph("A bespoke commission cannot be returned because you changed your mind. Nor can a piece that was personalised, resized, engraved or altered, or made to a measurement, fabric or finish chosen for your order. These are special-order goods: we buy or make them only for you."),
-    paragraph("A standard made-to-order piece is different. It is a catalogue piece with a lead time, made in its listed form. Once it is delivered or collected, you may return it within the same 30 days, on the same conditions as a piece in stock."),
+    paragraph(BESPOKE_CHANGE_OF_MIND),
+    paragraph(STANDARD_MADE_TO_ORDER),
     paragraph("An opened consumable that cannot be resold for hygiene reasons, such as a burned candle or an opened toiletry, also cannot be returned for a change of mind."),
     heading("Wrong, damaged or not as described"),
     paragraph(WRONG_PIECE),
@@ -295,12 +320,14 @@ function refundBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
   const blocks: PolicyBlock[] = [
     heading("When you get a refund"),
     paragraph("Ask for a refund through the Contact page and include your order number. You get a refund when you cancel an online order within the 7-day cooling-off period, when we accept a change-of-mind return, when a piece is faulty, wrong or not as described, or when we cancel the order."),
-    paragraph("A change-of-mind refund follows a return made within 30 days after delivery or collection. Outside the 7-day cooling-off period, a delivered piece has to come back under the return policy before we refund it."),
+    paragraph("A change-of-mind refund follows a return made within 30 days after delivery or collection."),
     // ECTA s46(3): unavailable goods are refunded within 30 days of notifying the consumer. ECTA s46(2): cancellation for late delivery.
     paragraph("If we cancel because a piece is unavailable or a price was shown in error, we tell you straight away and refund the full amount you paid within 30 days. If you cancel because we missed the agreed delivery period, we also refund the full amount you paid."),
     heading("How a refund is paid, and when"),
-    paragraph("The refund goes back to the payment method you used. If you paid by card, Paystack returns it to your card. For returns outside the cooling-off period, the refund starts once the piece is back with us and has been checked. It can take up to 10 working days after we receive the piece for the refund to show. Your bank may take longer. Working days are Monday to Friday, excluding South African public holidays."),
-    paragraph(`For a cooling-off cancellation, we make the refund within ${COOLING_OFF_REFUND_DAYS} days after you cancel.`),
+    paragraph(`The refund goes back to the payment method you used. If you paid by card, Paystack returns it to your card. ${CARD_REFUND_TIMING}`),
+    paragraph("For a change-of-mind return under our 30-day policy, we start the refund once the piece is back with us and has been checked."),
+    heading("Cooling-off refunds"),
+    paragraph(COOLING_OFF_REFUND),
     // ECTA s44(2)-(3): full refund, only the direct cost of return may be charged. CPA s56(2): faults at the supplier's risk and expense.
     heading("What we refund"),
     paragraph("7-day cooling-off: everything you paid, including the delivery charge. The only cost you may have to pay is the direct cost of returning the goods."),
@@ -351,12 +378,12 @@ function termsBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
     // ECTA s43(1)(i): full price including transport costs and taxes.
     heading("Prices and VAT"),
     paragraph("Prices are in South African rand (ZAR). Product prices include VAT where VAT applies. Our VAT status is in the business information above."),
-    paragraph("Checkout shows any delivery charge, including VAT, before you pay. Collection from the showroom is free."),
+    paragraph("Checkout shows any delivery charge, including VAT, before you pay. Collection is free."),
     paragraph("You pay the total shown at checkout. We do not change the price after you have paid."),
     // ECTA s43(1)(j): manner of payment. s43(1)(p) and s43(5): payment security procedures and a sufficiently secure payment system.
     heading("Payment"),
-    paragraph("You pay online by card. Paystack processes card payments for us."),
-    paragraph("You enter your card details on Paystack's secure payment page, not on our site. We never see or store your full card number. Our site and the payment page use encrypted (HTTPS) connections."),
+    paragraph("When online card payment is available at checkout, Paystack processes the payment."),
+    paragraph("For card payments, you enter your card details on Paystack's secure payment page. We never see or store your full card number. Our site and the payment page use encrypted (HTTPS) connections."),
     paragraph("If card payment is not available at checkout, call or email us to arrange your order."),
     // ECTA s43(1)(l), s46(1)-(2); CPA s19(5).
     heading("Delivery and collection"),
@@ -372,7 +399,8 @@ function termsBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
     heading("Cancellations and returns"),
     ...COOLING_OFF.map(paragraph),
     paragraph("Change of mind is our own policy and goes further than the law. It covers online and showroom purchases. You may return a piece in stock or a standard made-to-order piece within 30 days after delivery or collection, unused and in the condition it arrived in. The return policy sets out the conditions and the collection fee."),
-    paragraph("A standard made-to-order piece is a catalogue piece, made in its listed form after you order. A bespoke commission is made or altered only for you, which makes it special-order goods under the CPA. A bespoke or personalised piece cannot be returned for a change of mind."),
+    paragraph(STANDARD_MADE_TO_ORDER),
+    paragraph(BESPOKE_CHANGE_OF_MIND),
     paragraph(WRONG_PIECE),
     // ECTA s43(1)(k): guarantees. CPA s55-s56 as cited on FAULTS.
     heading("Faults and guarantees"),
@@ -393,7 +421,7 @@ function termsBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
   return document ? blocks : [notice(), ...blocks];
 }
 
-// POPIA s55 and PAIA s51(1)(a): the Information Officer (head of the body) and how to reach them; placeholders until #1006.
+// POPIA s55 and PAIA s51(1)(a): the Information Officer and contact details.
 function officerFacts(document: CustomerPolicyDocument | null) {
   if (!document) {
     return {
@@ -429,7 +457,7 @@ const PURPOSES = [
 // POPIA s18(1)(h)(i) recipients; s18(1)(g) and s72 where each is based. Railway: the DasKasas database runs in its US West (sfo) region (Railway project config, 21 Nov 2026).
 // PostHog: the storefront sends only to the EU host (lib/analytics/policy.ts). Vendor DPAs were not reviewed (research-popia-paia-ecta.md §1.4).
 const RECIPIENTS = [
-  "Paystack processes card payments. It receives your name, email address, the order amount and the card details you enter on its payment page. Paystack is based in Nigeria and also operates in South Africa.",
+  "When you pay by card, Paystack receives your name, email address, the order amount and the card details you enter on its payment page. Paystack is based in Nigeria and also operates in South Africa.",
   "SendGrid (Twilio) sends our order and delivery emails. It receives your name, email address and order details. It is based in the United States.",
   "Clerk runs account sign-in. It receives your email address and sign-in activity. It is based in the United States.",
   "Railway hosts our website, shop system and database, which hold all the information described here. It is based in the United States, and our database runs in its United States (California) region.",
@@ -508,7 +536,7 @@ function privacyBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
     paragraph("You can object in any way: by email, SMS, WhatsApp, phone, post or in person. You may use Form 1 in the POPIA Regulations, but you do not have to."),
     // s23-s25 and POPIA Regulations reg 3.4-3.6 (2025): any channel, phone requests recorded, outcome within 30 days.
     heading("How to make a request"),
-    paragraph(`Send any privacy request or objection to our Information Officer. Email ${officer.email}, phone ${contact.phone}, or write to or visit ${contact.address}.`),
+    paragraph(`Send any privacy request or objection to our Information Officer. Email ${officer.email}, phone ${contact.phone}, or write to ${officer.postalAddress}.`),
     paragraph("We may ask you to prove your identity before we share or change information. We record requests made by phone. We tell you what we did within 30 days."),
     // POPIA s55(1).
     heading("Information Officer", "information-officer"),
@@ -528,13 +556,14 @@ function paiaBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
   const business = businessFacts(document);
   const contact = contactFacts(document);
   const officer = officerFacts(document);
+  const registeredOffice = business.legalServiceAddress;
   const blocks: PolicyBlock[] = [
     heading("About this manual"),
     paragraph(`This manual is published under section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA). It explains how to ask ${business.legalName}, trading as ${business.tradingName} ("DasKasas"), a private body, for access to its records.`),
     // s51(1)(a)(i).
-    heading("Contact details of the head of DasKasas"),
-    paragraph(`Head and Information Officer: ${officer.name}.`),
-    paragraph(`Street address: ${contact.address}.`),
+    heading("Information Officer and PAIA requests"),
+    paragraph(`Information Officer: ${officer.name}.`),
+    paragraph(`Registered office: ${registeredOffice}.`),
     paragraph(`Postal address: ${officer.postalAddress}.`),
     paragraph(`Phone: ${contact.phone}.`),
     paragraph(`Fax: ${officer.fax}.`),
@@ -558,7 +587,7 @@ function paiaBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
     paragraph("Website and systems: website content, analytics from visitors who accepted it, and security logs."),
     // PAIA s53 (form and contents), s54 (fees; no request fee for a personal requester), s56-s57 (30 days, one extension), Part 3 Ch 4 (refusal grounds), s77A/s78 (remedies).
     heading("How to request a record"),
-    paragraph("Use Form 2 (Request for Access to Record) in the PAIA Regulations, 2021, available on the Information Regulator's website. Send it to the head of DasKasas using the contact details above."),
+    paragraph("Use Form 2 (Request for Access to Record) in the PAIA Regulations, 2021, available on the Information Regulator's website. Send it to our Information Officer using the contact details above."),
     paragraph("Describe the record well enough for us to find it, and say how you want access. Say which right you want to exercise or protect and why you need the record for it. If you ask on someone else's behalf, show that you may act for them."),
     paragraph("A request fee and access fees set in the PAIA Regulations may apply. We tell you about any fee before we go further. There is no request fee when you ask for your own personal information."),
     paragraph("We decide within 30 days and tell you in writing. We may extend this once, by up to 30 days, and we tell you why. We may refuse only on the grounds PAIA allows, such as protecting another person's privacy or commercial information."),
@@ -572,7 +601,7 @@ function paiaBlocks(document: CustomerPolicyDocument | null): PolicyBlock[] {
     paragraph(`Security measures: ${SAFEGUARDS.join(" ")}`),
     // s51(2)-(3).
     heading("Availability of this manual"),
-    paragraph(`This manual is on our website at ${WEBSITE}/policies/paia. You can inspect a copy at ${contact.address} during business hours. We give a copy to anyone who asks, for a reasonable fee, and to the Information Regulator on request. We update the manual regularly.`),
+    paragraph(`This manual is on our website at ${WEBSITE}/policies/paia. You can inspect a copy at ${registeredOffice} during business hours. We give a copy to anyone who asks, for a reasonable fee, and to the Information Regulator on request. We update the manual regularly.`),
     heading("Information Regulator"),
     ...INFORMATION_REGULATOR.map(paragraph),
   ];

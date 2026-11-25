@@ -1,5 +1,15 @@
-import { availabilityMaxAgeMs, checkoutChanges, holdTtlMs, opsCheckoutChanges } from "./checkout-holds";
+import type { MedusaContainer } from "@medusajs/framework/types";
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { updateCartWorkflow } from "@medusajs/medusa/core-flows";
+import { availabilityMaxAgeMs, cancelCheckoutHold, checkoutChanges, holdTtlMs, opsCheckoutChanges } from "./checkout-holds";
+import { clearCheckoutShippingWorkflow } from "./storefront-checkout-shipping";
 import { recordOpsCheckoutHealth, resetOpsCheckoutHealth } from "./storefront-commerce-exceptions";
+
+jest.mock("@medusajs/medusa/core-flows", () => ({
+  ...jest.requireActual("@medusajs/medusa/core-flows"),
+  updateCartWorkflow: jest.fn(),
+}));
+jest.mock("./storefront-checkout-shipping", () => ({ clearCheckoutShippingWorkflow: jest.fn() }));
 
 const now = Date.parse("2026-09-28T10:00:00.000Z");
 const cart = {
@@ -69,4 +79,44 @@ test("operational outage and stale projection block new checkout", () => {
     lastProjectionAt: "2026-09-28T09:59:00.000Z",
   });
   expect(opsCheckoutChanges(now)).toEqual([]);
+});
+
+function checkoutHoldContainer(metadata: Record<string, unknown>) {
+  const shippingMethod = { id: "method_reviewed" };
+  const graph = jest.fn(async ({ entity }) => {
+    if (entity === "cart") return { data: [{ ...cart, metadata, shipping_methods: [shippingMethod] }] };
+    if (entity === "product_variant") return { data: [variant] };
+    throw new Error("Unexpected query entity: " + entity);
+  });
+  const container = {
+    resolve: (key: string) => {
+      if (key === Modules.LOCKING) return { execute: async (_key: string, operation: () => Promise<unknown>) => operation() };
+      if (key === Modules.INVENTORY) return { listReservationItems: async () => [] };
+      if (key === ContainerRegistrationKeys.QUERY) return { graph };
+      return undefined;
+    },
+  } as unknown as MedusaContainer;
+  const updateCart = jest.fn(async () => ({}));
+  const clearShipping = jest.fn(async () => ({}));
+  (updateCartWorkflow as unknown as jest.Mock).mockReturnValue({ run: updateCart });
+  (clearCheckoutShippingWorkflow as unknown as jest.Mock).mockReturnValue({ run: clearShipping });
+  return { container, clearShipping, updateCart, shippingMethod };
+}
+
+test("backing out after review removes quoted shipping and detaches the unsubmitted address", async () => {
+  const { container, clearShipping, updateCart, shippingMethod } = checkoutHoldContainer({ storefront_hold: { status: "active" } });
+  const outcome = await cancelCheckoutHold(container, cart.id);
+  expect(outcome).toEqual({ status: "cancelled" });
+  expect(clearShipping).toHaveBeenCalledWith({ input: { shipping_method_ids: [shippingMethod.id] } });
+  expect(updateCart).toHaveBeenNthCalledWith(1, { input: { id: cart.id, shipping_address: null } });
+});
+
+test("backing out after payment preparation does not modify the accepted checkout or its shipping", async () => {
+  const hold = { status: "active", expires_at: "2026-10-01T12:00:00.000Z" };
+  const { container, clearShipping, updateCart } = checkoutHoldContainer({
+    storefront_hold: hold, storefront_confirmation_sha256: "synthetic-digest",
+  });
+  expect(await cancelCheckoutHold(container, cart.id)).toEqual(hold);
+  expect(clearShipping).not.toHaveBeenCalled();
+  expect(updateCart).not.toHaveBeenCalled();
 });

@@ -114,6 +114,7 @@ test('checkout with delivery reaches the card-payment-unavailable step and relea
 
   await fillContact(page)
   await expect(page.getByLabel('Delivery', { exact: true })).toBeChecked()
+  await expect(page.getByLabel('Delivery', { exact: true })).toHaveAccessibleDescription('Johannesburg: R1,100 · Pretoria: R1,300, VAT included. Coverage and the charge are confirmed before payment.')
   await expect(page.getByRole('main').getByText('Confirmed before payment', { exact: true })).toBeVisible()
   await page.getByLabel('Street address').fill('1 Fixture Street')
   await page.getByLabel('Suburb or area').fill('Bedfordview')
@@ -121,18 +122,11 @@ test('checkout with delivery reaches the card-payment-unavailable step and relea
   await expect(page.getByLabel('Province')).toHaveValue('Gauteng')
   await page.getByLabel('Postal code').fill('2007')
 
-  // CPA s49(4)(b): the important terms are shown above the button that leads to payment, before any payment step exists.
-  const beforeYouPay = page.getByRole('region', { name: 'Before you pay' })
-  await expect(beforeYouPay).toBeVisible()
-  await expect(beforeYouPay).toContainText('Wood, leather and natural fabrics vary')
-  await expect(beforeYouPay.getByRole('link', { name: 'Read our full terms of sale' })).toHaveAttribute('href', '/policies/terms')
-  const pay = page.getByRole('button', { name: 'Continue to payment' })
-  await expect(pay).toHaveAccessibleDescription('By continuing you accept our terms of sale.')
-  expect(await beforeYouPay.evaluate((box, button) => Boolean(box.compareDocumentPosition(button!) & Node.DOCUMENT_POSITION_FOLLOWING), await pay.elementHandle())).toBe(true)
+  await expect(page.getByRole('button', { name: 'Continue to payment' })).toHaveCount(0)
   await expect(page.getByTestId('card-payment-unavailable')).toHaveCount(0)
   const prepared = page.waitForRequest((request) => request.url().endsWith('/api/checkout/prepare'))
-  await page.getByRole('button', { name: 'Continue to payment' }).click()
-  expect((await prepared).postDataJSON()).toMatchObject({ fulfillment_type: 'delivery', province: 'Gauteng', city: 'Johannesburg', address_2: 'Bedfordview', postal_code: '2007' })
+  await page.getByRole('button', { name: 'Review order' }).click()
+  expect((await prepared).postDataJSON()).toMatchObject({ step: 'review', fulfillment_type: 'delivery', province: 'Gauteng', city: 'Johannesburg', address_2: 'Bedfordview', postal_code: '2007' })
   await expectUnavailableAndReleased(page)
 
   // The released bag is editable again.
@@ -142,21 +136,76 @@ test('checkout with delivery reaches the card-payment-unavailable step and relea
   await expect(bagButton(page)).toHaveAccessibleName('Bag, 1 item')
 })
 
-test('checkout with collection shows the showroom and reaches the unavailable step', async ({ page }) => {
+test('checkout shows free Wynberg collection by appointment and reaches the unavailable step', async ({ page }) => {
   await addToBag(page, chair)
   await page.goto('/bag')
-  await expect(page.getByRole('main')).toContainText(/If you buy online, you may cancel within 7 days.+Our own policy: .+within 30 days after delivery or collection.+Draft for owner and legal review before go-live\./)
+  await expect(page.getByRole('main')).toContainText(/If you buy online, you may cancel within 7 days.+Our own policy: .+within 30 days after delivery or collection/)
+  await expect(page.getByRole('main')).not.toContainText('Draft for owner and legal review before go-live.')
   await page.getByRole('main').getByRole('button', { name: 'Continue to checkout' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
   await fillContact(page)
   await page.getByLabel('Collection', { exact: true }).check()
-  const showroom = page.getByRole('region', { name: 'Collect from DasKasas, Bedford Square' })
-  await expect(showroom).toContainText('Shop GL15, Bedford Square, Smith Road, Bedfordview, Johannesburg, 2007')
-  for (const hours of ['Monday to Friday 09:00–18:00', 'Saturday 09:00–17:00', 'Sunday 09:00–15:00']) await expect(showroom).toContainText(hours)
+  const collection = page.getByRole('region', { name: 'Collect in Wynberg' })
+  await expect(collection).toContainText('32 4th Street, Wynberg, Sandton, Gauteng, 2090')
+  await expect(collection).toContainText('Collection is free and by appointment.')
+  await expect(collection).toContainText('Bring your order confirmation.')
   await expect(page.getByLabel('Street address')).toHaveCount(0)
   await expect(page.getByRole('main').getByText('Free', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Continue to payment' }).click()
+  await page.getByRole('button', { name: 'Review order' }).click()
   await expectUnavailableAndReleased(page)
+})
+
+test('review shows the full delivery price and terms before payment and lets a customer correct their details', async ({ page }) => {
+  const checkoutSteps: string[] = []
+  await page.route('**/api/checkout/prepare', async (route) => {
+    const input = route.request().postDataJSON() as { step: string; city: string; review_token?: string }
+    checkoutSteps.push(input.step)
+    if (input.step === 'review') {
+      const delivery = input.city === 'Johannesburg' ? 1100 : 1300
+      return route.fulfill({ json: { quote: {
+        amount: 5000 + delivery, currency_code: 'zar', delivery_amount: delivery, review_token: input.city,
+        hold_expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+        items: [{ id: 'cali_latest', title: 'Latest chair', quantity: 2, total: 5000 }],
+      } } })
+    }
+    expect(input).toMatchObject({ step: 'payment', city: 'Pretoria', review_token: 'Pretoria' })
+    return route.fulfill({ status: 409, json: { code: 'checkout_review_changed', message: 'Your total changed. Review your order again.' } })
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  const drawer = await addToBag(page, chair)
+  await drawer.getByRole('button', { name: 'Checkout' }).click()
+  await fillContact(page)
+  await page.getByLabel('Street address').fill('1 Fixture Street')
+  await page.getByLabel('Suburb or area').fill('Example')
+  await page.getByLabel('City').fill('Johannesburg')
+  await page.getByLabel('Postal code').fill('2007')
+  await page.getByRole('button', { name: 'Review order' }).click()
+  await expect(page.getByRole('heading', { name: 'Review your order' })).toBeFocused()
+  await expect(page.getByTestId('checkout-review-delivery')).toHaveText(/^R\s1\s100,00$/)
+  await expect(page.getByTestId('checkout-review-total')).toHaveText(/^R\s6\s100,00$/)
+  await expect(page.getByText('2 × Latest chair', { exact: true })).toBeVisible()
+  await expect(page.getByText('Test chair', { exact: true })).toHaveCount(0)
+  expect(checkoutSteps).toEqual(['review'])
+  expect(await noHorizontalScroll(page)).toBe(true)
+
+  const beforeYouPay = page.getByRole('region', { name: 'Before you pay' })
+  const pay = page.getByRole('button', { name: 'Continue to payment' })
+  await expect(beforeYouPay).toContainText('Wood, leather and natural fabrics vary')
+  await expect(beforeYouPay.getByRole('link', { name: 'Read our full terms of sale' })).toHaveAttribute('href', '/policies/terms')
+  await expect(pay).toHaveAccessibleDescription('By continuing you accept our terms of sale.')
+  expect(await beforeYouPay.evaluate((box, button) => Boolean(box.compareDocumentPosition(button!) & Node.DOCUMENT_POSITION_FOLLOWING), await pay.elementHandle())).toBe(true)
+
+  await page.getByRole('button', { name: 'Edit details' }).click()
+  await expect(page.getByLabel('Street address')).toHaveValue('1 Fixture Street')
+  await page.getByLabel('City').fill('Pretoria')
+  await page.getByRole('button', { name: 'Review order' }).click()
+  await expect(page.getByTestId('checkout-review-delivery')).toHaveText(/^R\s1\s300,00$/)
+  await expect(page.getByTestId('checkout-review-total')).toHaveText(/^R\s6\s300,00$/)
+  await page.getByRole('button', { name: 'Continue to payment' }).click()
+  await expect(page.getByText('Your total changed. Review your order again.')).toBeFocused()
+  await expect(page.getByLabel('City')).toHaveValue('Pretoria')
+  await expect(pay).toHaveCount(0)
+  expect(checkoutSteps).toEqual(['review', 'review', 'payment'])
 })
 
 test('bag, drawer and checkout fit 390px without horizontal scroll', async ({ page }) => {

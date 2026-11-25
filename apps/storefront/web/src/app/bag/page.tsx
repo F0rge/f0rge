@@ -11,8 +11,8 @@ import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@
 import { purchaseFeedback } from "@/lib/purchase-feedback";
 
 const assurances = [
-  { icon: Truck, title: "Delivery", description: "Selected Gauteng areas. The charge is confirmed before payment." },
-  { icon: Store, title: "Collection", description: "From our showroom at Bedford Square, Bedfordview." },
+  { icon: Truck, title: "Delivery", description: "Selected areas in Johannesburg and Pretoria. We confirm the charge before you pay." },
+  { icon: Store, title: "Collection", description: "Free by appointment in Wynberg." },
   { icon: RotateCcw, title: "Returns", description: [RETURNS_SUMMARY.coolingOff, RETURNS_SUMMARY.changeOfMind, currentCustomerPolicies() ? "" : POLICY_DRAFT_NOTICE].join(" ").trim() },
   { icon: UserRound, title: "Guest checkout", description: "No account needed." },
 ];

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Ban, CalendarClock, Clock, Mail, MapPin, PackageX, Phone, Receipt, RefreshCw, Store, Truck, Undo2, type LucideIcon } from "lucide-react";
+import { COLLECTION_ADDRESS, COLLECTION_INSTRUCTIONS, DELIVERY_DESCRIPTION } from "@/lib/checkout-fulfillment";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { SHOWROOM } from "@/lib/showroom";
 
@@ -18,9 +19,9 @@ const columns: { id: string; title: string; items: { icon: LucideIcon; title: st
     id: "delivery",
     title: "Delivery and collection",
     items: [
-      { icon: Truck, title: "Delivery", description: "We deliver in selected Gauteng areas." },
+      { icon: Truck, title: "Delivery", description: DELIVERY_DESCRIPTION },
       { icon: Receipt, title: "Delivery charges", description: "Shown in rand, including VAT, and confirmed in your order total before payment." },
-      { icon: Store, title: "Collection", description: `Free. Choose collection at checkout and collect from our showroom at ${SHOWROOM.address}. ${SHOWROOM.note} We contact you when your order is ready.` },
+      { icon: Store, title: "Collection", description: `${COLLECTION_ADDRESS}. ${COLLECTION_INSTRUCTIONS}` },
       { icon: Clock, title: "Showroom hours", description: `${SHOWROOM.hours.map((row) => `${row.days} ${row.time}`).join(", ")}.` },
     ],
   },

@@ -54,8 +54,7 @@ function sectionText(page: PolicyView, heading: string): string {
 }
 
 describe("customer policies", () => {
-  it("publishes no owner identity while the launch pack is absent", () => {
-    expect(currentCustomerPolicies()).toBeNull();
+  it("keeps an incomplete policy document out of published policy views", () => {
     const page = policyPage(null, "privacy");
     expect(page.published).toBe(false);
     expect(textOf(page)).toContain(POLICY_PLACEHOLDERS.legalName);
@@ -67,6 +66,30 @@ describe("customer policies", () => {
     expect(emailsIn(textOf(page))).toEqual([SHOWROOM.email, ...REGULATOR_EMAILS]);
     expect(textOf(page).toLowerCase()).not.toContain("northwind");
     for (const section of ["privacy", "paia"] as const) expect(policyPage(null, section).blocks[0]).toEqual({ type: "notice", text: POLICY_REVIEW_NOTICE });
+  });
+
+  it("publishes the approved Wynberg collection and VAT-inclusive delivery rates", () => {
+    const document = currentCustomerPolicies();
+    const delivery = textOf(policyPage(document, "delivery"));
+    const terms = textOf(policyPage(document, "terms"));
+    for (const copy of [delivery, terms]) {
+      expect(copy).toContain("32 4th Street, Wynberg, Sandton, Gauteng, 2090");
+      expect(copy).toContain("free and by appointment");
+      expect(copy).toContain("Bring your order confirmation");
+      expect(copy).not.toContain("Collect from our showroom");
+    }
+    expect(delivery).toContain(`Johannesburg: ${formatZar(1100)} incl. VAT`);
+    expect(delivery).toContain(`Pretoria: ${formatZar(1300)} incl. VAT`);
+    expect(delivery).toContain("assembly");
+    expect(terms).toContain("2020/674541/07");
+    const paia = textOf(policyPage(document, "paia"));
+    expect(paia).toContain("Information Officer: Cindy Gomes");
+    expect(paia).not.toContain("Head and Information Officer:");
+    for (const section of ["terms", "delivery", "returns", "refunds", "privacy", "paia"] as const) {
+      const page = policyPage(document, section);
+      expect(page.published).toBe(true);
+      expect(textOf(page)).not.toMatch(/\[PLACEHOLDER:|Draft for owner/);
+    }
   });
 
   it("fills return and refund rules without placeholders, and keeps delivery and contact unmarked", () => {
@@ -82,23 +105,30 @@ describe("customer policies", () => {
       expect(textOf(page)).toContain("Consumer Protection Act");
     }
     expect(textOf(returns)).toContain("collection fee");
-    expect(textOf(refunds)).toContain("10 working days");
+    expect(textOf(refunds)).toContain("10 business days to appear after Paystack processes them");
     expect(textOf(refunds)).toContain("Paystack");
     expect(sectionText(terms, "Cancellations and returns")).not.toContain("[PLACEHOLDER:");
     expect(sectionText(terms, "Cancellations and returns")).toContain("made-to-order");
     expect(sectionText(terms, "Cancellations and returns")).toContain("bespoke");
     expect(textOf(policyPage(null, "delivery"))).toContain(POLICY_PLACEHOLDERS.delivery);
     expect(textOf(policyPage(null, "delivery"))).not.toMatch(/R\s?\d/);
+    for (const section of ["delivery", "terms"] as const) {
+      const copy = textOf(policyPage(null, section));
+      expect(copy).toContain("32 4th Street, Wynberg, Sandton, Gauteng, 2090");
+      expect(copy).toContain("free and by appointment");
+      expect(copy).not.toContain("collect free of charge from our showroom");
+    }
   });
 
   it("shows reviewed contact, delivery, privacy and business facts only from the supplied document", () => {
     expect(textOf(policyPage(reviewed, "delivery"))).toContain(formatZar("950.00"));
     expect(textOf(policyPage(reviewed, "delivery"))).toContain(reviewed.collection_location);
-    for (const fact of ["Northwind Furnishings (Pty) Ltd", "Naledi Dlamini", "privacy@northwind.co.za", reviewed.contact_address]) {
+    for (const fact of ["Northwind Furnishings (Pty) Ltd", "Naledi Dlamini", "privacy@northwind.co.za"]) {
       expect(textOf(policyPage(reviewed, "privacy"))).toContain(fact);
       expect(textOf(policyPage(reviewed, "paia"))).toContain(fact);
     }
-    for (const fact of [reviewed.postal_address, "Fax: None.", "011 555 0100"]) expect(sectionText(policyPage(reviewed, "paia"), "Contact details of the head of DasKasas")).toContain(fact);
+    expect(textOf(policyPage(reviewed, "privacy"))).toContain(reviewed.contact_address);
+    for (const fact of [reviewed.legal_service_address, reviewed.postal_address, "Fax: None.", "011 555 0100"]) expect(sectionText(policyPage(reviewed, "paia"), "Information Officer and PAIA requests")).toContain(fact);
     const terms = policyPage(reviewed, "terms");
     expect(terms.published).toBe(true);
     for (const fact of ["Northwind Furnishings (Pty) Ltd", reviewed.legal_status, "2020/123456/07", "Thandi Mokoena, Pieter Botha", "4123456789", reviewed.contact_address, reviewed.legal_service_address, "011 555 0100", "support@northwind.co.za", reviewed.codes_of_conduct]) {
@@ -154,7 +184,7 @@ describe("customer policies", () => {
       "Contact",
     ]);
     expect(sectionText(terms, "Ordering")).toContain("You can go back and change anything, or leave without paying");
-    expect(sectionText(terms, "Payment")).toContain("Paystack");
+    expect(sectionText(terms, "Payment")).toContain("When online card payment is available at checkout, Paystack processes the payment.");
     expect(sectionText(terms, "Payment")).toContain("never see or store your full card number");
     expect(terms.links).toContainEqual({ href: "/policies/privacy", label: "Privacy" });
   });
@@ -163,10 +193,12 @@ describe("customer policies", () => {
     const returns = textOf(policyPage(null, "returns"));
     const refunds = textOf(policyPage(null, "refunds"));
     expect(RETURNS_SUMMARY.coolingOff).toContain("within 7 days after you receive the goods");
-    expect(RETURNS_SUMMARY.coolingOff).toContain("including the delivery charge");
+    expect(RETURNS_SUMMARY.coolingOff).toContain("including the original delivery charge");
     expect(RETURNS_SUMMARY.coolingOff).toContain("only the direct cost of returning them");
     expect(RETURNS_SUMMARY.coolingOff).toContain("made to your specifications or clearly personalised");
+    expect(RETURNS_SUMMARY.coolingOff).toContain("Standard catalogue options qualify");
     expect(returns).toContain("made to your specifications or clearly personalised");
+    expect(returns).toContain("including made-to-order pieces in standard catalogue options");
     expect(RETURNS_SUMMARY.changeOfMind).toContain("within 30 days after delivery or collection");
     expect(returns).toContain("within 30 days after the day it is delivered or collected");
     expect(RETURNS_SUMMARY.changeOfMindCosts).toContain("For a change-of-mind return we refund the price of the piece and keep the original delivery charge");
@@ -196,7 +228,9 @@ describe("customer policies", () => {
 
   it("keeps the failed-delivery charge, cooling-off refund and fault inspection consistent", () => {
     const deliveryTerm = IMPORTANT_TERMS.find((term) => term.includes("third-party courier"));
-    expect(deliveryTerm).toContain("reasonable courier cost");
+    expect(deliveryTerm).toContain("reasonable, documented courier cost");
+    expect(deliveryTerm).toContain("something within your control");
+    expect(deliveryTerm).toContain("disclosed the charge before you ordered");
     expect(deliveryTerm).toContain("After three failed attempts");
     expect(deliveryTerm).toContain("refund what you paid, less any permitted failed-delivery charges");
     for (const section of ["terms", "delivery", "refunds"] as const) {
@@ -204,15 +238,18 @@ describe("customer policies", () => {
       expect(copy).toContain(deliveryTerm);
       expect(copy).not.toContain("at our discretion");
     }
+    for (const section of ["terms", "returns", "refunds"] as const) {
+      const copy = textOf(policyPage(null, section));
+      expect(copy).toContain("We initiate the full refund, including the original delivery charge, within seven calendar days of cancellation.");
+      expect(copy).toContain("We meet any refund deadline the law requires");
+    }
     for (const section of ["terms", "returns"] as const) {
       const copy = textOf(policyPage(null, section));
-      expect(copy).toContain("We refund everything you paid, including the delivery charge, within 7 days after you cancel.");
       expect(copy).toContain("We can arrange for our technician to inspect");
       expect(copy).toContain("within six months after delivery");
     }
     const refunds = textOf(policyPage(null, "refunds"));
-    expect(refunds).toContain("For a cooling-off cancellation, we make the refund within 7 days after you cancel.");
-    expect(refunds).not.toContain("within 30 days after you cancel");
+    expect(refunds).not.toContain("10 working days after we receive the piece");
   });
 
   it("gives every POPIA s18(1) item and the right to object in the privacy policy", () => {
@@ -263,7 +300,7 @@ describe("customer policies", () => {
       expect(page.title).toBe("PAIA manual");
       expect(page.blocks.filter((block) => block.type === "heading").map((block) => block.text)).toEqual([
         "About this manual",
-        "Contact details of the head of DasKasas", // s51(1)(a)
+        "Information Officer and PAIA requests", // s51(1)(a)
         "The Information Regulator's PAIA Guide", // s51(1)(b)(i)
         "Records available without a request", // s51(1)(b)(ii)
         "Records kept under other laws", // s51(1)(b)(iii)
@@ -279,8 +316,8 @@ describe("customer policies", () => {
       expect(sectionText(page, "Information Regulator")).toContain("Woodmead North Office Park");
       expect(textOf(page)).not.toMatch(/JD House|Stiemens/);
     }
-    const draft = sectionText(policyPage(null, "paia"), "Contact details of the head of DasKasas");
+    const draft = sectionText(policyPage(null, "paia"), "Information Officer and PAIA requests");
     for (const placeholder of [POLICY_PLACEHOLDERS.informationOfficer, POLICY_PLACEHOLDERS.postalAddress, POLICY_PLACEHOLDERS.fax, POLICY_PLACEHOLDERS.informationOfficerEmail]) expect(draft).toContain(placeholder);
-    expect(draft).toContain(SHOWROOM.address);
+    expect(draft).toContain(POLICY_PLACEHOLDERS.legalServiceAddress);
   });
 });

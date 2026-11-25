@@ -1,4 +1,5 @@
 import { currentCustomerPolicies } from "./customer-policies";
+import { ORGANIZATION_LOGO_PATH } from "./homepage-structured-data";
 import { SHOP_CATEGORIES } from "./shop-categories";
 
 const PRIVATE_PREFIXES = ["/account", "/checkout", "/bag", "/sign-in", "/sign-up", "/order", "/api"];
@@ -47,7 +48,10 @@ export function catalogueIndexable(pathname: string, env: IndexingEnv = process.
 }
 
 export function robotsHeader(pathname: string, env: IndexingEnv = process.env): "noindex, nofollow, noarchive" | null {
-  return catalogueIndexable(pathname, env) ? null : "noindex, nofollow, noarchive";
+  const indexable = pathOnly(pathname) === ORGANIZATION_LOGO_PATH
+    ? storefrontIndexable(env)
+    : catalogueIndexable(pathname, env);
+  return indexable ? null : "noindex, nofollow, noarchive";
 }
 
 export function sitemapPaths(input: {

@@ -119,7 +119,7 @@ describe("account order history BFF", () => {
     authState.customerMedusaFetch.mockResolvedValueOnce({ status: 200, payload: { order } });
     const html = renderToStaticMarkup(await AccountOrderPage({ params: Promise.resolve({ id: "order_collection" }) }));
     expect(html).toContain("Ready for collection");
-    expect(html).toContain("Showroom collection");
+    expect(html).toContain(">Collection</p>");
     expect(html).not.toContain("Order status: completed");
   });
 

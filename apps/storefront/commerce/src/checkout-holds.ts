@@ -27,9 +27,16 @@ import {
   currentOpsCheckoutHealth,
   operationalCheckoutBlock,
 } from "./storefront-commerce-exceptions";
+import { clearCheckoutShippingWorkflow } from "./storefront-checkout-shipping";
 
 type CartLine = { id: string; variant_id: string | null; quantity: number; unit_price: number; metadata?: Record<string, unknown> | null };
-type Cart = { id: string; metadata: Record<string, unknown> | null; items: CartLine[] | null; currency_code: string };
+type Cart = {
+  id: string;
+  metadata: Record<string, unknown> | null;
+  items: CartLine[] | null;
+  currency_code: string;
+  shipping_methods?: { id: string }[];
+};
 type Variant = {
   id: string;
   metadata: Record<string, unknown> | null;
@@ -257,7 +264,7 @@ export function opsCheckoutChanges(nowMs = Date.now()): string[] {
 async function retrieveCart(container: MedusaContainer, cartId: string): Promise<Cart> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data } = await query.graph({
-    entity: "cart", fields: ["id", "metadata", "currency_code", "items.id", "items.variant_id", "items.quantity", "items.unit_price", "items.metadata"],
+    entity: "cart", fields: ["id", "metadata", "currency_code", "items.id", "items.variant_id", "items.quantity", "items.unit_price", "items.metadata", "shipping_methods.id"],
     filters: { id: cartId },
   });
   const cart = data[0] as Cart | undefined;
@@ -323,6 +330,14 @@ async function clearLinePromises(container: MedusaContainer, cart: Cart): Promis
   }
 }
 
+async function clearReviewShipping(container: MedusaContainer, cart: Cart): Promise<void> {
+  if (cart.metadata?.storefront_confirmation_sha256 || !cart.shipping_methods?.length) return;
+  await clearCheckoutShippingWorkflow(container).run({
+    input: { shipping_method_ids: cart.shipping_methods.map((method) => method.id) },
+  });
+  await updateCartWorkflow(container).run({ input: { id: cart.id, shipping_address: null } });
+}
+
 async function cartReservations(container: MedusaContainer, cartId: string): Promise<Reservation[]> {
   const inventory = container.resolve(Modules.INVENTORY);
   return await inventory.listReservationItems({ created_by: holdCreator(cartId) }) as Reservation[];
@@ -346,6 +361,7 @@ export async function withCheckoutInventoryLock<T>(container: MedusaContainer, o
 export async function checkoutHoldForCart(container: MedusaContainer, cartId: string, nowMs = Date.now()): Promise<{
   ready: boolean;
   expires_at?: string;
+  fulfillment_promise?: FulfillmentPromiseSummary;
   changes: string[];
 }> {
   const cart = await retrieveCart(container, cartId);
@@ -356,6 +372,7 @@ export async function checkoutHoldForCart(container: MedusaContainer, cartId: st
   if (!activeHoldMatches(cart, variants, existing, nowMs)) {
     await releaseCapacityForCart(container, cart, variants, storedHold, nowMs);
     if (existing.length) await releaseReservations(container, cartId);
+    await clearReviewShipping(container, cart);
     await clearLinePromises(container, cart);
     const hold: HoldMetadata = { status: "expired", changes: ["Your reservation expired. Review availability and reserve again before paying."] };
     await setHoldMetadata(container, cart, hold);
@@ -364,6 +381,7 @@ export async function checkoutHoldForCart(container: MedusaContainer, cartId: st
   if (changes.length) {
     await releaseCapacityForCart(container, cart, variants, storedHold, nowMs);
     await releaseReservations(container, cartId);
+    await clearReviewShipping(container, cart);
     await clearLinePromises(container, cart);
     if (changes.some((change) => change.includes("price changed"))) {
       await refreshCartItemsWorkflow(container).run({ input: { cart_id: cartId, force_refresh: true } });
@@ -372,7 +390,12 @@ export async function checkoutHoldForCart(container: MedusaContainer, cartId: st
     await setHoldMetadata(container, cart, hold);
     return { ready: false, changes };
   }
-  return { ready: true, expires_at: String(storedHold?.expires_at), changes: [] };
+  return {
+    ready: true,
+    expires_at: storedHold?.expires_at,
+    fulfillment_promise: storedHold?.fulfillment_promise,
+    changes: [],
+  };
 }
 
 /** Caller must hold `withCheckoutInventoryLock`; removes temporary holds before Medusa creates order reservations. */
@@ -393,6 +416,7 @@ export async function startCheckoutHold(container: MedusaContainer, cartId: stri
     }
     await releaseCapacityForCart(container, cart, variants, oldHold, nowMs);
     if (existing.length) await releaseReservations(container, cartId);
+    await clearReviewShipping(container, cart);
     await clearLinePromises(container, cart);
     if (changes.length) {
       if (changes.some((change) => change.includes("price changed"))) {
@@ -502,9 +526,15 @@ export async function cancelCheckoutHold(container: MedusaContainer, cartId: str
   const locking = container.resolve(Modules.LOCKING);
   return await locking.execute(inventoryLock, async () => {
     const cart = await retrieveCart(container, cartId);
+    // A payment already being prepared may finish asynchronously. Preserve
+    // the accepted amounts and fulfillment data it needs for reconciliation.
+    if (cart.metadata?.storefront_confirmation_sha256) {
+      return holdMetadata(cart) ?? { status: "cancelled" };
+    }
     const variants = await retrieveVariants(container, cart);
     await releaseCapacityForCart(container, cart, variants, holdMetadata(cart), Date.now());
     await releaseReservations(container, cartId);
+    await clearReviewShipping(container, cart);
     await clearLinePromises(container, cart);
     const hold: HoldMetadata = { status: "cancelled" };
     await setHoldMetadata(container, cart, hold);

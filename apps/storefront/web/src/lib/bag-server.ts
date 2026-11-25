@@ -107,6 +107,7 @@ export type BagItem = { id: string; variant_id: string; product_id?: string | nu
 export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[]; fulfillment_promise?: BagFulfillmentSummary } | null };
 type MedusaCart = Omit<Bag, "id" | "items"> & {
   id: string;
+  shipping_total?: number;
   completed_at?: string | null;
   items?: (Omit<BagItem, "fulfillment_promise"> & { metadata?: { fulfillment_promise?: BagFulfillmentPromise } | null })[] | null;
   metadata?: { storefront_hold?: Bag["hold"] };
@@ -198,13 +199,15 @@ export async function storefrontOrderStatusResponse(orderId: string, token: stri
 
 export function publicBag(cart?: MedusaCart | null): Bag {
   if (!cart) return { id: null, items: [], subtotal: 0, total: 0, currency_code: "zar" };
+  // Checkout can attach a provisional shipping method. The bag shows merchandise only.
+  const merchandiseTotal = Number(((cart.total || 0) - (cart.shipping_total || 0)).toFixed(2));
   return {
     id: cart.id,
     items: (cart.items || []).map(({ id, variant_id, product_id, title, thumbnail, quantity, unit_price, total, metadata }) => ({
       id, variant_id, product_id, title, thumbnail, quantity, unit_price, total: total ?? unit_price * quantity,
       fulfillment_promise: metadata?.fulfillment_promise || null,
     })),
-    subtotal: cart.subtotal || 0, total: cart.total || 0, currency_code: cart.currency_code || "zar",
+    subtotal: cart.subtotal || 0, total: merchandiseTotal, currency_code: cart.currency_code || "zar",
     hold: cart.metadata?.storefront_hold || null,
   };
 }
