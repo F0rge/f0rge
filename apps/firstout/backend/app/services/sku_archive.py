@@ -28,6 +28,7 @@ from app.models.stock_return import StockReturn, StockReturnLine
 from app.models.stocktake import Stocktake, StocktakeLine
 from app.models.team import Team
 from app.models.transfer import Transfer, TransferLine
+from app.schemas.quantity import quantity_text
 from app.services.record_workspace_filters import payload_hash
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -40,10 +41,6 @@ class SkuArchiveImpact:
     warnings: list[str] = field(default_factory=list)
     dependencies: list[dict] = field(default_factory=list)
     fingerprint: str = ""
-
-
-def quantity_text(value: Decimal) -> str:
-    return format(value.normalize(), "f") if value else "0"
 
 
 class SkuArchiveService:

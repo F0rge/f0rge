@@ -9,9 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.inventory import LocationStock, SkuStock
+from app.models.location import Location
 from app.models.purchase_order import PoLine, PurchaseOrder, PurchaseOrderStatus
 from app.models.supplier import Supplier
 from f0rge_db.crud import BaseCRUD
+from f0rge_db.organisation import current_tenant_id
 
 
 class PurchaseOrderCRUD(BaseCRUD):
@@ -171,6 +173,16 @@ class SkuStockCRUD(BaseCRUD):
         )
         return list(result.unique().scalars().all())
 
+    async def on_order_by_sku_id(self, sku_ids: list[uuid.UUID]) -> dict[uuid.UUID, Decimal]:
+        if not sku_ids:
+            return {}
+        result = await self.db.execute(
+            select(SkuStock.sku_id, SkuStock.on_order).where(
+                SkuStock.team_id == current_tenant_id(), SkuStock.sku_id.in_(sku_ids)
+            )
+        )
+        return {sku_id: on_order for sku_id, on_order in result}
+
 
 class LocationStockCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
@@ -233,6 +245,30 @@ class LocationStockCRUD(BaseCRUD):
             .execution_options(populate_existing=True)
         )
         return list(result.unique().scalars().all())
+
+    async def on_hand_locations_by_sku_id(
+        self, sku_ids: Optional[list[uuid.UUID]] = None
+    ) -> dict[uuid.UUID, list[tuple[uuid.UUID, str, Decimal]]]:
+        if sku_ids == []:
+            return {}
+        team_id = current_tenant_id()
+        statement = (
+            select(LocationStock.sku_id, Location.id, Location.name, LocationStock.on_hand)
+            .join(Location, Location.id == LocationStock.location_id)
+            .where(
+                LocationStock.team_id == team_id,
+                Location.team_id == team_id,
+                LocationStock.on_hand > 0,
+            )
+            .order_by(Location.name, Location.id)
+        )
+        if sku_ids is not None:
+            statement = statement.where(LocationStock.sku_id.in_(sku_ids))
+        result = await self.db.execute(statement)
+        grouped: dict[uuid.UUID, list[tuple[uuid.UUID, str, Decimal]]] = {}
+        for sku_id, location_id, location_name, on_hand in result:
+            grouped.setdefault(sku_id, []).append((location_id, location_name, on_hand))
+        return grouped
 
     async def on_hand_cost_pairs(
         self, sku_ids: list[uuid.UUID]

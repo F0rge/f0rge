@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from typing import Literal, Optional, Union
+from decimal import Decimal
+from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, PlainSerializer, model_validator
 
 from app.schemas.account import AccountResponse
 from app.schemas.bill import BillListItem
@@ -13,6 +14,7 @@ from app.schemas.location import LocationResponse
 from app.schemas.payment import PaymentResponse
 from app.schemas.price_list import PriceListResponse
 from app.schemas.proforma import ProformaResponse
+from app.schemas.quantity import quantity_text
 from app.schemas.quote import QuoteListItem
 from app.schemas.repeating_invoice import RepeatingInvoiceResponse
 from app.schemas.role import RoleResponse
@@ -46,8 +48,28 @@ WorkspaceAction = Literal[
     "pause",
     "resume",
 ]
+
+
+WorkspaceStockQuantity = Annotated[
+    Decimal,
+    PlainSerializer(quantity_text, return_type=str, when_used="json"),
+]
+
+
+class WorkspaceStockLocation(BaseModel):
+    location_id: uuid.UUID
+    location_name: str
+    on_hand: WorkspaceStockQuantity
+
+
+class WorkspaceSkuRow(SkuResponse):
+    on_hand: WorkspaceStockQuantity
+    on_order: WorkspaceStockQuantity
+    stock_locations: list[WorkspaceStockLocation]
+
+
 WorkspaceRow = Union[
-    SkuResponse,
+    WorkspaceSkuRow,
     CustomerCrmResponse,
     SupplierResponse,
     PriceListResponse,

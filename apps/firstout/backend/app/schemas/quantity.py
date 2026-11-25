@@ -7,6 +7,11 @@ from typing import Annotated
 
 from pydantic import Field, PlainSerializer
 
+
+def quantity_text(value: Decimal) -> str:
+    return format(value.normalize(), "f") if value else "0"
+
+
 Quantity = Annotated[
     Decimal,
     Field(max_digits=14, decimal_places=4, allow_inf_nan=False),

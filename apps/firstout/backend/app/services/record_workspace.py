@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.purchase_order import LocationStockCRUD, SkuStockCRUD
 from app.exceptions import ForbiddenError
 from app.schemas.location import LocationResponse
 from app.schemas.record_workspace import (
@@ -18,6 +20,8 @@ from app.schemas.record_workspace import (
     WorkspacePreflightResponse,
     WorkspaceQuery,
     WorkspaceQueryResponse,
+    WorkspaceSkuRow,
+    WorkspaceStockLocation,
 )
 from app.services.accounts import AccountService
 from app.services.bills import BillService
@@ -153,7 +157,23 @@ class RecordWorkspaceService:
         candidates = (
             rows if query.lifecycle == "all" else past if query.lifecycle == "archived" else active
         )
-        matching = filter_rows(candidates, query, definition.fields)
+        stock_locations = None
+        if resource == "skus" and "on_hand" in requested_fields:
+            stock_locations = await LocationStockCRUD(self.db).on_hand_locations_by_sku_id()
+        on_hand = (
+            {
+                sku_id: sum((qty for _, _, qty in locations), Decimal(0))
+                for sku_id, locations in stock_locations.items()
+            }
+            if stock_locations is not None
+            else None
+        )
+        matching = filter_rows(
+            candidates,
+            query,
+            definition.fields,
+            {"on_hand": on_hand} if on_hand is not None else None,
+        )
         page = matching[query.offset : query.offset + query.limit]
         token = None
         bulk_available = signing_key() is not None
@@ -167,8 +187,12 @@ class RecordWorkspaceService:
                     "revisions": {str(row.id): revision(row) for row in matching},
                 },
             )
+        # Stock is a read projection. Bulk preflight/execute still compare original SKU revisions.
+        items = page
+        if resource == "skus":
+            items = await self._add_catalogue_stock(page, stock_locations)
         return WorkspaceQueryResponse(
-            items=page,
+            items=items,
             total=len(matching),
             counts=WorkspaceCounts(active=len(active), archived=len(past)),
             revisions={str(row.id): revision(row) for row in page},
@@ -177,6 +201,31 @@ class RecordWorkspaceService:
             selection_count=len(matching),
             bulk_available=bulk_available,
         )
+
+    async def _add_catalogue_stock(
+        self,
+        page: list[BaseModel],
+        locations_by_id: Optional[dict[uuid.UUID, list[tuple[uuid.UUID, str, Decimal]]]],
+    ) -> list[BaseModel]:
+        sku_ids = [row.id for row in page]
+        if locations_by_id is None:
+            locations_by_id = await LocationStockCRUD(self.db).on_hand_locations_by_sku_id(sku_ids)
+        on_order_by_id = await SkuStockCRUD(self.db).on_order_by_sku_id(sku_ids)
+        items: list[BaseModel] = []
+        for sku in page:
+            locations = locations_by_id.get(sku.id, [])
+            items.append(
+                WorkspaceSkuRow(
+                    **sku.model_dump(),
+                    on_hand=sum((qty for _, _, qty in locations), Decimal(0)),
+                    on_order=on_order_by_id.get(sku.id, Decimal(0)),
+                    stock_locations=[
+                        WorkspaceStockLocation(location_id=id_, location_name=name, on_hand=qty)
+                        for id_, name, qty in locations
+                    ],
+                )
+            )
+        return items
 
     async def preflight(
         self, resource: str, body: WorkspacePreflight, actor: uuid.UUID
