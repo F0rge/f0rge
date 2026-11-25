@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, ShoppingBag, User } from "lucide-react";
@@ -47,7 +48,17 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
           </SheetContent>
         </Sheet>
 
-        <Link href="/" className="text-2xl" aria-label="DasKasas home"><Wordmark /></Link>
+        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label="DasKasas home">
+          <Image
+            src="/brand/dk-champagne.png"
+            alt=""
+            width={384}
+            height={203}
+            unoptimized
+            loading="eager"
+            className="h-6 w-auto lg:h-[30px]"
+          />
+        </Link>
 
         <nav aria-label="Main navigation" className="ml-6 hidden items-center gap-6 lg:flex">
           {links.map((link) => <Link key={link.href} href={link.href} aria-current={current(link.href)} className="text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:text-foreground">{link.label}</Link>)}

@@ -11,6 +11,15 @@ const menu = [
 
 const noHorizontalScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
 
+async function expectLogoOnlyHomeLink(page: Page) {
+  const homeLink = page.getByRole('banner').getByRole('link', { name: 'DasKasas home' })
+  const logo = homeLink.locator('img')
+  await expect(homeLink).toHaveText('')
+  await expect(logo).toBeVisible()
+  await expect.poll(() => logo.evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth)).toBeGreaterThan(0)
+  return homeLink
+}
+
 test('DasKasas desktop navigation shows the four categories, Shop all and Help', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/shop')
@@ -21,7 +30,8 @@ test('DasKasas desktop navigation shows the four categories, Shop all and Help',
   await expect(header.getByRole('button', { name: 'Bag, 0 items' })).toBeVisible()
   await expect(header.getByRole('link', { name: 'Account', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden()
-  await header.getByRole('link', { name: 'DasKasas home' }).click()
+  const homeLink = await expectLogoOnlyHomeLink(page)
+  await homeLink.click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page).toHaveTitle(/DasKasas/)
 })
@@ -30,6 +40,7 @@ for (const width of [390, 320]) {
   test(`mobile navigation supports keyboard, dismissal and route selection at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
     await page.goto('/shop')
+    await expectLogoOnlyHomeLink(page)
     await page.keyboard.press('Tab')
     await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused()
     await page.keyboard.press('Enter')
