@@ -131,10 +131,19 @@ test('an unknown category is a 404 and the old query forms move to the category 
 
 test('the home page links each category with its count', async ({ page }) => {
   await page.goto('/')
+  await expect(page).toHaveTitle('DasKasas | Furniture Store in Bedfordview')
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    'content', 'Shop sofas, armchairs, dining tables and bedroom furniture online, or visit the DasKasas showroom at Bedford Square.',
+  )
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Rooms worth coming home to.')
-  await expect(page.getByRole('img', { name: /^Ivory Salon/ })).toHaveAttribute('src', '/merchandising/home-ivory-salon.webp')
+  const hero = page.getByRole('img', { name: /^Ivory Salon/ })
+  await expect(hero).toHaveAttribute('srcset', /home-ivory-salon\.webp.*640w/)
+  await expect.poll(() => hero.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
   const tiles = page.getByRole('region', { name: 'Shop by category' })
   await expect(tiles.getByRole('link')).toHaveText([/Sofas & Armchairs.*2 pieces/, /Dining Room.*1 piece/, /Bedroom.*1 piece/, /Coffee & Console Tables.*1 piece/])
+  expect(await tiles.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual([
+    '/shop/sofas-armchairs', '/shop/dining-room', '/shop/bedroom', '/shop/coffee-console-tables',
+  ])
   expect(await tiles.locator('img').evaluateAll((images) => images.map((image) => image.getAttribute('src')))).toEqual([
     '/merchandising/category-sofas-armchairs.webp',
     '/merchandising/category-dining-room.webp',

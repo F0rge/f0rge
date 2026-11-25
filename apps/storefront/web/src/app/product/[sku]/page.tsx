@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { RotateCcw, Truck } from "lucide-react";
 import { ProductCardGallery } from "@/components/product-card-gallery";
 import { fromPrice, getStoreProduct, listStoreProducts, productPath, stockLabel, type StoreProduct } from "@/lib/medusa";
+import { productMetaDescription, productStructuredData } from "@/lib/product-seo";
 import { selectedImages } from "@/lib/product-variants";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { COLLECTION_ADDRESS } from "@/lib/checkout-fulfillment";
@@ -22,7 +24,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   if (!product) return {};
   return {
     title: product.metadata?.seo_title || product.title,
-    description: product.metadata?.seo_description || product.description || undefined,
+    description: productMetaDescription(product),
     alternates: { canonical: productPath(product) },
   };
 }
@@ -77,14 +79,26 @@ function RelatedPieces({ products }: { products: StoreProduct[] }) {
   </section>;
 }
 
+async function RelatedCatalogue({ product }: { product: StoreProduct }) {
+  const catalogue = await listStoreProducts().catch((error: unknown) => {
+    console.error("Could not load related pieces", error);
+    return [];
+  });
+  return <RelatedPieces products={relatedPieces(product, catalogue)} />;
+}
+
 export default async function ProductPage({ params, searchParams }: ProductPageProps) {
   const [{ sku }, { variant }] = await Promise.all([params, searchParams]);
-  const [product, catalogue] = await Promise.all([getStoreProduct(sku), listStoreProducts()]);
+  const product = await getStoreProduct(sku);
   if (!product) notFound();
   const variantId = product.variants.find((option) => option.id === variant)?.id;
+  const structuredData = productStructuredData(product, productPath(product));
   return <>
+    {structuredData && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />}
     <ProductDetail key={variantId ?? product.id} product={product} initialVariantId={variantId} />
     <DeliveryAndReturns />
-    <RelatedPieces products={relatedPieces(product, catalogue)} />
+    <Suspense fallback={null}>
+      <RelatedCatalogue product={product} />
+    </Suspense>
   </>;
 }
