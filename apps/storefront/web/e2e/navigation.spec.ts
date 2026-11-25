@@ -20,6 +20,19 @@ async function expectLogoOnlyHomeLink(page: Page) {
   return homeLink
 }
 
+test('DasKasas serves the browser-tab icon as a PNG', async ({ page }) => {
+  await page.goto('/shop')
+  const icon = page.locator('head link[rel="icon"]')
+  await expect(icon).toHaveCount(1)
+  await expect(icon).toHaveAttribute('type', 'image/png')
+  await expect(icon).toHaveAttribute('sizes', '64x64')
+
+  const url = await icon.evaluate((link) => link instanceof HTMLLinkElement ? link.href : '')
+  const response = await page.request.get(url)
+  await expect(response).toBeOK()
+  expect(response.headers()['content-type']).toMatch(/^image\/png(?:;|$)/)
+})
+
 test('DasKasas desktop navigation shows the four categories, Shop all and Help', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/shop')
