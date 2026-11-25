@@ -126,8 +126,8 @@ export function ShopListing({ pieces, categoryId, shopAll }: { pieces: ListedPie
 
         {shown.length > 0
           ? <ul aria-label="Pieces" className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((piece) => <li key={piece.id} data-product-card className="min-w-0 overflow-hidden rounded-xl border bg-card">
-              <ProductCardGallery key={piece.variant?.id} title={piece.title} images={piece.variant?.images ?? []} />
+            {shown.map((piece, index) => <li key={piece.id} data-product-card className="min-w-0 overflow-hidden rounded-xl border bg-card">
+              <ProductCardGallery key={piece.variant?.id} title={piece.title} images={piece.variant?.images ?? []} prioritizeFirstImage={index === 0} />
               <TrackedProductLink href={piece.href} productId={piece.id} className="flex items-center justify-between gap-4 p-4 hover:underline">
                 <h3 className="line-clamp-2 min-w-0 font-medium">{piece.title}</h3>
                 <div className="text-right">

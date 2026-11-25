@@ -6,7 +6,9 @@ import Image from "next/image";
 import { Button } from "@f0rge/ui";
 import { PieceImage } from "./piece-image";
 
-export function ProductCardGallery({ title, images }: { title: string; images: string[] }) {
+export function ProductCardGallery({ title, images, prioritizeFirstImage = false }: {
+  title: string; images: string[]; prioritizeFirstImage?: boolean;
+}) {
   const track = useRef<HTMLDivElement>(null);
   const trackId = useId();
   const [position, setPosition] = useState(0);
@@ -42,7 +44,8 @@ export function ProductCardGallery({ title, images }: { title: string; images: s
         }}
       >
         {images.map((url, index) => <Image key={url} src={url} alt={`${title}, photo ${index + 1} of ${images.length}`}
-          unoptimized loading="lazy" draggable={false} width={800} height={800}
+          unoptimized loading={prioritizeFirstImage && index === 0 ? "eager" : "lazy"} draggable={false}
+          fetchPriority={index > 0 ? "low" : prioritizeFirstImage ? "high" : undefined} width={800} height={800}
           className="h-full w-full flex-none snap-start snap-always object-contain select-none" />)}
       </div>
     )}

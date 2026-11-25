@@ -103,7 +103,9 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
         {gallery.length > 1 && <div role="group" aria-label="Product images" className="grid grid-cols-4 gap-4">{gallery.map((url, index) => <Button key={url} type="button" variant="ghost" aria-label={`Show image ${index + 1} of ${gallery.length}`} aria-pressed={url === image} onClick={() => {
           setActiveAngle(index);
           capture({ name: "storefront_product_media_selected", properties: { product_id: product.id, media_index: index } });
-        }} className={cn("aspect-square h-auto overflow-hidden rounded-xl border-2 border-transparent bg-muted p-0", url === image && "border-primary")}><img src={url} alt="" className="size-full object-contain" /></Button>)}</div>}
+        }} className={cn("aspect-square h-auto overflow-hidden rounded-xl border-2 border-transparent bg-muted p-0", url === image && "border-primary")}>
+          <img src={url} alt="" width={160} height={160} loading="lazy" fetchPriority="low" decoding="async" className="size-full object-contain" />
+        </Button>)}</div>}
       </div>
 
       <div className="min-w-0 space-y-8 self-start lg:sticky lg:top-20">
