@@ -40,7 +40,6 @@ export type MedusaVariant = {
   metadata?: {
     suitable_image_urls?: string[] | string;
     dimensions_cm?: DimensionsCm | null;
-    piece_count?: number | null;
     lead_time_days?: number | string;
     care_instructions?: string;
     made_to_order_offer?: MadeToOrderOffer | null;
@@ -139,7 +138,6 @@ function publicProduct(product: StoreProduct): StoreProduct {
       metadata: {
         suitable_image_urls: variant.metadata?.suitable_image_urls,
         dimensions_cm: variant.metadata?.dimensions_cm,
-        piece_count: variant.metadata?.piece_count,
         lead_time_days: variant.metadata?.lead_time_days,
         care_instructions: variant.metadata?.care_instructions,
         made_to_order_offer: variant.metadata?.storefront_made_to_order_offer as MadeToOrderOffer | null | undefined,

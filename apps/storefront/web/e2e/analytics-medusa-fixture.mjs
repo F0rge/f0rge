@@ -41,7 +41,7 @@ function products() {
   }
   return [
     piece({ uuid: '11111111-1111-4111-8111-111111111111', id: 'prod_test_chair', title: 'Test chair', image: '/demo/arc-front.jpg', extraImages: ['/demo/arc-angle.jpg'], tags: ['just-arrived'], categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_test_chair', 'TEST-CHAIR', 2400, 1)] }),
-    piece({ uuid: '22222222-2222-4222-8222-222222222222', id: 'prod_tilda_sofa', title: 'Tilda Sofa', image: '/hero-sofas.jpg', material: 'Bouclé', length: 220, width: 95, height: 80, metadata: { dimension_unit: 'cm' }, categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_tilda_sofa', 'TILDA-SOFA', 18999, 2, null, 22999)] }),
+    piece({ uuid: '22222222-2222-4222-8222-222222222222', id: 'prod_tilda_sofa', title: 'Tilda Sofa', image: '/hero-sofas.jpg', material: 'Bouclé', length: 220, width: 95, height: 80, metadata: { dimension_unit: 'cm' }, categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_tilda_sofa', 'TILDA-SOFA', 18999, 2, { piece_count: 2 }, 22999)] }),
     piece({ uuid: 'group-33333333-3333-4333-8333-333333333333', id: 'prod_umbra_table', title: 'Umbra Dining Table', image: '/demo/arc-angle.jpg', categories: category('dining-room', 'Dining Room'), options, variants: [
       umbraVariant('variant_umbra_table', 'UMBRA-TABLE', 'Silver', '200 cm', 34773.92, 1, ['/demo/arc-angle.jpg', '/demo/arc-detail.jpg']),
       umbraVariant('variant_umbra_gold_large', 'UMBRA-GOLD-200', 'Gold', '200 cm', 36500, 0, ['/hero-sofas.jpg']),

@@ -64,7 +64,6 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
   ].filter(({ value }) => typeof value === "number" && value > 0) : [];
   const legacyDimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
   const hasLegacyDimensions = measured == null && legacyDimensions.every((value) => value != null && value > 0);
-  const pieceCount = variant?.metadata?.piece_count;
   const material = variant?.material || product.material;
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
   const description = customerFacingCopy(product.description);
@@ -124,13 +123,12 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
           {quantity < 1 && offerAvailable && promisedWindow && <p className="text-sm text-muted-foreground">Made to order for you. Estimated ready between {promisedWindow}.</p>}
         </div>
 
-        {(description || material || dimensions.length > 0 || hasLegacyDimensions || pieceCount || care) && <div className="space-y-3 text-muted-foreground">
+        {(description || material || dimensions.length > 0 || hasLegacyDimensions || care) && <div className="space-y-3 text-muted-foreground">
           {description && <p>{description}</p>}
-          {(material || dimensions.length > 0 || hasLegacyDimensions || pieceCount || care) && <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+          {(material || dimensions.length > 0 || hasLegacyDimensions || care) && <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
             {material && <><dt className="font-medium text-foreground">Material</dt><dd>{material}</dd></>}
             {dimensions.map(({ label, value }) => <div className="contents" key={label}><dt className="font-medium text-foreground">{label}</dt><dd>{value} cm</dd></div>)}
             {hasLegacyDimensions && <><dt className="font-medium text-foreground">Size (L × W × H)</dt><dd>{legacyDimensions.join(" × ")} {product.metadata?.dimension_unit || ""}</dd></>}
-            {pieceCount != null && pieceCount > 0 && <><dt className="font-medium text-foreground">Pieces included</dt><dd>{pieceCount}</dd></>}
             {care && <><dt className="font-medium text-foreground">Care</dt><dd>{care}</dd></>}
           </dl>}
         </div>}

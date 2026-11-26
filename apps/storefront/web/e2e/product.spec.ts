@@ -17,6 +17,7 @@ test('an in-stock piece shows its facts, caps quantity at stock and adds to the 
   await expect(article).toContainText('incl. VAT')
   await expect(page.locator('#product-sku')).toHaveText('SKU TILDA-SOFA')
   await expect(article.getByRole('status')).toHaveText('In stock')
+  await expect(article.getByText('Pieces included', { exact: true })).toHaveCount(0)
   await expect(article.getByRole('definition')).toHaveText(['Bouclé', '220 × 95 × 80 cm'])
   await expect(page.locator('[data-main-image] img')).toHaveAttribute('alt', 'Tilda Sofa, view 1 of 1')
 
