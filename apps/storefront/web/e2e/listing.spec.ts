@@ -66,6 +66,18 @@ test('availability filter, sort and counts agree with the grid', async ({ page }
   await expect(grid(page).getByRole('heading', { level: 3 })).toHaveText([...byPrice].reverse().filter((title) => title !== 'Wren Coffee Table'))
 })
 
+test('the shop and category pages show the showroom and link directly to buying policies', async ({ page }) => {
+  for (const path of ['/shop', '/shop/sofas-armchairs', '/shop/dining-room', '/shop/bedroom', '/shop/coffee-console-tables']) {
+    await page.goto(path)
+    const help = page.getByRole('region', { name: 'Showroom and shopping help' })
+    await expect(help).toContainText('Shop GL15, Bedford Square')
+    await expect(help.getByRole('link', { name: '010 745 1980' })).toHaveAttribute('href', 'tel:0107451980')
+    await expect(help.getByRole('link', { name: 'Showroom hours and contact' })).toHaveAttribute('href', '/help#contact')
+    await expect(help.getByRole('link', { name: 'Delivery and collection policy' })).toHaveAttribute('href', '/policies/delivery')
+    await expect(help.getByRole('link', { name: 'Return policy' })).toHaveAttribute('href', '/policies/returns')
+  }
+})
+
 test('category and price filters combine, keep counts in sync and survive reload and back', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/shop?utm_source=fixture')

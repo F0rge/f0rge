@@ -3,6 +3,7 @@ import { Button } from "@f0rge/ui";
 import { CategoryTiles } from "@/components/category-tiles";
 import { listShopProducts, listedPiece } from "@/lib/medusa";
 import type { ShopCategory } from "@/lib/shop-categories";
+import { SHOWROOM } from "@/lib/showroom";
 import { ShopListing } from "./shop-listing";
 
 const buyingGuides: Partial<Record<ShopCategory["handle"], { title: string; paragraphs: string[] }>> = {
@@ -46,6 +47,22 @@ export async function Listing({ category }: { category?: ShopCategory }) {
       <h2 id="buying-guide" className="text-xl font-semibold">{guide.title}</h2>
       {guide.paragraphs.map((paragraph) => <p key={paragraph} className="max-w-prose text-muted-foreground">{paragraph}</p>)}
     </section>}
+    <section aria-labelledby="listing-help-title" className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6">
+      <div className="rounded-xl border p-5 md:p-6">
+        <h2 id="listing-help-title" className="text-xl font-semibold">Showroom and shopping help</h2>
+        <address className="mt-2 space-y-2 text-sm not-italic">
+          <p>{SHOWROOM.address}</p>
+          <ul className="flex flex-wrap gap-x-5 gap-y-2">
+            {SHOWROOM.phones.map(({ label, number }) => <li key={number}>{label}: <a className="font-medium underline underline-offset-4" href={`tel:${number.replace(/[^+\d]/g, "")}`}>{number}</a></li>)}
+          </ul>
+        </address>
+        <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium [&_a]:underline [&_a]:underline-offset-4">
+          <li><Link href="/help#contact">Showroom hours and contact</Link></li>
+          <li><Link href="/policies/delivery">Delivery and collection policy</Link></li>
+          <li><Link href="/policies/returns">Return policy</Link></li>
+        </ul>
+      </div>
+    </section>
     <CategoryTiles products={products} exclude={category?.handle} title={category ? "Other categories" : "Shop by category"} description="More from the showroom." />
   </>;
 }
