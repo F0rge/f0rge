@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { SignIn } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false, noarchive: true } };
+export const metadata: Metadata = {
+  title: "Sign in",
+  description: "Sign in to DasKasas with a one-time email code or create a customer account.",
+  robots: { index: false, follow: false, noarchive: true },
+};
 
 export default function SignInPage() {
   const configured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY && process.env.STOREFRONT_CLERK_JWT_TEMPLATE);

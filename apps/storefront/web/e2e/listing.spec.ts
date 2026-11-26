@@ -25,12 +25,21 @@ test('the menu opens each category with only its pieces; an uncategorised piece 
   expect(await titles(page)).toEqual(byName)
   for (const [name, pieces] of categories) {
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name, exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
+    const heading = name === 'Sofas & Armchairs' ? 'Find a sofa or armchair' : name
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Pieces', exact: true })).toHaveCount(1)
     await expect(grid(page).getByRole('heading', { level: 3 })).toHaveText([...pieces])
     await expect(page.getByRole('status').filter({ hasText: /piece/ })).toHaveText(`${pieces.length} ${pieces.length === 1 ? 'piece' : 'pieces'}`)
     await expect(grid(page)).not.toContainText('Yara Floor Lamp')
     await expect(page.getByRole('region', { name: 'Other categories' }).getByRole('link')).toHaveCount(3)
   }
+})
+
+test('the sofa category describes the range and helps shoppers choose a sofa', async ({ page }) => {
+  await page.goto('/shop/sofas-armchairs')
+  await expect(page).toHaveTitle('Sofa & Armchair Shop in Bedfordview | DasKasas')
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Find a sofa or armchair at DasKasas/)
+  await expect(page.getByRole('region', { name: 'Choosing a sofa for your living room' })).toContainText('Measure the space the sofa will occupy')
 })
 
 test('availability filter, sort and counts agree with the grid', async ({ page }) => {
@@ -63,6 +72,18 @@ test('availability filter, sort and counts agree with the grid', async ({ page }
   await expect(grid(page).getByRole('heading', { level: 3 })).toHaveText([...byPrice].reverse())
   await inStock.check()
   await expect(grid(page).getByRole('heading', { level: 3 })).toHaveText([...byPrice].reverse().filter((title) => title !== 'Wren Coffee Table'))
+})
+
+test('the shop and category pages show the showroom and link directly to buying policies', async ({ page }) => {
+  for (const path of ['/shop', '/shop/sofas-armchairs', '/shop/dining-room', '/shop/bedroom', '/shop/coffee-console-tables']) {
+    await page.goto(path)
+    const help = page.getByRole('region', { name: 'Showroom and shopping help' })
+    await expect(help).toContainText('Shop GL15, Bedford Square')
+    await expect(help.getByRole('link', { name: '010 745 1980' })).toHaveAttribute('href', 'tel:0107451980')
+    await expect(help.getByRole('link', { name: 'Showroom hours and contact' })).toHaveAttribute('href', '/help#contact')
+    await expect(help.getByRole('link', { name: 'Delivery and collection policy' })).toHaveAttribute('href', '/policies/delivery')
+    await expect(help.getByRole('link', { name: 'Return policy' })).toHaveAttribute('href', '/policies/returns')
+  }
 })
 
 test('category and price filters combine, keep counts in sync and survive reload and back', async ({ page }) => {
@@ -127,10 +148,14 @@ test('each card shows at most one alert, and finish dots switch the photos, pric
   await expect(grid(page)).not.toContainText('In stock')
 
   const table = card(page, 'Umbra Dining Table')
+  const productPath = '/product/firstout-group-33333333-3333-4333-8333-333333333333'
   // One dot per colour: both gold sizes share a dot, which opens the gold size in stock.
   const finishes = table.getByRole('group', { name: 'Finishes of Umbra Dining Table' })
   await expect(finishes.getByRole('button')).toHaveCount(2)
   await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'true')
+  for (const link of await table.getByRole('link').all()) {
+    await expect(link).toHaveAttribute('href', productPath)
+  }
   await finishes.getByRole('button', { name: 'Gold', exact: true }).click()
   await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'false')
@@ -140,6 +165,8 @@ test('each card shows at most one alert, and finish dots switch the photos, pric
   // A new filter result keeps the card (and the shopper's finish) rather than remounting it.
   await page.getByRole('complementary', { name: 'Filters' }).getByRole('checkbox', { name: /^In stock/ }).check()
   await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await finishes.getByRole('button', { name: 'Silver / 200 cm' }).click()
+  for (const link of await table.getByRole('link').all()) await expect(link).toHaveAttribute('href', productPath)
   await expect(card(page, 'Tilda Sofa').getByRole('group', { name: /^Finishes/ })).toHaveCount(0)
 })
 
@@ -181,7 +208,7 @@ test('the home page links each category with its count', async ({ page }) => {
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     'content', 'Shop sofas, armchairs, dining tables and bedroom furniture online, or visit the DasKasas showroom at Bedford Square.',
   )
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Rooms worth coming home to.')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Furniture store in Bedfordview')
   const hero = page.getByRole('img', { name: /^Ivory Salon/ })
   await expect(hero).toHaveAttribute('srcset', /home-ivory-salon\.webp.*640w/)
   await expect.poll(() => hero.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)

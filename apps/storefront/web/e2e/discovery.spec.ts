@@ -20,11 +20,26 @@ test('catalogue metadata and non-production robots policy describe public routes
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'http://localhost:3004/shop')
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Browse sofas and armchairs.*Filter by price and availability/)
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Shop furniture | DasKasas')
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute('content', 'http://localhost:3004/shop')
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'http://localhost:3004/hero-sofas.jpg')
 
   if (sourceSkuId) {
     await page.goto(`/product/${sourceSkuId}`)
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `http://localhost:3004/product/${sourceSkuId}`)
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /\S.{14,}/)
+  }
+})
+
+test('the homepage keeps its canonical and private pages have no canonical', async ({ page }) => {
+  const canonical = page.locator('link[rel="canonical"]')
+  await page.goto('/')
+  await expect(canonical).toHaveAttribute('href', /^http:\/\/localhost:3004\/?$/)
+
+  for (const path of ['/account', '/account/sign-in', '/bag', '/checkout', '/order/confirmation']) {
+    const response = await page.goto(path)
+    expect(response?.headers()['x-robots-tag']).toContain('noindex')
+    await expect(canonical).toHaveCount(0)
   }
 })
 
@@ -37,10 +52,12 @@ test('mobile keyboard path reaches a piece and its gallery without horizontal ov
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.locator('#main-content')).toBeInViewport()
-  await expect(page.locator(`a:visible[href="/product/${sourceSkuId}"]`)).toBeVisible()
+  const productLink = page.getByRole('list', { name: 'Pieces' }).getByRole('heading', { level: 3 })
+    .getByRole('link').and(page.locator(`[href="/product/${sourceSkuId}"]`))
+  await expect(productLink).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 
-  await page.locator(`a:visible[href="/product/${sourceSkuId}"]`).focus()
+  await productLink.focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(new RegExp(`/product/${sourceSkuId}$`))
   const galleryChoice = page.getByRole('button', { name: /^Show image 2 of / })

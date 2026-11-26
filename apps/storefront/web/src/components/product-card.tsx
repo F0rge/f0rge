@@ -180,7 +180,8 @@ export function ProductCard({ piece, initialVariantId, featured = false, eager =
   const alert = cardAlert(piece, shown);
   const sale = alert?.kind === "sale";
   const changed = shown?.id !== start?.id;
-  const href = piece.variants.length > 1 && shown ? variantHref(piece.href, shown.id) : piece.href;
+  // The product page starts on the first variant when the URL has no selection.
+  const href = shown && shown.id !== piece.variants[0]?.id ? variantHref(piece.href, shown.id) : piece.href.split("?")[0];
   const nameLink = <TrackedProductLink href={href} productId={piece.id} className="underline-offset-3 hover:underline">{piece.title}</TrackedProductLink>;
 
   return <li ref={card} data-product-card className={cn("min-w-0", featured && "col-span-full md:grid md:grid-cols-[2fr_3fr] md:items-center md:gap-10")}>

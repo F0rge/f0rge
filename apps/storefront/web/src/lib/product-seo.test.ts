@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MadeToOrderOffer, MedusaVariant, StoreProduct } from "./medusa";
-import { productMetaDescription, productStructuredData } from "./product-seo";
+import { productMetaDescription, productPageCopy, productShareImage, productStructuredData } from "./product-seo";
 
 const origin = "https://www.daskasas.co.za";
 const path = "/product/firstout-group-11111111-1111-4111-8111-111111111111";
@@ -68,7 +68,18 @@ describe("product meta descriptions", () => {
   it("falls back to published facts when copy is absent or retired", () => {
     expect(productMetaDescription({
       ...product, description: "A considered addition to your living space.", metadata: { seo_description: "   " },
-    })).toBe("Explore Linden Bench at DasKasas. Dimensions: 135 × 38 × 45 cm. Material: Solid oak. Dining Room collection. SKU LINDEN-OAK.");
+    })).toBe("Linden Bench. Dimensions: 135 × 38 × 45 cm. Material: Solid oak. Dining Room collection. SKU LINDEN-OAK.");
+  });
+
+  it("uses published materials only when they apply to the whole model", () => {
+    const secondVariant = { ...variant, id: "second_variant" };
+    const group = { ...product, description: null, variants: [variant, secondVariant] };
+    expect(productMetaDescription(group)).toContain("Material: Solid oak.");
+
+    const different = { ...secondVariant, material: "Ash" };
+    const mixed = productMetaDescription({ ...group, variants: [variant, different] });
+    expect(mixed).toContain("SKU LINDEN-OAK.");
+    expect(mixed).not.toContain("Material:");
   });
 
   it("omits incomplete legacy dimensions that the product page does not display", () => {
@@ -131,6 +142,37 @@ describe("product meta descriptions", () => {
     expect(description).toContain("Linden Bench");
     expect(description).toMatch(/… SKU LINDEN-OAK\.$/);
     expect(description).not.toContain("ignore this CSS");
+  });
+});
+
+describe("product page metadata for selected variants", () => {
+  it("uses public option values even when the available finish is named by a code", () => {
+    const selection = { ...variant, options: [{ id: "fabric_oak", option_id: "fabric", value: "FAB-42" }] };
+    const other = { ...variant, id: "other", options: [{ id: "fabric_grey", option_id: "fabric", value: "Grey" }] };
+    const group = { ...product, options: [{ id: "fabric", title: "Upholstery" }], variants: [selection, other] };
+
+    expect(productPageCopy(group)).toEqual({ title: group.title, description: productMetaDescription(group) });
+    expect(productPageCopy(group, selection)).toEqual({
+      title: "Linden Bench – FAB-42",
+      description: "Linden Bench. Upholstery: FAB-42. SKU LINDEN-OAK.",
+    });
+    expect(productPageCopy(product, variant)).toEqual(productPageCopy(product));
+  });
+});
+
+describe("product share images", () => {
+  it("uses the selected variant's approved public image, or lets the page use its default", () => {
+    const alternatePhoto = "https://media.example.com/linden-grey.jpg";
+    const finish = {
+      ...variant,
+      id: "second_variant",
+      images: ["/demo/arc-front.jpg", "https://files.railway.internal/image.jpg", alternatePhoto].map((url) => ({ id: url, url })),
+    };
+    const group = { ...product, variants: [variant, finish] };
+
+    expect(productShareImage(group, undefined, origin)).toEqual({ url: image, alt: product.title });
+    expect(productShareImage(group, finish, origin)).toEqual({ url: alternatePhoto, alt: product.title });
+    expect(productShareImage(group, { ...finish, images: finish.images.slice(0, 2) }, origin)).toBeUndefined();
   });
 });
 

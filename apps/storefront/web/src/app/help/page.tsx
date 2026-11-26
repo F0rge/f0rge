@@ -4,14 +4,15 @@ import { Ban, CalendarClock, Clock, Mail, MapPin, PackageX, Phone, Receipt, Refr
 import { COLLECTION_ADDRESS, COLLECTION_INSTRUCTIONS, DELIVERY_DESCRIPTION } from "@/lib/checkout-fulfillment";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { SHOWROOM } from "@/lib/showroom";
+import { publicPageMetadata } from "@/lib/storefront-metadata";
 
 // Rendered per request so the layout's robots meta reads the live indexing switch.
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: "Help",
   description: "Delivery, collection, returns and how to reach the DasKasas showroom.",
-  alternates: { canonical: "/help" },
-};
+  path: "/help",
+});
 
 // Every line restates the delivery, return and refund policies or the showroom facts; the policies stay the full text.
 const columns: { id: string; title: string; items: { icon: LucideIcon; title: string; description: string }[] }[] = [
