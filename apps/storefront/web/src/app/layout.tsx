@@ -25,7 +25,6 @@ export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
   title: { default: "DasKasas | Considered furniture", template: "%s | DasKasas" },
   description: "Considered furniture for a home, thoughtfully yours.",
-  alternates: { canonical: "/" },
   robots: { index: indexable, follow: indexable },
 };
 

@@ -31,6 +31,18 @@ test('catalogue metadata and non-production robots policy describe public routes
   }
 })
 
+test('the homepage keeps its canonical and private pages have no canonical', async ({ page }) => {
+  const canonical = page.locator('link[rel="canonical"]')
+  await page.goto('/')
+  await expect(canonical).toHaveAttribute('href', /^http:\/\/localhost:3004\/?$/)
+
+  for (const path of ['/account', '/account/sign-in', '/bag', '/checkout', '/order/confirmation']) {
+    const response = await page.goto(path)
+    expect(response?.headers()['x-robots-tag']).toContain('noindex')
+    await expect(canonical).toHaveCount(0)
+  }
+})
+
 test('mobile keyboard path reaches a piece and its gallery without horizontal overflow', async ({ page }) => {
   test.skip(!sourceSkuId, 'Set STOREFRONT_TEST_SKU_ID to a published product with a gallery')
 
