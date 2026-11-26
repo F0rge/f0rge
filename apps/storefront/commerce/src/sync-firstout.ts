@@ -44,6 +44,9 @@ function syncedCatalogueMetadata(row: OpsProduct) {
     ...(row.piece_count === undefined ? {} : { piece_count: row.piece_count }),
     // Variant metadata key the storefront card reads; null once Firstout clears the colour.
     ...(row.swatch_hex === undefined ? {} : { swatch_hex: row.swatch_hex }),
+    // Selling rules the cart hooks and checkout hold enforce (publication.ts sellRules).
+    ...(row.sell_multiple === undefined ? {} : { sell_multiple: row.sell_multiple }),
+    ...(row.min_quantity === undefined ? {} : { min_quantity: row.min_quantity }),
   };
 }
 
@@ -107,7 +110,7 @@ async function opsGet(path: string): Promise<{ response: Response; companyId: st
 
 async function fetchOpsProducts(): Promise<OpsProductsResponse> {
   const { response, companyId } = await opsGet(
-    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true&include_swatch=true&include_second_detail_photo=true",
+    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true&include_swatch=true&include_second_detail_photo=true&include_sell_rules=true",
   );
   return parseOpsProducts(await response.json(), companyId);
 }

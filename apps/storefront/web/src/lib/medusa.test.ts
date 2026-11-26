@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.stubEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY", "pk_test_fixture");
-const { listedPiece, listShopProducts, listStoreProducts, saleOriginal, swatchHex } = await import("./medusa");
+const { listedPiece, listShopProducts, listStoreProducts, saleOriginal, swatchHex, variantQuantityCaps } = await import("./medusa");
 vi.unstubAllEnvs();
 import type { MedusaVariant, StoreProduct } from "./medusa";
 
@@ -50,6 +50,27 @@ describe("shop catalogue snapshot", () => {
       expect(fetchStore).toHaveBeenCalledTimes(8);
     } finally {
       clock.mockRestore();
+      fetchStore.mockRestore();
+    }
+  });
+});
+
+describe("sell rules", () => {
+  it("reach the page and the bag caps only as positive integers", async () => {
+    const pairs = variant({ id: "variant_pairs", inventory_quantity: 5, metadata: { sell_multiple: 2, min_quantity: 4 } });
+    const odd = variant({ id: "variant_odd", metadata: { sell_multiple: "2", min_quantity: 0 } as unknown as MedusaVariant["metadata"] });
+    const fetchStore = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (new URL(String(input)).pathname === "/store/regions") return Response.json({ regions: [{ id: "reg_fixture", currency_code: "zar" }] });
+      return Response.json({ products: [{ id: "prod_pairs", handle: "firstout-11111111-1111-4111-8111-111111111111", title: "Pairs", description: null, variants: [pairs, odd] }], count: 1 });
+    });
+    try {
+      const [product] = await listStoreProducts();
+      expect(product.variants.map(({ metadata }) => [metadata?.sell_multiple, metadata?.min_quantity])).toEqual([[2, 4], [1, 1]]);
+      expect(Object.fromEntries(await variantQuantityCaps(["prod_pairs"]))).toEqual({
+        variant_pairs: { cap: 5, multiple: 2, minimum: 4 },
+        variant_odd: { cap: 1, multiple: 1, minimum: 1 },
+      });
+    } finally {
       fetchStore.mockRestore();
     }
   });

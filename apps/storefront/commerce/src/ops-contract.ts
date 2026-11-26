@@ -48,6 +48,11 @@ const productSchema = z.object({
   // Opt-in finish colour for the shop card dot. Null clears it; absent (an older Firstout)
   // leaves the stored colour alone.
   swatch_hex: z.string().regex(/^#[0-9a-f]{6}$/).nullable().optional(),
+  // Opt-in selling rules (include_sell_rules=true): a basket total must be a multiple of
+  // sell_multiple and at least min_quantity. Absent (an older Firstout) leaves the stored rule
+  // alone; null clears it, which the shop reads as 1, like swatch_hex.
+  sell_multiple: z.number().int().positive().nullable().optional(),
+  min_quantity: z.number().int().positive().nullable().optional(),
   // One of the four shop categories, from Firstout's mapping. Absent (auto-publish off, or an
   // older Firstout) means categories are left alone.
   shop_category: z.enum(shopCategoryHandles).optional(),

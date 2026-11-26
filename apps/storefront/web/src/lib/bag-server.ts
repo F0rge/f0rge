@@ -4,6 +4,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { getCustomerContext } from "@/lib/customer-auth";
 import { variantQuantityCaps } from "@/lib/medusa";
+import { roundDownToMultiple } from "@/lib/sell-rules";
 
 export const cartCookie = "collector_cart";
 export const orderAccessCookie = "collector_order_access";
@@ -103,7 +104,7 @@ export type BagFulfillmentSummary = {
   estimated_from: string;
   estimated_by: string;
 };
-export type BagItem = { id: string; variant_id: string; product_id?: string | null; title: string; thumbnail?: string | null; quantity: number; max_quantity?: number; unit_price: number; total: number; fulfillment_promise?: BagFulfillmentPromise | null };
+export type BagItem = { id: string; variant_id: string; product_id?: string | null; title: string; thumbnail?: string | null; quantity: number; max_quantity?: number; sell_multiple?: number; min_quantity?: number; unit_price: number; total: number; fulfillment_promise?: BagFulfillmentPromise | null };
 export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[]; fulfillment_promise?: BagFulfillmentSummary } | null };
 type MedusaCart = Omit<Bag, "id" | "items"> & {
   id: string;
@@ -212,7 +213,8 @@ export function publicBag(cart?: MedusaCart | null): Bag {
   };
 }
 
-// Adds each line's quantity cap; a piece no longer for sale keeps its current quantity as the cap.
+// Adds each line's quantity cap and sell rules; a piece no longer for sale keeps its current quantity as the cap.
+// The cap is rounded down to the sell multiple so the stepper only offers quantities the server accepts.
 export async function withStock(bag: Bag): Promise<Bag> {
   const caps = await variantQuantityCaps(bag.items.flatMap((item) => item.product_id ? [item.product_id] : []));
   const totals = new Map<string, number>();
@@ -220,9 +222,13 @@ export async function withStock(bag: Bag): Promise<Bag> {
     totals.set(variant_id, (totals.get(variant_id) ?? 0) + quantity);
   }
   return { ...bag, items: bag.items.map((item) => {
-    const cap = caps.get(item.variant_id);
+    const stock = caps.get(item.variant_id);
+    if (!stock) return { ...item, max_quantity: item.quantity };
     const otherUnits = (totals.get(item.variant_id) ?? item.quantity) - item.quantity;
-    return { ...item, max_quantity: cap === undefined ? item.quantity : Math.max(0, cap - otherUnits) };
+    return {
+      ...item, sell_multiple: stock.multiple, min_quantity: stock.minimum,
+      max_quantity: roundDownToMultiple(stock.cap - otherUnits, stock.multiple),
+    };
   }) };
 }
 

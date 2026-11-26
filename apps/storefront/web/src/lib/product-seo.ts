@@ -5,6 +5,7 @@ import { offerLive } from "./made-to-order";
 import type { MedusaVariant, StoreProduct } from "./medusa";
 import { productVariantOptions, selectedImages, variantChoices } from "./product-variants";
 import { customerFacingCopy } from "./purchase-feedback";
+import { sellRules } from "./sell-rules";
 
 const CANONICAL_HOMEPAGE = "https://www.daskasas.co.za/";
 const MAX_DESCRIPTION_LENGTH = 170;
@@ -185,7 +186,11 @@ function variantOffer(variant: MedusaVariant, url: string, sku: string | null) {
 
   const availability = offerAvailability(variant);
   if (!availability) return undefined;
-  return { "@type": "Offer", price: amount, priceCurrency: "ZAR", availability: `${SCHEMA}/${availability}`, url };
+  const { minimum } = sellRules(variant.metadata);
+  return {
+    "@type": "Offer", price: amount, priceCurrency: "ZAR", availability: `${SCHEMA}/${availability}`, url,
+    ...(minimum > 1 ? { eligibleQuantity: { "@type": "QuantitativeValue", minValue: minimum } } : {}),
+  };
 }
 
 function variantProduct(

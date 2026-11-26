@@ -156,3 +156,53 @@ test("a Firstout photo the sync stores on the hosted volume passes the public-im
     "sc_1",
   )).toEqual([]);
 });
+
+describe("selling rules on cart writes", () => {
+  const rewriteWords = /\b(?:stock|inventory|remaining capacity)\b/i;
+  const seam = (metadata: Record<string, unknown>, external_id = product.external_id) => {
+    const graph = jest.fn().mockResolvedValue({ data: [{ ...variant, product: { ...product, external_id }, metadata: { ...variant.metadata, ...metadata } }] });
+    const container = { resolve: () => ({ graph }) } as unknown as MedusaContainer;
+    return (...quantities: number[]) => assertVariantsPurchasable(container, [variant.id], "sc_1",
+      basketVariantTotals(quantities.map((quantity) => ({ variant_id: variant.id, quantity })), new Set([variant.id])));
+  };
+  const refusal = async (attempt: Promise<void>) => {
+    const error = await attempt.then(() => null, (caught: Error) => caught);
+    expect(error).not.toBeNull();
+    expect(error!.message).not.toMatch(rewriteWords);
+    return error!.message;
+  };
+
+  test("a total must be a multiple of the sell multiple and at least the minimum, across lines", async () => {
+    const add = seam({ source_available_quantity: 10, sell_multiple: 2, min_quantity: 4 });
+    expect(await refusal(add(3))).toBe("This piece is sold in sets of 2.");
+    expect(await refusal(add(2))).toBe("The minimum order for this piece is 4.");
+    expect(await refusal(add(2, 3))).toBe("This piece is sold in sets of 2.");
+    await expect(add(4)).resolves.toBeUndefined();
+    await expect(add(3, 1)).resolves.toBeUndefined();
+    await expect(add(2, 2, 2)).resolves.toBeUndefined();
+  });
+
+  test("the cap is rounded down to the multiple, and a cap below the minimum refuses plainly", async () => {
+    const oddCap = seam({ source_available_quantity: 5, sell_multiple: 2 });
+    await expect(oddCap(4)).resolves.toBeUndefined();
+    await expect(oddCap(6)).rejects.toThrow("That quantity is no longer available for this piece.");
+    expect(await refusal(oddCap(5))).toBe("This piece is sold in sets of 2.");
+
+    const short = seam({ source_available_quantity: 3, sell_multiple: 2, min_quantity: 4 });
+    expect(await refusal(short(4))).toBe("The minimum order for this piece is 4, and fewer than 4 are available right now.");
+    const single = seam({ source_available_quantity: 1, sell_multiple: 2 });
+    expect(await refusal(single(2))).toBe("This piece is sold in sets of 2, and fewer than 2 are available right now.");
+  });
+
+  test("a variant without rules, a malformed rule and a non-Firstout product behave as before", async () => {
+    await expect(seam({ source_available_quantity: 3 })(1)).resolves.toBeUndefined();
+    await expect(seam({ source_available_quantity: 3, sell_multiple: null, min_quantity: "4" })(3)).resolves.toBeUndefined();
+    await expect(seam({ sell_multiple: 2, min_quantity: 4 }, "staff-product")(1)).resolves.toBeUndefined();
+  });
+
+  test("cart completion does not check the rules: it runs after payment", async () => {
+    const graph = jest.fn().mockResolvedValue({ data: [{ ...variant, product, metadata: { ...variant.metadata, sell_multiple: 2 } }] });
+    const container = { resolve: () => ({ graph }) } as unknown as MedusaContainer;
+    await expect(assertVariantsPurchasable(container, [variant.id], "sc_1")).resolves.toBeUndefined();
+  });
+});

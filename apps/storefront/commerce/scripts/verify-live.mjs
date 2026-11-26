@@ -20,7 +20,7 @@ const headers = {
   Authorization: `Bearer ${process.env.FIRSTOUT_OPS_TOKEN}`,
   "X-Ops-Company-ID": companyId,
 }
-const sourceResponse = await fetch(`${sourceBase}/products`, { headers })
+const sourceResponse = await fetch(`${sourceBase}/products?include_sell_rules=true`, { headers })
 if (!sourceResponse.ok) throw new Error(`Ops API returned ${sourceResponse.status}`)
 const source = await sourceResponse.json()
 if (source.company_id !== companyId) throw new Error("Ops API company mismatch")
@@ -32,10 +32,16 @@ const allowedFields = [
   "acknowledged_commitment_ids", "made_to_order_offer",
 ]
 // photo_token appears only once Firstout's OPS_COMMERCE_PHOTO_TOKENS_ENABLED is on, and
-// shop_category only once OPS_COMMERCE_AUTO_PUBLISH_ENABLED is on.
-const optionalFields = ["photo_token", "shop_category"]
+// shop_category only once OPS_COMMERCE_AUTO_PUBLISH_ENABLED is on. The selling rules are
+// opted in above; a Firstout older than that opt-in omits them.
+const optionalFields = ["photo_token", "shop_category", "sell_multiple", "min_quantity"]
 if (Object.keys(snapshot).filter((key) => !optionalFields.includes(key)).sort().join() !== allowedFields.sort().join()) {
   throw new Error("Ops API exposed an unexpected field")
+}
+for (const key of ["sell_multiple", "min_quantity"]) {
+  if (key in snapshot && !(Number.isSafeInteger(snapshot[key]) && snapshot[key] > 0)) {
+    throw new Error(`Ops API ${key} is not a positive integer`)
+  }
 }
 
 const denied = await fetch(`${sourceBase}/products`, {

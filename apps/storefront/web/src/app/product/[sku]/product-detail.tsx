@@ -12,6 +12,7 @@ import { formatCustomerPrice } from "@/lib/order-money";
 import { offerLive } from "@/lib/made-to-order";
 import { pickVariant, productVariantOptions, selectedImages, variantChoices } from "@/lib/product-variants";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
+import { batchPriceLine, roundDownToMultiple, sellRules } from "@/lib/sell-rules";
 
 const assurances = [
   { title: "Delivery", description: "Selected areas in Johannesburg and Pretoria" },
@@ -54,9 +55,14 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
   const availability = !variant ? "This combination is unavailable" : quantity > 0 ? "In stock" : offerAvailable ? `Made to order · ${offer.min_lead_time_days}–${offer.max_lead_time_days} days` : "Out of stock";
   const skuCapacity = quantity > 0 ? quantity : offerAvailable ? offer.remaining_capacity : 0;
   const inBag = bag?.items.reduce((total, item) => total + (item.variant_id === variant?.id ? item.quantity : 0), 0) ?? 0;
-  const maxQuantity = Math.max(0, skuCapacity - inBag);
-  const chosenQuantity = Math.max(1, Math.min(requested, maxQuantity));
-  const canAdd = !!variant?.calculated_price && maxQuantity > 0;
+  // Sold in multiples: the bag total for this variant stays a multiple, at least the minimum.
+  const rules = sellRules(variant?.metadata);
+  const leastToAdd = Math.max(rules.multiple, Math.ceil((rules.minimum - inBag) / rules.multiple) * rules.multiple);
+  const remaining = Math.max(0, skuCapacity - inBag);
+  const maxQuantity = roundDownToMultiple(remaining, rules.multiple);
+  const chosenQuantity = Math.max(leastToAdd, Math.min(requested, maxQuantity));
+  const canAdd = !!variant?.calculated_price && maxQuantity >= leastToAdd;
+  const batch = variant?.calculated_price ? batchPriceLine(variant.calculated_price.calculated_amount, variant.calculated_price.currency_code, rules) : null;
   const measured = variant?.metadata?.dimensions_cm;
   const dimensions = measured ? [
     { label: "Width", value: measured.width }, { label: "Depth", value: measured.depth },
@@ -115,6 +121,7 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
 
         <div className="space-y-2">
           <p id="product-price" aria-live="polite" className="text-3xl font-bold">{formatPrice(variant)}</p>
+          {batch && <p id="product-batch" className="text-sm">{batch}</p>}
           <p className="text-sm text-muted-foreground">
             {variant?.calculated_price && <>incl. VAT · </>}
             <span id="product-sku">{variant?.sku ? `SKU ${variant.sku}` : "Select an available combination"}</span>
@@ -156,8 +163,10 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
         </div>}
 
         <div className="space-y-6 border-t pt-6">
-          {skuCapacity > 0 && maxQuantity === 0 && <p className="text-sm text-muted-foreground">You have the available quantity of this option in your bag.</p>}
-          {canAdd && <div className="flex justify-start"><Stepper label="Quantity" value={chosenQuantity} min={1} max={maxQuantity} onChange={setRequested} /></div>}
+          {skuCapacity > 0 && maxQuantity < leastToAdd && <p className="text-sm text-muted-foreground">{inBag > 0
+            ? "You have the available quantity of this option in your bag."
+            : `Only ${remaining} available, fewer than the minimum order of ${leastToAdd}.`}</p>}
+          {canAdd && <div className="flex justify-start"><Stepper label="Quantity" value={chosenQuantity} min={leastToAdd} max={maxQuantity} step={rules.multiple} onChange={setRequested} /></div>}
           {/* Mantine's unlayered button reset makes buttons inherit their font, so the wrapper carries it. */}
           <div className="text-sm font-medium">
             <Button size="lg" type="button" className="h-12 w-full" disabled={!canAdd || adding} onClick={async () => {

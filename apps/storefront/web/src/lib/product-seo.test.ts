@@ -265,6 +265,15 @@ describe("product structured data", () => {
     });
   });
 
+  it("states the minimum order on the offer and keeps the unit price", () => {
+    const pairs = { ...variant, metadata: { ...variant.metadata, sell_multiple: 2, min_quantity: 4 } };
+    expect(schema({ ...product, variants: [pairs] }).offers).toEqual({
+      "@type": "Offer", url: origin + path, price: 4299.95, priceCurrency: "ZAR", availability: "https://schema.org/InStock",
+      eligibleQuantity: { "@type": "QuantitativeValue", minValue: 4 },
+    });
+    expect(schema().offers).not.toHaveProperty("eligibleQuantity");
+  });
+
   it.each([
     { calculated_price: undefined },
     { calculated_price: { calculated_amount: 4299.95, currency_code: "USD" } },

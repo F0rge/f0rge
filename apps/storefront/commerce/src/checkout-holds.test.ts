@@ -120,3 +120,18 @@ test("backing out after payment preparation does not modify the accepted checkou
   expect(clearShipping).not.toHaveBeenCalled();
   expect(updateCart).not.toHaveBeenCalled();
 });
+
+test("a bag that breaks a selling rule becomes a review change, counted per variant across lines", () => {
+  const paired = { ...variant, metadata: { ...variant.metadata, source_available_quantity: 10, sell_multiple: 2, min_quantity: 4 } };
+  const lines = (...quantities: number[]) => ({
+    ...cart, items: quantities.map((quantity, index) => ({ ...cart.items[0], id: `cali_${index}`, quantity })),
+  });
+  expect(checkoutChanges(lines(3), [paired], now, 5 * 60_000)).toEqual(["This piece is sold in sets of 2."]);
+  expect(checkoutChanges(lines(2), [paired], now, 5 * 60_000)).toEqual(["The minimum order for this piece is 4."]);
+  expect(checkoutChanges(lines(4), [paired], now, 5 * 60_000)).toEqual([]);
+  expect(checkoutChanges(lines(2, 2), [paired], now, 5 * 60_000)).toEqual([]);
+  expect(checkoutChanges(lines(3, 1), [paired], now, 5 * 60_000)).toEqual([]);
+  expect(checkoutChanges(lines(2, 1), [paired], now, 5 * 60_000)).toEqual(["This piece is sold in sets of 2."]);
+  // No rules: any whole quantity is fine.
+  expect(checkoutChanges(lines(1), [variant], now, 5 * 60_000)).toEqual([]);
+});

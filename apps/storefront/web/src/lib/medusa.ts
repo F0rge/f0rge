@@ -2,6 +2,7 @@ import "server-only";
 import { formatCustomerPrice, isZarCurrency } from "./order-money";
 import { offerLive } from "./made-to-order";
 import { selectedImages } from "./product-variants";
+import { sellCount, sellRules, type SellRules } from "./sell-rules";
 
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
@@ -45,6 +46,10 @@ export type MedusaVariant = {
     made_to_order_offer?: MadeToOrderOffer | null;
     storefront_made_to_order_offer?: MadeToOrderOffer | null;
     swatch_hex?: string | null;
+    /** Sold in multiples of this; absent means 1. */
+    sell_multiple?: number;
+    /** Least quantity per order; absent means 1. */
+    min_quantity?: number;
   } | null;
   material?: string | null;
   length?: number | null;
@@ -142,6 +147,8 @@ function publicProduct(product: StoreProduct): StoreProduct {
         care_instructions: variant.metadata?.care_instructions,
         made_to_order_offer: variant.metadata?.storefront_made_to_order_offer as MadeToOrderOffer | null | undefined,
         swatch_hex: swatchHex(variant.metadata?.swatch_hex),
+        sell_multiple: sellCount(variant.metadata?.sell_multiple),
+        min_quantity: sellCount(variant.metadata?.min_quantity),
       },
     })),
   };
@@ -198,7 +205,7 @@ export async function getStoreProduct(slug: string): Promise<StoreProduct | null
 
 // The most of each variant a shopper can put in the bag. Authoritative cart
 // mutations and checkout recheck availability independently.
-export async function variantQuantityCaps(productIds: string[]): Promise<Map<string, number>> {
+export async function variantQuantityCaps(productIds: string[]): Promise<Map<string, { cap: number } & SellRules>> {
   if (!productIds.length) return new Map();
   const query = new URLSearchParams({ fields: "id,*variants,+variants.inventory_quantity,+variants.metadata" });
   for (const id of new Set(productIds)) query.append("id", id);
@@ -206,7 +213,8 @@ export async function variantQuantityCaps(productIds: string[]): Promise<Map<str
   return new Map(products.flatMap((product) => product.variants.map((variant) => {
     const stock = variant.inventory_quantity ?? 0;
     const offer = variant.metadata?.storefront_made_to_order_offer;
-    return [variant.id, stock > 0 ? stock : offerLive(offer) ? offer.remaining_capacity : 0] as const;
+    const cap = stock > 0 ? stock : offerLive(offer) ? offer.remaining_capacity : 0;
+    return [variant.id, { cap, ...sellRules(variant.metadata) }] as const;
   })));
 }
 

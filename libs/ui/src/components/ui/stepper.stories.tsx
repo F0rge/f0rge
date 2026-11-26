@@ -43,3 +43,20 @@ export const Compact: Story = {
     )
   },
 }
+
+export const Stepped: Story = {
+  render: function SteppedStepperDemo() {
+    const [value, setValue] = useState(2)
+    return (
+      <Stepper
+        label="Chairs"
+        value={value}
+        onChange={setValue}
+        size="compact"
+        min={2}
+        max={7}
+        step={2}
+      />
+    )
+  },
+}

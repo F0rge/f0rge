@@ -779,3 +779,51 @@ test("an uncoloured variant is not rewritten just because Firstout now reports a
   expect(calls.filter((call) => call.workflow === "updateProductVariantsWorkflow")).toHaveLength(settled);
   expect(existing.variants![0].metadata).not.toHaveProperty("swatch_hex");
 });
+
+test("selling rules reach variant metadata only when changed, and an older feed or revision leaves them", async () => {
+  const existing = stagedTable();
+  const { calls, state, container } = fakeMedusa([existing], [{ ...table, sell_multiple: 2, min_quantity: 4 }]);
+  const variantUpdates = () => calls.filter((call) => call.workflow === "updateProductVariantsWorkflow").length;
+
+  await syncFirstout(container);
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("&include_sell_rules=true"), expect.anything());
+  const variant = existing.variants![0];
+  expect(variant.metadata).toMatchObject({ sell_multiple: 2, min_quantity: 4 });
+  const afterFirst = variantUpdates();
+
+  await syncFirstout(container);
+  expect(variantUpdates()).toBe(afterFirst);
+
+  state.feed = [table]; // An older Firstout omits the rules: the stored ones stay.
+  await syncFirstout(container);
+  expect(variant.metadata).toMatchObject({ sell_multiple: 2, min_quantity: 4 });
+  expect(variantUpdates()).toBe(afterFirst);
+
+  state.feed = [{ ...table, revision: "2026-01-01T00:00:00.000000Z", sell_multiple: 3, min_quantity: 3 }];
+  await syncFirstout(container);
+  expect(variant.metadata).toMatchObject({ sell_multiple: 2, min_quantity: 4 });
+
+  state.feed = [{ ...table, sell_multiple: null, min_quantity: null }];
+  await syncFirstout(container);
+  expect(variant.metadata).toMatchObject({ sell_multiple: null, min_quantity: null });
+});
+
+test("a new product and a new variant on an existing product carry the selling rules", async () => {
+  const { calls, container } = fakeMedusa([], [{ ...table, sell_multiple: 2, min_quantity: 2 }]);
+  await syncFirstout(container);
+  const created = calls.find((call) => call.workflow === "createProductsWorkflow")?.input as
+    { products: { variants: { metadata: Record<string, unknown> }[] }[] };
+  expect(created.products[0].variants[0].metadata).toMatchObject({ sell_multiple: 2, min_quantity: 2 });
+
+  const charcoal = { ...base, source_sku_id: "da9cdb14-9126-408d-a3bd-ab8352d2d810", sku: "ARC-CHAR", options: { Colour: "Charcoal" }, sell_multiple: 2, min_quantity: 4 };
+  const group: FakeProduct = {
+    id: "prod_arc", external_id: `firstout-group-${base.product_group_id}`, status: "draft", metadata: {}, options: [{ title: "Colour" }],
+    variants: [{ id: "variant_sand", sku: "ARC-SAND", allow_backorder: false, options: [{ value: "Sand", option: { title: "Colour" } }],
+      metadata: { source_sku_id: base.source_sku_id, source_revision: base.revision, source_observed_at: base.observed_at } }],
+  };
+  const second = fakeMedusa([group], [base, charcoal]);
+  await syncFirstout(second.container);
+  const added = second.calls.find((call) => call.workflow === "createProductVariantsWorkflow")?.input as
+    { product_variants: { sku: string; metadata: Record<string, unknown> }[] };
+  expect(added.product_variants).toEqual([expect.objectContaining({ sku: "ARC-CHAR", metadata: expect.objectContaining({ sell_multiple: 2, min_quantity: 4 }) })]);
+});

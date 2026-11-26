@@ -3,6 +3,7 @@
 import { Button } from './button'
 import { cn } from '../../lib/utils'
 import { Minus, Plus } from 'lucide-react'
+import { stepTargets } from './stepper-grid'
 
 interface StepperProps {
   value: number
@@ -12,6 +13,8 @@ interface StepperProps {
   label: string
   tooltip?: string
   size?: 'default' | 'compact'
+  /** Plus and minus move by this much, on the grid min, min + step… Default 1. */
+  step?: number
 }
 
 export function Stepper({
@@ -22,14 +25,16 @@ export function Stepper({
   label,
   tooltip,
   size = 'default',
+  step = 1,
 }: StepperProps) {
   const max = maxProp ?? (size === 'compact' ? 99 : 10)
+  const { down, up } = stepTargets(value, min, max, step)
 
   const decrement = () => {
-    if (value > min) onChange(value - 1)
+    if (down !== null) onChange(down)
   }
   const increment = () => {
-    if (value < max) onChange(value + 1)
+    if (up !== null) onChange(up)
   }
 
   if (size === 'compact') {
@@ -40,7 +45,7 @@ export function Stepper({
           variant="outline"
           size="icon"
           onClick={decrement}
-          disabled={value <= min}
+          disabled={down === null}
           aria-label={`Decrease ${label}`}
           className="size-8 rounded-md"
         >
@@ -57,7 +62,7 @@ export function Stepper({
           variant="outline"
           size="icon"
           onClick={increment}
-          disabled={value >= max}
+          disabled={up === null}
           aria-label={`Increase ${label}`}
           className="size-8 rounded-md"
         >
@@ -81,7 +86,7 @@ export function Stepper({
           variant="outline"
           size="icon"
           onClick={decrement}
-          disabled={value <= min}
+          disabled={down === null}
           aria-label={`Decrease ${label}`}
           className="size-11 rounded-lg"
         >
@@ -101,7 +106,7 @@ export function Stepper({
           variant="outline"
           size="icon"
           onClick={increment}
-          disabled={value >= max}
+          disabled={up === null}
           aria-label={`Increase ${label}`}
           className="size-11 rounded-lg"
         >
