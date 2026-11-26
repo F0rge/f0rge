@@ -20,10 +20,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.rounding {
-  display: block;
-}
-
 .rateState {
   grid-column: 1 / -1;
 }

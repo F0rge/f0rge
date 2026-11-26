@@ -28,7 +28,7 @@ from app.services.catalogue_csv import (
 )
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
-from app.services.vat import current_vat_rate, inc_to_ex
+from app.services.vat import current_vat_rate, retail_inc_to_ex
 from app.services.sku_archive import SkuArchiveService
 from f0rge_core.exceptions import ValidationError
 from f0rge_db.crud import unit_of_work
@@ -293,7 +293,7 @@ class CatalogueImportService:
         assert row.our_ref is not None
         assert row.name is not None
         assert row.retail_inc_vat is not None
-        retail_ex = inc_to_ex(row.retail_inc_vat, vat_rate)
+        retail_ex = retail_inc_to_ex(row.retail_inc_vat, vat_rate)
         existing = await self.sku_crud.get_by_our_ref(row.our_ref)
         if existing is not None:
             existing.name = row.name

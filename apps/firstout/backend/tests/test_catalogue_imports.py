@@ -88,6 +88,20 @@ async def test_commit_inventory_creates_sku(owner_client: AsyncClient) -> None:
     assert payload["fabric"] == "-"
 
 
+async def test_inventory_import_preserves_exact_retail_price(owner_client: AsyncClient) -> None:
+    our_ref = "CSV-EXACT-PRICE"
+    for entered, gross in (("999.004", "999.01"), ("999.00", "999.00")):
+        imported = await owner_client.post(
+            "/api/v1/imports/commit",
+            files=_inventory_file(_inventory_csv(our_ref, retail=entered)),
+        )
+        assert imported.status_code == 200, imported.text
+        response = await owner_client.get("/api/v1/skus", params={"q": our_ref})
+        assert response.status_code == 200, response.text
+        sku = next(row for row in response.json() if row["our_ref"] == our_ref)
+        assert sku["retail_inc_vat"] == gross
+
+
 async def test_missing_category_preview_error_commit_400(owner_client: AsyncClient) -> None:
     csv_bytes = b"SKU,Name,Retail Price\nCSV-NOCAT-REF,Table,115.00\n"
     preview = await owner_client.post(

@@ -68,13 +68,13 @@ describe("SKU price form", () => {
     });
   });
 
-  it("shows both tax bases and the retail cent difference before saving", () => {
+  it("shows the paired tax bases for trade and retail prices", () => {
     expect(skuPricePair(sku, SKU_PRICE_TIERS[0], "2099", "0.1500", false))
-      .toMatchObject({ paired: "2413.85", savedRetail: null });
+      .toMatchObject({ paired: "2413.85" });
     expect(skuPricePair(sku, SKU_PRICE_TIERS[0], "2100", "0.1600", false))
-      .toMatchObject({ paired: "2436.00", savedRetail: null });
+      .toMatchObject({ paired: "2436.00" });
     expect(skuPricePair(sku, RETAIL_SKU_PRICE_TIER, "999.00", "0.1500", false))
-      .toMatchObject({ paired: "868.70", savedRetail: "999.01" });
+      .toEqual({ paired: "868.70", belowCost: false });
   });
 
   it("uses the saved below-cost flag and checks edited amounts only with cost access", () => {

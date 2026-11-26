@@ -6,7 +6,7 @@ converts at the team's ``vat_rate`` setting, read with ``current_vat_rate``.
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,17 @@ def ex_to_inc(ex: Decimal, vat_rate: Decimal) -> Decimal:
 
 def inc_to_ex(inc: Decimal, vat_rate: Decimal) -> Decimal:
     return (inc / (1 + vat_rate)).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def retail_inc_to_ex(inc: Decimal, vat_rate: Decimal) -> Decimal:
+    """Preserve the catalogue's retail cents with extra ex-VAT precision if needed."""
+    net = inc_to_ex(inc, vat_rate)
+    # Keep the old conversion for legacy inputs with sub-cent retail amounts.
+    if inc != inc.quantize(CENT, rounding=ROUND_HALF_UP) or ex_to_inc(net, vat_rate) == inc:
+        return net
+    # Truncation keeps the net price on the same side of a half-cent boundary
+    # for invoicing. With VAT at most 100%, this loses under 0.0002 of gross.
+    return (inc / (1 + vat_rate)).quantize(Decimal("0.0001"), rounding=ROUND_DOWN)
 
 
 def vat_percent(vat_rate: Decimal) -> Decimal:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.price_list import PriceListCRUD
 from app.models.customer import Customer
 from app.models.sku import Sku
-from app.services.vat import ex_to_inc
+from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ValidationError
 
 PRICE_CLASSIFICATIONS = ("Stockist", "Wholesale", "Decorator", "Retail")
@@ -176,4 +176,6 @@ async def resolve_unit_ex_vat(
     sku: Sku,
     customer: Optional[Customer],
 ) -> Decimal:
-    return (await resolve_unit_price(db, sku, customer)).unit_ex_vat
+    # The portal displays the same unit cents that its sales orders use.
+    price = await resolve_unit_price(db, sku, customer)
+    return price.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)

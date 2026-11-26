@@ -107,6 +107,9 @@ export function SkuInvoicePreview({ skuId, skuRevision, vatRate, priceChanges, a
                   <div className={styles.total}><dt>Total incl. VAT</dt><dd>{formatZarAmount(amounts.total_inc_vat)}</dd></div>
                 </dl>
                 <p className={styles.hint}>Price source · {SOURCE_LABELS[amounts.source]}</p>
+                {(amounts.source === "retail" || amounts.source === "retail_fallback") && (
+                  <p className={styles.hint}>Invoice totals can differ from catalogue prices because invoices round the excl. VAT unit price to cents before adding VAT.</p>
+                )}
               </>
             )}
           </div>

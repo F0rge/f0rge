@@ -34,7 +34,7 @@ import {
   type CatalogueEditorTextField,
 } from "@/lib/catalogue-editor";
 import { referenceQueries } from "@/lib/queries";
-import { RETAIL_SKU_PRICE_TIER, skuPricePair, validateSkuPriceForm } from "@/lib/sku-price-form";
+import { validateSkuPriceForm } from "@/lib/sku-price-form";
 
 import styles from "./catalogue-sku-editor.module.css";
 
@@ -427,10 +427,7 @@ export function CatalogueSkuEditor({
                 <strong>
                   {form.retail_inc_vat.trim() &&
                   Number.isFinite(Number(form.retail_inc_vat))
-                    ? formatZarAmount(
-                        skuPricePair(sku, RETAIL_SKU_PRICE_TIER, form.retail_inc_vat, vatRate, false).savedRetail
-                          ?? form.retail_inc_vat.trim(),
-                      )
+                    ? formatZarAmount(form.retail_inc_vat.trim())
                     : "—"}
                 </strong>
               </div>
