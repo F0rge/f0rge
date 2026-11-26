@@ -13,6 +13,17 @@ from app.config import settings
 from tests.test_purchase_orders import _location_id_by_name
 
 
+import pytest
+
+from tests.catalogue_lists import ensure_categories
+
+
+@pytest.fixture(autouse=True)
+async def _managed_categories(async_db) -> None:
+    # SKU writes resolve category names to existing categories only.
+    await ensure_categories(async_db, "Sofas", "Dining")
+
+
 async def _login(client: AsyncClient, email: str, password: str) -> None:
     client.cookies.clear()
     client.headers.pop("Authorization", None)

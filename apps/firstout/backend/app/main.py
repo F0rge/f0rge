@@ -48,6 +48,7 @@ from app.routers import (
     books_events,
     books_periods,
     catalogue_imports,
+    catalogue_lists,
     category_maps,
     customer_portal,
     cost_audit,
@@ -96,6 +97,7 @@ from app.services.mcp_tokens import mcp_signing_key
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
 from app.services.roles import RoleSeedService
+from app.services.sale_line_pricing import SaleQuantityRuleError
 from app.services.till_seed import TillSeedService
 from app.services.storefront_system_actor import StorefrontSystemActorService
 from app.services.record_workspace_tokens import signing_key
@@ -209,6 +211,7 @@ async def _conflict_handler(_: Request, exc: Exception) -> JSONResponse:
             KitRequiresPickError,
             TillBasketConflictError,
             TillPriceConflictError,
+            SaleQuantityRuleError,
         ),
     ):
         return JSONResponse(
@@ -270,6 +273,8 @@ app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
 app.include_router(document_intake.document_intake_router)
 app.include_router(skus.skus_router)
+app.include_router(catalogue_lists.categories_router)
+app.include_router(catalogue_lists.materials_router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
 app.include_router(catalogue_imports.catalogue_imports_router)

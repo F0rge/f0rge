@@ -6,6 +6,16 @@ from tests.conftest import authenticate_as, create_test_staff
 
 from httpx import AsyncClient
 
+import pytest
+
+from tests.catalogue_lists import ensure_categories
+
+
+@pytest.fixture(autouse=True)
+async def _managed_categories(async_db) -> None:
+    # SKU writes resolve category names to existing categories only.
+    await ensure_categories(async_db, "Sofas", "Dining")
+
 
 def _sku_payload(suffix: str, **overrides: object) -> dict:
     body: dict = {

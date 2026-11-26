@@ -111,7 +111,7 @@ class LaybysService:
     async def preview(self, data: LaybyPreviewRequest, user_id: uuid.UUID) -> SalePricePreview:
         """The layby's prices and totals exactly as creating it would store them."""
         customer = await require_active_customer(self.db, data.customer_id)
-        return await self._price(customer, data.lines, user_id)
+        return await self._price(customer, data.lines, user_id, enforce=False)
 
     async def create(self, data: LaybyCreate, user_id: uuid.UUID) -> LaybyResponse:
         customer = await require_active_customer(self.db, data.customer_id)
@@ -352,7 +352,9 @@ class LaybysService:
             unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
         return StockCost(Decimal(line.qty), unit_cost)
 
-    async def _price(self, customer, lines: list, user_id: uuid.UUID) -> SalePricePreview:
+    async def _price(
+        self, customer, lines: list, user_id: uuid.UUID, *, enforce: bool = True
+    ) -> SalePricePreview:
         requests = []
         for line in lines:
             sku = await self.sku_crud.get_by_id(line.sku_id)
@@ -364,7 +366,7 @@ class LaybysService:
         pricing = await SaleLinePricing.for_customer(
             self.db, customer, await PricingAuthority.of(self.db, user_id)
         )
-        return await pricing.price(requests)
+        return await pricing.price(requests, enforce=enforce)
 
     async def _build_line_models(
         self,

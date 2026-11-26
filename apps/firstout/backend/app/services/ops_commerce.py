@@ -95,6 +95,7 @@ class OpsCommerceService:
         include_detail_photo: bool = False,
         include_second_detail_photo: bool = False,
         include_swatch: bool = False,
+        include_sell_rules: bool = False,
     ) -> OpsProductsResponse:
         company_id = await self._authorize(
             authorization=authorization,
@@ -184,6 +185,11 @@ class OpsCommerceService:
                     ),
                     # Opt-in: the strict commerce contract rejects keys an older sync does not know.
                     **({"swatch_hex": sku.swatch_hex} if include_swatch else {}),
+                    **(
+                        {"sell_multiple": sku.sell_multiple, "min_quantity": sku.min_sell_qty}
+                        if include_sell_rules
+                        else {}
+                    ),
                 )
                 for sku in snapshots
             ],

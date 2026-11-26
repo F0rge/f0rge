@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.proforma import ProformaResponse
 from app.schemas.purchase_order import PurchaseOrderResponse
-from app.schemas.sku import SkuResponse
+from app.schemas.sku import SkuColourName, SkuResponse
 
 
 class ModelUsage(BaseModel):
@@ -183,7 +183,9 @@ class SkuSuggestion(BaseModel):
     design: str
     fabric: str
     supplier_ref: Optional[str] = None
+    # An existing category matched from the document's hint, or null. Never created.
     category: Optional[str] = None
+    category_id: Optional[uuid.UUID] = None
     cost_price: Optional[str] = None
     vat_rate: Optional[str] = None
     source: str
@@ -194,9 +196,14 @@ class IntakeSkuCreate(BaseModel):
     our_barcode: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1)
     design: str = Field(min_length=1)
-    fabric: str = Field(min_length=1)
+    # Deprecated: see SkuCreate.fabric and SkuCreate.category.
+    fabric: Optional[str] = Field(default=None, min_length=1, max_length=255)
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
     category: Optional[str] = Field(default=None, max_length=64)
+    category_id: Optional[uuid.UUID] = None
+    subcategory_id: Optional[uuid.UUID] = None
+    colour_name: SkuColourName = None
+    main_material_id: Optional[uuid.UUID] = None
     carton_count: int = Field(default=1, ge=1)
     supplier_id: uuid.UUID
     supplier_sku: Optional[str] = Field(default=None, max_length=128)

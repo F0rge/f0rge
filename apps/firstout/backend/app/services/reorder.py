@@ -95,9 +95,13 @@ class ReorderService:
                 our_ref=row.our_ref,
                 name=row.name,
                 reorder_min=row.reorder_min,
+                order_up_to=row.order_up_to,
                 on_hand=row.on_hand,
                 on_order=row.on_order,
+                need_qty=row.need_qty,
                 suggested_qty=row.suggested_qty,
+                min_order_qty=row.min_order_qty,
+                pack_multiple=row.pack_multiple,
                 preferred_supplier_id=row.preferred_supplier_id,
                 preferred_supplier_name=(
                     supplier_names.get(row.preferred_supplier_id)

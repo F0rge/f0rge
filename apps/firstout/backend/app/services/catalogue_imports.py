@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
+from app.models.catalogue_list import SkuCategory
 from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.catalogue_import import (
@@ -25,6 +26,12 @@ from app.services.catalogue_csv import (
     SohCsvParse,
     parse_inventory_csv,
     parse_soh_csv,
+)
+from app.services.sku_classification import (
+    FABRIC_PLACEHOLDER,
+    category_by_name,
+    unknown_category_message,
+    unknown_subcategory_message,
 )
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
@@ -42,6 +49,8 @@ class CatalogueImportService:
         self.location_stock_crud = LocationStockCRUD(db)
         self.stock_movements = StockMovementService(db)
         self.stocktakes = StocktakeService(db)
+        # Row number -> (category, sub-category) resolved by validation; nothing is created.
+        self._categories: dict[int, tuple[SkuCategory, Optional[SkuCategory]]] = {}
 
     async def preview(
         self,
@@ -146,7 +155,12 @@ class CatalogueImportService:
     ) -> None:
         seen_refs: dict[str, int] = {}
         seen_barcodes: dict[str, str] = {}
+        self._categories = {}
         for row in parsed.rows:
+            if row.category is not None and not row.errors:
+                resolved = await self._resolve_categories(row, errors)
+                if resolved is not None:
+                    self._categories[row.row] = resolved
             if row.our_ref is None:
                 continue
             if row.our_ref in seen_refs:
@@ -193,6 +207,32 @@ class CatalogueImportService:
                         message=f"Barcode collides with another SKU: {barcode}",
                     )
                 )
+
+    async def _resolve_categories(
+        self, row: InventoryCsvRow, errors: list[CatalogueImportRowError]
+    ) -> Optional[tuple[SkuCategory, Optional[SkuCategory]]]:
+        assert row.category is not None
+        category = await category_by_name(self.db, row.category)
+        if category is None:
+            errors.append(
+                CatalogueImportRowError(
+                    file="inventory", row=row.row, message=unknown_category_message(row.category)
+                )
+            )
+            return None
+        sub = None
+        if row.sub_category is not None:
+            sub = await category_by_name(self.db, row.sub_category, parent_id=category.id)
+            if sub is None:
+                errors.append(
+                    CatalogueImportRowError(
+                        file="inventory",
+                        row=row.row,
+                        message=unknown_subcategory_message(row.sub_category),
+                    )
+                )
+                return None
+        return category, sub
 
     async def _validate_soh_rows(
         self,
@@ -281,7 +321,9 @@ class CatalogueImportService:
                 continue
             seen.add(row.our_ref)
             existing = await self.sku_crud.get_by_our_ref(row.our_ref)
-            sku = await self._upsert_inventory_row(row, vat_rate)
+            sku = await self._upsert_inventory_row(
+                row, vat_rate, sub_category_column="sub_category" in parsed.applied_map
+            )
             sku_ids[row.our_ref] = sku.id
             if existing is None:
                 created_skus += 1
@@ -289,16 +331,26 @@ class CatalogueImportService:
                 updated_skus += 1
         return sku_ids, inventory_costs, created_skus, updated_skus
 
-    async def _upsert_inventory_row(self, row: InventoryCsvRow, vat_rate: Decimal) -> Sku:
+    async def _upsert_inventory_row(
+        self, row: InventoryCsvRow, vat_rate: Decimal, *, sub_category_column: bool
+    ) -> Sku:
         assert row.our_ref is not None
         assert row.name is not None
         assert row.retail_inc_vat is not None
         retail_ex = retail_inc_to_ex(row.retail_inc_vat, vat_rate)
+        category, sub = self._categories[row.row]
         existing = await self.sku_crud.get_by_our_ref(row.our_ref)
         if existing is not None:
             existing.name = row.name
             existing.retail_ex_vat = retail_ex
-            existing.category = row.category
+            if not sub_category_column and existing.category_id == category.id:
+                sub_id = existing.subcategory_id  # no column: a sub-category that fits stays
+            else:
+                sub_id = sub.id if sub is not None else None
+            # Category and sub-category change in the same flush; the name is the read model.
+            existing.category_id = category.id
+            existing.subcategory_id = sub_id
+            existing.category = category.name
             if row.barcode:
                 existing.our_barcode = row.barcode
             if row.carton_count is not None:
@@ -309,8 +361,10 @@ class CatalogueImportService:
             our_barcode=row.barcode or f"csv:{row.our_ref}",
             name=row.name,
             design=f"csv:{row.our_ref}",
-            fabric="-",
-            category=row.category,
+            fabric=FABRIC_PLACEHOLDER,
+            category=category.name,
+            category_id=category.id,
+            subcategory_id=sub.id if sub is not None else None,
             retail_ex_vat=retail_ex,
             carton_count=row.carton_count if row.carton_count is not None else 1,
         )

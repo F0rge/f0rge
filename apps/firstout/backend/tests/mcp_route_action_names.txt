@@ -42,6 +42,7 @@ create_adjustment
 create_bank_rule
 create_bill
 create_books_period
+create_category
 create_credit_note
 create_customer
 create_delivery
@@ -52,6 +53,7 @@ create_journal
 create_layby
 create_location
 create_location_bin
+create_material
 create_payment
 create_period
 create_pick
@@ -104,6 +106,7 @@ get_sales_order
 get_settings
 get_sku
 get_sku_bom
+get_sku_overview
 get_stocktake
 get_supplier
 get_till_basket
@@ -119,6 +122,7 @@ list_bank_rules
 list_bills
 list_books_events
 list_books_periods
+list_categories
 list_category_maps
 list_cost_audit
 list_credit_notes
@@ -134,6 +138,7 @@ list_journals
 list_laybys
 list_location_bins
 list_locations
+list_materials
 list_open_payment_documents
 list_payments
 list_periods
@@ -150,6 +155,7 @@ list_sales_history
 list_sales_orders
 list_sales_staff
 list_sales_staff_options
+list_sku_supplier_prices
 list_sku_unit_costs
 list_skus
 list_stock_by_bin
@@ -190,6 +196,7 @@ reopen_books_period
 reopen_period
 replace_quote
 replace_sku_bom
+replace_sku_supplier_prices
 replace_till_basket
 reprice_customer_drafts
 restore_bill
@@ -213,11 +220,13 @@ update_account
 update_adjustment_line
 update_bank_rule
 update_bill
+update_category
 update_customer
 update_document_template
 update_invoice
 update_location
 update_location_bin
+update_material
 update_pending_purchase_order
 update_pick
 update_price_list

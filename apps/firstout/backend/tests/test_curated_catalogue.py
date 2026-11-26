@@ -19,6 +19,7 @@ from app.models.sku import Sku
 from app.models.team import Team
 from app.services.curated_catalogue import CuratedCatalogueService
 from app.services.curated_catalogue_archive import ReviewedCatalogue, read_catalogue_archive
+from tests.catalogue_lists import ensure_categories
 from tests.conftest import authenticate_as, create_test_staff
 
 
@@ -147,6 +148,7 @@ async def test_supplemental_photos_keep_studio_and_selection_and_use_distinct_op
     }
 
     async def create(code: str, *, primary: bytes | None = None) -> str:
+        await ensure_categories(owner_client, "Armchairs")
         response = await owner_client.post(
             "/api/v1/skus",
             json={
@@ -445,6 +447,7 @@ async def test_apply_is_scoped_repeatable_and_adds_gallery_to_only_the_opt_in_fe
     }
 
     async def create(code: str, *, legacy_photo: bool = False) -> str:
+        await ensure_categories(owner_client, "Armchairs")
         created = await owner_client.post(
             "/api/v1/skus",
             json={

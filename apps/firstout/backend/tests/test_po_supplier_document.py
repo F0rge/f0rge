@@ -446,8 +446,8 @@ async def test_purchase_order_pdf_shows_factory_details_and_hides_our_cost(
     assert "EUR 160.00" in text
     assert "EUR 40.00" in text
     assert "EUR 200.00" in text
-    assert text.count("Fabric / finish") == 1
-    assert "Fabric / finish: -" not in text
+    assert text.count("Finish:") == 1
+    assert "Finish: -" not in text
     lowered = text.lower()
     assert "unit cost" not in lowered
     assert "margin" not in lowered

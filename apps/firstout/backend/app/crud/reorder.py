@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from dataclasses import dataclass
 from typing import Optional
 
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.inventory import LocationStock, SkuStock
 from app.models.purchase_order import PoLine, PurchaseOrder, PurchaseOrderStatus
 from app.models.sku import Sku
+from app.models.sku_supplier_price import SkuSupplierPrice
 from f0rge_db.crud import BaseCRUD
 from f0rge_db.organisation import current_tenant_id
 
@@ -21,10 +22,32 @@ class ReorderRow:
     our_ref: str
     name: str
     reorder_min: int
+    order_up_to: Optional[int]
     on_hand: Decimal
     on_order: Decimal
+    # What brings stock back to order_up_to (or reorder_min).
+    need_qty: Decimal
+    # need_qty rounded for the preferred supplier's pack multiple and minimum order.
     suggested_qty: Decimal
     preferred_supplier_id: Optional[uuid.UUID]
+    min_order_qty: Optional[int]
+    pack_multiple: Optional[int]
+
+
+def suggest_qty(
+    need: Decimal, min_order_qty: Optional[int], pack_multiple: Optional[int]
+) -> Decimal:
+    """``need`` rounded up to the pack multiple, then raised to the minimum order (itself
+    rounded up to the pack multiple). Without either, the need itself."""
+    pack = Decimal(pack_multiple or 1)
+
+    def up(qty: Decimal) -> Decimal:
+        return (qty / pack).to_integral_value(rounding=ROUND_CEILING) * pack
+
+    qty = up(need) if pack_multiple else need
+    if min_order_qty:
+        qty = max(qty, up(Decimal(min_order_qty)))
+    return qty
 
 
 class ReorderCRUD(BaseCRUD):
@@ -78,16 +101,27 @@ class ReorderCRUD(BaseCRUD):
                 Sku.our_ref,
                 Sku.name,
                 Sku.reorder_min,
+                Sku.order_up_to,
                 Sku.preferred_supplier_id,
+                SkuSupplierPrice.min_order_qty,
+                SkuSupplierPrice.pack_multiple,
                 on_hand_col.label("on_hand"),
                 on_order_col.label("on_order"),
-                (Sku.reorder_min - on_hand_col - on_order_col).label("suggested_qty"),
+                (
+                    func.coalesce(Sku.order_up_to, Sku.reorder_min) - on_hand_col - on_order_col
+                ).label("need_qty"),
             )
             .outerjoin(on_hand_subq, on_hand_subq.c.sku_id == Sku.id)
             .outerjoin(SkuStock, (SkuStock.sku_id == Sku.id) & (SkuStock.team_id == team_id))
             .outerjoin(open_po_subq, open_po_subq.c.sku_id == Sku.id)
+            .outerjoin(
+                SkuSupplierPrice,
+                (SkuSupplierPrice.sku_id == Sku.id)
+                & (SkuSupplierPrice.supplier_id == Sku.preferred_supplier_id)
+                & (SkuSupplierPrice.team_id == team_id),
+            )
             .where(Sku.team_id == team_id, Sku.reorder_min.isnot(None))
-            .where(Sku.is_archived.is_(False))
+            .where(Sku.is_archived.is_(False), Sku.do_not_reorder.is_(False))
             .where(total_col < Sku.reorder_min)
             .order_by(Sku.our_ref)
         )
@@ -106,10 +140,16 @@ class ReorderCRUD(BaseCRUD):
                     our_ref=row.our_ref,
                     name=row.name,
                     reorder_min=row.reorder_min,
+                    order_up_to=row.order_up_to,
                     on_hand=Decimal(row.on_hand),
                     on_order=Decimal(row.on_order),
-                    suggested_qty=Decimal(row.suggested_qty),
+                    need_qty=Decimal(row.need_qty),
+                    suggested_qty=suggest_qty(
+                        Decimal(row.need_qty), row.min_order_qty, row.pack_multiple
+                    ),
                     preferred_supplier_id=row.preferred_supplier_id,
+                    min_order_qty=row.min_order_qty,
+                    pack_multiple=row.pack_multiple,
                 )
             )
         return rows

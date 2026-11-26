@@ -51,6 +51,7 @@ from app.services.playground_bi_catalog import (
     sku_barcode,
 )
 from app.services.purchase_orders import PurchaseOrderService
+from app.services.sku_classification import seed_categories
 from app.services.skus import SkuService
 from app.services.suppliers import SupplierService
 from app.services.till_orchestrator import TillOrchestrator
@@ -221,6 +222,7 @@ class PlaygroundBiPack:
         suppliers: dict[str, uuid.UUID],
     ) -> dict[str, uuid.UUID]:
         sku_service = SkuService(self.db)
+        await seed_categories(self.db, sorted({spec["category"] for spec in BI_SKUS}))
         out: dict[str, uuid.UUID] = {}
         for index, spec in enumerate(BI_SKUS, start=1):
             retail = Decimal(spec["retail_ex"])

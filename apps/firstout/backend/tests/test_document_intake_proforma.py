@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tests.catalogue_lists import ensure_categories
 from tests.conftest import authenticate_as, create_test_staff
 
 import json
@@ -284,6 +285,8 @@ async def test_guided_sku_hint_and_confirm_creates_open_po(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The hint is matched to an existing category; intake never creates one.
+    await ensure_categories(async_db, "Soft Furnishings")
     monkeypatch.setattr(
         "app.services.document_intake.extract.extract_supplier_document",
         _fake_extract,

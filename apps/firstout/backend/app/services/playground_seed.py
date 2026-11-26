@@ -50,6 +50,7 @@ from app.services.object_storage import overwrite_bytes, read_bytes
 from app.services.placeholder_pdf import PLACEHOLDER_PDF, is_openable_pdf
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
+from app.services.sku_classification import seed_categories
 from app.services.skus import SkuService
 from app.services.suppliers import SupplierService
 from app.services.till_orchestrator import TillOrchestrator
@@ -59,6 +60,8 @@ from f0rge_core.exceptions import NotFoundError
 MINIMAL_PDF = PLACEHOLDER_PDF
 
 PLAYGROUND_SUPPLIER_NAME = "Playground Imports"
+# Every category the playground packs use; seeded before their SKUs are written.
+PLAYGROUND_CATEGORIES = ("Seating", "Tables", "Storage", "Decor", "Outdoor")
 MARKER_SKU_REF = "PG-TABLE"
 CHAIR_SKU_REF = "PG-CHAIR"
 PACK_MARKER_REF = "PG-SOFA"
@@ -374,6 +377,7 @@ class PlaygroundSeedService:
         crm = CustomersCrmService(self.db)
         laybys = LaybysService(self.db)
         invoice_service = InvoiceService(self.db)
+        await seed_categories(self.db, PLAYGROUND_CATEGORIES)
 
         table = await self.sku_crud.get_by_our_ref(MARKER_SKU_REF)
         if table is not None:
@@ -645,6 +649,7 @@ class PlaygroundSeedService:
         laybys = LaybysService(self.db)
         invoice_service = InvoiceService(self.db)
         bill_service = BillService(self.db)
+        await seed_categories(self.db, PLAYGROUND_CATEGORIES)
 
         catalogue_rows = [
             {

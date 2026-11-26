@@ -873,6 +873,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skus/{sku_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sku Overview */
+        get: operations["get_sku_overview_api_v1_skus__sku_id__overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skus/{sku_id}/supplier-prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sku Supplier Prices */
+        get: operations["list_sku_supplier_prices_api_v1_skus__sku_id__supplier_prices_get"];
+        /** Replace Sku Supplier Prices */
+        put: operations["replace_sku_supplier_prices_api_v1_skus__sku_id__supplier_prices_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Categories */
+        get: operations["list_categories_api_v1_categories_get"];
+        put?: never;
+        /** Create Category */
+        post: operations["create_category_api_v1_categories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Category */
+        patch: operations["update_category_api_v1_categories__category_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/materials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Materials */
+        get: operations["list_materials_api_v1_materials_get"];
+        put?: never;
+        /** Create Material */
+        post: operations["create_material_api_v1_materials_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/materials/{material_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Material */
+        patch: operations["update_material_api_v1_materials__material_id__patch"];
+        trace?: never;
+    };
     "/api/v1/ops-commerce/v1/products": {
         parameters: {
             query?: never;
@@ -6027,6 +6132,60 @@ export interface components {
             /** Count Var Code */
             count_var_code: string;
         };
+        /** CategoryCreate */
+        CategoryCreate: {
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Shop Category */
+            shop_category?: string | null;
+        };
+        /** CategoryResponse */
+        CategoryResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Is Archived */
+            is_archived: boolean;
+            /** Shop Category */
+            shop_category: string | null;
+            sales_account: components["schemas"]["SalesAccount"] | null;
+            /** Sku Count */
+            sku_count: number;
+            /**
+             * Subcategories
+             * @default []
+             */
+            subcategories: components["schemas"]["CategoryResponse"][];
+        };
+        /** CategoryTree */
+        CategoryTree: {
+            /** Categories */
+            categories: components["schemas"]["CategoryResponse"][];
+            /** Shop Sections */
+            shop_sections: components["schemas"]["ShopSection"][];
+        };
+        /**
+         * CategoryUpdate
+         * @description Fields left out are unchanged; ``shop_category: null`` clears the shop section.
+         */
+        CategoryUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Is Archived */
+            is_archived?: boolean | null;
+            /** Shop Category */
+            shop_category?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+        };
         /** ChargeOut */
         ChargeOut: {
             /** Description */
@@ -7219,11 +7378,19 @@ export interface components {
             /** Design */
             design: string;
             /** Fabric */
-            fabric: string;
+            fabric?: string | null;
             /** Supplier Ref */
             supplier_ref?: string | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
+            /** Subcategory Id */
+            subcategory_id?: string | null;
+            /** Colour Name */
+            colour_name?: string | null;
+            /** Main Material Id */
+            main_material_id?: string | null;
             /**
              * Carton Count
              * @default 1
@@ -8181,6 +8348,44 @@ export interface components {
             sales_staff_id?: string | null;
             payment?: components["schemas"]["InvoicePaymentCreate"] | null;
         };
+        /** MaterialCreate */
+        MaterialCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Family
+             * @enum {string}
+             */
+            family: "fabric" | "leather" | "wood" | "stone" | "metal" | "glass" | "woven" | "other";
+        };
+        /** MaterialResponse */
+        MaterialResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Family
+             * @enum {string}
+             */
+            family: "fabric" | "leather" | "wood" | "stone" | "metal" | "glass" | "woven" | "other";
+            /** Is Archived */
+            is_archived: boolean;
+            /** Sku Count */
+            sku_count: number;
+        };
+        /** MaterialUpdate */
+        MaterialUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Family */
+            family?: ("fabric" | "leather" | "wood" | "stone" | "metal" | "glass" | "woven" | "other") | null;
+            /** Is Archived */
+            is_archived?: boolean | null;
+        };
         /** McpAccessResponse */
         McpAccessResponse: {
             /** Endpoint */
@@ -8393,6 +8598,10 @@ export interface components {
             second_detail_photo_token: string | null;
             /** Swatch Hex */
             swatch_hex: string | null;
+            /** Sell Multiple */
+            sell_multiple: number | null;
+            /** Min Quantity */
+            min_quantity: number | null;
         };
         /** OpsProductsResponse */
         OpsProductsResponse: {
@@ -8955,9 +9164,19 @@ export interface components {
             /** Design */
             design: string;
             /** Fabric */
-            fabric: string;
+            fabric?: string | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
+            /** Subcategory Id */
+            subcategory_id?: string | null;
+            /** Colour Name */
+            colour_name?: string | null;
+            /** Main Material Id */
+            main_material_id?: string | null;
+            /** Other Material Ids */
+            other_material_ids?: string[];
         };
         /** PoLineWrite */
         PoLineWrite: {
@@ -9780,12 +9999,20 @@ export interface components {
             name: string;
             /** Reorder Min */
             reorder_min: number;
+            /** Order Up To */
+            order_up_to: number | null;
             /** On Hand */
             on_hand: number;
             /** On Order */
             on_order: number;
+            /** Need Qty */
+            need_qty: number;
             /** Suggested Qty */
             suggested_qty: number;
+            /** Min Order Qty */
+            min_order_qty: number | null;
+            /** Pack Multiple */
+            pack_multiple: number | null;
             /** Preferred Supplier Id */
             preferred_supplier_id: string | null;
             /** Preferred Supplier Name */
@@ -9986,6 +10213,8 @@ export interface components {
             suspect_price_warning: string | null;
             /** Blocked By */
             blocked_by: string | null;
+            /** Quantity Rule */
+            quantity_rule: string | null;
         };
         /** SalePricePreview */
         SalePricePreview: {
@@ -10011,6 +10240,13 @@ export interface components {
             lines: components["schemas"]["SaleLinePrice"][];
             /** Price Revision */
             price_revision: string;
+        };
+        /** SalesAccount */
+        SalesAccount: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
         };
         /** SalesBySkuLine */
         SalesBySkuLine: {
@@ -10559,6 +10795,13 @@ export interface components {
             /** Document Sequences */
             document_sequences?: components["schemas"]["DocumentSequenceUpdateItem"][] | null;
         };
+        /** ShopSection */
+        ShopSection: {
+            /** Slug */
+            slug: string;
+            /** Label */
+            label: string;
+        };
         /** SignupIntent */
         SignupIntent: {
             /** Name */
@@ -10582,6 +10825,33 @@ export interface components {
              * @default Main location
              */
             location_name?: string;
+        };
+        /** SkuActivityEntry */
+        SkuActivityEntry: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Source */
+            source: string;
+            /** Source Label */
+            source_label: string;
+            /** Location Id */
+            location_id: string | null;
+            /** Location Name */
+            location_name: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Note */
+            note: string | null;
+            /** Old Cost Zar */
+            old_cost_zar: string | null;
+            /** New Cost Zar */
+            new_cost_zar: string | null;
         };
         /** SkuBomLineResponse */
         SkuBomLineResponse: {
@@ -10666,11 +10936,37 @@ export interface components {
             /** Design */
             design: string;
             /** Fabric */
-            fabric: string;
+            fabric?: string | null;
             /** Supplier Ref */
             supplier_ref?: string | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
+            /** Subcategory Id */
+            subcategory_id?: string | null;
+            /** Colour Name */
+            colour_name?: string | null;
+            /** Main Material Id */
+            main_material_id?: string | null;
+            /** Other Material Ids */
+            other_material_ids?: string[];
+            /**
+             * Sell Multiple
+             * @default 1
+             */
+            sell_multiple?: number;
+            /** Min Sell Qty */
+            min_sell_qty?: number | null;
+            /** Reorder Min */
+            reorder_min?: number | null;
+            /** Order Up To */
+            order_up_to?: number | null;
+            /**
+             * Do Not Reorder
+             * @default false
+             */
+            do_not_reorder?: boolean;
             /** Opening Location Id */
             opening_location_id?: string | null;
             /** Opening Qty */
@@ -10753,6 +11049,39 @@ export interface components {
             /** Categories */
             categories: components["schemas"]["SkuCriticalityCategoryLine"][];
         };
+        /** SkuHeldDocument */
+        SkuHeldDocument: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "sales_order" | "layby";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: string;
+            /** Qty */
+            qty: number;
+        };
+        /** SkuKitUse */
+        SkuKitUse: {
+            /**
+             * Parent Sku Id
+             * Format: uuid
+             */
+            parent_sku_id: string;
+            /** Our Ref */
+            our_ref: string;
+            /** Name */
+            name: string;
+            /** Qty */
+            qty: number;
+            /** Parent Is Archived */
+            parent_is_archived: boolean;
+        };
         /** SkuLeadTimeLine */
         SkuLeadTimeLine: {
             /**
@@ -10806,6 +11135,75 @@ export interface components {
             confidence: number;
             /** Reason */
             reason: string;
+        };
+        /** SkuMaterialSummary */
+        SkuMaterialSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Family */
+            family: string;
+            /**
+             * Is Archived
+             * @default false
+             */
+            is_archived: boolean;
+        };
+        /** SkuNextArrival */
+        SkuNextArrival: {
+            /**
+             * Purchase Order Id
+             * Format: uuid
+             */
+            purchase_order_id: string;
+            /** Po Number */
+            po_number: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "on_water" | "landed";
+            /** Qty */
+            qty: number;
+            /** Expected On */
+            expected_on: string | null;
+            /** Expected On Basis */
+            expected_on_basis: "planned_lead_time" | null;
+        };
+        /** SkuOverviewResponse */
+        SkuOverviewResponse: {
+            sku: components["schemas"]["SkuResponse"];
+            stock: components["schemas"]["SkuOverviewStock"];
+            /** Supplier Prices */
+            supplier_prices: components["schemas"]["SkuSupplierPriceResponse"][];
+            /** Is Kit */
+            is_kit: boolean;
+            /** Used In Kits */
+            used_in_kits: components["schemas"]["SkuKitUse"][];
+            /** Activity */
+            activity: components["schemas"]["SkuActivityEntry"][];
+        };
+        /** SkuOverviewStock */
+        SkuOverviewStock: {
+            /** On Hand */
+            on_hand: number;
+            /** Held */
+            held: number;
+            /** Held Documents */
+            held_documents: components["schemas"]["SkuHeldDocument"][];
+            /** Available */
+            available: number;
+            /** On Order */
+            on_order: number;
+            next_arrival: components["schemas"]["SkuNextArrival"] | null;
+            /** Unit Cost Zar */
+            unit_cost_zar: string | null;
+            /** Locations */
+            locations: components["schemas"]["LocationStockResponse"][];
         };
         /** SkuPricePreviewChanges */
         SkuPricePreviewChanges: {
@@ -10926,6 +11324,38 @@ export interface components {
             last_landed_cost_zar: string | null;
             /** Category */
             category: string | null;
+            /** Category Id */
+            category_id: string | null;
+            /** Subcategory Id */
+            subcategory_id: string | null;
+            /** Subcategory */
+            subcategory: string | null;
+            /** Colour Name */
+            colour_name: string | null;
+            /** Main Material Id */
+            main_material_id: string | null;
+            main_material: components["schemas"]["SkuMaterialSummary"] | null;
+            /** Other Material Ids */
+            other_material_ids: string[];
+            /** Other Materials */
+            other_materials: components["schemas"]["SkuMaterialSummary"][];
+            /**
+             * Sell Multiple
+             * @default 1
+             */
+            sell_multiple: number;
+            /**
+             * Min Sell Qty
+             * @default 1
+             */
+            min_sell_qty: number;
+            /** Order Up To */
+            order_up_to: number | null;
+            /**
+             * Do Not Reorder
+             * @default false
+             */
+            do_not_reorder: boolean;
             /** Swatch Hex */
             swatch_hex: string | null;
             /** Photo Storage Key */
@@ -11004,6 +11434,35 @@ export interface components {
             our_barcode: string;
             /** Name */
             name: string;
+            /** Category */
+            category: string | null;
+            /**
+             * Has Photo
+             * @default false
+             */
+            has_photo: boolean;
+            /** Retail Inc Vat */
+            retail_inc_vat: string | null;
+            /**
+             * Available
+             * @default 0
+             */
+            available: number;
+            /**
+             * Is Kit
+             * @default false
+             */
+            is_kit: boolean;
+            /**
+             * Sell Multiple
+             * @default 1
+             */
+            sell_multiple: number;
+            /**
+             * Min Sell Qty
+             * @default 1
+             */
+            min_sell_qty: number;
         };
         /** SkuSuggestIn */
         SkuSuggestIn: {
@@ -11038,12 +11497,71 @@ export interface components {
             supplier_ref: string | null;
             /** Category */
             category: string | null;
+            /** Category Id */
+            category_id: string | null;
             /** Cost Price */
             cost_price: string | null;
             /** Vat Rate */
             vat_rate: string | null;
             /** Source */
             source: string;
+        };
+        /** SkuSupplierPriceResponse */
+        SkuSupplierPriceResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Supplier Id
+             * Format: uuid
+             */
+            supplier_id: string;
+            /** Supplier Name */
+            supplier_name: string;
+            /** Supplier Is Archived */
+            supplier_is_archived: boolean;
+            /** Is Preferred */
+            is_preferred: boolean;
+            /** Supplier Sku */
+            supplier_sku: string | null;
+            /** Latest Price */
+            latest_price: string | null;
+            /** Fixed Price */
+            fixed_price: string | null;
+            /** Min Order Qty */
+            min_order_qty: number | null;
+            /** Pack Multiple */
+            pack_multiple: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SkuSupplierPriceWrite */
+        SkuSupplierPriceWrite: {
+            /**
+             * Supplier Id
+             * Format: uuid
+             */
+            supplier_id: string;
+            /** Supplier Sku */
+            supplier_sku?: string | null;
+            /** Latest Price */
+            latest_price?: number | string | null;
+            /** Fixed Price */
+            fixed_price?: number | string | null;
+            /** Min Order Qty */
+            min_order_qty?: number | null;
+            /** Pack Multiple */
+            pack_multiple?: number | null;
+        };
+        /** SkuSupplierPricesReplace */
+        SkuSupplierPricesReplace: {
+            /** Rows */
+            rows: components["schemas"]["SkuSupplierPriceWrite"][];
         };
         /** SkuUnitCostItem */
         SkuUnitCostItem: {
@@ -11096,6 +11614,24 @@ export interface components {
             fabric?: string | null;
             /** Category */
             category?: string | null;
+            /** Category Id */
+            category_id?: string | null;
+            /** Subcategory Id */
+            subcategory_id?: string | null;
+            /** Colour Name */
+            colour_name?: string | null;
+            /** Main Material Id */
+            main_material_id?: string | null;
+            /** Other Material Ids */
+            other_material_ids?: string[] | null;
+            /** Sell Multiple */
+            sell_multiple?: number | null;
+            /** Min Sell Qty */
+            min_sell_qty?: number | null;
+            /** Order Up To */
+            order_up_to?: number | null;
+            /** Do Not Reorder */
+            do_not_reorder?: boolean | null;
             /** Preferred Supplier Id */
             preferred_supplier_id?: string | null;
             /** Lead Time Days */
@@ -13185,6 +13721,38 @@ export interface components {
             last_landed_cost_zar: string | null;
             /** Category */
             category: string | null;
+            /** Category Id */
+            category_id: string | null;
+            /** Subcategory Id */
+            subcategory_id: string | null;
+            /** Subcategory */
+            subcategory: string | null;
+            /** Colour Name */
+            colour_name: string | null;
+            /** Main Material Id */
+            main_material_id: string | null;
+            main_material: components["schemas"]["SkuMaterialSummary"] | null;
+            /** Other Material Ids */
+            other_material_ids: string[];
+            /** Other Materials */
+            other_materials: components["schemas"]["SkuMaterialSummary"][];
+            /**
+             * Sell Multiple
+             * @default 1
+             */
+            sell_multiple: number;
+            /**
+             * Min Sell Qty
+             * @default 1
+             */
+            min_sell_qty: number;
+            /** Order Up To */
+            order_up_to: number | null;
+            /**
+             * Do Not Reorder
+             * @default false
+             */
+            do_not_reorder: boolean;
             /** Swatch Hex */
             swatch_hex: string | null;
             /** Photo Storage Key */
@@ -13253,6 +13821,8 @@ export interface components {
             on_hand: string;
             /** On Order */
             on_order: string;
+            /** Available */
+            available: string;
             /** Stock Locations */
             stock_locations: components["schemas"]["WorkspaceStockLocation"][];
         };
@@ -15514,6 +16084,301 @@ export interface operations {
             };
         };
     };
+    get_sku_overview_api_v1_skus__sku_id__overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sku_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkuOverviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sku_supplier_prices_api_v1_skus__sku_id__supplier_prices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sku_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkuSupplierPriceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_sku_supplier_prices_api_v1_skus__sku_id__supplier_prices_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sku_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkuSupplierPricesReplace"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkuSupplierPriceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_categories_api_v1_categories_get: {
+        parameters: {
+            query?: {
+                lifecycle?: "active" | "archived" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryTree"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_category_api_v1_categories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_category_api_v1_categories__category_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_materials_api_v1_materials_get: {
+        parameters: {
+            query?: {
+                lifecycle?: "active" | "archived" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_material_api_v1_materials_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_material_api_v1_materials__material_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                material_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_products_api_v1_ops_commerce_v1_products_get: {
         parameters: {
             query?: {
@@ -15522,6 +16387,7 @@ export interface operations {
                 include_detail_photo?: boolean;
                 include_second_detail_photo?: boolean;
                 include_swatch?: boolean;
+                include_sell_rules?: boolean;
             };
             header?: {
                 authorization?: string | null;

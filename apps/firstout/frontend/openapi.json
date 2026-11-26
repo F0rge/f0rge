@@ -3243,6 +3243,435 @@
         }
       }
     },
+    "/api/v1/skus/{sku_id}/overview": {
+      "get": {
+        "tags": [
+          "skus"
+        ],
+        "summary": "Get Sku Overview",
+        "operationId": "get_sku_overview_api_v1_skus__sku_id__overview_get",
+        "parameters": [
+          {
+            "name": "sku_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sku Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkuOverviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/skus/{sku_id}/supplier-prices": {
+      "get": {
+        "tags": [
+          "skus"
+        ],
+        "summary": "List Sku Supplier Prices",
+        "operationId": "list_sku_supplier_prices_api_v1_skus__sku_id__supplier_prices_get",
+        "parameters": [
+          {
+            "name": "sku_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sku Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SkuSupplierPriceResponse"
+                  },
+                  "title": "Response List Sku Supplier Prices Api V1 Skus  Sku Id  Supplier Prices Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "skus"
+        ],
+        "summary": "Replace Sku Supplier Prices",
+        "operationId": "replace_sku_supplier_prices_api_v1_skus__sku_id__supplier_prices_put",
+        "parameters": [
+          {
+            "name": "sku_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sku Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkuSupplierPricesReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SkuSupplierPriceResponse"
+                  },
+                  "title": "Response Replace Sku Supplier Prices Api V1 Skus  Sku Id  Supplier Prices Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "List Categories",
+        "operationId": "list_categories_api_v1_categories_get",
+        "parameters": [
+          {
+            "name": "lifecycle",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "active",
+                "archived",
+                "all"
+              ],
+              "type": "string",
+              "default": "active",
+              "title": "Lifecycle"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTree"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "Create Category",
+        "operationId": "create_category_api_v1_categories_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories/{category_id}": {
+      "patch": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "Update Category",
+        "operationId": "update_category_api_v1_categories__category_id__patch",
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Category Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/materials": {
+      "get": {
+        "tags": [
+          "materials"
+        ],
+        "summary": "List Materials",
+        "operationId": "list_materials_api_v1_materials_get",
+        "parameters": [
+          {
+            "name": "lifecycle",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "active",
+                "archived",
+                "all"
+              ],
+              "type": "string",
+              "default": "active",
+              "title": "Lifecycle"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MaterialResponse"
+                  },
+                  "title": "Response List Materials Api V1 Materials Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "materials"
+        ],
+        "summary": "Create Material",
+        "operationId": "create_material_api_v1_materials_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/materials/{material_id}": {
+      "patch": {
+        "tags": [
+          "materials"
+        ],
+        "summary": "Update Material",
+        "operationId": "update_material_api_v1_materials__material_id__patch",
+        "parameters": [
+          {
+            "name": "material_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Material Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ops-commerce/v1/products": {
       "get": {
         "tags": [
@@ -3301,6 +3730,16 @@
               "type": "boolean",
               "default": false,
               "title": "Include Swatch"
+            }
+          },
+          {
+            "name": "include_sell_rules",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Sell Rules"
             }
           },
           {
@@ -19686,6 +20125,196 @@
         ],
         "title": "CategoryAccountMapUpsert"
       },
+      "CategoryCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "shop_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shop Category"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CategoryCreate"
+      },
+      "CategoryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "shop_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shop Category"
+          },
+          "sales_account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SalesAccount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sku_count": {
+            "type": "integer",
+            "title": "Sku Count"
+          },
+          "subcategories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryResponse"
+            },
+            "type": "array",
+            "title": "Subcategories",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "parent_id",
+          "is_archived",
+          "shop_category",
+          "sales_account",
+          "sku_count",
+          "subcategories"
+        ],
+        "title": "CategoryResponse"
+      },
+      "CategoryTree": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryResponse"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "shop_sections": {
+            "items": {
+              "$ref": "#/components/schemas/ShopSection"
+            },
+            "type": "array",
+            "title": "Shop Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categories",
+          "shop_sections"
+        ],
+        "title": "CategoryTree"
+      },
+      "CategoryUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "is_archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Archived"
+          },
+          "shop_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shop Category"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "type": "object",
+        "title": "CategoryUpdate",
+        "description": "Fields left out are unchanged; ``shop_category: null`` clears the shop section."
+      },
       "ChargeOut": {
         "properties": {
           "description": {
@@ -22855,8 +23484,16 @@
             "title": "Design"
           },
           "fabric": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Fabric"
           },
           "supplier_ref": {
@@ -22882,6 +23519,54 @@
               }
             ],
             "title": "Category"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "subcategory_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory Id"
+          },
+          "colour_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour Name"
+          },
+          "main_material_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Material Id"
           },
           "carton_count": {
             "type": "integer",
@@ -22929,7 +23614,6 @@
           "our_barcode",
           "name",
           "design",
-          "fabric",
           "supplier_id"
         ],
         "title": "IntakeSkuCreate"
@@ -25291,6 +25975,131 @@
         "title": "ManualInvoiceCreate",
         "description": "An invoice created by staff in the back office."
       },
+      "MaterialCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "fabric",
+              "leather",
+              "wood",
+              "stone",
+              "metal",
+              "glass",
+              "woven",
+              "other"
+            ],
+            "title": "Family"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "family"
+        ],
+        "title": "MaterialCreate"
+      },
+      "MaterialResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "fabric",
+              "leather",
+              "wood",
+              "stone",
+              "metal",
+              "glass",
+              "woven",
+              "other"
+            ],
+            "title": "Family"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived"
+          },
+          "sku_count": {
+            "type": "integer",
+            "title": "Sku Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "family",
+          "is_archived",
+          "sku_count"
+        ],
+        "title": "MaterialResponse"
+      },
+      "MaterialUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fabric",
+                  "leather",
+                  "wood",
+                  "stone",
+                  "metal",
+                  "glass",
+                  "woven",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "is_archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Archived"
+          }
+        },
+        "type": "object",
+        "title": "MaterialUpdate"
+      },
       "McpAccessResponse": {
         "properties": {
           "endpoint": {
@@ -25889,6 +26698,28 @@
               }
             ],
             "title": "Swatch Hex"
+          },
+          "sell_multiple": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Multiple"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Quantity"
           }
         },
         "type": "object",
@@ -25913,7 +26744,9 @@
           "setting_photo_token",
           "detail_photo_token",
           "second_detail_photo_token",
-          "swatch_hex"
+          "swatch_hex",
+          "sell_multiple",
+          "min_quantity"
         ],
         "title": "OpsProductResponse"
       },
@@ -27627,8 +28460,16 @@
             "title": "Design"
           },
           "fabric": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Fabric"
           },
           "category": {
@@ -27642,6 +28483,63 @@
               }
             ],
             "title": "Category"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "subcategory_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory Id"
+          },
+          "colour_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour Name"
+          },
+          "main_material_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Material Id"
+          },
+          "other_material_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Other Material Ids"
           }
         },
         "type": "object",
@@ -27649,8 +28547,7 @@
           "our_ref",
           "our_barcode",
           "name",
-          "design",
-          "fabric"
+          "design"
         ],
         "title": "PoLineSkuCreate"
       },
@@ -29973,6 +30870,17 @@
             "type": "integer",
             "title": "Reorder Min"
           },
+          "order_up_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Up To"
+          },
           "on_hand": {
             "type": "number",
             "title": "On Hand"
@@ -29981,9 +30889,35 @@
             "type": "number",
             "title": "On Order"
           },
+          "need_qty": {
+            "type": "number",
+            "title": "Need Qty"
+          },
           "suggested_qty": {
             "type": "number",
             "title": "Suggested Qty"
+          },
+          "min_order_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Order Qty"
+          },
+          "pack_multiple": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Multiple"
           },
           "preferred_supplier_id": {
             "anyOf": [
@@ -30027,9 +30961,13 @@
           "our_ref",
           "name",
           "reorder_min",
+          "order_up_to",
           "on_hand",
           "on_order",
+          "need_qty",
           "suggested_qty",
+          "min_order_qty",
+          "pack_multiple",
           "preferred_supplier_id",
           "preferred_supplier_name",
           "last_landed_cost_zar"
@@ -30635,6 +31573,17 @@
               }
             ],
             "title": "Blocked By"
+          },
+          "quantity_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity Rule"
           }
         },
         "type": "object",
@@ -30652,7 +31601,8 @@
           "source",
           "price_warning",
           "suspect_price_warning",
-          "blocked_by"
+          "blocked_by",
+          "quantity_rule"
         ],
         "title": "SaleLinePrice",
         "description": "One priced line of a sale document, exactly as saving it would store it."
@@ -30735,6 +31685,24 @@
           "price_revision"
         ],
         "title": "SalePricePreview"
+      },
+      "SalesAccount": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "SalesAccount"
       },
       "SalesBySkuLine": {
         "properties": {
@@ -32381,6 +33349,24 @@
         "type": "object",
         "title": "SettingsUpdate"
       },
+      "ShopSection": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "label"
+        ],
+        "title": "ShopSection"
+      },
       "SignupIntent": {
         "properties": {
           "name": {
@@ -32435,6 +33421,99 @@
           "slug"
         ],
         "title": "SignupIntent"
+      },
+      "SkuActivityEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "old_cost_zar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Cost Zar"
+          },
+          "new_cost_zar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Cost Zar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "source_label",
+          "location_id",
+          "location_name",
+          "created_at",
+          "note",
+          "old_cost_zar",
+          "new_cost_zar"
+        ],
+        "title": "SkuActivityEntry"
       },
       "SkuBomLineResponse": {
         "properties": {
@@ -32658,8 +33737,16 @@
             "title": "Design"
           },
           "fabric": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Fabric"
           },
           "supplier_ref": {
@@ -32685,6 +33772,112 @@
               }
             ],
             "title": "Category"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "subcategory_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory Id"
+          },
+          "colour_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour Name"
+          },
+          "main_material_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Material Id"
+          },
+          "other_material_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Other Material Ids"
+          },
+          "sell_multiple": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Sell Multiple",
+            "default": 1
+          },
+          "min_sell_qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Sell Qty"
+          },
+          "reorder_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reorder Min"
+          },
+          "order_up_to": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Up To"
+          },
+          "do_not_reorder": {
+            "type": "boolean",
+            "title": "Do Not Reorder",
+            "default": false
           },
           "opening_location_id": {
             "anyOf": [
@@ -32765,8 +33958,7 @@
         "required": [
           "our_ref",
           "name",
-          "design",
-          "fabric"
+          "design"
         ],
         "title": "SkuCreate"
       },
@@ -32937,6 +34129,73 @@
         ],
         "title": "SkuCriticalityReport"
       },
+      "SkuHeldDocument": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sales_order",
+              "layby"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "qty": {
+            "type": "number",
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "number",
+          "qty"
+        ],
+        "title": "SkuHeldDocument"
+      },
+      "SkuKitUse": {
+        "properties": {
+          "parent_sku_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parent Sku Id"
+          },
+          "our_ref": {
+            "type": "string",
+            "title": "Our Ref"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "qty": {
+            "type": "number",
+            "title": "Qty"
+          },
+          "parent_is_archived": {
+            "type": "boolean",
+            "title": "Parent Is Archived"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parent_sku_id",
+          "our_ref",
+          "name",
+          "qty",
+          "parent_is_archived"
+        ],
+        "title": "SkuKitUse"
+      },
       "SkuLeadTimeLine": {
         "properties": {
           "sku_id": {
@@ -33091,6 +34350,209 @@
           "reason"
         ],
         "title": "SkuMatchOut"
+      },
+      "SkuMaterialSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "family": {
+            "type": "string",
+            "title": "Family"
+          },
+          "is_archived": {
+            "type": "boolean",
+            "title": "Is Archived",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "family",
+          "is_archived"
+        ],
+        "title": "SkuMaterialSummary"
+      },
+      "SkuNextArrival": {
+        "properties": {
+          "purchase_order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Purchase Order Id"
+          },
+          "po_number": {
+            "type": "string",
+            "title": "Po Number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "on_water",
+              "landed"
+            ],
+            "title": "Status"
+          },
+          "qty": {
+            "type": "number",
+            "title": "Qty"
+          },
+          "expected_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected On"
+          },
+          "expected_on_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "planned_lead_time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected On Basis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "purchase_order_id",
+          "po_number",
+          "status",
+          "qty",
+          "expected_on",
+          "expected_on_basis"
+        ],
+        "title": "SkuNextArrival"
+      },
+      "SkuOverviewResponse": {
+        "properties": {
+          "sku": {
+            "$ref": "#/components/schemas/SkuResponse"
+          },
+          "stock": {
+            "$ref": "#/components/schemas/SkuOverviewStock"
+          },
+          "supplier_prices": {
+            "items": {
+              "$ref": "#/components/schemas/SkuSupplierPriceResponse"
+            },
+            "type": "array",
+            "title": "Supplier Prices"
+          },
+          "is_kit": {
+            "type": "boolean",
+            "title": "Is Kit"
+          },
+          "used_in_kits": {
+            "items": {
+              "$ref": "#/components/schemas/SkuKitUse"
+            },
+            "type": "array",
+            "title": "Used In Kits"
+          },
+          "activity": {
+            "items": {
+              "$ref": "#/components/schemas/SkuActivityEntry"
+            },
+            "type": "array",
+            "title": "Activity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sku",
+          "stock",
+          "supplier_prices",
+          "is_kit",
+          "used_in_kits",
+          "activity"
+        ],
+        "title": "SkuOverviewResponse"
+      },
+      "SkuOverviewStock": {
+        "properties": {
+          "on_hand": {
+            "type": "number",
+            "title": "On Hand"
+          },
+          "held": {
+            "type": "number",
+            "title": "Held"
+          },
+          "held_documents": {
+            "items": {
+              "$ref": "#/components/schemas/SkuHeldDocument"
+            },
+            "type": "array",
+            "title": "Held Documents"
+          },
+          "available": {
+            "type": "number",
+            "title": "Available"
+          },
+          "on_order": {
+            "type": "number",
+            "title": "On Order"
+          },
+          "next_arrival": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkuNextArrival"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit_cost_zar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost Zar"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/LocationStockResponse"
+            },
+            "type": "array",
+            "title": "Locations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "on_hand",
+          "held",
+          "held_documents",
+          "available",
+          "on_order",
+          "next_arrival",
+          "unit_cost_zar",
+          "locations"
+        ],
+        "title": "SkuOverviewStock"
       },
       "SkuPricePreviewChanges": {
         "properties": {
@@ -33523,6 +34985,115 @@
             ],
             "title": "Category"
           },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "subcategory_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory Id"
+          },
+          "subcategory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory"
+          },
+          "colour_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour Name"
+          },
+          "main_material_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Material Id"
+          },
+          "main_material": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkuMaterialSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "other_material_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Other Material Ids"
+          },
+          "other_materials": {
+            "items": {
+              "$ref": "#/components/schemas/SkuMaterialSummary"
+            },
+            "type": "array",
+            "title": "Other Materials"
+          },
+          "sell_multiple": {
+            "type": "integer",
+            "title": "Sell Multiple",
+            "default": 1
+          },
+          "min_sell_qty": {
+            "type": "integer",
+            "title": "Min Sell Qty",
+            "default": 1
+          },
+          "order_up_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Up To"
+          },
+          "do_not_reorder": {
+            "type": "boolean",
+            "title": "Do Not Reorder",
+            "default": false
+          },
           "swatch_hex": {
             "anyOf": [
               {
@@ -33731,6 +35302,18 @@
           "reorder_min",
           "last_landed_cost_zar",
           "category",
+          "category_id",
+          "subcategory_id",
+          "subcategory",
+          "colour_name",
+          "main_material_id",
+          "main_material",
+          "other_material_ids",
+          "other_materials",
+          "sell_multiple",
+          "min_sell_qty",
+          "order_up_to",
+          "do_not_reorder",
           "swatch_hex",
           "photo_storage_key",
           "gallery_photo_count",
@@ -33772,6 +35355,54 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "has_photo": {
+            "type": "boolean",
+            "title": "Has Photo",
+            "default": false
+          },
+          "retail_inc_vat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retail Inc Vat"
+          },
+          "available": {
+            "type": "number",
+            "title": "Available",
+            "default": 0.0
+          },
+          "is_kit": {
+            "type": "boolean",
+            "title": "Is Kit",
+            "default": false
+          },
+          "sell_multiple": {
+            "type": "integer",
+            "title": "Sell Multiple",
+            "default": 1
+          },
+          "min_sell_qty": {
+            "type": "integer",
+            "title": "Min Sell Qty",
+            "default": 1
           }
         },
         "type": "object",
@@ -33779,7 +35410,14 @@
           "id",
           "our_ref",
           "our_barcode",
-          "name"
+          "name",
+          "category",
+          "has_photo",
+          "retail_inc_vat",
+          "available",
+          "is_kit",
+          "sell_multiple",
+          "min_sell_qty"
         ],
         "title": "SkuSearchHit"
       },
@@ -33916,6 +35554,18 @@
             ],
             "title": "Category"
           },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
           "cost_price": {
             "anyOf": [
               {
@@ -33952,11 +35602,218 @@
           "fabric",
           "supplier_ref",
           "category",
+          "category_id",
           "cost_price",
           "vat_rate",
           "source"
         ],
         "title": "SkuSuggestion"
+      },
+      "SkuSupplierPriceResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "supplier_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supplier Id"
+          },
+          "supplier_name": {
+            "type": "string",
+            "title": "Supplier Name"
+          },
+          "supplier_is_archived": {
+            "type": "boolean",
+            "title": "Supplier Is Archived"
+          },
+          "is_preferred": {
+            "type": "boolean",
+            "title": "Is Preferred"
+          },
+          "supplier_sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Sku"
+          },
+          "latest_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Price"
+          },
+          "fixed_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Price"
+          },
+          "min_order_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Order Qty"
+          },
+          "pack_multiple": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Multiple"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "supplier_id",
+          "supplier_name",
+          "supplier_is_archived",
+          "is_preferred",
+          "supplier_sku",
+          "latest_price",
+          "fixed_price",
+          "min_order_qty",
+          "pack_multiple",
+          "updated_at"
+        ],
+        "title": "SkuSupplierPriceResponse"
+      },
+      "SkuSupplierPriceWrite": {
+        "properties": {
+          "supplier_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supplier Id"
+          },
+          "supplier_sku": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Sku"
+          },
+          "latest_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Price"
+          },
+          "fixed_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Price"
+          },
+          "min_order_qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Order Qty"
+          },
+          "pack_multiple": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Multiple"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "supplier_id"
+        ],
+        "title": "SkuSupplierPriceWrite"
+      },
+      "SkuSupplierPricesReplace": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SkuSupplierPriceWrite"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Rows"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "SkuSupplierPricesReplace"
       },
       "SkuUnitCostItem": {
         "properties": {
@@ -34196,6 +36053,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 255,
                 "minLength": 1
               },
               {
@@ -34215,6 +36073,119 @@
               }
             ],
             "title": "Category"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "subcategory_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory Id"
+          },
+          "colour_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour Name"
+          },
+          "main_material_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Material Id"
+          },
+          "other_material_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Material Ids"
+          },
+          "sell_multiple": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Multiple"
+          },
+          "min_sell_qty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Sell Qty"
+          },
+          "order_up_to": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Up To"
+          },
+          "do_not_reorder": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Do Not Reorder"
           },
           "preferred_supplier_id": {
             "anyOf": [
@@ -40134,6 +42105,115 @@
             ],
             "title": "Category"
           },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "subcategory_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory Id"
+          },
+          "subcategory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subcategory"
+          },
+          "colour_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour Name"
+          },
+          "main_material_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Material Id"
+          },
+          "main_material": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkuMaterialSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "other_material_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Other Material Ids"
+          },
+          "other_materials": {
+            "items": {
+              "$ref": "#/components/schemas/SkuMaterialSummary"
+            },
+            "type": "array",
+            "title": "Other Materials"
+          },
+          "sell_multiple": {
+            "type": "integer",
+            "title": "Sell Multiple",
+            "default": 1
+          },
+          "min_sell_qty": {
+            "type": "integer",
+            "title": "Min Sell Qty",
+            "default": 1
+          },
+          "order_up_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Up To"
+          },
+          "do_not_reorder": {
+            "type": "boolean",
+            "title": "Do Not Reorder",
+            "default": false
+          },
           "swatch_hex": {
             "anyOf": [
               {
@@ -40316,6 +42396,10 @@
             "type": "string",
             "title": "On Order"
           },
+          "available": {
+            "type": "string",
+            "title": "Available"
+          },
           "stock_locations": {
             "items": {
               "$ref": "#/components/schemas/WorkspaceStockLocation"
@@ -40357,6 +42441,18 @@
           "reorder_min",
           "last_landed_cost_zar",
           "category",
+          "category_id",
+          "subcategory_id",
+          "subcategory",
+          "colour_name",
+          "main_material_id",
+          "main_material",
+          "other_material_ids",
+          "other_materials",
+          "sell_multiple",
+          "min_sell_qty",
+          "order_up_to",
+          "do_not_reorder",
           "swatch_hex",
           "photo_storage_key",
           "gallery_photo_count",
@@ -40379,6 +42475,7 @@
           "updated_at",
           "on_hand",
           "on_order",
+          "available",
           "stock_locations"
         ],
         "title": "WorkspaceSkuRow"

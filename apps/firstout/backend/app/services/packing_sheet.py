@@ -60,8 +60,11 @@ def build_packing_sheet_pdf(
         y -= 6 * mm
         pdf.drawString(30 * mm, y, f"Name: {name}")
         y -= 6 * mm
-        pdf.drawString(30 * mm, y, f"Fabric: {fabric}")
-        y -= 6 * mm
+        # skus.fabric is the finish label (colour and material); "-" means none.
+        finish = (fabric or "").strip()
+        if finish and finish != "-":
+            pdf.drawString(30 * mm, y, f"Finish: {finish}")
+            y -= 6 * mm
         pdf.drawString(30 * mm, y, f"Qty: {qty}")
         y -= 6 * mm
         if carton_count > 1:

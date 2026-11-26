@@ -20,6 +20,15 @@ from tests.test_purchase_orders import (
     _relogin_owner,
 )
 from tests.test_transfers import _receive_qty_at_location, complete_location_transfer
+import pytest
+
+from tests.catalogue_lists import ensure_categories
+
+
+@pytest.fixture(autouse=True)
+async def _managed_categories(async_db) -> None:
+    # SKU writes resolve category names to existing categories only.
+    await ensure_categories(async_db, "Seating")
 
 
 async def _transfer_to_bedfordview(

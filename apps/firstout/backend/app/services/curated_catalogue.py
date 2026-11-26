@@ -5,14 +5,13 @@ import hashlib
 import json
 import uuid
 from pathlib import PurePosixPath
-from typing import BinaryIO
+from typing import BinaryIO, Optional
 
 from PIL import Image
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.ops_commerce import SHOP_CATEGORIES
 from app.exceptions import ForbiddenError
 from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.sku import Sku
@@ -34,6 +33,7 @@ from app.services.curated_catalogue_archive import (
 from app.services.object_storage import read_bytes, save_bytes, tenant_storage_ref
 from app.services.permissions import PermissionService
 from app.services.sku_archive import SkuArchiveService
+from app.services.sku_classification import categories_by_id
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 from f0rge_db.organisation import tenant_id_ctx
@@ -286,13 +286,24 @@ class CuratedCatalogueService:
                 )
             ).all()
         }
+        # The shop section comes from the SKU's category row (SPEC 9C), not its name.
+        sections = {
+            category.id: category.shop_category
+            for category in (
+                await categories_by_id(self.db, [sku.category_id for sku in skus.values()])
+            ).values()
+        }
+
+        def section(sku: Sku) -> Optional[str]:
+            return sections.get(sku.category_id) if sku.category_id is not None else None
+
         for row in manifest.skus:
             sku = skus.get(row.sku_id)
             if sku is None or sku.our_ref != row.our_ref:
                 raise ValidationError(f"SKU identifier or code does not match: {row.our_ref}")
             if sku.is_archived or not sku.is_sellable:
                 raise ValidationError(f"SKU must be active and sellable: {row.our_ref}")
-            if scope != "photos" and _category(sku) not in SHOP_CATEGORIES:
+            if scope != "photos" and section(sku) is None:
                 raise ValidationError(f"SKU has no storefront category: {row.our_ref}")
             if sku.setting_photo_storage_key:
                 _validate_setting_distinct(row, PurePosixPath(sku.setting_photo_storage_key).stem)
@@ -304,7 +315,7 @@ class CuratedCatalogueService:
             if any(photo.sha256 in detail_digests for photo in row.gallery or ()):
                 raise ValidationError("Detail and studio photos must be distinct")
         for group in manifest.groups:
-            if len({SHOP_CATEGORIES[_category(skus[row.sku_id])] for row in group.variants}) != 1:
+            if len({section(skus[row.sku_id]) for row in group.variants}) != 1:
                 raise ValidationError(
                     "Variants in a product group must have the same shop category"
                 )
@@ -376,7 +387,8 @@ class CuratedCatalogueService:
     def _write_reviewed_details(sku: Sku, row: ReviewedSku, gallery: list[str]) -> None:
         assert row.name is not None
         sku.name = row.name
-        if row.fabric is not None:
+        # Deprecated label input: only while the SKU has neither colour name nor material.
+        if row.fabric is not None and sku.colour_name is None and sku.main_material_id is None:
             sku.fabric = row.fabric
         for field in row.model_fields_set.intersection(SKU_DETAIL_FIELDS):
             setattr(sku, field, getattr(row, field))
@@ -440,10 +452,6 @@ class CuratedCatalogueService:
                     option_signature=signature,
                 )
             )
-
-
-def _category(sku: Sku) -> str:
-    return (sku.category or "").strip().lower()
 
 
 def _group_options(group: ReviewedGroup) -> dict[str, list[str]]:

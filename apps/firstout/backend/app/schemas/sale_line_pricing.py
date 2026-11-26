@@ -30,8 +30,14 @@ class SaleLinePrice(BaseModel):
     price_warning: Optional[str] = None
     suspect_price_warning: Optional[str] = None
     # The permission that refuses this line's discount or price override, if any:
-    # till.discount, users.manage (above the Discount cap) or sales.price_override.
+    # till.discount, users.manage (above the Discount cap), sales.price_override, or
+    # quantity_rule (the quantity breaks the SKU's selling rule).
     blocked_by: Optional[str] = None
+    # The plain message when the quantity breaks the SKU's selling rule, e.g. "Oslo dining
+    # chair is sold in multiples of 2, minimum 4." Set whether or not the actor may break
+    # it: with blocked_by "quantity_rule" it is a refusal; otherwise a sales.price_override
+    # holder is breaking a batch and the till shows it as a notice.
+    quantity_rule: Optional[str] = None
 
 
 class SalePricePreview(BaseModel):

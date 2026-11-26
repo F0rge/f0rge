@@ -379,6 +379,7 @@ class QuotesService:
                     discount_percent=line.discount_percent,
                     unit_ex_vat=line.unit_ex_vat,
                     saved=prior if keep_saved else None,
+                    saved_qty=prior.qty if prior is not None else None,
                 )
             )
         pricing = await SaleLinePricing.for_customer(

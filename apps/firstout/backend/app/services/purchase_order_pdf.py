@@ -149,7 +149,7 @@ def build_purchase_order_pdf(
             [_paragraph(f"Our ref: {line.our_ref or '-'}", small)],
         ]
         if line.fabric:
-            rows.append([_paragraph(f"Fabric / finish: {line.fabric}", body)])
+            rows.append([_paragraph(f"Finish: {line.fabric}", body)])
         if line.notes:
             rows.append([_paragraph(f"Notes: {line.notes}", body)])
         rows.append(

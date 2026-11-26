@@ -17,9 +17,18 @@ class ReorderItemResponse(BaseModel):
     our_ref: str
     name: str
     reorder_min: int
+    # The level a reorder brings stock back to; None reorders up to reorder_min.
+    order_up_to: Optional[int] = None
     on_hand: QuantityTotal
     on_order: QuantityTotal
+    # (order_up_to or reorder_min) - on_hand - on_order.
+    need_qty: QuantityTotal
+    # need_qty rounded up to the preferred supplier's pack_multiple, then raised to its
+    # min_order_qty; equal to need_qty without a price row. Draft purchase orders use it.
     suggested_qty: QuantityTotal
+    # From the SKU's price row for its preferred supplier; None without one.
+    min_order_qty: Optional[int] = None
+    pack_multiple: Optional[int] = None
     preferred_supplier_id: Optional[uuid.UUID] = None
     preferred_supplier_name: Optional[str] = None
     last_landed_cost_zar: Optional[Decimal] = None

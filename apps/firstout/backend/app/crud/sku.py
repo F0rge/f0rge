@@ -11,7 +11,7 @@ from f0rge_db.organisation import tenant_id_ctx
 from f0rge_db.crud import BaseCRUD
 
 
-def _escape_like(value: str) -> str:
+def escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
@@ -96,7 +96,7 @@ class SkuCRUD(BaseCRUD):
         if category is not None:
             filters.append(func.lower(Sku.category) == category.lower())
         if q:
-            pattern = f"%{_escape_like(q)}%"
+            pattern = f"%{escape_like(q)}%"
             filters.append(
                 or_(
                     Sku.name.ilike(pattern, escape="\\"),
