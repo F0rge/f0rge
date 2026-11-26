@@ -3112,7 +3112,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 5,
+              "maximum": 6,
               "minimum": 1,
               "default": 1,
               "title": "Slot"
@@ -3284,6 +3284,16 @@
             }
           },
           {
+            "name": "include_second_detail_photo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Second Detail Photo"
+            }
+          },
+          {
             "name": "include_swatch",
             "in": "query",
             "required": false,
@@ -3374,7 +3384,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 5,
+              "maximum": 6,
               "minimum": 1,
               "default": 1,
               "title": "Slot"
@@ -25858,6 +25868,17 @@
             ],
             "title": "Detail Photo Token"
           },
+          "second_detail_photo_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Detail Photo Token"
+          },
           "swatch_hex": {
             "anyOf": [
               {
@@ -25891,6 +25912,7 @@
           "gallery_photo_tokens",
           "setting_photo_token",
           "detail_photo_token",
+          "second_detail_photo_token",
           "swatch_hex"
         ],
         "title": "OpsProductResponse"

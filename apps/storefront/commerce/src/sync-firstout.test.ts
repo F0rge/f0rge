@@ -352,6 +352,59 @@ test("reconciles a slot-five detail independently from setting photos and preser
   expect(existing.thumbnail).toBe(gallery[0]);
 });
 
+test("appends, retries, retains and clears slot six without replacing the current close-up", async () => {
+  const bytes = [1, 2, 3, 4, 5, 6].map((slot) => new Uint8Array([0xff, 0xd8, 0xff, slot]));
+  const tokens = bytes.map((body) => createHash("sha256").update(body).digest("hex"));
+  const existing = stagedTable();
+  const studio = { ...table, gallery_photo_tokens: tokens.slice(0, 3) };
+  const original = { ...studio, setting_photo_token: tokens[3], detail_photo_token: tokens[4] };
+  const withSecond = { ...original, second_detail_photo_token: tokens[5] };
+  const { calls, state, container, logger } = fakeMedusa([existing], [original]);
+  state.curated = true;
+  const photo = jest.fn((_id: string, slot: number | null) => jpeg(bytes[(slot || 0) - 1]));
+  state.photo = photo;
+  await syncFirstout(container);
+  const variant = existing.variants![0];
+  const originalUrls = variant.metadata?.suitable_image_urls as string[];
+  expect(photo.mock.calls.map(([, slot]) => slot)).toEqual([1, 2, 3, 4, 5]);
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("&include_second_detail_photo=true"), expect.anything());
+
+  state.feed = [withSecond];
+  photo.mockImplementationOnce(() => jpeg(bytes[0]));
+  await syncFirstout(container);
+  expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Firstout gallery changed during download"));
+  expect(existing.status).toBe("published");
+  expect(variant.metadata?.suitable_image_urls).toEqual(originalUrls);
+  expect(calls.filter((call) => call.workflow === "uploadFilesWorkflow")).toHaveLength(1);
+
+  await syncFirstout(container);
+  const expanded = variant.metadata?.suitable_image_urls as string[];
+  expect(expanded).toEqual([...originalUrls, expect.stringMatching(/-6\.jpg$/)]);
+  expect(variant.metadata?.firstout_gallery_photo_tokens).toEqual(tokens);
+  expect(variant.thumbnail).toBe(originalUrls[0]);
+  expect(existing.thumbnail).toBe(originalUrls[0]);
+  expect(existing.images?.map((image) => image.id)).toContain("img_staff");
+  expect(photo.mock.calls.map(([, slot]) => slot)).toEqual([1, 2, 3, 4, 5, 6, 6]);
+
+  await syncFirstout(container);
+  state.feed = [studio];
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual(expanded);
+  expect(photo).toHaveBeenCalledTimes(7);
+
+  state.feed = [{ ...withSecond, setting_photo_token: null }];
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual([...originalUrls.slice(0, 3), originalUrls[4], expanded[5]]);
+  expect(variant.metadata?.firstout_gallery_photo_tokens).toEqual([...tokens.slice(0, 3), null, tokens[4], tokens[5]]);
+  expect(photo).toHaveBeenCalledTimes(7);
+
+  state.feed = [{ ...studio, detail_photo_token: tokens[4], second_detail_photo_token: null }];
+  await syncFirstout(container);
+  expect(variant.metadata?.suitable_image_urls).toEqual([...originalUrls.slice(0, 3), originalUrls[4]]);
+  expect(existing.images?.map((image) => image.url)).not.toContain(expanded[5]);
+  expect(photo).toHaveBeenCalledTimes(7);
+});
+
 test("a failed supplemental download keeps a verified studio gallery published while the sync retries", async () => {
   const bytes = [1, 2, 3, 4, 5].map((slot) => new Uint8Array([0xff, 0xd8, 0xff, slot]));
   const tokens = bytes.map((body) => createHash("sha256").update(body).digest("hex"));

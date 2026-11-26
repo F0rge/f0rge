@@ -8389,6 +8389,8 @@ export interface components {
             setting_photo_token: string | null;
             /** Detail Photo Token */
             detail_photo_token: string | null;
+            /** Second Detail Photo Token */
+            second_detail_photo_token: string | null;
             /** Swatch Hex */
             swatch_hex: string | null;
         };
@@ -15518,6 +15520,7 @@ export interface operations {
                 catalogue_version?: number;
                 include_setting_photo?: boolean;
                 include_detail_photo?: boolean;
+                include_second_detail_photo?: boolean;
                 include_swatch?: boolean;
             };
             header?: {

@@ -55,6 +55,7 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     gallery_photo_keys: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
     setting_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     detail_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    second_detail_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Finish colour as lowercase #rrggbb, shown as a dot on storefront product cards.
     swatch_hex: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
     width_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))

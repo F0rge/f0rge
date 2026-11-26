@@ -53,7 +53,11 @@ from app.schemas.ops_commerce_order import (
     StorefrontOrderStatusItem,
     StorefrontOrderStatusResponse,
 )
-from app.schemas.sku import SKU_DETAIL_PHOTO_SLOT, SKU_SETTING_PHOTO_SLOT
+from app.schemas.sku import (
+    SKU_DETAIL_PHOTO_SLOT,
+    SKU_SECOND_DETAIL_PHOTO_SLOT,
+    SKU_SETTING_PHOTO_SLOT,
+)
 from app.services.storefront_fulfillment import StorefrontFulfillmentService
 from app.services.books_periods import BooksPeriodLockedError
 from app.services.chart_of_accounts import (
@@ -89,6 +93,7 @@ class OpsCommerceService:
         catalogue_version: int = 1,
         include_setting_photo: bool = False,
         include_detail_photo: bool = False,
+        include_second_detail_photo: bool = False,
         include_swatch: bool = False,
     ) -> OpsProductsResponse:
         company_id = await self._authorize(
@@ -160,7 +165,21 @@ class OpsCommerceService:
                             if sku.gallery_photo_keys and sku.detail_photo_storage_key
                             else None,
                         }
-                        if catalogue_version == 2 and include_detail_photo
+                        if catalogue_version == 2
+                        and (include_detail_photo or include_second_detail_photo)
+                        else {}
+                    ),
+                    **(
+                        {
+                            "second_detail_photo_token": PurePosixPath(
+                                sku.second_detail_photo_storage_key
+                            ).stem
+                            if sku.gallery_photo_keys
+                            and sku.detail_photo_storage_key
+                            and sku.second_detail_photo_storage_key
+                            else None,
+                        }
+                        if catalogue_version == 2 and include_second_detail_photo
                         else {}
                     ),
                     # Opt-in: the strict commerce contract rejects keys an older sync does not know.
@@ -198,6 +217,12 @@ class OpsCommerceService:
             key = snapshot.setting_photo_storage_key if snapshot.gallery_photo_keys else None
         elif slot == SKU_DETAIL_PHOTO_SLOT:
             key = snapshot.detail_photo_storage_key if snapshot.gallery_photo_keys else None
+        elif slot == SKU_SECOND_DETAIL_PHOTO_SLOT:
+            key = (
+                snapshot.second_detail_photo_storage_key
+                if snapshot.gallery_photo_keys and snapshot.detail_photo_storage_key
+                else None
+            )
         elif snapshot.gallery_photo_keys:
             key = snapshot.gallery_photo_keys[slot - 1]
         else:

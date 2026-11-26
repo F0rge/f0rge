@@ -40,6 +40,7 @@ const productSchema = z.object({
   // Opt-in only. An older source omits these fields. Null removes the corresponding photo.
   setting_photo_token: photoToken.nullable().optional(),
   detail_photo_token: photoToken.nullable().optional(),
+  second_detail_photo_token: photoToken.nullable().optional(),
   dimensions_cm: z.object({
     width: centimetres, depth: centimetres, height: centimetres, diameter: centimetres,
   }).strict().nullable().optional(),
@@ -58,6 +59,10 @@ const productSchema = z.object({
   ({ gallery_photo_tokens: studio, setting_photo_token: setting, detail_photo_token: detail }) =>
     !detail || (studio !== undefined && !studio.includes(detail) && detail !== setting),
   { path: ["detail_photo_token"], message: "A detail photo requires three distinct studio photos and differs from the setting photo" },
+).refine(
+  ({ gallery_photo_tokens: studio, setting_photo_token: setting, detail_photo_token: detail, second_detail_photo_token: second }) =>
+    !second || (studio !== undefined && Boolean(detail) && !studio.includes(second) && second !== setting && second !== detail),
+  { path: ["second_detail_photo_token"], message: "A second detail photo requires a first detail photo and differs from all other photos" },
 );
 
 const responseSchema = z.object({

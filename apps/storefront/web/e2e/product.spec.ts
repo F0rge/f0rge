@@ -102,8 +102,16 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await expect(size.getByRole('button', { name: '200 cm' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/demo/arc-angle.jpg')
 
+  const gallery = page.getByRole('group', { name: 'Product images' })
+  await gallery.getByRole('button', { name: 'Show image 5 of 6' }).click()
+  await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/demo/arc-detail.jpg')
+  await gallery.getByRole('button', { name: 'Show image 6 of 6' }).click()
+  await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/merchandising/category-coffee-console-tables.webp')
+
   await colour.getByRole('button', { name: 'Gold' }).click()
   await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-200')
+  await expect(gallery).toHaveCount(0)
+  await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/hero-sofas.jpg')
   await expect(page.locator('#product-price')).toHaveText(/^R\s36\s500,00$/)
   await expect(article.getByRole('status')).toHaveText('Out of stock')
   await expect(page.getByRole('button', { name: 'Add to bag' })).toBeDisabled()

@@ -89,6 +89,29 @@ test("a material detail photo can follow the studio gallery even without a setti
   expect(() => read({ gallery_photo_tokens: studio, detail_photo_token: "unverified" })).toThrow();
 });
 
+test("an opted-in second detail requires a distinct first detail and studio gallery", () => {
+  const [first, middle, last, setting, detail, second] = ["a", "b", "c", "d", "e", "f"]
+    .map((letter) => letter.repeat(64));
+  const gallery = { gallery_photo_tokens: [first, middle, last], detail_photo_token: detail };
+  const read = (fields: Record<string, unknown>) => parseOpsProducts({
+    ...contract, products: [{ ...contract.products[0], ...fields }],
+  }, contract.company_id).products[0];
+
+  expect(read({ ...gallery, second_detail_photo_token: second })).toMatchObject({
+    detail_photo_token: detail, second_detail_photo_token: second,
+  });
+  expect(read(gallery)).not.toHaveProperty("second_detail_photo_token");
+  expect(read({ second_detail_photo_token: null }).second_detail_photo_token).toBeNull();
+  expect(() => read({ detail_photo_token: detail, second_detail_photo_token: second })).toThrow();
+  expect(() => read({ gallery_photo_tokens: gallery.gallery_photo_tokens, second_detail_photo_token: second }))
+    .toThrow("A second detail photo requires a first detail photo");
+  expect(() => read({ ...gallery, detail_photo_token: null, second_detail_photo_token: second })).toThrow();
+  for (const duplicate of [first, setting, detail]) {
+    expect(() => read({ ...gallery, setting_photo_token: setting, second_detail_photo_token: duplicate })).toThrow();
+  }
+  expect(() => read({ ...gallery, second_detail_photo_token: "unverified" })).toThrow();
+});
+
 test("validates finite made-to-order offers and rejects an inverted promise range", () => {
   const offer = {
     id: "bcd2f5d4-237b-43fb-a152-bef10a6a3eaa",
