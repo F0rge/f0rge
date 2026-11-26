@@ -7,6 +7,13 @@ import { SHOWROOM } from "@/lib/showroom";
 import { ShopListing } from "./shop-listing";
 
 const buyingGuides: Partial<Record<ShopCategory["handle"], { title: string; paragraphs: string[] }>> = {
+  "sofas-armchairs": {
+    title: "Choosing a sofa for your living room",
+    paragraphs: [
+      "Measure the space the sofa will occupy and the route it has to take to get there. Allow room to walk around it, reach a coffee table and open nearby doors. If you are comparing corner sofas, check which side the shorter section sits on and whether it leaves your main route through the room clear.",
+      "Think about how you sit. A deeper sofa gives you more room to stretch out, while a shallower seat can make it easier to sit upright. If you need extra seating or want to keep the arrangement flexible, compare a straight sofa with a separate armchair. Check the dimensions and finish for the option you plan to order.",
+    ],
+  },
   bedroom: {
     title: "Choosing bedroom furniture",
     paragraphs: [
@@ -29,11 +36,12 @@ export async function Listing({ category }: { category?: ShopCategory }) {
   const inListing = category ? products.filter((product) => product.categories?.some((item) => item.handle === category.handle)) : products;
   const categoryId = category && inListing[0]?.categories?.find((item) => item.handle === category.handle)?.id;
   const guide = category && buyingGuides[category.handle];
+  const heading = category && "pageCopy" in category ? category.pageCopy.heading : category?.name ?? "Shop all";
   return <>
     <section aria-labelledby="listing-title" className="bg-primary">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:flex lg:items-center lg:justify-between lg:px-8 lg:py-16">
         <div className="text-3xl font-bold tracking-tight sm:text-4xl">
-          <h1 id="listing-title" className="text-primary-foreground">{category?.name ?? "Shop all"}</h1>
+          <h1 id="listing-title" className="text-primary-foreground">{heading}</h1>
           <p className="text-primary-foreground/80">{category?.blurb ?? "Every piece for sale."}</p>
         </div>
         <div className="mt-8 flex flex-wrap gap-3 lg:mt-0 lg:ml-4 lg:shrink-0">

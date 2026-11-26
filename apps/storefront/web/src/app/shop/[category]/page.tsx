@@ -13,7 +13,13 @@ const categoryFor = async (params: Props["params"]) => {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const category = await categoryFor(params);
-  return category ? { title: category.name, description: `${category.blurb} Shop DasKasas furniture online or in the Bedfordview showroom.`, alternates: { canonical: category.href } } : {};
+  if (!category) return {};
+  const pageCopy = "pageCopy" in category ? category.pageCopy : undefined;
+  return {
+    title: pageCopy?.title ?? category.name,
+    description: pageCopy?.description ?? `${category.blurb} Shop DasKasas furniture online or in the Bedfordview showroom.`,
+    alternates: { canonical: category.href },
+  };
 }
 
 export default async function CategoryPage({ params }: Props) {

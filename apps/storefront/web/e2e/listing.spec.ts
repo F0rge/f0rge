@@ -25,13 +25,21 @@ test('the menu opens each category with only its pieces; an uncategorised piece 
   expect(await titles(page)).toEqual(byName)
   for (const [name, pieces] of categories) {
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name, exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
+    const heading = name === 'Sofas & Armchairs' ? 'Find a sofa or armchair' : name
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible()
     await expect(page.getByRole('heading', { level: 2, name: 'Pieces', exact: true })).toHaveCount(1)
     await expect(grid(page).getByRole('heading', { level: 3 })).toHaveText([...pieces])
     await expect(page.getByRole('status').filter({ hasText: /piece/ })).toHaveText(`${pieces.length} ${pieces.length === 1 ? 'piece' : 'pieces'}`)
     await expect(grid(page)).not.toContainText('Yara Floor Lamp')
     await expect(page.getByRole('region', { name: 'Other categories' }).getByRole('link')).toHaveCount(3)
   }
+})
+
+test('the sofa category describes the range and helps shoppers choose a sofa', async ({ page }) => {
+  await page.goto('/shop/sofas-armchairs')
+  await expect(page).toHaveTitle('Sofa & Armchair Shop in Bedfordview | DasKasas')
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Find a sofa or armchair at DasKasas/)
+  await expect(page.getByRole('region', { name: 'Choosing a sofa for your living room' })).toContainText('Measure the space the sofa will occupy')
 })
 
 test('availability filter, sort and counts agree with the grid', async ({ page }) => {
