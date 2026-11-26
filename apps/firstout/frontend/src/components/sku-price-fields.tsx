@@ -61,7 +61,7 @@ export function SkuPriceFields({
         const retail = tier.field === "retail_inc_vat";
         const value = form[tier.field];
         const error = errors[tier.field];
-        const { paired, savedRetail, belowCost } = skuPricePair(sku, tier, value, vatRate, canViewCost);
+        const { paired, belowCost } = skuPricePair(sku, tier, value, vatRate, canViewCost);
         return (
           <div className={styles.field} key={tier.field}>
             <TextInput
@@ -74,7 +74,6 @@ export function SkuPriceFields({
                   {paired === null
                     ? readOnly ? "No price set." : "Leave blank if unset."
                     : `${formatZarAmount(paired)} ${retail ? "excl." : "incl."} VAT`}
-                  {savedRetail && <span className={styles.rounding}>Saves as {formatZarAmount(savedRetail)} incl. VAT</span>}
                   {belowCost && <span className={styles.warning}>Price is below average unit cost.</span>}
                 </>
               }

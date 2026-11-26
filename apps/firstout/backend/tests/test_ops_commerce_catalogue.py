@@ -50,7 +50,7 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
     )
     assert created.status_code == 201
     sku_id = created.json()["id"]
-    price = await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"retail_inc_vat": "11500.00"})
+    price = await owner_client.patch(f"/api/v1/skus/{sku_id}", json={"retail_inc_vat": "49990.00"})
     assert price.status_code == 200
 
     route = "/api/v1/ops-commerce/v1/products"
@@ -76,7 +76,7 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
     assert product["source_sku_id"] == sku_id
     assert product["sku"] == "OPS-SOFA-001"
     assert product["name"] == "Arc sofa"
-    assert product["price_minor_zar"] == 1150000
+    assert product["price_minor_zar"] == 4999000
     assert product["available_quantity"] == 2
     assert product["revision"]
     assert product["revision"].endswith("Z")

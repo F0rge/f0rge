@@ -46,6 +46,7 @@ from app.services.vat import (
     current_vat_rate,
     inc_to_ex,
     inc_vat_or_none,
+    retail_inc_to_ex,
     validate_non_negative_price,
 )
 from app.services.object_storage import (
@@ -79,12 +80,16 @@ def _sku_price_updates(
             value = getattr(data, ex_field)
             if value is not None:
                 validate_non_negative_price(value, ex_field)
+                if column == "retail_ex_vat":
+                    value = value.quantize(CENT, rounding=ROUND_HALF_UP)
             updates[column] = value
         elif inc_field in fields_set:
             value = getattr(data, inc_field)
             if value is not None:
                 validate_non_negative_price(value, inc_field)
-            updates[column] = inc_to_ex(value, vat_rate) if value is not None else None
+                convert = retail_inc_to_ex if column == "retail_ex_vat" else inc_to_ex
+                value = convert(value, vat_rate)
+            updates[column] = value
     return updates
 
 
@@ -184,7 +189,9 @@ class SkuService:
         vat_rate = await current_vat_rate(self.db)
         updates = _sku_price_updates(data.price_changes, vat_rate)
         retail = updates.get("retail_ex_vat")
-        if retail is not None and retail > Decimal("9999999999.99"):
+        if retail is not None and retail.quantize(CENT, rounding=ROUND_HALF_UP) > Decimal(
+            "9999999999.99"
+        ):
             raise ValidationError("Retail price exceeds the maximum supported price")
         resolved = resolve_classification_price(sku, data.classification, price_updates=updates)
         unit = resolved.unit_ex_vat.quantize(CENT, rounding=ROUND_HALF_UP)
@@ -353,8 +360,7 @@ class SkuService:
             assert data.carton_count is not None
             sku.carton_count = data.carton_count
 
-        # Catalogue prices convert at the team's rate today (ADR 0003). Known limit, not
-        # fixed here (ADR 0001): R999 incl. → R868.70 excl. → R999.01 incl.
+        # Catalogue prices convert at the team's rate today (ADR 0003).
         vat_rate = await current_vat_rate(self.db)
         for column, amount in _sku_price_updates(data, vat_rate).items():
             setattr(sku, column, amount)
@@ -558,6 +564,7 @@ class SkuService:
         retail_below_cost: bool = False,
     ) -> SkuResponse:
         photo_keys = _staff_photo_storage_keys(sku)
+        retail_ex = sku.retail_ex_vat
         return SkuResponse(
             is_sellable=sku.is_sellable,
             till_no_stock_required=sku.till_no_stock_required,
@@ -602,8 +609,10 @@ class SkuService:
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat, vat_rate),
             decorator_ex_vat=sku.decorator_ex_vat,
             decorator_inc_vat=inc_vat_or_none(sku.decorator_ex_vat, vat_rate),
-            retail_ex_vat=sku.retail_ex_vat,
-            retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat, vat_rate),
+            retail_ex_vat=(
+                retail_ex.quantize(CENT, rounding=ROUND_HALF_UP) if retail_ex is not None else None
+            ),
+            retail_inc_vat=inc_vat_or_none(retail_ex, vat_rate),
             average_unit_cost_zar=average_unit_cost_zar,
             stockist_below_cost=stockist_below_cost,
             wholesale_below_cost=wholesale_below_cost,

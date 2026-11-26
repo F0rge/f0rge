@@ -26,7 +26,7 @@ export const SKU_PRICE_TIERS = [
 
 type SkuPriceTier = (typeof SKU_PRICE_TIERS)[number];
 const PRICE_INPUT = /^\d+(?:\.\d{1,2})?$/;
-// The stored ex-VAT amount is Numeric(12, 2).
+// Limit for an ex-VAT price in cents.
 const MAX_EX_VAT_PRICE = 9_999_999_999.99;
 
 export function skuPriceFormFromSku(sku: Pick<Sku, SkuPriceField>): SkuPriceForm {
@@ -83,28 +83,25 @@ export function skuPricePair(
   value: string,
   vatRate: string | undefined,
   canViewCost: boolean,
-): { paired: string | null; savedRetail: string | null; belowCost: boolean } {
+): { paired: string | null; belowCost: boolean } {
   if (!priceChanged(sku[tier.field], value)) {
     return {
       paired: sku[tier.paired] ?? null,
-      savedRetail: null,
       belowCost: canViewCost && Boolean(sku[tier.belowCost]),
     };
   }
   const entered = value.trim();
   const amount = Number(entered);
   if (!vatRate || !PRICE_INPUT.test(entered) || !Number.isFinite(amount) || amount > 2 * MAX_EX_VAT_PRICE) {
-    return { paired: null, savedRetail: null, belowCost: false };
+    return { paired: null, belowCost: false };
   }
   const retail = tier.field === "retail_inc_vat";
   const ex = retail ? incVatToExVat(amount, vatRate) : amount;
-  const inc = exVatToIncVat(ex, vatRate);
   const cost = canViewCost && sku.average_unit_cost_zar != null
     ? roundHalfUp(Number(sku.average_unit_cost_zar))
     : null;
   return {
-    paired: formatPriceAmount(retail ? ex : inc),
-    savedRetail: retail && inc !== amount ? formatPriceAmount(inc) : null,
+    paired: formatPriceAmount(retail ? ex : exVatToIncVat(ex, vatRate)),
     belowCost: cost !== null && ex > 0 && ex < cost,
   };
 }

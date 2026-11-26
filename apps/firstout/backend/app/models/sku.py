@@ -69,7 +69,7 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     stockist_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     wholesale_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     decorator_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
-    retail_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    retail_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
     carton_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default=text("1")
     )

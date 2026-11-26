@@ -144,6 +144,8 @@ function CatalogueScreen() {
     { key: "name", label: "Product name", type: "text" },
     { key: "our_ref", label: "SKU", type: "text" },
     { key: "our_barcode", label: "Barcode", type: "text" },
+    { key: "on_hand", label: "On hand", type: "number" },
+    { key: "retail_inc_vat", label: "Retail price (incl. VAT)", type: "number" },
     { key: "is_kit", label: "Kit", type: "boolean" },
     { key: "is_sellable", label: "Sellable", type: "boolean" },
   ];

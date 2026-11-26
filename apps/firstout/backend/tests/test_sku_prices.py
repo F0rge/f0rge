@@ -61,6 +61,74 @@ async def test_patch_retail_inc_vat_derives_ex(owner_client: AsyncClient) -> Non
     assert body["retail_ex_vat"] == "2000.00"
 
 
+@pytest.mark.parametrize(
+    ("vat_rate", "gross", "net", "invoice_total"),
+    [
+        ("0.15", "999.00", "868.70", "999.01"),
+        ("0.16", "3990.00", "3439.66", "3990.01"),
+        ("0.1501", "2.95", "2.56", "2.94"),
+    ],
+)
+async def test_exact_catalogue_retail_price_keeps_invoice_rounding(
+    owner_client: AsyncClient, vat_rate: str, gross: str, net: str, invoice_total: str
+) -> None:
+    sku = await _create_sku(owner_client, "EXACT-RETAIL")
+    sku_url = f"/api/v1/skus/{sku['id']}"
+    settings = await owner_client.patch("/api/v1/settings", json={"vat_rate": vat_rate})
+    assert settings.status_code == 200, settings.text
+
+    initial = await owner_client.patch(sku_url, json={"retail_ex_vat": net})
+    assert initial.status_code == 200, initial.text
+    assert initial.json()["retail_inc_vat"] == invoice_total
+
+    updated = await owner_client.patch(sku_url, json={"retail_inc_vat": gross})
+    assert updated.status_code == 200, updated.text
+    reloaded = await owner_client.get(sku_url)
+    assert reloaded.status_code == 200, reloaded.text
+    for response in (updated, reloaded):
+        assert response.json()["retail_inc_vat"] == gross
+        assert response.json()["retail_ex_vat"] == net
+
+    invoice = await owner_client.post(
+        f"{sku_url}/price-preview", json={"classification": "Retail", "quantity": 1}
+    )
+    assert invoice.status_code == 200, invoice.text
+    assert invoice.json()["unit_ex_vat"] == net
+    assert invoice.json()["total_inc_vat"] == invoice_total
+
+
+async def test_exact_retail_price_preview_accepts_the_existing_invoice_limit(
+    owner_client: AsyncClient,
+) -> None:
+    sku = await _create_sku(owner_client, "MAX-RETAIL")
+    sku_url = f"/api/v1/skus/{sku['id']}"
+    settings = await owner_client.patch("/api/v1/settings", json={"vat_rate": "0.75"})
+    assert settings.status_code == 200, settings.text
+
+    prices = {"retail_inc_vat": "17499999999.99"}
+    preview = await owner_client.post(
+        f"{sku_url}/price-preview",
+        json={"classification": "Retail", "quantity": 1, "price_changes": prices},
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["unit_ex_vat"] == "9999999999.99"
+    saved = await owner_client.patch(sku_url, json=prices)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["retail_inc_vat"] == prices["retail_inc_vat"]
+
+
+async def test_patch_preserves_rounding_for_legacy_sub_cent_retail_input(
+    owner_client: AsyncClient,
+) -> None:
+    sku = await _create_sku(owner_client, "SUB-CENT-RETAIL")
+    updated = await owner_client.patch(
+        f"/api/v1/skus/{sku['id']}", json={"retail_inc_vat": "999.004"}
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["retail_inc_vat"] == "999.01"
+    assert updated.json()["retail_ex_vat"] == "868.70"
+
+
 async def test_inc_to_ex_round_half_up(owner_client: AsyncClient) -> None:
     sku = await _create_sku(owner_client, "ROUND")
     resp = await owner_client.patch(

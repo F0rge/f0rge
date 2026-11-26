@@ -25,7 +25,7 @@ The rule:
 
 - A document prints the list unit price and the discount %, never a "discounted unit" that will not multiply out to the line amount.
 - Rounding a cash total to the nearest coin is a separate step at payment (BGR 65), not part of line pricing.
-- Known limit, not decided here: South African shelf prices must include VAT (VAT 404), but Firstout stores ex-VAT units to the cent, so some inclusive prices do not round-trip (R999 incl. → R868.70 excl. → R999.01 incl.). Storing the inclusive price, storing ex-VAT to four decimals, or using the tax fraction 15/115 each need their own decision.
+- Known limit, not decided here: South African shelf prices must include VAT (VAT 404), but Firstout stores ex-VAT units to the cent, so some inclusive prices do not round-trip (R999 incl. → R868.70 excl. → R999.01 incl.). Storing the inclusive price, storing ex-VAT to four decimals, or using the tax fraction 15/115 each need their own decision. [ADR 0004](0004-retail-catalogue-price-precision.md) proposes a catalogue-specific change.
 
 ## Sources
 

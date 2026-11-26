@@ -59,7 +59,9 @@ export function WorkspaceFieldValue({
             ? "date"
             : "text"
       }
-      value={String(value ?? "")}
+      step={field.type === "number" ? "any" : undefined}
+      // Keep numeric values numeric so React preserves fractional zeros while typing.
+      value={typeof value === "number" ? value : String(value ?? "")}
       disabled={disabled}
       onChange={(event) => onChange(workspaceScalar(event.target.value, field.type))}
     />
