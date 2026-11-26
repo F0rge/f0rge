@@ -85,12 +85,16 @@ export function productMetaDescription(product: StoreProduct): string | undefine
     return shortDescription(sentence(description));
   }
 
-  const variant = product.variants.length === 1 ? product.variants[0] : undefined;
+  const [firstVariant] = product.variants;
   const category = publicText(product.categories?.[0]?.name);
-  const material = publicText(variant?.material || product.material);
-  const sku = publicText(product.variants[0]?.sku);
+  const materials = product.variants.map((variant) => publicText(variant.material || product.material));
+  const [firstMaterial = publicText(product.material)] = materials;
+  const material = materials.every((value) => value === firstMaterial) ? firstMaterial : null;
+  const sku = publicText(firstVariant?.sku);
   const size = sizeDescription(product);
   const copy = publicText(product.description);
+  // TODO(leo): Add verified finish, material or design details in Firstout for Thera, Carmella and Genevieve,
+  // and clarify how Alba and Maya differ beyond their shared dimensions.
   const facts = [
     size && `Dimensions: ${size}`,
     ...optionDescriptions(product),
@@ -98,9 +102,10 @@ export function productMetaDescription(product: StoreProduct): string | undefine
     category && `${category} collection`,
   ];
   const hasCatalogueCopy = copy != null && sentence(copy).toLowerCase() !== title;
+  const fallback = facts.some(Boolean) ? sentence(name) : `Explore ${name} at DasKasas.`;
   const lead = hasCatalogueCopy
     ? sentence(copy.toLowerCase().includes(name.toLowerCase()) ? copy : `${sentence(name)} ${copy}`)
-    : `Explore ${name} at DasKasas.`;
+    : fallback;
   const skuText = sku && !lead.includes(sku) ? ` SKU ${sku}.` : "";
   const identifier = skuText.length < MAX_DESCRIPTION_LENGTH / 2 ? skuText : "";
   const limit = MAX_DESCRIPTION_LENGTH - identifier.length;

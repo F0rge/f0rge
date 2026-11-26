@@ -68,7 +68,18 @@ describe("product meta descriptions", () => {
   it("falls back to published facts when copy is absent or retired", () => {
     expect(productMetaDescription({
       ...product, description: "A considered addition to your living space.", metadata: { seo_description: "   " },
-    })).toBe("Explore Linden Bench at DasKasas. Dimensions: 135 × 38 × 45 cm. Material: Solid oak. Dining Room collection. SKU LINDEN-OAK.");
+    })).toBe("Linden Bench. Dimensions: 135 × 38 × 45 cm. Material: Solid oak. Dining Room collection. SKU LINDEN-OAK.");
+  });
+
+  it("uses published materials only when they apply to the whole model", () => {
+    const secondVariant = { ...variant, id: "second_variant" };
+    const group = { ...product, description: null, variants: [variant, secondVariant] };
+    expect(productMetaDescription(group)).toContain("Material: Solid oak.");
+
+    const different = { ...secondVariant, material: "Ash" };
+    const mixed = productMetaDescription({ ...group, variants: [variant, different] });
+    expect(mixed).toContain("SKU LINDEN-OAK.");
+    expect(mixed).not.toContain("Material:");
   });
 
   it("omits incomplete legacy dimensions that the product page does not display", () => {
