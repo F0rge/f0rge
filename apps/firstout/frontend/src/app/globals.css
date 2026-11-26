@@ -5,6 +5,17 @@ body {
   margin: 0;
 }
 
+/* Only the back-office shell owns its own scrollport. */
+html:has(.firstout-shell) {
+  overflow: hidden;
+  overscroll-behavior-y: none;
+}
+
+.firstout-shell {
+  /* Keep the header clearance from collapsing through to the document. */
+  display: flow-root;
+}
+
 /* Firstout-owned main region — do not rely on Carbon Content offset.
    2rem padding is the page inset for every screen. Nested Carbon Grids are
    viewport-page layouts (auto margins, 99rem max, extra --cds-grid-margin)
@@ -16,11 +27,14 @@ body {
   padding: 2rem;
   /* Fixed header is 3rem — main is the app scrollport so tab nav can reset it. */
   height: calc(100vh - 3rem);
+  height: calc(100dvh - 3rem);
   min-height: 0;
   min-width: 0;
   /* Title rows stay in the dock-inset viewport; wide tables scroll on panels. */
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: none;
+  scrollbar-gutter: stable;
 }
 
 .firstout-main > * {
