@@ -159,6 +159,29 @@ export async function listStoreProducts(): Promise<StoreProduct[]> {
   return products.filter(isPublicProduct).map(publicProduct);
 }
 
+const shopCatalogueTtlMs = 15_000;
+type ShopCatalogue = { products: Promise<StoreProduct[]>; expiresAt?: number };
+let shopCatalogue: ShopCatalogue | undefined;
+
+// The shop routes share a short-lived, anonymous catalogue snapshot. Product
+// detail, cart availability and checkout keep reading Medusa independently.
+export function listShopProducts(): Promise<StoreProduct[]> {
+  if (shopCatalogue && (shopCatalogue.expiresAt === undefined || Date.now() < shopCatalogue.expiresAt)) {
+    return shopCatalogue.products;
+  }
+
+  const snapshot: ShopCatalogue = { products: listStoreProducts() };
+  shopCatalogue = snapshot;
+  snapshot.products = snapshot.products.then((products) => {
+    snapshot.expiresAt = Date.now() + shopCatalogueTtlMs;
+    return products;
+  }, (error: unknown) => {
+    shopCatalogue = undefined;
+    throw error;
+  });
+  return snapshot.products;
+}
+
 function isPublicProduct(product: StoreProduct): boolean {
   return /^firstout-(group-)?[0-9a-f-]{36}$/i.test(product.handle) &&
     (product.status == null || product.status === "published") && product.variants.length > 0;

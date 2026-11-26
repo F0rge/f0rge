@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { listedPiece, saleOriginal, swatchHex } = await import("./medusa");
+vi.stubEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY", "pk_test_fixture");
+const { listedPiece, listShopProducts, listStoreProducts, saleOriginal, swatchHex } = await import("./medusa");
+vi.unstubAllEnvs();
 import type { MedusaVariant, StoreProduct } from "./medusa";
 
 const price = (calculated: number, original: number | null, type: string | null, currency = "zar"): MedusaVariant["calculated_price"] => ({
@@ -10,6 +12,47 @@ const price = (calculated: number, original: number | null, type: string | null,
 const variant = (overrides: Partial<MedusaVariant> = {}): MedusaVariant => ({
   id: "variant_simone_grey", sku: "SIMONE-GREY", title: "Grey velvet", inventory_quantity: 1, options: [], images: [],
   calculated_price: price(29_600, 29_600, null), ...overrides,
+});
+
+describe("shop catalogue snapshot", () => {
+  it("shares a load, expires, retries after an error and leaves other catalogue reads fresh", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(0);
+    let title = "Simone King Bed";
+    let available = true;
+    const fetchStore = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (new URL(String(input)).pathname === "/store/regions") {
+        return Response.json({ regions: [{ id: "reg_fixture", currency_code: "zar" }] });
+      }
+      if (!available) return new Response(null, { status: 503 });
+      const product: StoreProduct = {
+        id: "prod_simone", handle: "firstout-group-51632a5c-8dfc-55d5-9d12-b1e05f4ac5ee", title, description: null, variants: [variant()],
+      };
+      return Response.json({ products: [product], count: 1 });
+    });
+
+    try {
+      const first = listShopProducts();
+      expect(listShopProducts()).toBe(first);
+      expect(await first).toMatchObject([{ title: "Simone King Bed" }]);
+      expect(fetchStore).toHaveBeenCalledTimes(2);
+
+      clock.mockReturnValue(14_999);
+      title = "Updated Simone King Bed";
+      expect(await listShopProducts()).toMatchObject([{ title: "Simone King Bed" }]);
+      expect(fetchStore).toHaveBeenCalledTimes(2);
+      expect(await listStoreProducts()).toMatchObject([{ title }]);
+
+      clock.mockReturnValue(15_000);
+      available = false;
+      await expect(listShopProducts()).rejects.toThrow("Medusa Store API returned 503");
+      available = true;
+      expect(await listShopProducts()).toMatchObject([{ title }]);
+      expect(fetchStore).toHaveBeenCalledTimes(8);
+    } finally {
+      clock.mockRestore();
+      fetchStore.mockRestore();
+    }
+  });
 });
 
 describe("sale price", () => {
