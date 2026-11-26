@@ -10,17 +10,20 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.catalogue_list import Material, SkuCategory, SkuMaterial
 from app.models.tenant import TenantOwnedMixin
 from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
@@ -50,7 +53,23 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         UUID(as_uuid=True), nullable=True, unique=True
     )
     reorder_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Read model: always the top-level category's name (ledger posting, reports, stocktakes).
     category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    category_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    subcategory_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    colour_name: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    main_material_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # A sale line's quantity must be a multiple of sell_multiple and at least min_sell_qty.
+    sell_multiple: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    min_sell_qty: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    order_up_to: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    do_not_reorder: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     gallery_photo_keys: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
     setting_photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -98,7 +117,65 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
 
+    # View-only: services write the *_id columns and reload. Names avoid response fields.
+    category_ref: Mapped[Optional[SkuCategory]] = relationship(
+        primaryjoin="Sku.category_id == SkuCategory.id",
+        foreign_keys="[Sku.category_id]",
+        viewonly=True,
+    )
+    subcategory_ref: Mapped[Optional[SkuCategory]] = relationship(
+        primaryjoin="Sku.subcategory_id == SkuCategory.id",
+        foreign_keys="[Sku.subcategory_id]",
+        viewonly=True,
+    )
+    main_material_ref: Mapped[Optional[Material]] = relationship(
+        primaryjoin="Sku.main_material_id == Material.id",
+        foreign_keys="[Sku.main_material_id]",
+        viewonly=True,
+    )
+    # Other materials in order. The database cascades a SKU delete.
+    material_links: Mapped[list[SkuMaterial]] = relationship(
+        primaryjoin="Sku.id == SkuMaterial.sku_id",
+        foreign_keys="[SkuMaterial.sku_id]",
+        order_by="SkuMaterial.position",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     __table_args__ = (
+        # Target of tenant FKs; existing databases carry it as 080's tenant_ref_* key.
+        UniqueConstraint("team_id", "id", name="uq_skus_team_id_id"),
+        ForeignKeyConstraint(
+            ["team_id", "category_id"],
+            ["sku_categories.team_id", "sku_categories.id"],
+            name="fk_skus_category_tenant",
+            ondelete="RESTRICT",
+        ),
+        # The sub-category must be a child of the SKU's category.
+        ForeignKeyConstraint(
+            ["team_id", "subcategory_id", "category_id"],
+            ["sku_categories.team_id", "sku_categories.id", "sku_categories.parent_id"],
+            name="fk_skus_subcategory_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["team_id", "main_material_id"],
+            ["materials.team_id", "materials.id"],
+            name="fk_skus_main_material_tenant",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "subcategory_id IS NULL OR category_id IS NOT NULL",
+            name="ck_skus_subcategory_needs_category",
+        ),
+        CheckConstraint("sell_multiple >= 1", name="ck_skus_sell_multiple"),
+        CheckConstraint(
+            # CASE: a zero multiple must fail the check, not raise division by zero.
+            "min_sell_qty >= 1 AND CASE WHEN sell_multiple >= 1 "
+            "THEN min_sell_qty % sell_multiple = 0 ELSE false END",
+            name="ck_skus_min_sell_qty",
+        ),
+        CheckConstraint("order_up_to >= 1", name="ck_skus_order_up_to"),
         Index("ix_skus_team_id_is_archived", "team_id", "is_archived"),
         Index(
             "ix_skus_design_fabric_lower",
