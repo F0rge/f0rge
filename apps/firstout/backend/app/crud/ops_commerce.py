@@ -70,6 +70,7 @@ class PublishedSkuSnapshot:
     setting_photo_storage_key: Optional[str]
     detail_photo_storage_key: Optional[str]
     swatch_hex: Optional[str]
+    second_detail_photo_storage_key: Optional[str]
 
 
 class OpsCommerceCRUD:
@@ -168,6 +169,7 @@ class OpsCommerceCRUD:
                 Sku.setting_photo_storage_key,
                 Sku.detail_photo_storage_key,
                 Sku.swatch_hex,
+                Sku.second_detail_photo_storage_key,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
             .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
@@ -287,6 +289,7 @@ class OpsCommerceCRUD:
                 setting_photo_storage_key=row[23],
                 detail_photo_storage_key=row[24],
                 swatch_hex=row[25],
+                second_detail_photo_storage_key=row[26],
             )
             for row in rows
         ]

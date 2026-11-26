@@ -465,13 +465,14 @@ class SkuService:
             raise ValidationError(
                 "That file isn't a readable image. Use a JPEG, PNG, or WebP."
             ) from exc
-        if sku.setting_photo_storage_key or sku.detail_photo_storage_key:
+        supplemental_keys = (
+            sku.setting_photo_storage_key,
+            sku.detail_photo_storage_key,
+            sku.second_detail_photo_storage_key,
+        )
+        if any(supplemental_keys):
             digest = hashlib.sha256(image_bytes).hexdigest()
-            if any(
-                PurePosixPath(key).stem == digest
-                for key in (sku.setting_photo_storage_key, sku.detail_photo_storage_key)
-                if key
-            ):
+            if any(PurePosixPath(key).stem == digest for key in supplemental_keys if key):
                 raise ValidationError("The primary photo must be distinct from the gallery photos")
         relative_path = f"skus/{sku_id}.jpg"
         try:
@@ -600,6 +601,7 @@ class SkuService:
                 if sku.gallery_photo_keys
                 or sku.setting_photo_storage_key
                 or sku.detail_photo_storage_key
+                or sku.second_detail_photo_storage_key
                 else 0
             ),
             **{field: getattr(sku, field) for field in SKU_DETAIL_FIELDS},
@@ -662,5 +664,12 @@ class SkuService:
 def _staff_photo_storage_keys(sku: Sku) -> tuple[str, ...]:
     studio = sku.gallery_photo_keys or [sku.photo_storage_key]
     return tuple(
-        key for key in (*studio, sku.setting_photo_storage_key, sku.detail_photo_storage_key) if key
+        key
+        for key in (
+            *studio,
+            sku.setting_photo_storage_key,
+            sku.detail_photo_storage_key,
+            sku.second_detail_photo_storage_key,
+        )
+        if key
     )

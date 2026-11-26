@@ -20,7 +20,7 @@ from app.dependencies.auth import (
 )
 from app.schemas.curated_catalogue import CURATED_CATALOGUE_SCOPES, CuratedCatalogueResult
 from app.schemas.sku import (
-    SKU_DETAIL_PHOTO_SLOT,
+    SKU_SECOND_DETAIL_PHOTO_SLOT,
     SkuCreate,
     SkuListPage,
     SkuPricePreviewRequest,
@@ -206,7 +206,7 @@ async def upload_sku_photo(
 @skus_router.get("/{sku_id}/photo", response_model=None)
 async def get_sku_photo(
     sku_id: uuid.UUID,
-    slot: int = Query(default=1, ge=1, le=SKU_DETAIL_PHOTO_SLOT),
+    slot: int = Query(default=1, ge=1, le=SKU_SECOND_DETAIL_PHOTO_SLOT),
     _: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ) -> Response:

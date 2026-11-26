@@ -193,6 +193,19 @@ async def test_supplemental_photos_keep_studio_and_selection_and_use_distinct_op
     assert selected.status_code == 200, selected.text
     private_primary = (await staff_photo(private, 1)).content
 
+    second_detail = _jpeg(195)
+    second_detail_only = _photo_bundle((listed, "LISTED", {"second_detail": second_detail}))
+    missing_first_detail = await import_photos(second_detail_only, apply=True)
+    assert missing_first_detail.status_code == 400, missing_first_detail.text
+    assert "require a first detail photo" in missing_first_detail.text
+    private_second_detail = await import_photos(
+        _photo_bundle((private, "PRIVATE", {"detail": detail, "second_detail": second_detail})),
+        apply=True,
+    )
+    assert private_second_detail.status_code == 400, private_second_detail.text
+    assert "require a curated storefront gallery" in private_second_detail.text
+    assert (await shop_photo(listed, 6)).status_code == 404
+
     detail_only = _photo_bundle((listed, "LISTED", {"detail": detail}))
     batch = _photo_bundle(
         (listed, "LISTED", {"detail": detail}),
@@ -286,6 +299,80 @@ async def test_supplemental_photos_keep_studio_and_selection_and_use_distinct_op
     assert extended[0]["gallery_photo_tokens"] == [
         hashlib.sha256(image).hexdigest() for image in views
     ]
+    assert "second_detail_photo_token" not in extended[0]
+
+    for duplicate in (*views, setting, detail):
+        rejected = await import_photos(
+            _photo_bundle((listed, "LISTED", {"second_detail": duplicate})), apply=True
+        )
+        assert rejected.status_code == 400, rejected.text
+
+    preview_second_detail = await import_photos(second_detail_only)
+    assert preview_second_detail.status_code == 200, preview_second_detail.text
+    assert preview_second_detail.json() == {
+        "applied": False,
+        "selected_skus": 1,
+        "gallery_images": 1,
+        "groups": 0,
+        "held_without_price": [],
+    }
+    assert not list(tmp_path.rglob("second_detail/*.jpg"))
+    for _ in range(2):
+        applied_second_detail = await import_photos(second_detail_only, apply=True)
+        assert applied_second_detail.status_code == 200, applied_second_detail.text
+        assert applied_second_detail.json() == {**preview_second_detail.json(), "applied": True}
+    assert len(list(tmp_path.rglob("second_detail/*.jpg"))) == 1
+
+    later_duplicate = await import_photos(
+        _photo_bundle((listed, "LISTED", {"detail": second_detail})), apply=True
+    )
+    assert later_duplicate.status_code == 400, later_duplicate.text
+    later_studio_duplicate = await import_photos(
+        _bundle((listed, "LISTED", (views[0], views[1], second_detail))), scope="sku", apply=True
+    )
+    assert later_studio_duplicate.status_code == 400, later_studio_duplicate.text
+    for slot, image in enumerate((*views, setting, detail, second_detail), start=1):
+        assert (await staff_photo(listed, slot)).content == image
+        assert (await shop_photo(listed, slot)).content == image
+    updated = (await owner_client.get(f"/api/v1/skus/{listed}")).json()
+    assert updated["gallery_photo_count"] == 6
+    assert updated["name"] == sku["name"]
+    assert updated["retail_ex_vat"] == sku["retail_ex_vat"]
+
+    after_upload_legacy = (
+        await owner_client.get(
+            f"{FEED}?catalogue_version=2&include_detail_photo=true", headers=headers
+        )
+    ).json()["products"]
+    version_one = (
+        await owner_client.get(f"{FEED}?include_second_detail_photo=true", headers=headers)
+    ).json()["products"]
+    assert "second_detail_photo_token" not in after_upload_legacy[0]
+    assert "detail_photo_token" not in version_one[0]
+    assert "second_detail_photo_token" not in version_one[0]
+    after_upload_opt_in = (
+        await owner_client.get(
+            f"{FEED}?catalogue_version=2&include_detail_photo=true&include_second_detail_photo=true",
+            headers=headers,
+        )
+    ).json()["products"]
+    assert [row["sku"] for row in after_upload_opt_in] == ["LISTED"]
+    assert after_upload_opt_in[0]["detail_photo_token"] == hashlib.sha256(detail).hexdigest()
+    assert (
+        after_upload_opt_in[0]["second_detail_photo_token"]
+        == hashlib.sha256(second_detail).hexdigest()
+    )
+    second_detail_opt_in = (
+        await owner_client.get(
+            f"{FEED}?catalogue_version=2&include_second_detail_photo=true", headers=headers
+        )
+    ).json()["products"]
+    assert [row["sku"] for row in second_detail_opt_in] == ["LISTED"]
+    assert second_detail_opt_in[0]["detail_photo_token"] == hashlib.sha256(detail).hexdigest()
+    assert (
+        second_detail_opt_in[0]["second_detail_photo_token"]
+        == hashlib.sha256(second_detail).hexdigest()
+    )
 
 
 @pytest.mark.asyncio

@@ -111,7 +111,7 @@ class CuratedCatalogueService:
         manifest = reviewed.manifest
         if manifest.groups or any(not row.supplemental_photos() for row in manifest.skus):
             raise ValidationError(
-                "Supplemental photos require one or two photos per SKU and no variant groups"
+                "Supplemental photos require at least one photo per SKU and no variant groups"
             )
         skus = await self._catalogue_skus(team_id, manifest, scope="photos")
         legacy_primaries = await self._read_legacy_primary_digests(skus)
@@ -133,6 +133,8 @@ class CuratedCatalogueService:
                     sku.setting_photo_storage_key = setting_key
                 if detail_key := keys[row.sku_id].get("detail"):
                     sku.detail_photo_storage_key = detail_key
+                if second_detail_key := keys[row.sku_id].get("second_detail"):
+                    sku.second_detail_photo_storage_key = second_detail_key
             return self._receipt(reviewed, skus, applied=True)
 
     @staticmethod
@@ -159,6 +161,19 @@ class CuratedCatalogueService:
     ) -> None:
         for row in manifest.skus:
             sku = skus[row.sku_id]
+            if row.second_detail_photo is not None:
+                if (
+                    not sku.storefront_catalogue_selected
+                    or sku.storefront_hidden
+                    or not sku.gallery_photo_keys
+                ):
+                    raise ValidationError(
+                        f"Second detail photos require a curated storefront gallery: {row.our_ref}"
+                    )
+                if row.detail_photo is None and not sku.detail_photo_storage_key:
+                    raise ValidationError(
+                        f"Second detail photos require a first detail photo: {row.our_ref}"
+                    )
             retained = {PurePosixPath(key).stem for key in sku.gallery_photo_keys or ()}
             primary_key = None if sku.gallery_photo_keys else sku.photo_storage_key or None
             captured_key, digest = legacy_primaries.get(row.sku_id, (None, None))
@@ -170,6 +185,8 @@ class CuratedCatalogueService:
                 retained.add(PurePosixPath(sku.setting_photo_storage_key).stem)
             if row.detail_photo is None and sku.detail_photo_storage_key:
                 retained.add(PurePosixPath(sku.detail_photo_storage_key).stem)
+            if row.second_detail_photo is None and sku.second_detail_photo_storage_key:
+                retained.add(PurePosixPath(sku.second_detail_photo_storage_key).stem)
             incoming = [photo.sha256 for photo in row.supplemental_photos().values()]
             if len(incoming) != len(set(incoming)) or retained.intersection(incoming):
                 raise ValidationError(f"Gallery photos must be distinct: {row.our_ref}")
@@ -195,7 +212,7 @@ class CuratedCatalogueService:
                 setting_key,
                 row,
                 preserved=setting_key == sku.setting_photo_storage_key,
-                detail_key=sku.detail_photo_storage_key,
+                detail_keys=(sku.detail_photo_storage_key, sku.second_detail_photo_storage_key),
             )
         if dry_run:
             return self._receipt(
@@ -203,7 +220,8 @@ class CuratedCatalogueService:
                 {sku.id: sku},
                 applied=False,
                 retained_photos=int(bool(setting_key or sku.setting_photo_storage_key))
-                + int(bool(sku.detail_photo_storage_key)),
+                + int(bool(sku.detail_photo_storage_key))
+                + int(bool(sku.second_detail_photo_storage_key)),
             )
 
         # Staged studio photos are immutable. The setting source is resolved again under
@@ -220,7 +238,7 @@ class CuratedCatalogueService:
                     row,
                     setting_key,
                     preserved=setting_key == sku.setting_photo_storage_key,
-                    detail_key=sku.detail_photo_storage_key,
+                    detail_keys=(sku.detail_photo_storage_key, sku.second_detail_photo_storage_key),
                 )
             self._write_reviewed_details(sku, row, gallery_keys[row.sku_id])
             return self._receipt(
@@ -228,7 +246,8 @@ class CuratedCatalogueService:
                 {sku.id: sku},
                 applied=True,
                 retained_photos=int(bool(sku.setting_photo_storage_key))
-                + int(bool(sku.detail_photo_storage_key)),
+                + int(bool(sku.detail_photo_storage_key))
+                + int(bool(sku.second_detail_photo_storage_key)),
             )
 
     async def _selected_sku(self, team_id: uuid.UUID, manifest: CuratedCatalogueManifest) -> Sku:
@@ -277,11 +296,13 @@ class CuratedCatalogueService:
                 raise ValidationError(f"SKU has no storefront category: {row.our_ref}")
             if sku.setting_photo_storage_key:
                 _validate_setting_distinct(row, PurePosixPath(sku.setting_photo_storage_key).stem)
-            if sku.detail_photo_storage_key and any(
-                photo.sha256 == PurePosixPath(sku.detail_photo_storage_key).stem
-                for photo in row.gallery or ()
-            ):
-                raise ValidationError("The detail photo must be distinct from the studio photos")
+            detail_digests = {
+                PurePosixPath(key).stem
+                for key in (sku.detail_photo_storage_key, sku.second_detail_photo_storage_key)
+                if key
+            }
+            if any(photo.sha256 in detail_digests for photo in row.gallery or ()):
+                raise ValidationError("Detail and studio photos must be distinct")
         for group in manifest.groups:
             if len({SHOP_CATEGORIES[_category(skus[row.sku_id])] for row in group.variants}) != 1:
                 raise ValidationError(
@@ -457,7 +478,7 @@ def _validate_setting_distinct(row: ReviewedSku, digest: str) -> None:
 
 
 def _read_setting_photo(
-    key: str, row: ReviewedSku, *, preserved: bool, detail_key: str | None
+    key: str, row: ReviewedSku, *, preserved: bool, detail_keys: tuple[str | None, str | None]
 ) -> tuple[bytes, str]:
     try:
         data = read_bytes(key)
@@ -470,15 +491,15 @@ def _read_setting_photo(
     if preserved and digest != PurePosixPath(key).stem:
         raise ConflictError("The retained setting photo did not match its checksum")
     _validate_setting_distinct(row, digest)
-    if detail_key and digest == PurePosixPath(detail_key).stem:
+    if any(key and digest == PurePosixPath(key).stem for key in detail_keys):
         raise ValidationError("The retained setting photo must be distinct from the detail photo")
     return data, digest
 
 
 def _preserve_setting_photo(
-    row: ReviewedSku, key: str, *, preserved: bool, detail_key: str | None
+    row: ReviewedSku, key: str, *, preserved: bool, detail_keys: tuple[str | None, str | None]
 ) -> str:
-    data, digest = _read_setting_photo(key, row, preserved=preserved, detail_key=detail_key)
+    data, digest = _read_setting_photo(key, row, preserved=preserved, detail_keys=detail_keys)
     if preserved:
         return key
     return _store_reviewed_photo(f"skus/{row.sku_id}/setting/{digest}.jpg", data, digest)

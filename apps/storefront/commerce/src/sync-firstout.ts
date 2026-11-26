@@ -107,7 +107,7 @@ async function opsGet(path: string): Promise<{ response: Response; companyId: st
 
 async function fetchOpsProducts(): Promise<OpsProductsResponse> {
   const { response, companyId } = await opsGet(
-    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true&include_swatch=true",
+    "/products?catalogue_version=2&include_setting_photo=true&include_detail_photo=true&include_swatch=true&include_second_detail_photo=true",
   );
   return parseOpsProducts(await response.json(), companyId);
 }
@@ -338,6 +338,7 @@ const PHOTO_SLOT_METADATA_KEY = "firstout_gallery_slot";
 const GALLERY_TOKENS_METADATA_KEY = "firstout_gallery_photo_tokens";
 const SETTING_PHOTO_SLOT = 4;
 const DETAIL_PHOTO_SLOT = 5;
+const SECOND_DETAIL_PHOTO_SLOT = 6;
 
 type PhotoImage = { id: string; url: string; metadata?: Record<string, unknown> | null };
 type PhotoVariant = {
@@ -451,15 +452,21 @@ async function syncReviewedGallery(
   };
   const settingCandidate = row.setting_photo_token === undefined ? retainedToken(SETTING_PHOTO_SLOT) : row.setting_photo_token;
   const detailCandidate = row.detail_photo_token === undefined ? retainedToken(DETAIL_PHOTO_SLOT) : row.detail_photo_token;
+  const secondDetailCandidate = row.second_detail_photo_token === undefined
+    ? retainedToken(SECOND_DETAIL_PHOTO_SLOT) : row.second_detail_photo_token;
   // The source's explicitly supplied tokens take precedence over retained
   // assets if the same image is now used in a different slot.
-  const setting = settingCandidate && !studioTokens.includes(settingCandidate) && settingCandidate !== row.detail_photo_token
+  const setting = settingCandidate && !studioTokens.includes(settingCandidate) &&
+    settingCandidate !== row.detail_photo_token && settingCandidate !== row.second_detail_photo_token
     ? settingCandidate : null;
   const detail = detailCandidate && !studioTokens.includes(detailCandidate) && detailCandidate !== setting
     ? detailCandidate : null;
+  const secondDetail = detail && secondDetailCandidate && !studioTokens.includes(secondDetailCandidate) &&
+    secondDetailCandidate !== setting && secondDetailCandidate !== detail ? secondDetailCandidate : null;
   const tokens: (string | null)[] = [...studioTokens];
   if (setting || detail) tokens.push(setting);
   if (detail) tokens.push(detail);
+  if (secondDetail) tokens.push(secondDetail);
   const slots = tokens.flatMap((token, index) => token ? [{ token, slot: index + 1 }] : []);
   const missing = slots.filter(({ token, slot }) => !findImage(slot, token));
   const toUpload = await Promise.all(missing.map(async ({ token, slot }) => {

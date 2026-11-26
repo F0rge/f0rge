@@ -17,7 +17,7 @@ ArchiveFilename = Annotated[
 ]
 CuratedCatalogueScope = Literal["catalogue", "sku", "photos"]
 CURATED_CATALOGUE_SCOPES = ("catalogue", "sku", "photos")
-SUPPLEMENTAL_PHOTO_FIELDS = frozenset({"setting_photo", "detail_photo"})
+SUPPLEMENTAL_PHOTO_FIELDS = frozenset({"setting_photo", "detail_photo", "second_detail_photo"})
 
 
 class ReviewedPhoto(BaseModel):
@@ -38,11 +38,16 @@ class ReviewedSku(SkuDetails):
     retain_current_photo_as_setting: bool = Field(default=False, strict=True)
     setting_photo: Optional[ReviewedPhoto] = None
     detail_photo: Optional[ReviewedPhoto] = None
+    second_detail_photo: Optional[ReviewedPhoto] = None
 
     def supplemental_photos(self) -> dict[str, ReviewedPhoto]:
         return {
             role: photo
-            for role, photo in (("setting", self.setting_photo), ("detail", self.detail_photo))
+            for role, photo in (
+                ("setting", self.setting_photo),
+                ("detail", self.detail_photo),
+                ("second_detail", self.second_detail_photo),
+            )
             if photo is not None
         }
 
