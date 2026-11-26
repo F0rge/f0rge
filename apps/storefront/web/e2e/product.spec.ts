@@ -123,6 +123,8 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await expect(page).toHaveTitle('Umbra Dining Table – Gold, 160 cm | DasKasas')
   await expect(description).toHaveAttribute('content', 'Umbra Dining Table. Colour: Gold. Size: 160 cm. SKU UMBRA-GOLD-160.')
   await expect(canonical).toHaveAttribute('href', new RegExp(`${path}$`))
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Umbra Dining Table – Gold, 160 cm | DasKasas')
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', /\/hero-sofas\.jpg$/)
   await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-160')
   await expect(colour.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
   await expect(size.getByRole('button', { name: '160 cm' })).toHaveAttribute('aria-pressed', 'true')

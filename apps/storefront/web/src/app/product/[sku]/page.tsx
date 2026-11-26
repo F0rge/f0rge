@@ -5,9 +5,10 @@ import { Suspense } from "react";
 import { RotateCcw, Truck } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
 import { getStoreProduct, listStoreProducts, listedPiece, productPath, type StoreProduct } from "@/lib/medusa";
-import { productPageCopy, productStructuredData } from "@/lib/product-seo";
+import { productPageCopy, productShareImage, productStructuredData } from "@/lib/product-seo";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { COLLECTION_ADDRESS } from "@/lib/checkout-fulfillment";
+import { publicPageMetadata } from "@/lib/storefront-metadata";
 import { ProductDetail } from "./product-detail";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +26,12 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
   const [{ sku }, { variant }] = await Promise.all([params, searchParams]);
   const product = await getStoreProduct(sku);
   if (!product) return {};
-  return {
-    ...productPageCopy(product, selectedVariant(product, variant)),
-    alternates: { canonical: productPath(product) },
-  };
+  const selected = selectedVariant(product, variant);
+  return publicPageMetadata({
+    ...productPageCopy(product, selected),
+    path: productPath(product),
+    image: productShareImage(product, selected),
+  });
 }
 
 // Same category first, then everything else, in Medusa's order (Array.sort is stable).

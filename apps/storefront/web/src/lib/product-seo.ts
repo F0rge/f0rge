@@ -140,15 +140,27 @@ export function productPageCopy(product: StoreProduct, variant?: MedusaVariant) 
 }
 
 function publicImages(product: StoreProduct, variant: MedusaVariant, canonicalUrl: string): string[] {
+  const storefrontOrigin = URL.parse(canonicalUrl)?.origin;
   return selectedImages(product, variant).flatMap((image) => {
     if (image.startsWith("//") || image.includes("\\")) return [];
     const url = image.startsWith("/") ? URL.parse(image, canonicalUrl) : URL.parse(image);
     if (!url || url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return [];
-    if (url.origin === CANONICAL_HOMEPAGE.slice(0, -1) && url.pathname.startsWith("/demo/")) return [];
+    if (url.origin === storefrontOrigin && url.pathname.startsWith("/demo/")) return [];
     const host = url.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
     if (!host.includes(".") || isIP(host) || /\.(?:local|localhost|internal|lan|test|invalid)$/.test(host)) return [];
     return [url.href];
   });
+}
+
+export function productShareImage(
+  product: StoreProduct,
+  variant?: MedusaVariant,
+  baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3004",
+) {
+  for (const candidate of variant ? [variant] : product.variants) {
+    const [url] = publicImages(product, candidate, baseUrl);
+    if (url) return { url, alt: publicText(product.title) || product.title };
+  }
 }
 
 function offerAvailability(variant: MedusaVariant): "InStock" | "BackOrder" | "OutOfStock" | null {

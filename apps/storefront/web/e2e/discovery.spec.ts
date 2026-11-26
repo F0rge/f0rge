@@ -20,6 +20,9 @@ test('catalogue metadata and non-production robots policy describe public routes
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'http://localhost:3004/shop')
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Browse sofas and armchairs.*Filter by price and availability/)
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Shop furniture | DasKasas')
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute('content', 'http://localhost:3004/shop')
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'http://localhost:3004/hero-sofas.jpg')
 
   if (sourceSkuId) {
     await page.goto(`/product/${sourceSkuId}`)

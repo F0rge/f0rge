@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PolicyArticle } from "@/components/policy-article";
 import { currentCustomerPolicies, policyPage, type PolicySection } from "@/lib/customer-policies";
 import { storefrontIndexable } from "@/lib/launch-indexing";
+import { publicPageMetadata } from "@/lib/storefront-metadata";
 
 const SECTIONS = new Set<PolicySection>(["delivery", "returns", "refunds", "terms", "privacy", "paia"]);
 const descriptions: Record<PolicySection, string> = {
@@ -26,10 +27,12 @@ export async function generateMetadata({ params }: PolicyPageProps): Promise<Met
   const page = policyPage(currentCustomerPolicies(), section);
   const index = storefrontIndexable() && page.published;
   return {
-    title: page.title,
-    description: descriptions[section],
+    ...publicPageMetadata({
+      title: page.title,
+      description: descriptions[section],
+      path: `/policies/${section}`,
+    }),
     robots: { index, follow: index },
-    alternates: { canonical: `/policies/${section}` },
   };
 }
 

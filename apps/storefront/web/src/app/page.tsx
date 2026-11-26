@@ -11,13 +11,24 @@ import { homepageStructuredData } from "@/lib/homepage-structured-data";
 import { listStoreProducts, listedPiece, type StoreProduct } from "@/lib/medusa";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { SHOWROOM } from "@/lib/showroom";
+import { publicPageMetadata } from "@/lib/storefront-metadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: { absolute: "DasKasas | Furniture Store in Bedfordview" },
-  description: "Shop sofas, armchairs, dining tables and bedroom furniture online, or visit the DasKasas showroom at Bedford Square.",
+const heroImage = {
+  url: "/merchandising/home-ivory-salon.webp",
+  alt: "Ivory Salon with the Avanzi sofa, Carmella armchair and Canberra coffee table",
+  width: 1672,
+  height: 941,
 };
+
+export const metadata: Metadata = publicPageMetadata({
+  title: "DasKasas | Furniture Store in Bedfordview",
+  absoluteTitle: true,
+  description: "Shop sofas, armchairs, dining tables and bedroom furniture online, or visit the DasKasas showroom at Bedford Square.",
+  path: "/",
+  image: heroImage,
+});
 
 const faqs: { question: string; answer: string; returnPolicy?: true }[] = [
   {
@@ -133,7 +144,7 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="lg:col-span-5 lg:self-center xl:col-span-6">
-          <Image src="/merchandising/home-ivory-salon.webp" alt="Ivory Salon with the Avanzi sofa, Carmella armchair and Canberra coffee table" width={1672} height={941}
+          <Image src={heroImage.url} alt={heroImage.alt} width={heroImage.width} height={heroImage.height}
             sizes="(min-width: 1280px) 594px, (min-width: 1024px) 42vw, 100vw" loading="eager" fetchPriority="high" className="aspect-video w-full object-contain" />
         </div>
       </div>

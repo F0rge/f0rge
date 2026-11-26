@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MadeToOrderOffer, MedusaVariant, StoreProduct } from "./medusa";
-import { productMetaDescription, productPageCopy, productStructuredData } from "./product-seo";
+import { productMetaDescription, productPageCopy, productShareImage, productStructuredData } from "./product-seo";
 
 const origin = "https://www.daskasas.co.za";
 const path = "/product/firstout-group-11111111-1111-4111-8111-111111111111";
@@ -157,6 +157,22 @@ describe("product page metadata for selected variants", () => {
       description: "Linden Bench. Upholstery: FAB-42. SKU LINDEN-OAK.",
     });
     expect(productPageCopy(product, variant)).toEqual(productPageCopy(product));
+  });
+});
+
+describe("product share images", () => {
+  it("uses the selected variant's approved public image, or lets the page use its default", () => {
+    const alternatePhoto = "https://media.example.com/linden-grey.jpg";
+    const finish = {
+      ...variant,
+      id: "second_variant",
+      images: ["/demo/arc-front.jpg", "https://files.railway.internal/image.jpg", alternatePhoto].map((url) => ({ id: url, url })),
+    };
+    const group = { ...product, variants: [variant, finish] };
+
+    expect(productShareImage(group, undefined, origin)).toEqual({ url: image, alt: product.title });
+    expect(productShareImage(group, finish, origin)).toEqual({ url: alternatePhoto, alt: product.title });
+    expect(productShareImage(group, { ...finish, images: finish.images.slice(0, 2) }, origin)).toBeUndefined();
   });
 });
 
