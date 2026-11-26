@@ -87,6 +87,8 @@ import { administrationHome } from "@/lib/admin-navigation";
 import { WorkspaceLoader } from "@/components/workspace-loader";
 import loadingStyles from "@/components/auth-loading.module.css";
 import { HeaderSearch } from "@/components/header-search";
+import { SkuPanelProvider } from "@/components/sku-panel/provider";
+import { SkuPanel } from "@/components/sku-panel/sku-panel";
 import {
   getNarrowViewportServerSnapshot,
   getNarrowViewportSnapshot,
@@ -284,6 +286,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
+    <SkuPanelProvider>
     <div
       className="firstout-shell"
       data-nav-expanded={expanded ? "true" : "false"}
@@ -411,7 +414,13 @@ export function AppShell({ children }: AppShellProps) {
             {loading ? <WorkspaceLoader /> : children}
           </main>
         )}
+        {!loading && (
+          <Suspense>
+            <SkuPanel />
+          </Suspense>
+        )}
       </Theme>
     </div>
+    </SkuPanelProvider>
   );
 }

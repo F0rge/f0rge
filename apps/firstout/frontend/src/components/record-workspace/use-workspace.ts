@@ -16,6 +16,7 @@ import {
   workspaceSearch,
   workspaceStateForKey,
 } from "@/lib/record-workspace";
+import { withSkuPanelParams } from "@/lib/sku-panel";
 import type { RecordWorkspaceAdapter } from "./types";
 
 interface SelectionState {
@@ -81,9 +82,10 @@ export function useWorkspace<T extends { id: string }>(
         ...patch,
         offset: keepPage ? (patch.offset ?? query.offset) : 0,
       };
-      router.replace(`${pathname}?${workspaceSearch(next)}`, { scroll: false });
+      // The shell SKU panel (?sku, &skuView) stays open while the list changes underneath it.
+      router.replace(`${pathname}?${withSkuPanelParams(workspaceSearch(next), params)}`, { scroll: false });
     },
-    [query, pathname, router],
+    [query, pathname, router, params],
   );
   useEffect(() => {
     if (search.trim() === query.q) return;
@@ -119,7 +121,7 @@ export function useWorkspace<T extends { id: string }>(
   const requestedRecord = items.find((item) => item.id === recordId);
   const active = requestedRecord ?? items[0];
   const focus = (id?: string) =>
-    router.replace(`${pathname}?${workspaceSearch(query, id)}`, {
+    router.replace(`${pathname}?${withSkuPanelParams(workspaceSearch(query, id), params)}`, {
       scroll: false,
     });
   const isChecked = (id: string) =>

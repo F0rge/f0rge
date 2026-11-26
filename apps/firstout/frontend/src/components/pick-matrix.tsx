@@ -13,6 +13,7 @@ import {
 
 import type { Location } from "@/lib/api";
 import type { PickLine } from "@/lib/picks";
+import { SkuLink } from "@/components/sku-link";
 
 type PickMatrixProps = {
   locations: Location[];
@@ -70,7 +71,7 @@ export function PickMatrix({
             return (
               <TableRow key={line.sku_id}>
                 <TableCell>
-                  <strong>{line.sku_our_ref || line.sku_id}</strong>
+                  <strong><SkuLink id={line.sku_id}>{line.sku_our_ref || line.sku_id}</SkuLink></strong>
                   <div className="firstout-muted-text">{line.sku_name}</div>
                 </TableCell>
                 <TableCell>{line.qty_needed}</TableCell>

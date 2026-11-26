@@ -51,6 +51,18 @@ export function newOrderDraft(): OrderDraft {
     lines: [newOrderLine()],
   };
 }
+/**
+ * A new order for one SKU (`/purchase-orders?new=1&sku=<id>`): its preferred supplier when
+ * that supplier can still be ordered from, otherwise the supplier is left to the user.
+ */
+export function prefilledOrderDraft(
+  sku: Pick<Sku, "id" | "preferred_supplier_id">,
+  suppliers: readonly Pick<Supplier, "id" | "is_archived">[],
+): OrderDraft {
+  const draft = newOrderDraft();
+  const supplier = suppliers.find((item) => item.id === sku.preferred_supplier_id && !item.is_archived);
+  return { ...draft, supplier_id: supplier?.id ?? "", lines: [{ ...draft.lines[0], sku_id: sku.id }] };
+}
 export function isPositiveDecimal(value: string): boolean {
   return /^\d+(?:\.\d+)?$/.test(value.trim()) && /[1-9]/.test(value);
 }

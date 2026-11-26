@@ -1,0 +1,39 @@
+.picker {
+  display: grid;
+  gap: var(--cds-spacing-03);
+  min-width: 0;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--cds-spacing-05);
+}
+
+.manage {
+  justify-self: start;
+}
+
+.others {
+  display: grid;
+  gap: var(--cds-spacing-03);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cds-spacing-02);
+  min-height: 2rem;
+}
+
+.error {
+  display: block;
+  overflow: visible;
+  max-height: none;
+  color: var(--cds-text-error);
+}

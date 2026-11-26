@@ -58,6 +58,10 @@ class PortalCatalogueItem(BaseModel):
     name: str
     unit_ex_vat: Decimal
     unit_inc_vat: Decimal
+    # The selling rule: a line's quantity is a multiple of sell_multiple, at least
+    # min_sell_qty (both 1 when the SKU has none).
+    sell_multiple: int
+    min_sell_qty: int
 
 
 class PortalOrderLineCreate(BaseModel):

@@ -24,6 +24,8 @@ export function alignPreviewLines(
 /** Why the server will refuse this line's discount or price (ADR 0002), in plain words. */
 export function blockedReason(blockedBy: string | null | undefined): string | null {
   if (!blockedBy) return null;
+  // The quantity rule is not a permission; its message comes with the line (`quantity_rule`).
+  if (blockedBy === "quantity_rule") return null;
   if (blockedBy === "users.manage") {
     return `The discount is above the team's cap. Only staff who can "${permissionLabel("users.manage")}" can go higher.`;
   }

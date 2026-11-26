@@ -82,6 +82,8 @@ class CustomerPortalService:
                     name=sku.name,
                     unit_ex_vat=unit_ex,
                     unit_inc_vat=ex_to_inc(unit_ex, vat_rate),
+                    sell_multiple=sku.sell_multiple,
+                    min_sell_qty=sku.min_sell_qty,
                 )
             )
         return items

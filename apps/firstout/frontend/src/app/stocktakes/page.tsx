@@ -24,7 +24,6 @@ import {
   getStocktake,
   isActiveLocation,
   listLocations,
-  listSkus,
   listStocktakes,
   startStocktake,
   type Location,
@@ -33,6 +32,7 @@ import {
   type StocktakeSummary,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCategories } from "@/components/catalogue-lists/hooks";
 
 import { StocktakeSession } from "./stocktake-session";
 
@@ -51,7 +51,9 @@ export default function StocktakesPage() {
   const [active, setActive] = useState<Stocktake | null>(null);
   const [locationId, setLocationId] = useState("");
   const [category, setCategory] = useState("");
-  const [categories, setCategories] = useState<string[]>([]);
+  // Counts are by top-level category; the server matches the SKUs' category name.
+  const categoryTree = useCategories("active");
+  const categories = categoryTree.data?.categories ?? [];
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,25 +63,9 @@ export default function StocktakesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryData, locationData, skuData] = await Promise.all([
-        listStocktakes(),
-        listLocations(),
-        listSkus({ lifecycle: "all" }),
-      ]);
+      const [summaryData, locationData] = await Promise.all([listStocktakes(), listLocations()]);
       setStocktakes(summaryData);
       setLocations(locationData.filter(isActiveLocation));
-      const seen = new Map<string, string>();
-      for (const sku of skuData) {
-        const value = sku.category?.trim();
-        if (!value) {
-          continue;
-        }
-        const key = value.toLowerCase();
-        if (!seen.has(key)) {
-          seen.set(key, value);
-        }
-      }
-      setCategories([...seen.values()].sort((a, b) => a.localeCompare(b)));
       const activeSummary = summaryData.find((entry) => entry.status === "in_progress");
       if (activeSummary && !sessionDismissedRef.current) {
         setActive(await getStocktake(activeSummary.id));
@@ -240,11 +226,18 @@ export default function StocktakesPage() {
                 labelText="Category"
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
-                helperText="All categories counts every SKU. A category counts only that group."
+                disabled={categoryTree.isPending}
+                helperText={categoryTree.isError
+                  ? "Categories could not be loaded. You can still count every SKU."
+                  : "All categories counts every SKU. A category counts only its SKUs, sub-categories included."}
               >
                 <SelectItem value="" text="All categories" />
                 {categories.map((entry) => (
-                  <SelectItem key={entry} value={entry} text={entry} />
+                  <SelectItem
+                    key={entry.id}
+                    value={entry.name}
+                    text={`${entry.name} (${entry.sku_count} ${entry.sku_count === 1 ? "SKU" : "SKUs"})`}
+                  />
                 ))}
               </Select>
               <Button

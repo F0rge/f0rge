@@ -814,6 +814,10 @@ function SettingsContent() {
         </Stack>
       ))}
       <Stack gap={4}>
+        <h2 className="cds--type-heading-03">Catalogue lists</h2>
+        <AdminDirectoryLinks items={["categories", "materials"]} />
+      </Stack>
+      <Stack gap={4}>
         <h2 className="cds--type-heading-03">Integrations</h2>
         <AdminDirectoryLinks items={["integrations"]} />
       </Stack>

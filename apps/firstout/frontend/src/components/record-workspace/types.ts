@@ -62,7 +62,20 @@ export interface RecordWorkspaceProps<T extends { id: string }> {
   listTitle?: string;
   /** Render an action above the inline inspector's scrolling content. */
   renderDetailsHeader?: (item: T) => ReactNode;
-  renderDetails: (item: T, context: RecordWorkspaceContext) => ReactNode;
+  /** Inspector content. Not used when `openRecord` is set. */
+  renderDetails?: (item: T, context: RecordWorkspaceContext) => ReactNode;
+  /**
+   * No-details mode: the list is full width and the page shows the record elsewhere
+   * (the catalogue docks the shell SKU panel). Without it, nothing changes.
+   */
+  openRecord?: {
+    /** The row shown with the standard active style, or none. */
+    activeId: string | null;
+    /** A row was opened; `pageItems` is the current page of rows, in order. */
+    onOpen: (item: T, pageItems: readonly T[]) => void;
+    /** The current page of rows changed (paging, sorting, filters, reload). */
+    onPageItems?: (pageItems: readonly T[]) => void;
+  };
   loadingDetails?: { tabs: readonly string[]; fields: readonly string[] };
   headerActions?: ReactNode;
   /** Shown between the header and the filters, e.g. KPI tiles. */

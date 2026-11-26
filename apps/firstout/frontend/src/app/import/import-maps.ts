@@ -2,6 +2,7 @@ export const INVENTORY_FIELDS = [
   { key: "our_ref", label: "SKU", required: true },
   { key: "name", label: "Name", required: true },
   { key: "category", label: "Category", required: true },
+  { key: "sub_category", label: "Sub-category", required: false },
   { key: "retail_inc_vat", label: "Retail Price", required: true },
   { key: "barcode", label: "Barcode", required: false },
   { key: "cost_zar", label: "Cost Price", required: false },
@@ -21,7 +22,7 @@ export type MapField = {
   required: boolean;
 };
 
-export const INVENTORY_TEMPLATE = "SKU,Name,Category,Retail Price,Barcode\n";
+export const INVENTORY_TEMPLATE = "SKU,Name,Category,Sub-category,Retail Price,Barcode\n";
 export const SOH_TEMPLATE = "SKU,Location,Qty,Unit Cost\n";
 
 export function invertAppliedMap(

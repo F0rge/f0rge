@@ -21,6 +21,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { SkuLink } from "@/components/sku-link";
 
 import {
   ApiError,
@@ -220,7 +221,7 @@ function PicksPageContent() {
                               </Tag>
                             ) : cell.info.header === "sku" && entry ? (
                               <>
-                                {entry.sku_our_ref || entry.sku_id}
+                                <SkuLink id={entry.sku_id}>{entry.sku_our_ref || entry.sku_id}</SkuLink>
                                 {entry.sku_name ? (
                                   <div className="firstout-muted-text">{entry.sku_name}</div>
                                 ) : null}

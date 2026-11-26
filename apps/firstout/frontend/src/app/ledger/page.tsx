@@ -22,7 +22,8 @@ import {
   TextInput,
 } from "@carbon/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
 
 import {
   ACCOUNT_TYPES,
@@ -44,6 +45,8 @@ import {
   type UpsertCategoryMapPayload,
 } from "@/lib/api";
 import { usePageError } from "@/hooks/use-page-error";
+import { useCategories } from "@/components/catalogue-lists/hooks";
+import { unmappedCategories } from "@/lib/catalogue-list-view";
 import { useAuth } from "@/lib/auth";
 import { workspaceIdentity } from "@/lib/record-workspace";
 import { RecordWorkspace, RecordDetails, RecordDetail, type RecordWorkspaceAdapter } from "@/components/record-workspace";
@@ -93,14 +96,19 @@ function accountsOfType(accounts: Account[], type: AccountType): Account[] {
 
 export default function ChartOfAccountsPage() {
   const { user } = useAuth();
-  return <ChartOfAccountsContent key={workspaceIdentity(user)} />;
+  return (
+    <Suspense fallback={<PageLoading kind="status" label="Loading chart of accounts…" />}>
+      <ChartOfAccountsContent key={workspaceIdentity(user)} />
+    </Suspense>
+  );
 }
 
 function ChartOfAccountsContent() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [categoryOpen, setCategoryOpen] = useState(false);
+  // `/ledger?posting=1` (from Settings → Categories) opens Category posting.
+  const [categoryOpen, setCategoryOpen] = useState(useSearchParams().get("posting") === "1");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateAccountPayload>(emptyCreateForm);
@@ -125,9 +133,16 @@ function ChartOfAccountsContent() {
   });
   const accounts = useMemo(() => ledgerQuery.data?.accounts ?? [], [ledgerQuery.data]);
   const maps = useMemo(() => ledgerQuery.data?.maps ?? [], [ledgerQuery.data]);
+  const managedCategories = useCategories("active");
+  // A new posting entry is for a managed category that has none yet.
+  const mappableCategories = unmappedCategories(managedCategories.data?.categories ?? [], maps.map((map) => map.category));
   const loading = ledgerQuery.isPending || ledgerQuery.isFetching;
   const { error, setError } = usePageError(ledgerQuery.error, "Failed to load ledger.");
-  const loadLedger = () => client.invalidateQueries({ queryKey: ["ledger"] });
+  // Category posting also shows on Settings → Categories (each category's sales account).
+  const loadLedger = () => Promise.all([
+    client.invalidateQueries({ queryKey: ["ledger"] }),
+    client.invalidateQueries({ queryKey: ["categories"] }),
+  ]);
 
   const incomeAccounts = useMemo(() => accountsOfType(accounts, "income"), [accounts]);
   const expenseAccounts = useMemo(() => accountsOfType(accounts, "expense"), [accounts]);
@@ -546,16 +561,27 @@ function ChartOfAccountsContent() {
       >
         <Stack gap={5}>
           {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
-          <TextInput
-            id="category-map-name"
-            labelText="Category"
-            value={mapForm.category}
-            onChange={(event) =>
-              setMapForm((form) => ({ ...form, category: event.target.value }))
-            }
-            disabled={saving || mapMode === "edit"}
-            required
-          />
+          {mapMode === "edit" ? (
+            <TextInput id="category-map-name" labelText="Category" value={mapForm.category} disabled required />
+          ) : (
+            <Select
+              id="category-map-name"
+              labelText="Category"
+              value={mapForm.category}
+              disabled={saving || managedCategories.isPending}
+              helperText={managedCategories.isError
+                ? "Categories could not be loaded. Close this and try again."
+                : !managedCategories.isPending && !mappableCategories.length
+                  ? "Every category already has posting accounts. Add categories in Settings → Categories."
+                  : "Categories without posting accounts. Their sales post to the 4000 fallback until mapped."}
+              onChange={(event) => setMapForm((form) => ({ ...form, category: event.target.value }))}
+            >
+              <SelectItem value="" text={managedCategories.isPending ? "Loading categories…" : "Select a category"} />
+              {mappableCategories.map((category) => (
+                <SelectItem key={category.id} value={category.name} text={category.name} />
+              ))}
+            </Select>
+          )}
           <Select
             id="category-map-sales"
             disabled={saving}

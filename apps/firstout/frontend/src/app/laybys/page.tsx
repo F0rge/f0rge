@@ -36,6 +36,7 @@ import {
   ApiError,
   addLaybyPayment,
   cancelLayby,
+  can,
   canMutateLaybys,
   completeLayby,
   createCustomer,
@@ -62,7 +63,15 @@ import { useAuth } from "@/lib/auth";
 import { queryKeys, referenceQueries } from "@/lib/queries";
 import { localIsoDate } from "@/lib/dates";
 import { printHtml } from "@/lib/print-html";
-import { mayBePriced } from "@/lib/sale-preview";
+import { anyLineBlocked, mayBePriced } from "@/lib/sale-preview";
+import {
+  lineQuantityNotice,
+  quantityInputBounds,
+  quantityRuleHelper,
+  quantityRuleRefusal,
+  startQty,
+  type QuantityRuleRefusal,
+} from "@/lib/sale-quantity-rule";
 
 const TABLE_HEADERS = [
   { key: "layby_number", header: "Reference" },
@@ -267,6 +276,8 @@ function LaybysPageContent() {
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [duplicateMatches, setDuplicateMatches] = useState<CustomerDuplicateMatch[]>([]);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [quantityRefusal, setQuantityRefusal] = useState<QuantityRuleRefusal | null>(null);
+  const canBreakBatches = can(user, "sales.price_override");
   const [lines, setLines] = useState<LineForm[]>([emptyLine()]);
   const [durationMonths, setDurationMonths] = useState<"3" | "6">("3");
   const [holdStock, setHoldStock] = useState(true);
@@ -375,7 +386,8 @@ function LaybysPageContent() {
   const monthlyInstallment = roundHalfUp(remainingBalance / durationCount, 2);
 
   const createFormValid = Boolean(
-    customerId && locationId && preview && !previewQuery.isPlaceholderData && numericDeposit >= 0,
+    customerId && locationId && preview && !previewQuery.isPlaceholderData && numericDeposit >= 0 &&
+      !anyLineBlocked(preview),
   );
 
   useEffect(() => {
@@ -465,6 +477,7 @@ function LaybysPageContent() {
     }
     setSaving(true);
     setError(null);
+    setQuantityRefusal(null);
     try {
       const created = await createLayby({
         customer_id: customerId,
@@ -481,6 +494,7 @@ function LaybysPageContent() {
       printLaybyReceipt(created);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create layby.");
+      setQuantityRefusal(quantityRuleRefusal(err));
     } finally {
       setSaving(false);
     }
@@ -800,7 +814,15 @@ function LaybysPageContent() {
             </Button>
           </Stack>
 
-          {lines.map((line, index) => (
+          {lines.map((line, index) => {
+            const lineSku = skusById.get(line.sku_id);
+            const bounds = lineSku ? quantityInputBounds(lineSku, canBreakBatches) : { min: 1, step: 1 };
+            const qtyNumber = typeof line.qty === "number" ? line.qty : 0;
+            const notice = lineQuantityNotice(
+              preview?.lines.find((entry) => entry.sku_id === line.sku_id && entry.qty === qtyNumber),
+              quantityRefusal, line.sku_id, qtyNumber,
+            );
+            return (
             <Stack key={index} gap={4} orientation="horizontal">
               <Select
                 id={`layby-sku-${index}`}
@@ -808,7 +830,9 @@ function LaybysPageContent() {
                 value={line.sku_id}
                 onChange={(event) => {
                   const next = [...lines];
-                  next[index] = { ...next[index], sku_id: event.target.value };
+                  const chosen = skusById.get(event.target.value);
+                  // A batch-sold SKU starts at its minimum.
+                  next[index] = { ...next[index], sku_id: event.target.value, qty: chosen ? startQty(chosen) : next[index].qty };
                   setLines(next);
                 }}
               >
@@ -824,7 +848,13 @@ function LaybysPageContent() {
               <NumberInput
                 id={`layby-qty-${index}`}
                 label="Quantity"
-                min={1}
+                min={bounds.min}
+                step={bounds.step}
+                helperText={lineSku ? quantityRuleHelper(lineSku) ?? undefined : undefined}
+                invalid={notice?.kind === "error"}
+                invalidText={notice?.message}
+                warn={notice?.kind === "info"}
+                warnText={notice ? `${notice.message} You may break the batch because you can override prices.` : undefined}
                 value={line.qty}
                 onChange={(_, { value }) => {
                   const next = [...lines];
@@ -845,7 +875,8 @@ function LaybysPageContent() {
                 </Button>
               ) : null}
             </Stack>
-          ))}
+            );
+          })}
           <Button kind="tertiary" onClick={() => setLines([...lines, emptyLine()])}>
             Add item
           </Button>

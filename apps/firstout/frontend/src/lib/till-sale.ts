@@ -8,6 +8,7 @@ import {
   type TillSaleResult,
   type TillTender,
 } from "./api";
+import { quantityRuleRefusal, type QuantityRuleRefusal } from "./sale-quantity-rule";
 import { isBasketConflict, type SavedBasket } from "./till-basket";
 import { parseKitRequiresPick, salePickIds, type TillCartSnapshot, type TillKitBlock } from "./till-kit-pick";
 
@@ -149,6 +150,8 @@ export type TillSaleOutcome =
   | { kind: "credit_block"; message: string }
   /** Kits whose parts need a pick first; the kits say why, so no message. */
   | { kind: "kit_requires_pick"; kits: TillKitBlock[] }
+  /** A line breaks its SKU's sell multiple or minimum: show the message on those lines. */
+  | { kind: "quantity_rule"; message: string; refusal: QuantityRuleRefusal }
   | { kind: "error"; message: string };
 
 function saleFailure(error: unknown): Exclude<TillSaleOutcome, { kind: "sold" }> {
@@ -157,6 +160,8 @@ function saleFailure(error: unknown): Exclude<TillSaleOutcome, { kind: "sold" }>
   const code = conflictCode(error);
   if (code === "till_price_conflict") return { kind: "price_conflict", message };
   if (code === "customer_credit_blocked") return { kind: "credit_block", message };
+  const refusal = quantityRuleRefusal(error);
+  if (refusal) return { kind: "quantity_rule", message: refusal.message, refusal };
   const kits = parseKitRequiresPick(error)?.kits;
   if (kits) return { kind: "kit_requires_pick", kits };
   return { kind: "error", message };

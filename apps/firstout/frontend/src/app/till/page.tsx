@@ -73,6 +73,7 @@ import { localIsoDate } from "@/lib/dates";
 import { statementDueDate } from "@/lib/till-statement";
 import { rememberedColleague } from "@/lib/sales-staff";
 import { anyLineBlocked, formatDiscount, mayBePriced } from "@/lib/sale-preview";
+import type { QuantityRuleRefusal } from "@/lib/sale-quantity-rule";
 
 import {
   ApiError,
@@ -314,6 +315,7 @@ function TillWorkspace() {
   const [amountTendered, setAmountTendered] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quantityRefusal, setQuantityRefusal] = useState<QuantityRuleRefusal | null>(null);
   const [lastSale, setLastSale] = useState<TillSaleResult | null>(null);
   const [lastBuyerName, setLastBuyerName] = useState(WALK_IN_CUSTOMER_NAME);
   // Remounts the cart editor after a sale so its search and page start over.
@@ -1167,6 +1169,10 @@ function TillWorkspace() {
           setError(outcome.message);
           edit({ creditBlock: outcome.message });
           return;
+        case "quantity_rule":
+          setError(outcome.message);
+          setQuantityRefusal(outcome.refusal);
+          return;
         case "error":
           setError(outcome.message);
       }
@@ -1516,6 +1522,8 @@ function TillWorkspace() {
           pricingError={pricingError}
           onRetryPricing={refreshPrices}
           canDiscount={canDiscount}
+          canBreakBatches={can(user, "sales.price_override")}
+          quantityRefusal={quantityRefusal}
           colleagues={colleagues}
           colleaguesError={colleaguesError}
           salesStaffId={salesStaffId}

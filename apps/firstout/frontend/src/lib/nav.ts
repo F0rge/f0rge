@@ -63,6 +63,8 @@ export const ADMIN_NAV_ITEMS = [
   { href: "/audit", label: "Audit log" },
   { href: "/profile", label: "My profile" },
   { href: "/settings", label: "Settings directory" },
+  { href: "/settings/categories", label: "Categories" },
+  { href: "/settings/materials", label: "Materials" },
   { href: "/settings/integrations", label: "Integrations" },
   { href: "/settings/integrations/mcp-tokens", label: "MCP tokens" },
 ] as const;

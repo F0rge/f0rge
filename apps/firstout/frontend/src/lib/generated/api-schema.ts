@@ -9210,6 +9210,10 @@ export interface components {
             unit_ex_vat: string;
             /** Unit Inc Vat */
             unit_inc_vat: string;
+            /** Sell Multiple */
+            sell_multiple: number;
+            /** Min Sell Qty */
+            min_sell_qty: number;
         };
         /** PortalInvitationAccept */
         PortalInvitationAccept: {

@@ -28662,6 +28662,14 @@
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Unit Inc Vat"
+          },
+          "sell_multiple": {
+            "type": "integer",
+            "title": "Sell Multiple"
+          },
+          "min_sell_qty": {
+            "type": "integer",
+            "title": "Min Sell Qty"
           }
         },
         "type": "object",
@@ -28670,7 +28678,9 @@
           "our_ref",
           "name",
           "unit_ex_vat",
-          "unit_inc_vat"
+          "unit_inc_vat",
+          "sell_multiple",
+          "min_sell_qty"
         ],
         "title": "PortalCatalogueItem"
       },

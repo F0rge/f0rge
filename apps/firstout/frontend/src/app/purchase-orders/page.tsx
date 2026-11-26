@@ -283,6 +283,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
     if (createRequested) {
       const params = new URLSearchParams(searchParams.toString());
       params.delete("new");
+      params.delete("sku");
       router.replace(`${pathname}${params.size ? `?${params}` : ""}`, {
         scroll: false,
       });
@@ -543,6 +544,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
         open={canRaise && (createOpen || createRequested)}
         onClose={closeComposer}
         onCreated={created}
+        prefillSkuId={createRequested ? searchParams.get("sku") : null}
       />
     </div>
   );

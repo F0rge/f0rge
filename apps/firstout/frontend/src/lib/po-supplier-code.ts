@@ -1,6 +1,9 @@
 import { ApiError, listSupplierPrices, type Sku } from "@/lib/api";
 
-/** Fabric / finish shown on a PO line. The catalogue placeholder "-" stays hidden. */
+/**
+ * The SKU's finish shown on a PO line: the server-derived `fabric` label ("Oat Bouclé"), no
+ * longer typed by anyone. The placeholder "-" stays hidden.
+ */
 export function displayFabric(fabric: string | null | undefined): string | null {
   const cleaned = (fabric ?? "").trim();
   if (!cleaned || cleaned === "-") {

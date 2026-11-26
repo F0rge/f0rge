@@ -2,8 +2,8 @@
 
 import { Breadcrumb, BreadcrumbItem } from "@carbon/react";
 import {
-  ArrowRight, Badge, Building, ChevronDown, Document, Identification,
-  ImportExport, Location, Locked, Printer, Security, Settings, User, UserAdmin, UserMultiple,
+  ArrowRight, Badge, Building, Category, ChevronDown, Document, Identification,
+  ImportExport, Layers, Location, Locked, Printer, Security, Settings, User, UserAdmin, UserMultiple,
 } from "@carbon/icons-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -19,7 +19,7 @@ import styles from "./administration.module.css";
 const icons = {
   organisation: Building, settings: Settings, team: UserMultiple, salesStaff: Badge, roles: UserAdmin,
   company: Identification, documents: Document, locations: Location, operations: Settings,
-  labels: Printer, integrations: ImportExport,
+  labels: Printer, categories: Category, materials: Layers, integrations: ImportExport,
   mcp: Locked, audit: Security, profile: User,
 } satisfies Record<AdminDestination, typeof Settings>;
 
@@ -89,7 +89,8 @@ export function AdminBreadcrumb() {
   }, [path, tab]);
 
   if (!current) return null;
-  const settingsPage = (path === "/settings" && findSettingsSection(tab)) || current === "mcp" || current === "integrations";
+  const settingsPage = (path === "/settings" && findSettingsSection(tab)) || current === "mcp" || current === "integrations"
+    || current === "categories" || current === "materials";
   const crumbs = [
     { label: "Administration", href: home === path && !tab ? undefined : home },
     ...(settingsPage ? [{ label: "Settings", href: "/settings" }] : []),

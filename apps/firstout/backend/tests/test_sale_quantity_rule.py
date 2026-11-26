@@ -365,3 +365,20 @@ async def test_repeating_invoices_run_their_stored_free_text_lines(
     run = await owner_client.post(f"/api/v1/repeating-invoices/{schedule.json()['id']}/run")
     assert run.status_code == 201, run.text
     assert run.json()["invoice"]["lines"][0]["qty"] == 3
+
+
+async def test_portal_catalogue_carries_the_selling_rule(async_db) -> None:
+    pair = await _ruled_sku(async_db, 2, 4)
+    single = await _sku(async_db, "100.00")
+    customer = await _customer(async_db)
+    customer.customer_type = "trade"
+    portal_user = CustomerPortalUser(
+        customer_id=customer.id, email=f"{uuid.uuid4().hex[:8]}@trade.example", password_hash="x"
+    )
+    async_db.add(portal_user)
+    await async_db.flush()
+    items = {
+        item.id: item for item in await CustomerPortalService(async_db).catalogue(portal_user.id)
+    }
+    assert (items[pair.id].sell_multiple, items[pair.id].min_sell_qty) == (2, 4)
+    assert (items[single.id].sell_multiple, items[single.id].min_sell_qty) == (1, 1)
