@@ -115,6 +115,25 @@ export function productMetaDescription(product: StoreProduct): string | undefine
   return `${description}${identifier}`;
 }
 
+export function productPageCopy(product: StoreProduct, variant?: MedusaVariant) {
+  const title = product.metadata?.seo_title || product.title;
+  const choices = variantChoices(variant);
+  const selection = variant ? productVariantOptions(product).flatMap(({ id, title: optionTitle }) => {
+    const label = publicText(optionTitle);
+    const value = publicText(choices[id]);
+    return label && value ? [{ label, value }] : [];
+  }) : [];
+  if (!selection.length) return { title, description: productMetaDescription(product) };
+
+  const name = publicText(product.title) || title;
+  const options = selection.map(({ label, value }) => sentence(`${label}: ${value}`));
+  const sku = publicText(variant?.sku);
+  return {
+    title: `${title} – ${selection.map(({ value }) => value).join(", ")}`,
+    description: shortDescription([sentence(name), ...options, ...(sku ? [sentence(`SKU ${sku}`)] : [])].join(" ")),
+  };
+}
+
 function publicImages(product: StoreProduct, variant: MedusaVariant, canonicalUrl: string): string[] {
   return selectedImages(product, variant).flatMap((image) => {
     if (image.startsWith("//") || image.includes("\\")) return [];

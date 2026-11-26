@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { RotateCcw, Truck } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
 import { getStoreProduct, listStoreProducts, listedPiece, productPath, type StoreProduct } from "@/lib/medusa";
-import { productMetaDescription, productStructuredData } from "@/lib/product-seo";
+import { productPageCopy, productStructuredData } from "@/lib/product-seo";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { COLLECTION_ADDRESS } from "@/lib/checkout-fulfillment";
 import { ProductDetail } from "./product-detail";
@@ -17,13 +17,16 @@ type ProductPageProps = {
   searchParams: Promise<{ variant?: string | string[] }>;
 };
 
-export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const { sku } = await params;
+function selectedVariant(product: StoreProduct, variantId: string | string[] | undefined) {
+  return product.variants.find(({ id }) => id === variantId);
+}
+
+export async function generateMetadata({ params, searchParams }: ProductPageProps): Promise<Metadata> {
+  const [{ sku }, { variant }] = await Promise.all([params, searchParams]);
   const product = await getStoreProduct(sku);
   if (!product) return {};
   return {
-    title: product.metadata?.seo_title || product.title,
-    description: productMetaDescription(product),
+    ...productPageCopy(product, selectedVariant(product, variant)),
     alternates: { canonical: productPath(product) },
   };
 }
@@ -80,7 +83,7 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
   const [{ sku }, { variant }] = await Promise.all([params, searchParams]);
   const product = await getStoreProduct(sku);
   if (!product) notFound();
-  const variantId = product.variants.find((option) => option.id === variant)?.id;
+  const variantId = selectedVariant(product, variant)?.id;
   const structuredData = productStructuredData(product, productPath(product));
   return <>
     {structuredData && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />}

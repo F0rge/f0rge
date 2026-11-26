@@ -5,7 +5,11 @@ import { getCustomerContext } from "@/lib/customer-auth";
 import { AccountClient } from "./account-client";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Your account", robots: { index: false, follow: false, noarchive: true } };
+export const metadata: Metadata = {
+  title: "Your account",
+  description: "View your DasKasas orders and manage your saved delivery addresses.",
+  robots: { index: false, follow: false, noarchive: true },
+};
 
 export default async function AccountPage() {
   let customer: { email: string; first_name: string; last_name: string } | null = null;

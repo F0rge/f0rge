@@ -89,6 +89,11 @@ test('the gallery and add to bag work from the keyboard', async ({ page }) => {
 test('colour and size select real SKUs, prices and photos on one grouped page', async ({ page }) => {
   const path = '/product/firstout-group-33333333-3333-4333-8333-333333333333'
   await page.goto(path)
+  await expect(page).toHaveTitle('Umbra Dining Table | DasKasas')
+  const canonical = page.locator('link[rel="canonical"]')
+  const description = page.locator('meta[name="description"]')
+  const groupDescription = await description.getAttribute('content')
+  await expect(canonical).toHaveAttribute('href', new RegExp(`${path}$`))
   const colour = page.getByRole('group', { name: 'Colour', exact: true })
   const size = page.getByRole('group', { name: 'Size', exact: true })
   const article = page.getByRole('article')
@@ -115,9 +120,17 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await expect(page).toHaveURL(new RegExp(`${path}$`))
 
   await page.goto(`${path}?variant=variant_umbra_gold_small`)
+  await expect(page).toHaveTitle('Umbra Dining Table – Gold, 160 cm | DasKasas')
+  await expect(description).toHaveAttribute('content', 'Umbra Dining Table. Colour: Gold. Size: 160 cm. SKU UMBRA-GOLD-160.')
+  await expect(canonical).toHaveAttribute('href', new RegExp(`${path}$`))
   await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-160')
   await expect(colour.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
   await expect(size.getByRole('button', { name: '160 cm' })).toHaveAttribute('aria-pressed', 'true')
+
+  await page.goto(`${path}?variant=unknown`)
+  await expect(page).toHaveTitle('Umbra Dining Table | DasKasas')
+  await expect(description).toHaveAttribute('content', groupDescription ?? '')
+  await expect(canonical).toHaveAttribute('href', new RegExp(`${path}$`))
 })
 
 for (const path of [tilda, wren, vale]) {
