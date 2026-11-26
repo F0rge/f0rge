@@ -124,9 +124,12 @@ export function ShopListing({ pieces, categoryId, shopAll }: { pieces: ListedPie
         </div>
 
         {shown.length > 0
-          ? <ul aria-label="Pieces" className="grid grid-cols-2 gap-x-2.5 gap-y-[22px] md:grid-cols-3 md:gap-x-5 md:gap-y-9">
-            {shown.map((piece, index) => <ProductCard key={piece.id} piece={piece} initialVariantId={piece.variant?.id} eager={index < 3} />)}
-          </ul>
+          ? <>
+            <h2 id="shop-pieces-title" className="sr-only">Pieces</h2>
+            <ul aria-labelledby="shop-pieces-title" className="grid grid-cols-2 gap-x-2.5 gap-y-[22px] md:grid-cols-3 md:gap-x-5 md:gap-y-9">
+              {shown.map((piece, index) => <ProductCard key={piece.id} piece={piece} initialVariantId={piece.variant?.id} eager={index < 3} />)}
+            </ul>
+          </>
           : <div className="py-12 text-center">
             <h2 className="text-lg font-medium">No pieces found</h2>
             <p className="mt-1 text-muted-foreground">{pieces.length ? "Try clearing a filter." : "New pieces arrive in the showroom often. Visit us or try another category."}</p>
