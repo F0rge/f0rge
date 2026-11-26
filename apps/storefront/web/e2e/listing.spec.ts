@@ -181,7 +181,7 @@ test('the home page links each category with its count', async ({ page }) => {
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     'content', 'Shop sofas, armchairs, dining tables and bedroom furniture online, or visit the DasKasas showroom at Bedford Square.',
   )
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Rooms worth coming home to.')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Furniture store in Bedfordview')
   const hero = page.getByRole('img', { name: /^Ivory Salon/ })
   await expect(hero).toHaveAttribute('srcset', /home-ivory-salon\.webp.*640w/)
   await expect.poll(() => hero.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
