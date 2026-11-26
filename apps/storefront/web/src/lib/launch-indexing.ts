@@ -48,9 +48,10 @@ export function catalogueIndexable(pathname: string, env: IndexingEnv = process.
 }
 
 export function robotsHeader(pathname: string, env: IndexingEnv = process.env): "noindex, nofollow, noarchive" | null {
-  const indexable = pathOnly(pathname) === ORGANIZATION_LOGO_PATH
+  const path = pathOnly(pathname);
+  const indexable = path === ORGANIZATION_LOGO_PATH || path === "/llms.txt"
     ? storefrontIndexable(env)
-    : catalogueIndexable(pathname, env);
+    : catalogueIndexable(path, env);
   return indexable ? null : "noindex, nofollow, noarchive";
 }
 

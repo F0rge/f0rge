@@ -96,6 +96,11 @@ describe("storefront indexing", () => {
     expect(robotsHeader("/apple-icon", production)).toBe("noindex, nofollow, noarchive");
   });
 
+  it("lets crawlers read the guide only when storefront indexing is on", () => {
+    expect(robotsHeader("/llms.txt", production)).toBeNull();
+    expect(robotsHeader("/llms.txt", { ...production, STOREFRONT_PRIVATE_PREVIEW: "on" })).toBe("noindex, nofollow, noarchive");
+  });
+
   it("uses the configured public origin for canonical urls", () => {
     expect(canonicalUrl("https://daskasas.example", "/product/chair")).toBe("https://daskasas.example/product/chair");
     expect(canonicalUrl("https://daskasas.example/", "/shop/bedroom")).toBe("https://daskasas.example/shop/bedroom");
