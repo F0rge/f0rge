@@ -171,12 +171,12 @@ class HeldSaleDeleteResult(BaseModel):
 
 
 class HeldSaleLine(HeldSaleLineCreate):
+    # Stored lines may also carry kept_qty (see TillBasketLine); it stays server-side.
+    model_config = ConfigDict(extra="ignore")
+
     sku_code: str
     sku_name: str
     estimated_total_inc_vat: Optional[Decimal] = None
-    # The held quantity, when it met the SKU's selling rule (or the holder could break
-    # it) at the moment of holding: completing the sale keeps it even if the rule tightens.
-    kept_qty: Optional[int] = None
 
 
 class HeldSale(BaseModel):

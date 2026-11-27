@@ -23118,20 +23118,8 @@
               }
             ],
             "title": "Estimated Total Inc Vat"
-          },
-          "kept_qty": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kept Qty"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "sku_id",
@@ -23139,8 +23127,7 @@
           "discount_percent",
           "sku_code",
           "sku_name",
-          "estimated_total_inc_vat",
-          "kept_qty"
+          "estimated_total_inc_vat"
         ],
         "title": "HeldSaleLine"
       },

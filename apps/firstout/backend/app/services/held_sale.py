@@ -326,6 +326,9 @@ class HeldSaleService:
                 pass
         can_break_rule = (await PricingAuthority.of(self.db, actor_id)).can_override
         lines: list[HeldSaleLine] = []
+        # sku_id -> held quantity kept if the rule later tightens; stored with the line,
+        # never returned to clients.
+        kept_now: dict[str, int] = {}
         for line in data.lines:
             sku = skus[line.sku_id]
             # Saved now: a quantity that meets the rule (or that the holder may break it
@@ -356,9 +359,10 @@ class HeldSaleService:
                     sku_code=sku.our_ref,
                     sku_name=sku.name,
                     estimated_total_inc_vat=estimate,
-                    kept_qty=line.qty if keep else None,
                 )
             )
+            if keep:
+                kept_now[str(line.sku_id)] = line.qty
         total = (
             sum(
                 line.estimated_total_inc_vat
@@ -385,7 +389,13 @@ class HeldSaleService:
                 estimated_total_inc_vat=total,
                 pick_id=data.pick_id,
                 linked_pick_ids={str(sku): str(pick) for sku, pick in data.linked_pick_ids.items()},
-                lines=[line.model_dump(mode="json") for line in lines],
+                lines=[
+                    {
+                        **line.model_dump(mode="json"),
+                        "kept_qty": kept_now.get(str(line.sku_id)),
+                    }
+                    for line in lines
+                ],
             )
         )
         self._record_operation(showroom.id, actor_id, "save", data.id, fingerprint, row.id, now)

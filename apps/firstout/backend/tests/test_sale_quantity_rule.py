@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer_portal_user import CustomerPortalUser
@@ -494,7 +495,8 @@ async def test_till_keeps_a_held_sales_quantity_after_the_rule_tightens(
 
     # Held while 3 was a valid quantity: the held line keeps it.
     held, basket = await hold_and_resume([_line(chair, qty=3)])
-    assert held["lines"][0]["kept_qty"] == 3
+    # The kept quantity is server-side state: never on a held sale or basket response.
+    assert "kept_qty" not in held["lines"][0]
     await _set_rule(async_db, chair["id"], 2, 2)
     await _set_rule(async_db, other["id"], 2, 2)
     basket = await resume(held, basket)
@@ -515,7 +517,129 @@ async def test_till_keeps_a_held_sales_quantity_after_the_rule_tightens(
 
     # A line held when it already broke the rule earns no exemption by being held.
     held, basket = await hold_and_resume([_line(other, qty=1)])
-    assert held["lines"][0]["kept_qty"] is None
     basket = await resume(held, basket)
     _assert_refused(await sell(basket, [_line(other, qty=1)]), other["id"], 1)
+    await _relogin_owner(owner_client)
+
+
+async def test_a_quote_keeps_its_quantities_only_for_its_own_customer_and_once(
+    async_client: AsyncClient, owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Security re-check R1: naming a quote must not lift the rule for another sale."""
+    location, chair, _, customer = await _till_setup(owner_client, "QR-QS")
+    stranger = (await owner_client.post("/api/v1/customers", json={"name": "QR-QS other"})).json()
+    quote = await owner_client.post(
+        "/api/v1/quotes", json={"customer_id": customer, "lines": [_line(chair, qty=3)]}
+    )
+    assert quote.status_code == 201, quote.text
+    quote_id = quote.json()["id"]
+    await _set_rule(async_db, chair["id"], 2, 2)
+    await _as_seller(owner_client)
+    seller = owner_client
+    sale = {"quote_id": quote_id, "location_id": location, "tender": "cash"}
+
+    # The reviewer's probe: another customer, the quoted line twice.
+    probe = await seller.post(
+        SALES,
+        json={
+            **sale,
+            "customer_id": stranger["id"],
+            "lines": [_line(chair, qty=3), _line(chair, qty=3)],
+        },
+    )
+    assert probe.status_code == 409, probe.text
+    assert probe.json()["detail"]["code"] == "sale_quantity_rule"
+    assert len(probe.json()["detail"]["lines"]) == 2
+    # Another customer, the quoted line once: still checked (the customer may be changed at
+    # the till with a quote loaded, but the quote's quantities then do not apply).
+    _assert_refused(
+        await seller.post(
+            SALES, json={**sale, "customer_id": stranger["id"], "lines": [_line(chair, qty=3)]}
+        ),
+        chair["id"],
+        3,
+    )
+    # Its own customer, the quoted line twice: the quote's quantity is handed out once.
+    _assert_refused(
+        await seller.post(
+            SALES,
+            json={
+                **sale,
+                "customer_id": customer,
+                "lines": [_line(chair, qty=3), _line(chair, qty=3)],
+            },
+        ),
+        chair["id"],
+        3,
+    )
+    assert (await seller.get(f"/api/v1/quotes/{quote_id}")).json()["status"] == "draft"
+    # Its own customer, as quoted: sold, and the quote is converted.
+    done = await seller.post(
+        SALES, json={**sale, "customer_id": customer, "lines": [_line(chair, qty=3)]}
+    )
+    assert done.status_code == 201, done.text
+
+    # A converted quote keeps nothing, even on the preview.
+    converted = await seller.post(
+        SALE_PREVIEW,
+        json={"customer_id": customer, "quote_id": quote_id, "lines": [_line(chair, qty=3)]},
+    )
+    _assert_previewed(converted)
+    await _relogin_owner(owner_client)
+
+
+async def test_a_cancelled_or_foreign_quote_keeps_nothing(
+    async_client: AsyncClient, owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    from app.models.customer import Customer
+    from app.models.quote import Quote, QuoteStatus
+    from app.models.team import Team
+    from app.models.user import User
+
+    location, chair, _, customer = await _till_setup(owner_client, "QR-QC")
+    quote = await owner_client.post(
+        "/api/v1/quotes", json={"customer_id": customer, "lines": [_line(chair, qty=3)]}
+    )
+    quote_id = quote.json()["id"]
+    assert (await owner_client.post(f"/api/v1/quotes/{quote_id}/cancel")).status_code == 200
+    await _set_rule(async_db, chair["id"], 2, 2)
+    await _as_seller(owner_client)
+    cart = {"customer_id": customer, "quote_id": quote_id, "lines": [_line(chair, qty=3)]}
+    _assert_previewed(await owner_client.post(SALE_PREVIEW, json=cart))
+
+    # Another company's quote id is not found (the plain test database has no RLS, so this
+    # is the code's own team filter).
+    other = Team(name="Quote other company", slug="qr-other", clerk_org_id="org_qr_other")
+    async_db.add(other)
+    await async_db.flush()
+    stranger = Customer(team_id=other.id, name="Other company customer")
+    async_db.add(stranger)
+    await async_db.flush()
+    owner = await async_db.scalar(select(User).limit(1))
+    foreign = Quote(
+        team_id=other.id,
+        quote_number="QT-OTHER-1",
+        customer_id=stranger.id,
+        status=QuoteStatus.DRAFT,
+        subtotal_ex_vat=0,
+        vat_amount=0,
+        total_inc_vat=0,
+        vat_rate=Decimal("0.15"),
+        created_by_user_id=owner.id,
+    )
+    async_db.add(foreign)
+    await async_db.flush()
+    refused = await owner_client.post(
+        SALES,
+        json={
+            "customer_id": customer,
+            "quote_id": str(foreign.id),
+            "location_id": location,
+            "tender": "cash",
+            "lines": [_line(chair, qty=2)],
+        },
+    )
+    assert refused.status_code == 404, refused.text
+    preview = await owner_client.post(SALE_PREVIEW, json={**cart, "quote_id": str(foreign.id)})
+    _assert_previewed(preview)
     await _relogin_owner(owner_client)

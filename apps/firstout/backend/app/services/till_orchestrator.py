@@ -119,45 +119,51 @@ class TillOrchestrator:
             await PricingAuthority.of(self.db, user_id),
             enforce_required_list=True,
         )
-        kept = await self._kept_quantities(request, user_id)
-        preview = await pricing.price(
-            [
-                # Only the quantity is kept: prices and discounts are authorised afresh.
+        # Saved quantities still to hand out, per SKU; each one exempts one line, once.
+        kept = await self._kept_quantities(request, customer, user_id)
+        requests = []
+        for sku, line in zip(skus, request.lines, strict=True):
+            pool = kept.get(sku.id, [])
+            saved_qty = line.qty if line.qty in pool else None
+            if saved_qty is not None:
+                pool.remove(saved_qty)
+            # Only the quantity is kept: prices and discounts are authorised afresh.
+            requests.append(
                 SaleLineRequest(
                     sku=sku,
                     qty=line.qty,
                     discount_percent=line.discount_percent,
-                    saved_qty=kept.get(sku.id),
+                    saved_qty=saved_qty,
                 )
-                for sku, line in zip(skus, request.lines, strict=True)
-            ],
-            enforce=enforce,
-        )
+            )
+        preview = await pricing.price(requests, enforce=enforce)
         return skus, preview
 
     async def _kept_quantities(
-        self, request: TillPriceRequest, user_id: Optional[uuid.UUID]
-    ) -> dict[uuid.UUID, int]:
-        """Per SKU, the quantity a saved quote or held sale already holds for this cart.
+        self, request: TillPriceRequest, customer: Customer, user_id: Optional[uuid.UUID]
+    ) -> dict[uuid.UUID, list[int]]:
+        """Per SKU, the quantities a saved quote or held sale already holds for this cart.
 
-        A line still at that quantity is not checked against the SKU's selling rule, so a
-        rule tightened after saving never blocks finishing the sale (SPEC 5.3, ADR 0002's
-        kept values). Held quantities travel in the basket's lines as ``kept_qty``.
+        A line at one of them is not checked against the SKU's selling rule, so a rule
+        tightened after saving never blocks finishing the sale (SPEC 5.3, ADR 0002's kept
+        values). A quote counts only while it can still be sold and only for its own
+        customer; held quantities travel in the caller's basket lines as ``kept_qty``.
         """
-        kept: dict[uuid.UUID, int] = {}
+        kept: dict[uuid.UUID, list[int]] = {}
         if request.basket_id is not None and user_id is not None:
             from app.services.till_basket import TillBasketService
 
             basket = await TillBasketService(self.db).get_owned(request.basket_id, user_id)
             for stored in basket.lines:
-                if stored.get("kept_qty") is not None:
-                    kept[uuid.UUID(stored["sku_id"])] = int(stored["kept_qty"])
+                if stored.get("kept_qty"):
+                    kept.setdefault(uuid.UUID(stored["sku_id"]), []).append(int(stored["kept_qty"]))
         if request.quote_id is not None:
-            from app.crud.quote import QuoteCRUD
+            from app.services.quotes import QuotesService
 
-            quote = await QuoteCRUD(self.db).get_by_id(request.quote_id)
-            for quote_line in quote.lines if quote is not None else []:
-                kept.setdefault(quote_line.sku_id, quote_line.qty)
+            quote = await QuotesService(self.db).sellable_quote(request.quote_id)
+            if quote is not None and quote.customer_id == customer.id:
+                for quote_line in quote.lines:
+                    kept.setdefault(quote_line.sku_id, []).append(quote_line.qty)
         return kept
 
     async def preview_prices(

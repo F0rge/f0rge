@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.customer import CustomerCRUD
 from app.services.party_archive import assert_customer_active
@@ -51,6 +52,7 @@ from app.services.settings import SettingsService
 from app.services.suspect_price import annotate_line_warnings
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+from f0rge_db.organisation import tenant_id_ctx
 
 QUOTE_VALID_DAYS = 14
 
@@ -249,7 +251,7 @@ class QuotesService:
         """The open quote a till sale converts, locked until that sale commits."""
         quote = await self.db.scalar(
             select(Quote)
-            .where(Quote.id == quote_id)
+            .where(Quote.id == quote_id, Quote.team_id == tenant_id_ctx.get())
             .with_for_update()
             .execution_options(populate_existing=True)
         )
@@ -257,6 +259,15 @@ class QuotesService:
             raise NotFoundError("Quote not found")
         self._assert_open(quote, "sold")
         return quote
+
+    async def sellable_quote(self, quote_id: uuid.UUID) -> Optional[Quote]:
+        """This company's quote with its lines, while the till may still sell it."""
+        quote = await self.db.scalar(
+            select(Quote)
+            .options(selectinload(Quote.lines))
+            .where(Quote.id == quote_id, Quote.team_id == tenant_id_ctx.get())
+        )
+        return quote if quote is not None and quote.status in OPEN_QUOTE_STATUSES else None
 
     @staticmethod
     def _assert_open(quote: Quote, verb: str) -> None:

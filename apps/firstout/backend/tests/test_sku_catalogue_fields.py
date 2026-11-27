@@ -529,24 +529,40 @@ async def test_startup_relink_repairs_old_backend_category_writes(owner_client, 
     fine = old_style(
         "RL-5", "Sofas", category_id=lists["sofas"].id, subcategory_id=lists["corner"].id
     )
+    # The old backend renamed the text to an unmanaged name but left the link.
+    stale = old_style(
+        "RL-6", "Lamps", category_id=lists["sofas"].id, subcategory_id=lists["corner"].id
+    )
+    decor = await ensure_category(owner_client, "Décor")
+    accented = old_style("RL-7", " decor ", category_id=decor.id)  # same name, folded
     other = Team(name="Relink other organisation", slug="relink-other-org")
     db.add(other)
     await db.flush()
+    foreign_sofas = SkuCategory(team_id=other.id, name="Sofas")
+    db.add(foreign_sofas)
+    await db.flush()
     foreign = old_style("RL-FOREIGN", "Sofas", team_id=other.id)
-    db.add_all([unlinked, moved, unknown, cleared, fine, foreign])
+    foreign_stale = old_style(
+        "RL-FOREIGN-2", "Lamps", team_id=other.id, category_id=foreign_sofas.id
+    )
+    rows = (unlinked, moved, unknown, cleared, fine, stale, accented, foreign, foreign_stale)
+    db.add_all(rows)
     await db.flush()
 
-    assert await relink_sku_categories(db) == (3, 1)
-    for row in (unlinked, moved, unknown, cleared, fine, foreign):
+    assert await relink_sku_categories(db) == (4, 2)
+    for row in rows:
         await db.refresh(row)
     assert (unlinked.category_id, unlinked.category) == (lists["sofas"].id, "Sofas")
     assert (moved.category_id, moved.subcategory_id) == (lists["dining"].id, None)
     assert (unknown.category_id, unknown.category) == (None, "Lamps")
     assert (cleared.category_id, cleared.subcategory_id) == (None, None)
     assert (fine.category_id, fine.subcategory_id) == (lists["sofas"].id, lists["corner"].id)
+    assert (stale.category_id, stale.subcategory_id, stale.category) == (None, None, "Lamps")
+    assert (accented.category_id, accented.category) == (decor.id, " decor ")
     assert foreign.category_id is None
-    # Idempotent: only the unknown name is reported again.
-    assert await relink_sku_categories(db) == (0, 1)
+    assert foreign_stale.category_id == foreign_sofas.id
+    # Idempotent: only the unmanaged names are reported again.
+    assert await relink_sku_categories(db) == (0, 2)
     count = await db.scalar(
         select(func.count()).select_from(SkuCategory).where(func.lower(SkuCategory.name) == "lamps")
     )

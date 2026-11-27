@@ -7241,8 +7241,6 @@ export interface components {
             sku_name: string;
             /** Estimated Total Inc Vat */
             estimated_total_inc_vat: string | null;
-            /** Kept Qty */
-            kept_qty: number | null;
         };
         /** HeldSaleLineCreate */
         HeldSaleLineCreate: {

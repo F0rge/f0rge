@@ -119,7 +119,9 @@ async def relink_sku_categories(db: AsyncSession) -> tuple[int, int]:
       unique index uses; an active row wins over an archived one) but a missing or different
       link: linked to it, text set to its spelling, a sub-category that no longer fits cleared;
     - blank text with a link: link and sub-category cleared;
-    - text naming no category: left alone (nothing creates a category) and counted.
+    - text naming no category (accents folded too): counted and logged, never created; a
+      link it still carries is cleared with its sub-category, so the SKU leaves its old
+      shop section and posts by its text like any unmapped category.
 
     One query when nothing needs fixing. Idempotent; replicas racing write the same values.
     Returns ``(fixed, unmatched)``.
@@ -153,10 +155,36 @@ async def relink_sku_categories(db: AsyncSession) -> tuple[int, int]:
     ).all()
     if not rows:
         return 0, 0
-    unmatched = [sku for sku, found in rows if found is None and (sku.category or "").strip()]
-    fixes = [
-        (sku, found) for sku, found in rows if found is not None or not (sku.category or "").strip()
-    ]
+    from app.services.catalogue_lists import fold_name
+
+    # SQL matched case- and space-insensitively; fall back to the accent folding the
+    # categories service uses ("Decor" is "Décor"), active categories first.
+    top_level: list[SkuCategory] = []
+    if any(found is None and (sku.category or "").strip() for sku, found in rows):
+        top_level = list(
+            await db.scalars(
+                select(SkuCategory)
+                .where(SkuCategory.team_id == team_id, SkuCategory.parent_id.is_(None))
+                .order_by(SkuCategory.is_archived, SkuCategory.created_at, SkuCategory.id)
+            )
+        )
+    fixes: list[tuple[Sku, Optional[uuid.UUID]]] = []
+    unmatched: list[Sku] = []
+    for sku, found in rows:
+        text = (sku.category or "").strip()
+        if text and found is None:
+            key = fold_name(text)
+            found = next((row.id for row in top_level if fold_name(row.name) == key), None)
+            if found is None:
+                # Unmanaged name: never create it. A stale link would keep the SKU in its
+                # old shop section and posting, so it is cleared; the text stays.
+                unmatched.append(sku)
+                if sku.category_id is not None:
+                    fixes.append((sku, None))
+                continue
+            if found == sku.category_id:
+                continue  # text and link already agree once accents are folded
+        fixes.append((sku, found))
     categories = await categories_by_id(
         db, [found for _, found in fixes] + [sku.subcategory_id for sku, _ in fixes]
     )
@@ -166,10 +194,12 @@ async def relink_sku_categories(db: AsyncSession) -> tuple[int, int]:
             # Both columns in one UPDATE: the database checks the pair.
             sku.category_id = found
             sku.subcategory_id = sub.id if sub is not None and sub.parent_id == found else None
-            sku.category = categories[found].name if found is not None else None
+            if found is not None:
+                sku.category = categories[found].name
     if fixes:
         logger.warning(
-            "Re-linked the category of %d SKU(s) written by an older backend", len(fixes)
+            "Re-linked or unlinked the category of %d SKU(s) written by an older backend",
+            len(fixes),
         )
     if unmatched:
         logger.warning(
