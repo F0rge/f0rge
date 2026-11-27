@@ -174,24 +174,28 @@ describe("selling rules on cart writes", () => {
 
   test("a total must be a multiple of the sell multiple and at least the minimum, across lines", async () => {
     const add = seam({ source_available_quantity: 10, sell_multiple: 2, min_quantity: 4 });
-    expect(await refusal(add(3))).toBe("This piece is sold in sets of 2.");
+    expect(await refusal(add(3))).toBe("This piece is sold in pairs.");
     expect(await refusal(add(2))).toBe("The minimum order for this piece is 4.");
-    expect(await refusal(add(2, 3))).toBe("This piece is sold in sets of 2.");
+    expect(await refusal(add(2, 3))).toBe("This piece is sold in pairs.");
     await expect(add(4)).resolves.toBeUndefined();
     await expect(add(3, 1)).resolves.toBeUndefined();
     await expect(add(2, 2, 2)).resolves.toBeUndefined();
+    const threes = seam({ source_available_quantity: 10, sell_multiple: 3 });
+    expect(await refusal(threes(4))).toBe("This piece is sold in sets of 3.");
+    const fewThrees = seam({ source_available_quantity: 2, sell_multiple: 3 });
+    expect(await refusal(fewThrees(3))).toBe("This piece is sold in sets of 3, and fewer than 3 are available right now.");
   });
 
   test("the cap is rounded down to the multiple, and a cap below the minimum refuses plainly", async () => {
     const oddCap = seam({ source_available_quantity: 5, sell_multiple: 2 });
     await expect(oddCap(4)).resolves.toBeUndefined();
     await expect(oddCap(6)).rejects.toThrow("That quantity is no longer available for this piece.");
-    expect(await refusal(oddCap(5))).toBe("This piece is sold in sets of 2.");
+    expect(await refusal(oddCap(5))).toBe("This piece is sold in pairs.");
 
     const short = seam({ source_available_quantity: 3, sell_multiple: 2, min_quantity: 4 });
     expect(await refusal(short(4))).toBe("The minimum order for this piece is 4, and fewer than 4 are available right now.");
     const single = seam({ source_available_quantity: 1, sell_multiple: 2 });
-    expect(await refusal(single(2))).toBe("This piece is sold in sets of 2, and fewer than 2 are available right now.");
+    expect(await refusal(single(2))).toBe("This piece is sold in pairs, and fewer than 2 are available right now.");
   });
 
   test("a variant without rules, a malformed rule and a non-Firstout product behave as before", async () => {

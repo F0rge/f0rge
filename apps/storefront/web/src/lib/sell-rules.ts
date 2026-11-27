@@ -19,17 +19,34 @@ export function roundDownToMultiple(available: number, multiple: number): number
   return Math.max(0, Math.floor(available / multiple) * multiple);
 }
 
+/** Whether `capacity` units can make up at least one valid order. */
+export function coversMinimum({ multiple, minimum }: SellRules, capacity: number): boolean {
+  return roundDownToMultiple(capacity, multiple) >= minimum;
+}
+
 /**
- * The quiet price line that makes a batch plain, e.g.
- * "R 2 450,00 each · sold in pairs · R 4 900,00 per pair". Null for a piece sold singly
- * or a price that is not in rand.
+ * What can be added to a bag already holding `inBag` units so the variant's bag total is valid:
+ * `least`, then steps of the multiple up to `most`. Works on totals, so an off-rule bag
+ * (the rule tightened after it was added) is brought back onto the rule. Nothing fits when most < least.
  */
-export function batchPriceLine(unit: number, currency: string | null | undefined, { multiple, minimum }: SellRules): string | null {
+export function addableRange({ multiple, minimum }: SellRules, capacity: number, inBag: number): { least: number; most: number } {
+  return {
+    least: Math.max(minimum, (Math.floor(inBag / multiple) + 1) * multiple) - inBag,
+    most: Math.max(0, roundDownToMultiple(capacity, multiple) - inBag),
+  };
+}
+
+/**
+ * The parts of the quiet price line that makes a batch plain, e.g.
+ * ["R 2 450,00 each", "sold in pairs", "R 4 900,00 per pair"], shown joined by " · ".
+ * Null for a piece sold singly or a price that is not in rand.
+ */
+export function batchPriceParts(unit: number, currency: string | null | undefined, { multiple, minimum }: SellRules): string[] | null {
   if ((multiple === 1 && minimum === 1) || !isZarCurrency(currency)) return null;
   const price = (quantity: number) => formatCustomerPrice(unit * quantity, currency);
   const parts = [`${price(1)} each`];
   if (multiple > 1) parts.push(multiple === 2 ? "sold in pairs" : `sold in sets of ${multiple}`);
   if (minimum > multiple) parts.push(`minimum ${minimum}`, `from ${price(minimum)}`);
   else parts.push(`${price(multiple)} per ${multiple === 2 ? "pair" : "set"}`);
-  return parts.join(" · ");
+  return parts;
 }

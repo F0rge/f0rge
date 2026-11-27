@@ -2,7 +2,7 @@ import "server-only";
 import { formatCustomerPrice, isZarCurrency } from "./order-money";
 import { offerLive } from "./made-to-order";
 import { selectedImages } from "./product-variants";
-import { sellCount, sellRules, type SellRules } from "./sell-rules";
+import { coversMinimum, sellCount, sellRules, type SellRules } from "./sell-rules";
 
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
@@ -239,9 +239,13 @@ export function fromPrice(product: StoreProduct): string {
 }
 
 export type Availability = "in-stock" | "made-to-order";
+// Stock or capacity that cannot make up the minimum order is not offered as available.
 function variantAvailability(variant: MedusaVariant): Availability | null {
-  if ((variant.inventory_quantity ?? 0) > 0) return "in-stock";
-  return offerLive(variant.metadata?.made_to_order_offer) ? "made-to-order" : null;
+  const rules = sellRules(variant.metadata);
+  const stock = variant.inventory_quantity ?? 0;
+  if (stock > 0) return coversMinimum(rules, stock) ? "in-stock" : null;
+  const offer = variant.metadata?.made_to_order_offer;
+  return offerLive(offer) && coversMinimum(rules, offer.remaining_capacity) ? "made-to-order" : null;
 }
 
 // Only a lowercase #rrggbb reaches the page; it is written into a style.

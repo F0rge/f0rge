@@ -5,7 +5,7 @@ import { offerLive } from "./made-to-order";
 import type { MedusaVariant, StoreProduct } from "./medusa";
 import { productVariantOptions, selectedImages, variantChoices } from "./product-variants";
 import { customerFacingCopy } from "./purchase-feedback";
-import { sellRules } from "./sell-rules";
+import { coversMinimum, sellRules } from "./sell-rules";
 
 const CANONICAL_HOMEPAGE = "https://www.daskasas.co.za/";
 const MAX_DESCRIPTION_LENGTH = 170;
@@ -164,15 +164,17 @@ export function productShareImage(
   }
 }
 
+// Stock or capacity that cannot make up the minimum order cannot be bought, so it is OutOfStock.
 function offerAvailability(variant: MedusaVariant): "InStock" | "BackOrder" | "OutOfStock" | null {
   const quantity = variant.inventory_quantity;
-  if (typeof quantity === "number" && Number.isSafeInteger(quantity) && quantity > 0) return "InStock";
+  const rules = sellRules(variant.metadata);
+  if (typeof quantity === "number" && Number.isSafeInteger(quantity) && quantity > 0) return coversMinimum(rules, quantity) ? "InStock" : "OutOfStock";
   const madeToOrder = variant.metadata?.made_to_order_offer;
   if (offerLive(madeToOrder)) {
     return Number.isSafeInteger(madeToOrder.remaining_capacity) &&
       Number.isSafeInteger(madeToOrder.min_lead_time_days) && madeToOrder.min_lead_time_days > 0 &&
       Number.isSafeInteger(madeToOrder.max_lead_time_days) && madeToOrder.max_lead_time_days >= madeToOrder.min_lead_time_days
-      ? "BackOrder" : null;
+      ? coversMinimum(rules, madeToOrder.remaining_capacity) ? "BackOrder" : "OutOfStock" : null;
   }
   return quantity === 0 ? "OutOfStock" : null;
 }

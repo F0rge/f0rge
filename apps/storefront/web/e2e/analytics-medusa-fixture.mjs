@@ -64,7 +64,9 @@ function products() {
 const pairSold = () => piece({ uuid: '77777777-7777-4777-8777-777777777777', id: 'prod_pella_chair', title: 'Pella Dining Chair', image: '/demo/arc-front.jpg', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_pella_chair', 'PELLA-CHAIR', 2450, 5, { sell_multiple: 2, min_quantity: 2 })] })
 // Sold in pairs with a single unit left: no valid quantity can be offered.
 const lastOddUnit = () => piece({ uuid: '88888888-8888-4888-8888-888888888888', id: 'prod_pella_stool', title: 'Pella Counter Stool', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_pella_stool', 'PELLA-STOOL', 1850, 1, { sell_multiple: 2, min_quantity: 2 })] })
-const allProducts = () => [...products(), pairSold(), lastOddUnit()]
+// Sold in pairs, minimum four, nine in stock: four, six or eight.
+const pairsFromFour = () => piece({ uuid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', id: 'prod_pella_side', title: 'Pella Side Chair', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_pella_side', 'PELLA-SIDE', 1990, 9, { sell_multiple: 2, min_quantity: 4 })] })
+const allProducts = () => [...products(), pairSold(), lastOddUnit(), pairsFromFour()]
 
 // In-memory carts so the bag route works against the fixture.
 // ponytail: no stock check here; the web caps quantity and real Medusa enforces inventory.

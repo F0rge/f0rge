@@ -111,4 +111,14 @@ describe("listed piece", () => {
     ]);
     expect(listedPiece({ ...product, tags: undefined }).justArrived).toBe(false);
   });
+  it("does not list stock that cannot make up the minimum order as available", () => {
+    const product: StoreProduct = {
+      id: "prod_pairs", handle: "firstout-11111111-1111-4111-8111-111111111111", title: "Pairs", description: null,
+      variants: [
+        variant({ id: "variant_last_odd", inventory_quantity: 1, metadata: { sell_multiple: 2, min_quantity: 2 } }),
+        variant({ id: "variant_pair_left", inventory_quantity: 2, metadata: { sell_multiple: 2, min_quantity: 2 } }),
+      ],
+    };
+    expect(listedPiece(product).variants.map(({ availability }) => availability)).toEqual([null, "in-stock"]);
+  });
 });

@@ -31,13 +31,13 @@ const cart = { id: "cart_1", sales_channel_id: "sc_1", items: existingLines };
 test("adding counts the lines already in the bag", async () => {
   await expect(hooks.add({ input: { items: [{ variant_id: pairVariant.id, quantity: 2 }] }, cart }, { container })).resolves.toBeUndefined();
   await expect(hooks.add({ input: { items: [{ variant_id: pairVariant.id, quantity: 1 }] }, cart }, { container }))
-    .rejects.toThrow("This piece is sold in sets of 2.");
+    .rejects.toThrow("This piece is sold in pairs.");
 });
 
 test("updating checks the replaced total, and a delete is always allowed", async () => {
   const update = (quantity: number | null) => hooks.update({ input: { item_id: "cali_1", update: { quantity } }, cart }, { container });
   await expect(update(4)).resolves.toBeUndefined();
-  await expect(update(3)).rejects.toThrow("This piece is sold in sets of 2.");
+  await expect(update(3)).rejects.toThrow("This piece is sold in pairs.");
   await expect(update(0)).resolves.toBeUndefined();
   await expect(update(null)).resolves.toBeUndefined();
 });

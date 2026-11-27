@@ -151,10 +151,15 @@ export function sellRules(metadata: Record<string, unknown> | null | undefined):
   return { multiple: ruleValue(metadata?.sell_multiple), minimum: ruleValue(metadata?.min_quantity) };
 }
 
+// Matches the storefront's "sold in pairs" wording.
+function soldIn(multiple: number): string {
+  return multiple === 2 ? "This piece is sold in pairs" : `This piece is sold in sets of ${multiple}`;
+}
+
 // Messages avoid "stock", "inventory" and "remaining capacity": the web BFF rewrites those.
 export function sellRuleProblem(total: number, metadata: Record<string, unknown> | null | undefined): string | null {
   const { multiple, minimum } = sellRules(metadata);
-  if (total % multiple) return `This piece is sold in sets of ${multiple}.`;
+  if (total % multiple) return `${soldIn(multiple)}.`;
   if (total < minimum) return `The minimum order for this piece is ${minimum}.`;
   return null;
 }
@@ -188,7 +193,7 @@ export async function assertVariantsPurchasable(
     const { multiple, minimum } = sellRules(variant.metadata);
     const least = Math.ceil(minimum / multiple) * multiple;
     if (cap > 0 && cap - (cap % multiple) < least) {
-      const rule = minimum > multiple ? `The minimum order for this piece is ${minimum}` : `This piece is sold in sets of ${multiple}`;
+      const rule = minimum > multiple ? `The minimum order for this piece is ${minimum}` : soldIn(multiple);
       throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `${rule}, and fewer than ${least} are available right now.`);
     }
     const problem = sellRuleProblem(total, variant.metadata);
