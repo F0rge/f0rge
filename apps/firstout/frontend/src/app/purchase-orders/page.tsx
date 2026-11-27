@@ -51,6 +51,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { workspaceIdentity } from "@/lib/record-workspace";
+import { PREFILL_SKU_PARAM } from "@/lib/sku-panel";
 
 type StatusFilter = "all" | PurchaseOrderStatus;
 const statuses: PurchaseOrderStatus[] = [
@@ -283,7 +284,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
     if (createRequested) {
       const params = new URLSearchParams(searchParams.toString());
       params.delete("new");
-      params.delete("sku");
+      params.delete(PREFILL_SKU_PARAM);
       router.replace(`${pathname}${params.size ? `?${params}` : ""}`, {
         scroll: false,
       });
@@ -544,7 +545,7 @@ function PurchaseOrdersWorkspace({ canRaise }: { canRaise: boolean }) {
         open={canRaise && (createOpen || createRequested)}
         onClose={closeComposer}
         onCreated={created}
-        prefillSkuId={createRequested ? searchParams.get("sku") : null}
+        prefillSkuId={createRequested ? searchParams.get(PREFILL_SKU_PARAM) : null}
       />
     </div>
   );

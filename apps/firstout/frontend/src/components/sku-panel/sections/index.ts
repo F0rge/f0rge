@@ -21,4 +21,4 @@ export const SKU_SECTIONS: readonly { id: SkuSectionId; Component: ComponentType
 ];
 
 export { SkuSectionFrame, SkuSectionStateContext, useSkuSection, Facts } from "./section";
-export type { SkuSectionLayout, SkuSectionMode, SkuSectionProps, SkuSectionState } from "./section";
+export type { SkuCardEditing, SkuSectionLayout, SkuSectionMode, SkuSectionProps, SkuSectionState } from "./section";

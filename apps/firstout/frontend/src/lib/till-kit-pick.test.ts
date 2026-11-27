@@ -53,8 +53,8 @@ describe("parseKitRequiresPick", () => {
 describe("open picks target", () => {
   it("links each kit, including one that is not first in the cart", () => {
     const hrefs = [headboard, flower].map(openPicksHrefForKit);
-    expect(hrefs[0]).toBe("/picks?sku=sku-headboard&qty=1");
-    expect(hrefs[1]).toBe("/picks?sku=sku-flower&qty=1");
+    expect(hrefs[0]).toBe("/picks?prefill_sku=sku-headboard&qty=1");
+    expect(hrefs[1]).toBe("/picks?prefill_sku=sku-flower&qty=1");
     expect(hrefs[1]).not.toContain("sku-headboard");
   });
 });

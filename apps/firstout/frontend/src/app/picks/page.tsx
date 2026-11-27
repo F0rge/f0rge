@@ -97,7 +97,7 @@ function PicksPageContent() {
     if (!canMutate || prefillConsumed.current) {
       return;
     }
-    const skuPrefill = searchParams.get("sku");
+    const skuPrefill = searchParams.get("prefill_sku");
     const qtyPrefill = Number(searchParams.get("qty") ?? "");
     if (!skuPrefill) {
       return;
@@ -107,7 +107,7 @@ function PicksPageContent() {
     setQty(Number.isFinite(qtyPrefill) && qtyPrefill > 0 ? qtyPrefill : 1);
     setCreateOpen(true);
     const next = new URLSearchParams(searchParams.toString());
-    next.delete("sku");
+    next.delete("prefill_sku");
     next.delete("qty");
     const qs = next.toString();
     router.replace(qs ? `/picks?${qs}` : "/picks");

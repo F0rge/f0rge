@@ -31,7 +31,6 @@ export type NewSkuFieldInput = {
   ourRef: string;
   name: string;
   design: string;
-  fabric: string;
   cartonCount: number | "";
   recordStockNow: boolean;
   openingLocationId: string;
@@ -51,9 +50,6 @@ export function missingNewSkuFields(input: NewSkuFieldInput): string[] {
   }
   if (!input.design.trim()) {
     missing.push("Design");
-  }
-  if (!input.fabric.trim()) {
-    missing.push("Fabric");
   }
   if (!isValidCartonCount(input.cartonCount)) {
     missing.push("Cartons");
@@ -77,6 +73,27 @@ export function missingNewSkuFields(input: NewSkuFieldInput): string[] {
     }
   }
   return missing;
+}
+
+export type NewSkuRules = { sellMultiple: string; minSellQty: string; reorderMin: string; orderUpTo: string };
+
+/** Selling and reorder rules on the new SKU page, keyed by the API field each error belongs to. */
+export function newSkuRuleErrors(rules: NewSkuRules): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const whole = (value: string) => /^\d+$/.test(value.trim()) && Number(value) >= 1;
+  if (!whole(rules.sellMultiple) || Number(rules.sellMultiple) > 100_000) errors.sell_multiple = "Enter a whole number from 1 to 100000.";
+  if (!whole(rules.minSellQty) || Number(rules.minSellQty) > 100_000) errors.min_sell_qty = "Enter a whole number from 1 to 100000.";
+  else if (!errors.sell_multiple && Number(rules.minSellQty) % Number(rules.sellMultiple) !== 0) {
+    errors.min_sell_qty = `Must be a multiple of ${Number(rules.sellMultiple)}.`;
+  }
+  for (const [field, value] of [["reorder_min", rules.reorderMin], ["order_up_to", rules.orderUpTo]] as const) {
+    if (value.trim() && !whole(value)) errors[field] = "Enter a whole number of 1 or more, or leave blank.";
+  }
+  if (!errors.reorder_min && !errors.order_up_to && rules.reorderMin.trim() && rules.orderUpTo.trim() &&
+      Number(rules.orderUpTo) < Number(rules.reorderMin)) {
+    errors.order_up_to = `Must be at least the reorder minimum (${Number(rules.reorderMin)}).`;
+  }
+  return errors;
 }
 
 export function missingNewSkuMessage(fields: readonly string[]): string | null {

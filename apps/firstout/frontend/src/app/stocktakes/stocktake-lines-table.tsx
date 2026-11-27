@@ -13,6 +13,7 @@ import {
 } from "@carbon/react";
 import { useMemo } from "react";
 
+import { SkuLink } from "@/components/sku-link";
 import type { StocktakeLine } from "@/lib/api";
 import { formatQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 
@@ -124,6 +125,13 @@ export function StocktakeLinesTable({
                     }
                   >
                     {row.cells.map((cell) => {
+                      if (cell.info.header === "our_ref" && line) {
+                        return (
+                          <TableCell key={cell.id}>
+                            <SkuLink id={line.sku_id} context={{ ids: lines.map((item) => item.sku_id), label: "Count" }}>{line.our_ref}</SkuLink>
+                          </TableCell>
+                        );
+                      }
                       if (cell.info.header === "counted_qty") {
                         return (
                           <TableCell key={cell.id}>

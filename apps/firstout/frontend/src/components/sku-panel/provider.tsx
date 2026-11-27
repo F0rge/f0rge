@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Sku } from "@/lib/api";
 import {
   contextFor,
   readSkuPanel,
@@ -14,8 +13,11 @@ import {
   type SkuPanelView,
 } from "@/lib/sku-panel";
 
-/** A page may offer its own editor for the SKU shown (the catalogue keeps its Edit modal for now). */
-export type SkuEditAction = (sku: Sku, options: { pricing?: boolean }) => void;
+/**
+ * Asked before the panel leaves the SKU or the full view. Returns true when it blocked the move
+ * (a card has unsaved changes); it then calls `proceed` itself if the user discards them.
+ */
+export type SkuLeaveGuard = (proceed: () => void) => boolean;
 
 export interface SkuPanelApi {
   /** Dock the panel on the current page. `context` is the ordered list ↑ ↓ step through. */
@@ -30,8 +32,10 @@ export interface SkuPanelApi {
   context: SkuPanelContext | null;
   /** Replace the context's ids and label, but only while `key` still owns it (for example a new page of catalogue rows). */
   refreshContext: (key: string, ids: readonly string[], label: string) => void;
-  editAction: SkuEditAction | null;
-  setEditAction: (action: SkuEditAction | null) => void;
+  /** Leave the page for `href`, asking first about unsaved card changes. */
+  navigate: (href: string) => void;
+  /** The full view registers this while a card is being edited. */
+  setLeaveGuard: (guard: SkuLeaveGuard | null) => void;
 }
 
 const SkuPanelContextValue = createContext<SkuPanelApi | null>(null);
@@ -48,7 +52,7 @@ function focusable(element: Element | null): element is HTMLElement {
 export function SkuPanelProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [context, setContext] = useState<SkuPanelContext | null>(null);
-  const [editAction, setEditActionState] = useState<SkuEditAction | null>(null);
+  const leaveGuard = useRef<SkuLeaveGuard | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
 
   const go = useCallback(
@@ -60,7 +64,12 @@ export function SkuPanelProvider({ children }: { children: ReactNode }) {
     [router],
   );
 
-  const close = useCallback(() => {
+  // Every way out of the SKU goes through here, so unsaved card changes are never lost silently.
+  const guarded = useCallback((action: () => void) => {
+    if (!leaveGuard.current?.(action)) action();
+  }, []);
+
+  const close = useCallback(() => guarded(() => {
     if (!currentState()) return;
     go(null);
     const target = returnFocus.current;
@@ -69,9 +78,9 @@ export function SkuPanelProvider({ children }: { children: ReactNode }) {
       const main = document.getElementById("main-content");
       (focusable(target) ? target : main)?.focus({ preventScroll: true });
     });
-  }, [go]);
+  }), [go, guarded]);
 
-  const open = useCallback((id: string, next?: SkuPanelContext | null) => {
+  const open = useCallback((id: string, next?: SkuPanelContext | null) => guarded(() => {
     const state = currentState();
     if (!state) {
       const active = document.activeElement;
@@ -80,36 +89,38 @@ export function SkuPanelProvider({ children }: { children: ReactNode }) {
     }
     setContext(contextFor(id, next));
     go({ id, view: state?.view ?? "docked" });
-  }, [go]);
+  }), [go, guarded]);
 
-  const setView = useCallback((view: SkuPanelView) => {
+  const setView = useCallback((view: SkuPanelView) => guarded(() => {
     const state = currentState();
     if (state && state.view !== view) go({ ...state, view });
-  }, [go]);
+  }), [go, guarded]);
 
-  const back = useCallback(() => {
+  const back = useCallback(() => guarded(() => {
     const next = skuPanelBack(currentState());
     if (next) go(next);
     else close();
-  }, [close, go]);
+  }), [close, go, guarded]);
 
-  const step = useCallback((delta: number) => {
+  const step = useCallback((delta: number) => guarded(() => {
     const state = currentState();
     if (!state) return;
     const id = stepSkuId(context?.ids ?? [state.id], state.id, delta);
     if (id) go({ ...state, id });
-  }, [context, go]);
+  }), [context, go, guarded]);
+
+  const navigate = useCallback((href: string) => guarded(() => router.push(href)), [guarded, router]);
 
   const refreshContext = useCallback((key: string, ids: readonly string[], label: string) => {
     setContext((current) =>
       current?.key === key && (current.label !== label || current.ids.join() !== ids.join()) ? { ids, label, key } : current);
   }, []);
 
-  const setEditAction = useCallback((action: SkuEditAction | null) => setEditActionState(() => action), []);
+  const setLeaveGuard = useCallback((guard: SkuLeaveGuard | null) => { leaveGuard.current = guard; }, []);
 
   const api = useMemo<SkuPanelApi>(
-    () => ({ open, setView, back, close, step, context, refreshContext, editAction, setEditAction }),
-    [open, setView, back, close, step, context, refreshContext, editAction, setEditAction],
+    () => ({ open, setView, back, close, step, context, refreshContext, navigate, setLeaveGuard }),
+    [open, setView, back, close, step, context, refreshContext, navigate, setLeaveGuard],
   );
 
   return <SkuPanelContextValue.Provider value={api}>{children}</SkuPanelContextValue.Provider>;

@@ -62,11 +62,22 @@ export function stepSkuId(ids: readonly string[], current: string, delta: number
   return ids[index + delta] ?? null;
 }
 
-/** "oslo · 2 of 5", or "Catalogue · not on this page" when the SKU left the list. */
-export function skuPanelPosition(context: SkuPanelContext, id: string): string {
+/**
+ * "oslo · 2 of 5", or "Catalogue · not in this list" when the SKU left the list. The label is
+ * left out when it only repeats the page the trail already names ("Catalogue › 2 of 25").
+ */
+export function skuPanelPosition(context: SkuPanelContext, id: string, pageLabel = ""): string {
   const index = context.ids.indexOf(id);
   const where = index < 0 ? "not in this list" : `${index + 1} of ${context.ids.length}`;
-  return context.label ? `${context.label} · ${where}` : where;
+  const label = context.label.trim().toLowerCase() === pageLabel.trim().toLowerCase() ? "" : context.label;
+  return label ? `${label} · ${where}` : where;
+}
+
+/** The page the panel sits on, named as the page calls itself (the catalogue's crumb says "Products"). */
+export function skuPanelPageLabel(crumbs: readonly { label: string }[]): string {
+  const label = crumbs.at(-1)?.label;
+  // ponytail: one special case; move to a per-route title map if a second page needs one.
+  return label === "Products" ? "Catalogue" : (label ?? "Home");
 }
 
 /** A context that always contains `id`: callers that pass none get the SKU on its own. */
@@ -97,3 +108,11 @@ export function keysBelongToTarget(target: KeyTarget | null): boolean {
   if (target.isContentEditable) return true;
   return Boolean(target.closest?.(OWN_KEYS));
 }
+
+/**
+ * Prefill parameter for pages that start work on one SKU. Deliberately not `sku`, which is the
+ * panel's own parameter: following a quick action must not dock the panel on the destination.
+ */
+export const PREFILL_SKU_PARAM = "prefill_sku";
+export const addToPurchaseOrderHref = (id: string) => `/purchase-orders?new=1&${PREFILL_SKU_PARAM}=${encodeURIComponent(id)}`;
+export const adjustStockHref = (id: string) => `/adjustments?${PREFILL_SKU_PARAM}=${encodeURIComponent(id)}`;

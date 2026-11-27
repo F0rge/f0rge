@@ -10,7 +10,8 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { SkuThumb } from "@/components/sku-panel/sku-thumb";
 import { useSkuPanel } from "@/components/sku-panel/provider";
 import { searchAdminDestinations } from "@/lib/admin-navigation";
-import { formatZarAmount, searchAll, type AuthUser } from "@/lib/api";
+import { searchAll, type AuthUser } from "@/lib/api";
+import { formatZarCents } from "@/lib/money";
 import { catalogueListKeys, getSkuOverview, type SkuOverview } from "@/lib/catalogue-lists";
 import { moveHighlight, searchGroups, skuIds, type SearchOption } from "@/lib/header-search";
 import { keysBelongToTarget } from "@/lib/sku-panel";
@@ -58,7 +59,7 @@ function SkuPreview({ data }: { data: SkuOverview }) {
         <p className="firstout-header-search__preview-label">Pricing</p>
         <dl>
           {SKU_PRICE_TIERS.map((tier) => (
-            <div key={tier.field}><dt>{tier.label}</dt><dd>{formatZarAmount(sku[tier.field])}</dd></div>
+            <div key={tier.field}><dt>{tier.label}</dt><dd>{formatZarCents(sku[tier.field])}</dd></div>
           ))}
         </dl>
         {(sku.sell_multiple > 1 || sku.min_sell_qty > sku.sell_multiple) && (
@@ -239,7 +240,7 @@ export function HeaderSearch({ className, administrationUser }: HeaderSearchProp
                               <span className="firstout-header-search__meta"><code>{option.hit.our_ref}</code>{option.hit.category ? ` · ${option.hit.category}` : ""}</span>
                             </span>
                             <span className="firstout-header-search__qty"><strong>{formatCount(option.hit.available)}</strong> available</span>
-                            <span className="firstout-header-search__price">{formatZarAmount(option.hit.retail_inc_vat)}</span>
+                            <span className="firstout-header-search__price">{formatZarCents(option.hit.retail_inc_vat)}</span>
                           </>
                         ) : (
                           <span className="firstout-header-search__text">

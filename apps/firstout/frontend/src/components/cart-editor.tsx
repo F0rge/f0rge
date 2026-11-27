@@ -5,7 +5,6 @@ import {
   ClickableTile,
   ComboBox,
   InlineNotification,
-  Link,
   NumberInput,
   Pagination,
   Select,
@@ -15,9 +14,9 @@ import {
   TextArea,
   Tile,
 } from "@carbon/react";
+import { SkuLink } from "@/components/sku-link";
 import {
   Image as ImageIcon,
-  Launch,
   Locked,
   Purchase,
   TrashCan,
@@ -536,16 +535,13 @@ export function CartEditor(props: CartEditorProps) {
                         <SkuThumb sku={line.sku} />
                         <div>
                           <h3 className="cds--type-heading-compact-01">{line.sku.name}</h3>
-                          <Link
-                            className="cds--type-label-01"
-                            href={`/catalogue/${line.sku.id}`}
-                            target="_blank"
-                            rel="noopener"
-                            renderIcon={Launch}
-                            aria-label={`Open ${line.sku.our_ref} in a new tab`}
+                          <SkuLink
+                            id={line.sku.id}
+                            context={{ ids: cart.map((item) => item.sku.id), label: isTill ? "Sale" : documentWord }}
+                            className="cds--link cds--type-label-01"
                           >
                             {line.sku.our_ref}
-                          </Link>
+                          </SkuLink>
                           {props.lineNote?.(line)}
                         </div>
                         <Button

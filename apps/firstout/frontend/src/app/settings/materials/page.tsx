@@ -146,16 +146,16 @@ function MaterialsScreen({ canMutate }: { canMutate: boolean }) {
           </p>
         ) : (
           groups.map((group) => (
-            <div key={group.family}>
+            <div key={group.family} className={own.familyGroup}>
               <h3 id={`family-${group.family}`} className={own.family}>{group.label}</h3>
               <div className={styles.tableScroll}>
-                <Table size="md" aria-labelledby={`family-${group.family}`}>
+                <Table size="md" aria-labelledby={`family-${group.family}`} className={own.familyTable}>
                   <TableHead>
                     <TableRow>
                       <TableHeader>Name</TableHeader>
-                      <TableHeader>SKUs</TableHeader>
-                      <TableHeader>Status</TableHeader>
-                      {canMutate && <TableHeader><span className="cds--visually-hidden">Actions</span></TableHeader>}
+                      <TableHeader className={own.colCount}>SKUs</TableHeader>
+                      <TableHeader className={own.colStatus}>Status</TableHeader>
+                      {canMutate && <TableHeader className={own.colActions}><span className="cds--visually-hidden">Actions</span></TableHeader>}
                     </TableRow>
                   </TableHead>
                   <TableBody>

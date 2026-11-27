@@ -22,6 +22,8 @@ export type MaterialPickerProps = {
   /** Names for ids the list does not hold (e.g. while loading), from the SKU response. */
   fallbackNames?: Record<string, string>;
   hideManageLink?: boolean;
+  /** Only the main material (for forms whose API takes no other materials). */
+  mainOnly?: boolean;
 };
 
 /** Main material (grouped by family) and Other materials as removable tags. */
@@ -66,7 +68,7 @@ export function MaterialPicker(props: MaterialPickerProps) {
           </SelectItemGroup>
         ))}
       </Select>
-      <fieldset className={styles.others} aria-describedby={invalidText?.others ? `${idPrefix}-others-error` : undefined}>
+      {!props.mainOnly && <fieldset className={styles.others} aria-describedby={invalidText?.others ? `${idPrefix}-others-error` : undefined}>
         <legend className="cds--label">Other materials</legend>
         <div className={styles.tags}>
           {value.otherIds.length === 0 && <span className="cds--type-helper-text-01">None</span>}
@@ -111,7 +113,7 @@ export function MaterialPicker(props: MaterialPickerProps) {
         {invalidText?.others && (
           <p id={`${idPrefix}-others-error`} className={`cds--form-requirement ${styles.error}`}>{invalidText.others}</p>
         )}
-      </fieldset>
+      </fieldset>}
       {!props.hideManageLink && (
         <Link className={styles.manage} href="/settings/materials" size="sm">Manage materials</Link>
       )}

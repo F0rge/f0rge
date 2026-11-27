@@ -86,10 +86,19 @@ export function tillSaleReducer(sale: TillSale, action: TillSaleAction): TillSal
     : { ...next, creditOverride: false, creditOverrideReason: "", creditBlock: null };
 }
 
-/** What the server prices; the preview query is keyed on it. */
-export function tillPriceRequest(cart: CartLine[], customerId: string): TillPriceRequest {
+/**
+ * What the server prices; the preview query is keyed on it. The quote and the held basket go with
+ * it, as on the sale, so a saved quantity kept from either is not shown as breaking the rule.
+ */
+export function tillPriceRequest(
+  cart: CartLine[],
+  customerId: string,
+  saved: { quoteId?: string; basketId?: string | null } = {},
+): TillPriceRequest {
   return {
     ...(customerId ? { customer_id: customerId } : {}),
+    ...(saved.quoteId ? { quote_id: saved.quoteId } : {}),
+    ...(saved.basketId ? { basket_id: saved.basketId } : {}),
     lines: cart.map((line) => ({
       sku_id: line.sku.id,
       qty: line.qty,

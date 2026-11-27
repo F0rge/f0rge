@@ -36,7 +36,7 @@ type AdjustmentDraftProps = {
   onLinesChanged: (lines: AdjustmentLine[]) => void;
   onFinished: () => Promise<void>;
   onError: (message: string) => void;
-  /** Preselects this SKU in the add-line picker (`/adjustments?sku=<id>`). */
+  /** Preselects this SKU in the add-line picker (`/adjustments?prefill_sku=<id>`). */
   initialSkuId?: string | null;
 };
 

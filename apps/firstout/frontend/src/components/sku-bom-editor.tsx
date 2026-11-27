@@ -16,7 +16,7 @@ import {
   Tile,
 } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 
 import {
   ApiError,
@@ -36,6 +36,9 @@ type SkuBomEditorProps = {
   onError: (message: string) => void;
   /** Modal (default) or embeddable section without modal chrome. */
   variant?: "modal" | "section";
+  /** Section variant inside a card that owns Save: the card calls `save()` and hears about changes. */
+  control?: MutableRefObject<{ save: () => Promise<void> } | null>;
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 function skuItemToString(item: Sku | null): string {
@@ -85,8 +88,11 @@ export function SkuBomEditor({
   onSaved,
   onError,
   variant = "modal",
+  control,
+  onDirtyChange,
 }: SkuBomEditorProps) {
   const [lines, setLines] = useState<(SkuBomLineWrite & { qty: number })[]>([]);
+  const [loaded, setLoaded] = useState<(SkuBomLineWrite & { qty: number })[]>([]);
   const [selectedSku, setSelectedSku] = useState<Sku | null>(null);
   const [qty, setQty] = useState<number | "">(1);
   const [loading, setLoading] = useState(false);
@@ -109,11 +115,11 @@ export function SkuBomEditor({
     listSkuBom(sku.id)
       .then((rows) => {
         if (!cancelled) {
-          setLines(
-            rows
-              .filter((row) => row.component_sku_id !== sku.id)
-              .map((row) => ({ component_sku_id: row.component_sku_id, qty: row.qty })),
-          );
+          const next = rows
+            .filter((row) => row.component_sku_id !== sku.id)
+            .map((row) => ({ component_sku_id: row.component_sku_id, qty: row.qty }));
+          setLines(next);
+          setLoaded(next);
         }
       })
       .catch((err: unknown) => {
@@ -143,6 +149,9 @@ export function SkuBomEditor({
       line.component_sku_id !== sku?.id && isValidBomQty(line.qty),
   );
 
+  const dirty = JSON.stringify(lines) !== JSON.stringify(loaded);
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+
   function addLine() {
     if (!selectedSku || !qtyValid || selectedSku.id === sku?.id) {
       return;
@@ -153,7 +162,8 @@ export function SkuBomEditor({
   }
 
   async function handleSave() {
-    if (!sku || sku.is_archived || !canMutate || !linesValid) {
+    if (!sku || sku.is_archived || !canMutate || !linesValid || loading) {
+      if (!linesValid) onError("Each quantity must be more than 0, with up to 4 decimals.");
       return;
     }
     setSaving(true);
@@ -173,6 +183,11 @@ export function SkuBomEditor({
       setSaving(false);
     }
   }
+
+  // Every render: handleSave closes over the current lines.
+  useEffect(() => {
+    if (control) control.current = { save: handleSave };
+  });
 
   const body = (
     <Stack gap={5}>
@@ -267,7 +282,7 @@ export function SkuBomEditor({
           </TableBody>
         </Table>
       )}
-      {variant === "section" && editable ? (
+      {variant === "section" && editable && !control ? (
         <Button
           kind="primary"
           disabled={saving || loading || !linesValid}
@@ -283,7 +298,7 @@ export function SkuBomEditor({
     if (!sku) {
       return null;
     }
-    return <Tile>{body}</Tile>;
+    return control ? body : <Tile>{body}</Tile>;
   }
 
   return (

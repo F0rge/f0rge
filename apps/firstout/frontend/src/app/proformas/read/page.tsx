@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  ApiError,
   canMutateCatalogue,
   confirmProforma,
   createIntakeSku,
@@ -32,6 +33,10 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { CategoryPicker } from "@/components/catalogue-lists/category-picker";
+import { useCategories, useMaterials } from "@/components/catalogue-lists/hooks";
+import { MaterialPicker } from "@/components/catalogue-lists/material-picker";
+import { cardSaveFailure } from "@/lib/catalogue-editor";
 import { queryKeys, referenceQueries } from "@/lib/queries";
 
 type DraftLine = {
@@ -53,8 +58,10 @@ type SkuDraft = {
   our_barcode: string;
   name: string;
   design: string;
-  fabric: string;
-  category: string;
+  category_id: string;
+  subcategory_id: string;
+  colour_name: string;
+  main_material_id: string;
   supplier_ref: string;
   latest_price: string;
 };
@@ -64,8 +71,10 @@ const emptySku: SkuDraft = {
   our_barcode: "",
   name: "",
   design: "",
-  fabric: "",
-  category: "",
+  category_id: "",
+  subcategory_id: "",
+  colour_name: "",
+  main_material_id: "",
   supplier_ref: "",
   latest_price: "",
 };
@@ -114,6 +123,9 @@ export default function ReadProformaPage() {
   const [skuOpen, setSkuOpen] = useState(false);
   const [skuLine, setSkuLine] = useState<number | null>(null);
   const [skuDraft, setSkuDraft] = useState<SkuDraft>(emptySku);
+  const [skuErrors, setSkuErrors] = useState<Record<string, string>>({});
+  const categories = useCategories();
+  const materials = useMaterials();
   const [skuSaving, setSkuSaving] = useState(false);
   const [submitForApproval, setSubmitForApproval] = useState(false);
 
@@ -217,8 +229,11 @@ export default function ReadProformaPage() {
         our_barcode: suggestion.our_barcode,
         name: suggestion.name,
         design: suggestion.design,
-        fabric: suggestion.fabric,
-        category: suggestion.category ?? "",
+        // The hint is matched to a managed category, never created; colour and material are chosen here.
+        category_id: suggestion.category_id ?? "",
+        subcategory_id: "",
+        colour_name: "",
+        main_material_id: "",
         supplier_ref: suggestion.supplier_ref ?? line.supplier_code,
         latest_price: suggestion.cost_price ?? line.unit_price,
       });
@@ -228,7 +243,6 @@ export default function ReadProformaPage() {
         ...emptySku,
         name: line.description,
         design: line.description,
-        fabric: "Unspecified",
         supplier_ref: line.supplier_code,
         latest_price: line.unit_price,
       });
@@ -248,14 +262,17 @@ export default function ReadProformaPage() {
     }
     setSkuSaving(true);
     setError(null);
+    setSkuErrors({});
     try {
       const created = await createIntakeSku({
         our_ref: skuDraft.our_ref.trim(),
         our_barcode: skuDraft.our_barcode.trim(),
         name: skuDraft.name.trim(),
         design: skuDraft.design.trim(),
-        fabric: skuDraft.fabric.trim(),
-        category: skuDraft.category.trim() || null,
+        category_id: skuDraft.category_id || null,
+        subcategory_id: skuDraft.subcategory_id || null,
+        colour_name: skuDraft.colour_name.trim() || null,
+        main_material_id: skuDraft.main_material_id || null,
         supplier_ref: skuDraft.supplier_ref.trim() || null,
         supplier_id: resolvedSupplier,
         supplier_sku: skuDraft.supplier_ref.trim() || null,
@@ -270,7 +287,9 @@ export default function ReadProformaPage() {
       void client.invalidateQueries({ queryKey: queryKeys.skus });
       setSkuOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create that SKU.");
+      const failure = cardSaveFailure(err);
+      setSkuErrors(failure.fields);
+      setError(err instanceof ApiError ? failure.message : "Could not create that SKU.");
     } finally {
       setSkuSaving(false);
     }
@@ -640,8 +659,24 @@ export default function ReadProformaPage() {
           <TextInput id="sku-barcode" labelText="Our barcode" value={skuDraft.our_barcode} onChange={(event) => setSkuDraft({ ...skuDraft, our_barcode: event.target.value })} />
           <TextInput id="sku-name" labelText="Name" value={skuDraft.name} onChange={(event) => setSkuDraft({ ...skuDraft, name: event.target.value })} />
           <TextInput id="sku-design" labelText="Design" value={skuDraft.design} onChange={(event) => setSkuDraft({ ...skuDraft, design: event.target.value })} />
-          <TextInput id="sku-fabric" labelText="Fabric" value={skuDraft.fabric} onChange={(event) => setSkuDraft({ ...skuDraft, fabric: event.target.value })} />
-          <TextInput id="sku-category" labelText="Category" value={skuDraft.category} onChange={(event) => setSkuDraft({ ...skuDraft, category: event.target.value })} />
+          <CategoryPicker
+            idPrefix="sku-intake"
+            categories={categories.data?.categories}
+            value={{ categoryId: skuDraft.category_id, subcategoryId: skuDraft.subcategory_id }}
+            onChange={(next) => setSkuDraft({ ...skuDraft, category_id: next.categoryId, subcategory_id: next.subcategoryId })}
+            invalidText={{ category: skuErrors.category_id, subcategory: skuErrors.subcategory_id }}
+          />
+          <TextInput id="sku-colour-name" labelText="Colour name" helperText="What customers read, such as Oat." maxLength={64}
+            value={skuDraft.colour_name} invalid={Boolean(skuErrors.colour_name)} invalidText={skuErrors.colour_name}
+            onChange={(event) => setSkuDraft({ ...skuDraft, colour_name: event.target.value })} />
+          <MaterialPicker
+            idPrefix="sku-intake"
+            materials={materials.data}
+            value={{ mainId: skuDraft.main_material_id, otherIds: [] }}
+            onChange={(next) => setSkuDraft({ ...skuDraft, main_material_id: next.mainId })}
+            invalidText={{ main: skuErrors.main_material_id }}
+            mainOnly
+          />
           <TextInput id="sku-supplier-code" labelText="Supplier code" value={skuDraft.supplier_ref} onChange={(event) => setSkuDraft({ ...skuDraft, supplier_ref: event.target.value })} />
           <TextInput id="sku-cost" labelText="Cost price on this document" value={skuDraft.latest_price} onChange={(event) => setSkuDraft({ ...skuDraft, latest_price: event.target.value })} />
         </Stack>

@@ -7,6 +7,7 @@ import type { TillKitBlock } from "./till-kit-pick";
 import {
   completeTillSale,
   EMPTY_SALE,
+  tillPriceRequest,
   tillSaleReducer,
   type TillCheckout,
   type TillSale,
@@ -99,6 +100,17 @@ async function sell(sale: TillSale, overrides: Partial<TillCheckout> = {}, creat
   }, sale, { ...checkout, ...overrides });
   return { outcome, body: bodies[0] };
 }
+
+describe("till price preview request", () => {
+  it("sends the quote and the held basket, as the sale does, so kept quantities are not flagged", () => {
+    expect(tillPriceRequest([line("sofa", 3)], "", { quoteId: "quote-1", basketId: "basket-1" })).toEqual({
+      quote_id: "quote-1", basket_id: "basket-1", lines: [{ sku_id: "sofa", qty: 3 }],
+    });
+    expect(tillPriceRequest([line("sofa")], "cust", { quoteId: "", basketId: null })).toEqual({
+      customer_id: "cust", lines: [{ sku_id: "sofa", qty: 1 }],
+    });
+  });
+});
 
 describe("till sale request", () => {
   it("sends a walk-in cash sale with nothing optional", async () => {

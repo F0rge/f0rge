@@ -65,7 +65,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onCreated: (order: PurchaseOrder) => void;
-  /** Start with this SKU on one line and its preferred supplier chosen (`?sku=` on the page). */
+  /** Start with this SKU on one line and its preferred supplier chosen (`?prefill_sku=` on the page). */
   prefillSkuId?: string | null;
 };
 type Choices = { suppliers: Supplier[]; proformas: Proforma[]; skus: Sku[] };

@@ -8,17 +8,30 @@ import styles from "../sku-panel.module.css";
 
 /** "panel": collapsible groups in the docked panel. "full": the facts column and cards of the full view. */
 export type SkuSectionLayout = "panel" | "full";
-/** Read today; frontend-editing adds "edit" per card. */
+/** A full-view card is "edit" while its fields are inputs; everything else reads. */
 export type SkuSectionMode = "read" | "edit";
+
+/** What an editing card needs from the panel: report changes, finish, and the discard question. */
+export interface SkuCardEditing {
+  /** The card reports whether its draft differs from where it started. */
+  setDirty: (dirty: boolean) => void;
+  /** Leave edit mode (after Cancel or a successful save). */
+  finish: () => void;
+  /** Set while "Discard changes to …?" is showing for this card. */
+  asking: boolean;
+  keepEditing: () => void;
+  discard: () => void;
+}
 
 export interface SkuSectionState {
   layout: SkuSectionLayout;
   isOpen: (id: SkuSectionId) => boolean;
   setOpen: (id: SkuSectionId, open: boolean) => void;
-  /** The edit seam: which card is in edit mode (none today). */
+  /** Which card is in edit mode (only ever one, and only in the full view). */
   modeOf: (id: SkuSectionId) => SkuSectionMode;
-  /** The edit seam: controls for a section's heading (an Edit button, Save/Cancel live in the body). */
+  /** Controls for a section's heading (the Edit button); Save/Cancel live in the body. */
   renderActions?: (id: SkuSectionId, overview: SkuOverview) => ReactNode;
+  editing?: SkuCardEditing;
 }
 
 export const SkuSectionStateContext = createContext<SkuSectionState>({

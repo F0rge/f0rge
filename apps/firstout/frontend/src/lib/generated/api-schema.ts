@@ -7181,7 +7181,7 @@ export interface components {
             /** Customer Id */
             customer_id?: string | null;
             /** Lines */
-            lines: components["schemas"]["HeldSaleLineCreate-Input"][];
+            lines: components["schemas"]["HeldSaleLineCreate"][];
             /** Pick Id */
             pick_id?: string | null;
             /** Linked Pick Ids */
@@ -7241,9 +7241,11 @@ export interface components {
             sku_name: string;
             /** Estimated Total Inc Vat */
             estimated_total_inc_vat: string | null;
+            /** Kept Qty */
+            kept_qty: number | null;
         };
         /** HeldSaleLineCreate */
-        "HeldSaleLineCreate-Input": {
+        HeldSaleLineCreate: {
             /**
              * Sku Id
              * Format: uuid
@@ -7256,21 +7258,6 @@ export interface components {
              * @default 0
              */
             discount_percent?: number | string;
-        };
-        /** HeldSaleLineCreate */
-        "HeldSaleLineCreate-Output": {
-            /**
-             * Sku Id
-             * Format: uuid
-             */
-            sku_id: string;
-            /** Qty */
-            qty: number;
-            /**
-             * Discount Percent
-             * @default 0
-             */
-            discount_percent: string;
         };
         /** HeldSaleNoteUpdate */
         HeldSaleNoteUpdate: {
@@ -12854,7 +12841,7 @@ export interface components {
                 [key: string]: string;
             };
             /** Lines */
-            lines: components["schemas"]["HeldSaleLineCreate-Output"][];
+            lines: components["schemas"]["TillBasketLine"][];
             /** Version */
             version: number;
             /**
@@ -12866,6 +12853,21 @@ export interface components {
             expires_at: string | null;
             /** Expired At */
             expired_at: string | null;
+        };
+        /** TillBasketLine */
+        TillBasketLine: {
+            /**
+             * Sku Id
+             * Format: uuid
+             */
+            sku_id: string;
+            /** Qty */
+            qty: number;
+            /**
+             * Discount Percent
+             * @default 0
+             */
+            discount_percent: string;
         };
         /**
          * TillBasketUpdate
@@ -12898,7 +12900,7 @@ export interface components {
                 [key: string]: string;
             };
             /** Lines */
-            lines?: components["schemas"]["HeldSaleLineCreate-Input"][];
+            lines?: components["schemas"]["HeldSaleLineCreate"][];
         };
         /** TillPriceRequest */
         TillPriceRequest: {
@@ -12906,6 +12908,10 @@ export interface components {
             lines: components["schemas"]["TillSaleLineCreate"][];
             /** Customer Id */
             customer_id?: string | null;
+            /** Basket Id */
+            basket_id?: string | null;
+            /** Quote Id */
+            quote_id?: string | null;
         };
         /** TillReservation */
         TillReservation: {
@@ -12924,6 +12930,10 @@ export interface components {
             lines: components["schemas"]["TillSaleLineCreate"][];
             /** Customer Id */
             customer_id?: string | null;
+            /** Basket Id */
+            basket_id?: string | null;
+            /** Quote Id */
+            quote_id?: string | null;
             /**
              * Location Id
              * Format: uuid
@@ -12949,8 +12959,6 @@ export interface components {
             credit_override?: boolean;
             /** Credit Override Reason */
             credit_override_reason?: string | null;
-            /** Basket Id */
-            basket_id?: string | null;
             /** Basket Version */
             basket_version?: number | null;
             /** Note Printed */
@@ -12959,8 +12967,6 @@ export interface components {
             note_internal?: string | null;
             /** Sales Staff Id */
             sales_staff_id?: string | null;
-            /** Quote Id */
-            quote_id?: string | null;
         };
         /** TillSaleLineCreate */
         TillSaleLineCreate: {

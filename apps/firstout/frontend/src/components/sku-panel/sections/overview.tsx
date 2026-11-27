@@ -7,6 +7,7 @@ import { MATERIAL_FAMILY_LABELS, type MaterialFamily } from "@/lib/catalogue-lis
 import { categoryText, dimensionsText, formatCount, sectionSummary, skuStatusTags } from "@/lib/sku-summary";
 import { ColourLine, SkuThumb } from "../sku-thumb";
 import { Facts, SkuSectionFrame, useSkuSection, type SkuSectionProps } from "./section";
+import { OverviewEdit } from "../edit/overview-edit";
 import styles from "../sku-panel.module.css";
 
 type MaterialSummary = SkuSectionProps["overview"]["sku"]["other_materials"][number];
@@ -32,9 +33,16 @@ function Barcode({ value }: { value: string }) {
 }
 
 export function OverviewSection({ overview }: SkuSectionProps) {
-  const { layout } = useSkuSection();
+  const { layout, modeOf } = useSkuSection();
   const { sku } = overview;
   const full = layout === "full";
+  if (modeOf("overview") === "edit") {
+    return (
+      <SkuSectionFrame id="overview" overview={overview} summary={sectionSummary("overview", overview)}>
+        <OverviewEdit overview={overview} />
+      </SkuSectionFrame>
+    );
+  }
   return (
     <SkuSectionFrame id="overview" overview={overview} summary={sectionSummary("overview", overview)}>
       {full && <SkuThumb sku={sku} className={styles.bigThumb} />}

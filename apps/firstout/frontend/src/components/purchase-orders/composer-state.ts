@@ -52,7 +52,7 @@ export function newOrderDraft(): OrderDraft {
   };
 }
 /**
- * A new order for one SKU (`/purchase-orders?new=1&sku=<id>`): its preferred supplier when
+ * A new order for one SKU (`/purchase-orders?new=1&prefill_sku=<id>`): its preferred supplier when
  * that supplier can still be ordered from, otherwise the supplier is left to the user.
  */
 export function prefilledOrderDraft(

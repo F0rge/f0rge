@@ -4,6 +4,7 @@ import {
   keysBelongToTarget,
   readSkuPanel,
   skuPanelBack,
+  skuPanelPageLabel,
   skuPanelPosition,
   skuPanelSearch,
   stepSkuId,
@@ -64,6 +65,14 @@ describe("SKU panel stepping", () => {
     expect(skuPanelPosition({ ids, label: "oslo" }, B)).toBe("oslo · 2 of 3");
     expect(skuPanelPosition({ ids, label: "Catalogue" }, "x")).toBe("Catalogue · not in this list");
     expect(skuPanelPosition({ ids: [A], label: "" }, A)).toBe("1 of 1");
+    expect(skuPanelPosition({ ids, label: "Catalogue" }, B, "Catalogue")).toBe("2 of 3");
+    expect(skuPanelPosition({ ids, label: "alba" }, B, "Purchase orders")).toBe("alba · 2 of 3");
+  });
+
+  it("names the page the panel sits on", () => {
+    expect(skuPanelPageLabel([{ label: "Catalogue management" }, { label: "Products" }])).toBe("Catalogue");
+    expect(skuPanelPageLabel([{ label: "Stock" }, { label: "Purchase orders" }])).toBe("Purchase orders");
+    expect(skuPanelPageLabel([])).toBe("Home");
   });
   it("always gives a context that contains the SKU", () => {
     expect(contextFor(A, { ids, label: "oslo", key: "search" })).toEqual({ ids, label: "oslo", key: "search" });

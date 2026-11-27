@@ -30,6 +30,7 @@ import {
   type ReorderRow,
 } from "@/lib/api";
 import { usePageError } from "@/hooks/use-page-error";
+import { SkuLink } from "@/components/sku-link";
 import { useAuth } from "@/lib/auth";
 import { reorderExplanation } from "@/lib/reorder";
 
@@ -314,6 +315,13 @@ export default function ReorderPage() {
                             return (
                               <TableCell key={cell.id} style={{ textAlign: "right" }}>
                                 {cell.value}
+                              </TableCell>
+                            );
+                          }
+                          if (cell.info.header === "our_ref" && entry) {
+                            return (
+                              <TableCell key={cell.id}>
+                                <SkuLink id={entry.sku_id} context={{ ids: rows.map((item) => item.sku_id), label: "Reorder" }}>{entry.our_ref}</SkuLink>
                               </TableCell>
                             );
                           }

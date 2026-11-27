@@ -21,6 +21,7 @@ import {
   type AdjustmentLine,
   type InventorySku,
 } from "@/lib/api";
+import { SkuLink } from "@/components/sku-link";
 import { formatQuantity, QUANTITY_STEP, quantityError } from "@/lib/quantity";
 
 export type LineDraftValue = number | "";
@@ -237,7 +238,9 @@ export function AdjustmentLinesTable({
                         return (
                           <TableCell key={cell.id}>
                             <div>{line.name}</div>
-                            <div className="cds--type-label-01">{line.our_ref}</div>
+                            <div className="cds--type-label-01">
+                              <SkuLink id={line.sku_id} context={{ ids: lines.map((item) => item.sku_id), label: "Adjustment" }}>{line.our_ref}</SkuLink>
+                            </div>
                           </TableCell>
                         );
                       }

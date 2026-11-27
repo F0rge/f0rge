@@ -41,6 +41,7 @@ import {
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { PREFILL_SKU_PARAM } from "@/lib/sku-panel";
 
 import { AdjustmentDraft } from "./adjustment-draft";
 import { AdjustmentView } from "./adjustment-view";
@@ -74,8 +75,8 @@ export default function AdjustmentsPage() {
 
 function AdjustmentsContent() {
   const { user } = useAuth();
-  // `/adjustments?sku=<id>` (Adjust stock on a SKU): that SKU is ready on the draft's first line.
-  const prefillSkuId = useSearchParams().get("sku");
+  // `/adjustments?prefill_sku=<id>` (Adjust stock on a SKU): that SKU is ready on the draft's first line.
+  const prefillSkuId = useSearchParams().get(PREFILL_SKU_PARAM);
   const canMutate = canReceive(user);
   const [summaries, setSummaries] = useState<AdjustmentSummary[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);

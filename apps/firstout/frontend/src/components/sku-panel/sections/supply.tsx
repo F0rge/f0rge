@@ -4,8 +4,10 @@ import { Tag } from "@carbon/react";
 import { useQuery } from "@tanstack/react-query";
 import { getSkuLeadTimes } from "@/lib/api";
 import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
+import { formatZarCents } from "@/lib/money";
 import { formatCount, sectionSummary } from "@/lib/sku-summary";
 import { Facts, SkuSectionFrame, useSkuSection, type SkuSectionProps } from "./section";
+import { SupplyEdit } from "../edit/supply-edit";
 import styles from "../sku-panel.module.css";
 
 type PriceRow = SkuSectionProps["overview"]["supplier_prices"][number];
@@ -14,6 +16,7 @@ const days = (value: number | null) => (value === null ? null : `${value} days`)
 const qty = (value: number | null) => (value === null ? "—" : formatCount(value));
 /** Prices are null without stock.cost.view; the fixed price wins over the latest one when set. */
 const price = (row: PriceRow) => row.fixed_price ?? row.latest_price;
+const money = (row: PriceRow) => formatZarCents(price(row));
 
 function madeToOrder(sku: SkuSectionProps["overview"]["sku"]): string | null {
   if (sku.made_to_order_capacity === null) return null;
@@ -24,7 +27,7 @@ function madeToOrder(sku: SkuSectionProps["overview"]["sku"]): string | null {
 }
 
 export function SupplySection({ overview }: SkuSectionProps) {
-  const { layout } = useSkuSection();
+  const { layout, modeOf } = useSkuSection();
   const { sku, supplier_prices: rows } = overview;
   // Same key as the catalogue page, so the report loads once.
   const leadTimes = useQuery({ queryKey: ["catalogue", "lead-times"], queryFn: getSkuLeadTimes, enabled: !overview.is_kit });
@@ -32,7 +35,7 @@ export function SupplySection({ overview }: SkuSectionProps) {
   const showPrices = rows.some((row) => price(row) !== null);
   return (
     <SkuSectionFrame id="supply" overview={overview} summary={sectionSummary("supply", overview)}>
-      {overview.is_kit ? (
+      {modeOf("supply") === "edit" ? <SupplyEdit overview={overview} /> : overview.is_kit ? (
         <p className={styles.help}>Not bought in. Reorders happen on its parts.</p>
       ) : (
         <>
@@ -62,7 +65,7 @@ export function SupplySection({ overview }: SkuSectionProps) {
                     <tr key={row.id}>
                       <td>{row.supplier_name} {row.is_preferred && <Tag size="sm" type="blue">Preferred</Tag>}{row.supplier_is_archived && <Tag size="sm" type="gray">Archived</Tag>}</td>
                       <td><code>{row.supplier_sku ?? "—"}</code></td>
-                      {showPrices && <td className={styles.num}>{price(row) ?? "—"}</td>}
+                      {showPrices && <td className={styles.num}>{money(row)}</td>}
                       <td className={styles.num}>{qty(row.min_order_qty)}</td>
                       <td className={styles.num}>{qty(row.pack_multiple)}</td>
                     </tr>
@@ -81,7 +84,7 @@ export function SupplySection({ overview }: SkuSectionProps) {
                         .filter(Boolean).join(" · ") || "No ordering rules"}
                     </small>
                   </span>
-                  {showPrices && <span>{price(row) ?? "—"}</span>}
+                  {showPrices && <span>{money(row)}</span>}
                 </li>
               ))}
             </ul>

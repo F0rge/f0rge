@@ -5,16 +5,14 @@ import { Catalog, DocumentExport, DocumentImport, Printer } from "@carbon/icons-
 import { Button, InlineNotification } from "@carbon/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { CatalogueSkuEditor } from "@/components/catalogue-sku-editor";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { RecordWorkspace, type RecordWorkspaceAdapter, type WorkspaceField } from "@/components/record-workspace";
-import { useSkuPanel, type SkuEditAction } from "@/components/sku-panel/provider";
+import { useSkuPanel } from "@/components/sku-panel/provider";
 import { StaffImage } from "@/components/staff-image";
 import { canMutateCatalogue, canViewCostAudit, formatZarAmount, listSkuUnitCosts, listSuppliers, skuPhotoUrl, type Sku, type WorkspaceSkuRow } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { catalogueCsv } from "@/lib/catalogue-export";
 import { MATERIAL_FAMILY_LABELS, catalogueListKeys, listCategories, listMaterials, type MaterialFamily } from "@/lib/catalogue-lists";
-import { queryKeys } from "@/lib/queries";
 import { loadCatalogueSelection } from "@/lib/catalogue-workspace";
 import { downloadCsv } from "@/lib/csv";
 import { formatQuantity } from "@/lib/quantity";
@@ -46,8 +44,6 @@ function CatalogueScreen() {
   const panel = useSkuPanel();
   const allowed = canMutateCatalogue(user);
   const canViewCost = canViewCostAudit(user);
-  const [refreshKey, refresh] = useState(0);
-  const [editing, setEditing] = useState<{ sku: Sku; startOnPricing?: boolean } | null>(null);
   const client = useQueryClient();
   const suppliersQuery = useQuery({ queryKey: ["catalogue", "suppliers"], queryFn: () => listSuppliers() });
   const categoriesQuery = useQuery({ queryKey: catalogueListKeys.categories(), queryFn: () => listCategories() });
@@ -57,27 +53,15 @@ function CatalogueScreen() {
   const subcategoryNames = [...new Set(categories.flatMap((item) => item.subcategories.map((sub) => sub.name)))].sort((a, b) => a.localeCompare(b));
   const suppliers = suppliersQuery.data ?? [];
   const materials = materialsQuery.data ?? [];
-  const metadataReady = Boolean(suppliersQuery.data && categoriesQuery.data);
   const metadataError = suppliersQuery.error || categoriesQuery.error || materialsQuery.error
-    ? "Supplier, category or material options could not be loaded. Existing products remain available; retry before editing."
+    ? "Supplier, category or material options could not be loaded. Existing products remain available."
     : null;
-  const unitCosts = useQuery({
-    queryKey: ["catalogue", "unit-costs"],
-    queryFn: async () => {
-      const result = await listSkuUnitCosts({ lifecycle: "all" });
-      return new Map<string, string>(result.items.flatMap((row) => row.unit_cost_zar === null ? [] : [[row.sku_id, row.unit_cost_zar]]));
-    },
-    enabled: canViewCost,
-  });
-  const costs = (!unitCosts.error && unitCosts.data) || new Map<string, string>();
-  const costState: "loading" | "ready" | "failed" = !canViewCost ? "ready" : unitCosts.error ? "failed" : unitCosts.data ? "ready" : "loading";
   const reloadMetadata = () => {
     void client.invalidateQueries({ queryKey: ["catalogue"] });
     void client.invalidateQueries({ queryKey: catalogueListKeys.categories() });
     void client.invalidateQueries({ queryKey: catalogueListKeys.materials() });
   };
   const [actionError, setActionError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -88,16 +72,6 @@ function CatalogueScreen() {
       router.replace(`/catalogue?${next}`, { scroll: false });
     }
   }, [params, router]);
-
-  // Until per-card editing lands, the panel's Edit SKU / Edit price open the existing editor modal here.
-  const editReady = allowed && metadataReady && !metadataError;
-  const setEditAction = panel?.setEditAction;
-  const editAction = useCallback<SkuEditAction>((sku, options) => setEditing({ sku, startOnPricing: options.pricing }), []);
-  useEffect(() => {
-    if (!setEditAction || !editReady) return;
-    setEditAction(editAction);
-    return () => setEditAction(null);
-  }, [setEditAction, editReady, editAction]);
 
   const contextLabel = params.get("q") || "Catalogue";
   const openSkuId = readSkuPanel(params)?.id ?? null;
@@ -152,11 +126,10 @@ function CatalogueScreen() {
     renderAvatar: (item) => <ProductImage sku={item} />,
   };
   return <>
-    {(actionError || success) && <InlineNotification kind={actionError ? "error" : "success"} title={actionError ? "Action failed" : "SKU updated"} subtitle={actionError ?? success ?? ""} lowContrast onCloseButtonClick={() => { setActionError(null); setSuccess(null); }} />}
+    {actionError && <InlineNotification kind="error" title="Action failed" subtitle={actionError} lowContrast onCloseButtonClick={() => setActionError(null)} />}
     {metadataError && <InlineNotification kind="warning" title="Catalogue options unavailable" subtitle={metadataError} lowContrast hideCloseButton />}
-    {costState === "failed" && canViewCost && <InlineNotification kind="warning" title="Costs unavailable" subtitle="Products are exported without unit costs." lowContrast hideCloseButton />}
-    {(metadataError || costState === "failed") && <Button kind="ghost" size="sm" onClick={reloadMetadata}>Retry catalogue options and costs</Button>}
-    <RecordWorkspace adapter={adapter} refreshKey={refreshKey}
+    {metadataError && <Button kind="ghost" size="sm" onClick={reloadMetadata}>Retry catalogue options</Button>}
+    <RecordWorkspace adapter={adapter}
       onCreate={allowed ? () => router.push("/catalogue/new") : undefined} createLabel="New SKU"
       onExport={exportCatalogue}
       headerActions={allowed ? <>
@@ -171,25 +144,6 @@ function CatalogueScreen() {
         onPageItems: (rows) => panel?.refreshContext(CONTEXT_KEY, rows.map((row) => row.id), contextLabel),
       }}
     />
-    {editing && allowed && !editing.sku.is_archived && metadataReady && !metadataError && (
-      <CatalogueSkuEditor
-        key={editing.sku.id}
-        sku={editing.sku}
-        startOnPricing={editing.startOnPricing}
-        suppliers={suppliers}
-        categories={categoryNames}
-        unitCost={canViewCost ? (costs.get(editing.sku.id) ?? null) : undefined}
-        costLoading={costState === "loading"}
-        onClose={() => setEditing(null)}
-        onSaved={(updated) => {
-          setSuccess(`${updated.name} has been saved.`);
-          refresh((value) => value + 1);
-          reloadMetadata();
-          void client.invalidateQueries({ queryKey: queryKeys.skus });
-          void client.invalidateQueries({ queryKey: catalogueListKeys.skuOverview(updated.id) });
-        }}
-      />
-    )}
   </>;
 }
 export default function CataloguePage() {

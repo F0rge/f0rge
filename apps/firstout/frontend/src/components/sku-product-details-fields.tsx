@@ -12,8 +12,11 @@ import {
 
 import styles from "./sku-product-details-fields.module.css";
 
+/** Optional colour name, shown beside the swatch so the two read as one colour. */
+type ColourNameField = { value: string; invalidText?: string; onChange: (value: string) => void };
+
 export function SkuProductDetailsFields({
-  idPrefix, form, errors, readOnly, disabled, onChange,
+  idPrefix, form, errors, readOnly, disabled, onChange, colourName,
 }: {
   idPrefix: string;
   form: SkuDetailsForm;
@@ -21,6 +24,7 @@ export function SkuProductDetailsFields({
   readOnly?: boolean;
   disabled?: boolean;
   onChange: (field: keyof SkuDetailsForm, value: string) => void;
+  colourName?: ColourNameField;
 }) {
   const typed = form.swatch_hex.trim().toLowerCase();
   const swatch = SKU_SWATCH_PATTERN.test(typed) ? typed : null;
@@ -56,7 +60,23 @@ export function SkuProductDetailsFields({
           onChange={(event) => onChange("piece_count", event.target.value)}
         />
         </Column>
-        <Column sm={4} md={8} lg={16}>
+        {colourName && (
+          <Column sm={4} md={4} lg={8}>
+            <TextInput
+              id={`${idPrefix}-colour_name`}
+              labelText="Colour name"
+              helperText="What customers read, such as Oat."
+              maxLength={64}
+              value={colourName.value}
+              invalid={Boolean(colourName.invalidText)}
+              invalidText={colourName.invalidText}
+              readOnly={readOnly}
+              disabled={disabled}
+              onChange={(event) => colourName.onChange(event.target.value)}
+            />
+          </Column>
+        )}
+        <Column sm={4} md={colourName ? 4 : 8} lg={colourName ? 8 : 16}>
         <div className={styles.swatch}>
           <TextInput
             id={`${idPrefix}-swatch_hex`}

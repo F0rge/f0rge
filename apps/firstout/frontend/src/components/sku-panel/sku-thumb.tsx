@@ -31,7 +31,7 @@ export function ColourLine({ name, hex }: { name: string | null; hex: string | n
     <span className={styles.colour}>
       {hex && <span className={styles.swatch} style={{ background: hex }} aria-hidden="true" />}
       {name && <span>{name}</span>}
-      {hex && <code>{hex}</code>}
+      {hex && <span className={styles.hex}>{hex}</span>}
     </span>
   );
 }

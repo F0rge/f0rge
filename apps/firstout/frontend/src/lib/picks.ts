@@ -132,7 +132,7 @@ export function firstWarehouseId(
 
 export function picksCreateHref(skuId: string, qty: number): string {
   const params = new URLSearchParams();
-  params.set("sku", skuId);
+  params.set("prefill_sku", skuId); // not "sku": that opens the SKU panel
   params.set("qty", String(qty));
   return `/picks?${params.toString()}`;
 }
