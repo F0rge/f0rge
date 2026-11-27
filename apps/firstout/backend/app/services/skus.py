@@ -785,7 +785,13 @@ class SkuService:
         target_colour = data.colour_name if "colour_name" in fields_set else sku.colour_name
         main_material = materials.get(target_main) if target_main is not None else None
         target_fabric = sku.fabric
-        finish_inputs = fields_set & {"colour_name", "main_material_id", "fabric"}
+        # Only a real change rebuilds the label: resending the stored colour or material
+        # (null included) must not erase a label that came from the old free-text fabric.
+        finish_inputs = {
+            field
+            for field in ("colour_name", "main_material_id")
+            if field in fields_set and getattr(data, field) != getattr(sku, field)
+        } | (fields_set & {"fabric"})
         if creating or finish_inputs:
             derived = finish_label(target_colour, main_material.name if main_material else None)
             if derived is not None:

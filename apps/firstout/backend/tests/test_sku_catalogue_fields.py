@@ -464,3 +464,98 @@ def test_packing_sheet_labels_finish_and_hides_placeholder() -> None:
     assert "Finish: Oat Bouclé" in text
     assert "Fabric" not in text
     assert text.count("Finish:") == 1
+
+
+# Finish label survives resends; startup category re-link; accent folding -----------------
+
+
+async def test_resending_unchanged_colour_or_material_keeps_legacy_label(owner_client, lists):
+    # A backfilled SKU whose label came from the old free-text fabric.
+    sku = await _create(owner_client, "CF-KEEP", design="Arc", fabric="Oat Bouclé Special")
+    await _create(owner_client, "CF-KEEP-DASH", design="Arc")  # already "-" for this design
+    url = f"{SKUS}/{sku['id']}"
+    for resend in (
+        {"colour_name": None, "retail_inc_vat": "100.00"},
+        {"main_material_id": None},
+        {"colour_name": "", "main_material_id": None},
+    ):
+        kept = await owner_client.patch(url, json=resend)
+        assert kept.status_code == 200, kept.text
+        assert kept.json()["fabric"] == "Oat Bouclé Special"
+
+    coloured = await owner_client.patch(url, json={"colour_name": "Oat"})
+    assert coloured.json()["fabric"] == "Oat"
+    same = await owner_client.patch(url, json={"colour_name": "Oat", "fabric": "Ignored"})
+    assert same.json()["fabric"] == "Oat"  # unchanged value, and the derived label wins
+    material = await owner_client.patch(url, json={"main_material_id": str(lists["boucle"].id)})
+    assert material.json()["fabric"] == "Oat Bouclé"
+    resent = await owner_client.patch(
+        url, json={"colour_name": "Oat", "main_material_id": str(lists["boucle"].id)}
+    )
+    assert resent.json()["fabric"] == "Oat Bouclé"
+
+    # The legacy rule still applies when fabric is sent to a SKU with neither set.
+    legacy = await _create(owner_client, "CF-KEEP-LEGACY", fabric="Old")
+    retyped = await owner_client.patch(
+        f"{SKUS}/{legacy['id']}", json={"colour_name": None, "fabric": "Retyped"}
+    )
+    assert retyped.json()["fabric"] == "Retyped"
+
+
+async def test_startup_relink_repairs_old_backend_category_writes(owner_client, lists) -> None:
+    from app.models.sku import Sku
+    from app.services.sku_classification import relink_sku_categories
+
+    db = owner_client.test_db
+
+    def old_style(ref: str, category, **extra) -> Sku:
+        # What the previous backend writes: the text only.
+        return Sku(
+            our_ref=ref,
+            our_barcode=ref,
+            name=ref,
+            design=ref,
+            fabric="-",
+            category=category,
+            **extra,
+        )
+
+    unlinked = old_style("RL-1", " sofas ")
+    moved = old_style(
+        "RL-2", "Dining room", category_id=lists["sofas"].id, subcategory_id=lists["corner"].id
+    )
+    unknown = old_style("RL-3", "Lamps")
+    cleared = old_style("RL-4", None, category_id=lists["sofas"].id)
+    fine = old_style(
+        "RL-5", "Sofas", category_id=lists["sofas"].id, subcategory_id=lists["corner"].id
+    )
+    other = Team(name="Relink other organisation", slug="relink-other-org")
+    db.add(other)
+    await db.flush()
+    foreign = old_style("RL-FOREIGN", "Sofas", team_id=other.id)
+    db.add_all([unlinked, moved, unknown, cleared, fine, foreign])
+    await db.flush()
+
+    assert await relink_sku_categories(db) == (3, 1)
+    for row in (unlinked, moved, unknown, cleared, fine, foreign):
+        await db.refresh(row)
+    assert (unlinked.category_id, unlinked.category) == (lists["sofas"].id, "Sofas")
+    assert (moved.category_id, moved.subcategory_id) == (lists["dining"].id, None)
+    assert (unknown.category_id, unknown.category) == (None, "Lamps")
+    assert (cleared.category_id, cleared.subcategory_id) == (None, None)
+    assert (fine.category_id, fine.subcategory_id) == (lists["sofas"].id, lists["corner"].id)
+    assert foreign.category_id is None
+    # Idempotent: only the unknown name is reported again.
+    assert await relink_sku_categories(db) == (0, 1)
+    count = await db.scalar(
+        select(func.count()).select_from(SkuCategory).where(func.lower(SkuCategory.name) == "lamps")
+    )
+    assert count == 0
+
+
+async def test_category_names_match_without_accents(owner_client) -> None:
+    decor = await ensure_category(owner_client, "Décor")
+    sku = await _create(owner_client, "CF-ACCENT", category="decor")
+    assert (sku["category"], sku["category_id"]) == ("Décor", str(decor.id))
+    csv = "SKU,Name,Category,Retail Price\nCSV-ACCENT,Vase,DECOR,115.00\n"
+    assert (await _import(owner_client, csv, "preview")).json()["errors"] == []

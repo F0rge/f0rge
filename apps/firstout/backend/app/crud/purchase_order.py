@@ -173,16 +173,6 @@ class SkuStockCRUD(BaseCRUD):
         )
         return list(result.unique().scalars().all())
 
-    async def on_order_by_sku_id(self, sku_ids: list[uuid.UUID]) -> dict[uuid.UUID, Decimal]:
-        if not sku_ids:
-            return {}
-        result = await self.db.execute(
-            select(SkuStock.sku_id, SkuStock.on_order).where(
-                SkuStock.team_id == current_tenant_id(), SkuStock.sku_id.in_(sku_ids)
-            )
-        )
-        return {sku_id: on_order for sku_id, on_order in result}
-
 
 class LocationStockCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:

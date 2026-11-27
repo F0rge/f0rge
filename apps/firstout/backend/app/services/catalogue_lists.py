@@ -14,9 +14,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.catalogue_list import MaterialCRUD, SkuCategoryCRUD
-from app.crud.category_account_map import CategoryAccountMapCRUD
 from app.crud.ops_commerce import SHOP_CATEGORIES
 from app.models.catalogue_list import MATERIAL_FAMILIES, Material, SkuCategory
+from app.services.sku_classification import finish_label
+from app.services.skus import field_errors
 from app.schemas.catalogue_list import (
     CategoryCreate,
     CategoryResponse,
@@ -29,7 +30,7 @@ from app.schemas.catalogue_list import (
     SalesAccount,
     ShopSection,
 )
-from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
 
 # Display names as the storefront shows them (commerce/src/catalogue-collections.ts).
@@ -75,7 +76,6 @@ class CategoryService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = SkuCategoryCRUD(db)
-        self.map_crud = CategoryAccountMapCRUD(db)
 
     async def tree(self, lifecycle: Lifecycle = "active") -> CategoryTree:
         """Top-level categories with their sub-categories, active rows first.
@@ -180,8 +180,8 @@ class CategoryService:
     async def _cascade_rename(self, category_id: uuid.UUID, old: str, new: str) -> None:
         """skus.category and the ledger map follow the name in the same transaction."""
         await self.crud.rename_sku_read_model(category_id, new)
-        target = await self.map_crud.get_by_category_insensitive(new)
-        mapping = await self.map_crud.get_by_category_insensitive(old)
+        target = await self.crud.account_map_by_name(new)
+        mapping = await self.crud.account_map_by_name(old)
         if target is not None and target is not mapping:
             raise ConflictError(
                 f"Category posting already has an entry named '{target.category}'. "
@@ -209,9 +209,11 @@ class CategoryService:
         if value is None:
             return None
         if parent_id is not None:
-            raise ValidationError("Only a top-level category can have a shop section.")
+            raise field_errors(
+                [("shop_category", "Only a top-level category can have a shop section.")]
+            )
         if value not in SHOP_CATEGORIES.values():
-            raise ValidationError(f"Unknown shop section '{value}'.")
+            raise field_errors([("shop_category", f"Unknown shop section '{value}'.")])
         return value
 
     async def _get(self, category_id: uuid.UUID) -> SkuCategory:
@@ -302,14 +304,54 @@ class MaterialService:
         if archived != material.is_archived:
             material.is_archived = archived
             material.archived_at = _now() if archived else None
+        labels = await self._rebuilt_finish_labels(material, name) if name != material.name else {}
         material.name = name
         if data.family is not None:
             material.family = data.family
         try:
-            await self.crud.commit_refresh(material)
+            async with unit_of_work(self.db):
+                await self.crud.flush()
+                await self.crud.set_finish_labels(labels)
         except IntegrityError as exc:
             raise ConflictError(self._taken(material.name)) from exc
         return await self._reloaded(material.id)
+
+    async def _rebuilt_finish_labels(
+        self, material: Material, new_name: str
+    ) -> dict[uuid.UUID, str]:
+        """New finish labels for SKUs whose label was derived from this material's old name.
+
+        A label that never matched "{colour} {material}" (a legacy, hand-typed one) is left
+        alone: it does not name the material, and rewriting it could lose detail.
+        Refuses the rename when a rebuilt label would give two SKUs one design and finish.
+        """
+        labels: dict[uuid.UUID, str] = {}
+        refs: dict[uuid.UUID, str] = {}
+        seen: dict[tuple[str, str], str] = {}
+        clashes: list[str] = []
+        for sku in await self.crud.skus_with_main_material(material.id):
+            old = finish_label(sku.colour_name, material.name)
+            new = finish_label(sku.colour_name, new_name)
+            if old is None or new is None or (sku.fabric or "").lower() != old.lower():
+                continue
+            labels[sku.id], refs[sku.id] = new, sku.our_ref
+            key = (sku.design.lower(), new.lower())
+            if key in seen:
+                clashes.append(f"{seen[key]} and {sku.our_ref}")
+            seen[key] = sku.our_ref
+        if labels:
+            pairs = [(design, finish) for design, finish in seen]
+            for other in await self.crud.skus_with_design_finish(pairs, list(labels)):
+                clashes.append(
+                    f"{seen[(other.design.lower(), other.fabric.lower())]} and {other.our_ref}"
+                )
+        if clashes:
+            raise ConflictError(
+                f"Renaming to '{new_name}' would give SKUs the same design, colour and material: "
+                + "; ".join(clashes)
+                + ". Change one of them first."
+            )
+        return labels
 
     async def _ensure_free(self, name: str, exclude_id: Optional[uuid.UUID] = None) -> None:
         key = fold_name(name)

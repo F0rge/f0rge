@@ -22,6 +22,7 @@ from app.models.location import Location
 from app.models.pick import Pick, PickSourceType, PickStatus
 from app.models.sku import Sku
 from app.models.stock_reservation import HOLDER_BASKET, HOLDER_HELD_SALE
+from app.models.till_basket import TillBasket as TillBasketRow
 from app.schemas.held_sale import (
     HeldSale,
     HeldSaleCreate,
@@ -36,7 +37,12 @@ from app.services.party_archive import assert_customer_active
 from app.services.record_workspace_filters import payload_hash
 from app.services.sellability import assert_sku_sellable
 from app.services.stock_availability import StockAvailability
-from app.services.sale_line_pricing import PricingAuthority, SaleLinePricing, SaleLineRequest
+from app.services.sale_line_pricing import (
+    PricingAuthority,
+    SaleLinePricing,
+    SaleLineRequest,
+    quantity_rule_message,
+)
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -44,6 +50,11 @@ from f0rge_db.crud import unit_of_work
 _RECEIPT_TTL = datetime.timedelta(days=30)
 # South Africa has no daylight saving, so a fixed offset is exact.
 _SAST = datetime.timezone(datetime.timedelta(hours=2))
+
+
+def kept_quantities(basket: TillBasketRow) -> dict[str, int]:
+    """sku_id -> held quantity kept against the sale quantity rule, from a basket's lines."""
+    return {line["sku_id"]: line["kept_qty"] for line in basket.lines if line.get("kept_qty")}
 
 
 def clock(moment: datetime.datetime) -> str:
@@ -85,7 +96,9 @@ class HeldSaleService:
                     baskets.assert_matches(basket, data.lines, None)
                 if data.basket_id is not None:
                     await self._prune_baskets(now)
-                row = await self._save(data, actor_id, showroom, now)
+                row = await self._save(
+                    data, actor_id, showroom, now, kept_quantities(basket) if basket else None
+                )
                 if baskets is not None and basket is not None:
                     # The held sale takes over the basket's reservations, never freeing them.
                     await self.availability.move(
@@ -189,7 +202,13 @@ class HeldSaleService:
                 current_id = None
                 if data.current is not None:
                     fresh = await self.crud.get(showroom.id, data.current.id) is None
-                    current = await self._save(data.current, actor_id, showroom, now)
+                    current = await self._save(
+                        data.current,
+                        actor_id,
+                        showroom,
+                        now,
+                        kept_quantities(basket) if basket is not None else None,
+                    )
                     current_id = current.id
                     if fresh and basket is not None:
                         # The basket's sale is now held: its reservations follow it.
@@ -276,7 +295,9 @@ class HeldSaleService:
         actor_id: uuid.UUID,
         showroom: Location,
         now: datetime.datetime,
+        kept: Optional[dict[str, int]] = None,
     ) -> HeldSaleRow:
+        """``kept``: the held basket's quantities already kept against the selling rule."""
         fingerprint = payload_hash(data.model_dump(mode="json"))
         replay = await self.crud.operation(showroom.id, actor_id, "save", data.id, now)
         existing = await self.crud.get(showroom.id, data.id)
@@ -303,9 +324,17 @@ class HeldSaleService:
                 )
             except (ConflictError, ValidationError):
                 pass
+        can_break_rule = (await PricingAuthority.of(self.db, actor_id)).can_override
         lines: list[HeldSaleLine] = []
         for line in data.lines:
             sku = skus[line.sku_id]
+            # Saved now: a quantity that meets the rule (or that the holder may break it
+            # with, or that was already kept) is kept if the rule later tightens.
+            keep = (
+                (kept or {}).get(str(line.sku_id)) == line.qty
+                or can_break_rule
+                or quantity_rule_message(sku, line.qty) is None
+            )
             estimate = None
             if pricing is not None:
                 # An estimate only: the sale is priced and authorised again when completed.
@@ -327,6 +356,7 @@ class HeldSaleService:
                     sku_code=sku.our_ref,
                     sku_name=sku.name,
                     estimated_total_inc_vat=estimate,
+                    kept_qty=line.qty if keep else None,
                 )
             )
         total = (

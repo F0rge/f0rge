@@ -119,14 +119,46 @@ class TillOrchestrator:
             await PricingAuthority.of(self.db, user_id),
             enforce_required_list=True,
         )
+        kept = await self._kept_quantities(request, user_id)
         preview = await pricing.price(
             [
-                SaleLineRequest(sku=sku, qty=line.qty, discount_percent=line.discount_percent)
+                # Only the quantity is kept: prices and discounts are authorised afresh.
+                SaleLineRequest(
+                    sku=sku,
+                    qty=line.qty,
+                    discount_percent=line.discount_percent,
+                    saved_qty=kept.get(sku.id),
+                )
                 for sku, line in zip(skus, request.lines, strict=True)
             ],
             enforce=enforce,
         )
         return skus, preview
+
+    async def _kept_quantities(
+        self, request: TillPriceRequest, user_id: Optional[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        """Per SKU, the quantity a saved quote or held sale already holds for this cart.
+
+        A line still at that quantity is not checked against the SKU's selling rule, so a
+        rule tightened after saving never blocks finishing the sale (SPEC 5.3, ADR 0002's
+        kept values). Held quantities travel in the basket's lines as ``kept_qty``.
+        """
+        kept: dict[uuid.UUID, int] = {}
+        if request.basket_id is not None and user_id is not None:
+            from app.services.till_basket import TillBasketService
+
+            basket = await TillBasketService(self.db).get_owned(request.basket_id, user_id)
+            for stored in basket.lines:
+                if stored.get("kept_qty") is not None:
+                    kept[uuid.UUID(stored["sku_id"])] = int(stored["kept_qty"])
+        if request.quote_id is not None:
+            from app.crud.quote import QuoteCRUD
+
+            quote = await QuoteCRUD(self.db).get_by_id(request.quote_id)
+            for quote_line in quote.lines if quote is not None else []:
+                kept.setdefault(quote_line.sku_id, quote_line.qty)
+        return kept
 
     async def preview_prices(
         self, request: TillPriceRequest, user_id: uuid.UUID

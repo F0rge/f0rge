@@ -63,6 +63,12 @@ class TillBasketUpdate(BaseModel):
         return self
 
 
+class TillBasketLine(HeldSaleLineCreate):
+    # A stored line may carry kept_qty (a held quantity kept against the sale quantity
+    # rule); it stays server-side, so clients never send or see it.
+    model_config = ConfigDict(extra="ignore")
+
+
 class TillBasket(BaseModel):
     id: uuid.UUID
     location_id: uuid.UUID
@@ -74,7 +80,7 @@ class TillBasket(BaseModel):
     quote_id: Optional[uuid.UUID] = None
     pick_id: Optional[uuid.UUID]
     linked_pick_ids: dict[uuid.UUID, uuid.UUID]
-    lines: list[HeldSaleLineCreate]
+    lines: list[TillBasketLine]
     version: int
     updated_at: datetime.datetime
     # While it has lines: when the sale (and its reservations) lapse unless changed.
@@ -168,6 +174,9 @@ class HeldSaleLine(HeldSaleLineCreate):
     sku_code: str
     sku_name: str
     estimated_total_inc_vat: Optional[Decimal] = None
+    # The held quantity, when it met the SKU's selling rule (or the holder could break
+    # it) at the moment of holding: completing the sale keeps it even if the rule tightens.
+    kept_qty: Optional[int] = None
 
 
 class HeldSale(BaseModel):

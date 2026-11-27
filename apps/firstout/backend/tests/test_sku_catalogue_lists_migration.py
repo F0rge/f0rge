@@ -39,11 +39,33 @@ GUESSES = [
     (("-", "Oslo", "Oslo Oak Dining Chair"), ("Oak", None)),
     (("Unspecified", "Siena", "Siena Glass Side Table"), ("Glass", None)),
     (("csv:AB1", "csv:AB1", "Rio Sideboard"), (None, None)),
-    (("Ash Grey Velvet", "Fez", "Fez Ottoman"), (None, None)),  # ambiguous: two materials
+    # "Ash" followed by a colour is the colour, so velvet is the only material.
+    (("Ash Grey Velvet", "Fez", "Fez Ottoman"), ("Velvet", None)),
     (("Solo 111", "Hathaway Taupe", "Hathaway Sofa"), (None, None)),
     (("", "Rio", "Rio Sideboard Walnut & Brass"), (None, None)),
     (("Oat", "Tula", "Tula Sofa"), (None, "Oat")),
+    (("Rosé Pink Velvet", "Siena", "Siena Chair"), ("Velvet", "Rosé Pink")),
+    (("Light Grey", "Oslo", "Oslo Sofa"), (None, "Light Grey")),
+    # A qualifier beside the material word means it is not that material.
+    (("Faux Leather Black", "Fez", "Fez Leather Chair"), (None, None)),
+    (("PU Leather Brown", "Fez", "Fez Chair"), (None, None)),
+    (("Leather Look Tan", "Fez", "Fez Chair"), (None, None)),
+    (("Linen Look Grey", "Lyon", "Lyon Linen Sofa"), (None, None)),
+    (("Vegan Leather", "", ""), (None, None)),
+    # A material word used as a colour is not the material.
+    (("Steel Blue", "Tula", "Tula Chair"), (None, None)),
+    (("Walnut Brown", "Rio", "Rio Sideboard"), (None, None)),
+    (("Ash Grey", "Rio", "Rio Sideboard"), (None, None)),
+    # Leftover words that are not colours give no colour name.
+    (("Glass Top Black", "Kiva", "Kiva Table"), ("Glass", None)),
+    (("Velvet Navy 2", "Alexa", "Alexa Chair"), ("Velvet", None)),
 ]
+
+
+def test_frozen_materials_match_the_model_at_this_revision() -> None:
+    from app.models.catalogue_list import DEFAULT_MATERIALS
+
+    assert _migration._MATERIALS == DEFAULT_MATERIALS
 
 
 @pytest.mark.parametrize(("fields", "expected"), GUESSES)
@@ -192,7 +214,7 @@ async def test_backfill_policy_constraints_and_downgrade(second_postgres_url: st
                 "sofa3": ("Sofas", "Oak", None),
                 "dining": ("dining room", "Glass", None),
                 "lamp": ("Lamps", None, None),
-                "none": (None, None, None),
+                "none": (None, "Velvet", None),
                 "b": ("sofas", "Linen", "Grey"),
             }
             for key, (category, material, colour) in expected.items():
@@ -211,7 +233,7 @@ async def test_backfill_policy_constraints_and_downgrade(second_postgres_url: st
                 assert row.do_not_reorder is False and row.untouched
             assert await conn.scalar(
                 sa.text("SELECT count(*) FROM materials WHERE team_id = :b"), {"b": b}
-            ) == len(_migration.DEFAULT_MATERIALS)
+            ) == len(_migration._MATERIALS)
 
         async def refused(statement: str, **params) -> None:
             with pytest.raises(IntegrityError):
@@ -327,6 +349,68 @@ async def test_backfill_policy_constraints_and_downgrade(second_postgres_url: st
                     sa.text("SELECT count(*) FROM skus WHERE category_id IS NOT NULL")
                 )
                 == 6
+            )
+    finally:
+        await admin.dispose()
+
+
+async def test_unicode_case_folding_follows_postgres(second_postgres_url: str) -> None:
+    """Names Python and Postgres lower-case differently ("DİNİNG ROOM") are grouped, linked
+    and kept unique by Postgres alone: no SKU loses its shop section and no duplicate
+    category aborts the release."""
+    url = second_postgres_url
+    migrate(url, PREVIOUS)
+    admin = create_async_engine(url, poolclass=NullPool)
+    alone, collide = uuid.uuid4(), uuid.uuid4()
+    try:
+        async with admin.begin() as conn:
+            for team in (alone, collide):
+                await conn.execute(
+                    sa.text("""INSERT INTO teams(id,name,slug,status,created_at,updated_at)
+                        VALUES (:id,'Synthetic unicode team',:slug,'active',now(),now())"""),
+                    {"id": team, "slug": f"unicode-{team.hex}"},
+                )
+            await _insert_sku(conn, alone, "DİNİNG ROOM", "-", "Lone", "Lone Table")
+            await _insert_sku(conn, collide, "DİNİNG ROOM", "-", "Pair A", "Pair Table")
+            await _insert_sku(conn, collide, "Dining Room", "-", "Pair B", "Pair Table")
+            await _insert_sku(conn, collide, "Σοφάς", "-", "Sigma", "Sigma Sofa")
+            # What the shop feed before 120 made of each SKU, by its own SQL expression.
+            before = dict(
+                (
+                    await conn.execute(
+                        sa.text("""SELECT id, CASE lower(trim(category))
+                                WHEN 'dining room' THEN 'dining-room' END
+                            FROM skus WHERE team_id IN (:a, :b)"""),
+                        {"a": alone, "b": collide},
+                    )
+                ).all()
+            )
+            groups = await conn.scalar(
+                sa.text("""SELECT count(DISTINCT (team_id, lower(btrim(category))))
+                    FROM skus WHERE team_id IN (:a, :b)"""),
+                {"a": alone, "b": collide},
+            )
+
+        migrate(url, LISTS)
+        async with admin.connect() as conn:
+            rows = (
+                await conn.execute(
+                    sa.text("""SELECT s.id, s.category, c.name, c.shop_category
+                        FROM skus s LEFT JOIN sku_categories c ON c.id = s.category_id
+                        WHERE s.team_id IN (:a, :b)"""),
+                    {"a": alone, "b": collide},
+                )
+            ).all()
+            assert len(rows) == 4
+            for sku, category, name, shop in rows:
+                assert name is not None and category == name
+                assert shop == before[sku]
+            assert (
+                await conn.scalar(
+                    sa.text("SELECT count(*) FROM sku_categories WHERE team_id IN (:a, :b)"),
+                    {"a": alone, "b": collide},
+                )
+                == groups
             )
     finally:
         await admin.dispose()

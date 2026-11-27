@@ -10,9 +10,13 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.reorder import suggest_qty
+from app.crud.sku_stock_figures import on_order_by_sku_id
+from app.models.inventory import SkuStock
+from app.models.purchase_order import PurchaseOrder, PurchaseOrderStatus
 from app.models.sku import Sku
 from app.models.sku_supplier_price import SkuSupplierPrice
 
@@ -370,3 +374,69 @@ async def test_order_up_to_and_supplier_rounding_shape_the_suggestion(
     assert quantities == {plain: 7, up_to: 17, packed: 8, minimum: 10, both: 8}
     refused = await owner_client.post("/api/v1/reorder/draft-po", json={"sku_ids": [stopped]})
     assert refused.status_code == 400
+
+
+async def test_reorder_on_order_matches_the_shared_on_order_figure(
+    owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Pins the two "on order" definitions together: reorder's SQL (crud/reorder.py) and
+    ``on_order_by_sku_id`` (crud/sku_stock_figures.py), which the catalogue table and the
+    SKU overview read. A change to either side alone fails here."""
+    supplier = await _create_supplier(owner_client, "Reorder Supplier On Order")
+
+    async def po(sku_id: str, qty: int) -> UUID:
+        resp = await owner_client.post(
+            "/api/v1/purchase-orders",
+            json={
+                "supplier_id": supplier,
+                "lines": [{"sku_id": sku_id, "qty": qty, "factory_unit_amount": "10.00"}],
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        return UUID(resp.json()["id"])
+
+    skus = [
+        (
+            await _sku_with_opening(
+                owner_client,
+                our_ref=f"RO-ONORDER-{index}",
+                opening_qty=1,
+                reorder_min=1000,
+                preferred_supplier_id=supplier,
+            )
+        )["id"]
+        for index in range(4)
+    ]
+    on_water, open_line, archived, mixed = skus
+    # On the water: counted through sku_stock.on_order.
+    shipped = await po(on_water, 7)
+    assert (
+        await owner_client.post(f"/api/v1/purchase-orders/{shipped}/on-water")
+    ).status_code == 200
+    # An open purchase order line.
+    await po(open_line, 5)
+    # An archived open purchase order, and a landed one, count nothing extra.
+    hidden = await async_db.get(PurchaseOrder, await po(archived, 4))
+    hidden.is_archive = True
+    landed = await async_db.get(PurchaseOrder, await po(mixed, 6))
+    landed.status = PurchaseOrderStatus.LANDED
+    # Both sources at once.
+    await po(mixed, 3)
+    stock = await async_db.scalar(select(SkuStock).where(SkuStock.sku_id == UUID(mixed)))
+    if stock is None:
+        async_db.add(SkuStock(sku_id=UUID(mixed), on_order=Decimal("2")))
+    else:
+        stock.on_order = Decimal("2")
+    await async_db.flush()
+
+    shared = await on_order_by_sku_id(async_db, [UUID(sku_id) for sku_id in skus])
+    for sku_id in skus:
+        item = await _reorder_item(owner_client, sku_id)
+        assert item is not None
+        assert Decimal(str(item["on_order"])) == shared.get(UUID(sku_id), Decimal(0)), sku_id
+    assert {sku_id: shared.get(UUID(sku_id), Decimal(0)) for sku_id in skus} == {
+        on_water: Decimal(7),
+        open_line: Decimal(5),
+        archived: Decimal(0),
+        mixed: Decimal(5),
+    }

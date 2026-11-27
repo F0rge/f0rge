@@ -16,7 +16,7 @@ from app.models.stock_reservation import HOLDER_BASKET
 from app.models.till_basket import TillBasket as TillBasketRow
 from app.schemas.held_sale import TillBasket, TillBasketUpdate
 from app.schemas.till_reservation import BlockingReservation, TillReservation
-from app.services.held_sale import HeldSaleService, clock as _clock
+from app.services.held_sale import HeldSaleService, clock as _clock, kept_quantities
 from app.services.stock_availability import StockAvailability, StockUnavailable
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -144,6 +144,8 @@ class TillBasketService:
                 await self.prune(now)
                 self.held.require_active(await self.held.showroom(row.location_id, lock=True))
                 await self.held.validate_cart(data)
+                # A line resumed from a held sale keeps its held quantity while it stays.
+                kept = kept_quantities(row)
                 await self.set_contents(
                     row,
                     customer_id=data.customer_id,
@@ -154,7 +156,10 @@ class TillBasketService:
                     quote_id=data.quote_id,
                     pick_id=data.pick_id,
                     linked_pick_ids=data.linked_pick_ids,
-                    lines=[line.model_dump(mode="json") for line in data.lines],
+                    lines=[
+                        {**line.model_dump(mode="json"), "kept_qty": kept.get(str(line.sku_id))}
+                        for line in data.lines
+                    ],
                     operation_id=data.operation_id,
                 )
                 return self.response(row)
@@ -204,6 +209,8 @@ class TillBasketService:
                 "sku_id": str(line["sku_id"]),
                 "qty": line["qty"],
                 "discount_percent": str(line["discount_percent"]),
+                # A held quantity kept against the sale quantity rule (never from a client).
+                **({"kept_qty": int(line["kept_qty"])} if line.get("kept_qty") else {}),
             }
             for line in (lines or [])
         ]

@@ -29,8 +29,9 @@ from app.services.sale_line_pricing import (
 from app.services.sales_orders import SalesOrdersService
 from tests.conftest import authenticate_as, create_test_staff
 from tests.test_laybys import _layby_payload, _stocked_sku_at_bedford
-from tests.test_purchase_orders import _relogin_owner
+from tests.test_purchase_orders import _location_id_by_name, _relogin_owner
 from tests.test_sale_line_pricing import _authority, _customer, _price, _Saved, _sku
+from tests.test_till_basket import HELD, SALES, _fill, _get, _line, _stocked
 
 D = Decimal
 
@@ -198,6 +199,7 @@ async def test_sales_order_and_trade_portal_refuse_an_off_rule_quantity(async_db
 # HTTP: every staff sale document, as a seller without sales.price_override.
 
 SELLER = "qty-rule-seller@example.com"
+SALE_PREVIEW = "/api/v1/till/price-preview"
 
 
 async def _as_seller(client: AsyncClient) -> None:
@@ -382,3 +384,138 @@ async def test_portal_catalogue_carries_the_selling_rule(async_db) -> None:
     }
     assert (items[pair.id].sell_multiple, items[pair.id].min_sell_qty) == (2, 4)
     assert (items[single.id].sell_multiple, items[single.id].min_sell_qty) == (1, 1)
+
+
+# The till honours quantities saved on a quote or a held sale (SPEC 5.3).
+
+
+async def _till_setup(owner_client: AsyncClient, ref: str) -> tuple[str, dict, dict, str]:
+    location = await _location_id_by_name(owner_client, "Bedfordview")
+    kept = await _stocked(owner_client, f"{ref}-A", location)
+    added = await _stocked(owner_client, f"{ref}-B", location)
+    customer = await owner_client.post("/api/v1/customers", json={"name": f"{ref} customer"})
+    return location, kept, added, customer.json()["id"]
+
+
+async def test_till_keeps_a_saved_quotes_quantity_after_the_rule_tightens(
+    async_client: AsyncClient, owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    location, chair, other, customer = await _till_setup(owner_client, "QR-TQ")
+    # Saved by the owner with a discount, while any quantity was fine.
+    quote = await owner_client.post(
+        "/api/v1/quotes",
+        json={"customer_id": customer, "lines": [_line(chair, qty=3, discount="10")]},
+    )
+    assert quote.status_code == 201, quote.text
+    await _set_rule(async_db, chair["id"], 2, 2)
+    await _set_rule(async_db, other["id"], 2, 2)
+    await _as_seller(owner_client)
+    seller = owner_client
+    cart = {"customer_id": customer, "quote_id": quote.json()["id"]}
+    sale = {**cart, "location_id": location, "tender": "cash"}
+
+    kept = await seller.post(SALE_PREVIEW, json={**cart, "lines": [_line(chair, qty=3)]})
+    assert kept.status_code == 200, kept.text
+    assert (kept.json()["lines"][0]["blocked_by"], kept.json()["lines"][0]["quantity_rule"]) == (
+        None,
+        None,
+    )
+    loose = await seller.post(
+        SALE_PREVIEW, json={"customer_id": customer, "lines": [_line(chair, qty=3)]}
+    )
+    _assert_previewed(loose)
+
+    # A changed quantity and an added off-rule line are still checked.
+    _assert_refused(
+        await seller.post(SALES, json={**sale, "lines": [_line(chair, qty=5)]}), chair["id"], 5
+    )
+    _assert_refused(
+        await seller.post(
+            SALES, json={**sale, "lines": [_line(chair, qty=3), _line(other, qty=1)]}
+        ),
+        other["id"],
+        1,
+    )
+    # Only the quantity is kept: the quote's discount still needs till.discount here.
+    discounted = await seller.post(
+        SALES, json={**sale, "lines": [_line(chair, qty=3, discount="10")]}
+    )
+    assert discounted.status_code == 403, discounted.text
+    done = await seller.post(SALES, json={**sale, "lines": [_line(chair, qty=3)]})
+    assert done.status_code == 201, done.text
+    await _relogin_owner(owner_client)
+
+
+async def test_till_keeps_a_held_sales_quantity_after_the_rule_tightens(
+    async_client: AsyncClient, owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    location, chair, other, _ = await _till_setup(owner_client, "QR-TH")
+    await _as_seller(owner_client)
+    seller = owner_client
+
+    async def hold_and_resume(lines: list[dict]) -> tuple[dict, dict]:
+        basket = await _fill(seller, await _get(seller, location), lines)
+        held = await seller.post(
+            HELD,
+            json={
+                "id": str(uuid.uuid4()),
+                "location_id": location,
+                "lines": lines,
+                "basket_id": basket["id"],
+            },
+        )
+        assert held.status_code == 201, held.text
+        return held.json(), basket
+
+    async def resume(held: dict, basket: dict) -> dict:
+        resumed = await seller.post(
+            f"{HELD}/{held['id']}/resume",
+            json={
+                "operation_id": str(uuid.uuid4()),
+                "location_id": location,
+                "version": held["version"],
+                "basket_id": basket["id"],
+            },
+        )
+        assert resumed.status_code == 200, resumed.text
+        return resumed.json()["basket"]
+
+    async def sell(basket: dict, lines: list[dict]):
+        basket = await _fill(seller, await _get(seller, location), lines)
+        return await seller.post(
+            SALES,
+            json={
+                "location_id": location,
+                "lines": lines,
+                "tender": "cash",
+                "basket_id": basket["id"],
+            },
+        )
+
+    # Held while 3 was a valid quantity: the held line keeps it.
+    held, basket = await hold_and_resume([_line(chair, qty=3)])
+    assert held["lines"][0]["kept_qty"] == 3
+    await _set_rule(async_db, chair["id"], 2, 2)
+    await _set_rule(async_db, other["id"], 2, 2)
+    basket = await resume(held, basket)
+    # The kept quantity stays on the server: clients never see or send it.
+    assert set(basket["lines"][0]) == {"sku_id", "qty", "discount_percent"}
+    preview = await seller.post(
+        SALE_PREVIEW, json={"lines": [_line(chair, qty=3)], "basket_id": basket["id"]}
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["lines"][0]["blocked_by"] is None
+
+    # A changed quantity, and an added off-rule line, are checked.
+    _assert_refused(await sell(basket, [_line(chair, qty=5)]), chair["id"], 5)
+    _assert_refused(await sell(basket, [_line(chair, qty=3), _line(other, qty=1)]), other["id"], 1)
+    # Back at the held quantity, it is kept again, and the sale completes.
+    done = await sell(basket, [_line(chair, qty=3)])
+    assert done.status_code == 201, done.text
+
+    # A line held when it already broke the rule earns no exemption by being held.
+    held, basket = await hold_and_resume([_line(other, qty=1)])
+    assert held["lines"][0]["kept_qty"] is None
+    basket = await resume(held, basket)
+    _assert_refused(await sell(basket, [_line(other, qty=1)]), other["id"], 1)
+    await _relogin_owner(owner_client)

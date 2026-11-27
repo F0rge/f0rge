@@ -293,16 +293,29 @@ async def test_shop_category_set_clear_and_validation(owner_client: AsyncClient)
     unknown = await owner_client.patch(
         f"/api/v1/categories/{top['id']}", json={"shop_category": "kitchens"}
     )
-    assert unknown.status_code == 400 and "Unknown shop section" in unknown.json()["detail"]
+    assert unknown.status_code == 422
+    assert unknown.json() == {
+        "detail": [
+            {
+                "type": "value_error",
+                "loc": ["body", "shop_category"],
+                "msg": "Unknown shop section 'kitchens'.",
+                "input": None,
+            }
+        ]
+    }
     on_sub = await owner_client.patch(
         f"/api/v1/categories/{sub['id']}", json={"shop_category": "sofas-armchairs"}
     )
-    assert on_sub.status_code == 400 and "top-level" in on_sub.json()["detail"]
+    assert on_sub.status_code == 422
+    assert on_sub.json()["detail"][0]["loc"] == ["body", "shop_category"]
+    assert on_sub.json()["detail"][0]["msg"] == "Only a top-level category can have a shop section."
     on_new_sub = await owner_client.post(
         "/api/v1/categories",
         json={"name": "Daybeds", "parent_id": top["id"], "shop_category": "bedroom"},
     )
-    assert on_new_sub.status_code == 400
+    assert on_new_sub.status_code == 422
+    assert on_new_sub.json()["detail"][0]["loc"] == ["body", "shop_category"]
 
     set_resp = await owner_client.patch(
         f"/api/v1/categories/{top['id']}", json={"shop_category": "sofas-armchairs"}
@@ -486,3 +499,191 @@ def _signup_enabled(monkeypatch):
     monkeypatch.setattr(settings, "tenant_signup_enabled", True)
     monkeypatch.setattr(settings, "public_app_url", "https://app.firstout.co.za")
     monkeypatch.setattr(settings, "clerk_secret_key", "")
+
+
+# --- Team filter, independent of RLS ----------------------------------------------------
+
+
+async def test_queries_filter_by_team_without_rls(owner_client: AsyncClient) -> None:
+    """The plain test database has no RLS policies, so only the team filter narrows here."""
+    from app.models.account import Account, AccountType
+    from app.models.team import Team
+
+    db = owner_client.test_db
+    other = Team(name="Other company", slug="lists-other-company", clerk_org_id="org_lists_other")
+    db.add(other)
+    await db.flush()
+    foreign_top = SkuCategory(team_id=other.id, name="Lighting")
+    foreign_material = Material(team_id=other.id, name="Cork", family="other")
+    db.add_all(
+        [
+            foreign_top,
+            foreign_material,
+            # Same code as our seeded 4010, and a map for a name only we use as a category.
+            Account(
+                team_id=other.id, code="4010", name="Other company sales", type=AccountType.INCOME
+            ),
+            Account(team_id=other.id, code="4999", name="Other lighting", type=AccountType.INCOME),
+            CategoryAccountMap(
+                team_id=other.id,
+                category="Lighting",
+                sales_code="4999",
+                cogs_code="4999",
+                stock_adj_code="4999",
+                count_var_code="4999",
+            ),
+        ]
+    )
+    await db.flush()
+    db.add(SkuCategory(team_id=other.id, name="Pendants", parent_id=foreign_top.id))
+    db.add(
+        Sku(
+            team_id=other.id,
+            our_ref="LIST-OTHER",
+            our_barcode="LIST-OTHER",
+            name="Other company lamp",
+            design="Other lamp",
+            fabric="-",
+            retail_ex_vat=100,
+            category="Lighting",
+            category_id=foreign_top.id,
+            main_material_id=foreign_material.id,
+        )
+    )
+    await db.commit()
+
+    # Duplicate-name checks see only this team: the other company's names are free here.
+    lighting = await _category(owner_client, "Lighting")
+    cork = await _material(owner_client, "Cork", "other")
+    seating = await _category(owner_client, "Seating")
+
+    tree = await _tree(owner_client, "all")
+    assert str(foreign_top.id) not in str(tree)
+    node = _find(tree, lighting["id"])
+    assert node["sales_account"] is None  # the other company's "Lighting" map is not ours
+    assert node["sku_count"] == 0 and node["subcategories"] == []
+    assert _find(tree, seating["id"])["sales_account"]["name"] != "Other company sales"
+    materials = (await owner_client.get("/api/v1/materials?lifecycle=all")).json()
+    assert str(foreign_material.id) not in str(materials)
+    assert next(row for row in materials if row["id"] == cork["id"])["sku_count"] == 0
+
+    # Get-by-id (behind every PATCH and the parent lookup) cannot reach the other company.
+    for path in (
+        f"/api/v1/categories/{foreign_top.id}",
+        f"/api/v1/materials/{foreign_material.id}",
+    ):
+        resp = await owner_client.patch(path, json={"name": "Taken over"})
+        assert resp.status_code == 404, resp.text
+    child = await owner_client.post(
+        "/api/v1/categories", json={"name": "Child", "parent_id": str(foreign_top.id)}
+    )
+    assert child.status_code == 404
+
+    # Rename and archive cascades touch only this team's SKUs and ledger map.
+    renamed = await owner_client.patch(
+        f"/api/v1/categories/{lighting['id']}", json={"name": "Lamps"}
+    )
+    assert renamed.status_code == 200, renamed.text
+    other_sku = await db.scalar(sa.select(Sku).where(Sku.our_ref == "LIST-OTHER"))
+    await db.refresh(other_sku)
+    other_map = await db.scalar(
+        sa.select(CategoryAccountMap).where(CategoryAccountMap.team_id == other.id)
+    )
+    await db.refresh(other_map)
+    assert other_sku.category == "Lighting" and other_map.category == "Lighting"
+    archived = await owner_client.patch(
+        f"/api/v1/categories/{renamed.json()['id']}", json={"is_archived": True}
+    )
+    assert archived.status_code == 200, archived.text
+    await db.refresh(foreign_top)
+    assert foreign_top.is_archived is False
+
+
+# --- Material rename keeps finish labels true -------------------------------------------
+
+
+async def test_material_rename_rebuilds_finish_labels(owner_client: AsyncClient) -> None:
+    from app.models.team import Team
+
+    db = owner_client.test_db
+    oak = await _material(owner_client, "Oak", "wood")
+    oak_id = uuid.UUID(oak["id"])
+    derived = await _sku(owner_client, "LIST-F1", colour_name="Natural", main_material_id=oak_id)
+    derived.design, derived.fabric = "Arc", "Natural Oak"
+    archived = await _sku(owner_client, "LIST-F2", main_material_id=oak_id, is_archived=True)
+    archived.design, archived.fabric = "Arc", "Oak"
+    legacy = await _sku(owner_client, "LIST-F3", main_material_id=oak_id)
+    legacy.fabric = "Hathaway veneer"  # never derived: left alone
+    # Another team's SKU with its own "Oak" material keeps its label.
+    other = Team(name="Other finish co", slug="lists-finish-other", clerk_org_id="org_lists_finish")
+    db.add(other)
+    await db.flush()
+    other_oak = Material(team_id=other.id, name="Oak", family="wood")
+    db.add(other_oak)
+    await db.flush()
+    foreign = Sku(
+        team_id=other.id,
+        our_ref="LIST-F-OTHER",
+        our_barcode="LIST-F-OTHER",
+        name="Other",
+        design="Arc",
+        fabric="Natural Oak",
+        colour_name="Natural",
+        retail_ex_vat=100,
+        main_material_id=other_oak.id,
+    )
+    db.add(foreign)
+    await db.commit()
+    stamps = {row.id: row.updated_at for row in (derived, archived)}
+
+    renamed = await owner_client.patch(f"/api/v1/materials/{oak['id']}", json={"name": "White oak"})
+    assert renamed.status_code == 200, renamed.text
+    for row in (derived, archived, legacy, foreign):
+        await db.refresh(row)
+    assert derived.fabric == "Natural White oak"
+    assert archived.fabric == "White oak"
+    assert legacy.fabric == "Hathaway veneer"
+    assert foreign.fabric == "Natural Oak"
+    # The shop feed sends neither the label nor material names: revisions stay.
+    assert {row.id: row.updated_at for row in (derived, archived)} == stamps
+
+    # A second SKU with the same design, colour and material is now refused.
+    duplicate = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "LIST-F4",
+            "our_barcode": "LIST-F4",
+            "name": "Arc chair",
+            "design": "Arc",
+            "colour_name": "Natural",
+            "main_material_id": oak["id"],
+            "retail_ex_vat": "100.00",
+        },
+    )
+    assert duplicate.status_code == 409, duplicate.text
+    assert "Another SKU already has this design, colour and material." in duplicate.text
+
+
+async def test_material_rename_that_would_collide_is_refused(owner_client: AsyncClient) -> None:
+    db = owner_client.test_db
+    oak = await _material(owner_client, "Oak", "wood")
+    ash = await _material(owner_client, "Ash", "wood")
+    on_oak = await _sku(
+        owner_client, "LIST-C1", colour_name="Natural", main_material_id=uuid.UUID(oak["id"])
+    )
+    on_oak.design, on_oak.fabric = "Arc", "Natural Oak"
+    # A hand-typed label equal to what renaming Oak to "Walnut" would produce for LIST-C1.
+    clash = await _sku(owner_client, "LIST-C2", main_material_id=uuid.UUID(ash["id"]))
+    clash.design, clash.fabric = "Arc", "Natural Walnut"
+    await db.commit()
+
+    refused = await owner_client.patch(f"/api/v1/materials/{oak['id']}", json={"name": "Walnut"})
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["detail"] == (
+        "Renaming to 'Walnut' would give SKUs the same design, colour and material: "
+        "LIST-C1 and LIST-C2. Change one of them first."
+    )
+    await db.refresh(on_oak)
+    assert on_oak.fabric == "Natural Oak"
+    names = {row["name"] for row in (await owner_client.get("/api/v1/materials")).json()}
+    assert "Oak" in names and "Walnut" not in names

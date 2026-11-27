@@ -133,13 +133,12 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         foreign_keys="[Sku.main_material_id]",
         viewonly=True,
     )
-    # Other materials in order. The database cascades a SKU delete.
+    # Other materials in order, read-only: services replace the rows with statements.
     material_links: Mapped[list[SkuMaterial]] = relationship(
         primaryjoin="Sku.id == SkuMaterial.sku_id",
         foreign_keys="[SkuMaterial.sku_id]",
         order_by="SkuMaterial.position",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
+        viewonly=True,
     )
 
     __table_args__ = (
@@ -177,6 +176,10 @@ class Sku(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
         ),
         CheckConstraint("order_up_to >= 1", name="ck_skus_order_up_to"),
         Index("ix_skus_team_id_is_archived", "team_id", "is_archived"),
+        # Feed joins, category/material counts and RESTRICT checks look SKUs up by these.
+        Index("ix_skus_category", "team_id", "category_id"),
+        Index("ix_skus_subcategory", "team_id", "subcategory_id"),
+        Index("ix_skus_main_material", "team_id", "main_material_id"),
         Index(
             "ix_skus_design_fabric_lower",
             text("lower(design)"),

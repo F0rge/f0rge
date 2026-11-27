@@ -98,6 +98,7 @@ from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
 from app.services.roles import RoleSeedService
 from app.services.sale_line_pricing import SaleQuantityRuleError
+from app.services.sku_classification import relink_sku_categories
 from app.services.till_seed import TillSeedService
 from app.services.storefront_system_actor import StorefrontSystemActorService
 from app.services.record_workspace_tokens import signing_key
@@ -149,6 +150,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await coa.ensure_customer_deposits()
             await coa.ensure_storefront_gateway_clearing()
             await coa.ensure_category_chart()
+            # Old-backend writes (release window, rollback) leave category_id stale.
+            await relink_sku_categories(session)
             await coa.ensure_bank_accounts()
             if slug == "firstout":
                 await PlaygroundSeedService(session).seed_if_enabled()

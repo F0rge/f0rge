@@ -22925,7 +22925,7 @@
           },
           "lines": {
             "items": {
-              "$ref": "#/components/schemas/HeldSaleLineCreate-Input"
+              "$ref": "#/components/schemas/HeldSaleLineCreate"
             },
             "type": "array",
             "maxItems": 100,
@@ -23118,6 +23118,17 @@
               }
             ],
             "title": "Estimated Total Inc Vat"
+          },
+          "kept_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kept Qty"
           }
         },
         "additionalProperties": false,
@@ -23128,11 +23139,12 @@
           "discount_percent",
           "sku_code",
           "sku_name",
-          "estimated_total_inc_vat"
+          "estimated_total_inc_vat",
+          "kept_qty"
         ],
         "title": "HeldSaleLine"
       },
-      "HeldSaleLineCreate-Input": {
+      "HeldSaleLineCreate": {
         "properties": {
           "sku_id": {
             "type": "string",
@@ -23166,35 +23178,6 @@
         "required": [
           "sku_id",
           "qty"
-        ],
-        "title": "HeldSaleLineCreate"
-      },
-      "HeldSaleLineCreate-Output": {
-        "properties": {
-          "sku_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Sku Id"
-          },
-          "qty": {
-            "type": "integer",
-            "maximum": 999999.0,
-            "exclusiveMinimum": 0.0,
-            "title": "Qty"
-          },
-          "discount_percent": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,8}0*$)\\d{0,3}\\.\\d{0,4}0*$)",
-            "title": "Discount Percent",
-            "default": "0"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "sku_id",
-          "qty",
-          "discount_percent"
         ],
         "title": "HeldSaleLineCreate"
       },
@@ -39578,7 +39561,7 @@
           },
           "lines": {
             "items": {
-              "$ref": "#/components/schemas/HeldSaleLineCreate-Output"
+              "$ref": "#/components/schemas/TillBasketLine"
             },
             "type": "array",
             "title": "Lines"
@@ -39636,6 +39619,34 @@
           "expired_at"
         ],
         "title": "TillBasket"
+      },
+      "TillBasketLine": {
+        "properties": {
+          "sku_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sku Id"
+          },
+          "qty": {
+            "type": "integer",
+            "maximum": 999999.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Qty"
+          },
+          "discount_percent": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,8}0*$)\\d{0,3}\\.\\d{0,4}0*$)",
+            "title": "Discount Percent",
+            "default": "0"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sku_id",
+          "qty",
+          "discount_percent"
+        ],
+        "title": "TillBasketLine"
       },
       "TillBasketUpdate": {
         "properties": {
@@ -39747,7 +39758,7 @@
           },
           "lines": {
             "items": {
-              "$ref": "#/components/schemas/HeldSaleLineCreate-Input"
+              "$ref": "#/components/schemas/HeldSaleLineCreate"
             },
             "type": "array",
             "maxItems": 100,
@@ -39784,6 +39795,30 @@
               }
             ],
             "title": "Customer Id"
+          },
+          "basket_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket Id"
+          },
+          "quote_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Id"
           }
         },
         "type": "object",
@@ -39843,6 +39878,30 @@
               }
             ],
             "title": "Customer Id"
+          },
+          "basket_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket Id"
+          },
+          "quote_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Id"
           },
           "location_id": {
             "type": "string",
@@ -39920,18 +39979,6 @@
             ],
             "title": "Credit Override Reason"
           },
-          "basket_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Basket Id"
-          },
           "basket_version": {
             "anyOf": [
               {
@@ -39979,18 +40026,6 @@
               }
             ],
             "title": "Sales Staff Id"
-          },
-          "quote_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quote Id"
           }
         },
         "type": "object",

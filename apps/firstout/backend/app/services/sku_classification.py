@@ -6,15 +6,20 @@ rows. ``seed_categories`` is the one exception, for playground seeds and local f
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Iterable
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalogue_list import Material, SkuCategory
+from app.models.sku import Sku
+from f0rge_db.crud import unit_of_work
 from f0rge_db.organisation import tenant_id_ctx
+
+logger = logging.getLogger(__name__)
 
 # skus.fabric is now a derived label; "-" is the placeholder documents hide.
 FABRIC_PLACEHOLDER = "-"
@@ -38,18 +43,25 @@ def finish_label(colour_name: Optional[str], material_name: Optional[str]) -> Op
 async def category_by_name(
     db: AsyncSession, name: str, *, parent_id: Optional[uuid.UUID] = None
 ) -> Optional[SkuCategory]:
-    """The active category (top-level when ``parent_id`` is None) with this name, any case."""
+    """The active category (top-level when ``parent_id`` is None) with this name.
+
+    Case- and accent-insensitive, the way the categories service compares names ("Decor"
+    finds "Décor"); that service keeps folded names unique per level.
+    """
+    from app.services.catalogue_lists import fold_name
+
     parent = (
         SkuCategory.parent_id.is_(None) if parent_id is None else SkuCategory.parent_id == parent_id
     )
-    return await db.scalar(
-        select(SkuCategory).where(
-            SkuCategory.team_id == tenant_id_ctx.get(),
-            SkuCategory.is_archived.is_(False),
-            parent,
-            func.lower(SkuCategory.name) == name.strip().lower(),
-        )
+    active = select(SkuCategory).where(
+        SkuCategory.team_id == tenant_id_ctx.get(), SkuCategory.is_archived.is_(False), parent
     )
+    exact = await db.scalar(active.where(func.lower(SkuCategory.name) == name.strip().lower()))
+    if exact is not None:
+        return exact
+    key = fold_name(name)
+    # ponytail: scans one level's active names; fine for a managed list of tens of rows.
+    return next((row for row in await db.scalars(active) if fold_name(row.name) == key), None)
 
 
 async def categories_by_id(
@@ -95,3 +107,74 @@ async def seed_categories(db: AsyncSession, names: Iterable[str]) -> dict[str, S
             await db.flush()
         found[key] = row
     return found
+
+
+async def relink_sku_categories(db: AsyncSession) -> tuple[int, int]:
+    """Startup repair: make each SKU's ``category_id`` agree with its ``category`` text.
+
+    The previous backend (during a release, or for as long as an automatic rollback runs it
+    on the new schema) writes only the text. Per team, under the session's tenant context:
+
+    - text naming a top-level category (``lower(btrim(text)) = lower(name)``, the folding the
+      unique index uses; an active row wins over an archived one) but a missing or different
+      link: linked to it, text set to its spelling, a sub-category that no longer fits cleared;
+    - blank text with a link: link and sub-category cleared;
+    - text naming no category: left alone (nothing creates a category) and counted.
+
+    One query when nothing needs fixing. Idempotent; replicas racing write the same values.
+    Returns ``(fixed, unmatched)``.
+    """
+    team_id = tenant_id_ctx.get()
+    match = (
+        select(SkuCategory.id)
+        .where(
+            SkuCategory.team_id == Sku.team_id,
+            SkuCategory.parent_id.is_(None),
+            func.lower(SkuCategory.name) == func.lower(func.btrim(Sku.category)),
+        )
+        .order_by(SkuCategory.is_archived, SkuCategory.created_at, SkuCategory.id)
+        .limit(1)
+        .correlate(Sku)
+        .scalar_subquery()
+    )
+    blank = func.btrim(func.coalesce(Sku.category, "")) == ""
+    rows = (
+        await db.execute(
+            select(Sku, match.label("match"))
+            .where(
+                Sku.team_id == team_id,
+                or_(
+                    and_(blank, Sku.category_id.is_not(None)),
+                    and_(~blank, or_(match.is_(None), Sku.category_id.is_distinct_from(match))),
+                ),
+            )
+            .order_by(Sku.id)
+        )
+    ).all()
+    if not rows:
+        return 0, 0
+    unmatched = [sku for sku, found in rows if found is None and (sku.category or "").strip()]
+    fixes = [
+        (sku, found) for sku, found in rows if found is not None or not (sku.category or "").strip()
+    ]
+    categories = await categories_by_id(
+        db, [found for _, found in fixes] + [sku.subcategory_id for sku, _ in fixes]
+    )
+    async with unit_of_work(db):
+        for sku, found in fixes:
+            sub = categories.get(sku.subcategory_id) if sku.subcategory_id else None
+            # Both columns in one UPDATE: the database checks the pair.
+            sku.category_id = found
+            sku.subcategory_id = sub.id if sub is not None and sub.parent_id == found else None
+            sku.category = categories[found].name if found is not None else None
+    if fixes:
+        logger.warning(
+            "Re-linked the category of %d SKU(s) written by an older backend", len(fixes)
+        )
+    if unmatched:
+        logger.warning(
+            "%d SKU(s) name a category that is not in the managed list; add it in Settings: %s",
+            len(unmatched),
+            ", ".join(sorted({sku.category.strip() for sku in unmatched})[:20]),
+        )
+    return len(fixes), len(unmatched)

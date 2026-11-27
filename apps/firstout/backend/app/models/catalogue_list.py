@@ -152,5 +152,7 @@ class SkuMaterial(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
             name="fk_sku_materials_material_tenant",
             ondelete="RESTRICT",
         ),
+        # The unique key leads with sku_id; this serves lookups by material.
+        Index("ix_sku_materials_material", "team_id", "material_id"),
         CheckConstraint("position >= 0", name="ck_sku_materials_position"),
     )
