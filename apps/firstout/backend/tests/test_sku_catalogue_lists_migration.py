@@ -68,6 +68,13 @@ def test_frozen_materials_match_the_model_at_this_revision() -> None:
     assert _migration._MATERIALS == DEFAULT_MATERIALS
 
 
+def test_frozen_shop_sections_match_the_live_shop_categories():
+    # The backfill assigns shop sections from a frozen copy; the feed used the live dict.
+    from app.crud.ops_commerce import SHOP_CATEGORIES
+
+    assert _migration._SHOP_SECTIONS == SHOP_CATEGORIES
+
+
 @pytest.mark.parametrize(("fields", "expected"), GUESSES)
 def test_material_and_colour_rule(fields, expected) -> None:
     material = _migration.main_material(*fields)

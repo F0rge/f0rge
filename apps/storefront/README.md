@@ -189,9 +189,9 @@ minimum of 4, and eight available, it offers 2 to 6). Under the price, a muted l
 plain, for example "R 2 450,00 each · sold in pairs · R 4 900,00 per pair", or
 "… · minimum 4 · from R 9 800,00" when the minimum is larger than the multiple;
 it wraps only between its parts. A piece whose stock or made-to-order capacity
-cannot cover the minimum reads "Not available to order" on the product page, on
-listing cards and in the availability filter, is `OutOfStock` in structured
-data, and Add to bag is disabled. The bag and drawer stepper uses the same step
+cannot cover the minimum reads "Not available to order" on the product page,
+is `OutOfStock` in structured data, has Add to bag disabled, and no longer
+counts as in stock for listing cards and the availability filter. The bag and drawer stepper uses the same step
 and never drops below the minimum; removing the line is the way down. Commerce
 refuses an off-rule quantity before payment: adding or changing a line returns
 HTTP 400 ("This piece is sold in pairs." for a multiple of 2, "This piece is

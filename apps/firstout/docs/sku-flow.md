@@ -219,7 +219,7 @@ A SKU's Sell multiple and Minimum quantity ([ADR 0005](adr/0005-sale-quantity-ru
   `include_sell_rules` and omits the keys, which commerce treats as "leave the
   stored value alone" (absent means 1); an older commerce never asks, so
   Firstout never sends them. `verify-live` treats both keys as optional.
-- Merging the one PR releases both Apps (P-006).
+- Merging the one PR releases three Apps (P-006): Firstout, DasKasas, and Marrow. Marrow is affected only because the shared `Stepper` in `libs/ui` gained an optional `step`; its behaviour is unchanged.
 
 ## Limits
 
