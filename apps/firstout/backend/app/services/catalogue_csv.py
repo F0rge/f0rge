@@ -16,6 +16,7 @@ INVENTORY_ALIASES: dict[str, tuple[str, ...]] = {
     "our_ref": ("sku", "itemcode", "item code", "our ref", "product code"),
     "name": ("name", "product name", "description"),
     "category": ("category", "cat"),
+    "sub_category": ("sub category", "sub-category", "subcategory", "sub_category"),
     "retail_inc_vat": ("retail price", "price", "pricezar", "retail", "retail price zar"),
     "barcode": ("barcode", "ean", "upc", "our barcode"),
     "cost_zar": ("cost", "cost price", "landed cost"),
@@ -35,11 +36,14 @@ INVENTORY_FIELDS = (
     "our_ref",
     "name",
     "category",
+    "sub_category",
     "retail_inc_vat",
     "barcode",
     "cost_zar",
     "carton_count",
 )
+# skus.category and sku_categories.name are String(64).
+CATEGORY_MAX_LENGTH = 64
 SOH_FIELDS = ("our_ref", "location", "qty", "unit_cost_zar")
 
 
@@ -55,6 +59,7 @@ class InventoryCsvRow:
     our_ref: Optional[str] = None
     name: Optional[str] = None
     category: Optional[str] = None
+    sub_category: Optional[str] = None
     retail_inc_vat: Optional[Decimal] = None
     barcode: Optional[str] = None
     cost_zar: Optional[Decimal] = None
@@ -266,6 +271,12 @@ def parse_inventory_csv(content: bytes, map_json: Optional[str] = None) -> Inven
             row.category = _cell(headers, cells, applied_map["category"]) or None
             if row.category is None:
                 row.errors.append("Category is required")
+            elif len(row.category) > CATEGORY_MAX_LENGTH:
+                row.errors.append(f"Category must be {CATEGORY_MAX_LENGTH} characters or fewer")
+        if "sub_category" in applied_map:
+            row.sub_category = _cell(headers, cells, applied_map["sub_category"]) or None
+            if row.sub_category is not None and len(row.sub_category) > CATEGORY_MAX_LENGTH:
+                row.errors.append(f"Sub-category must be {CATEGORY_MAX_LENGTH} characters or fewer")
         if "retail_inc_vat" in applied_map:
             raw_retail = _cell(headers, cells, applied_map["retail_inc_vat"])
             if not raw_retail:

@@ -7,6 +7,9 @@ reprice all price through ``SaleLinePricing.price``; readers of stored lines use
 (hand-made price list, classification tier, Retail), override and discount authority,
 rounding once per line, VAT per line at one rate, and the suspect-price warning.
 
+The sale quantity rule (a SKU's "sold in multiples of" and "minimum quantity") is checked
+here too, per line; see ``quantity_rule_message``.
+
 ADR 0003: the rate is the team's ``vat_rate`` setting, read once when pricing starts, or
 the stored rate of the document being repriced; the preview returns it for the document
 to keep.
@@ -44,6 +47,49 @@ from app.services.vat import CENT, current_vat_rate, ex_to_inc
 from f0rge_core.exceptions import ConflictError
 
 _HUNDRED = Decimal(100)
+
+# ``blocked_by`` for a line whose quantity breaks its SKU's selling rule.
+QUANTITY_RULE = "quantity_rule"
+
+
+def quantity_rule_message(sku: Sku, qty: int) -> Optional[str]:
+    """The plain refusal when ``qty`` breaks the SKU's selling rule, else None.
+
+    A line breaks it when its quantity is not a multiple of ``sell_multiple`` or is
+    below ``min_sell_qty``. The message states the whole rule.
+    """
+    multiple, minimum = sku.sell_multiple or 1, sku.min_sell_qty or 1
+    if qty % multiple == 0 and qty >= minimum:
+        return None
+    if multiple == 1:
+        return f"{sku.name} has a minimum quantity of {minimum}."
+    if minimum > multiple:
+        return f"{sku.name} is sold in multiples of {multiple}, minimum {minimum}."
+    return f"{sku.name} is sold in multiples of {multiple}."
+
+
+class SaleQuantityRuleError(ConflictError):
+    """Lines break their SKU's selling rule and the actor may not break it. HTTP 409."""
+
+    def __init__(self, lines: list[tuple[Sku, int, str]]) -> None:
+        message = " ".join(text for _, _, text in lines)
+        super().__init__(message)
+        self.payload = {
+            "code": "sale_quantity_rule",
+            "message": message,
+            "lines": [
+                {
+                    "sku_id": str(sku.id),
+                    "our_ref": sku.our_ref,
+                    "name": sku.name,
+                    "qty": qty,
+                    "sell_multiple": sku.sell_multiple,
+                    "min_sell_qty": sku.min_sell_qty,
+                    "message": text,
+                }
+                for sku, qty, text in lines
+            ],
+        }
 
 
 def _cents(amount: Decimal) -> Decimal:
@@ -83,6 +129,8 @@ class PricingAuthority:
 
     can_discount: bool
     can_exceed_cap: bool
+    # sales.price_override: a unit other than the resolved one, and a quantity that breaks
+    # the SKU's selling rule.
     can_override: bool
     sees_cost: bool
     discount_cap: Optional[Decimal]
@@ -136,6 +184,10 @@ class SaleLineRequest:
     # authority while the quantity does not grow (ADR 0002); the caller passes None when
     # the customer changed.
     saved: Optional[SavedLine] = None
+    # The quantity the document already stores for this SKU's line, when ``saved`` is not
+    # passed (another customer). An unchanged saved quantity is not checked against the
+    # SKU's selling rule, so tightening a rule never blocks finishing a saved document.
+    saved_qty: Optional[int] = None
 
 
 class SaleLinePricing:
@@ -194,8 +246,9 @@ class SaleLinePricing:
 
         ``enforce`` refuses a line whose discount or override the actor may not give:
         ForbiddenError (403) for a missing permission, ConflictError (409) above the
-        Discount cap without users.manage. A preview passes False and reports
-        ``blocked_by`` per line instead.
+        Discount cap without users.manage, SaleQuantityRuleError (409) for lines that break
+        their SKU's selling rule. A preview passes False and reports ``blocked_by`` per
+        line instead.
         """
         priced = [await self._line(line) for line in lines]
         if enforce:
@@ -240,7 +293,7 @@ class SaleLinePricing:
         fingerprint = scope + result.model_dump_json(
             exclude={
                 "price_revision": True,
-                "lines": {"__all__": {"suspect_price_warning", "blocked_by"}},
+                "lines": {"__all__": {"suspect_price_warning", "blocked_by", "quantity_rule"}},
             }
         )
         result.price_revision = hashlib.sha256(fingerprint.encode()).hexdigest()
@@ -261,6 +314,15 @@ class SaleLinePricing:
                 raise ForbiddenError(
                     f"Price override permission (sales.price_override) required for {ref}"
                 )
+        broken = [
+            (request.sku, line.qty, line.quantity_rule)
+            for request, line in zip(requests, priced, strict=True)
+            if line.blocked_by == QUANTITY_RULE
+            and request.sku is not None
+            and line.quantity_rule is not None
+        ]
+        if broken:
+            raise SaleQuantityRuleError(broken)
 
     async def _resolve(self, sku: Sku) -> tuple[Decimal, str, Optional[str]]:
         if self.require_listed_price:
@@ -325,6 +387,19 @@ class SaleLinePricing:
                 blocked = blocked or USERS_MANAGE
                 discount = Decimal("0.00")
 
+        rule: Optional[str] = None
+        kept_qty = (
+            request.saved_qty
+            if request.saved_qty is not None
+            else (saved.qty if saved is not None else None)
+        )
+        # A kit line is checked against the kit SKU only; a free-text line never.
+        if request.sku is not None and request.qty != kept_qty:
+            rule = quantity_rule_message(request.sku, request.qty)
+            # sales.price_override may also break the rule (one replacement chair).
+            if rule is not None and not authority.can_override:
+                blocked = blocked or QUANTITY_RULE
+
         ex_vat, vat, inc_vat = line_amounts(unit, request.qty, discount, self.vat_rate)
         return SaleLinePrice(
             sku_id=request.sku.id if request.sku is not None else None,
@@ -340,4 +415,5 @@ class SaleLinePricing:
             source=source,
             price_warning=warning,
             blocked_by=blocked,
+            quantity_rule=rule,
         )

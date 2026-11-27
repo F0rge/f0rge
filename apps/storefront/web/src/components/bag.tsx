@@ -102,6 +102,8 @@ export function BagLine({ item, compact = false }: { item: BagItem; compact?: bo
   const held = isHeld(bag);
   const currency = bag?.currency_code;
   const quantityLimit = item.max_quantity ?? item.quantity;
+  // Removing the line is the way below the minimum; the cap is already a whole number of multiples.
+  const minimum = item.min_quantity ?? 1;
   return <li className={cn("flex gap-4", compact ? "border-b pb-4 last:border-0" : "overflow-hidden rounded-xl border bg-card")}>
     <div className={cn("relative shrink-0 overflow-hidden bg-muted", compact ? "size-20 rounded-md" : "w-24 sm:w-32")}>
       <PieceImage product={{ title: item.title, thumbnail: item.thumbnail }} className="min-h-0" />
@@ -122,9 +124,9 @@ export function BagLine({ item, compact = false }: { item: BagItem; compact?: bo
         }}><Trash2 className="size-4" /></Button>}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        {held || quantityLimit === 0
+        {held || quantityLimit < minimum
           ? <p className="text-sm text-muted-foreground" aria-label={`Quantity of ${item.title}: ${item.quantity}`}>Qty {item.quantity}</p>
-          : <Stepper size="compact" label={`Quantity of ${item.title}`} value={item.quantity} min={1} max={quantityLimit} onChange={(quantity) => {
+          : <Stepper size="compact" label={`Quantity of ${item.title}`} value={item.quantity} min={minimum} max={quantityLimit} step={item.sell_multiple ?? 1} onChange={(quantity) => {
             if (!busy) void update("PATCH", "/api/bag", { item_id: item.id, quantity: Math.min(quantity, quantityLimit) });
           }} />}
         <p className={cn("font-medium whitespace-nowrap", compact && "text-sm")}>{money(item.total, currency)}</p>

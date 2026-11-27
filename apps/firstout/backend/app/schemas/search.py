@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
+from typing import Optional
 
 from pydantic import BaseModel, Field
+
+from app.schemas.quantity import QuantityTotal
 
 
 class SkuSearchHit(BaseModel):
@@ -10,6 +14,14 @@ class SkuSearchHit(BaseModel):
     our_ref: str
     our_barcode: str
     name: str
+    category: Optional[str] = None
+    has_photo: bool = False
+    retail_inc_vat: Optional[Decimal] = None
+    # Company availability (StockAvailability), never below zero.
+    available: QuantityTotal = Decimal(0)
+    is_kit: bool = False
+    sell_multiple: int = 1
+    min_sell_qty: int = 1
 
 
 class PurchaseOrderSearchHit(BaseModel):

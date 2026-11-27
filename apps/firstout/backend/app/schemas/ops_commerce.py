@@ -45,6 +45,10 @@ class OpsProductResponse(BaseModel):
     second_detail_photo_token: Optional[str] = None
     # Lowercase #rrggbb finish colour, or null. Sent only when the request opts in.
     swatch_hex: Optional[str] = None
+    # The SKU's selling rule: quantities are multiples of sell_multiple, at least
+    # min_quantity. Sent only when the request opts in (include_sell_rules).
+    sell_multiple: Optional[int] = None
+    min_quantity: Optional[int] = None
 
 
 class OpsProductsResponse(BaseModel):

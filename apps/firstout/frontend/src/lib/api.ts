@@ -633,18 +633,7 @@ export function suggestIntakeSku(payload: {
   });
 }
 
-export function createIntakeSku(payload: {
-  our_ref: string;
-  our_barcode: string;
-  name: string;
-  design: string;
-  fabric: string;
-  supplier_ref?: string | null;
-  category?: string | null;
-  supplier_id: string;
-  supplier_sku?: string | null;
-  latest_price?: string | null;
-}): Promise<{ sku: Sku; supplier_price_id: string }> {
+export function createIntakeSku(payload: Schema["IntakeSkuCreate"]): Promise<{ sku: Sku; supplier_price_id: string }> {
   return apiFetch("/document-intake/skus", {
     method: "POST",
     body: JSON.stringify(payload),

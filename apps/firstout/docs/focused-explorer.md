@@ -1,5 +1,7 @@
 # Focused explorer
 
+> **Updated, 26 November 2026.** More routes now use `RecordWorkspace` than the nine listed below: Catalogue, Bills, Invoices, Payments and Quotes as well (fourteen route components in all). The catalogue uses a newer mode with no details pane: the table is full width and opening a row docks the SKU panel instead (`openRecord` in `record-workspace/types.ts`; see [`sku-flow.md`](sku-flow.md)). The rest of this page records the original nine-directory rollout.
+
 Nine Firstout directories use one app-local `RecordWorkspace`: Customers,
 Suppliers, Price lists, Locations, Users, Roles, Chart of accounts, Repeating
 invoices and Proformas. The approved design keeps the breadcrumb above the

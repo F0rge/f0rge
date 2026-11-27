@@ -28,6 +28,7 @@ import {
   operationalCheckoutBlock,
 } from "./storefront-commerce-exceptions";
 import { clearCheckoutShippingWorkflow } from "./storefront-checkout-shipping";
+import { sellRuleProblem } from "./publication";
 
 type CartLine = { id: string; variant_id: string | null; quantity: number; unit_price: number; metadata?: Record<string, unknown> | null };
 type Cart = {
@@ -218,6 +219,13 @@ export function checkoutChanges(cart: Cart, variants: Variant[], nowMs: number, 
   if (!cart.items?.length) return ["Your bag is empty."];
   if (cart.currency_code !== "zar") changes.push("The cart currency is unavailable.");
   const byId = new Map(variants.map((variant) => [variant.id, variant]));
+  // Selling rules apply to a variant's total, which may be split across lines.
+  const variantTotals = new Map<string, number>();
+  for (const line of cart.items) {
+    if (line.variant_id && Number.isSafeInteger(line.quantity) && line.quantity > 0) {
+      variantTotals.set(line.variant_id, (variantTotals.get(line.variant_id) ?? 0) + line.quantity);
+    }
+  }
   for (const line of cart.items) {
     if (!Number.isSafeInteger(line.quantity) || line.quantity < 1) {
       changes.push("Choose a valid quantity for every piece.");
@@ -228,6 +236,8 @@ export function checkoutChanges(cart: Cart, variants: Variant[], nowMs: number, 
       changes.push("A piece in your bag is no longer available.");
       continue;
     }
+    const ruleProblem = sellRuleProblem(variantTotals.get(variant.id) ?? line.quantity, variant.metadata);
+    if (ruleProblem) changes.push(ruleProblem);
     const observed = variant.metadata?.source_observed_at;
     const observedMs = typeof observed === "string" ? Date.parse(observed) : NaN;
     if (!Number.isFinite(observedMs) || observedMs > nowMs + 60_000 || nowMs - observedMs > maxAgeMs) {

@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,7 +31,12 @@ class SkuSupplierPrice(TenantOwnedMixin, UUIDPkMixin, TimestampMixin, Base):
     supplier_sku: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     latest_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
     fixed_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
+    # The least this supplier accepts, and the increment it ships in.
+    min_order_qty: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    pack_multiple: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("sku_id", "supplier_id", name="uq_sku_supplier_prices_sku_supplier"),
+        CheckConstraint("min_order_qty >= 1", name="ck_sku_supplier_prices_min_order_qty"),
+        CheckConstraint("pack_multiple >= 1", name="ck_sku_supplier_prices_pack_multiple"),
     )

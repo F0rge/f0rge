@@ -21,6 +21,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { SkuLink } from "@/components/sku-link";
 
 import {
   ApiError,
@@ -96,7 +97,7 @@ function PicksPageContent() {
     if (!canMutate || prefillConsumed.current) {
       return;
     }
-    const skuPrefill = searchParams.get("sku");
+    const skuPrefill = searchParams.get("prefill_sku");
     const qtyPrefill = Number(searchParams.get("qty") ?? "");
     if (!skuPrefill) {
       return;
@@ -106,7 +107,7 @@ function PicksPageContent() {
     setQty(Number.isFinite(qtyPrefill) && qtyPrefill > 0 ? qtyPrefill : 1);
     setCreateOpen(true);
     const next = new URLSearchParams(searchParams.toString());
-    next.delete("sku");
+    next.delete("prefill_sku");
     next.delete("qty");
     const qs = next.toString();
     router.replace(qs ? `/picks?${qs}` : "/picks");
@@ -220,7 +221,7 @@ function PicksPageContent() {
                               </Tag>
                             ) : cell.info.header === "sku" && entry ? (
                               <>
-                                {entry.sku_our_ref || entry.sku_id}
+                                <SkuLink id={entry.sku_id}>{entry.sku_our_ref || entry.sku_id}</SkuLink>
                                 {entry.sku_name ? (
                                   <div className="firstout-muted-text">{entry.sku_name}</div>
                                 ) : null}

@@ -90,7 +90,7 @@ def validate_filters(query: WorkspaceQuery, fields: dict[str, str]) -> None:
         kind = fields[condition.field]
         if condition.operator in {"gt", "gte", "lt", "lte"} and kind not in {"number", "date"}:
             raise ValidationError("Ranges require a number or date field")
-        if condition.operator == "contains" and kind != "text":
+        if condition.operator == "contains" and kind not in {"text", "text_any"}:
             raise ValidationError("Contains requires a text field")
         if condition.operator not in {"empty", "not_empty"}:
             if condition.value is None:
@@ -108,6 +108,13 @@ def matches(value, condition: WorkspaceFilter, fields: dict[str, str]) -> bool:
         return not empty
     if empty:
         return condition.operator == "ne"
+    if fields[condition.field] == "text_any":
+        # A list of names (main and other materials): eq/contains match any one of them.
+        right = scalar(condition.value, "text")
+        found = [scalar(item, "text") for item in value]
+        if condition.operator == "contains":
+            return any(right in item for item in found)
+        return (right in found) == (condition.operator == "eq")
     left = scalar(value, fields[condition.field])
     right = scalar(condition.value, fields[condition.field])
     if condition.operator == "eq":
@@ -142,7 +149,7 @@ def filter_rows(
     result = []
     for row in rows:
         if q and not any(
-            q in str(getattr(row, field, "") or "").casefold()
+            q in str(get_value(row, field) or "").casefold()
             for field, kind in fields.items()
             if kind == "text"
         ):

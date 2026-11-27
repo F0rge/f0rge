@@ -79,3 +79,10 @@ export function formatFxGainLoss(value: string): string {
   const prefix = amount > 0 ? "Gain " : "Loss ";
   return `${prefix}R ${Math.abs(amount).toFixed(2)}`;
 }
+
+/** "R 3812.61" from a stored amount such as "3812.6058" (unit costs carry four decimals). */
+export function formatZarCents(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `R ${formatPriceAmount(roundHalfUp(amount))}` : "—";
+}

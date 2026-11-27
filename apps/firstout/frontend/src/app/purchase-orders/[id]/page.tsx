@@ -52,6 +52,11 @@ import {
   type Supplier,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { CategoryPicker } from "@/components/catalogue-lists/category-picker";
+import { useCategories, useMaterials } from "@/components/catalogue-lists/hooks";
+import { MaterialPicker } from "@/components/catalogue-lists/material-picker";
+import { fieldErrors } from "@/lib/catalogue-list-view";
+import { SkuLink } from "@/components/sku-link";
 import { queryKeys } from "@/lib/queries";
 import { formatSourceAmount, sourceReportAmountText } from "@/lib/source-history";
 import {
@@ -89,7 +94,11 @@ type SkuDraft = {
   our_barcode: string;
   name: string;
   design: string;
-  fabric: string;
+  category_id: string;
+  subcategory_id: string;
+  colour_name: string;
+  main_material_id: string;
+  other_material_ids: string[];
 };
 
 function draftsFromOrder(order: PurchaseOrder): DraftLine[] {
@@ -128,7 +137,11 @@ function skuDefaults(line: DraftLine): SkuDraft {
     our_barcode: tagged,
     name: line.description.trim() || ref,
     design: tagged,
-    fabric: "-",
+    category_id: "",
+    subcategory_id: "",
+    colour_name: "",
+    main_material_id: "",
+    other_material_ids: [],
   };
 }
 
@@ -137,7 +150,11 @@ const blankSkuDraft = (): SkuDraft => ({
   our_barcode: "",
   name: "",
   design: "",
-  fabric: "-",
+  category_id: "",
+  subcategory_id: "",
+  colour_name: "",
+  main_material_id: "",
+  other_material_ids: [],
 });
 
 export default function PurchaseOrderDetailPage() {
@@ -157,6 +174,9 @@ export default function PurchaseOrderDetailPage() {
   const [skuOpen, setSkuOpen] = useState(false);
   const [skuLineKey, setSkuLineKey] = useState<string | null>(null);
   const [skuDraft, setSkuDraft] = useState<SkuDraft>(blankSkuDraft());
+  const [skuFieldErrors, setSkuFieldErrors] = useState<Record<string, string>>({});
+  const categoryTree = useCategories();
+  const materialList = useMaterials();
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -427,6 +447,7 @@ export default function PurchaseOrderDetailPage() {
     }
     setSkuLineKey(line.key);
     setSkuDraft(skuDefaults(line));
+    setSkuFieldErrors({});
     setSkuOpen(true);
   }
 
@@ -434,8 +455,7 @@ export default function PurchaseOrderDetailPage() {
     skuDraft.our_ref.trim() &&
     skuDraft.our_barcode.trim() &&
     skuDraft.name.trim() &&
-    skuDraft.design.trim() &&
-    skuDraft.fabric.trim();
+    skuDraft.design.trim();
 
   async function handleCreateSku() {
     if (!order || order.is_archive || !skuLineKey || !skuDraftValid) {
@@ -448,20 +468,27 @@ export default function PurchaseOrderDetailPage() {
     }
     setActionLoading(true);
     setError(null);
+    setSkuFieldErrors({});
     try {
       const updated = await createPurchaseOrderLineSku(order.id, line.id, {
         our_ref: skuDraft.our_ref.trim(),
         our_barcode: skuDraft.our_barcode.trim(),
         name: skuDraft.name.trim(),
         design: skuDraft.design.trim(),
-        fabric: skuDraft.fabric.trim(),
+        category_id: skuDraft.category_id || null,
+        subcategory_id: skuDraft.subcategory_id || null,
+        colour_name: skuDraft.colour_name.trim() || null,
+        main_material_id: skuDraft.main_material_id || null,
+        other_material_ids: skuDraft.other_material_ids,
       });
       applyOrder(updated);
       setSkuOpen(false);
       void client.invalidateQueries({ queryKey: queryKeys.skus });
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        const fields = fieldErrors(err.detail);
+        setSkuFieldErrors(fields);
+        if (!Object.keys(fields).length) setError(err.message);
       } else {
         setError(err instanceof Error ? err.message : "Failed to create the SKU.");
       }
@@ -698,7 +725,7 @@ export default function PurchaseOrderDetailPage() {
                   <TableHeader>SKU</TableHeader>
                   <TableHeader>Supplier code</TableHeader>
                   <TableHeader>Description</TableHeader>
-                  <TableHeader>Fabric / finish</TableHeader>
+                  <TableHeader>Finish</TableHeader>
                   <TableHeader>Qty</TableHeader>
                   <TableHeader>Factory unit</TableHeader>
                   <TableHeader>Notes</TableHeader>
@@ -856,7 +883,7 @@ export default function PurchaseOrderDetailPage() {
                 key={line.id}
                 style={line.needs_sku ? { background: "var(--cds-highlight)" } : undefined}
               >
-                <TableCell>{line.our_ref ?? "—"}</TableCell>
+                <TableCell>{line.sku_id && line.our_ref ? <SkuLink id={line.sku_id} context={{ ids: order.lines.flatMap((row) => (row.sku_id ? [row.sku_id] : [])), label: order.po_number }}>{line.our_ref}</SkuLink> : (line.our_ref ?? "—")}</TableCell>
                 <TableCell>{line.supplier_code ?? "—"}</TableCell>
                 <TableCell>{line.description ?? line.name}</TableCell>
                 <TableCell>{line.name}</TableCell>
@@ -934,11 +961,37 @@ export default function PurchaseOrderDetailPage() {
             value={skuDraft.design}
             onChange={(event) => setSkuDraft({ ...skuDraft, design: event.target.value })}
           />
+          {Object.keys(skuFieldErrors).length > 0 && (
+            <InlineNotification kind="error" lowContrast hideCloseButton title="Check the highlighted fields" />
+          )}
+          <CategoryPicker
+            idPrefix="line-sku"
+            categories={categoryTree.data?.categories}
+            value={{ categoryId: skuDraft.category_id, subcategoryId: skuDraft.subcategory_id }}
+            onChange={({ categoryId, subcategoryId }) =>
+              setSkuDraft({ ...skuDraft, category_id: categoryId, subcategory_id: subcategoryId })}
+            invalidText={{
+              category: skuFieldErrors.category_id ?? skuFieldErrors.category,
+              subcategory: skuFieldErrors.subcategory_id,
+            }}
+          />
           <TextInput
-            id="line-sku-fabric"
-            labelText="Fabric"
-            value={skuDraft.fabric}
-            onChange={(event) => setSkuDraft({ ...skuDraft, fabric: event.target.value })}
+            id="line-sku-colour"
+            labelText="Colour name (optional)"
+            helperText="What customers read, such as Oat. With the main material it makes the finish."
+            maxLength={64}
+            value={skuDraft.colour_name}
+            invalid={!!skuFieldErrors.colour_name}
+            invalidText={skuFieldErrors.colour_name}
+            onChange={(event) => setSkuDraft({ ...skuDraft, colour_name: event.target.value })}
+          />
+          <MaterialPicker
+            idPrefix="line-sku"
+            materials={materialList.data}
+            value={{ mainId: skuDraft.main_material_id, otherIds: skuDraft.other_material_ids }}
+            onChange={({ mainId, otherIds }) =>
+              setSkuDraft({ ...skuDraft, main_material_id: mainId, other_material_ids: otherIds })}
+            invalidText={{ main: skuFieldErrors.main_material_id, others: skuFieldErrors.other_material_ids }}
           />
         </Stack>
       </Modal>

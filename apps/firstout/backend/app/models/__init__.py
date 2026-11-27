@@ -9,6 +9,7 @@ from app.models.books_period import BooksPeriod, BooksPeriodStatus
 from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillAttachment, BillLine
 from app.models.books_event import BooksDocumentType, BooksEvent, BooksEventAction
+from app.models.catalogue_list import Material, SkuCategory, SkuMaterial
 from app.models.category_account_map import CategoryAccountMap
 from app.models.credit_note import CreditNote
 from app.models.customer_portal_user import CustomerPortalUser
@@ -118,6 +119,7 @@ __all__ = [
     "BooksEvent",
     "BooksEventAction",
     "CategoryAccountMap",
+    "Material",
     "CreditNote",
     "Customer",
     "CustomerPortalUser",
@@ -190,6 +192,8 @@ __all__ = [
     "SalesStaff",
     "Sku",
     "SkuBomLine",
+    "SkuCategory",
+    "SkuMaterial",
     "SkuSupplierPrice",
     "SkuStock",
     "StockAdjustment",

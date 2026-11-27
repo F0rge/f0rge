@@ -10,6 +10,12 @@
         "command": "node node_modules/@typescript/native/bin/tsc --noEmit -p libs/ui/tsconfig.json"
       }
     },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --root libs/ui --passWithNoTests"
+      }
+    },
     "storybook": {
       "executor": "nx:run-commands",
       "options": {

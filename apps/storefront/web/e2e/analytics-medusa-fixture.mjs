@@ -59,12 +59,20 @@ function products() {
     piece({ uuid: '66666666-6666-4666-8666-666666666666', id: 'prod_yara_lamp', title: 'Yara Floor Lamp', image: '/demo/arc-front.jpg', variants: [variant('variant_yara_lamp', 'YARA-LAMP', 1999, 3)] }),
   ]
 }
+// Sold in pairs with five in stock, so the most a shopper can take is four.
+// Unlisted: served only by handle or id, so the listing and analytics counts stay as they are.
+const pairSold = () => piece({ uuid: '77777777-7777-4777-8777-777777777777', id: 'prod_pella_chair', title: 'Pella Dining Chair', image: '/demo/arc-front.jpg', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_pella_chair', 'PELLA-CHAIR', 2450, 5, { sell_multiple: 2, min_quantity: 2 })] })
+// Sold in pairs with a single unit left: no valid quantity can be offered.
+const lastOddUnit = () => piece({ uuid: '88888888-8888-4888-8888-888888888888', id: 'prod_pella_stool', title: 'Pella Counter Stool', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_pella_stool', 'PELLA-STOOL', 1850, 1, { sell_multiple: 2, min_quantity: 2 })] })
+// Sold in pairs, minimum four, nine in stock: four, six or eight.
+const pairsFromFour = () => piece({ uuid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', id: 'prod_pella_side', title: 'Pella Side Chair', categories: category('dining-room', 'Dining Room'), variants: [variant('variant_pella_side', 'PELLA-SIDE', 1990, 9, { sell_multiple: 2, min_quantity: 4 })] })
+const allProducts = () => [...products(), pairSold(), lastOddUnit(), pairsFromFour()]
 
 // In-memory carts so the bag route works against the fixture.
 // ponytail: no stock check here; the web caps quantity and real Medusa enforces inventory.
 const carts = new Map()
 function addLine(cart, { variant_id, quantity }) {
-  const product = products().find((candidate) => candidate.variants.some((item) => item.id === variant_id))
+  const product = allProducts().find((candidate) => candidate.variants.some((item) => item.id === variant_id))
   const unit = product?.variants.find((item) => item.id === variant_id)
   if (!unit) return false
   const line = cart.items.find((item) => item.variant_id === variant_id)
@@ -140,7 +148,7 @@ createServer(async (request, response) => {
   if (url.pathname === '/store/products') {
     const handles = url.searchParams.getAll('handle')
     const ids = url.searchParams.getAll('id')
-    const matching = products().filter((product) => (!handles.length || handles.includes(product.handle)) && (!ids.length || ids.includes(product.id)))
+    const matching = (handles.length || ids.length ? allProducts() : products()).filter((product) => (!handles.length || handles.includes(product.handle)) && (!ids.length || ids.includes(product.id)))
     response.end(JSON.stringify({ products: matching, count: matching.length }))
     return
   }

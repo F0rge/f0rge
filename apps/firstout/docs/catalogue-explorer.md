@@ -1,5 +1,7 @@
 # Catalogue explorer
 
+> **Superseded, 26 November 2026.** The SKU flow replaced the split view and its persistent inspector: the catalogue table is now full width, and opening a row docks the SKU panel, which expands to a full SKU view edited card by card. The Carbon edit modal and the old `/catalogue/{id}` page are replaced by that view. Current description: [`sku-flow.md`](sku-flow.md). The rest of this page records the earlier design.
+
 The catalogue uses the approved split-view design: a searchable product list beside a persistent product inspector. Category and preferred-supplier filters apply before server pagination. The default page contains 50 products; staff can choose 100. The list scrolls independently, keeping pagination below it. The existing full SKU page remains reachable.
 
 The inspector groups VAT-inclusive selling prices, permission-controlled unit cost, procurement fields and our barcode. Planned lead time stays separate from observed receipt history. Product results render independently of the cost request; costs have their own loading, failure and retry states.

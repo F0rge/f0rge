@@ -3,7 +3,8 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from app.crud.purchase_order import LocationStockCRUD, SkuStockCRUD
+from app.crud.purchase_order import LocationStockCRUD
+from app.crud.sku_stock_figures import on_order_by_sku_id
 from app.models.inventory import LocationStock, SkuStock
 from app.models.location import Location, LocationType
 from app.models.sku import Sku
@@ -119,7 +120,7 @@ async def test_catalogue_stock_scope_and_bulk_revisions(owner_client, async_db):
     await async_db.flush()
 
     assert foreign_sku.id not in await LocationStockCRUD(async_db).on_hand_locations_by_sku_id()
-    assert await SkuStockCRUD(async_db).on_order_by_sku_id([foreign_sku.id]) == {}
+    assert await on_order_by_sku_id(async_db, [foreign_sku.id]) == {}
     selected = await query(
         owner_client, "skus", q="WORKSPACE-STOCK-SCOPE", sort={"field": "on_hand"}
     )

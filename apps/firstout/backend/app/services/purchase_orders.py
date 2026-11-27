@@ -229,13 +229,9 @@ class PurchaseOrderService:
         skus = SkuService(self.db)
         created = await skus.create(
             SkuCreate(
-                our_ref=data.our_ref,
-                our_barcode=data.our_barcode,
-                name=data.name,
-                design=data.design,
-                fabric=data.fabric,
+                # Only what the caller sent: deprecated fabric and category stay optional.
+                **data.model_dump(exclude_unset=True),
                 supplier_ref=None if supplier_code is None else supplier_code[:64],
-                category=data.category,
             ),
             user_id,
         )

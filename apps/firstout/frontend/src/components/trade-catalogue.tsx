@@ -8,6 +8,9 @@ import {
   ApiError, formatZarAmount, getPortalMe, listPortalCatalogue, placePortalOrder,
   type PortalAccess, type PortalCatalogueItem, type PortalMe,
 } from "@/lib/api";
+import {
+  quantityInputBounds, quantityRuleHelper, quantityRuleRefusal, startQty, type QuantityRuleRefusal,
+} from "@/lib/sale-quantity-rule";
 
 /** The parent remounts this entire workspace whenever the approved access changes. */
 export function TradeCatalogue({ access }: { access: PortalAccess }) {
@@ -18,6 +21,7 @@ export function TradeCatalogue({ access }: { access: PortalAccess }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<QuantityRuleRefusal | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,16 +32,23 @@ export function TradeCatalogue({ access }: { access: PortalAccess }) {
     return () => { cancelled = true; };
   }, [access.id]);
 
-  async function order(itemId: string) {
-    setBusy(itemId); setError(null); setSuccess(null);
+  // A batch-sold piece starts at its minimum; the portal has no authority to break a batch.
+  const qtyFor = (item: PortalCatalogueItem) => qty[item.id] ?? startQty(item);
+
+  async function order(item: PortalCatalogueItem) {
+    const itemId = item.id;
+    setBusy(itemId); setError(null); setSuccess(null); setRefusal(null);
     try {
-      const order = await placePortalOrder(access.id, { lines: [{ sku_id: itemId, qty: qty[itemId] ?? 1 }] });
+      const order = await placePortalOrder(access.id, { lines: [{ sku_id: itemId, qty: qtyFor(item) }] });
       setSuccess(`Draft order ${order.so_number} placed. Staff will confirm it.`);
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         setMe(null); setItems([]); setQty({});
       }
-      setError(err instanceof Error ? err.message : "Could not place order.");
+      // A batch-sold piece: the message belongs to that item, not the page.
+      const rule = quantityRuleRefusal(err);
+      if (rule) setRefusal(rule);
+      else setError(err instanceof Error ? err.message : "Could not place order.");
     } finally { setBusy(null); }
   }
 
@@ -60,9 +71,11 @@ export function TradeCatalogue({ access }: { access: PortalAccess }) {
     ) : me ? <>
       {!items.length ? <p>No SKUs available.</p> : items.map((item) => <div key={item.id} className="firstout-trade-item">
         <div><strong>{item.our_ref}</strong> {item.name}<div>{formatZarAmount(item.unit_ex_vat)} excl. VAT</div></div>
-        <NumberInput id={`qty-${item.id}`} label="Qty" min={1} value={qty[item.id] ?? 1} disabled={busy !== null}
-          onChange={(_, { value }) => setQty((current) => ({ ...current, [item.id]: value === "" ? 1 : Number(value) }))} />
-        <Button size="sm" disabled={busy !== null || (qty[item.id] ?? 1) < 1} onClick={() => void order(item.id)}>{busy === item.id ? "Ordering…" : "Order"}</Button>
+        <NumberInput id={`qty-${item.id}`} label="Qty" {...quantityInputBounds(item, false)} value={qtyFor(item)}
+          disabled={busy !== null} helperText={quantityRuleHelper(item) ?? undefined}
+          invalid={refusal?.lines[item.id]?.qty === qtyFor(item)} invalidText={refusal?.lines[item.id]?.message}
+          onChange={(_, { value }) => setQty((current) => ({ ...current, [item.id]: value === "" ? startQty(item) : Number(value) }))} />
+        <Button size="sm" disabled={busy !== null || qtyFor(item) < 1} onClick={() => void order(item)}>{busy === item.id ? "Ordering…" : "Order"}</Button>
       </div>)}
     </> : null}
   </Stack>;

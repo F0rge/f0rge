@@ -9,7 +9,10 @@ from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.purchase_order import LocationStockCRUD, SkuStockCRUD
+import datetime
+
+from app.crud.purchase_order import LocationStockCRUD
+from app.crud.sku_stock_figures import on_order_by_sku_id
 from app.exceptions import ForbiddenError
 from app.schemas.location import LocationResponse
 from app.schemas.record_workspace import (
@@ -49,6 +52,7 @@ from app.services.suppliers import SupplierService
 from app.services.users import UserService
 from app.services.skus import SkuService
 from app.services.sku_archive import SkuArchiveService
+from app.services.stock_availability import StockAvailability
 from f0rge_core.exceptions import NotFoundError, ValidationError
 
 
@@ -168,12 +172,12 @@ class RecordWorkspaceService:
             if stock_locations is not None
             else None
         )
-        matching = filter_rows(
-            candidates,
-            query,
-            definition.fields,
-            {"on_hand": on_hand} if on_hand is not None else None,
-        )
+        derived: Optional[dict[str, dict]] = {"on_hand": on_hand} if on_hand is not None else None
+        if resource == "skus":
+            derived = {**(derived or {}), **_sku_material_values(candidates)}
+            if "available" in requested_fields:
+                derived["available"] = await _available(self.db, [row.id for row in candidates])
+        matching = filter_rows(candidates, query, definition.fields, derived)
         page = matching[query.offset : query.offset + query.limit]
         token = None
         bulk_available = signing_key() is not None
@@ -210,7 +214,8 @@ class RecordWorkspaceService:
         sku_ids = [row.id for row in page]
         if locations_by_id is None:
             locations_by_id = await LocationStockCRUD(self.db).on_hand_locations_by_sku_id(sku_ids)
-        on_order_by_id = await SkuStockCRUD(self.db).on_order_by_sku_id(sku_ids)
+        on_order_by_id = await on_order_by_sku_id(self.db, sku_ids)
+        available_by_id = await _available(self.db, sku_ids)
         items: list[BaseModel] = []
         for sku in page:
             locations = locations_by_id.get(sku.id, [])
@@ -219,6 +224,7 @@ class RecordWorkspaceService:
                     **sku.model_dump(),
                     on_hand=sum((qty for _, _, qty in locations), Decimal(0)),
                     on_order=on_order_by_id.get(sku.id, Decimal(0)),
+                    available=available_by_id[sku.id],
                     stock_locations=[
                         WorkspaceStockLocation(location_id=id_, location_name=name, on_hand=qty)
                         for id_, name, qty in locations
@@ -327,3 +333,23 @@ class RecordWorkspaceService:
         if action in {"restore", "enable", "resume"} and not past:
             return "This record is already active"
         return await blocked_reason(self.db, resource, action, row, count, patch)
+
+
+def _sku_material_values(rows: list[BaseModel]) -> dict[str, dict]:
+    """Filter values read from the SKU's material summaries, for every row."""
+    main: dict = {}
+    family: dict = {}
+    every: dict = {}
+    for row in rows:
+        material = getattr(row, "main_material", None)
+        others = getattr(row, "other_materials", [])
+        main[row.id] = material.name if material is not None else None
+        family[row.id] = material.family if material is not None else None
+        every[row.id] = [item.name for item in ([material] if material else []) + others]
+    return {"main_material": main, "material_family": family, "material": every}
+
+
+async def _available(db: AsyncSession, sku_ids: list[uuid.UUID]) -> dict[uuid.UUID, Decimal]:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    figures = await StockAvailability(db).company_available(sku_ids, now)
+    return {sku_id: max(Decimal(0), figures.get(sku_id, Decimal(0))) for sku_id in sku_ids}

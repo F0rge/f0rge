@@ -6,10 +6,11 @@ from decimal import Decimal
 import uuid
 from typing import Optional
 
-from sqlalchemy import ColumnElement, case, exists, false, func, select, true
+from sqlalchemy import ColumnElement, exists, false, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.models.catalogue_list import SkuCategory
 from app.models.inventory import LocationStock
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.product_group import ProductGroup, ProductGroupVariant
@@ -22,6 +23,9 @@ from app.models.team import Team
 
 
 # Owner decision, 21 Nov 2026: Firstout SKU category (trimmed, any case) -> shop category handle.
+# Since migration 120 the feed reads the section from the SKU's category row
+# (``sku_categories.shop_category``); this map is the list of valid section slugs (its
+# values) and what new categories with these names start with.
 SHOP_CATEGORIES = {
     "sofas": "sofas-armchairs",
     "armchairs": "sofas-armchairs",
@@ -32,8 +36,13 @@ SHOP_CATEGORIES = {
 }
 
 
-# The only category matcher: the feed selects and labels rows with this one SQL expression.
-SHOP_CATEGORY = case(SHOP_CATEGORIES, value=func.lower(func.trim(Sku.category)))
+# The only shop-section source: the feed selects and labels rows with this one SQL
+# expression, the shop section of the SKU's (top-level) category row. A rename keeps it.
+SHOP_CATEGORY = (
+    select(SkuCategory.shop_category)
+    .where(SkuCategory.id == Sku.category_id, SkuCategory.team_id == Sku.team_id)
+    .scalar_subquery()
+)
 
 # The auto-publish rule, per SKU: a shop category, a Firstout photo, and not hidden.
 ON_SHOP = (
@@ -71,6 +80,8 @@ class PublishedSkuSnapshot:
     detail_photo_storage_key: Optional[str]
     swatch_hex: Optional[str]
     second_detail_photo_storage_key: Optional[str]
+    sell_multiple: int
+    min_sell_qty: int
 
 
 class OpsCommerceCRUD:
@@ -170,6 +181,8 @@ class OpsCommerceCRUD:
                 Sku.detail_photo_storage_key,
                 Sku.swatch_hex,
                 Sku.second_detail_photo_storage_key,
+                Sku.sell_multiple,
+                Sku.min_sell_qty,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
             .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
@@ -290,6 +303,8 @@ class OpsCommerceCRUD:
                 detail_photo_storage_key=row[24],
                 swatch_hex=row[25],
                 second_detail_photo_storage_key=row[26],
+                sell_multiple=row[27],
+                min_sell_qty=row[28],
             )
             for row in rows
         ]

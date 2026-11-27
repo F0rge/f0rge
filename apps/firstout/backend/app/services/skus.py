@@ -9,7 +9,9 @@ from pathlib import PurePosixPath
 from typing import Optional, Union
 
 from fastapi import UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,7 @@ from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.supplier import SupplierCRUD
 from app.services.party_archive import assert_supplier_active
 from app.crud.unit_cost_audit import UnitCostAuditCRUD
+from app.models.catalogue_list import Material, SkuCategory, SkuMaterial
 from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.permissions import STOCK_COST_VIEW
@@ -27,6 +30,7 @@ from app.schemas.sku import (
     SKU_DETAIL_FIELDS,
     SkuCreate,
     SkuListPage,
+    SkuMaterialSummary,
     SkuPricePreviewChanges,
     SkuPricePreviewRequest,
     SkuPricePreviewResponse,
@@ -39,6 +43,15 @@ from app.services.inventory import InventoryService
 from app.services.pricing import resolve_classification_price
 from app.services.sale_line_pricing import line_amounts
 from app.services.sku_barcode import csv_style_barcode
+from app.services.sku_classification import (
+    DUPLICATE_FINISH_MESSAGE,
+    FABRIC_PLACEHOLDER,
+    categories_by_id,
+    category_by_name,
+    finish_label,
+    materials_by_id,
+    unknown_category_message,
+)
 from app.services.stock_movements import StockMovementService
 from app.services.suspect_price import average_costs_by_sku_id, tier_price_below_cost
 from app.services.vat import (
@@ -55,6 +68,7 @@ from app.services.object_storage import (
 )
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+from f0rge_db.organisation import tenant_id_ctx
 from f0rge_storage.images import resize_image
 
 
@@ -91,6 +105,22 @@ def _sku_price_updates(
                 value = convert(value, vat_rate)
             updates[column] = value
     return updates
+
+
+def field_errors(errors: list[tuple[str, str]]) -> RequestValidationError:
+    """A 422 in FastAPI's own shape, so clients attach each message to its field."""
+    return RequestValidationError(
+        [
+            {
+                "type": "value_error",
+                # "rows.0.supplier_id" -> ("body", "rows", 0, "supplier_id")
+                "loc": ("body", *(int(p) if p.isdigit() else p for p in field.split("."))),
+                "msg": message,
+                "input": None,
+            }
+            for field, message in errors
+        ]
+    )
 
 
 def _blank_to_none(value: Optional[str]) -> Optional[str]:
@@ -257,27 +287,11 @@ class SkuService:
             assert data.name is not None
             sku.name = data.name
 
-        if "design" in fields_set or "fabric" in fields_set:
-            new_design = data.design if "design" in fields_set else sku.design
-            new_fabric = data.fabric if "fabric" in fields_set else sku.fabric
-            if (
-                await self.crud.get_by_design_fabric_insensitive(
-                    new_design,
-                    new_fabric,
-                    exclude_id=sku.id,
-                )
-                is not None
-            ):
-                raise ConflictError("A SKU with this design and fabric already exists")
-            if "design" in fields_set:
-                assert data.design is not None
-                sku.design = data.design
-            if "fabric" in fields_set:
-                assert data.fabric is not None
-                sku.fabric = data.fabric
-
-        if "category" in fields_set:
-            sku.category = data.category
+        if "design" in fields_set:
+            assert data.design is not None
+        other_materials = await self._apply_catalogue_fields(sku, data, fields_set)
+        if other_materials is not None:
+            await self._replace_other_materials(sku.id, other_materials)
 
         if "swatch_hex" in fields_set:
             sku.swatch_hex = data.swatch_hex
@@ -346,9 +360,6 @@ class SkuService:
                 sku.made_to_order_lead_time_max_days = lead_max
                 sku.made_to_order_expires_at = expires_at
 
-        if "reorder_min" in fields_set:
-            sku.reorder_min = data.reorder_min
-
         if "supplier_ref" in fields_set:
             sku.supplier_ref = data.supplier_ref
 
@@ -395,7 +406,7 @@ class SkuService:
         barcode = data.our_barcode
         if barcode is None:
             barcode = await self._allocate_csv_barcode(data.our_ref)
-        await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, barcode)
+        await self._ensure_unique_fields(data.our_ref, barcode)
 
         if data.opening_location_id is not None:
             location = await self.location_crud.get_by_id(data.opening_location_id)
@@ -411,17 +422,22 @@ class SkuService:
             our_ref=data.our_ref,
             our_barcode=barcode,
             name=data.name,
-            design=data.design,
-            fabric=data.fabric,
             supplier_ref=data.supplier_ref,
-            category=data.category,
             swatch_hex=data.swatch_hex,
             carton_count=data.carton_count,
             **{field: getattr(data, field) for field in SKU_DETAIL_FIELDS},
         )
+        # Every catalogue field counts as sent on create, defaults included.
+        # The deprecated inputs, and an omitted minimum, count only when actually sent.
+        only_when_sent = {"min_sell_qty", "fabric", "category"}
+        create_fields = set(type(data).model_fields) - only_when_sent
+        create_fields |= data.model_fields_set & only_when_sent
+        other_materials = await self._apply_catalogue_fields(sku, data, create_fields)
         try:
             async with unit_of_work(self.db):
                 await self.crud.add_and_flush(sku)
+                if other_materials:
+                    await self._replace_other_materials(sku.id, other_materials)
                 if data.opening_location_id is not None:
                     assert data.opening_qty is not None
                     assert data.opening_unit_cost_zar is not None
@@ -521,10 +537,12 @@ class SkuService:
         kit_ids = await self.bom_crud.parent_ids_with_bom(sku_ids)
         average_costs = await average_costs_by_sku_id(self.db, sku_ids)
         vat_rate = await current_vat_rate(self.db)
+        lists = await self._catalogue_lists(skus)
 
         return [
             self._to_response(
                 sku,
+                lists=lists,
                 vat_rate=vat_rate,
                 preferred_supplier_name=(
                     supplier_names.get(sku.preferred_supplier_id)
@@ -550,10 +568,32 @@ class SkuService:
             for sku in skus
         ]
 
+    async def _catalogue_lists(self, skus: list[Sku]) -> _CatalogueLists:
+        """Names for category, sub-category and materials, in three batched queries."""
+        links: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for sku_id, material_id in await self.db.execute(
+            select(SkuMaterial.sku_id, SkuMaterial.material_id)
+            .where(
+                SkuMaterial.team_id == tenant_id_ctx.get(),
+                SkuMaterial.sku_id.in_([sku.id for sku in skus]),
+            )
+            .order_by(SkuMaterial.sku_id, SkuMaterial.position)
+        ):
+            links.setdefault(sku_id, []).append(material_id)
+        categories = await categories_by_id(
+            self.db, [value for sku in skus for value in (sku.category_id, sku.subcategory_id)]
+        )
+        materials = await materials_by_id(
+            self.db,
+            [sku.main_material_id for sku in skus] + [m for ids in links.values() for m in ids],
+        )
+        return _CatalogueLists(categories, materials, links)
+
     def _to_response(
         self,
         sku: Sku,
         *,
+        lists: _CatalogueLists,
         vat_rate: Decimal,
         preferred_supplier_name: Optional[str] = None,
         last_landed_cost_zar: Optional[Decimal] = None,
@@ -566,6 +606,7 @@ class SkuService:
     ) -> SkuResponse:
         photo_keys = _staff_photo_storage_keys(sku)
         retail_ex = sku.retail_ex_vat
+        other_ids = lists.links.get(sku.id, [])
         return SkuResponse(
             is_sellable=sku.is_sellable,
             till_no_stock_required=sku.till_no_stock_required,
@@ -592,6 +633,24 @@ class SkuService:
             reorder_min=sku.reorder_min,
             last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
+            category_id=sku.category_id,
+            subcategory_id=sku.subcategory_id,
+            subcategory=(
+                lists.categories[sku.subcategory_id].name
+                if sku.subcategory_id in lists.categories
+                else None
+            ),
+            colour_name=sku.colour_name,
+            main_material_id=sku.main_material_id,
+            main_material=lists.material(sku.main_material_id),
+            other_material_ids=other_ids,
+            other_materials=[
+                summary for summary in map(lists.material, other_ids) if summary is not None
+            ],
+            sell_multiple=sku.sell_multiple,
+            min_sell_qty=sku.min_sell_qty,
+            order_up_to=sku.order_up_to,
+            do_not_reorder=sku.do_not_reorder,
             swatch_hex=sku.swatch_hex,
             photo_storage_key=(
                 sku.gallery_photo_keys[0] if sku.gallery_photo_keys else sku.photo_storage_key
@@ -626,6 +685,213 @@ class SkuService:
             updated_at=sku.updated_at,
         )
 
+    async def _apply_catalogue_fields(
+        self,
+        sku: Sku,
+        data: Union[SkuCreate, SkuUpdate],
+        fields_set: set[str],
+    ) -> Optional[list[uuid.UUID]]:
+        """Validate and write category, materials, finish label, design, selling and reorder
+        rules. Everything is checked before anything is written. Returns the other materials
+        to store when they change (the caller writes them once the SKU has an id).
+        """
+        creating = sku.id is None
+        errors: list[tuple[str, str]] = []
+
+        # Category: legacy name input resolves to an existing top-level category.
+        current_category = sku.category_id
+        current_sub = sku.subcategory_id
+        target_category = current_category
+        if "category" in fields_set:
+            name = (data.category or "").strip()
+            legacy_id: Optional[uuid.UUID] = None
+            if name:
+                found = await category_by_name(self.db, name)
+                if found is None:
+                    errors.append(("category", unknown_category_message(name)))
+                else:
+                    legacy_id = found.id
+            if "category_id" in data.model_fields_set and data.category_id != legacy_id:
+                errors.append(("category", "category and category_id name different categories"))
+            target_category = legacy_id
+        if "category_id" in fields_set and "category" not in fields_set:
+            target_category = data.category_id
+        target_sub = data.subcategory_id if "subcategory_id" in fields_set else current_sub
+        categories = await categories_by_id(self.db, (target_category, target_sub))
+
+        category_row: Optional[SkuCategory] = None
+        if target_category is not None:
+            category_row = categories.get(target_category)
+            field = "category_id" if "category_id" in fields_set else "category"
+            if category_row is None:
+                errors.append((field, "Category not found"))
+            elif category_row.parent_id is not None:
+                errors.append(
+                    (field, f"'{category_row.name}' is a sub-category; choose a category")
+                )
+                category_row = None
+            elif category_row.is_archived and target_category != current_category:
+                errors.append((field, f"Category '{category_row.name}' is archived"))
+        if target_sub is not None:
+            sub_row = categories.get(target_sub)
+            if "subcategory_id" not in fields_set:
+                # Changing category clears a sub-category that no longer fits.
+                if sub_row is None or sub_row.parent_id != target_category:
+                    target_sub = None
+            elif target_category is None:
+                errors.append(("subcategory_id", "Choose a category before a sub-category"))
+            elif sub_row is None:
+                errors.append(("subcategory_id", "Sub-category not found"))
+            elif sub_row.parent_id != target_category:
+                parent = category_row.name if category_row is not None else "this category"
+                errors.append(
+                    ("subcategory_id", f"'{sub_row.name}' is not a sub-category of {parent}")
+                )
+            elif sub_row.is_archived and target_sub != current_sub:
+                errors.append(("subcategory_id", f"Sub-category '{sub_row.name}' is archived"))
+
+        # Materials: one main, any number of others, never the same one twice.
+        current_main = sku.main_material_id
+        current_others = [] if creating else await self._other_material_ids(sku.id)
+        target_main = data.main_material_id if "main_material_id" in fields_set else current_main
+        others_sent = "other_material_ids" in fields_set
+        target_others = list(data.other_material_ids or []) if others_sent else list(current_others)
+        if len(set(target_others)) != len(target_others):
+            errors.append(("other_material_ids", "A material is listed more than once"))
+        if target_main is not None and target_main in target_others:
+            errors.append(
+                (
+                    "other_material_ids" if others_sent else "main_material_id",
+                    "A material cannot be both the main material and another material",
+                )
+            )
+        materials = await materials_by_id(self.db, (target_main, *target_others))
+        if target_main is not None and target_main != current_main:
+            main = materials.get(target_main)
+            if main is None:
+                errors.append(("main_material_id", "Material not found"))
+            elif main.is_archived:
+                errors.append(("main_material_id", f"Material '{main.name}' is archived"))
+        for material_id in dict.fromkeys(target_others):
+            if material_id in current_others:
+                continue
+            other = materials.get(material_id)
+            if other is None:
+                errors.append(("other_material_ids", "Material not found"))
+            elif other.is_archived:
+                errors.append(("other_material_ids", f"Material '{other.name}' is archived"))
+
+        # Finish label (skus.fabric): derived from colour name and main material.
+        target_colour = data.colour_name if "colour_name" in fields_set else sku.colour_name
+        main_material = materials.get(target_main) if target_main is not None else None
+        target_fabric = sku.fabric
+        # Only a real change rebuilds the label: resending the stored colour or material
+        # (null included) must not erase a label that came from the old free-text fabric.
+        finish_inputs = {
+            field
+            for field in ("colour_name", "main_material_id")
+            if field in fields_set and getattr(data, field) != getattr(sku, field)
+        } | (fields_set & {"fabric"})
+        if creating or finish_inputs:
+            derived = finish_label(target_colour, main_material.name if main_material else None)
+            if derived is not None:
+                target_fabric = derived
+            elif "fabric" in fields_set and data.fabric and data.fabric.strip():
+                target_fabric = data.fabric.strip()
+            elif creating or finish_inputs - {"fabric"} or "fabric" in fields_set:
+                target_fabric = FABRIC_PLACEHOLDER
+        if target_fabric is not None and len(target_fabric) > 255:
+            errors.append(("colour_name", "Colour and material together are too long"))
+        target_design = data.design if "design" in fields_set else sku.design
+
+        # Selling rules: the minimum is always a multiple of the sell multiple.
+        for field in ("sell_multiple", "do_not_reorder"):
+            if field in fields_set and getattr(data, field) is None:
+                errors.append((field, f"{field} must not be null"))
+        multiple = data.sell_multiple if "sell_multiple" in fields_set else sku.sell_multiple
+        multiple = multiple or 1
+        if "min_sell_qty" in fields_set and data.min_sell_qty is not None:
+            minimum = data.min_sell_qty
+            if minimum % multiple:
+                errors.append(
+                    ("min_sell_qty", f"Minimum quantity must be a multiple of {multiple}")
+                )
+        else:
+            # Not sent (or cleared): keep the stored minimum, raised to the next valid
+            # multiple when it no longer fits.
+            stored = sku.min_sell_qty or 1
+            minimum = -(-stored // multiple) * multiple
+
+        reorder_min = data.reorder_min if "reorder_min" in fields_set else sku.reorder_min
+        order_up_to = data.order_up_to if "order_up_to" in fields_set else sku.order_up_to
+        if reorder_min is not None and order_up_to is not None and order_up_to < reorder_min:
+            field = "reorder_min" if "order_up_to" not in fields_set else "order_up_to"
+            errors.append(
+                (
+                    field,
+                    f"Order up to ({order_up_to}) must be at least the reorder minimum "
+                    f"({reorder_min})",
+                )
+            )
+
+        if errors:
+            raise field_errors(errors)
+
+        if (
+            creating
+            or target_design != sku.design
+            or (target_fabric or "").lower() != (sku.fabric or "").lower()
+        ):
+            assert target_design is not None and target_fabric is not None
+            duplicate = await self.crud.get_by_design_fabric_insensitive(
+                target_design, target_fabric, exclude_id=sku.id
+            )
+            if duplicate is not None:
+                raise ConflictError(DUPLICATE_FINISH_MESSAGE)
+
+        # Set or clear category and sub-category together: the database checks the pair.
+        sku.category_id = target_category
+        sku.subcategory_id = target_sub
+        if category_row is not None:
+            sku.category = category_row.name
+        elif fields_set & {"category", "category_id"} or creating:
+            sku.category = None
+        sku.colour_name = target_colour
+        sku.main_material_id = target_main
+        sku.design = target_design
+        sku.fabric = target_fabric
+        sku.sell_multiple = multiple
+        sku.min_sell_qty = minimum
+        sku.reorder_min = reorder_min
+        sku.order_up_to = order_up_to
+        if "do_not_reorder" in fields_set:
+            sku.do_not_reorder = data.do_not_reorder
+        if target_others != current_others:
+            return target_others
+        return None
+
+    async def _other_material_ids(self, sku_id: uuid.UUID) -> list[uuid.UUID]:
+        return list(
+            await self.db.scalars(
+                select(SkuMaterial.material_id)
+                .where(SkuMaterial.team_id == tenant_id_ctx.get(), SkuMaterial.sku_id == sku_id)
+                .order_by(SkuMaterial.position)
+            )
+        )
+
+    async def _replace_other_materials(
+        self, sku_id: uuid.UUID, material_ids: list[uuid.UUID]
+    ) -> None:
+        # Delete first, as a statement, so re-adding a material never trips the unique key.
+        await self.db.execute(
+            delete(SkuMaterial).where(
+                SkuMaterial.team_id == tenant_id_ctx.get(), SkuMaterial.sku_id == sku_id
+            )
+        )
+        for position, material_id in enumerate(material_ids):
+            self.db.add(SkuMaterial(sku_id=sku_id, material_id=material_id, position=position))
+        await self.db.flush()
+
     async def _allocate_csv_barcode(self, our_ref: str) -> str:
         for attempt in range(1, 1000):
             candidate = csv_style_barcode(our_ref, attempt)
@@ -633,15 +899,7 @@ class SkuService:
                 return candidate
         raise ConflictError("Could not allocate a unique barcode")
 
-    async def _ensure_unique_fields(
-        self,
-        design: str,
-        fabric: str,
-        our_ref: str,
-        our_barcode: str,
-    ) -> None:
-        if await self.crud.get_by_design_fabric_insensitive(design, fabric) is not None:
-            raise ConflictError("A SKU with this design and fabric already exists")
+    async def _ensure_unique_fields(self, our_ref: str, our_barcode: str) -> None:
         if await self.crud.get_by_our_ref(our_ref) is not None:
             raise ConflictError("A SKU with this our_ref already exists")
         if await self.crud.get_by_our_barcode(our_barcode) is not None:
@@ -653,12 +911,32 @@ class SkuService:
         if "ix_skus_design_fabric_lower" in lowered or (
             "design" in lowered and "fabric" in lowered
         ):
-            raise ConflictError("A SKU with this design and fabric already exists") from exc
+            raise ConflictError(DUPLICATE_FINISH_MESSAGE) from exc
         if "our_barcode" in lowered:
             raise ConflictError("A SKU with this our_barcode already exists") from exc
         if "our_ref" in lowered:
             raise ConflictError("A SKU with this our_ref already exists") from exc
         raise ConflictError("SKU already exists") from exc
+
+
+class _CatalogueLists:
+    def __init__(
+        self,
+        categories: dict[uuid.UUID, SkuCategory],
+        materials: dict[uuid.UUID, Material],
+        links: dict[uuid.UUID, list[uuid.UUID]],
+    ) -> None:
+        self.categories = categories
+        self.materials = materials
+        self.links = links
+
+    def material(self, material_id: Optional[uuid.UUID]) -> Optional[SkuMaterialSummary]:
+        row = self.materials.get(material_id) if material_id is not None else None
+        if row is None:
+            return None
+        return SkuMaterialSummary(
+            id=row.id, name=row.name, family=row.family, is_archived=row.is_archived
+        )
 
 
 def _staff_photo_storage_keys(sku: Sku) -> tuple[str, ...]:

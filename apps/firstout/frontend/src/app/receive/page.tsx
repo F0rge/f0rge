@@ -19,6 +19,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Suspense, useEffect, useState } from "react";
+import { SkuLink } from "@/components/sku-link";
 
 import { LocationBinFields } from "@/components/bin-select";
 import { useLocationBins } from "@/hooks/use-location-bins";
@@ -272,7 +273,7 @@ function ReceivePageContent() {
               <TableBody>
                 {inventory.map((entry) => (
                   <TableRow key={entry.sku_id}>
-                    <TableCell>{entry.our_ref}</TableCell>
+                    <TableCell><SkuLink id={entry.sku_id} context={{ ids: inventory.map((item) => item.sku_id), label: "Inventory" }}>{entry.our_ref}</SkuLink></TableCell>
                     <TableCell>{entry.name}{entry.is_archived && <Tag type="gray" size="sm">Archived</Tag>}</TableCell>
                     <TableCell>{formatQuantity(entry.on_order)}</TableCell>
                     <TableCell>{formatQuantity(entry.on_hand)}</TableCell>

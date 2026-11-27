@@ -1,192 +1,167 @@
 import { describe, expect, it } from "vitest";
 
-import { ApiError } from "./api";
+import { ApiError, type Sku } from "./api";
+import type { SkuSupplierPrice } from "./catalogue-lists";
 import {
-  buildCatalogueUpdate,
-  catalogueFormFromSku,
-  catalogueSaveFailure,
-  firstCatalogueError,
-  validateCatalogueForm,
+  cardSaveFailure,
+  formChanged,
+  newSupplierRow,
+  overviewFormFromSku,
+  overviewPayload,
+  pricingFormFromSku,
+  pricingPayload,
+  supplierRowsPayload,
+  supplyFormFromSku,
+  supplyPayload,
+  validateOverview,
+  validatePricing,
+  validateSupply,
+  withSellMultiple,
 } from "./catalogue-editor";
 
-const sku: Parameters<typeof catalogueFormFromSku>[0] = {
-  our_ref: "SOF-001",
-  our_barcode: "FO-SOF-001",
-  name: "Luca Sofa",
-  design: "Luca",
-  fabric: "Linen",
-  width_cm: null,
-  depth_cm: null,
-  height_cm: null,
-  diameter_cm: null,
-  notes: null,
-  piece_count: null,
-  swatch_hex: null,
-  category: null,
-  preferred_supplier_id: null,
-  supplier_ref: null,
-  lead_time_days: null,
-  carton_count: 1,
-  till_no_stock_required: false,
-  reorder_min: null,
-  stockist_ex_vat: null,
-  wholesale_ex_vat: null,
-  decorator_ex_vat: null,
-  retail_inc_vat: null,
-};
+function sku(patch: Partial<Sku> = {}): Sku {
+  return {
+    id: "11111111-1111-4111-8111-111111111111", our_ref: "DC-OSLO-OAT", our_barcode: "600", name: "Oslo dining chair",
+    design: "Oslo", fabric: "Oat Bouclé", width_cm: 52, depth_cm: 56, height_cm: 80, diameter_cm: null, notes: null,
+    piece_count: null, is_archived: false, archived_at: null, archived_by_id: null, is_sellable: true, till_no_stock_required: false,
+    exclude_from_commission: false, storefront_hidden: false, supplier_ref: "NH-1", preferred_supplier_id: "s1",
+    preferred_supplier_name: "Nordhaus", lead_time_days: 84, made_to_order_capacity: null, made_to_order_lead_time_min_days: null,
+    made_to_order_lead_time_max_days: null, made_to_order_expires_at: null, made_to_order_offer_id: null, reorder_min: 8,
+    last_landed_cost_zar: null, category: "Dining", category_id: "c1", subcategory_id: "sub1", subcategory: "Chairs", colour_name: "Oat",
+    main_material_id: "m1", main_material: null, other_material_ids: ["m2"], other_materials: [], sell_multiple: 2, min_sell_qty: 2,
+    order_up_to: 24, do_not_reorder: false, swatch_hex: "#e6dccb", photo_storage_key: null, gallery_photo_count: 0,
+    stockist_ex_vat: "1000.00", stockist_inc_vat: "1150.00", wholesale_ex_vat: null, wholesale_inc_vat: null, decorator_ex_vat: null,
+    decorator_inc_vat: null, retail_ex_vat: "2130.43", retail_inc_vat: "2450.00", average_unit_cost_zar: null,
+    stockist_below_cost: false, wholesale_below_cost: false, decorator_below_cost: false, retail_below_cost: false,
+    carton_count: 1, is_kit: false, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z",
+    ...patch,
+  };
+}
 
-describe("catalogue update payload", () => {
-  it("saves a name change without inventing prices or replacing unset optional fields", () => {
-    const form = { ...catalogueFormFromSku(sku), name: "  Luca Linen Sofa  " };
-    expect(buildCatalogueUpdate(sku, form)).toEqual({
-      name: "Luca Linen Sofa",
-    });
-    expect(buildCatalogueUpdate(sku, catalogueFormFromSku(sku))).toEqual({});
+const row = (patch: Partial<SkuSupplierPrice> = {}): SkuSupplierPrice => ({
+  id: "r1", supplier_id: "s1", supplier_name: "Nordhaus", supplier_is_archived: false, is_preferred: true,
+  supplier_sku: "NH-OSLO", latest_price: "380.00", fixed_price: null, min_order_qty: 4, pack_multiple: 2,
+  updated_at: "2026-11-01T00:00:00Z", ...patch,
+});
+
+describe("overview card", () => {
+  it("sends nothing for an untouched form and only the changed fields otherwise", () => {
+    const base = sku();
+    expect(overviewPayload(base, overviewFormFromSku(base))).toEqual({});
+    expect(overviewPayload(base, { ...overviewFormFromSku(base), name: "  Oslo chair ", do_not_reorder: true }))
+      .toEqual({ name: "Oslo chair", do_not_reorder: true });
   });
 
-  it("omits an untouched till setting and sends explicit changes in either direction", () => {
-    const form = catalogueFormFromSku(sku);
-    expect(form.till_no_stock_required).toBe(false);
-    expect(buildCatalogueUpdate(sku, form)).toEqual({});
-    const enabled = { ...form, till_no_stock_required: true };
-    expect(buildCatalogueUpdate(sku, enabled)).toEqual({ till_no_stock_required: true });
-
-    const service = { ...sku, till_no_stock_required: true };
-    expect(buildCatalogueUpdate(service, catalogueFormFromSku(service))).toEqual({});
-    expect(buildCatalogueUpdate(service, form)).toEqual({ till_no_stock_required: false });
+  it("clears nullable fields with null and sends the sub-category with a new category", () => {
+    const base = sku();
+    const form = { ...overviewFormFromSku(base), colour_name: " ", main_material_id: "", category_id: "c2", subcategory_id: "" };
+    expect(overviewPayload(base, form)).toEqual({ colour_name: null, main_material_id: null, category_id: "c2", subcategory_id: null });
   });
 
-  it("distinguishes clearing a value from leaving it unchanged", () => {
-    const existing = {
-      ...sku,
-      category: "Sofas",
-      preferred_supplier_id: "supplier-id",
-      supplier_ref: "LUCA",
-      lead_time_days: 28,
-      reorder_min: 2,
-      retail_inc_vat: "9995.00",
-    };
-    const form = {
-      ...catalogueFormFromSku(existing),
-      category: "",
-      preferred_supplier_id: "",
-      supplier_ref: "",
-      lead_time_days: "",
-      reorder_min: "",
-      retail_inc_vat: "",
-    };
-    expect(buildCatalogueUpdate(existing, form)).toEqual({
-      category: null,
-      preferred_supplier_id: null,
-      supplier_ref: null,
-      lead_time_days: null,
-      reorder_min: null,
-      retail_inc_vat: null,
-    });
+  it("sends the whole ordered list when other materials change", () => {
+    const base = sku();
+    expect(overviewPayload(base, { ...overviewFormFromSku(base), other_material_ids: ["m3", "m2"] }))
+      .toEqual({ other_material_ids: ["m3", "m2"] });
   });
 
-  it("sends the edited basis for trade and retail without sending unchanged tiers", () => {
-    const existing = { ...sku, stockist_ex_vat: "1999.00", retail_inc_vat: "9995.00" };
-    expect(
-      buildCatalogueUpdate(existing, {
-        ...catalogueFormFromSku(existing),
-        stockist_ex_vat: "2099",
-        retail_inc_vat: "10995.50",
-      }),
-    ).toEqual({ stockist_ex_vat: "2099", retail_inc_vat: "10995.50" });
-    expect(
-      buildCatalogueUpdate(existing, {
-        ...catalogueFormFromSku(existing),
-        retail_inc_vat: "9995",
-      }),
-    ).toEqual({});
+  it("requires identity fields and whole cartons", () => {
+    const errors = validateOverview({ ...overviewFormFromSku(sku()), our_ref: " ", carton_count: "0", swatch_hex: "red" });
+    expect(Object.keys(errors).sort()).toEqual(["carton_count", "our_ref", "swatch_hex"]);
   });
 });
 
-describe("catalogue validation", () => {
-  it("allows unknown optional values and a zero-day lead time, while cartons and reorder quantities start at one", () => {
-    const form = { ...catalogueFormFromSku(sku), lead_time_days: "0" };
-    expect(validateCatalogueForm(form)).toEqual({});
-    const errors = validateCatalogueForm({
-      ...form,
-      carton_count: "0",
-      reorder_min: "0",
-    });
-    expect(Object.keys(errors)).toEqual(["carton_count", "reorder_min"]);
+describe("pricing card", () => {
+  it("lets the minimum follow the multiple until the minimum is edited", () => {
+    const form = pricingFormFromSku(sku());
+    expect(withSellMultiple(form, "3", false)).toMatchObject({ sell_multiple: "3", min_sell_qty: "3" });
+    expect(withSellMultiple({ ...form, min_sell_qty: "6" }, "3", true)).toMatchObject({ sell_multiple: "3", min_sell_qty: "6" });
   });
 
-  it("rejects blank identity, invalid money and fractional or overflowing carton quantities", () => {
-    const form = {
-      ...catalogueFormFromSku(sku),
-      our_barcode: " ",
-      retail_inc_vat: "-1",
-      carton_count: "1.5",
-    };
-    const errors = validateCatalogueForm(form);
-    expect(firstCatalogueError(errors)).toBe("our_barcode");
-    expect(errors.retail_inc_vat).toBeDefined();
-    expect(errors.carton_count).toBeDefined();
-    expect(
-      validateCatalogueForm({
-        ...catalogueFormFromSku(sku),
-        carton_count: "2147483648",
-      }).carton_count,
-    ).toBeDefined();
+  it("refuses a minimum that is not a multiple", () => {
+    expect(validatePricing({ ...pricingFormFromSku(sku()), sell_multiple: "2", min_sell_qty: "3" }, "0.15"))
+      .toEqual({ min_sell_qty: "Must be a multiple of 2." });
+    expect(validatePricing({ ...pricingFormFromSku(sku()), sell_multiple: "0" }, "0.15").sell_multiple).toBeTruthy();
+  });
+
+  it("sends the minimum with a new multiple, the changed price and the commission flag", () => {
+    const base = sku();
+    const form = { ...withSellMultiple(pricingFormFromSku(base), "4", false), retail_inc_vat: "2500", earns_commission: false };
+    expect(pricingPayload(base, form)).toEqual({ retail_inc_vat: "2500", sell_multiple: 4, min_sell_qty: 4, exclude_from_commission: true });
+    expect(pricingPayload(base, pricingFormFromSku(base))).toEqual({});
   });
 });
 
-describe("catalogue API failure fields", () => {
-  it("places uniqueness conflicts on their editable identity fields", () => {
-    expect(
-      catalogueSaveFailure(
-        new ApiError(409, "A SKU with this our_barcode already exists"),
-      ).fields,
-    ).toEqual({ our_barcode: "This barcode is already used by another SKU." });
-    expect(
-      firstCatalogueError(
-        catalogueSaveFailure(
-          new ApiError(409, "A SKU with this design and fabric already exists"),
-        ).fields,
-      ),
-    ).toBe("design");
+describe("supply card", () => {
+  it("clears values with null and leaves untouched ones out", () => {
+    const base = sku();
+    const form = { ...supplyFormFromSku(base, []), reorder_min: "", supplier_ref: "NH-1", order_up_to: "30" };
+    expect(supplyPayload(base, form)).toEqual({ reorder_min: null, order_up_to: 30 });
   });
 
-  it("maps FastAPI validation locations without assuming every issue has a known field", () => {
-    const result = catalogueSaveFailure(
-      new ApiError(422, "Validation failed", [
-        { loc: ["body", "lead_time_days"], msg: "Must be a whole number" },
-        { loc: ["body", "unknown_field"], msg: "Unknown" },
-        null,
-      ]),
-    );
-    expect(result.fields).toEqual({ lead_time_days: "Must be a whole number" });
+  it("checks order up to against the reorder minimum and made to order as a set", () => {
+    const errors = validateSupply({ ...supplyFormFromSku(sku(), []), reorder_min: "10", order_up_to: "5", mto_capacity: "3" });
+    expect(errors.order_up_to).toBe("Must be at least the reorder minimum (10).");
+    expect(errors.mto_min_days).toBeTruthy();
+    expect(errors.mto_capacity).toBeUndefined();
+  });
+
+  it("flags a repeated supplier and a bad quantity on its row", () => {
+    const form = supplyFormFromSku(sku(), [row()]);
+    form.rows.push({ ...newSupplierRow("new-1", "s1"), pack_multiple: "0" });
+    expect(validateSupply(form)).toMatchObject({ "rows.1.supplier_id": "This supplier already has a row.", "rows.1.pack_multiple": expect.any(String) });
+  });
+
+  it("builds the replace-all rows only when they changed", () => {
+    const saved = [row()];
+    const form = supplyFormFromSku(sku(), saved);
+    expect(supplierRowsPayload(saved, form.rows, true)).toBeNull();
+    const edited = [{ ...form.rows[0], latest_price: "400.00", min_order_qty: "" }, { ...newSupplierRow("new-1", "s2"), pack_multiple: "6" }];
+    expect(supplierRowsPayload(saved, edited, true)).toEqual({ rows: [
+      { supplier_id: "s1", supplier_sku: "NH-OSLO", latest_price: "400.00", fixed_price: null, min_order_qty: null, pack_multiple: 2 },
+      { supplier_id: "s2", supplier_sku: null, latest_price: null, fixed_price: null, min_order_qty: null, pack_multiple: 6 },
+    ] });
+  });
+
+  it("never sends prices without cost access, so the stored ones are kept", () => {
+    const saved = [row({ latest_price: null })];
+    const rows = [{ ...supplyFormFromSku(sku(), saved).rows[0], supplier_sku: "NH-2", latest_price: "99" }];
+    expect(supplierRowsPayload(saved, rows, false)?.rows[0]).toMatchObject({ supplier_sku: "NH-2", latest_price: null, fixed_price: null });
   });
 });
 
-describe("measured SKU details", () => {
-  it("saves measurements, notes and pieces independently of cartons", () => {
-    const original = { ...sku, width_cm: 101.25, piece_count: 2, notes: "Old note" };
-    const form = {
-      ...catalogueFormFromSku(original),
-      width_cm: "",
-      depth_cm: "74.5",
-      piece_count: "3",
-      notes: "  Internal finish reference  ",
-    };
-    expect(validateCatalogueForm(form)).toEqual({});
-    expect(buildCatalogueUpdate(original, form)).toEqual({
-      width_cm: null,
-      depth_cm: 74.5,
-      piece_count: 3,
-      notes: "Internal finish reference",
+describe("dirty detection", () => {
+  it("compares the draft with the form the edit started from", () => {
+    const start = overviewFormFromSku(sku());
+    expect(formChanged(start, { ...start })).toBe(false);
+    expect(formChanged(start, { ...start, notes: "x" })).toBe(true);
+  });
+});
+
+describe("save failures", () => {
+  it("maps 422 locations, including legacy names and supplier rows", () => {
+    const error = new ApiError(422, "Unprocessable", [
+      { loc: ["body", "min_sell_qty"], msg: "Minimum quantity must be a multiple of 2" },
+      { loc: ["body", "category"], msg: "Unknown category 'X'. Add it in Settings first." },
+      { loc: ["body", "rows", 1, "supplier_id"], msg: "Value error, Supplier not found" },
+    ]);
+    expect(cardSaveFailure(error).fields).toEqual({
+      min_sell_qty: "Minimum quantity must be a multiple of 2",
+      category_id: "Unknown category 'X'. Add it in Settings first.",
+      "rows.1.supplier_id": "Supplier not found",
     });
   });
 
-  it("rejects non-positive measurements and non-integer piece counts", () => {
-    const form = { ...catalogueFormFromSku(sku), diameter_cm: "0", piece_count: "1.5" };
-    expect(validateCatalogueForm(form)).toMatchObject({
-      diameter_cm: expect.any(String),
-      piece_count: expect.any(String),
-    });
+  it("puts the duplicate finish 409 on design and colour, and reference clashes on their field", () => {
+    const finish = cardSaveFailure(new ApiError(409, "Another SKU already has this design, colour and material."));
+    expect(finish.fields.design).toBe("Another SKU already has this design, colour and material.");
+    expect(finish.fields.colour_name).toBeTruthy();
+    expect(cardSaveFailure(new ApiError(409, "A SKU with this our_barcode already exists")).fields)
+      .toEqual({ our_barcode: "Another SKU already uses this barcode." });
+  });
+
+  it("explains a refused price change and keeps unknown failures readable", () => {
+    expect(cardSaveFailure(new ApiError(403, "Changing supplier prices needs stock.cost.view")).message).toMatch(/cost access/);
+    expect(cardSaveFailure(new ApiError(409, "Restore the SKU before editing it")).message).toBe("Restore the SKU before editing it");
+    expect(cardSaveFailure(new TypeError("fetch")).message).toMatch(/connection/);
   });
 });

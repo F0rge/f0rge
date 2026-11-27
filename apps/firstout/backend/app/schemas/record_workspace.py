@@ -64,7 +64,10 @@ class WorkspaceStockLocation(BaseModel):
 
 class WorkspaceSkuRow(SkuResponse):
     on_hand: WorkspaceStockQuantity
+    # Same definition as reorder and the SKU overview (crud/sku_stock_figures.py).
     on_order: WorkspaceStockQuantity
+    # Company availability (StockAvailability), never below zero.
+    available: WorkspaceStockQuantity
     stock_locations: list[WorkspaceStockLocation]
 
 

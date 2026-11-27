@@ -9,7 +9,7 @@ function line(sku_id: string | null, inc_vat: string): SaleLinePrice {
     sku_id, qty: 1, discount_percent: "0", unit_ex_vat: "100.00", unit_inc_vat: "115.00",
     resolved_unit_ex_vat: "100.00", before_discount_ex_vat: "100.00", ex_vat: "100.00",
     vat_amount: "15.00", inc_vat, source: sku_id ? "retail" : "manual",
-    price_warning: null, suspect_price_warning: null, blocked_by: null,
+    price_warning: null, suspect_price_warning: null, blocked_by: null, quantity_rule: null,
   };
 }
 
@@ -40,6 +40,8 @@ describe("alignPreviewLines", () => {
 describe("blockedReason", () => {
   it("names the permission the server will ask for", () => {
     expect(blockedReason(null)).toBeNull();
+    // Worded by the server on the line itself (`quantity_rule`).
+    expect(blockedReason("quantity_rule")).toBeNull();
     expect(blockedReason("till.discount")).toContain("Apply discounts");
     expect(blockedReason("sales.price_override")).toContain("Override unit prices");
     expect(blockedReason("users.manage")).toContain("above the team's cap");

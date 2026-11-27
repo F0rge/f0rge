@@ -154,9 +154,23 @@ What the shop does not require:
   come from Firstout when it has one (below), but a SKU without a photo still
   publishes.
 
+## Selling rules from Firstout
+
+With `include_sell_rules=true` the feed carries `sell_multiple` and
+`min_quantity` (positive integers) per SKU. The sync writes them to variant
+metadata under the same keys, only when they change. A feed without them (an
+older Firstout) leaves the stored values alone; null clears them, and a missing
+value means 1. Before payment, the add-to-bag and update-line hooks refuse a
+variant total that is not a multiple of `sell_multiple` or is below
+`min_quantity`, and the checkout hold turns such a bag into a review. The
+purchasable cap is the stock cap rounded down to the multiple. Cart completion
+does not check the rules: it runs after payment.
+
 ## Photos from Firstout
 
-The version 2 feed uses opt-in query parameters for the supplemental images.
+The version 2 feed uses opt-in query parameters for the supplemental images,
+the finish swatch (`include_swatch`) and the selling rules
+(`include_sell_rules`).
 An older Firstout can omit an unsupported field. DasKasas retains the last
 verified asset for that slot when it is still attached. An explicit null
 removes that asset. Media updates preserve the curated selection and leave

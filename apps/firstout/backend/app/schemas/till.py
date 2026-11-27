@@ -22,6 +22,12 @@ class TillSaleLineCreate(BaseModel):
 class TillPriceRequest(BaseModel):
     lines: list[TillSaleLineCreate] = Field(min_length=1)
     customer_id: Optional[uuid.UUID] = None
+    # Complete from the caller's server basket; it is emptied with the sale. On a preview,
+    # its lines resumed from a held sale keep their held quantities (the sale quantity rule).
+    basket_id: Optional[uuid.UUID] = None
+    # The open quote this sale converts; it is marked converted with the sale. Its lines'
+    # quantities are kept against the sale quantity rule, on the preview too.
+    quote_id: Optional[uuid.UUID] = None
 
 
 TillTender = Literal["statement", "cash", "card", "deposit", "eft"]
@@ -38,15 +44,11 @@ class TillSaleCreate(TillPriceRequest):
     pick_ids: list[uuid.UUID] = Field(default_factory=list)
     credit_override: bool = False
     credit_override_reason: Optional[str] = None
-    # Complete from the caller's server basket; it is emptied with the sale.
-    basket_id: Optional[uuid.UUID] = None
     basket_version: Optional[int] = Field(default=None, ge=1)
     note_printed: DocumentNote = None
     note_internal: DocumentNote = None
     # Required when the business has an active sales colleague.
     sales_staff_id: Optional[uuid.UUID] = None
-    # The open quote this sale converts; it is marked converted with the sale.
-    quote_id: Optional[uuid.UUID] = None
 
 
 class TillSaleLocationStock(BaseModel):

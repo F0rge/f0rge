@@ -29,7 +29,18 @@ from app.schemas.sku import (
     SkuUnitCostPage,
     SkuUpdate,
 )
+from app.dependencies.sku_overview import (
+    get_sku_overview_service,
+    get_sku_supplier_price_service,
+)
 from app.schemas.sku_bom import SkuBomLineResponse, SkuBomReplace
+from app.schemas.sku_overview import (
+    SkuOverviewResponse,
+    SkuSupplierPriceResponse,
+    SkuSupplierPricesReplace,
+)
+from app.services.sku_overview import SkuOverviewService
+from app.services.sku_supplier_prices import SkuSupplierPriceService
 from app.services.sku_bom import SkuBomService
 from app.services.curated_catalogue import CuratedCatalogueService
 from app.services.curated_catalogue_archive import MAX_ARCHIVE_BYTES
@@ -230,3 +241,31 @@ async def replace_sku_bom(
     service: SkuBomService = Depends(get_sku_bom_service),
 ):
     return await service.replace(sku_id, body)
+
+
+@skus_router.get("/{sku_id}/overview", response_model=SkuOverviewResponse)
+async def get_sku_overview(
+    sku_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    service: SkuOverviewService = Depends(get_sku_overview_service),
+) -> SkuOverviewResponse:
+    return await service.get(sku_id, user_id)
+
+
+@skus_router.get("/{sku_id}/supplier-prices", response_model=list[SkuSupplierPriceResponse])
+async def list_sku_supplier_prices(
+    sku_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    service: SkuSupplierPriceService = Depends(get_sku_supplier_price_service),
+) -> list[SkuSupplierPriceResponse]:
+    return await service.list(sku_id, user_id)
+
+
+@skus_router.put("/{sku_id}/supplier-prices", response_model=list[SkuSupplierPriceResponse])
+async def replace_sku_supplier_prices(
+    sku_id: uuid.UUID,
+    body: SkuSupplierPricesReplace,
+    user_id: uuid.UUID = Depends(require_catalogue_mutate),
+    service: SkuSupplierPriceService = Depends(get_sku_supplier_price_service),
+) -> list[SkuSupplierPriceResponse]:
+    return await service.replace(sku_id, body, user_id)

@@ -1,7 +1,7 @@
 "use client";
 
 import { Select, SelectItem, Stack, Tag } from "@carbon/react";
-import Link from "next/link";
+import { SkuLink } from "@/components/sku-link";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
@@ -20,7 +20,7 @@ const COLUMNS: RecordsColumn<StockByBinRow>[] = [
   {
     key: "our_ref",
     header: "SKU",
-    render: (row) => <Link href={`/catalogue/${row.sku_id}`}>{row.our_ref}</Link>,
+    render: (row) => <SkuLink id={row.sku_id}>{row.our_ref}</SkuLink>,
   },
   { key: "sku_name", header: "Product", render: (row) => <>{row.sku_name}{row.is_archived && <Tag type="gray" size="sm">Archived</Tag>}</> },
   { key: "on_hand", header: "On hand", render: (row) => formatQuantity(row.on_hand) },

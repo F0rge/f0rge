@@ -173,3 +173,21 @@ test("an opted-in finish colour is lowercase #rrggbb, null clears it, absent lea
     expect(() => read({ swatch_hex: malformed })).toThrow();
   }
 });
+
+test("opted-in selling rules are positive integers, null clears them, absent leaves them alone", () => {
+  const read = (overrides: Record<string, unknown>) => parseOpsProducts({
+    ...contract, products: [{ ...contract.products[0], ...overrides }],
+  }, contract.company_id).products[0];
+
+  expect(read({ sell_multiple: 2, min_quantity: 4 })).toMatchObject({ sell_multiple: 2, min_quantity: 4 });
+  expect(read({ sell_multiple: null, min_quantity: null })).toMatchObject({ sell_multiple: null, min_quantity: null });
+  const absent = read({});
+  expect(absent.sell_multiple).toBeUndefined();
+  expect(absent.min_quantity).toBeUndefined();
+  for (const key of ["sell_multiple", "min_quantity"]) {
+    for (const malformed of [0, -2, 1.5, "2", Number.NaN]) {
+      expect(() => read({ [key]: malformed })).toThrow();
+    }
+  }
+  expect(() => read({ sell_multiple: 2, sold_in_pairs: true })).toThrow();
+});

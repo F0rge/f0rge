@@ -12,6 +12,7 @@ import {
 } from "@carbon/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SkuLink } from "@/components/sku-link";
 
 import { PickMatrix } from "@/components/pick-matrix";
 import {
@@ -259,7 +260,7 @@ export default function PickDetailPage() {
           </h1>
           {pick ? (
             <p className="cds--type-body-01">
-              {pick.sku_our_ref || pick.sku_id}
+              <SkuLink id={pick.sku_id}>{pick.sku_our_ref || pick.sku_id}</SkuLink>
               {pick.sku_name ? ` — ${pick.sku_name}` : ""} × {pick.qty}
             </p>
           ) : null}

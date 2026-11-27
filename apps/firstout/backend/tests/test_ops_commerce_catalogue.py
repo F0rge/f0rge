@@ -8,13 +8,15 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient
 from httpx import ASGITransport
-from sqlalchemy import text, update
+from sqlalchemy import func, text, update
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.crud.ops_commerce import SHOP_CATEGORIES
 from app.database import Base, get_db
 from app.main import app
+from app.models.catalogue_list import SkuCategory
 from app.models.inventory import LocationStock
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.product_group import ProductGroup, ProductGroupVariant
@@ -382,6 +384,38 @@ async def test_service_credential_cannot_select_another_database_backed_instance
     await second_engine.dispose()
 
 
+async def backfill_categories(db: AsyncSession) -> dict[str, SkuCategory]:
+    """What migration 120 does for SKUs that only carry a category name: one top-level
+    category per lower(trim(name)), its shop section from SHOP_CATEGORIES. Returns them by key.
+    """
+    keys = (
+        await db.execute(
+            text("""SELECT DISTINCT lower(btrim(category)) FROM skus
+            WHERE category_id IS NULL AND btrim(coalesce(category, '')) <> ''""")
+        )
+    ).scalars()
+    categories = {}
+    for key in keys:
+        category = await db.scalar(
+            select(SkuCategory).where(
+                func.lower(SkuCategory.name) == key, SkuCategory.parent_id.is_(None)
+            )
+        )
+        if category is None:
+            category = SkuCategory(name=key, shop_category=SHOP_CATEGORIES.get(key))
+            db.add(category)
+            await db.flush()
+        await db.execute(
+            update(Sku)
+            .where(func.lower(func.trim(Sku.category)) == key, Sku.category_id.is_(None))
+            .values(category_id=category.id)
+            .execution_options(synchronize_session="fetch")
+        )
+        categories[key] = category
+    await db.flush()
+    return categories
+
+
 @pytest.mark.asyncio
 async def test_auto_publish_feeds_photographed_unhidden_shop_category_skus(
     async_client: AsyncClient,
@@ -427,6 +461,9 @@ async def test_auto_publish_feeds_photographed_unhidden_shop_category_skus(
         "AP-H-2": sku("AP-H-2", "Rugs", True),
     }
     async_db.add_all(skus.values())
+    await async_db.flush()
+    # The shop section now comes from the category row (migration 120 backfills it).
+    await backfill_categories(async_db)
     shown = ProductGroup(title="Side table", options={"Finish": ["1", "2", "3", "4", "5"]})
     unshown = ProductGroup(title="Bed", options={"Finish": ["1", "2"]})
     async_db.add_all([shown, unshown])
@@ -469,3 +506,100 @@ async def test_auto_publish_feeds_photographed_unhidden_shop_category_skus(
     await async_db.flush()
     hidden = (await async_client.get(route, headers=headers)).json()["products"]
     assert "AP-SOFA" not in {row["sku"] for row in hidden}
+
+
+async def _feed(
+    client: AsyncClient,
+    db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    query: str = "",
+) -> dict[str, dict]:
+    company_id = (await db.execute(select(Team.id))).scalar_one()
+    monkeypatch.setattr(settings, "ops_commerce_company_id", str(company_id))
+    monkeypatch.setattr(settings, "ops_commerce_token", "test-ops-token")
+    monkeypatch.setattr(settings, "ops_commerce_allowed_host", "test")
+    headers = {"Authorization": "Bearer test-ops-token", "X-Ops-Company-ID": str(company_id)}
+    response = await client.get(f"/api/v1/ops-commerce/v1/products{query}", headers=headers)
+    assert response.status_code == 200, response.text
+    return {row["sku"]: row for row in response.json()["products"]}
+
+
+def _shop_sku(ref: str, category: str | None, **fields: object) -> Sku:
+    return Sku(
+        our_ref=ref,
+        our_barcode=ref,
+        name=f"{ref} name",
+        design=ref,
+        fabric="plain",
+        retail_ex_vat=1000,
+        category=category,
+        photo_storage_key=f"photos/{ref}.jpg",
+        **fields,
+    )
+
+
+@pytest.mark.asyncio
+async def test_feed_sends_sell_rules_only_when_requested(
+    async_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async_db.add_all(
+        [
+            _shop_sku("SR-PAIR", None, storefront_published=True, sell_multiple=2, min_sell_qty=4),
+            _shop_sku("SR-ONE", None, storefront_published=True),
+        ]
+    )
+    await async_db.flush()
+
+    # Absent by default: an older strict commerce contract rejects unknown keys.
+    plain = await _feed(async_client, async_db, monkeypatch)
+    assert "sell_multiple" not in plain["SR-PAIR"] and "min_quantity" not in plain["SR-PAIR"]
+    ruled = await _feed(async_client, async_db, monkeypatch, "?include_sell_rules=true")
+    assert (ruled["SR-PAIR"]["sell_multiple"], ruled["SR-PAIR"]["min_quantity"]) == (2, 4)
+    assert (ruled["SR-ONE"]["sell_multiple"], ruled["SR-ONE"]["min_quantity"]) == (1, 1)
+    # Independent of the other opt-ins.
+    assert "swatch_hex" not in ruled["SR-PAIR"]
+
+
+@pytest.mark.asyncio
+async def test_shop_section_follows_the_category_row_through_a_rename(
+    async_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "ops_commerce_auto_publish_enabled", True)
+    async_db.add_all(
+        [
+            _shop_sku("SS-SOFA", "Sofas"),
+            _shop_sku("SS-RUG", "Rugs"),
+            _shop_sku("SS-NONE", None),
+        ]
+    )
+    await async_db.flush()
+    categories = await backfill_categories(async_db)
+    before = await _feed(async_client, async_db, monkeypatch)
+    assert before["SS-SOFA"]["shop_category"] == "sofas-armchairs"
+    # A category with no shop section, and a SKU with no category, stay off the shop
+    # exactly as an unmapped name did.
+    assert "SS-RUG" not in before and "SS-NONE" not in before
+
+    # Renaming the category (the service cascades the name to skus.category) keeps the section.
+    sofas = categories["sofas"]
+    sofas.name = "Lounge seating"
+    await async_db.execute(
+        update(Sku).where(Sku.category_id == sofas.id).values(category="Lounge seating")
+    )
+    await async_db.flush()
+    after = await _feed(async_client, async_db, monkeypatch)
+    assert after["SS-SOFA"]["shop_category"] == "sofas-armchairs"
+
+    # Giving the rug category a section puts its SKUs on the shop; clearing it takes them off.
+    categories["rugs"].shop_category = "bedroom"
+    await async_db.flush()
+    assert (await _feed(async_client, async_db, monkeypatch))["SS-RUG"]["shop_category"] == (
+        "bedroom"
+    )
+    sofas.shop_category = None
+    await async_db.flush()
+    assert "SS-SOFA" not in await _feed(async_client, async_db, monkeypatch)

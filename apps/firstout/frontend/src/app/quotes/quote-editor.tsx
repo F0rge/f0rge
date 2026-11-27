@@ -32,6 +32,7 @@ import {
   type SalePricePreview,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { quantityRuleRefusal, type QuantityRuleRefusal } from "@/lib/sale-quantity-rule";
 import { referenceQueries, useSaleReference } from "@/lib/queries";
 import { anyLineBlocked, mayBePriced } from "@/lib/sale-preview";
 import { defaultValidUntil, isQuoteOpen, quoteState, quoteStateInfo } from "@/lib/quote-state";
@@ -128,6 +129,8 @@ function QuoteForm({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<QuantityRuleRefusal | null>(null);
+  const canBreakBatches = can(useAuth().user, "sales.price_override");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pricing, setPricing] = useState<{ key: string; preview?: SalePricePreview; error?: string } | null>(null);
   const [pricingAttempt, setPricingAttempt] = useState(0);
@@ -208,6 +211,7 @@ function QuoteForm({
       return saved;
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : "Could not save the quote.");
+      setRefusal(quantityRuleRefusal(err));
       return null;
     } finally {
       setSaving(false);
@@ -324,6 +328,8 @@ function QuoteForm({
           <CartEditor
             mode="quote"
             title="Quote lines"
+            canBreakBatches={canBreakBatches}
+            quantityRefusal={refusal}
             products={products}
             cart={cart}
             addDisabled={!editable}

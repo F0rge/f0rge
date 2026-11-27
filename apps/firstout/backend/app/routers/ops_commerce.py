@@ -43,6 +43,7 @@ async def list_products(
     include_detail_photo: bool = False,
     include_second_detail_photo: bool = False,
     include_swatch: bool = False,
+    include_sell_rules: bool = False,
     authorization: Optional[str] = Header(default=None),
     x_ops_company_id: Optional[str] = Header(default=None),
     service: OpsCommerceService = Depends(get_ops_commerce_service),
@@ -56,6 +57,7 @@ async def list_products(
         include_detail_photo=include_detail_photo,
         include_second_detail_photo=include_second_detail_photo,
         include_swatch=include_swatch,
+        include_sell_rules=include_sell_rules,
     )
 
 

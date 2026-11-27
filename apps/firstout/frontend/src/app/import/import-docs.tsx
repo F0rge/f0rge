@@ -1,6 +1,6 @@
 "use client";
 
-import { Column, Grid, Tile } from "@carbon/react";
+import { Column, Grid, Link, Tile } from "@carbon/react";
 
 export function ImportDocs() {
   return (
@@ -17,7 +17,11 @@ export function ImportDocs() {
               <strong>Name</strong> — product name (required)
             </li>
             <li>
-              <strong>Category</strong> — required
+              <strong>Category</strong> — required; must already exist in{" "}
+              <Link href="/settings/categories" inline>Settings → Categories</Link> (any capitalisation)
+            </li>
+            <li>
+              <strong>Sub-category</strong> — optional; must be one of that category&apos;s sub-categories
             </li>
             <li>
               <strong>Retail Price</strong> — ZAR including VAT (required)

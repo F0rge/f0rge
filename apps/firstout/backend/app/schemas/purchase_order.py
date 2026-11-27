@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 
 from app.schemas.quantity import Quantity
+from app.schemas.sku import SkuColourName, SkuOtherMaterialIds
 
 
 class PoLineCreate(BaseModel):
@@ -50,8 +51,14 @@ class PoLineSkuCreate(BaseModel):
     our_barcode: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1)
     design: str = Field(min_length=1)
-    fabric: str = Field(min_length=1)
+    # Deprecated: see SkuCreate.fabric and SkuCreate.category.
+    fabric: Optional[str] = Field(default=None, min_length=1, max_length=255)
     category: Optional[str] = Field(default=None, max_length=64)
+    category_id: Optional[uuid.UUID] = None
+    subcategory_id: Optional[uuid.UUID] = None
+    colour_name: SkuColourName = None
+    main_material_id: Optional[uuid.UUID] = None
+    other_material_ids: SkuOtherMaterialIds = Field(default_factory=list)
 
 
 class PoLineResponse(BaseModel):

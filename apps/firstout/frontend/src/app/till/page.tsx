@@ -73,6 +73,7 @@ import { localIsoDate } from "@/lib/dates";
 import { statementDueDate } from "@/lib/till-statement";
 import { rememberedColleague } from "@/lib/sales-staff";
 import { anyLineBlocked, formatDiscount, mayBePriced } from "@/lib/sale-preview";
+import type { QuantityRuleRefusal } from "@/lib/sale-quantity-rule";
 
 import {
   ApiError,
@@ -314,6 +315,7 @@ function TillWorkspace() {
   const [amountTendered, setAmountTendered] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quantityRefusal, setQuantityRefusal] = useState<QuantityRuleRefusal | null>(null);
   const [lastSale, setLastSale] = useState<TillSaleResult | null>(null);
   const [lastBuyerName, setLastBuyerName] = useState(WALK_IN_CUSTOMER_NAME);
   // Remounts the cart editor after a sale so its search and page start over.
@@ -334,6 +336,8 @@ function TillWorkspace() {
   const scanBufferRef = useRef("");
   // cartReady: the cart shows the server basket for this showroom and saves back to it.
   const [cartReady, setCartReady] = useState(false);
+  // The server basket this till saves to; the preview sends it so held quantities stay kept.
+  const [basketId, setBasketId] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [reservations, setReservations] = useState<{ locationId: string; rows: TillReservation[] } | null>(null);
@@ -362,6 +366,7 @@ function TillWorkspace() {
   /** Show the server basket again; a basket conflict's own basket is shown without a fetch. */
   const reloadBasket = useCallback((conflict?: unknown) => {
     saver.reset(null);
+    setBasketId(null);
     if (conflict !== undefined) adoptServerBasket(conflict);
     setCartReady(false);
   }, [adoptServerBasket, saver]);
@@ -510,6 +515,7 @@ function TillWorkspace() {
       if (cancelled) return;
       // Reset first so a basket that cannot be shown can still be discarded.
       saver.reset(basket);
+      setBasketId(basket.id);
       setExpiresAt(basket.expires_at ?? null);
       setNow(Date.now());
       if (basket.expired_at && !basket.lines.length && shownExpiry.current !== basket.expired_at) {
@@ -566,7 +572,10 @@ function TillWorkspace() {
     };
   }, [cartReady, expiresAt, pendingHeld, refreshReservations, reloadBasket, submitting]);
 
-  const priceRequest = useMemo(() => tillPriceRequest(cart, customerId), [cart, customerId]);
+  const priceRequest = useMemo(
+    () => tillPriceRequest(cart, customerId, { quoteId, basketId }),
+    [cart, customerId, quoteId, basketId],
+  );
   const pricing = useQuery({
     queryKey: [...PRICE_PREVIEW_KEY, priceRequest],
     queryFn: ({ signal }) => previewTillPrices(priceRequest, signal),
@@ -694,8 +703,10 @@ function TillWorkspace() {
         scanBufferRef.current = scanBufferRef.current.slice(0, -1);
       }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    // Capture: the scan is read before anything else on the page (such as the SKU panel's Enter)
+    // can act on the same key, and the till marks the Enter it used.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [applyScan]);
 
   const unavailableStock = resumedSale || quoteId ? cart.filter((line) =>
@@ -995,6 +1006,7 @@ function TillWorkspace() {
         client.setQueryData(stockQueries.tillPicks.queryKey, next.latestPicks);
         client.setQueryData(queryKeys.inventory, next.latestInventory);
         saver.reset(result.basket);
+        setBasketId(result.basket.id);
         setExpiresAt(result.basket.expires_at ?? null);
         refreshReservations();
         dispatch({ type: "reset" });
@@ -1166,6 +1178,10 @@ function TillWorkspace() {
         case "credit_block":
           setError(outcome.message);
           edit({ creditBlock: outcome.message });
+          return;
+        case "quantity_rule":
+          setError(outcome.message);
+          setQuantityRefusal(outcome.refusal);
           return;
         case "error":
           setError(outcome.message);
@@ -1516,6 +1532,8 @@ function TillWorkspace() {
           pricingError={pricingError}
           onRetryPricing={refreshPrices}
           canDiscount={canDiscount}
+          canBreakBatches={can(user, "sales.price_override")}
+          quantityRefusal={quantityRefusal}
           colleagues={colleagues}
           colleaguesError={colleaguesError}
           salesStaffId={salesStaffId}

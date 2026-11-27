@@ -2,6 +2,7 @@
 
 import { Stack, TableContainer, Tag } from "@carbon/react";
 import Link from "next/link";
+import { SkuLink } from "@/components/sku-link";
 import { useCallback } from "react";
 import { LoadingField, LoadingTableRows } from "@/components/page-loading";
 
@@ -95,7 +96,7 @@ const PRICE_COLUMNS: RecordsColumn<SupplierPriceRow>[] = [
   {
     key: "our_ref",
     header: "SKU",
-    render: (row) => <Link href={`/catalogue/${row.sku_id}`}>{row.our_ref}</Link>,
+    render: (row) => <SkuLink id={row.sku_id}>{row.our_ref}</SkuLink>,
   },
   { key: "sku_name", header: "Product", render: (row) => row.sku_name },
   { key: "supplier_sku", header: "Supplier SKU", render: (row) => row.supplier_sku ?? "—" },

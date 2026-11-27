@@ -87,6 +87,8 @@ import { administrationHome } from "@/lib/admin-navigation";
 import { WorkspaceLoader } from "@/components/workspace-loader";
 import loadingStyles from "@/components/auth-loading.module.css";
 import { HeaderSearch } from "@/components/header-search";
+import { SkuPanelProvider } from "@/components/sku-panel/provider";
+import { SkuPanel } from "@/components/sku-panel/sku-panel";
 import {
   getNarrowViewportServerSnapshot,
   getNarrowViewportSnapshot,
@@ -284,10 +286,13 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
+    <SkuPanelProvider>
     <div
       className="firstout-shell"
       data-nav-expanded={expanded ? "true" : "false"}
       data-compact={narrow ? "true" : "false"}
+      // The Administration layout adds its own nav column, so the SKU panel's inset rules treat it like an open nav.
+      data-administration={isAdministration ? "true" : undefined}
     >
       <Theme theme="g100">
         <Header aria-label="Firstout" className={loading ? "firstout-loading-motion" : undefined}>
@@ -411,7 +416,13 @@ export function AppShell({ children }: AppShellProps) {
             {loading ? <WorkspaceLoader /> : children}
           </main>
         )}
+        {!loading && (
+          <Suspense>
+            <SkuPanel />
+          </Suspense>
+        )}
       </Theme>
     </div>
+    </SkuPanelProvider>
   );
 }

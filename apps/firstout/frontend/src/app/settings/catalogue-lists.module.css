@@ -1,0 +1,61 @@
+.parent {
+  font-weight: 600;
+}
+
+.child {
+  display: inline-block;
+  padding-inline-start: 1.5rem;
+  border-inline-start: 2px solid var(--cds-border-subtle-01);
+}
+
+.unmapped {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+/* Family headings on Materials: a clear break between families, then the table. */
+.familyGroup .family {
+  margin: 2rem 0 0;
+  padding: 0 1rem 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+.familyGroup:first-child .family {
+  margin-block-start: 1rem;
+}
+
+/* Fixed layout so the columns line up from one family's table to the next. */
+.familyTable {
+  table-layout: fixed;
+}
+/* Qualified to outrank Carbon's own last-column width. */
+.familyTable th.colCount {
+  width: 7rem;
+}
+.familyTable th.colStatus {
+  width: 9rem;
+}
+.familyTable th.colActions {
+  width: 3.5rem;
+}
+
+/* Categories: a shop section change is staged in its row until Save. */
+.shopSection {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 12rem;
+}
+.stagedSection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+.stagedSection > span {
+  flex-basis: 100%;
+  color: var(--cds-text-secondary);
+}

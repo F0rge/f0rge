@@ -4,9 +4,21 @@ from __future__ import annotations
 
 from tests.conftest import authenticate_as, create_test_staff
 
+from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
+import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.crud.reorder import suggest_qty
+from app.crud.sku_stock_figures import on_order_by_sku_id
+from app.models.inventory import SkuStock
+from app.models.purchase_order import PurchaseOrder, PurchaseOrderStatus
+from app.models.sku import Sku
+from app.models.sku_supplier_price import SkuSupplierPrice
 
 from tests.test_purchase_orders import _create_supplier, _relogin_owner
 
@@ -260,3 +272,171 @@ async def test_unauthenticated_get_reorder_returns_401(
     async_client.headers.pop("Authorization", None)
     resp = await async_client.get("/api/v1/reorder")
     assert resp.status_code == 401
+
+
+@pytest.mark.no_db
+@pytest.mark.parametrize(
+    ("need", "min_order", "pack", "expected"),
+    [
+        # No price row for the preferred supplier: the need itself, fractions included.
+        ("7", None, None, "7"),
+        ("2.5", None, None, "2.5"),
+        # Rounded up to the pack multiple.
+        ("7", None, 4, "8"),
+        ("8", None, 4, "8"),
+        ("2.5", None, 1, "3"),
+        # Raised to the minimum order.
+        ("3", 10, None, "10"),
+        ("12", 10, None, "12"),
+        # Both: the minimum order is itself rounded up to the pack multiple.
+        ("3", 10, 4, "12"),
+        ("13", 10, 4, "16"),
+    ],
+)
+def test_suggest_qty_rounds_for_the_supplier(need, min_order, pack, expected) -> None:
+    assert suggest_qty(Decimal(need), min_order, pack) == Decimal(expected)
+
+
+async def _reorder_item(client: AsyncClient, sku_id: str) -> Optional[dict]:
+    resp = await client.get("/api/v1/reorder")
+    assert resp.status_code == 200
+    return next((row for row in resp.json() if row["sku_id"] == sku_id), None)
+
+
+async def _set_supply(db: AsyncSession, sku_id: str, supplier_id: Optional[str], **fields) -> None:
+    sku = await db.get(Sku, UUID(sku_id))
+    assert sku is not None
+    for key in ("order_up_to", "do_not_reorder"):
+        if key in fields:
+            setattr(sku, key, fields.pop(key))
+    if supplier_id is not None:
+        db.add(SkuSupplierPrice(sku_id=sku.id, supplier_id=UUID(supplier_id), **fields))
+    await db.flush()
+
+
+async def test_order_up_to_and_supplier_rounding_shape_the_suggestion(
+    owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    supplier = await _create_supplier(owner_client, "Reorder Supplier Packs")
+    other = await _create_supplier(owner_client, "Reorder Supplier Other")
+
+    async def listed(ref: str, opening: int, reorder_min: int) -> str:
+        sku = await _sku_with_opening(
+            owner_client,
+            our_ref=ref,
+            opening_qty=opening,
+            reorder_min=reorder_min,
+            preferred_supplier_id=supplier,
+        )
+        return sku["id"]
+
+    # Below the minimum without order-up-to: need = reorder_min - stock.
+    plain = await listed("RO-PLAIN", 3, 10)
+    # With order-up-to: need = order_up_to - stock.
+    up_to = await listed("RO-UPTO", 3, 10)
+    await _set_supply(async_db, up_to, None, order_up_to=20)
+    packed = await listed("RO-PACK", 3, 10)
+    await _set_supply(async_db, packed, supplier, pack_multiple=4)
+    minimum = await listed("RO-MOQ", 8, 10)
+    await _set_supply(async_db, minimum, supplier, min_order_qty=10)
+    both = await listed("RO-BOTH", 8, 10)
+    await _set_supply(async_db, both, supplier, order_up_to=12, min_order_qty=5, pack_multiple=4)
+    # A price row for another supplier does not apply.
+    elsewhere = await listed("RO-ELSEWHERE", 3, 10)
+    await _set_supply(async_db, elsewhere, other, pack_multiple=50)
+    stopped = await listed("RO-STOPPED", 3, 10)
+    await _set_supply(async_db, stopped, None, do_not_reorder=True)
+
+    def shape(item: dict) -> tuple:
+        return (
+            item["order_up_to"],
+            item["need_qty"],
+            item["min_order_qty"],
+            item["pack_multiple"],
+            item["suggested_qty"],
+        )
+
+    assert shape(await _reorder_item(owner_client, plain)) == (None, 7, None, None, 7)
+    assert shape(await _reorder_item(owner_client, up_to)) == (20, 17, None, None, 17)
+    assert shape(await _reorder_item(owner_client, packed)) == (None, 7, None, 4, 8)
+    assert shape(await _reorder_item(owner_client, minimum)) == (None, 2, 10, None, 10)
+    assert shape(await _reorder_item(owner_client, both)) == (12, 4, 5, 4, 8)
+    assert shape(await _reorder_item(owner_client, elsewhere)) == (None, 7, None, None, 7)
+    # Do not reorder: still sells, never listed.
+    assert await _reorder_item(owner_client, stopped) is None
+
+    resp = await owner_client.post(
+        "/api/v1/reorder/draft-po", json={"sku_ids": [plain, up_to, packed, minimum, both]}
+    )
+    assert resp.status_code == 201, resp.text
+    [po] = resp.json()["purchase_orders"]
+    quantities = {line["sku_id"]: line["qty"] for line in po["lines"]}
+    assert quantities == {plain: 7, up_to: 17, packed: 8, minimum: 10, both: 8}
+    refused = await owner_client.post("/api/v1/reorder/draft-po", json={"sku_ids": [stopped]})
+    assert refused.status_code == 400
+
+
+async def test_reorder_on_order_matches_the_shared_on_order_figure(
+    owner_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Pins the two "on order" definitions together: reorder's SQL (crud/reorder.py) and
+    ``on_order_by_sku_id`` (crud/sku_stock_figures.py), which the catalogue table and the
+    SKU overview read. A change to either side alone fails here."""
+    supplier = await _create_supplier(owner_client, "Reorder Supplier On Order")
+
+    async def po(sku_id: str, qty: int) -> UUID:
+        resp = await owner_client.post(
+            "/api/v1/purchase-orders",
+            json={
+                "supplier_id": supplier,
+                "lines": [{"sku_id": sku_id, "qty": qty, "factory_unit_amount": "10.00"}],
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        return UUID(resp.json()["id"])
+
+    skus = [
+        (
+            await _sku_with_opening(
+                owner_client,
+                our_ref=f"RO-ONORDER-{index}",
+                opening_qty=1,
+                reorder_min=1000,
+                preferred_supplier_id=supplier,
+            )
+        )["id"]
+        for index in range(4)
+    ]
+    on_water, open_line, archived, mixed = skus
+    # On the water: counted through sku_stock.on_order.
+    shipped = await po(on_water, 7)
+    assert (
+        await owner_client.post(f"/api/v1/purchase-orders/{shipped}/on-water")
+    ).status_code == 200
+    # An open purchase order line.
+    await po(open_line, 5)
+    # An archived open purchase order, and a landed one, count nothing extra.
+    hidden = await async_db.get(PurchaseOrder, await po(archived, 4))
+    hidden.is_archive = True
+    landed = await async_db.get(PurchaseOrder, await po(mixed, 6))
+    landed.status = PurchaseOrderStatus.LANDED
+    # Both sources at once.
+    await po(mixed, 3)
+    stock = await async_db.scalar(select(SkuStock).where(SkuStock.sku_id == UUID(mixed)))
+    if stock is None:
+        async_db.add(SkuStock(sku_id=UUID(mixed), on_order=Decimal("2")))
+    else:
+        stock.on_order = Decimal("2")
+    await async_db.flush()
+
+    shared = await on_order_by_sku_id(async_db, [UUID(sku_id) for sku_id in skus])
+    for sku_id in skus:
+        item = await _reorder_item(owner_client, sku_id)
+        assert item is not None
+        assert Decimal(str(item["on_order"])) == shared.get(UUID(sku_id), Decimal(0)), sku_id
+    assert {sku_id: shared.get(UUID(sku_id), Decimal(0)) for sku_id in skus} == {
+        on_water: Decimal(7),
+        open_line: Decimal(5),
+        archived: Decimal(0),
+        mixed: Decimal(5),
+    }

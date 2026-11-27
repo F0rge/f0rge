@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   missingNewSkuFields,
   missingNewSkuMessage,
+  newSkuRuleErrors,
   pickSkuPhoto,
   type NewSkuFieldInput,
 } from "./new-sku-form";
@@ -11,7 +12,6 @@ const ready: NewSkuFieldInput = {
   ourRef: "DC-23-11G",
   name: "Moseli Dining Chair 58*54*79 cm",
   design: "Dining Chair",
-  fabric: "Teddy - C01",
   cartonCount: 1,
   recordStockNow: false,
   openingLocationId: "",
@@ -39,8 +39,8 @@ describe("missingNewSkuFields", () => {
   });
 
   it("names a single missing field", () => {
-    expect(missingNewSkuMessage(missingNewSkuFields({ ...ready, fabric: "" }))).toBe(
-      "Fabric is required before you can save.",
+    expect(missingNewSkuMessage(missingNewSkuFields({ ...ready, design: "" }))).toBe(
+      "Design is required before you can save.",
     );
   });
 
@@ -54,6 +54,20 @@ describe("missingNewSkuFields", () => {
         openingUnitCost: "0",
       }),
     ).toEqual(["Location", "Quantity on hand", "Unit cost"]);
+  });
+});
+
+describe("newSkuRuleErrors", () => {
+  const rules = { sellMultiple: "2", minSellQty: "4", reorderMin: "", orderUpTo: "" };
+  it("accepts a minimum that is a multiple, and blank reorder values", () => {
+    expect(newSkuRuleErrors(rules)).toEqual({});
+  });
+  it("refuses an off-multiple minimum and order up to below the reorder minimum", () => {
+    expect(newSkuRuleErrors({ ...rules, minSellQty: "3", reorderMin: "10", orderUpTo: "5" })).toEqual({
+      min_sell_qty: "Must be a multiple of 2.",
+      order_up_to: "Must be at least the reorder minimum (10).",
+    });
+    expect(newSkuRuleErrors({ ...rules, sellMultiple: "0" }).sell_multiple).toBeTruthy();
   });
 });
 

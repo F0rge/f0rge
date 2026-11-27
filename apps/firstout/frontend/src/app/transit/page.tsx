@@ -24,6 +24,7 @@ import {
 } from "@/lib/api";
 import { usePageError } from "@/hooks/use-page-error";
 import { useAuth } from "@/lib/auth";
+import { SkuLink } from "@/components/sku-link";
 
 const TABLE_HEADERS = [
   { key: "po_number", header: "PO number" },
@@ -179,7 +180,7 @@ export default function TransitPage() {
               <TableBody>
                 {onOrderSkus.map((entry) => (
                   <TableRow key={entry.sku_id}>
-                    <TableCell>{entry.our_ref}</TableCell>
+                    <TableCell><SkuLink id={entry.sku_id} context={{ ids: onOrderSkus.map((item) => item.sku_id), label: "On order" }}>{entry.our_ref}</SkuLink></TableCell>
                     <TableCell>{entry.name}</TableCell>
                     <TableCell>{entry.on_order}</TableCell>
                     <TableCell>{entry.on_hand}</TableCell>

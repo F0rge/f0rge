@@ -4,7 +4,45 @@ The back office of a Gauteng furniture retailer: stock, the till and the books. 
 
 ## Language
 
+### Catalogue
+
+**Category**:
+A top-level grouping of SKUs from a list staff maintain; it decides which sales accounts a SKU's sales post to and which shop section, if any, shows it.
+_Avoid_: Product type, collection, department
+
+**Sub-category**:
+A grouping within exactly one Category; there is no third level.
+_Avoid_: Child category, subcategory type, tag
+
+**Material**:
+An entry in the maintained list of what pieces are made of, each belonging to one family: Fabric, Leather, Wood, Stone, Metal, Glass, Woven or Other. A SKU has at most one main Material and any number of other Materials.
+_Avoid_: Fabric (for the material itself), composition
+
+**Colour name**:
+The colour customers read for a SKU ("Oat"), shown beside its swatch.
+_Avoid_: Colour family, colourway, shade
+
+**Finish**:
+The label a SKU's Colour name and main Material make together ("Oat Bouclé"); it tells two SKUs of the same design apart and prints on purchase orders and packing sheets. Nobody types it.
+_Avoid_: Fabric, fabric/finish, variant name
+
 ### Pricing
+
+**Sale quantity rule**:
+A SKU's Sell multiple and Minimum quantity together: the quantities one line of a Sale document may carry.
+_Avoid_: Batch rule, pack rule, MOQ
+
+**Sell multiple**:
+The batch a SKU is sold in: a line's quantity must be a whole number of batches ("sold in multiples of 2").
+_Avoid_: Pack size, set size, step
+
+**Minimum quantity**:
+The smallest quantity one line may carry for a SKU; always a whole number of Sell multiples.
+_Avoid_: Minimum order (that is the supplier's), MOQ
+
+**Breaking a batch**:
+Selling a quantity that breaks the Sale quantity rule, such as one replacement chair from a pair; only staff allowed a Price override may.
+_Avoid_: Splitting a set, override quantity
 
 **Sale document**:
 A till sale, quote, sales order, layby, tax invoice or storefront order: any document that charges a customer for SKUs.
@@ -53,6 +91,38 @@ The moment a tax invoice gets its number and issue date; from then on its lines 
 _Avoid_: Posting, finalising, proforma
 
 ### Stock
+
+**On hand**:
+Stock physically on a shelf at any location. Stock a sales order or layby has taken to hold is no longer On hand.
+_Avoid_: Stock on hand (SOH) as a different figure, physical stock
+
+**Held**:
+Stock taken off the shelf for an open sales order or layby, awaiting its customer; already excluded from On hand.
+_Avoid_: Reserved, allocated, committed
+
+**Available**:
+What can be sold now: On hand at active showrooms and warehouses, less what open till baskets and held sales have reserved.
+_Avoid_: Free stock, sellable, ATP
+
+**On order**:
+Quantity bought but not yet received: open purchase orders and goods on the water or landed.
+_Avoid_: Incoming, in transit (that is a transfer)
+
+**Order-up-to level**:
+The stock level a reorder should bring a SKU back to; without one, a reorder brings it back to its reorder minimum.
+_Avoid_: Max stock, par level, target stock
+
+**Minimum order**:
+The least of a SKU a supplier accepts on one order.
+_Avoid_: Minimum quantity (that is the sale rule), MOQ
+
+**Pack multiple**:
+The increment a supplier ships a SKU in; reorder suggestions round up to it.
+_Avoid_: Inner pack, case size, Sell multiple
+
+**Do not reorder**:
+A SKU that still sells but never appears on the reorder list; unlike an archived SKU it stays in business.
+_Avoid_: Discontinued, archived, inactive
 
 **Hold cost**:
 The unit cost of stock a sales order or layby took off its location's shelf to hold for the customer, kept so that releasing, delivering or returning that stock uses the same cost.

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import TenantSession
 from app.models.account import Account
+from tests.catalogue_lists import ensure_category
 from f0rge_db.organisation import apply_tenant_context, organisation_session, tenant_id_ctx
 
 pytestmark = pytest.mark.no_db
@@ -127,6 +128,7 @@ async def tenant_database(rls_database_url, monkeypatch):
                 "product_group_variants",
                 "product_groups",
                 "skus",
+                "sku_categories",
                 "customer_portal_users",
                 "customers",
                 "memberships",
@@ -509,6 +511,9 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
                 role="owner",
             )
             customer = Customer(name=f"Trade {team}", customer_type="trade")
+            # Each company's own category rows carry the shop section the feed reads.
+            sofas = await ensure_category(session, "Sofas")
+            bedroom = await ensure_category(session, "Bedroom")
             sku = Sku(
                 our_ref=f"HTTP-{team}",
                 our_barcode=f"HTTP-{team}",
@@ -518,6 +523,7 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
                 retail_ex_vat=100,
                 storefront_published=True,
                 category="Sofas",
+                category_id=sofas.id,
             )
             sku.photo_storage_key = object_storage.save_bytes(
                 "http/photo.jpg", b"synthetic-image-" + str(team).encode()
@@ -531,6 +537,7 @@ async def test_http_directory_media_trade_inverse_and_public_isolation(
                 fabric="plain",
                 retail_ex_vat=100,
                 category="Bedroom",
+                category_id=bedroom.id,
                 photo_storage_key=sku.photo_storage_key,
             )
             group = ProductGroup(title=f"Group {team}", options={"Finish": ["Oak"]})

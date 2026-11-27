@@ -213,6 +213,7 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
                 sa.text(
                     "REVOKE ALL ON TABLE held_sales, held_sale_operations, till_baskets, stock_reservations, "
                     "stock_reservation_changes, sales_staff, bill_attachments, "
+                    "sku_categories, materials, sku_materials, "
                     f'mcp_operations, mcp_action_activity FROM "{name}"'
                 )
             )
@@ -253,6 +254,9 @@ async def test_distinct_runtime_role_can_read_but_cannot_mutate_receipts(
                 "stock_reservation_changes",
                 "sales_staff",
                 "bill_attachments",
+                "sku_categories",
+                "materials",
+                "sku_materials",
                 "mcp_operations",
                 "mcp_action_activity",
             ):

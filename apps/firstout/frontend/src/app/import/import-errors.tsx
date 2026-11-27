@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Link,
   Table,
   TableBody,
   TableCell,
@@ -35,7 +36,16 @@ export function ImportErrors({ errors }: ImportErrorsProps) {
             <TableRow key={`${entry.file}-${entry.row}-${index}`}>
               <TableCell>{entry.file === "inventory" ? "Inventory" : "Stock on Hand"}</TableCell>
               <TableCell>{entry.row}</TableCell>
-              <TableCell>{entry.message}</TableCell>
+              <TableCell>
+                {entry.message}
+                {/* "Unknown category 'X'. Add it in Settings first." and the sub-category twin. */}
+                {/add it in settings first/i.test(entry.message) && (
+                  <>
+                    {" "}
+                    <Link href="/settings/categories" inline>Open Settings → Categories</Link>
+                  </>
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -36,6 +36,8 @@ type AdjustmentDraftProps = {
   onLinesChanged: (lines: AdjustmentLine[]) => void;
   onFinished: () => Promise<void>;
   onError: (message: string) => void;
+  /** Preselects this SKU in the add-line picker (`/adjustments?prefill_sku=<id>`). */
+  initialSkuId?: string | null;
 };
 
 function formatDateTime(iso: string | undefined): string {
@@ -113,8 +115,12 @@ export function AdjustmentDraft({
   onLinesChanged,
   onFinished,
   onError,
+  initialSkuId,
 }: AdjustmentDraftProps) {
-  const [skuId, setSkuId] = useState("");
+  // Only a SKU the picker offers (not archived away, not already on a line).
+  const [skuId, setSkuId] = useState(() =>
+    initialSkuId && skus.some((sku) => sku.id === initialSkuId) && !adjustment.lines.some((line) => line.sku_id === initialSkuId)
+      ? initialSkuId : "");
   const [qtyDelta, setQtyDelta] = useState<number | "">("");
   const [unitCost, setUnitCost] = useState<number | "">("");
   const [adding, setAdding] = useState(false);

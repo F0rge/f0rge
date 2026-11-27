@@ -1093,3 +1093,22 @@ async def test_paid_order_captured_in_locked_books_period_is_retryable_and_write
     # 503, not 409: the storefront retries with backoff instead of marking it terminal.
     assert resp.status_code == 503, resp.text
     assert await counts() == before
+
+
+async def test_paid_order_imports_even_when_its_quantity_breaks_the_selling_rule(
+    owner_client,
+    async_db,
+    ops_headers,
+):
+    """The shop enforces the rule before payment; a paid order is always recorded."""
+    payload, sku_id = await _paid_order_payload(owner_client, fixture_tag="sell-rule")
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    sku = await async_db.get(Sku, UUID(sku_id))
+    sku.sell_multiple, sku.min_sell_qty = 2, 4
+    await async_db.flush()
+    imported = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert imported.status_code == 201, imported.text
+    line = await async_db.scalar(select(SalesOrderLine).where(SalesOrderLine.sku_id == sku.id))
+    assert line is not None and line.qty == 1

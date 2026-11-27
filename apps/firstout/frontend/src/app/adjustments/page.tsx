@@ -16,7 +16,8 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 import {
   ADJUSTMENT_REASON_LABELS,
@@ -40,6 +41,7 @@ import {
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { PREFILL_SKU_PARAM } from "@/lib/sku-panel";
 
 import { AdjustmentDraft } from "./adjustment-draft";
 import { AdjustmentView } from "./adjustment-view";
@@ -64,7 +66,17 @@ function historyDate(entry: AdjustmentSummary): string {
 }
 
 export default function AdjustmentsPage() {
+  return (
+    <Suspense fallback={<PageLoading kind="status" label="Loading adjustments…" />}>
+      <AdjustmentsContent />
+    </Suspense>
+  );
+}
+
+function AdjustmentsContent() {
   const { user } = useAuth();
+  // `/adjustments?prefill_sku=<id>` (Adjust stock on a SKU): that SKU is ready on the draft's first line.
+  const prefillSkuId = useSearchParams().get(PREFILL_SKU_PARAM);
   const canMutate = canReceive(user);
   const [summaries, setSummaries] = useState<AdjustmentSummary[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -112,6 +124,8 @@ export default function AdjustmentsPage() {
       void load();
     }
   }, [user, load]);
+
+  const prefillSku = prefillSkuId ? skus.find((sku) => sku.id === prefillSkuId) ?? null : null;
 
   const history = summaries
     .filter((entry) => entry.status !== "draft")
@@ -212,6 +226,7 @@ export default function AdjustmentsPage() {
           onLinesChanged={handleLinesChanged}
           onFinished={load}
           onError={setError}
+          initialSkuId={prefillSkuId}
         />
       ) : viewing ? (
         <AdjustmentView
@@ -229,6 +244,15 @@ export default function AdjustmentsPage() {
             </p>
           </div>
 
+          {prefillSku && canMutate ? (
+            <InlineNotification
+              kind="info"
+              title={`Adjusting ${prefillSku.our_ref} · ${prefillSku.name}`}
+              subtitle="Choose the location and reason, then start the draft. The SKU is ready on its first line."
+              hideCloseButton
+              lowContrast
+            />
+          ) : null}
           {!canMutate ? (
             <InlineNotification
               kind="warning"

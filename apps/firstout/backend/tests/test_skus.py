@@ -7,6 +7,7 @@ from tests.conftest import authenticate_as, create_test_staff
 from httpx import AsyncClient
 
 from app.services.sku_barcode import csv_style_barcode
+from tests.catalogue_lists import ensure_categories
 
 # 1x1 PNG
 TINY_PNG = (
@@ -184,6 +185,7 @@ async def test_unauthenticated_catalogue_routes_return_401(async_client: AsyncCl
 
 
 async def test_create_sku_with_category(owner_client: AsyncClient) -> None:
+    await ensure_categories(owner_client, "Seating")
     create_resp = await owner_client.post(
         "/api/v1/skus",
         json={
@@ -195,7 +197,7 @@ async def test_create_sku_with_category(owner_client: AsyncClient) -> None:
             "category": "Seating",
         },
     )
-    assert create_resp.status_code == 201
+    assert create_resp.status_code == 201, create_resp.text
     body = create_resp.json()
     assert body["category"] == "Seating"
 
@@ -205,6 +207,7 @@ async def test_create_sku_with_category(owner_client: AsyncClient) -> None:
 
 
 async def test_patch_category_set_and_clear(owner_client: AsyncClient) -> None:
+    await ensure_categories(owner_client, "Dining", "Living")
     create_resp = await owner_client.post(
         "/api/v1/skus",
         json={
@@ -235,6 +238,7 @@ async def test_patch_category_set_and_clear(owner_client: AsyncClient) -> None:
 
 
 async def test_list_skus_filter_by_category(owner_client: AsyncClient) -> None:
+    await ensure_categories(owner_client, "Seating", "Dining")
     for suffix, category in [("A", "Seating"), ("B", "Dining"), ("C", "Seating")]:
         resp = await owner_client.post(
             "/api/v1/skus",
@@ -489,6 +493,7 @@ def test_csv_style_barcode_matches_import_and_fits_column() -> None:
 async def test_blank_barcode_is_generated_without_changing_existing(
     owner_client: AsyncClient,
 ) -> None:
+    await ensure_categories(owner_client, "Dining Room")
     existing = await owner_client.post(
         "/api/v1/skus",
         json={

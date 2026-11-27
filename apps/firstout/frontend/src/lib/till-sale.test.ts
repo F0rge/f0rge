@@ -7,6 +7,7 @@ import type { TillKitBlock } from "./till-kit-pick";
 import {
   completeTillSale,
   EMPTY_SALE,
+  tillPriceRequest,
   tillSaleReducer,
   type TillCheckout,
   type TillSale,
@@ -100,6 +101,17 @@ async function sell(sale: TillSale, overrides: Partial<TillCheckout> = {}, creat
   return { outcome, body: bodies[0] };
 }
 
+describe("till price preview request", () => {
+  it("sends the quote and the held basket, as the sale does, so kept quantities are not flagged", () => {
+    expect(tillPriceRequest([line("sofa", 3)], "", { quoteId: "quote-1", basketId: "basket-1" })).toEqual({
+      quote_id: "quote-1", basket_id: "basket-1", lines: [{ sku_id: "sofa", qty: 3 }],
+    });
+    expect(tillPriceRequest([line("sofa")], "cust", { quoteId: "", basketId: null })).toEqual({
+      customer_id: "cust", lines: [{ sku_id: "sofa", qty: 1 }],
+    });
+  });
+});
+
 describe("till sale request", () => {
   it("sends a walk-in cash sale with nothing optional", async () => {
     const { outcome, body } = await sell({ ...EMPTY_SALE, cart: [line("sofa")] });
@@ -151,6 +163,9 @@ describe("till sale outcome", () => {
         { kind: "credit_block", message: "Customer is on hold" }],
       [new ApiError(409, "Kit needs a pick.", { code: "kit_requires_pick", message: "Kit needs a pick.", kits: [kit] }),
         { kind: "kit_requires_pick", kits: [kit] }],
+      [new ApiError(409, "Pairs only", { code: "sale_quantity_rule", message: "Pairs only",
+        lines: [{ sku_id: "chair", qty: 1, message: "Pairs only" }] }),
+        { kind: "quantity_rule", message: "Pairs only", refusal: { message: "Pairs only", lines: { chair: { qty: 1, message: "Pairs only" } } } }],
       [new ApiError(409, "Bad kit", { code: "kit_requires_pick", kits: [{ sku_id: "kit" }] }),
         { kind: "error", message: "Bad kit" }],
       [new ApiError(409, "Customer is on hold", "Customer is on hold"), { kind: "error", message: "Customer is on hold" }],

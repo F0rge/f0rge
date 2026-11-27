@@ -14,6 +14,7 @@ from app.config import settings
 from app.crud.role import RoleCRUD
 from app.crud.user import TeamCRUD
 from app.exceptions import ForbiddenError
+from app.models.catalogue_list import DEFAULT_MATERIALS, Material, SkuCategory
 from app.models.customer import Customer
 from app.models.location import Location, LocationType
 from app.models.location_bin import new_floor_bin
@@ -214,6 +215,7 @@ class TenantSignupService:
                     )
                 )
                 await self._bootstrap_accounts()
+                self._bootstrap_catalogue_lists()
                 await DocumentNumberingService(self.db).ensure_all_for_team(team.id)
                 self.db.add(Customer(team_id=team.id, name="Walk-in customer"))
                 attempt.result_team_id = team.id
@@ -308,6 +310,18 @@ class TenantSignupService:
                     count_var_code=count_var,
                 )
             )
+
+    def _bootstrap_catalogue_lists(self) -> None:
+        """One category per default ledger category, and the default materials."""
+        from app.crud.ops_commerce import SHOP_CATEGORIES
+        from app.services.chart_of_accounts import CATEGORY_MAPS
+
+        for category, *_codes in CATEGORY_MAPS:
+            self.db.add(
+                SkuCategory(name=category, shop_category=SHOP_CATEGORIES.get(category.lower()))
+            )
+        for name, family in DEFAULT_MATERIALS:
+            self.db.add(Material(name=name, family=family))
 
     async def reconcile_invitations(self, subject: str, profile: dict) -> None:
         """Provider membership plus a persisted local invite are both required."""

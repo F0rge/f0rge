@@ -6,6 +6,7 @@ import {
   lineFieldId,
   newOrderDraft,
   orderRequiresApproval,
+  prefilledOrderDraft,
   validateOrderDraft,
   type ComposerChoices,
   type OrderDraft,
@@ -209,5 +210,20 @@ describe("factory totals", () => {
     expect(factoryTotal([{ qty: "", factory_unit_amount: "10" }])).toBeNull();
     expect(formatFactoryAmount("100", null)).toBe("Currency unavailable");
     expect(formatFactoryAmount(null, "ZAR")).toBe("—");
+  });
+});
+
+describe("prefilledOrderDraft", () => {
+  it("opens with the SKU's preferred supplier and one line for it", () => {
+    const draft = prefilledOrderDraft({ id: "sku", preferred_supplier_id: "supplier" }, choices.suppliers);
+    expect(draft.supplier_id).toBe("supplier");
+    expect(draft.lines).toHaveLength(1);
+    expect(draft.lines[0]).toMatchObject({ sku_id: "sku", qty: 1, supplier_code: "" });
+  });
+
+  it("still adds the line when there is no usable preferred supplier", () => {
+    expect(prefilledOrderDraft({ id: "sku", preferred_supplier_id: null }, choices.suppliers).supplier_id).toBe("");
+    expect(prefilledOrderDraft({ id: "sku", preferred_supplier_id: "archived" }, choices.suppliers).supplier_id).toBe("");
+    expect(prefilledOrderDraft({ id: "sku", preferred_supplier_id: "gone" }, choices.suppliers).lines[0].sku_id).toBe("sku");
   });
 });

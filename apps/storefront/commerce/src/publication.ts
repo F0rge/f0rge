@@ -142,6 +142,28 @@ function basketQuantityLimit(variant: PublicationVariant): number {
   return hasFiniteMadeToOrderOffer(offer) ? Number((offer as Record<string, unknown>).remaining_capacity) : 0;
 }
 
+function ruleValue(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 1;
+}
+
+/** Firstout's selling rules from variant metadata; absent, null or malformed means 1. */
+export function sellRules(metadata: Record<string, unknown> | null | undefined): { multiple: number; minimum: number } {
+  return { multiple: ruleValue(metadata?.sell_multiple), minimum: ruleValue(metadata?.min_quantity) };
+}
+
+// Matches the storefront's "sold in pairs" wording.
+function soldIn(multiple: number): string {
+  return multiple === 2 ? "This piece is sold in pairs" : `This piece is sold in sets of ${multiple}`;
+}
+
+// Messages avoid "stock", "inventory" and "remaining capacity": the web BFF rewrites those.
+export function sellRuleProblem(total: number, metadata: Record<string, unknown> | null | undefined): string | null {
+  const { multiple, minimum } = sellRules(metadata);
+  if (total % multiple) return `${soldIn(multiple)}.`;
+  if (total < minimum) return `The minimum order for this piece is ${minimum}.`;
+  return null;
+}
+
 export async function assertVariantsPurchasable(
   container: MedusaContainer, variantIds: string[], channelId?: string | null, totals?: Map<string, number>,
 ): Promise<void> {
@@ -164,7 +186,20 @@ export async function assertVariantsPurchasable(
     }
     const problems = publicationProblems(variant.product, variant, channelId);
     if (problems.length) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `Variant ${id} is unavailable: ${problems.join("; ")}`);
-    if ((totals?.get(id) ?? 0) > basketQuantityLimit(variant)) {
+    // Only the add and update hooks pass totals. Completion runs after payment and must not refuse.
+    if (!totals) continue;
+    const total = totals.get(id) ?? 0;
+    const cap = basketQuantityLimit(variant);
+    const { multiple, minimum } = sellRules(variant.metadata);
+    const least = Math.ceil(minimum / multiple) * multiple;
+    if (cap > 0 && cap - (cap % multiple) < least) {
+      const rule = minimum > multiple ? `The minimum order for this piece is ${minimum}` : soldIn(multiple);
+      throw new MedusaError(MedusaError.Types.NOT_ALLOWED, `${rule}, and fewer than ${least} are available right now.`);
+    }
+    const problem = sellRuleProblem(total, variant.metadata);
+    if (problem) throw new MedusaError(MedusaError.Types.INVALID_DATA, problem);
+    // A valid total above the cap is also above the cap rounded down to the multiple.
+    if (total > cap) {
       throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "That quantity is no longer available for this piece.");
     }
   }

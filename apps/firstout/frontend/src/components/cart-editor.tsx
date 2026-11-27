@@ -5,7 +5,6 @@ import {
   ClickableTile,
   ComboBox,
   InlineNotification,
-  Link,
   NumberInput,
   Pagination,
   Select,
@@ -15,9 +14,10 @@ import {
   TextArea,
   Tile,
 } from "@carbon/react";
+import { SkuLink } from "@/components/sku-link";
+import { useWidePage } from "@/components/sku-panel/provider";
 import {
   Image as ImageIcon,
-  Launch,
   Locked,
   Purchase,
   TrashCan,
@@ -39,6 +39,13 @@ import {
   type SalePricePreview,
 } from "@/lib/api";
 import { alignPreviewLines, blockedReason } from "@/lib/sale-preview";
+import {
+  lineQuantityNotice,
+  quantityInputBounds,
+  quantityRuleHelper,
+  startQty,
+  type QuantityRuleRefusal,
+} from "@/lib/sale-quantity-rule";
 import { commissionBase, rememberColleague, zar } from "@/lib/sales-staff";
 import styles from "./cart-editor.module.css";
 
@@ -171,6 +178,10 @@ export type CartEditorProps = {
   lineCount?: number;
   /** After the notes: payment at the till, dates on quotes and invoices. */
   children?: ReactNode;
+  /** `sales.price_override`: may sell off a SKU's sell multiple or minimum (sees a notice instead). */
+  canBreakBatches?: boolean;
+  /** The last save's `sale_quantity_rule` refusal, shown on each refused line until its quantity changes. */
+  quantityRefusal?: QuantityRuleRefusal | null;
 };
 
 export function CartEditor(props: CartEditorProps) {
@@ -205,6 +216,10 @@ export function CartEditor(props: CartEditorProps) {
   const selectedSku = props.products.find((sku) => sku.id === props.skuId);
   const selectedSkuOption = comboOptions.find((sku) => sku.id === props.skuId) ?? null;
   const numericQty = typeof props.qty === "number" ? props.qty : 0;
+  // The finder and cart columns need 56rem; below that the SKU panel lies over the page.
+  useWidePage();
+  const canBreak = props.canBreakBatches ?? false;
+  const finderBounds = selectedSku ? quantityInputBounds(selectedSku, canBreak) : { min: 1, step: 1 };
   const addValid =
     !props.searchDisabled &&
     !!selectedSku?.is_sellable &&
@@ -273,7 +288,11 @@ export function CartEditor(props: CartEditorProps) {
                   )}
                   selectedItem={selectedSkuOption}
                   shouldFilterItem={filterSkuItem}
-                  onChange={({ selectedItem }) => props.onSkuIdChange(selectedItem?.id ?? "")}
+                  onChange={({ selectedItem }) => {
+                    props.onSkuIdChange(selectedItem?.id ?? "");
+                    // A batch-sold SKU starts at its minimum.
+                    if (selectedItem) props.onQtyChange(startQty(selectedItem));
+                  }}
                   disabled={props.searchDisabled}
                   onInputChange={(value) => {
                     setProductQuery(value);
@@ -294,8 +313,11 @@ export function CartEditor(props: CartEditorProps) {
               <NumberInput
                 id={`${mode}-qty`}
                 label="Quantity"
-                min={1}
+                min={finderBounds.min}
+                step={finderBounds.step}
                 max={selectedSku ? props.qtyMax?.(selectedSku) : undefined}
+                invalidText={selectedSku && typeof props.qty === "number" && props.qty < finderBounds.min
+                  ? quantityRuleHelper(selectedSku) ?? undefined : undefined}
                 value={props.qty}
                 onChange={(_, { value }) => {
                   if (value === "") {
@@ -305,8 +327,8 @@ export function CartEditor(props: CartEditorProps) {
                   }
                 }}
                 helperText={
-                  selectedSku && !props.searchDisabled && props.stockState
-                    ? props.stockState(selectedSku)
+                  selectedSku && !props.searchDisabled
+                    ? [quantityRuleHelper(selectedSku), props.stockState?.(selectedSku)].filter(Boolean).join(" · ") || undefined
                     : undefined
                 }
                 disabled={!props.skuId}
@@ -323,7 +345,7 @@ export function CartEditor(props: CartEditorProps) {
                       role="button"
                       key={sku.id}
                       aria-label={`Add ${sku.name} to ${isTill ? "sale" : documentWord}${reason ? `. ${reason}` : ""}`}
-                      onClick={() => props.onAdd(sku, 1)}
+                      onClick={() => props.onAdd(sku, startQty(sku))}
                       disabled={
                         props.addDisabled ||
                         (props.tileDisabled?.(sku) ?? false)
@@ -509,6 +531,8 @@ export function CartEditor(props: CartEditorProps) {
                   const linePricing = linePrices[index];
                   const lineDiscount = Number(linePricing?.discount_percent ?? 0);
                   const refused = blockedReason(linePricing?.blocked_by);
+                  const quantityNotice = lineQuantityNotice(linePricing, props.quantityRefusal, line.sku.id, line.qty);
+                  const lineBounds = quantityInputBounds(line.sku, canBreak);
                   const lineQtyMax = props.lineQtyMax?.(line.sku);
                   return (
                     <div className={styles.cartLine} key={line.key}>
@@ -516,16 +540,13 @@ export function CartEditor(props: CartEditorProps) {
                         <SkuThumb sku={line.sku} />
                         <div>
                           <h3 className="cds--type-heading-compact-01">{line.sku.name}</h3>
-                          <Link
-                            className="cds--type-label-01"
-                            href={`/catalogue/${line.sku.id}`}
-                            target="_blank"
-                            rel="noopener"
-                            renderIcon={Launch}
-                            aria-label={`Open ${line.sku.our_ref} in a new tab`}
+                          <SkuLink
+                            id={line.sku.id}
+                            context={{ ids: cart.map((item) => item.sku.id), label: isTill ? "Sale" : documentWord }}
+                            className="cds--link cds--type-label-01"
                           >
                             {line.sku.our_ref}
-                          </Link>
+                          </SkuLink>
                           {props.lineNote?.(line)}
                         </div>
                         <Button
@@ -558,8 +579,12 @@ export function CartEditor(props: CartEditorProps) {
                           disabled={line.sku.is_archived}
                           label="Quantity"
                           size="sm"
-                          min={1}
+                          min={lineBounds.min}
+                          step={lineBounds.step}
                           max={lineQtyMax || undefined}
+                          helperText={quantityRuleHelper(line.sku) ?? undefined}
+                          // Carbon swaps the helper for this when the value is off its own min/step, so the rule stays in view.
+                          invalidText={line.qty < lineBounds.min ? quantityRuleHelper(line.sku) ?? undefined : undefined}
                           value={line.qty}
                           onChange={(_, { value }) => {
                             const next =
@@ -612,6 +637,19 @@ export function CartEditor(props: CartEditorProps) {
                           hideCloseButton
                           title="Check this price"
                           subtitle={linePricing.suspect_price_warning}
+                        />
+                      )}
+                      {quantityNotice && (
+                        <InlineNotification
+                          kind={quantityNotice.kind === "error" ? "error" : "info"}
+                          lowContrast
+                          hideCloseButton
+                          title={quantityNotice.kind === "error"
+                            ? "Change the quantity"
+                            : "You're breaking a batch"}
+                          subtitle={quantityNotice.kind === "error"
+                            ? quantityNotice.message
+                            : `${quantityNotice.message} You can sell this quantity because you may override prices.`}
                         />
                       )}
                       {refused && (

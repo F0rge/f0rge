@@ -53,6 +53,7 @@ import {
   newOrderDraft,
   newOrderLine,
   orderRequiresApproval,
+  prefilledOrderDraft,
   validateOrderDraft,
   type FormErrors,
   type OrderDraft,
@@ -64,6 +65,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onCreated: (order: PurchaseOrder) => void;
+  /** Start with this SKU on one line and its preferred supplier chosen (`?prefill_sku=` on the page). */
+  prefillSkuId?: string | null;
 };
 type Choices = { suppliers: Supplier[]; proformas: Proforma[]; skus: Sku[] };
 const steps = ["Supplier & reference", "Order lines", "Review"];
@@ -82,11 +85,11 @@ function focusField(id: string) {
 /** Unmount on close: another order always starts with a clean draft and fresh choices. */
 export function PurchaseOrderComposer(props: Props) {
   return props.open ? (
-    <ComposerSession onClose={props.onClose} onCreated={props.onCreated} />
+    <ComposerSession onClose={props.onClose} onCreated={props.onCreated} prefillSkuId={props.prefillSkuId} />
   ) : null;
 }
 
-function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
+function ComposerSession({ onClose, onCreated, prefillSkuId }: Omit<Props, "open">) {
   const [draft, setDraft] = useState<OrderDraft>(newOrderDraft);
   const choicesQuery = useQuery({
     queryKey: ["purchase-orders", "composer-choices"],
@@ -104,6 +107,13 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
     },
   });
   const choices = choicesQuery.data ?? null;
+  // Apply the prefilled SKU once, as soon as the choices it needs have loaded.
+  const [prefill, setPrefill] = useState<"pending" | "applied" | "missing">(prefillSkuId ? "pending" : "applied");
+  if (prefill === "pending" && choices) {
+    const sku = choices.skus.find((item) => item.id === prefillSkuId);
+    setPrefill(sku ? "applied" : "missing");
+    if (sku) setDraft(prefilledOrderDraft(sku, choices.suppliers));
+  }
   // Every open shows its own load, as when choices were fetched per session.
   const loading = choicesQuery.isFetching;
   const loadError =
@@ -139,6 +149,16 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
     },
     [],
   );
+  // The prefilled line's supplier code, looked up once like a chosen SKU's.
+  const prefillCodeRequested = useRef(false);
+  useEffect(() => {
+    if (prefill !== "applied" || !prefillSkuId || prefillCodeRequested.current) return;
+    prefillCodeRequested.current = true;
+    const line = draft.lines[0];
+    const sku = choices?.skus.find((item) => item.id === prefillSkuId);
+    if (sku && line?.sku_id === sku.id && draft.supplier_id)
+      void prefillSupplierCode(setLines, line.key, draft.supplier_id, sku);
+  }, [prefill, prefillSkuId, choices, draft, setLines]);
   const supplier = choices?.suppliers.find(
     (item) => item.id === draft.supplier_id,
   );
@@ -352,6 +372,15 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
               </Button>
             </div>
           )}
+          {prefill === "missing" && (
+            <InlineNotification
+              lowContrast
+              kind="warning"
+              title="That SKU can't be ordered"
+              subtitle="It is archived or no longer exists. Choose a product on the order lines."
+              hideCloseButton
+            />
+          )}
           {serverError && (
             <div id="po-create-server-error" tabIndex={-1}>
               <InlineNotification
@@ -550,7 +579,7 @@ function ComposerSession({ onClose, onCreated }: Omit<Props, "open">) {
                                 invalidText={errors[lineFieldId(line, "sku")]}
                                 helperText={
                                   fabric
-                                    ? `Fabric / finish: ${fabric}`
+                                    ? `Finish: ${fabric}`
                                     : "No SKU? Enter a description below."
                                 }
                               />

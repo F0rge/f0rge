@@ -18,6 +18,7 @@ from app.crud.purchase_order import PurchaseOrderCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
 from app.services.party_archive import assert_supplier_active
+from app.models.catalogue_list import SkuCategory
 from app.models.proforma import Proforma
 from app.models.sku_supplier_price import SkuSupplierPrice
 from app.schemas.document_intake import (
@@ -58,6 +59,7 @@ from app.services.object_storage import save_bytes
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.sku_archive import SkuArchiveService
+from app.services.sku_classification import category_by_name
 from app.services.skus import SkuService
 from app.schemas.supplier import SupplierCreate
 from app.services.suppliers import SupplierService, normalize_vat_number
@@ -260,7 +262,7 @@ class DocumentIntakeService:
         name = description[:255]
         design = description[:255]
         fabric = "Unspecified"
-        category: Optional[str] = None
+        category: Optional[SkuCategory] = None
         source = "document"
         if hint:
             hinted = await extract_mod.suggest_sku_fields(description, data.supplier_code, hint)
@@ -269,7 +271,8 @@ class DocumentIntakeService:
             fabric = str(hinted.get("fabric") or fabric).strip()[:255] or fabric
             raw_category = hinted.get("category")
             if isinstance(raw_category, str) and raw_category.strip():
-                category = raw_category.strip()[:64]
+                # Matched to an existing category or left empty; never created.
+                category = await category_by_name(self.db, raw_category.strip()[:64])
             source = "model"
         base = _slug(data.supplier_code or description)
         our_ref = await self._unique_our_ref(base)
@@ -282,7 +285,8 @@ class DocumentIntakeService:
             design=design,
             fabric=fabric,
             supplier_ref=(data.supplier_code or "").strip()[:64] or None,
-            category=category,
+            category=category.name if category is not None else None,
+            category_id=category.id if category is not None else None,
             cost_price=cost,
             vat_rate=dec_str(data.vat_rate, Decimal("0.0001")),
             source=source,
@@ -295,14 +299,11 @@ class DocumentIntakeService:
         assert_supplier_active(supplier)
         created = await self.skus.create(
             SkuCreate(
-                our_ref=data.our_ref,
-                our_barcode=data.our_barcode,
-                name=data.name,
-                design=data.design,
-                fabric=data.fabric,
-                supplier_ref=data.supplier_ref,
-                category=data.category,
-                carton_count=data.carton_count,
+                # Only what the caller sent: deprecated fabric and category stay optional.
+                **data.model_dump(
+                    exclude_unset=True,
+                    exclude={"supplier_id", "supplier_sku", "latest_price"},
+                ),
             ),
             user_id,
         )

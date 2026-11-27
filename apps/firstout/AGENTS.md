@@ -87,7 +87,7 @@ Authorisation is a **permission catalog**, not role-tuple checks. `users.role` i
 | **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers` (no `stock.cost.view`) |
 | **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view` (no `till.sell`) |
 
-`GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Every sale document prices through Sale line pricing (`services/sale_line_pricing.py`, [ADR 0001](docs/adr/0001-one-price-rule-for-sale-documents.md)). A new or changed line discount on any of them needs `till.discount`, capped by `max_till_discount_percent` unless the user has `users.manage` (409 otherwise); a unit price other than the resolved one needs `sales.price_override`, held only by the owner preset ([ADR 0002](docs/adr/0002-discount-and-price-override-authority.md)).
+`GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Every sale document prices through Sale line pricing (`services/sale_line_pricing.py`, [ADR 0001](docs/adr/0001-one-price-rule-for-sale-documents.md)). A new or changed line discount on any of them needs `till.discount`, capped by `max_till_discount_percent` unless the user has `users.manage` (409 otherwise); a unit price other than the resolved one needs `sales.price_override`, held only by the owner preset ([ADR 0002](docs/adr/0002-discount-and-price-override-authority.md)). The same key lets a user sell a quantity that breaks a SKU's sale quantity rule (see [S5 prices](#s5-prices), [ADR 0005](docs/adr/0005-sale-quantity-rule.md)).
 
 Reads (list/get/PDF/reports) stay **any authenticated** unless noted. Mutate keys below replace the old owner\|warehouse\|… matrices.
 
@@ -95,7 +95,7 @@ Reads (list/get/PDF/reports) stay **any authenticated** unless noted. Mutate key
 
 Nia (the in-app assistant), Canvas (`/canvas`), lookbooks, and storefront-exception admin are removed. Do not rebuild them. There is no `nia.use` / `nia.admin`, no OpenRouter key, and no Jspreadsheet.
 
-Staff storefront-product admin (`/product-groups`) is also removed. Medusa owns public merchandising, apart from the category and name the ops feed supplies. Keep the ops-commerce feed: `GET /api/v1/ops-commerce/v1/products` returns names, tax-inclusive prices and stock. With `OPS_COMMERCE_AUTO_PUBLISH_ENABLED` off it returns SKUs with `skus.storefront_published`; with it on it returns every photographed SKU in a mapped category that is not hidden (`skus.storefront_hidden`, the "Hide from shop" switch on the SKU page, `catalogue.mutate`), each with its `shop_category`. See `backend/docs/ops_commerce_availability.md`. `skus.storefront_published` and `product_groups` stay in the database: the feed filters on the flag while the setting is off and always groups variants by `product_groups`. `GET /api/v1/ops-commerce/v1/checkout-safety` stays and, once authorized, returns `checkout_allowed: true`. A missing or failing checkout-safety response pauses shop checkout.
+Staff storefront-product admin (`/product-groups`) is also removed. Medusa owns public merchandising, apart from the category and name the ops feed supplies. Keep the ops-commerce feed: `GET /api/v1/ops-commerce/v1/products` returns names, tax-inclusive prices and stock. With `OPS_COMMERCE_AUTO_PUBLISH_ENABLED` off it returns SKUs with `skus.storefront_published`; with it on it returns every photographed SKU whose category has a shop section that is not hidden (`skus.storefront_hidden`, the "Hide from shop" switch in the SKU's Shop section, `catalogue.mutate`), each with its `shop_category`. The shop section is `sku_categories.shop_category` on the SKU's top-level category (`skus.category_id`), set in Settings → Categories; it no longer depends on the category's name. `SHOP_CATEGORIES` in `app/crud/ops_commerce.py` is only the list of valid section slugs. With `include_sell_rules=true` each product also carries `sell_multiple` and `min_quantity`; the keys are absent otherwise, the same opt-in pattern as `include_swatch`. See `backend/docs/ops_commerce_availability.md`. `skus.storefront_published` and `product_groups` stay in the database: the feed filters on the flag while the setting is off and always groups variants by `product_groups`. `GET /api/v1/ops-commerce/v1/checkout-safety` stays and, once authorized, returns `checkout_allowed: true`. A missing or failing checkout-safety response pauses shop checkout.
 
 ### Playground seed (disposable local demos)
 
@@ -177,7 +177,7 @@ Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Stocktakes:** `GET/POST /stocktakes`, `GET /stocktakes/{id}`, `PATCH /stocktakes/{id}/lines/{line_id}` (`{counted_qty}` ≥ 0), `POST /stocktakes/{id}/lookup` (`{barcode}` exact `our_barcode`), `POST /stocktakes/{id}/complete`, `POST /stocktakes/{id}/cancel`. No pause endpoint.
 
-Start snapshots SKUs at that location (`expected_qty` = on-hand or 0). Optional `category` is a case-insensitive exact match on `skus.category` and limits the sheet to that category (for example Sofas). Omit it, or send a blank, to count every SKU. A category with no SKUs returns 409 `"No SKUs in that category"` and does not lock the location. Status `in_progress`. 409 `"Location is locked for stocktake"` if that location already has an in-progress stocktake, including when the open count is only one category. The lock is still the whole location.
+Start snapshots SKUs at that location (`expected_qty` = on-hand or 0). Optional `category` is a case-insensitive exact match on `skus.category` and limits the sheet to that category (for example Sofas). `skus.category` always holds the name of the SKU's top-level managed category ([V2-S8](#v2-s8-sku-category-sub-category-materials-and-colour)); the start form lists active top-level categories with their SKU counts and sends the name. Omit it, or send a blank, to count every SKU. A category with no SKUs returns 409 `"No SKUs in that category"` and does not lock the location. Status `in_progress`. 409 `"Location is locked for stocktake"` if that location already has an in-progress stocktake, including when the open count is only one category. The lock is still the whole location.
 
 **Location lock:** while `in_progress`, receive into the location, transfer from **or** to the location, and till sale at the location return 409 `"Location is locked for stocktake"`.
 
@@ -217,7 +217,7 @@ Endpoints (authenticated staff): `POST /api/v1/imports/preview`, `POST /api/v1/i
 
 Preview is in-memory (200 even with row errors; 400 only if a file is unreadable or empty). Commit re-parses the files; any row error → 400; otherwise one transaction: inventory then SOH.
 
-**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode and cost_zar optional. Category is required for Cin7 parity and **stored on the SKU** (`skus.category`, max 64). Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
+**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode, cost_zar and sub_category optional. Category must name an existing active top-level category (case- and accent-insensitive) or the row errors `"Unknown category 'X'. Add it in Settings first."`; longer than 64 characters errors `"Category must be 64 characters or fewer"`. The import never creates a category. The optional sub-category column (headers `sub_category`, `sub category`, `sub-category`, `subcategory`) must name a child of the row's category (`"Unknown sub-category 'Y'. Add it in Settings first."`, same 64 limit). On update without that column, a sub-category that still fits the category stays; a changed category clears it. Preview and commit share the validation. Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
 
 **SOH columns:** our_ref, location, qty required; unit_cost_zar optional. Location is an active case-insensitive name match. SKU must exist in the DB or in the same inventory file. **SET** on-hand to qty (not add). Increase needs a unit cost from the SOH column, inventory `cost_zar`, or existing location cost (`"unit cost required to increase stock"`). Audit source `import`. In-progress stocktake at that location → 409 `"Location is locked for stocktake"`.
 
@@ -225,11 +225,24 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 |--------|------------|
 | Preview / commit CSV import | `catalogue.mutate` |
 
-## V2-S8 SKU category
+## V2-S8 SKU category, sub-category, materials and colour
 
-- **SKUs:** nullable `category` (max 64) on create (`SkuCreate`), PATCH (`SkuUpdate` — set or clear with `null`), and in responses.
-- **List filter:** `GET /skus?category=` — case-insensitive exact match when provided; omit to list all.
-- **CSV import:** inventory `category` column is written on create and update (same as manual create).
+Categories and materials are managed lists (migration `120_sku_catalogue_lists`, tables `sku_categories`, `materials`, `sku_materials`). **Nothing creates a category or material implicitly**: only the two list APIs below, the migration's backfill and new-tenant signup do. SKU create/update, CSV import, the PO line create-SKU path, document intake and the curated import all refuse or leave empty an unknown name. Seeds and fixtures create theirs first (`services/sku_classification.seed_categories`; tests use `tests/catalogue_lists.py::ensure_category`).
+
+- **Categories:** `GET /api/v1/categories?lifecycle=active|archived|all` (default `active`) returns the tree: top-level categories, each with `subcategories`, `sku_count` (non-archived SKUs), `shop_category`, and `sales_account` (`{code, name}` from `category_account_maps` by name; `null` when unmapped, which posts to the 4000/5000 fallback; a sub-category shows its parent's), plus `shop_sections` (valid slugs and labels). `POST /api/v1/categories` `{name, parent_id?, shop_category?}`, `PATCH /api/v1/categories/{id}` `{name?, is_archived?, shop_category?}`. No DELETE.
+  - Two levels only: a sub-category cannot have children (409), and `parent_id` cannot change after create (409). Names are unique among active rows at the same level, case- and accent-insensitive (409).
+  - `shop_category` only on top-level rows and only a known slug (the Settings screen stages a change with its consequence and sends it on Save), else a 422 field error on `shop_category` (`"Only a top-level category can have a shop section."` / `"Unknown shop section 'x'."`). Other refusals (duplicate name, in use, archived parent, move, posting name taken) are plain-message 409s. Changing it bumps `updated_at` on that category's SKUs so the feed revision moves.
+  - Archive is refused while active SKUs use the category or sub-category (409 `"<n> active SKU(s) use this …"`). Archiving a top-level category also archives its sub-categories; restoring it does not restore them.
+  - Renaming a top-level category rewrites `skus.category` for its SKUs (archived ones included) and the matching `category_account_maps` row in one transaction, without bumping SKU `updated_at`. 409 if another posting entry already has the new name.
+- **Materials:** `GET /api/v1/materials?lifecycle=`, `POST /api/v1/materials` `{name, family}`, `PATCH /api/v1/materials/{id}` `{name?, family?, is_archived?}`. `family` is one of `fabric`, `leather`, `wood`, `stone`, `metal`, `glass`, `woven`, `other`. Names are unique among active rows, accent-insensitive ("Boucle" beside "Bouclé" is 409). Archiving is always allowed: SKUs keep an archived material, but it cannot be newly picked. `sku_count` counts SKUs carrying it as main or other material. Renaming a material rebuilds, in the same transaction, the finish label of every SKU in the team (archived included) whose main material it is and whose `fabric` still equals the label derived from the old name; hand-typed legacy labels are left alone, and SKU `updated_at` is not bumped (the feed sends neither). If a rebuilt label would duplicate another SKU's design and finish, the rename is refused with 409 `"Renaming to '<new>' would give SKUs the same design, colour and material: <REF-A> and <REF-B>. Change one of them first."` and nothing changes.
+- **List permissions:** read any authenticated; create/change `catalogue.mutate`. Every list query also filters `team_id`, on top of RLS. New tenants get the default materials (`DEFAULT_MATERIALS` in `app/models/catalogue_list.py`; migration 120 keeps its own frozen copy, pinned to it by a test) and one top-level category per `CATEGORY_MAPS` name.
+- **SKU fields** (`SkuCreate`, `SkuUpdate`, `SkuResponse`): `category_id`, `subcategory_id` (must be a child of `category_id`; the database enforces it, so set or clear both in one flush), `colour_name` (max 64, blank = null), `main_material_id`, `other_material_ids` (ordered, max 20; on update the full new list). Responses add the names: `category`, `subcategory`, `main_material` and `other_materials` (`{id, name, family, is_archived}`). Changing category clears a sub-category that no longer fits. Archived categories and materials already on a SKU stay, and other edits still save.
+- **`skus.category` stays** as a read model and always equals the top-level category's name, so ledger posting, reports, stocktakes and `GET /skus?category=` (case-insensitive exact match) keep reading the string.
+- **`skus.fabric` stays** (not null) as a derived finish label. On create, on any update whose `colour_name` or `main_material_id` differs from the stored value, and on any update that sends `fabric`, it becomes `"{colour_name} {main material name}"` trimmed when either exists, else the sent `fabric`, else `-`. It keeps the `(design, fabric)` unique, purchase order documents, document-intake matching and history working. Resending an unchanged colour or material (including `colour_name: null` on a SKU without one) leaves a backfilled free-text label alone. A material rename rebuilds derived labels (above). The 409 for a duplicate reads `"Another SKU already has this design, colour and material."` The PO PDF and packing sheet label the value `Finish:` and hide `-`.
+- **Deprecated inputs** kept for existing API clients and MCP tools: `category` (a name, resolved case- and accent-insensitively to an active top-level category, as are CSV and document-intake names; unknown → 422 `"Unknown category 'X'. Add it in Settings first."`; disagreeing with `category_id` → 422) and `fabric` (used only while the SKU has neither colour name nor main material). The Firstout UI sends only `category_id` and never `fabric`.
+- **Field errors** on these rules are 422 in FastAPI's own shape (`detail[].loc = ["body", "<field>"]`, every failure of one request together), so the UI maps them like schema errors.
+- **Backfill (migration 120)**: one top-level category per distinct Postgres `lower(btrim(category))` over `skus` and `category_account_maps` (the key the unique index and the old feed use). The spelling kept prefers SKU spellings over map-only ones, then the most active SKUs, then the most SKUs, then byte order; `skus.category` is rewritten to it. Shop section from `SHOP_CATEGORIES` by that key. Main material came from the first of `fabric`, `design`, `name` that names a default material, and colour name from `fabric` with that material word removed, both conservatively: a text naming two materials, a material word next to `faux`, `pu`, `vegan`, `look`, `effect` and similar (no material at all), a colour-capable material followed by a colour word ("Ash Grey": read as a colour), a placeholder fabric, or leftover words that are not colour words or modifiers gave null. Expect SKUs with an empty colour name or main material.
+- **Startup re-link** (`sku_classification.relink_sku_categories`, run per team in `main.py` lifespan after `ensure_category_chart()`): repairs SKUs an older image wrote after migration 120. A SKU whose `skus.category` text matches a top-level category (`lower(btrim())`, active before archived) but whose `category_id` is null or different is re-linked, its text set to the category's spelling, and a sub-category that no longer fits cleared; blank text with a link set clears the link. Text matching no category keeps its wording but loses any stale link (category and sub-category cleared), so it posts through the fallback and is off the shop; nothing is created, and the names are logged as a warning (up to 20). Text that differs from its linked category only by accents is left alone. Idempotent; with nothing to fix it is one query. Repaired rows get a new `updated_at`, so the feed revision moves. The read-only operator check is in [`docs/sku-flow.md`](docs/sku-flow.md#release-order).
 - **Prices:** the customer's `price_classification` selects stockist, wholesale, decorator, or retail ex VAT (S5). Retail is shown including VAT.
 
 ## V2-S9 till
@@ -271,14 +284,18 @@ Extends `skus` (no second table). Columns: nullable `preferred_supplier_id` (FK 
 
 `last_landed_cost_zar` is **computed** on read from the latest `unit_cost_audit` row for that SKU where `source` is `land` or `receive` only (opening, correction, import, etc. do not count). `SkuResponse` also includes `preferred_supplier_name` (lookup).
 
-`PATCH /api/v1/skus/{id}` fields: identity (`our_ref`, `our_barcode`, `name`, `design`, `fabric`), `category`, `preferred_supplier_id`, `lead_time_days`, `supplier_ref`, plus price fields. Duplicate `our_ref` / `our_barcode` / design+fabric → 409. Unknown `preferred_supplier_id` → 404 `"Supplier not found"`. Null clears nullable fields via `model_fields_set`. Identity uniqueness checks pass `exclude_id` so unchanged values are not treated as collisions.
+`PATCH /api/v1/skus/{id}` fields: identity (`our_ref`, `our_barcode`, `name`, `design`), the classification fields ([V2-S8](#v2-s8-sku-category-sub-category-materials-and-colour)), `preferred_supplier_id`, `lead_time_days`, `supplier_ref`, `reorder_min`, `order_up_to`, `do_not_reorder` ([V2-S12](#v2-s12-reorder)), `sell_multiple`, `min_sell_qty` ([S5](#s5-prices)), plus price fields. Duplicate `our_ref` / `our_barcode` / design + finish → 409. Unknown `preferred_supplier_id` → 404 `"Supplier not found"`. Null clears nullable fields via `model_fields_set`. Identity uniqueness checks pass `exclude_id` so unchanged values are not treated as collisions.
 
 | Action | Permission |
 |--------|------------|
 | List / get SKUs (incl. supplier fields) | any authenticated (`last_landed_cost_zar` needs `stock.cost.view`) |
 | PATCH supplier / lead time / supplier_ref | `catalogue.mutate` |
+| Get supplier price rows | any authenticated (prices need `stock.cost.view`) |
+| Replace supplier price rows | `catalogue.mutate` (prices also need `stock.cost.view`) |
 
-Migration: `018_v2_s13_sku_supplier`.
+**Supplier price rows** (`sku_supplier_prices`): `GET /api/v1/skus/{id}/supplier-prices` lists them, preferred supplier first, then by name. `PUT /api/v1/skus/{id}/supplier-prices` `{"rows": [{supplier_id, supplier_sku?, latest_price?, fixed_price?, min_order_qty?, pack_multiple?}]}` replaces all rows (max 50; rows not listed are deleted, listed rows update in place) and returns the new list. Rows carry `supplier_name`, `supplier_is_archived`, `is_preferred` and `updated_at`. `min_order_qty` and `pack_multiple` (≥ 1, nullable) drive reorder rounding ([V2-S12](#v2-s12-reorder)). Prices are null without `stock.cost.view`; such a caller may still change `supplier_sku` and the quantities, but sending a non-null price or dropping a priced row is 403 `"Changing supplier prices needs stock.cost.view"`. Duplicate, unknown or newly added archived supplier → 422; archived SKU → 409.
+
+Migration: `018_v2_s13_sku_supplier` (columns on `skus`); `120_sku_catalogue_lists` (`min_order_qty`, `pack_multiple`).
 
 ## V2-S11 deliveries
 
@@ -299,22 +316,26 @@ Migration: `019_v2_s11_deliveries`.
 
 ## V2-S12 reorder
 
-Nullable `skus.reorder_min` (Integer). PATCH via `SkuUpdate` — set with `ge=1`, clear with `null`. Included on `SkuResponse`.
+SKU fields (`SkuCreate`, `SkuUpdate`, `SkuResponse`): nullable `reorder_min` (≥ 1), nullable `order_up_to` (≥ 1, and ≥ `reorder_min` when both are set, else 422), `do_not_reorder` (bool, default false; the SKU still sells but never appears on the reorder list; not the same as archived). Supplier price rows carry `min_order_qty` and `pack_multiple` ([V2-S13](#v2-s13-sku-supplier-prices)).
 
-**Reorder math:** `on_hand` = SUM(`location_stock.on_hand`); `on_order` = (`sku_stock.on_order` or 0) + SUM(`po_lines.qty`) on purchase orders with status **`open`** (draft POs count; on-water qty lives in `sku_stock` only). Listed when `reorder_min IS NOT NULL` and `(on_hand + on_order) < reorder_min`. `suggested_qty = reorder_min - on_hand - on_order`.
+**Reorder math:** `on_hand` = SUM(`location_stock.on_hand`); `on_order` = (`sku_stock.on_order` or 0) + SUM(`po_lines.qty`) on non-archived purchase orders with status **`open`** (draft POs count; on-water qty lives in `sku_stock` only). The SKU overview and the catalogue workspace use the same definition (`crud/sku_stock_figures.on_order_by_sku_id`); reorder computes it in SQL. Listed when `reorder_min IS NOT NULL`, `do_not_reorder` is false, the SKU is not archived and `(on_hand + on_order) < reorder_min`. `order_up_to` changes only the quantity:
+
+- `need_qty = (order_up_to or reorder_min) - on_hand - on_order`.
+- `suggested_qty` = `need_qty` rounded up to the preferred supplier's `pack_multiple`, then raised to its `min_order_qty` (itself rounded up to the pack multiple) if lower (`crud/reorder.suggest_qty`). Only the row for the SKU's preferred supplier counts; without one, `suggested_qty = need_qty`.
+- `GET /reorder` items add `order_up_to`, `need_qty`, `min_order_qty`, `pack_multiple`. A suggestion was rounded when `suggested_qty != need_qty`; the Reorder page explains it.
 
 Endpoints (authenticated staff):
 
 - **Reorder:** `GET /reorder`, `POST /reorder/draft-po` body `{ sku_ids: [uuid, ...] }` (min 1).
 
-`POST /reorder/draft-po` groups by `preferred_supplier_id`, one `PurchaseOrderService.create` per supplier (`proforma_id=null`, status `open`). Line `qty` = `suggested_qty`; `factory_unit_amount` = `last_landed_cost_zar` or `1`. Each SKU must be on the reorder list and have a preferred supplier.
+`POST /reorder/draft-po` groups by `preferred_supplier_id`, one `PurchaseOrderService.create` per supplier (`proforma_id=null`, status `open`). Line `qty` = `suggested_qty`; `factory_unit_amount` = the SKU's latest `factory_unit_amount` on a non-archived purchase order line (by PO `created_at`), else `1`. Each SKU must be on the reorder list (a `do_not_reorder` SKU is not; 400 `"SKU is not on the reorder list"`), have a preferred supplier, and have a whole `suggested_qty`.
 
 | Action | Permission |
 |--------|------------|
 | GET reorder list | any authenticated |
 | POST draft PO | `catalogue.mutate` |
 
-Migration: `020_v2_s12_reorder_min`.
+Migrations: `020_v2_s12_reorder_min`; `120_sku_catalogue_lists` (`order_up_to`, `do_not_reorder`, supplier row quantities).
 
 ## V2-S14 mobile WMS
 
@@ -395,7 +416,22 @@ Endpoints (all under `/api/v1`, authenticated staff):
 
 - **Suppliers:** `GET/POST /suppliers` — `{ name, default_currency? }` (currency defaults to USD).
 - **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF streamed via `serve_stored_pdf`; no S3 302).
-- **SKUs:** `GET/POST /skus`, `GET /skus/{id}`, `PATCH /skus/{id}` (identity, category, prices, supplier fields), `DELETE /skus/{id}` (204; 409 if stock/orders/sales history), `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}/photo`.
+- **SKUs:** `GET/POST /skus`, `GET /skus/{id}`, `PATCH /skus/{id}` (identity, category, prices, supplier fields), `DELETE /skus/{id}` (204; 409 if stock/orders/sales history), `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}/photo`, `GET /skus/{id}/overview`, `GET/PUT /skus/{id}/supplier-prices` ([V2-S13](#v2-s13-sku-supplier-prices)).
+- **Categories, materials:** `GET/POST /categories`, `PATCH /categories/{id}`, `GET/POST /materials`, `PATCH /materials/{id}` ([V2-S8](#v2-s8-sku-category-sub-category-materials-and-colour)).
+- **Search:** `GET /search?q=` (header search; at most 20 hits). SKU hits carry `category`, `has_photo`, `retail_inc_vat`, `available`, `is_kit`, `sell_multiple`, `min_sell_qty`. `%`, `_` and `\` in the term are literal.
+
+**SKU overview** (`GET /skus/{id}/overview`, any authenticated; archived SKUs return normally): one call for the SKU panel and full view: `sku` (`SkuResponse`), `stock`, `supplier_prices`, `is_kit`, `used_in_kits`, `activity`. Stock figures:
+
+- `on_hand`: sum of `location_stock.on_hand` over locations with positive stock, every location type; `locations` lists them with bins.
+- `held`: stock already taken off the shelf for open sales orders (`held_qty` on `open`/`awaiting_stock` orders) and laybys holding stock (`open`/`ready`), with `held_documents`. Holds already decremented on-hand, so `held` is context, not a subtraction.
+- `available`: `StockAvailability.company_available` (on hand at active showroom and warehouse locations minus live till reservations), floored at 0. Search and the catalogue workspace return the same figure.
+- `on_order`: the reorder definition ([V2-S12](#v2-s12-reorder)).
+- `next_arrival`: earliest non-archived PO with the SKU that is `landed`, then `on_water`, then `open`. `expected_on` is the order date plus the SKU's `lead_time_days`, only for an `open` PO with both known; otherwise null.
+- `activity`: the 15 newest `unit_cost_audit` rows (source, label, location, date, note). These rows have no quantities.
+
+Unit costs (SKU, per location, activity) and supplier prices are null without `stock.cost.view`.
+
+**Other SKU-creating paths** follow the V2-S8 rules: the PO line create-SKU (`POST /purchase-orders/{id}/lines/{line_id}/sku`, `PoLineSkuCreate` gains the classification fields, `fabric` optional) and document intake (the LLM category hint is matched to an existing category, returned as `category` + `category_id`, or both null).
 
 **S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Requires `catalogue.mutate`. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`). Catalogue-only SKUs can be `DELETE`d; SKUs with `location_stock`, orders, or sales history return 409 `"Cannot delete a SKU that has stock, orders, or sales history."`
 
@@ -474,6 +510,15 @@ v1 is location not bin.
 
 Endpoints: `PATCH /api/v1/skus/{id}` with optional ex-VAT or inc-VAT fields for stockist, wholesale, decorator, and retail. Source of truth columns on `skus`: `stockist_ex_vat`, `wholesale_ex_vat`, `decorator_ex_vat`, `retail_ex_vat` (ex-VAT stored; inc-VAT derived on read at 15%). Cin7 PriceTier1 is Stockist, PriceTier2 is Wholesale, PriceTier3 is Decorator (all already ex VAT). Cin7 PriceTier4 is Retail including 15% VAT and is stored with `inc_to_ex`. `customers.price_classification` is Stockist, Wholesale, Decorator, or Retail (default Retail). Till, quotes, sales orders, and invoices use that tier. A hand-made price list still overrides. Lists named `Cin7 Tier N` or `Cin7 Stockist` / `Cin7 Wholesale` / `Cin7 Decorator` / `Cin7 Retail` do not. A missing tier price falls back to Retail and stores a line warning. Retail (and a walk-in) is the only classification whose unit price is shown including VAT. `customers.price_tier` stays as the Cin7 label and does not select the price. `customer_type` stays: Retail is `retail`, the other three are `trade`.
 
+**Sale quantity rule** ([ADR 0005](docs/adr/0005-sale-quantity-rule.md)): each SKU has `sell_multiple` ("Sold in multiples of", default 1) and `min_sell_qty` ("Minimum quantity", default 1; the database keeps it ≥ 1 and a multiple of `sell_multiple`). On create an omitted minimum equals the multiple; on update a changed multiple raises a stored minimum that no longer fits to the next valid multiple; an explicit off-grid minimum is 422 `"Minimum quantity must be a multiple of N"`. Sale line pricing checks every SKU line on every sale document: a line breaks the rule when `qty % sell_multiple != 0` or `qty < min_sell_qty`.
+
+- **Previews** (till, quote, layby, invoice) return per line `quantity_rule` (the plain message, whenever the line breaks the rule) and `blocked_by: "quantity_rule"` when the user may not break it. A permission block takes precedence in `blocked_by`.
+- **Saving or completing** refuses with 409 `{"detail": {"code": "sale_quantity_rule", "message", "lines": [{sku_id, our_ref, name, qty, sell_multiple, min_sell_qty, message}]}}`, listing every offending line: till sale, quote create/edit, layby create, books invoice create, trade-portal order. A 403 for a permission block comes first.
+- **Who may break a batch:** `sales.price_override` (the owner preset). They see the message as a notice. The trade portal has no authority; the draft reprice uses system authority and is never refused.
+- **Not checked:** free-text lines; a kit's components (the kit line uses the kit SKU's own rule); a saved line whose SKU and quantity are unchanged (so a tightened rule never blocks an existing document); quote acceptance into a sales order, layby completion and repeating-invoice runs, which do not re-price; storefront paid-order intake, which records the order whatever its quantities.
+- **Till kept quantities:** `POST /till/price-preview` and the till sale accept optional `quote_id` and `basket_id` (the UI sends both on the preview as well as the sale, or the preview would block a line the sale accepts). A line whose SKU and quantity match the quote's line or the held basket's `kept_qty` is not checked; a changed quantity, a repeated line or an added line is. A quote's quantities count only when the quote belongs to this team, can still be sold (draft, sent or expired) and its customer is the sale's customer, and each quoted line covers one sale line. Selling a loaded quote to a different customer is still allowed; its quantities are then checked like any new line. Only the quantity is kept: prices and discounts are authorised afresh. Holding a sale stores `kept_qty` on a held line only if its quantity met the rule at that moment or the holder has `sales.price_override` (or the basket already carried it), so holding is never a way round the rule. `kept_qty` lives in the JSONB lines of `held_sales` and `till_baskets` (no migration), is never returned on a held sale or a basket and cannot be set by a client; another user's `basket_id` is 404. Held sales from before this release carry no `kept_qty` and are checked.
+- `GET /portal/catalogue` items (`PortalCatalogueItem`) always carry `sell_multiple` and `min_sell_qty` (1 and 1 without a rule); the quantity inputs on the till, quotes, new invoice, laybys and the trade portal step by the multiple and start at the minimum (an override holder may type any quantity; a barcode scan still adds 1 and the preview flags it).
+
 - **VAT:** 15% hardcoded (V1). Home currency **ZAR**. No SARS API.
 - **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
 - **Worked examples:** 100.00 ex → 115.00 inc; 2300.00 inc → 2000.00 ex; 2500.00 inc → 2173.91 ex.
@@ -518,7 +563,7 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 | 5210–5270 | Count var – same categories | expense |
 | 6100 | Foreign exchange gain/loss | expense |
 
-SKU `category` maps to those P&L accounts via `GET/PUT /api/v1/category-maps` (seeded; owner/books can upsert). Till/layby/adj/CN post to the mapped codes when the SKU has a category; books invoices without `sku_id` still use 4000. Extra accounts are added by `ensure_category_chart()` on startup.
+SKU `category` maps to those P&L accounts via `GET/PUT /api/v1/category-maps` (seeded; owner/books can upsert). Till/layby/adj/CN post to the mapped codes when the SKU has a category; books invoices without `sku_id` still use 4000. Category maps stay keyed by category name (`skus.category`, the top-level name): renaming a top-level category in Settings → Categories renames its map row in the same transaction, and Ledger → Category posting adds entries only for managed categories that have none (`/ledger?posting=1` opens it). Extra accounts are added by `ensure_category_chart()` on startup, followed by the SKU category re-link ([V2-S8](#v2-s8-sku-category-sub-category-materials-and-colour)).
 
 **Numbering:** `INV-0001`, `CN-0001`, … via `document_sequences` (row lock; prefix editable in settings). Auto-posted GL keeps `journal_number` null.
 
@@ -646,8 +691,10 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/login` | Redirects to `/clerk-login`; `/auth/login` rejects local credentials |
 | `/forgot-password` | Redirects to `/clerk-login`; `/auth/forgot-password` rejects local reset |
 | `/reset-password` | Redirects to `/clerk-login`; `/auth/reset-password` rejects local reset |
-| `/catalogue` | `/skus` |
-| `/catalogue/[id]` | `/skus/{id}` (+ `/inventory` rollup on Stock tab) |
+| `/catalogue` | `/record-workspaces/skus/query`, `/categories`, `/materials` |
+| `/catalogue/[id]` | Deep link: opens `/catalogue` with that SKU in the full view (see below) |
+| `/settings/categories` | `/categories` (unmapped rows link to `/ledger?posting=1`) |
+| `/settings/materials` | `/materials` |
 | `/price-lists` | `/price-lists` |
 | `/ledger` | `/accounts`, `/category-maps` |
 | `/journals` | `/journals`, `/journal-imports`, `/books-events` |
@@ -676,6 +723,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/customers` | `/customers` |
 | `/deliveries` | `/deliveries` |
 | `/reorder` | `/reorder` |
+
+**SKU panel** ([`docs/sku-flow.md`](docs/sku-flow.md)): on any staff page, `?sku=<id>` docks the SKU panel and `&skuView=full` expands it to the full SKU view; both read `/skus/{id}/overview`. The page underneath keeps its own route and state. Header search (`/search`), `SkuLink`s and catalogue rows set these parameters. A page that rebuilds its own query string drops them unless it wraps it in `withSkuPanelParams` (`lib/sku-panel.ts`). Prefills use a separate parameter, `prefill_sku` (`PREFILL_SKU_PARAM`), so they never dock the panel: `/purchase-orders?new=1&prefill_sku=<id>` opens the composer with that SKU on a line (the panel's Add to purchase order), `/adjustments?prefill_sku=<id>` preselects it for the adjustment (Adjust stock), and `/picks?prefill_sku=<id>&qty=<n>` opens a new pick for that kit (the till's kit-pick link). `/catalogue/{id}` is only a deep link: it replaces itself with `/catalogue?sku=<id>&skuView=full`. There is no separate SKU page and no catalogue edit modal; every field is edited per card in the full view. Panel keys: `↑` `↓` step only while focus is inside the panel, `Enter` expands only when the panel itself has focus, `Esc` goes back from anywhere. The panel docks beside a page only while the page keeps 40rem (640px), or 56rem (896px) for pages that call `useWidePage()` (the cart editor: till, quotes, new invoice); below that it overlays the page (breakpoints in `app/globals.css`). While a card has unsaved edits, in-app links, header-search results, reload and tab close ask first; browser Back does not (the panel replaces history entries).
 
 ## Non-goals
 

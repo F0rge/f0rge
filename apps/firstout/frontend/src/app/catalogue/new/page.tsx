@@ -33,7 +33,12 @@ import {
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { CategoryPicker } from "@/components/catalogue-lists/category-picker";
+import { useCategories, useMaterials } from "@/components/catalogue-lists/hooks";
+import { MaterialPicker } from "@/components/catalogue-lists/material-picker";
 import { SkuProductDetailsFields } from "@/components/sku-product-details-fields";
+import { cardSaveFailure } from "@/lib/catalogue-editor";
+import { skuPanelSearch } from "@/lib/sku-panel";
 import { skuDetailsFormFromSku, skuDetailsPayload, validateSkuDetails } from "@/lib/sku-details";
 import { queryKeys, referenceQueries } from "@/lib/queries";
 import { isValidCartonCount } from "@/lib/carton-helpers";
@@ -41,6 +46,7 @@ import {
   SKU_PHOTO_ACCEPT,
   missingNewSkuFields,
   missingNewSkuMessage,
+  newSkuRuleErrors,
   pickSkuPhoto,
 } from "@/lib/new-sku-form";
 
@@ -49,7 +55,6 @@ const emptyCreateForm: CreateSkuPayload = {
   our_barcode: "",
   name: "",
   design: "",
-  fabric: "",
 };
 
 function parseOptionalIncVat(value: string, label: string): string | null {
@@ -83,6 +88,16 @@ export default function NewSkuPage() {
   const [openingUnitCost, setOpeningUnitCost] = useState("");
   const [openingDate, setOpeningDate] = useState("");
   const [cartonCount, setCartonCount] = useState<number | "">(1);
+  const [category, setCategory] = useState({ categoryId: "", subcategoryId: "" });
+  const [material, setMaterial] = useState<{ mainId: string; otherIds: string[] }>({ mainId: "", otherIds: [] });
+  const [colourName, setColourName] = useState("");
+  const [rules, setRules] = useState({ sellMultiple: "1", minSellQty: "1", reorderMin: "", orderUpTo: "" });
+  // The minimum follows the multiple until it is typed.
+  const [minimumTouched, setMinimumTouched] = useState(false);
+  const [doNotReorder, setDoNotReorder] = useState(false);
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
+  const categories = useCategories();
+  const materials = useMaterials();
   const locationsQuery = useQuery({ ...referenceQueries.locations, enabled: canMutate });
   const locations = (locationsQuery.data ?? []).filter(isActiveLocation);
   const client = useQueryClient();
@@ -105,7 +120,6 @@ export default function NewSkuPage() {
     ourRef: createForm.our_ref,
     name: createForm.name,
     design: createForm.design,
-    fabric: createForm.fabric,
     cartonCount,
     recordStockNow,
     openingLocationId,
@@ -115,7 +129,9 @@ export default function NewSkuPage() {
   const missingMessage = missingNewSkuMessage(missingFields);
   const missing = new Set(missingFields);
   const detailsErrors = validateSkuDetails(details);
-  const formValid = missingFields.length === 0 && !Object.keys(detailsErrors).length;
+  const ruleErrors = newSkuRuleErrors(rules);
+  const errors: Record<string, string> = { ...ruleErrors, ...serverErrors };
+  const formValid = missingFields.length === 0 && !Object.keys(detailsErrors).length && !Object.keys(ruleErrors).length;
 
   async function handleCreate() {
     if (!canMutate || !formValid) {
@@ -123,13 +139,23 @@ export default function NewSkuPage() {
     }
     setSaving(true);
     setError(null);
+    setServerErrors({});
     try {
       const payload: CreateSkuPayload = {
         ...skuDetailsPayload(details),
         our_ref: createForm.our_ref.trim(),
         name: createForm.name.trim(),
         design: createForm.design.trim(),
-        fabric: createForm.fabric.trim(),
+        category_id: category.categoryId || null,
+        subcategory_id: category.subcategoryId || null,
+        colour_name: colourName.trim() || null,
+        main_material_id: material.mainId || null,
+        other_material_ids: material.otherIds,
+        sell_multiple: Number(rules.sellMultiple),
+        min_sell_qty: Number(rules.minSellQty),
+        reorder_min: rules.reorderMin.trim() ? Number(rules.reorderMin) : null,
+        order_up_to: rules.orderUpTo.trim() ? Number(rules.orderUpTo) : null,
+        do_not_reorder: doNotReorder,
       };
       if (createForm.till_no_stock_required) {
         payload.till_no_stock_required = true;
@@ -141,10 +167,6 @@ export default function NewSkuPage() {
       const supplierRef = createForm.supplier_ref?.trim();
       if (supplierRef) {
         payload.supplier_ref = supplierRef;
-      }
-      const category = createForm.category?.trim();
-      if (category) {
-        payload.category = category;
       }
       if (isValidCartonCount(cartonCount)) {
         payload.carton_count = cartonCount;
@@ -193,10 +215,13 @@ export default function NewSkuPage() {
         await uploadSkuPhoto(created.id, photoFile);
       }
 
-      router.push(`/catalogue/${created.id}`);
+      // The new SKU opens in the catalogue's full view, where every card can be edited.
+      router.push(`/catalogue?${skuPanelSearch("", { id: created.id, view: "full" })}`);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setError(err.message);
+      if (err instanceof ApiError && (err.status === 409 || err.status === 422)) {
+        const failure = cardSaveFailure(err);
+        setServerErrors(failure.fields);
+        setError(failure.message);
       } else {
         setError(err instanceof Error ? err.message : "Failed to add SKU.");
       }
@@ -271,8 +296,8 @@ export default function NewSkuPage() {
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, our_ref: event.target.value }))
                     }
-                    invalid={missing.has("Our ref")}
-                    invalidText="Our ref is required"
+                    invalid={missing.has("Our ref") || Boolean(errors.our_ref)}
+                    invalidText={errors.our_ref ?? "Our ref is required"}
                     required
                   />
                 </Column>
@@ -282,6 +307,8 @@ export default function NewSkuPage() {
                     labelText="Our barcode"
                     helperText="Optional. Not the supplier's reference. Leave blank and Firstout assigns a unique value like csv:YOUR-REF."
                     value={createForm.our_barcode ?? ""}
+                    invalid={Boolean(errors.our_barcode)}
+                    invalidText={errors.our_barcode}
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, our_barcode: event.target.value }))
                     }
@@ -300,15 +327,14 @@ export default function NewSkuPage() {
                     required
                   />
                 </Column>
-                <Column lg={8} md={4} sm={4}>
-                  <TextInput
-                    id="new-sku-category"
-                    labelText="Category"
-                    helperText="Optional — e.g. Seating, Tables"
-                    value={createForm.category ?? ""}
-                    onChange={(event) =>
-                      setCreateForm((form) => ({ ...form, category: event.target.value }))
-                    }
+                <Column lg={16} md={8} sm={4}>
+                  <CategoryPicker
+                    idPrefix="new-sku"
+                    categories={categories.data?.categories}
+                    value={category}
+                    onChange={setCategory}
+                    disabled={saving}
+                    invalidText={{ category: errors.category_id, subcategory: errors.subcategory_id }}
                   />
                 </Column>
                 <Column lg={8} md={4} sm={4}>
@@ -330,22 +356,19 @@ export default function NewSkuPage() {
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, design: event.target.value }))
                     }
-                    invalid={missing.has("Design")}
-                    invalidText="Design is required"
+                    invalid={missing.has("Design") || Boolean(errors.design)}
+                    invalidText={errors.design ?? "Design is required"}
                     required
                   />
                 </Column>
-                <Column lg={8} md={4} sm={4}>
-                  <TextInput
-                    id="new-sku-fabric"
-                    labelText="Fabric *"
-                    value={createForm.fabric}
-                    onChange={(event) =>
-                      setCreateForm((form) => ({ ...form, fabric: event.target.value }))
-                    }
-                    invalid={missing.has("Fabric")}
-                    invalidText="Fabric is required"
-                    required
+                <Column lg={16} md={8} sm={4}>
+                  <MaterialPicker
+                    idPrefix="new-sku"
+                    materials={materials.data}
+                    value={material}
+                    onChange={setMaterial}
+                    disabled={saving}
+                    invalidText={{ main: errors.main_material_id, others: errors.other_material_ids }}
                   />
                 </Column>
                 <Column lg={8} md={4} sm={4}>
@@ -439,7 +462,78 @@ export default function NewSkuPage() {
                 errors={detailsErrors}
                 disabled={saving}
                 onChange={(field, value) => setDetails((current) => ({ ...current, [field]: value }))}
+                colourName={{ value: colourName, invalidText: errors.colour_name, onChange: setColourName }}
               />
+            </Stack>
+          </Tile>
+
+          <Tile>
+            <Stack gap={5}>
+              <div>
+                <h2 className="cds--type-productive-heading-02">Selling and reordering</h2>
+                <p className="cds--type-body-01">Every sale line must be a multiple of the first value and at least the minimum.</p>
+              </div>
+              <Grid condensed fullWidth>
+                <Column lg={8} md={4} sm={4}>
+                  <TextInput
+                    id="new-sku-sell-multiple"
+                    labelText="Sold in multiples of"
+                    inputMode="numeric"
+                    value={rules.sellMultiple}
+                    invalid={Boolean(errors.sell_multiple)}
+                    invalidText={errors.sell_multiple}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setRules((current) => ({ ...current, sellMultiple: value, minSellQty: minimumTouched ? current.minSellQty : value }));
+                    }}
+                  />
+                </Column>
+                <Column lg={8} md={4} sm={4}>
+                  <TextInput
+                    id="new-sku-min-sell-qty"
+                    labelText="Minimum quantity"
+                    helperText="The smallest quantity one sale line can have."
+                    inputMode="numeric"
+                    value={rules.minSellQty}
+                    invalid={Boolean(errors.min_sell_qty)}
+                    invalidText={errors.min_sell_qty}
+                    onChange={(event) => { setMinimumTouched(true); setRules((current) => ({ ...current, minSellQty: event.target.value })); }}
+                  />
+                </Column>
+                <Column lg={8} md={4} sm={4}>
+                  <TextInput
+                    id="new-sku-reorder-min"
+                    labelText="Reorder minimum"
+                    helperText="Leave blank to keep it off the reorder list."
+                    inputMode="numeric"
+                    value={rules.reorderMin}
+                    invalid={Boolean(errors.reorder_min)}
+                    invalidText={errors.reorder_min}
+                    onChange={(event) => setRules((current) => ({ ...current, reorderMin: event.target.value }))}
+                  />
+                </Column>
+                <Column lg={8} md={4} sm={4}>
+                  <TextInput
+                    id="new-sku-order-up-to"
+                    labelText="Order up to"
+                    helperText="A reorder brings stock back to this level."
+                    inputMode="numeric"
+                    value={rules.orderUpTo}
+                    invalid={Boolean(errors.order_up_to)}
+                    invalidText={errors.order_up_to}
+                    onChange={(event) => setRules((current) => ({ ...current, orderUpTo: event.target.value }))}
+                  />
+                </Column>
+                <Column lg={16} md={8} sm={4}>
+                  <Checkbox
+                    id="new-sku-do-not-reorder"
+                    labelText="Do not reorder"
+                    helperText="It still sells until stock runs out, but never appears on the reorder list."
+                    checked={doNotReorder}
+                    onChange={(_event, { checked }) => setDoNotReorder(checked)}
+                  />
+                </Column>
+              </Grid>
             </Stack>
           </Tile>
 

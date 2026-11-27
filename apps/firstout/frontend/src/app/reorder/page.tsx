@@ -30,7 +30,9 @@ import {
   type ReorderRow,
 } from "@/lib/api";
 import { usePageError } from "@/hooks/use-page-error";
+import { SkuLink } from "@/components/sku-link";
 import { useAuth } from "@/lib/auth";
+import { reorderExplanation } from "@/lib/reorder";
 
 const TABLE_HEADERS = [
   { key: "select", header: "" },
@@ -39,6 +41,9 @@ const TABLE_HEADERS = [
   { key: "on_hand", header: "On hand" },
   { key: "on_order", header: "On order" },
   { key: "reorder_min", header: "Reorder min" },
+  { key: "order_up_to", header: "Order up to" },
+  { key: "min_order_qty", header: "Minimum order" },
+  { key: "pack_multiple", header: "Pack multiple" },
   { key: "suggested_qty", header: "Suggested qty" },
   { key: "preferred_supplier", header: "Preferred supplier" },
   { key: "last_landed", header: "Last landed" },
@@ -52,6 +57,9 @@ type ReorderTableRow = {
   on_hand: string;
   on_order: string;
   reorder_min: string;
+  order_up_to: string;
+  min_order_qty: string;
+  pack_multiple: string;
   suggested_qty: string;
   preferred_supplier: string;
   last_landed: string;
@@ -99,6 +107,9 @@ export default function ReorderPage() {
     on_hand: String(entry.on_hand),
     on_order: String(entry.on_order),
     reorder_min: String(entry.reorder_min),
+    order_up_to: entry.order_up_to === null ? "—" : String(entry.order_up_to),
+    min_order_qty: entry.min_order_qty === null ? "—" : String(entry.min_order_qty),
+    pack_multiple: entry.pack_multiple === null ? "—" : String(entry.pack_multiple),
     suggested_qty: String(entry.suggested_qty),
     preferred_supplier: entry.preferred_supplier_name?.trim() || "—",
     last_landed: entry.last_landed_cost_zar
@@ -165,7 +176,9 @@ export default function ReorderPage() {
         <div>
           <h1 className="cds--type-productive-heading-04">Reorder</h1>
           <p className="cds--type-body-01">
-            SKUs below minimum stock. Create draft purchase orders to preferred suppliers.
+            SKUs below their reorder minimum. Suggestions bring stock back to Order up to (or the minimum),
+            rounded to the preferred supplier&apos;s minimum order and pack size. Create draft purchase orders to
+            preferred suppliers.
           </p>
         </div>
         {canRaise ? (
@@ -281,16 +294,34 @@ export default function ReorderPage() {
                               </TableCell>
                             );
                           }
+                          if (cell.info.header === "suggested_qty" && entry) {
+                            const why = reorderExplanation(entry);
+                            return (
+                              <TableCell key={cell.id} style={{ textAlign: "right" }}>
+                                {cell.value}
+                                {why && <span className="cds--type-helper-text-01" style={{ display: "block" }}>{why}</span>}
+                              </TableCell>
+                            );
+                          }
                           if (
                             cell.info.header === "on_hand" ||
                             cell.info.header === "on_order" ||
                             cell.info.header === "reorder_min" ||
-                            cell.info.header === "suggested_qty" ||
+                            cell.info.header === "order_up_to" ||
+                            cell.info.header === "min_order_qty" ||
+                            cell.info.header === "pack_multiple" ||
                             cell.info.header === "last_landed"
                           ) {
                             return (
                               <TableCell key={cell.id} style={{ textAlign: "right" }}>
                                 {cell.value}
+                              </TableCell>
+                            );
+                          }
+                          if (cell.info.header === "our_ref" && entry) {
+                            return (
+                              <TableCell key={cell.id}>
+                                <SkuLink id={entry.sku_id} context={{ ids: rows.map((item) => item.sku_id), label: "Reorder" }}>{entry.our_ref}</SkuLink>
                               </TableCell>
                             );
                           }

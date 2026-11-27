@@ -25,7 +25,7 @@ import {
   Tabs,
   Tag,
 } from "@carbon/react";
-import { Suspense, useState, type PropsWithChildren, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type PropsWithChildren, type ReactNode } from "react";
 import { LoadingRegion } from "@/components/page-loading";
 import { WorkspaceLoader } from "@/components/workspace-loader";
 import { ApiError } from "@/lib/api";
@@ -100,11 +100,31 @@ function WorkspaceContent<T extends { id: string }>({
   summary,
   renderSelectionActions,
   onExport,
+  openRecord,
   children,
 }: RecordWorkspaceProps<T>) {
   const workspace = useWorkspace(adapter, refreshKey);
   const { query, result, items } = workspace;
-  const active = modalDetails ? workspace.requestedRecord : workspace.active;
+  const activeId = openRecord?.activeId;
+  const active = openRecord
+    ? items.find((item) => item.id === activeId)
+    : modalDetails ? workspace.requestedRecord : workspace.active;
+  const singlePane = modalDetails || Boolean(openRecord);
+  // No-details mode: tell the page when its page of rows changes, and keep the open row in view.
+  const onPageItems = useRef(openRecord?.onPageItems);
+  useEffect(() => {
+    onPageItems.current = openRecord?.onPageItems;
+  });
+  useEffect(() => {
+    if (result.data) onPageItems.current?.(result.data.items);
+  }, [result.data]);
+  const tableScroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!activeId) return;
+    tableScroll.current
+      ?.querySelector(`tr[data-record-id="${CSS.escape(activeId)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeId]);
   const [operation, setOperation] = useState<WorkspaceOperation | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -233,7 +253,7 @@ function WorkspaceContent<T extends { id: string }>({
       {result.isPending && (
         <span className="firstout-sr-only" role="status">Loading {plural}…</span>
       )}
-      <div className={modalDetails ? styles.singlePane : styles.layout}>
+      <div className={singlePane ? styles.singlePane : styles.layout}>
         <section
           className={`${styles.list}${result.isPending ? " firstout-loading-motion" : ""}`}
           aria-label={`${adapter.title} list`}
@@ -346,7 +366,7 @@ function WorkspaceContent<T extends { id: string }>({
               </div>
             </>
           )}
-          <div className={styles.tableScroll}>
+          <div className={styles.tableScroll} ref={tableScroll}>
             {result.isPending || items.length ? (
               <table className={styles.table}>
                 <thead>
@@ -435,6 +455,7 @@ function WorkspaceContent<T extends { id: string }>({
                   )) : items.map((item) => (
                     <tr
                       key={item.id}
+                      data-record-id={item.id}
                       className={
                         active?.id === item.id ? styles.active : undefined
                       }
@@ -469,7 +490,7 @@ function WorkspaceContent<T extends { id: string }>({
                                 active?.id === item.id ? "true" : undefined
                               }
                               aria-haspopup={modalDetails ? "dialog" : undefined}
-                              onClick={() => workspace.focus(item.id)}
+                              onClick={() => (openRecord ? openRecord.onOpen(item, items) : workspace.focus(item.id))}
                             >
                               <span
                                 className={styles.avatar}
@@ -551,7 +572,7 @@ function WorkspaceContent<T extends { id: string }>({
             }
           />}
         </section>
-        {!modalDetails && <WorkspaceInspector
+        {!singlePane && <WorkspaceInspector
           header={active && renderDetailsHeader?.(active)}
           recordId={active?.id}
         >
@@ -623,7 +644,7 @@ function WorkspaceContent<T extends { id: string }>({
                 </div>
               </div>
               <div className={styles.detailBody}>
-                {renderDetails(active, { reload: workspace.reload, archived })}
+                {renderDetails?.(active, { reload: workspace.reload, archived })}
               </div>
               <div className={styles.inspectorActions}>
                 {actions
@@ -671,7 +692,7 @@ function WorkspaceContent<T extends { id: string }>({
           modalLabel={adapter.getSubtitle?.(active)}
           onRequestClose={() => workspace.focus()}
         >
-          {renderDetails(active, { reload: workspace.reload, archived })}
+          {renderDetails?.(active, { reload: workspace.reload, archived })}
           <div className={styles.modalDetailActions}>
             {actions.filter((action) => action.key !== "edit" && (!adapter.canEdit || adapter.canEdit(active))).map((action) => (
               <Button key={action.key} size="sm" kind={action.danger ? "danger--tertiary" : "tertiary"}
