@@ -220,7 +220,9 @@ async def test_archive_restore_and_refusals(owner_client: AsyncClient) -> None:
         f"/api/v1/categories/{sub['id']}", json={"is_archived": True}
     )
     assert refused.status_code == 409
-    assert refused.json()["detail"].startswith("1 active SKU use this sub-category")
+    assert refused.json()["detail"].startswith(
+        "1 active SKU uses this sub-category. Move it to another sub-category first."
+    )
     refused_top = await owner_client.patch(
         f"/api/v1/categories/{top['id']}", json={"is_archived": True}
     )

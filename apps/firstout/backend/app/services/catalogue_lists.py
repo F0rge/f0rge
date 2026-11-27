@@ -160,7 +160,8 @@ class CategoryService:
         if in_use:
             kind = "category" if category.parent_id is None else "sub-category"
             raise ConflictError(
-                f"{_skus(in_use)} use this {kind}. Move them to another {kind} first."
+                f"{_skus(in_use)} {'uses' if in_use == 1 else 'use'} this {kind}. "
+                f"Move {'it' if in_use == 1 else 'them'} to another {kind} first."
             )
         # Its sub-categories are unused here: every SKU in one is also in this category.
         if category.parent_id is None:

@@ -21,7 +21,7 @@ A SKU's category used to be free text (`skus.category`), and ledger posting (`ca
 
 ## Consequences
 
-- Two sources must agree: services keep `skus.category` in step with `category_id` on every write and rename. A write that changes only the text (an older image during the release window, or a direct database write) leaves the link stale; the backend re-links such SKUs to the category their text names on every start, and leaves text that names no category alone for staff to add in Settings.
+- Two sources must agree: services keep `skus.category` in step with `category_id` on every write and rename. A write that changes only the text (an older image during the release window, or a direct database write) leaves the link stale; the backend re-links such SKUs to the category their text names on every start; a SKU whose text names no managed category keeps its text but loses the stale link, so it posts through the fallback and leaves the shop until staff add the category in Settings.
 - Renaming a material rewrites the finish labels derived from it in the same transaction, and is refused if that would make two SKUs' design and finish collide.
 - Tests and fixtures must create the categories they name first.
 - Dropping either column later needs its own migration and a release-order note; nothing in this decision blocks it.

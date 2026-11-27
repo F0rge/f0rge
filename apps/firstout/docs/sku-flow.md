@@ -15,18 +15,39 @@ catalogue split view and edit modal described in
 
 | Surface | Behaviour |
 | --- | --- |
-| Docked panel | A sibling of `<main>` in the app shell, 28rem wide on the right; `main` gets a right inset so the page stays usable. Below 672px it is a full-width sheet. Sections are collapsible groups with a one-line summary; Overview and Stock start open, and open state survives stepping. |
+| Docked panel | A sibling of `<main>` in the app shell, 28rem wide on the right. When the viewport leaves the page enough room it sits beside the page and `main` gets a right inset; otherwise it lies over the right of the page, which keeps its full width underneath (see Docking). Below 672px it is a full-width sheet. Sections are collapsible groups with a one-line summary; Overview and Stock start open, and open state survives stepping. |
 | Full view | The same element grows to cover the content area: same header, same section order. Overview becomes a sticky facts column with the large photo and barcode; the other sections are cards. The page underneath stays mounted and is `inert`. |
 | Header search | `/` or Ctrl/Cmd+K. Rich SKU rows (photo, name, Kit tag, ref and category, available, retail), then purchase orders and invoices, and Administration destinations on Administration pages. A live preview of the highlighted SKU sits on the right (hidden at 800px and below). `Enter` on a SKU docks the panel on the current page with every SKU hit as the stepping context; other hits navigate as before. |
 | `SkuLink` | A SKU ref rendered as a real link to `/catalogue/{id}` (new tab and middle click work; the link lands in the full view); a plain click docks the panel. Used on receive, transit, picks (list, detail, matrix), stock by bin, supplier price history, purchase order lines, cart lines, reorder, stocktake lines, adjustment lines and inside the panel. |
 | Catalogue | `RecordWorkspace` without a details pane (`openRecord`): the table is full width and opening a row docks the panel with the current page of rows as context. Paging, sorting and filtering refresh that context. Filters add Sub-category, Material (main or other), Material family and Do not reorder; Category options come from the managed list. Import, DasKasas import, Export CSV (now with sub-category, colour, materials, order up to, do not reorder and the selling rule), New SKU, label printing and archive/restore are kept. |
 
-Keyboard while the panel is open: `↑` `↓` step through the context (no wrap),
-`Enter` expands (docked panel focused), `Esc` goes back one level (full → docked
-→ closed). Keys are left alone while focus is in an input, select, textarea,
-combobox, grid, dialog or similar, or a Carbon modal is open. Closing returns
+Keyboard while the panel is open: `↑` `↓` step through the context (no wrap)
+only while focus is inside the panel, so the page keeps its own arrow keys;
+`Enter` expands only when the panel itself has focus; `Esc` goes back one level
+(full → docked → closed) from anywhere. Keys are left alone while focus is in an
+input, select, textarea, combobox, grid, dialog or similar, or a Carbon modal is
+open. Opening a row or a search hit moves focus into the panel, so stepping
+works straight away. The till's barcode listener claims its own Enter first, so
+a scan never also acts on the panel. Closing returns
 focus to where it was. Motion is 200 ms on Carbon's productive curve and is off
 under `prefers-reduced-motion`.
+
+### Docking
+
+A page sits beside the docked panel only while it keeps its minimum width: 40rem
+(640px) by default, 56rem (896px) for a page that calls `useWidePage()`
+(`components/sku-panel/provider.tsx`). The cart editor calls it, which covers the
+till, quotes and new invoices. Below that the panel overlays the page. The
+breakpoints are media queries in `app/globals.css` (nav + 28rem panel + the
+page's minimum); Administration pages count their own nav column as an open nav.
+
+| Page kind | Nav open | Nav collapsed |
+| --- | --- | --- |
+| Default (catalogue, purchase orders, lists) | beside from 1344px | beside from 1136px |
+| Wide (till, quotes, new invoice) | beside from 1600px | beside from 1392px |
+| Administration (Settings) | beside from 1344px | beside from 1344px |
+
+Below 1056px the nav is compact and the panel always overlays.
 
 ## URL parameters
 
@@ -81,8 +102,11 @@ modal, the old price editor and the old `/catalogue/{id}` page are gone.
   saves; Esc on a clean card ends the edit.
 - **Leaving a dirty card** shows an inline "Discard changes to X?" bar with Keep
   editing and Discard. It covers Esc, Collapse, Close, ↑/↓, previous/next, the
-  page crumb, a `SkuLink`, header-search Enter and the quick actions; Discard
-  then completes the move, and Esc closes the bar.
+  page crumb, a `SkuLink`, header-search results of any kind, the quick
+  actions, and any other plain click on a same-origin link (side nav, page
+  links, "Manage categories"); Discard then completes the move, and Esc closes
+  the bar. Reload and tab close raise the browser's own leave prompt while a
+  card is dirty. Browser Back is not guarded (see Limits).
 - **Saving** sends only changed fields: Overview and Pricing through
   `PATCH /skus/{id}` (a new multiple always sends the minimum too); Supply
   through `PATCH /skus/{id}`, then `PUT /skus/{id}/supplier-prices` only if the
@@ -133,8 +157,11 @@ modal, the old price editor and the old `/catalogue/{id}` page are gone.
 **Settings → Categories** (`/settings/categories`): the category tree with
 sub-categories; add, add sub-category, rename, archive, restore. Each top-level
 row shows its sales account (or "Not mapped", posts to the 4000 fallback, with a
-link to Category posting), a shop section picker that saves immediately, and its
-SKU count. Archive is refused with the server's reason while active SKUs use the
+link to Category posting), a shop section picker, and its SKU count. Choosing a
+section only stages it: the row states the consequence ("Puts up to N SKUs on
+the shop in X.", "Takes up to N SKUs off the shop.", "Moves up to N SKUs on the
+shop from X to Y.") and nothing is sent until Save; Cancel restores the saved
+value. Archive is refused with the server's reason while active SKUs use the
 row; archiving a category archives its sub-categories.
 
 **Settings → Materials** (`/settings/materials`): one table per family; add,
@@ -180,7 +207,13 @@ A SKU's Sell multiple and Minimum quantity ([ADR 0005](adr/0005-sale-quantity-ru
   categories and materials per team, and rewrites `skus.category` to one
   canonical spelling per category (grouped by Postgres `lower(btrim())`, the
   key the old feed used). It does not bump `updated_at`, so the shop feed does
-  not see a change. Automatic recovery never downgrades the database.
+  not see a change. The rewritten spellings are not restored by the
+  migration's downgrade. Take a Firstout database backup before merging.
+- **No going back to a pre-merge image**: a failed Release reverts the images
+  automatically and leaves the schema at 120, and automatic recovery never
+  downgrades the database. A manual `cd.yml` redeploy of Firstout at a pre-merge
+  commit is refused by `release_migrate`, so recovery is a fix forward.
+  DasKasas and Marrow can be redeployed by hand at the previous commit.
 - **Release window**: the old API keeps serving while the migration has run and
   before the new image is promoted. Every new SKU column is nullable or has a
   server default, so its writes succeed, but it enforces no selling rule and
@@ -188,17 +221,28 @@ A SKU's Sell multiple and Minimum quantity ([ADR 0005](adr/0005-sale-quantity-ru
   or recategorises is unlinked or linked to the wrong category, which would put
   it in the wrong shop section or none. The new backend repairs this on every
   start (`relink_sku_categories`, per team, after `ensure_category_chart()`):
-  text that matches a top-level category is re-linked to it, blank text clears
-  the link, and text that matches no category is left alone and logged as a
-  warning. Run this read-only check after the release (as a role that bypasses
-  RLS, or per team after `set_config('app.tenant_id', '<team>', true)`). A row
-  with `matching_category_id` null names a category missing from the managed
-  list (add it in Settings); any other row is one the next backend start
-  repairs.
+  text that matches a top-level category (accents folded) is re-linked to it,
+  blank text clears the link, and text that matches no category keeps its
+  wording but loses any stale link (category and sub-category cleared), so it
+  behaves like any unmapped name: off the shop, posting through the 4000/5000
+  fallback. Unmatched names are logged as a warning; nothing is created. Run
+  this read-only check after the release (as a role that bypasses RLS, or per
+  team after `set_config('app.tenant_id', '<team>', true)`). `startup_action`
+  says what the next start does with each row; "unmanaged name, no link" rows
+  name a category missing from the managed list (add it in Settings). Plain SQL
+  cannot fold accents, so a row whose text differs from its category only by
+  accents shows as "unlink: unmanaged name, stale link" although the startup
+  leaves it alone: compare `linked_name`.
 
   ```sql
   SELECT s.team_id, s.id, s.our_ref, s.category AS category_text, c.name AS linked_name,
-         m.id AS matching_category_id
+         m.id AS matching_category_id,
+         CASE
+           WHEN btrim(coalesce(s.category, '')) = '' THEN 'unlink: blank text'
+           WHEN m.id IS NULL AND s.category_id IS NOT NULL THEN 'unlink: unmanaged name, stale link'
+           WHEN m.id IS NULL THEN 'unmanaged name, no link'
+           ELSE 'relink'
+         END AS startup_action
   FROM skus s
   LEFT JOIN sku_categories c ON c.id = s.category_id AND c.team_id = s.team_id
   LEFT JOIN LATERAL (
@@ -214,12 +258,15 @@ A SKU's Sell multiple and Minimum quantity ([ADR 0005](adr/0005-sale-quantity-ru
   ```
 - Held sales and till baskets saved before this release carry no `kept_qty`,
   so their quantities are checked at the till. Every SKU starts at 1 and 1, so
-  this only matters once a rule is set.
+  this only matters once a rule is set. At the till a saved quote's quantities
+  are kept only when the quote can still be sold and its customer is the sale's
+  customer, and each quoted line covers one sale line.
 - **DasKasas**: safe whichever releases first. An older Firstout ignores
   `include_sell_rules` and omits the keys, which commerce treats as "leave the
   stored value alone" (absent means 1); an older commerce never asks, so
   Firstout never sends them. `verify-live` treats both keys as optional.
-- Merging the one PR releases three Apps (P-006): Firstout, DasKasas, and Marrow. Marrow is affected only because the shared `Stepper` in `libs/ui` gained an optional `step`; its behaviour is unchanged.
+- Merging the one PR releases three Apps (P-006): Firstout, DasKasas, and Marrow. Marrow is affected only because the shared `Stepper` in `libs/ui` gained an optional `step`; its behaviour is unchanged. Its whole App (api, worker, mcp, frontend) is released.
+- **After the release**, from the delivery review: Firstout `GET /api/v1/ready` answers and Settings → Categories and Materials load; the category check above returns no rows other than known unmanaged names; the shop feed carries `sell_multiple` and `min_quantity` with `include_sell_rules=true`; a pair-sold piece on the storefront shows "sold in pairs"; Marrow's health paths answer; the merge commit has a CI run (a dropped push event releases nothing).
 
 ## Limits
 
@@ -231,10 +278,13 @@ A SKU's Sell multiple and Minimum quantity ([ADR 0005](adr/0005-sale-quantity-ru
   text naming two materials, a "faux" or "look" material, a colour-capable
   material followed by a colour word, a placeholder fabric, or leftover words
   that are not colour words give null rather than a guess.
-- A browser Back or a side-nav click while a card is dirty is not intercepted
-  (no `beforeunload`); the edit just ends and the draft is lost.
-- A `/catalogue/{id}` deep link opens with a one-SKU context ("1 of 1"); ↑/↓
-  step only once a row is opened from the table.
+- Unsaved card edits are guarded on in-app links (side nav, page links,
+  header-search results, the panel's own controls), reload and tab close. Only
+  the browser's Back button is not: the panel replaces history entries rather
+  than pushing them, so Back leaves the page and the draft is lost.
+- A malformed id in a `/catalogue/{id}` link shows the catalogue with no panel
+  and no message. A valid deep link (or a reload) takes the catalogue page's
+  rows as its stepping context when the SKU is on that page.
 - The proforma reader's create-SKU form takes a main material only, no other
   materials.
 - Reorder computes "on order" in its own SQL; the overview and catalogue use
@@ -247,6 +297,85 @@ A SKU's Sell multiple and Minimum quantity ([ADR 0005](adr/0005-sale-quantity-ru
 
 ## Verification
 
-> **Placeholder for the coordinator.** Fill in the real results (commands,
-> counts, browser walkthrough and whether it used a local build or a deployed
-> service). Nothing here has been verified by this document.
+Recorded 27 November 2026 at the branch's final commit, on a developer machine.
+Nothing here was run against a deployed service.
+
+### Automated checks
+
+| Check | Result |
+| --- | --- |
+| Firstout backend, full suite (`uv run pytest`, PostgreSQL 16 in testcontainers) | 1,279 passed |
+| Firstout backend `ruff check` and `ruff format --check` | clean |
+| `nx run-many -t typecheck,lint,test,build` for `firstout-frontend`, `daskasas-web`, `daskasas-commerce`, `f0rge-ui`, `marrow-frontend` | all pass (lint: 0 errors) |
+| `firstout-frontend:codegen:check` | passes |
+| DasKasas browser specs on the synthetic fixture (`sell-rules`, `product`, `bag-checkout`) | 21 passed |
+| `npm run agents:check` | passes |
+
+### Walkthrough
+
+The Firstout walkthrough used a local harness kept outside Git: the working
+tree's real frontend under `next dev`, the real FastAPI app as a restricted
+database role with tenant isolation enforced, the schema built by the real
+migrations to `120_sku_catalogue_lists`, and the app's playground seed. Only
+the Clerk modules and the identity provider were replaced. It does not prove
+real Clerk sign-in, tenant-host routing, the production build's runtime, or
+production database grants.
+
+Walked as **owner**:
+
+- Catalogue with a category filter and a checked row: open a row, step with
+  the arrow keys, expand, edit Pricing (the minimum follows the multiple; a
+  minimum of 3 with a multiple of 2 is refused; the "Customers see" line
+  updates), the discard bar on `Esc`, save, then back out to the list with the
+  filter and the checked row intact. No console errors or failed requests.
+- Header search from Purchase orders and from Settings: rich results, live
+  preview, `Enter` docks the panel on the page; a purchase order hit is listed
+  in its own group.
+- The catalogue docks beside the panel at 1440px; the panel at 390px is a
+  full-width sheet with editing and the discard bar working, and no horizontal
+  page scroll.
+- Settings → Categories and Materials; a shop-section change is staged with
+  "Takes up to 12 SKUs off the shop." and nothing is sent until Save.
+- Reorder lists a seeded SKU with Order up to, Minimum order and Pack multiple.
+- "Add to purchase order" lands on the composer with `prefill_sku` and no panel.
+- The new SKU page has no Fabric field; `/catalogue?sku=<unknown>` shows
+  "SKU not found" and `Esc` closes it; reduced motion removes the transitions.
+
+Walked as the **till** user (no `catalogue.mutate`, `sales.price_override` or
+`stock.cost.view`): the full view shows no edit controls, costs or archive
+action; both Settings screens are view-only; on the till a SKU sold in
+multiples of 2 with a minimum of 4 starts at 4 and steps by 2, and a quantity
+of 3 is blocked with the rule's message, while the owner gets the "You're
+breaking a batch" notice instead.
+
+Against the harness API, as both identities (32 checks, all passing): the till
+user is refused SKU, category and supplier-price writes (403) and receives no
+costs; a quote at an off-rule quantity is refused with `sale_quantity_rule`; a
+quote saved before the rule was tightened previews clean at the till for its
+own customer, and is still checked for another customer or at a changed
+quantity; reorder rounds to the pack multiple and drops a do-not-reorder SKU;
+a sub-category cannot have children; a category in use cannot be archived; a
+rename reaches the SKU's category text; an unknown category name and an
+unknown shop section are refused; "Boucle" is refused beside "Bouclé"; the
+finish label is derived from colour and material; search treats `%` literally.
+
+The shop was checked on the storefront's synthetic fixture at 375px: a piece
+sold in pairs, one sold in pairs with a minimum of 4, and one whose stock
+cannot cover its minimum ("Not available to order", Add to bag disabled).
+
+### Not walked in a browser by the coordinator
+
+The layby, new-invoice and trade-portal quantity inputs (the harness has no
+customer login), photo upload, the CSV import screen, the ledger's category
+posting picker and an archived SKU. These rest on the backend suite and on the
+implementing agents' own walkthroughs.
+
+### Independent review
+
+Security, data, backend, frontend (shop and Firstout), quality and delivery
+reviews were run by separate agent instances. None found a blocker; their
+should-fix findings were fixed on the branch. Accepted, not fixed: the browser
+Back button with unsaved card edits; a paid shop cart becoming a staff
+exception if a rule is tightened between payment and the payment webhook; the
+reorder list computing "on order" in its own query (pinned to the shared
+definition by a test).
