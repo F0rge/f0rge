@@ -181,20 +181,28 @@ go-live order are in `commerce/MERCHANDISING.md`.
 Some pieces are sold only in batches: Firstout's "Sold in multiples of" and
 "Minimum quantity" arrive through the feed opt-in `include_sell_rules=true` and
 are stored as Medusa variant metadata `sell_multiple` and `min_quantity`
-(positive integers; absent means 1). The product page starts the quantity at the
-minimum, steps by the multiple and caps it at the available stock rounded down
-to the multiple. Under the price, a line makes the batch plain, for example
-"R 2 450,00 each · sold in pairs · R 4 900,00 per pair", or "… · minimum 4 ·
-from R 9 800,00" when the minimum is larger than the multiple. When stock cannot
-cover the minimum, the page says so and Add to bag is disabled. The bag and
-drawer stepper uses the same step and never drops below the minimum; removing
-the line is the way down. Commerce refuses an off-rule quantity before payment:
-adding or changing a line returns HTTP 400 ("This piece is sold in sets of 2." /
-"The minimum order for this piece is 4."), which the bag shows verbatim, and the
-checkout hold turns an off-rule bag into a review. Cart completion does not
-check, because it runs after payment, and Firstout records a paid order whatever
-its quantities. Product JSON-LD adds `eligibleQuantity` when the minimum is
-above 1. Listing cards still show the unit price. The `Stepper` in `libs/ui`
+(positive integers; absent means 1). The product page works from the piece's
+total already in the bag: it offers only quantities that keep that total on the
+rule, stepping by the multiple, and caps them at the available stock rounded
+down to the multiple (with two chairs of a pair-sold piece in the bag and a
+minimum of 4, and eight available, it offers 2 to 6). Under the price, a muted line makes the batch
+plain, for example "R 2 450,00 each · sold in pairs · R 4 900,00 per pair", or
+"… · minimum 4 · from R 9 800,00" when the minimum is larger than the multiple;
+it wraps only between its parts. A piece whose stock or made-to-order capacity
+cannot cover the minimum reads "Not available to order" on the product page, on
+listing cards and in the availability filter, is `OutOfStock` in structured
+data, and Add to bag is disabled. The bag and drawer stepper uses the same step
+and never drops below the minimum; removing the line is the way down. Commerce
+refuses an off-rule quantity before payment: adding or changing a line returns
+HTTP 400 ("This piece is sold in pairs." for a multiple of 2, "This piece is
+sold in sets of 3." otherwise, "The minimum order for this piece is 4."), which
+the bag shows verbatim, and the checkout hold turns an off-rule bag into a
+review. Cart completion does not check, and Firstout records a paid order
+whatever its quantities. The Paystack webhook does re-run the checkout hold
+after payment, so a rule tightened between payment start and the webhook makes
+that cart a paid exception for staff rather than an order. Product JSON-LD adds
+`eligibleQuantity` when the minimum is above 1. Listing cards still show the
+unit price. The `Stepper` in `libs/ui`
 takes an optional `step` (default 1) for this.
 Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
 before launch; canonical links use it. Page metadata permits indexing only
@@ -279,11 +287,13 @@ The fixture also keeps in-memory carts (no stock check), so `e2e/product.spec.ts
 can add to the bag; `navigation.spec.ts`, `product.spec.ts`, `listing.spec.ts`
 (categories, availability filter, sort, counts) and `sell-rules.spec.ts` run
 against it without further opt-in. For `sell-rules.spec.ts` the fixture serves
-two unlisted pair-sold products, returned only for `handle` or `id` queries so
-listing, analytics and related-piece counts are unchanged: Pella Dining Chair
-(R 2 450, five in stock) and Pella Counter Stool (R 1 850, one in stock). The
-spec covers stepping and the stock cap on the product page, the "cannot cover the
-minimum" message, bag stepping, and an unchanged piece without rules.
+three unlisted pair-sold products, returned only for `handle` or `id` queries
+so listing, analytics and related-piece counts are unchanged: Pella Dining Chair
+(R 2 450, five in stock), Pella Counter Stool (R 1 850, one in stock) and Pella
+Side Chair (R 1 990, minimum 4, nine in stock). The spec covers stepping and the
+stock cap on the product page, "Not available to order" with the "cannot cover
+the minimum" message, a minimum above the batch size, a bag already off the rule,
+bag stepping, and an unchanged piece without rules.
 Then run `STOREFRONT_ANALYTICS_E2E=true npx playwright test --config playwright.config.ts e2e/analytics.spec.ts`.
 The test-only token is safe only because the browser test intercepts ingestion;
 do not use it for live browsing or a production PostHog project. The tests verify
