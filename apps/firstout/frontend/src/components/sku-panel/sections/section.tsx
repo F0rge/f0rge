@@ -68,18 +68,21 @@ export function SkuSectionFrame({ id, overview, summary, note, children }: {
   const actions = state.renderActions?.(id, overview);
   if (state.layout === "panel") {
     const open = state.isOpen(id);
+    // The Edit control sits beside the <summary>, not in it: a summary is already a button.
     return (
-      <details className={styles.group} open={open} onToggle={(event) => {
-        if (event.currentTarget.open !== open) state.setOpen(id, event.currentTarget.open);
-      }}>
-        <summary>
-          <span className={styles.groupTitle}>{name}</span>
-          <span className={styles.groupSummary}>{summary}</span>
-          {actions}
-          <ChevronDown className={styles.chevron} aria-hidden="true" />
-        </summary>
-        <div className={styles.groupBody}>{children}</div>
-      </details>
+      <div className={styles.groupWrap} data-has-actions={actions ? "" : undefined}>
+        <details className={styles.group} open={open} onToggle={(event) => {
+          if (event.currentTarget.open !== open) state.setOpen(id, event.currentTarget.open);
+        }}>
+          <summary>
+            <span className={styles.groupTitle}>{name}</span>
+            <span className={styles.groupSummary}>{summary}</span>
+            <ChevronDown className={styles.chevron} aria-hidden="true" />
+          </summary>
+          <div className={styles.groupBody}>{children}</div>
+        </details>
+        {actions && <span className={styles.groupActions}>{actions}</span>}
+      </div>
     );
   }
   const editing = state.modeOf(id) === "edit";

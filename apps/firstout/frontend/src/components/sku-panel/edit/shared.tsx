@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, InlineNotification } from "@carbon/react";
+import { Button, InlineNotification, Layer } from "@carbon/react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Sku } from "@/lib/api";
@@ -98,7 +98,8 @@ export function CardForm({ id, saving, failure, onSave, children }: {
       aria-label={`Edit ${name}`}
       onSubmit={(event: FormEvent) => { event.preventDefault(); onSave(); }}
     >
-      {children}
+      {/* The card is a layer of its own, so its fields take the next field fill and stand out from it. */}
+      <Layer className={styles.editForm}>{children}</Layer>
       <div className={styles.cardFoot}>
         {failure && (
           <InlineNotification kind="error" lowContrast hideCloseButton title={`${name} not saved`} subtitle={failure} className={styles.footNotice} />

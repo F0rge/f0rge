@@ -428,6 +428,8 @@
 .figures small,
 .prices small {
   display: block;
+  margin-block-start: 0.25rem;
+  font-weight: 400;
   font-size: 0.6875rem;
   color: var(--cds-text-helper);
   overflow-wrap: anywhere;
@@ -630,8 +632,23 @@
   outline: 2px solid var(--cds-focus);
   outline-offset: -2px;
 }
-.group > summary .editLink {
-  min-height: 1.5rem;
+.groupWrap {
+  position: relative;
+}
+/* Room for the Edit control, which is laid over the summary row but is not inside it. */
+.groupWrap[data-has-actions] .groupSummary {
+  margin-inline-end: 4.5rem;
+}
+.groupWrap[data-has-actions] .group[open] .groupTitle {
+  margin-inline-end: auto;
+}
+.groupActions {
+  position: absolute;
+  top: 0.5rem;
+  right: 2.25rem;
+}
+.groupActions .editLink {
+  min-height: 2rem;
   font-size: 0.75rem;
 }
 .editForm {

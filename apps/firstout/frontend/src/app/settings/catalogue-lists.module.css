@@ -41,3 +41,21 @@
 .familyTable th.colActions {
   width: 3.5rem;
 }
+
+/* Categories: a shop section change is staged in its row until Save. */
+.shopSection {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 12rem;
+}
+.stagedSection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+.stagedSection > span {
+  flex-basis: 100%;
+  color: var(--cds-text-secondary);
+}

@@ -23,7 +23,7 @@ export function SkuLink({ id, context, className, children }: {
     panel.open(id, context);
   }
   return (
-    <Link href={`/catalogue/${id}`} prefetch={false} className={className ?? "cds--link"} onClick={onClick}>
+    <Link href={`/catalogue/${id}`} prefetch={false} className={className ?? "cds--link"} onClick={onClick} data-sku-link="">
       {children}
     </Link>
   );

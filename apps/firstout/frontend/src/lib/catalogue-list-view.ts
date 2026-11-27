@@ -106,3 +106,21 @@ export function fieldErrors(detail: unknown): Record<string, string> {
   }
   return fields;
 }
+
+/**
+ * What changing a category's shop section does, in plain words, before it is saved:
+ * "Puts up to 12 SKUs on the shop in Bedroom." The count is every active SKU in the category;
+ * only photographed, unhidden ones actually appear, hence "up to".
+ */
+export function shopSectionChangeText(
+  skuCount: number,
+  from: string | null,
+  to: string | null,
+  label: (slug: string) => string,
+): string {
+  const skus = `up to ${skuCount} ${skuCount === 1 ? "SKU" : "SKUs"}`;
+  if (from === to) return "No change.";
+  if (!to) return `Takes ${skus} off the shop.`;
+  if (!from) return `Puts ${skus} on the shop in ${label(to)}.`;
+  return `Moves ${skus} on the shop from ${label(from)} to ${label(to)}.`;
+}

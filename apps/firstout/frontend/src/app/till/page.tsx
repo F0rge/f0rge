@@ -703,8 +703,10 @@ function TillWorkspace() {
         scanBufferRef.current = scanBufferRef.current.slice(0, -1);
       }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    // Capture: the scan is read before anything else on the page (such as the SKU panel's Enter)
+    // can act on the same key, and the till marks the Enter it used.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [applyScan]);
 
   const unavailableStock = resumedSale || quoteId ? cart.filter((line) =>

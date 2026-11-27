@@ -9,6 +9,7 @@ import {
   pickableCategories,
   pickableSubcategories,
   salesAccountLabel,
+  shopSectionChangeText,
   subcategoryAfterCategoryChange,
   unmappedCategories,
 } from "./catalogue-list-view";
@@ -93,5 +94,14 @@ describe("fieldErrors", () => {
       { loc: ["body", "other_material_ids", 0], msg: "Material not found" },
     ])).toEqual({ subcategory_id: "'Y' is not a sub-category of X", other_material_ids: "Material not found" });
     expect(fieldErrors("Category not found")).toEqual({});
+  });
+});
+
+describe("shopSectionChangeText", () => {
+  const label = (slug: string) => ({ bedroom: "Bedroom", sofas: "Sofas" })[slug] ?? slug;
+  it("states the consequence with the SKU count", () => {
+    expect(shopSectionChangeText(12, null, "bedroom", label)).toBe("Puts up to 12 SKUs on the shop in Bedroom.");
+    expect(shopSectionChangeText(12, "bedroom", null, label)).toBe("Takes up to 12 SKUs off the shop.");
+    expect(shopSectionChangeText(1, "bedroom", "sofas", label)).toBe("Moves up to 1 SKU on the shop from Bedroom to Sofas.");
   });
 });

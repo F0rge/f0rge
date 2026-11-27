@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   contextFor,
   readSkuPanel,
@@ -112,8 +112,15 @@ export function SkuPanelProvider({ children }: { children: ReactNode }) {
   const navigate = useCallback((href: string) => guarded(() => router.push(href)), [guarded, router]);
 
   const refreshContext = useCallback((key: string, ids: readonly string[], label: string) => {
-    setContext((current) =>
-      current?.key === key && (current.label !== label || current.ids.join() !== ids.join()) ? { ids, label, key } : current);
+    // A panel that no list owns yet (a reload, a deep link) adopts the page's list when the SKU is on it,
+    // so stepping reads the same at any width and after any way in.
+    const shownId = currentState()?.id;
+    setContext((current) => {
+      const owned = current?.key === key;
+      const unowned = !current?.key && shownId !== undefined && ids.includes(shownId);
+      if (!owned && !unowned) return current;
+      return owned && current.label === label && current.ids.join() === ids.join() ? current : { ids, label, key };
+    });
   }, []);
 
   const setLeaveGuard = useCallback((guard: SkuLeaveGuard | null) => { leaveGuard.current = guard; }, []);
@@ -129,4 +136,19 @@ export function SkuPanelProvider({ children }: { children: ReactNode }) {
 /** The panel API, or null outside the back-office shell (links then navigate normally). */
 export function useSkuPanel(): SkuPanelApi | null {
   return useContext(SkuPanelContextValue);
+}
+
+/**
+ * For a page with a fixed multi-column layout (the cart editor on the till, quotes and new
+ * invoices): the docked panel then insets the page only while it keeps 56rem (896px), and lies
+ * over it below that. Other pages keep 40rem (640px). The widths live in globals.css.
+ */
+export function useWidePage() {
+  useEffect(() => {
+    const shell = document.querySelector<HTMLElement>(".firstout-shell");
+    if (!shell) return;
+    // ponytail: one flag, not a count; fine while a page mounts at most one wide layout.
+    shell.dataset.widePage = "";
+    return () => { delete shell.dataset.widePage; };
+  }, []);
 }

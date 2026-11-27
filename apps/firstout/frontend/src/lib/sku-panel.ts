@@ -74,10 +74,11 @@ export function skuPanelPosition(context: SkuPanelContext, id: string, pageLabel
 }
 
 /** The page the panel sits on, named as the page calls itself (the catalogue's crumb says "Products"). */
-export function skuPanelPageLabel(crumbs: readonly { label: string }[]): string {
+export function skuPanelPageLabel(crumbs: readonly { label: string }[], pathname = "/"): string {
   const label = crumbs.at(-1)?.label;
-  // ponytail: one special case; move to a per-route title map if a second page needs one.
-  return label === "Products" ? "Catalogue" : (label ?? "Home");
+  // ponytail: the few pages without a crumb, by hand; move to a per-route title map if more appear.
+  if (!label) return pathname.startsWith("/till") ? "Till" : "Home";
+  return label === "Products" ? "Catalogue" : label;
 }
 
 /** A context that always contains `id`: callers that pass none get the SKU on its own. */

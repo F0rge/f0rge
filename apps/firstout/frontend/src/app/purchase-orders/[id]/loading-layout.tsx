@@ -10,7 +10,7 @@ export const purchaseOrderLineColumns = [
   "Supplier code",
   "Description",
   "Name",
-  "Fabric / finish",
+  "Finish",
   "Qty",
   "Factory unit",
   "Unit cost ZAR",

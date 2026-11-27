@@ -13,7 +13,7 @@ import { useCategories } from "@/components/catalogue-lists/hooks";
 import { PageLoading } from "@/components/page-loading";
 import { ApiError, can } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { FALLBACK_SALES_CODE, flattenCategoryTree } from "@/lib/catalogue-list-view";
+import { FALLBACK_SALES_CODE, flattenCategoryTree, shopSectionChangeText } from "@/lib/catalogue-list-view";
 import {
   createCategory, updateCategory, type Category, type ListLifecycle, type ShopSection,
 } from "@/lib/catalogue-lists";
@@ -121,9 +121,25 @@ function CategoriesScreen({ canMutate }: { canMutate: boolean }) {
       await updateCategory(category.id, payload);
       setNotice(done);
       await refresh();
+      return true;
     } catch (err) {
       setError(message(err, `Could not change ${category.name}.`));
+      return false;
     }
+  }
+
+  // A shop section change publishes or withdraws a whole category on the live shop, so choosing one
+  // only stages it in the row; Save sends it, after the row says what it will do.
+  const [staged, setStaged] = useState<Record<string, string>>({});
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  const unstage = (id: string) => setStaged((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id)));
+  async function saveSection(row: Category) {
+    const next = staged[row.id] || null;
+    setSavingSection(row.id);
+    const ok = await change(row, { shop_category: next },
+      next ? `${row.name} now shows in ${sectionLabel(next)} on the shop.` : `${row.name} is no longer on the shop.`);
+    setSavingSection(null);
+    if (ok) unstage(row.id);
   }
 
   return (
@@ -189,16 +205,31 @@ function CategoriesScreen({ canMutate }: { canMutate: boolean }) {
                       {parent ? (
                         <span className={styles.email}>—</span>
                       ) : canMutate && !row.is_archived ? (
+                        <div className={own.shopSection}>
                         <Select id={`shop-section-${row.id}`} labelText={`Shop section for ${row.name}`} hideLabel size="sm"
-                          value={row.shop_category ?? ""}
-                          onChange={(event) => void change(row, { shop_category: event.target.value || null },
-                            event.target.value ? `${row.name} now shows in ${sectionLabel(event.target.value)} on the shop.` : `${row.name} is no longer on the shop.`)}>
+                          value={staged[row.id] ?? row.shop_category ?? ""}
+                          disabled={savingSection === row.id}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (value === (row.shop_category ?? "")) unstage(row.id);
+                            else setStaged((current) => ({ ...current, [row.id]: value }));
+                          }}>
                           <SelectItem value="" text="Not on the shop" />
                           {row.shop_category && !sections.some((entry) => entry.slug === row.shop_category) && (
                             <SelectItem value={row.shop_category} text={row.shop_category} />
                           )}
                           {sections.map((entry) => <SelectItem key={entry.slug} value={entry.slug} text={entry.label} />)}
                         </Select>
+                        {row.id in staged && (
+                          <div className={own.stagedSection} role="group" aria-label={`Unsaved shop section for ${row.name}`}>
+                            <span>{shopSectionChangeText(row.sku_count, row.shop_category ?? null, staged[row.id] || null, (slug) => sectionLabel(slug) ?? slug)}</span>
+                            <Button size="sm" kind="primary" disabled={savingSection === row.id} onClick={() => void saveSection(row)}>
+                              {savingSection === row.id ? "Saving…" : "Save"}
+                            </Button>
+                            <Button size="sm" kind="ghost" disabled={savingSection === row.id} onClick={() => unstage(row.id)}>Cancel</Button>
+                          </div>
+                        )}
+                        </div>
                       ) : (
                         sectionLabel(row.shop_category) ?? "Not on the shop"
                       )}

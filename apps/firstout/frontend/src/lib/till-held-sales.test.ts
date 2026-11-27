@@ -13,7 +13,7 @@ const held: HeldSale = {
   note_printed: null, note_internal: null, sales_staff_id: null, quote_id: null,
   lines: [{
     sku_id: "service", sku_code: "SERVICE", sku_name: "Service", qty: 2,
-    discount_percent: "12.50", estimated_total_inc_vat: "115.00", kept_qty: null,
+    discount_percent: "12.50", estimated_total_inc_vat: "115.00",
   }],
 };
 

@@ -33,16 +33,31 @@ html:has(.firstout-shell) {
   transition: margin-right 200ms cubic-bezier(0.2, 0, 0.38, 0.9);
 }
 
-.firstout-shell:has([data-sku-panel="docked"], [data-sku-panel="full"]) main.firstout-main {
-  margin-right: var(--firstout-sku-panel-width);
-}
-
-@media (max-width: 672px) {
-  .firstout-shell:has([data-sku-panel="docked"], [data-sku-panel="full"]) main.firstout-main {
-    /* Below 672px the panel is a full-width sheet over the page. */
-    margin-right: 0;
+/* Inset only while main keeps enough room beside the panel; with less, the panel lies over the
+   right of the page and the page keeps its full width underneath. Most pages need 40rem (640px);
+   a page that declares a fixed multi-column layout (data-wide-page, set by useWidePage) needs
+   56rem (896px). Breakpoint = nav (16rem open, 3rem collapsed) + panel 28rem + that minimum. */
+@media (min-width: 84rem) {
+  .firstout-shell:not([data-wide-page]):has([data-sku-panel="docked"], [data-sku-panel="full"]) main.firstout-main {
+    margin-right: var(--firstout-sku-panel-width);
   }
 }
+@media (min-width: 71rem) {
+  .firstout-shell[data-nav-expanded="false"]:not([data-wide-page], [data-administration]):has([data-sku-panel="docked"], [data-sku-panel="full"]) main.firstout-main {
+    margin-right: var(--firstout-sku-panel-width);
+  }
+}
+@media (min-width: 100rem) {
+  .firstout-shell[data-wide-page]:has([data-sku-panel="docked"], [data-sku-panel="full"]) main.firstout-main {
+    margin-right: var(--firstout-sku-panel-width);
+  }
+}
+@media (min-width: 87rem) {
+  .firstout-shell[data-nav-expanded="false"][data-wide-page]:not([data-administration]):has([data-sku-panel="docked"], [data-sku-panel="full"]) main.firstout-main {
+    margin-right: var(--firstout-sku-panel-width);
+  }
+}
+
 
 @media (prefers-reduced-motion: reduce) {
   .firstout-main {

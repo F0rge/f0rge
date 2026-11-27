@@ -15,6 +15,7 @@ import {
   Tile,
 } from "@carbon/react";
 import { SkuLink } from "@/components/sku-link";
+import { useWidePage } from "@/components/sku-panel/provider";
 import {
   Image as ImageIcon,
   Locked,
@@ -215,6 +216,8 @@ export function CartEditor(props: CartEditorProps) {
   const selectedSku = props.products.find((sku) => sku.id === props.skuId);
   const selectedSkuOption = comboOptions.find((sku) => sku.id === props.skuId) ?? null;
   const numericQty = typeof props.qty === "number" ? props.qty : 0;
+  // The finder and cart columns need 56rem; below that the SKU panel lies over the page.
+  useWidePage();
   const canBreak = props.canBreakBatches ?? false;
   const finderBounds = selectedSku ? quantityInputBounds(selectedSku, canBreak) : { min: 1, step: 1 };
   const addValid =
@@ -313,6 +316,8 @@ export function CartEditor(props: CartEditorProps) {
                 min={finderBounds.min}
                 step={finderBounds.step}
                 max={selectedSku ? props.qtyMax?.(selectedSku) : undefined}
+                invalidText={selectedSku && typeof props.qty === "number" && props.qty < finderBounds.min
+                  ? quantityRuleHelper(selectedSku) ?? undefined : undefined}
                 value={props.qty}
                 onChange={(_, { value }) => {
                   if (value === "") {
@@ -578,6 +583,8 @@ export function CartEditor(props: CartEditorProps) {
                           step={lineBounds.step}
                           max={lineQtyMax || undefined}
                           helperText={quantityRuleHelper(line.sku) ?? undefined}
+                          // Carbon swaps the helper for this when the value is off its own min/step, so the rule stays in view.
+                          invalidText={line.qty < lineBounds.min ? quantityRuleHelper(line.sku) ?? undefined : undefined}
                           value={line.qty}
                           onChange={(_, { value }) => {
                             const next =

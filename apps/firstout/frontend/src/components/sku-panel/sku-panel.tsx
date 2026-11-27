@@ -262,18 +262,41 @@ export function SkuPanel() {
           type="button"
           className={styles.editLink}
           aria-label={`Edit ${name}`}
-          onClick={(event) => {
-            // Inside a <summary>: do not toggle the group.
-            event.preventDefault();
-            event.stopPropagation();
-            startEditing(section);
-          }}
+          onClick={() => startEditing(section)}
         >
           <Edit aria-hidden="true" /> Edit
         </button>
       );
     } : undefined,
   }), [openGroups, editingId, cardEditing, canEdit, startEditing]);
+
+  // While a card edits, links anywhere (side nav, page, header) and a reload or tab close ask
+  // first, like the panel's own controls. SkuLinks are left alone: they open through the guarded panel.
+  useEffect(() => {
+    if (!editingId || !panel) return;
+    const unsaved = panel;
+    function beforeUnload(event: BeforeUnloadEvent) {
+      if (!dirty.current) return;
+      event.preventDefault();
+      event.returnValue = true;
+    }
+    function onClick(event: globalThis.MouseEvent) {
+      if (!dirty.current || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!link || link.hasAttribute("data-sku-link") || (link.target && link.target !== "_self") || link.hasAttribute("download")) return;
+      const destination = new URL(link.href, window.location.href);
+      if (destination.origin !== window.location.origin) return;
+      event.preventDefault();
+      event.stopPropagation();
+      unsaved.navigate(`${destination.pathname}${destination.search}${destination.hash}`);
+    }
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [editingId, panel]);
 
   // Focus: the editing card's first field, the discard question, or the panel itself.
   const opened = Boolean(state);
@@ -315,13 +338,16 @@ export function SkuPanel() {
         return;
       }
       if (keysBelongToTarget(target)) return;
+      // Esc works from anywhere; ↑ ↓ and Enter only while focus is in the panel, so the page
+      // underneath keeps its own arrow keys and a scanner's Enter on the till is not taken.
+      const inPanel = Boolean(target && element.current?.contains(target));
       if (event.key === "Escape") {
         event.preventDefault();
         panel.back();
-      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && inPanel) {
         event.preventDefault();
         panel.step(event.key === "ArrowDown" ? 1 : -1);
-      } else if (event.key === "Enter" && view === "docked" && (target === element.current || target === document.body)) {
+      } else if (event.key === "Enter" && view === "docked" && target === element.current) {
         event.preventDefault();
         panel.setView("full");
       }
@@ -331,7 +357,7 @@ export function SkuPanel() {
   }, [opened, panel, view, finish]);
 
   if (!panel || !id) return null;
-  const pageLabel = skuPanelPageLabel(breadcrumbsForPath(pathname));
+  const pageLabel = skuPanelPageLabel(breadcrumbsForPath(pathname), pathname);
   const error = overview.error;
   const body = (layout: SkuSectionLayout) => (
     <>
@@ -350,7 +376,9 @@ export function SkuPanel() {
             title={error instanceof ApiError && error.status === 404 ? "SKU not found" : "Could not load this SKU"}
             subtitle={error.message}
           />
-          <Button kind="tertiary" size="sm" onClick={() => void overview.refetch()}>Retry</Button>
+          {!(error instanceof ApiError && error.status === 404) && (
+            <Button kind="tertiary" size="sm" onClick={() => void overview.refetch()}>Retry</Button>
+          )}
         </div>
       ) : <PanelLoading />}
     </>

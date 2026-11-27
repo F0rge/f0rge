@@ -725,7 +725,7 @@ export default function PurchaseOrderDetailPage() {
                   <TableHeader>SKU</TableHeader>
                   <TableHeader>Supplier code</TableHeader>
                   <TableHeader>Description</TableHeader>
-                  <TableHeader>Fabric / finish</TableHeader>
+                  <TableHeader>Finish</TableHeader>
                   <TableHeader>Qty</TableHeader>
                   <TableHeader>Factory unit</TableHeader>
                   <TableHeader>Notes</TableHeader>

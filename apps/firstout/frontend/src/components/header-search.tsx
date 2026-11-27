@@ -146,7 +146,9 @@ export function HeaderSearch({ className, administrationUser }: HeaderSearchProp
     }
     setOpen(false);
     setQuery("");
-    router.push(option.href);
+    // Through the panel, so a card with unsaved changes asks before the page changes.
+    if (panel) panel.navigate(option.href);
+    else router.push(option.href);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -205,7 +207,8 @@ export function HeaderSearch({ className, administrationUser }: HeaderSearchProp
         <Theme theme="g10">
           <div className="firstout-header-search__panel" id={panelId}>
             <div className="firstout-header-search__body">
-              <div className="firstout-header-search__results" role="listbox" id={listId} aria-label="Search results">
+              <div className="firstout-header-search__results">
+              <div role="listbox" id={listId} aria-label="Search results">
                 {groups.map(({ label, options: rows }) => (
                   <div role="group" aria-label={label} key={label}>
                     <p className="firstout-header-search__group" aria-hidden="true">{label} · {rows.length}</p>
@@ -252,11 +255,13 @@ export function HeaderSearch({ className, administrationUser }: HeaderSearchProp
                     ))}
                   </div>
                 ))}
-                <div role="status">
-                  {!results && !searchError && !groups.length && <p className="firstout-header-search__empty">Searching…</p>}
-                  {searchError && <p className="firstout-header-search__empty">{searchError}</p>}
-                  {results && !groups.length && <p className="firstout-header-search__empty">No matches for “{term}”.</p>}
-                </div>
+              </div>
+              {/* Outside the listbox: a listbox may only hold options and groups. */}
+              <div role="status" className="firstout-header-search__status">
+                {!results && !searchError && !groups.length && <p className="firstout-header-search__empty">Searching…</p>}
+                {searchError && <p className="firstout-header-search__empty">{searchError}</p>}
+                {results && !groups.length && <p className="firstout-header-search__empty">No matches for “{term}”.</p>}
+              </div>
               </div>
               {active && (
                 <aside className="firstout-header-search__preview" aria-label="Preview">

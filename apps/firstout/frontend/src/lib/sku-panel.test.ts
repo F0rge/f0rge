@@ -73,6 +73,7 @@ describe("SKU panel stepping", () => {
     expect(skuPanelPageLabel([{ label: "Catalogue management" }, { label: "Products" }])).toBe("Catalogue");
     expect(skuPanelPageLabel([{ label: "Stock" }, { label: "Purchase orders" }])).toBe("Purchase orders");
     expect(skuPanelPageLabel([])).toBe("Home");
+    expect(skuPanelPageLabel([], "/till")).toBe("Till");
   });
   it("always gives a context that contains the SKU", () => {
     expect(contextFor(A, { ids, label: "oslo", key: "search" })).toEqual({ ids, label: "oslo", key: "search" });

@@ -22,9 +22,12 @@ export function PricingSection({ overview }: SkuSectionProps) {
         {SKU_PRICE_TIERS.map((tier) => (
           <div key={tier.field}>
             <dt>{tier.label}</dt>
-            <dd>{formatZarCents(sku[tier.field])}</dd>
-            <small>{tier.field === "retail_inc_vat" ? "incl. VAT" : "excl. VAT"}</small>
-            {sku[tier.belowCost] && <Tag size="sm" type="red">Below cost</Tag>}
+            {/* A dl's div may hold only dt and dd, so the note and tag go inside the dd. */}
+            <dd>
+              {formatZarCents(sku[tier.field])}
+              <small>{tier.field === "retail_inc_vat" ? "incl. VAT" : "excl. VAT"}</small>
+              {sku[tier.belowCost] && <Tag size="sm" type="red">Below cost</Tag>}
+            </dd>
           </div>
         ))}
       </dl>

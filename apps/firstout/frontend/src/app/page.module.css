@@ -27,7 +27,7 @@
 }
 .intro {
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: var(--cds-spacing-08, 2.5rem);
   align-items: center;
 }
@@ -107,4 +107,10 @@
   .followUp {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Narrow beside the SKU panel: tiles shrink with their column instead of pushing past it. */
+.shortcuts :global(.cds--tile) {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
