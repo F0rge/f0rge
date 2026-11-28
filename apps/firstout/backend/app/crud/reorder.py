@@ -5,7 +5,7 @@ from decimal import ROUND_CEILING, Decimal
 from dataclasses import dataclass
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import LocationStock, SkuStock
@@ -50,6 +50,57 @@ def suggest_qty(
     return qty
 
 
+def _below_reorder_min():
+    """The reorder list's stock condition: a reorder minimum is set and on hand (every
+    location, signed) plus on order is below it. Returns the on-hand and on-order columns and
+    a function adding the joins and that condition to a ``select`` over ``Sku``.
+
+    It describes stock level only; the reorder list also leaves out archived and
+    do-not-reorder SKUs.
+    """
+    team_id = current_tenant_id()
+    on_hand_subq = (
+        select(
+            LocationStock.sku_id.label("sku_id"),
+            func.coalesce(func.sum(LocationStock.on_hand), 0).label("on_hand"),
+        )
+        .where(LocationStock.team_id == team_id)
+        .group_by(LocationStock.sku_id)
+        .subquery()
+    )
+    open_po_subq = (
+        select(
+            PoLine.sku_id.label("sku_id"),
+            func.coalesce(func.sum(PoLine.qty), 0).label("open_po_qty"),
+        )
+        .join(PurchaseOrder, PurchaseOrder.id == PoLine.po_id)
+        .where(
+            PurchaseOrder.team_id == team_id,
+            PoLine.team_id == team_id,
+            PurchaseOrder.status == PurchaseOrderStatus.OPEN,
+        )
+        .where(PurchaseOrder.is_archive.is_(False))
+        .where(PoLine.sku_id.isnot(None))
+        .group_by(PoLine.sku_id)
+        .subquery()
+    )
+    on_hand_col = func.coalesce(on_hand_subq.c.on_hand, 0)
+    on_order_col = func.coalesce(SkuStock.on_order, 0) + func.coalesce(
+        open_po_subq.c.open_po_qty, 0
+    )
+
+    def below_min(stmt: Select) -> Select:
+        return (
+            stmt.outerjoin(on_hand_subq, on_hand_subq.c.sku_id == Sku.id)
+            .outerjoin(SkuStock, (SkuStock.sku_id == Sku.id) & (SkuStock.team_id == team_id))
+            .outerjoin(open_po_subq, open_po_subq.c.sku_id == Sku.id)
+            .where(Sku.team_id == team_id, Sku.reorder_min.isnot(None))
+            .where(on_hand_col + on_order_col < Sku.reorder_min)
+        )
+
+    return on_hand_col, on_order_col, below_min
+
+
 class ReorderCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
@@ -61,40 +112,7 @@ class ReorderCRUD(BaseCRUD):
         limit: int | None = None,
         offset: int = 0,
     ) -> list[ReorderRow]:
-        team_id = current_tenant_id()
-        on_hand_subq = (
-            select(
-                LocationStock.sku_id.label("sku_id"),
-                func.coalesce(func.sum(LocationStock.on_hand), 0).label("on_hand"),
-            )
-            .where(LocationStock.team_id == team_id)
-            .group_by(LocationStock.sku_id)
-            .subquery()
-        )
-
-        open_po_subq = (
-            select(
-                PoLine.sku_id.label("sku_id"),
-                func.coalesce(func.sum(PoLine.qty), 0).label("open_po_qty"),
-            )
-            .join(PurchaseOrder, PurchaseOrder.id == PoLine.po_id)
-            .where(
-                PurchaseOrder.team_id == team_id,
-                PoLine.team_id == team_id,
-                PurchaseOrder.status == PurchaseOrderStatus.OPEN,
-            )
-            .where(PurchaseOrder.is_archive.is_(False))
-            .where(PoLine.sku_id.isnot(None))
-            .group_by(PoLine.sku_id)
-            .subquery()
-        )
-
-        on_hand_col = func.coalesce(on_hand_subq.c.on_hand, 0)
-        sku_on_order_col = func.coalesce(SkuStock.on_order, 0)
-        open_po_col = func.coalesce(open_po_subq.c.open_po_qty, 0)
-        on_order_col = sku_on_order_col + open_po_col
-        total_col = on_hand_col + on_order_col
-
+        on_hand_col, on_order_col, below_min = _below_reorder_min()
         stmt = (
             select(
                 Sku.id,
@@ -111,20 +129,16 @@ class ReorderCRUD(BaseCRUD):
                     func.coalesce(Sku.order_up_to, Sku.reorder_min) - on_hand_col - on_order_col
                 ).label("need_qty"),
             )
-            .outerjoin(on_hand_subq, on_hand_subq.c.sku_id == Sku.id)
-            .outerjoin(SkuStock, (SkuStock.sku_id == Sku.id) & (SkuStock.team_id == team_id))
-            .outerjoin(open_po_subq, open_po_subq.c.sku_id == Sku.id)
             .outerjoin(
                 SkuSupplierPrice,
                 (SkuSupplierPrice.sku_id == Sku.id)
                 & (SkuSupplierPrice.supplier_id == Sku.preferred_supplier_id)
-                & (SkuSupplierPrice.team_id == team_id),
+                & (SkuSupplierPrice.team_id == current_tenant_id()),
             )
-            .where(Sku.team_id == team_id, Sku.reorder_min.isnot(None))
             .where(Sku.is_archived.is_(False), Sku.do_not_reorder.is_(False))
-            .where(total_col < Sku.reorder_min)
             .order_by(Sku.our_ref)
         )
+        stmt = below_min(stmt)
         if sku_ids is not None:
             stmt = stmt.where(Sku.id.in_(sku_ids))
 
@@ -153,3 +167,17 @@ class ReorderCRUD(BaseCRUD):
                 )
             )
         return rows
+
+
+async def below_reorder_min_sku_ids(
+    db: AsyncSession, sku_ids: Optional[list[uuid.UUID]] = None
+) -> set[uuid.UUID]:
+    """SKUs meeting the reorder list's stock condition, archived and do-not-reorder included.
+    ``None`` means every SKU of the tenant. One query."""
+    if sku_ids == []:
+        return set()
+    _, _, below_min = _below_reorder_min()
+    stmt = below_min(select(Sku.id))
+    if sku_ids is not None:
+        stmt = stmt.where(Sku.id.in_(sku_ids))
+    return set((await db.execute(stmt)).scalars())

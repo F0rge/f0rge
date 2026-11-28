@@ -2,11 +2,11 @@
 
 import { Breadcrumb, BreadcrumbItem } from "@carbon/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { breadcrumbsForPath } from "@/lib/breadcrumbs";
 
 export function AppBreadcrumb() {
-  const crumbs = breadcrumbsForPath(usePathname());
+  const crumbs = breadcrumbsForPath(usePathname(), useSearchParams());
   if (crumbs.length < 2) return null;
   return (
     <Breadcrumb

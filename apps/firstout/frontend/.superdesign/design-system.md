@@ -18,7 +18,9 @@ IBM Carbon g10 (light productive). Do not invent a second brand.
 
 ## V2 shell (S0) — SideNav labels
 
-Home, Locations, Suppliers, Proformas, Catalogue, **Stock** (menu: Stock, Stocktakes, Adjustments, Import, Reorder), Purchase orders, Transit, Receive, WMS, Transfers, Deliveries, Till, Returns, Laybys, Customers, **Books** (menu: Chart of accounts, Contacts, Invoices, Credit notes, Bills, Payments, Bank reconciliation, Reports, VAT201 draft), Users, Profile, Settings.
+Home, Till, **Sell** (Quotes, Orders, Laybys, Invoices, Returns, Credit notes, Customers), **Products** (Catalogue, Price lists), **Buy** (Reorder, Purchase orders, Proformas, Suppliers), **Warehouse** (Receive, Warehouse on phones only, Transit, Transfers, Picks, Deliveries), **Stock** (Stock on hand, Stock by bin, Stocktakes, Adjustments), **Books** (Bills, Payments, Bank reconciliation, Journals, Repeating invoices, Chart of accounts, VAT201, Books periods), **Reports** (Sales, Stock, Books, Commission), Admin.
+
+Each person sees only the groups and pages their permissions use; the source of truth is `NAV_GROUPS` in `src/lib/nav.ts` (see `apps/firstout/AGENTS.md`, V2 shell). Admin opens the Administration shell: Organisation, Settings, people and roles, Locations, Location defaults, Categories, Materials, MCP tokens, Audit log, Import, Archive, My profile.
 
 Deliveries, Reorder, WMS, and reports extras are live — see `apps/firstout/AGENTS.md`.
 

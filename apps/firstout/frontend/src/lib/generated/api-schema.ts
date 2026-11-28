@@ -13827,10 +13827,14 @@ export interface components {
             updated_at: string;
             /** On Hand */
             on_hand: string;
+            /** Held */
+            held: string;
             /** On Order */
             on_order: string;
             /** Available */
             available: string;
+            /** Below Reorder Min */
+            below_reorder_min: boolean;
             /** Stock Locations */
             stock_locations: components["schemas"]["WorkspaceStockLocation"][];
         };

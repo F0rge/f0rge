@@ -260,7 +260,7 @@ function BillsContent() {
         )}
       >
         <p className="cds--type-body-01">
-          Imported records are available in <Link className="cds--link" href="/history">Searchable history</Link>.
+          Bills imported from Cin7 are in the <Link className="cds--link" href="/history">Archive</Link>.
         </p>
       </RecordWorkspace>
 

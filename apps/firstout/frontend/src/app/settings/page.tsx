@@ -810,7 +810,7 @@ function SettingsContent() {
       {(["Business", "Operations"] as const).map((group) => (
         <Stack key={group} gap={4}>
           <h2 className="cds--type-heading-03">{group}</h2>
-          <AdminDirectoryLinks items={SETTINGS_SECTIONS.filter((entry) => entry.group === group).map(({ id }) => id)} />
+          <AdminDirectoryLinks items={[...(group === "Operations" ? ["locationsPage" as const] : []), ...SETTINGS_SECTIONS.filter((entry) => entry.group === group).map(({ id }) => id)]} />
         </Stack>
       ))}
       <Stack gap={4}>

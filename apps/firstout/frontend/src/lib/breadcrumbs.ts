@@ -1,21 +1,8 @@
-import {
-  ADMIN_NAV_ITEMS,
-  BOOKS_NAV_ITEMS,
-  CATALOGUE_NAV_ITEMS,
-  SALES_NAV_ITEMS,
-  STOCK_NAV_ITEMS,
-  WAREHOUSE_NAV_ITEMS,
-} from "./nav";
+import { NAV_GROUPS } from "./nav";
+import { reportsView } from "./reports-sections";
 
 export type AppCrumb = { label: string; href?: string };
-const groups = [
-  { label: "Catalogue management", items: CATALOGUE_NAV_ITEMS },
-  { label: "Stock", items: STOCK_NAV_ITEMS },
-  { label: "Warehouse", items: WAREHOUSE_NAV_ITEMS },
-  { label: "Sales", items: SALES_NAV_ITEMS },
-  { label: "Books", items: BOOKS_NAV_ITEMS },
-  { label: "Administration", items: ADMIN_NAV_ITEMS },
-];
+
 const detailLabels: Record<string, string> = {
   "/catalogue": "Product details",
   "/suppliers": "Supplier details",
@@ -32,16 +19,22 @@ const newLabels: Record<string, string> = {
   "/invoices": "Create invoice",
 };
 
-/** Groups are labels, not invented links. Only ancestors with real routes link. */
-export function breadcrumbsForPath(pathname: string): AppCrumb[] {
+/**
+ * Workspace breadcrumbs: group / page [/ detail]. Groups are labels, not invented links; only ancestors
+ * with real routes link. Top-level pages and Administration pages (which have their own) return [].
+ */
+export function breadcrumbsForPath(pathname: string, search: string | URLSearchParams = ""): AppCrumb[] {
   const path = pathname.replace(/\/+$/, "") || "/";
-  if (path === "/" || path === "/till") return [];
-  for (const group of groups) {
-    const item = group.items.find(({ href }) => path === href) ??
-      group.items.find(({ href }) => path.startsWith(`${href}/`));
+  if (path === "/reports") {
+    const view = reportsView(new URLSearchParams(search).get("section"));
+    return view.sectionLabel ? [{ label: "Reports" }, { label: view.sectionLabel }] : [];
+  }
+  for (const group of NAV_GROUPS) {
+    if (group.link) continue;
+    const item = group.pages.find(({ href }) => path === href) ??
+      group.pages.find(({ href }) => path.startsWith(`${href}/`));
     if (!item) continue;
-    const label = item.href === "/catalogue" ? "Products" : item.label;
-    if (path === item.href) return [{ label: group.label }, { label }];
+    if (path === item.href) return [{ label: group.label }, { label: item.label }];
     const tail = path.slice(item.href.length + 1);
     const current =
       tail === "new"
@@ -51,7 +44,7 @@ export function breadcrumbsForPath(pathname: string): AppCrumb[] {
           : (detailLabels[item.href] ?? "Details");
     return [
       { label: group.label },
-      { label, href: item.href },
+      { label: item.label, href: item.href },
       { label: current },
     ];
   }

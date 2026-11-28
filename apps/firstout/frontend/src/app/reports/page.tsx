@@ -22,7 +22,8 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { CriticalityReport } from "@/components/criticality-report";
 import { LoadingRegion, LoadingTableRows } from "@/components/page-loading";
@@ -66,6 +67,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { localIsoDate } from "@/lib/dates";
+import { reportsView, type ReportTabId } from "@/lib/reports-sections";
 
 function monthStartIso(): string {
   const now = new Date();
@@ -155,7 +157,27 @@ function ReportLoading({ title, columns, sections = [title] }: {
 }
 
 export default function ReportsPage() {
+  return (
+    <Suspense>
+      <ReportsScreen />
+    </Suspense>
+  );
+}
+
+function ReportsScreen() {
   const { user } = useAuth();
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const view = reportsView(params.get("section"), params.get("tab"));
+  const section = view.section;
+  // The tab lives in the URL (?tab=), so it survives a reload; other parameters (section, SKU panel) are kept.
+  function selectTab(id: string | undefined) {
+    if (!id) return;
+    const next = new URLSearchParams(params);
+    next.set("tab", id);
+    router.replace(`${pathname}?${next}`, { scroll: false });
+  }
   const [asOf, setAsOf] = useState(localIsoDate());
   const [fromDate, setFromDate] = useState(monthStartIso());
   const [toDate, setToDate] = useState(localIsoDate());
@@ -194,20 +216,23 @@ export default function ReportsPage() {
     setError(null);
     setLeadTimesError(null);
     setCriticalityError(null);
+    // Only the visible section's reports are fetched, so a failing books report never shows on Stock.
+    const shows = reportsView(section).shows;
+    const fetchIf = <T,>(id: ReportTabId, load: () => Promise<T>): Promise<T | null> => (shows(id) ? load() : Promise.resolve(null));
     try {
       const [ar, ap, pl, bs, tb, journals, cash, valuation, aged, salesSku, salesVatReport] =
         await Promise.all([
-          getAgedAr(effectiveAsOf),
-          getAgedAp(effectiveAsOf),
-          getProfitLoss(effectiveFrom, effectiveTo),
-          getBalanceSheet(effectiveAsOf),
-          getTrialBalance(effectiveAsOf),
-          getJournalsReport(effectiveFrom, effectiveTo, journalSourceRef.current),
-          getCashSummary(effectiveFrom, effectiveTo),
-          getStockValuation(),
-          getAgedStock(),
-          getSalesBySku(effectiveFrom, effectiveTo),
-          getSalesVat(effectiveFrom, effectiveTo),
+          fetchIf("aged-ar", () => getAgedAr(effectiveAsOf)),
+          fetchIf("aged-ap", () => getAgedAp(effectiveAsOf)),
+          fetchIf("profit-loss", () => getProfitLoss(effectiveFrom, effectiveTo)),
+          fetchIf("balance-sheet", () => getBalanceSheet(effectiveAsOf)),
+          fetchIf("trial-balance", () => getTrialBalance(effectiveAsOf)),
+          fetchIf("journals", () => getJournalsReport(effectiveFrom, effectiveTo, journalSourceRef.current)),
+          fetchIf("cash-summary", () => getCashSummary(effectiveFrom, effectiveTo)),
+          fetchIf("stock-valuation", () => getStockValuation()),
+          fetchIf("aged-stock", () => getAgedStock()),
+          fetchIf("sales-by-sku", () => getSalesBySku(effectiveFrom, effectiveTo)),
+          fetchIf("sales-vat", () => getSalesVat(effectiveFrom, effectiveTo)),
         ]);
       setAgedAr(ar);
       setAgedAp(ap);
@@ -224,29 +249,30 @@ export default function ReportsPage() {
       setError(err instanceof Error ? err.message : "Failed to load reports.");
     }
 
-    try {
-      const [supplierLead, skuLead] = await Promise.all([
-        getSupplierLeadTimes(),
-        getSkuLeadTimes(),
-      ]);
-      setSupplierLeadTimes(supplierLead);
-      setSkuLeadTimes(skuLead);
-    } catch (err) {
-      setSupplierLeadTimes({ rows: [] });
-      setSkuLeadTimes({ rows: [] });
-      setLeadTimesError(err instanceof Error ? err.message : "Failed to load lead times.");
+    if (shows("lead-times")) {
+      try {
+        const [supplierLead, skuLead] = await Promise.all([
+          getSupplierLeadTimes(),
+          getSkuLeadTimes(),
+        ]);
+        setSupplierLeadTimes(supplierLead);
+        setSkuLeadTimes(skuLead);
+      } catch (err) {
+        setSupplierLeadTimes({ rows: [] });
+        setSkuLeadTimes({ rows: [] });
+        setLeadTimesError(err instanceof Error ? err.message : "Failed to load lead times.");
+      }
     }
 
     try {
-      const criticality = await getSkuCriticality(effectiveFrom, effectiveTo);
-      setSkuCriticality(criticality);
+      if (shows("criticality")) setSkuCriticality(await getSkuCriticality(effectiveFrom, effectiveTo));
     } catch (err) {
       setSkuCriticality(null);
       setCriticalityError(err instanceof Error ? err.message : "Failed to load criticality.");
     } finally {
       setLoading(false);
     }
-  }, [asOf, fromDate, toDate]);
+  }, [asOf, fromDate, toDate, section]);
 
   useEffect(() => {
     if (user) {
@@ -361,14 +387,649 @@ export default function ReportsPage() {
     );
   }
 
+  const panels: Record<ReportTabId, ReactNode> = {
+    "aged-ar": (
+      <>
+        {agedAr ? (
+          <Stack gap={4}>
+            <p className="cds--type-body-01">
+              Total outstanding: {formatZarAmount(agedAr.total_zar)}
+            </p>
+            <DataTable rows={agedRows(agedAr)} headers={[...AGED_HEADERS]}>
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Aged accounts receivable">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Aged accounts receivable" columns={AGED_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "aged-ap": (
+      <>
+        {agedAp ? (
+          <Stack gap={4}>
+            <p className="cds--type-body-01">
+              Total outstanding: {formatZarAmount(agedAp.total_zar)}
+            </p>
+            <DataTable rows={agedRows(agedAp)} headers={[...AGED_HEADERS]}>
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Aged accounts payable">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Aged accounts payable" columns={AGED_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "profit-loss": (
+      <>
+        {profitLoss ? (
+          <Stack gap={4}>
+            <p className="cds--type-body-01">
+              Net profit: {formatZarAmount(profitLoss.net_profit_zar)} (
+              {profitLoss.from_date} to {profitLoss.to_date})
+            </p>
+            <p className="cds--type-body-01">
+              Income and expenses are grouped by account, including category sales.
+            </p>
+            <TableContainer title="Income">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Code</TableHeader>
+                    <TableHeader>Account</TableHeader>
+                    <TableHeader>Amount</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {profitLoss.income.map((line) => (
+                    <TableRow key={line.code}>
+                      <TableCell>{line.code}</TableCell>
+                      <TableCell>{line.name}</TableCell>
+                      <TableCell>{formatZarAmount(line.amount_zar)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={2}>
+                      <strong>Total income</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>{formatZarAmount(profitLoss.total_income_zar)}</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TableContainer title="Expenses">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Code</TableHeader>
+                    <TableHeader>Account</TableHeader>
+                    <TableHeader>Amount</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {profitLoss.expenses.map((line) => (
+                    <TableRow key={line.code}>
+                      <TableCell>{line.code}</TableCell>
+                      <TableCell>{line.name}</TableCell>
+                      <TableCell>{formatZarAmount(line.amount_zar)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={2}>
+                      <strong>Total expenses</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>{formatZarAmount(profitLoss.total_expenses_zar)}</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Profit and loss" columns={["Code", "Account", "Amount"]} sections={["Income", "Expenses"]} />
+        ) : null}
+      </>
+    ),
+    "balance-sheet": (
+      <>
+        {balanceSheet ? (
+          <Stack gap={4}>
+            <p className="cds--type-body-01">
+              As of {balanceSheet.as_of} — Equity: {formatZarAmount(balanceSheet.equity_zar)}
+            </p>
+            <TableContainer title="Assets">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Code</TableHeader>
+                    <TableHeader>Account</TableHeader>
+                    <TableHeader>Balance</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {balanceSheet.assets.map((line) => (
+                    <TableRow key={line.code}>
+                      <TableCell>{line.code}</TableCell>
+                      <TableCell>{line.name}</TableCell>
+                      <TableCell>{formatZarAmount(line.balance_zar)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={2}>
+                      <strong>Total assets</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>{formatZarAmount(balanceSheet.total_assets_zar)}</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TableContainer title="Liabilities">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Code</TableHeader>
+                    <TableHeader>Account</TableHeader>
+                    <TableHeader>Balance</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {balanceSheet.liabilities.map((line) => (
+                    <TableRow key={line.code}>
+                      <TableCell>{line.code}</TableCell>
+                      <TableCell>{line.name}</TableCell>
+                      <TableCell>{formatZarAmount(line.balance_zar)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={2}>
+                      <strong>Total liabilities</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>{formatZarAmount(balanceSheet.total_liabilities_zar)}</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Balance sheet" columns={["Code", "Account", "Balance"]} sections={["Assets", "Liabilities"]} />
+        ) : null}
+      </>
+    ),
+    "trial-balance": (
+      <>
+        {trialBalance ? (
+          <Stack gap={4}>
+            <Stack gap={4} orientation="horizontal">
+              <p className="cds--type-body-01">
+                As of {trialBalance.as_of} — Debits {formatZarAmount(trialBalance.total_debit_zar)}{" "}
+                / Credits {formatZarAmount(trialBalance.total_credit_zar)}
+              </p>
+              <Button
+                kind="tertiary"
+                onClick={() => void handleCsvDownload(() => downloadTrialBalanceCsv(asOf))}
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <DataTable rows={trialBalanceRows(trialBalance)} headers={[...TRIAL_BALANCE_HEADERS]}>
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Trial balance">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Trial balance" columns={TRIAL_BALANCE_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "journals": (
+      <>
+        {journalsReport ? (
+          <Stack gap={4}>
+            <TextInput
+              id="journal-source"
+              labelText="Source (optional)"
+              placeholder="e.g. manual"
+              helperText="Leave blank for all sources. Click Refresh to apply."
+              value={journalSource}
+              onChange={(event) => setJournalSource(event.target.value)}
+            />
+            <Stack gap={4} orientation="horizontal">
+              <p className="cds--type-body-01">
+                {journalsReport.from_date} to {journalsReport.to_date}
+                {journalsReport.source ? ` — source ${journalsReport.source}` : ""}
+              </p>
+              <Button
+                kind="tertiary"
+                onClick={() =>
+                  void handleCsvDownload(() =>
+                    downloadJournalsCsv(fromDate, toDate, journalSource),
+                  )
+                }
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <DataTable
+              rows={journalReportRows(journalsReport)}
+              headers={[...JOURNAL_REPORT_HEADERS]}
+            >
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Journals">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Journals" columns={JOURNAL_REPORT_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "cash-summary": (
+      <>
+        {cashSummary ? (
+          <Stack gap={4}>
+            <Stack gap={4} orientation="horizontal">
+              <p className="cds--type-body-01">
+                {cashSummary.from_date} to {cashSummary.to_date} — In{" "}
+                {formatZarAmount(cashSummary.total_cash_in_zar)} / Out{" "}
+                {formatZarAmount(cashSummary.total_cash_out_zar)} / Net{" "}
+                {formatZarAmount(cashSummary.total_net_zar)}
+              </p>
+              <Button
+                kind="tertiary"
+                onClick={() =>
+                  void handleCsvDownload(() => downloadCashSummaryCsv(fromDate, toDate))
+                }
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <DataTable rows={cashSummaryRows(cashSummary)} headers={[...CASH_SUMMARY_HEADERS]}>
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Cash summary">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Cash summary" columns={CASH_SUMMARY_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "stock-valuation": (
+      <>
+        {stockValuation ? (
+          <Stack gap={4}>
+            <Stack gap={4} orientation="horizontal">
+              <p className="cds--type-body-01">
+                Total inventory value: {formatZarAmount(stockValuation.total_value_zar)}
+              </p>
+              <Button
+                kind="tertiary"
+                onClick={() => void handleCsvDownload(downloadStockValuationCsv)}
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <DataTable
+              rows={stockValuationRows(stockValuation)}
+              headers={[...STOCK_VALUATION_HEADERS]}
+            >
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Stock valuation">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Stock valuation" columns={STOCK_VALUATION_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "aged-stock": (
+      <>
+        {agedStock ? (
+          <Stack gap={4}>
+            <Stack gap={4} orientation="horizontal">
+              <p className="cds--type-body-01">Current snapshot by age bucket.</p>
+              <Button
+                kind="tertiary"
+                onClick={() => void handleCsvDownload(downloadAgedStockCsv)}
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <TableContainer title="Age buckets">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Bucket</TableHeader>
+                    <TableHeader>Qty</TableHeader>
+                    <TableHeader>Value</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {agedStock.buckets.map((bucket) => (
+                    <TableRow key={bucket.bucket}>
+                      <TableCell>{bucket.label}</TableCell>
+                      <TableCell>{bucket.qty}</TableCell>
+                      <TableCell>{formatZarAmount(bucket.value_zar)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <DataTable rows={agedStockRows(agedStock)} headers={[...AGED_STOCK_HEADERS]}>
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Aged stock detail">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Aged stock detail" columns={AGED_STOCK_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "sales-by-sku": (
+      <>
+        {salesBySku ? (
+          <Stack gap={4}>
+            <Stack gap={4} orientation="horizontal">
+              <p className="cds--type-body-01">
+                {salesBySku.from_date} to {salesBySku.to_date}
+              </p>
+              <Button
+                kind="tertiary"
+                onClick={() =>
+                  void handleCsvDownload(() =>
+                    downloadSalesBySkuCsv(fromDate, toDate),
+                  )
+                }
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <DataTable rows={salesBySkuRows(salesBySku)} headers={[...SALES_BY_SKU_HEADERS]}>
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Sales by SKU">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Sales by SKU" columns={SALES_BY_SKU_HEADERS.map(({ header }) => header)} />
+        ) : null}
+      </>
+    ),
+    "lead-times": (
+      <>
+        {supplierLeadTimes && skuLeadTimes ? (
+          <LeadTimesReport
+            suppliers={supplierLeadTimes.rows}
+            skus={skuLeadTimes.rows}
+            error={leadTimesError}
+            onCsvError={setError}
+          />
+        ) : loading && !leadTimesError ? (
+          <ReportLoading title="Supplier lead times" columns={["Supplier", "n", "Median PO→receive", "Last 3", "Water median", "P90"]} />
+        ) : null}
+      </>
+    ),
+    "criticality": (
+      <>
+        {skuCriticality ? (
+          <CriticalityReport
+            report={skuCriticality}
+            fromDate={fromDate}
+            toDate={toDate}
+            error={criticalityError}
+            onCsvError={setError}
+          />
+        ) : criticalityError ? (
+          <InlineNotification
+            kind="error"
+            title="Criticality"
+            subtitle={criticalityError}
+            hideCloseButton
+            lowContrast
+          />
+        ) : loading && !criticalityError ? (
+          <ReportLoading title="SKU criticality" columns={["Our ref", "Name", "Category", "Qty", "Value", "Share %", "Cumulative %", "ABC", "50% band"]} />
+        ) : null}
+      </>
+    ),
+    "sales-vat": (
+      <>
+        {salesVat ? (
+          <Stack gap={4}>
+            <Stack gap={4} orientation="horizontal">
+              <p className="cds--type-body-01">
+                {salesVat.from_date} to {salesVat.to_date}
+              </p>
+              <Button
+                kind="tertiary"
+                onClick={() =>
+                  void handleCsvDownload(() => downloadSalesVatCsv(fromDate, toDate))
+                }
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <TableContainer title="Sales VAT summary">
+              <Table>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Invoices</TableCell>
+                    <TableCell>{salesVat.invoice_count}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Subtotal (ex VAT)</TableCell>
+                    <TableCell>{formatZarAmount(salesVat.subtotal_ex_vat)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>VAT amount</TableCell>
+                    <TableCell>{formatZarAmount(salesVat.vat_amount)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Total (inc VAT)</TableCell>
+                    <TableCell>{formatZarAmount(salesVat.total_inc_vat)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Amount paid</TableCell>
+                    <TableCell>{formatZarAmount(salesVat.amount_paid)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Stack>
+        ) : loading && !error ? (
+          <ReportLoading title="Sales VAT summary" columns={2} />
+        ) : null}
+      </>
+    ),
+  };
+
   return (
     <Stack gap={6}>
       <div>
-        <h1 className="cds--type-productive-heading-04">Reports</h1>
-        <p className="cds--type-body-01">
-          Financial and stock reports in ZAR — aged AR/AP, P&amp;L, balance sheet, trial balance,
-          journals, cash summary, stock valuation, aged stock, sales, lead times, and criticality.
-        </p>
+        <h1 className="cds--type-productive-heading-04">{view.title}</h1>
+        <p className="cds--type-body-01">{view.description}</p>
       </div>
 
       {error ? (
@@ -382,661 +1043,51 @@ export default function ReportsPage() {
       ) : null}
 
       <Stack gap={4} orientation="horizontal">
-        <DatePicker datePickerType="single" dateFormat="Y-m-d" value={asOf}>
-          <DatePickerInput
-            id="as-of"
-            labelText="As of (aged AR/AP, balance sheet, trial balance)"
-            placeholder="YYYY-MM-DD"
-            onChange={(event) => setAsOf(event.target.value)}
-          />
-        </DatePicker>
-        <DatePicker datePickerType="single" dateFormat="Y-m-d" value={fromDate}>
-          <DatePickerInput
-            id="from-date"
-            labelText="From (P&L, sales, journals, cash)"
-            placeholder="YYYY-MM-DD"
-            onChange={(event) => setFromDate(event.target.value)}
-          />
-        </DatePicker>
-        <DatePicker datePickerType="single" dateFormat="Y-m-d" value={toDate}>
-          <DatePickerInput
-            id="to-date"
-            labelText="To (P&L, sales, journals, cash)"
-            placeholder="YYYY-MM-DD"
-            onChange={(event) => setToDate(event.target.value)}
-          />
-        </DatePicker>
+        {view.asOfLabel && (
+          <DatePicker datePickerType="single" dateFormat="Y-m-d" value={asOf}>
+            <DatePickerInput
+              id="as-of"
+              labelText={view.asOfLabel}
+              placeholder="YYYY-MM-DD"
+              onChange={(event) => setAsOf(event.target.value)}
+            />
+          </DatePicker>
+        )}
+        {view.rangeLabels && (
+          <>
+            <DatePicker datePickerType="single" dateFormat="Y-m-d" value={fromDate}>
+              <DatePickerInput
+                id="from-date"
+                labelText={view.rangeLabels.from}
+                placeholder="YYYY-MM-DD"
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+            </DatePicker>
+            <DatePicker datePickerType="single" dateFormat="Y-m-d" value={toDate}>
+              <DatePickerInput
+                id="to-date"
+                labelText={view.rangeLabels.to}
+                placeholder="YYYY-MM-DD"
+                onChange={(event) => setToDate(event.target.value)}
+              />
+            </DatePicker>
+          </>
+        )}
         <Button kind="primary" disabled={loading} onClick={() => void loadReports()}>
           {loading ? "Loading…" : "Refresh"}
         </Button>
       </Stack>
 
-      <Tabs>
-        <TabList aria-label="Financial reports">
-          <Tab>Aged AR</Tab>
-          <Tab>Aged AP</Tab>
-          <Tab>Profit &amp; loss</Tab>
-          <Tab>Balance sheet</Tab>
-          <Tab>Trial balance</Tab>
-          <Tab>Journals</Tab>
-          <Tab>Cash summary</Tab>
-          <Tab>Stock valuation</Tab>
-          <Tab>Aged stock</Tab>
-          <Tab>Sales by SKU</Tab>
-          <Tab>Lead times</Tab>
-          <Tab>Criticality</Tab>
-          <Tab>Sales VAT</Tab>
+      <Tabs
+        key={view.section ?? "all"}
+        selectedIndex={view.selected}
+        onChange={({ selectedIndex }) => selectTab(view.tabs[selectedIndex]?.id)}
+      >
+        <TabList aria-label={view.title}>
+          {view.tabs.map((tab) => <Tab key={tab.id}>{tab.label}</Tab>)}
         </TabList>
         <TabPanels>
-          <TabPanel>
-            {agedAr ? (
-              <Stack gap={4}>
-                <p className="cds--type-body-01">
-                  Total outstanding: {formatZarAmount(agedAr.total_zar)}
-                </p>
-                <DataTable rows={agedRows(agedAr)} headers={[...AGED_HEADERS]}>
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Aged accounts receivable">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Aged accounts receivable" columns={AGED_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {agedAp ? (
-              <Stack gap={4}>
-                <p className="cds--type-body-01">
-                  Total outstanding: {formatZarAmount(agedAp.total_zar)}
-                </p>
-                <DataTable rows={agedRows(agedAp)} headers={[...AGED_HEADERS]}>
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Aged accounts payable">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Aged accounts payable" columns={AGED_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {profitLoss ? (
-              <Stack gap={4}>
-                <p className="cds--type-body-01">
-                  Net profit: {formatZarAmount(profitLoss.net_profit_zar)} (
-                  {profitLoss.from_date} to {profitLoss.to_date})
-                </p>
-                <p className="cds--type-body-01">
-                  Income and expenses are grouped by account, including category sales.
-                </p>
-                <TableContainer title="Income">
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableHeader>Code</TableHeader>
-                        <TableHeader>Account</TableHeader>
-                        <TableHeader>Amount</TableHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {profitLoss.income.map((line) => (
-                        <TableRow key={line.code}>
-                          <TableCell>{line.code}</TableCell>
-                          <TableCell>{line.name}</TableCell>
-                          <TableCell>{formatZarAmount(line.amount_zar)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={2}>
-                          <strong>Total income</strong>
-                        </TableCell>
-                        <TableCell>
-                          <strong>{formatZarAmount(profitLoss.total_income_zar)}</strong>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <TableContainer title="Expenses">
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableHeader>Code</TableHeader>
-                        <TableHeader>Account</TableHeader>
-                        <TableHeader>Amount</TableHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {profitLoss.expenses.map((line) => (
-                        <TableRow key={line.code}>
-                          <TableCell>{line.code}</TableCell>
-                          <TableCell>{line.name}</TableCell>
-                          <TableCell>{formatZarAmount(line.amount_zar)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={2}>
-                          <strong>Total expenses</strong>
-                        </TableCell>
-                        <TableCell>
-                          <strong>{formatZarAmount(profitLoss.total_expenses_zar)}</strong>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Profit and loss" columns={["Code", "Account", "Amount"]} sections={["Income", "Expenses"]} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {balanceSheet ? (
-              <Stack gap={4}>
-                <p className="cds--type-body-01">
-                  As of {balanceSheet.as_of} — Equity: {formatZarAmount(balanceSheet.equity_zar)}
-                </p>
-                <TableContainer title="Assets">
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableHeader>Code</TableHeader>
-                        <TableHeader>Account</TableHeader>
-                        <TableHeader>Balance</TableHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {balanceSheet.assets.map((line) => (
-                        <TableRow key={line.code}>
-                          <TableCell>{line.code}</TableCell>
-                          <TableCell>{line.name}</TableCell>
-                          <TableCell>{formatZarAmount(line.balance_zar)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={2}>
-                          <strong>Total assets</strong>
-                        </TableCell>
-                        <TableCell>
-                          <strong>{formatZarAmount(balanceSheet.total_assets_zar)}</strong>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <TableContainer title="Liabilities">
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableHeader>Code</TableHeader>
-                        <TableHeader>Account</TableHeader>
-                        <TableHeader>Balance</TableHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {balanceSheet.liabilities.map((line) => (
-                        <TableRow key={line.code}>
-                          <TableCell>{line.code}</TableCell>
-                          <TableCell>{line.name}</TableCell>
-                          <TableCell>{formatZarAmount(line.balance_zar)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={2}>
-                          <strong>Total liabilities</strong>
-                        </TableCell>
-                        <TableCell>
-                          <strong>{formatZarAmount(balanceSheet.total_liabilities_zar)}</strong>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Balance sheet" columns={["Code", "Account", "Balance"]} sections={["Assets", "Liabilities"]} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {trialBalance ? (
-              <Stack gap={4}>
-                <Stack gap={4} orientation="horizontal">
-                  <p className="cds--type-body-01">
-                    As of {trialBalance.as_of} — Debits {formatZarAmount(trialBalance.total_debit_zar)}{" "}
-                    / Credits {formatZarAmount(trialBalance.total_credit_zar)}
-                  </p>
-                  <Button
-                    kind="tertiary"
-                    onClick={() => void handleCsvDownload(() => downloadTrialBalanceCsv(asOf))}
-                  >
-                    Download CSV
-                  </Button>
-                </Stack>
-                <DataTable rows={trialBalanceRows(trialBalance)} headers={[...TRIAL_BALANCE_HEADERS]}>
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Trial balance">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Trial balance" columns={TRIAL_BALANCE_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {journalsReport ? (
-              <Stack gap={4}>
-                <TextInput
-                  id="journal-source"
-                  labelText="Source (optional)"
-                  placeholder="e.g. manual"
-                  helperText="Leave blank for all sources. Click Refresh to apply."
-                  value={journalSource}
-                  onChange={(event) => setJournalSource(event.target.value)}
-                />
-                <Stack gap={4} orientation="horizontal">
-                  <p className="cds--type-body-01">
-                    {journalsReport.from_date} to {journalsReport.to_date}
-                    {journalsReport.source ? ` — source ${journalsReport.source}` : ""}
-                  </p>
-                  <Button
-                    kind="tertiary"
-                    onClick={() =>
-                      void handleCsvDownload(() =>
-                        downloadJournalsCsv(fromDate, toDate, journalSource),
-                      )
-                    }
-                  >
-                    Download CSV
-                  </Button>
-                </Stack>
-                <DataTable
-                  rows={journalReportRows(journalsReport)}
-                  headers={[...JOURNAL_REPORT_HEADERS]}
-                >
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Journals">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Journals" columns={JOURNAL_REPORT_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {cashSummary ? (
-              <Stack gap={4}>
-                <Stack gap={4} orientation="horizontal">
-                  <p className="cds--type-body-01">
-                    {cashSummary.from_date} to {cashSummary.to_date} — In{" "}
-                    {formatZarAmount(cashSummary.total_cash_in_zar)} / Out{" "}
-                    {formatZarAmount(cashSummary.total_cash_out_zar)} / Net{" "}
-                    {formatZarAmount(cashSummary.total_net_zar)}
-                  </p>
-                  <Button
-                    kind="tertiary"
-                    onClick={() =>
-                      void handleCsvDownload(() => downloadCashSummaryCsv(fromDate, toDate))
-                    }
-                  >
-                    Download CSV
-                  </Button>
-                </Stack>
-                <DataTable rows={cashSummaryRows(cashSummary)} headers={[...CASH_SUMMARY_HEADERS]}>
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Cash summary">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Cash summary" columns={CASH_SUMMARY_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {stockValuation ? (
-              <Stack gap={4}>
-                <Stack gap={4} orientation="horizontal">
-                  <p className="cds--type-body-01">
-                    Total inventory value: {formatZarAmount(stockValuation.total_value_zar)}
-                  </p>
-                  <Button
-                    kind="tertiary"
-                    onClick={() => void handleCsvDownload(downloadStockValuationCsv)}
-                  >
-                    Download CSV
-                  </Button>
-                </Stack>
-                <DataTable
-                  rows={stockValuationRows(stockValuation)}
-                  headers={[...STOCK_VALUATION_HEADERS]}
-                >
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Stock valuation">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Stock valuation" columns={STOCK_VALUATION_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {agedStock ? (
-              <Stack gap={4}>
-                <Stack gap={4} orientation="horizontal">
-                  <p className="cds--type-body-01">Current snapshot by age bucket.</p>
-                  <Button
-                    kind="tertiary"
-                    onClick={() => void handleCsvDownload(downloadAgedStockCsv)}
-                  >
-                    Download CSV
-                  </Button>
-                </Stack>
-                <TableContainer title="Age buckets">
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableHeader>Bucket</TableHeader>
-                        <TableHeader>Qty</TableHeader>
-                        <TableHeader>Value</TableHeader>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {agedStock.buckets.map((bucket) => (
-                        <TableRow key={bucket.bucket}>
-                          <TableCell>{bucket.label}</TableCell>
-                          <TableCell>{bucket.qty}</TableCell>
-                          <TableCell>{formatZarAmount(bucket.value_zar)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <DataTable rows={agedStockRows(agedStock)} headers={[...AGED_STOCK_HEADERS]}>
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Aged stock detail">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Aged stock detail" columns={AGED_STOCK_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {salesBySku ? (
-              <Stack gap={4}>
-                <Stack gap={4} orientation="horizontal">
-                  <p className="cds--type-body-01">
-                    {salesBySku.from_date} to {salesBySku.to_date}
-                  </p>
-                  <Button
-                    kind="tertiary"
-                    onClick={() =>
-                      void handleCsvDownload(() =>
-                        downloadSalesBySkuCsv(fromDate, toDate),
-                      )
-                    }
-                  >
-                    Download CSV
-                  </Button>
-                </Stack>
-                <DataTable rows={salesBySkuRows(salesBySku)} headers={[...SALES_BY_SKU_HEADERS]}>
-                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                    <TableContainer title="Sales by SKU">
-                      <Table {...getTableProps()}>
-                        <TableHead>
-                          <TableRow>
-                            {headers.map((header) => (
-                              <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                                {header.header}
-                              </TableHeader>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {rows.map((row) => (
-                            <TableRow {...getRowProps({ row })} key={row.id}>
-                              {row.cells.map((cell) => (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DataTable>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Sales by SKU" columns={SALES_BY_SKU_HEADERS.map(({ header }) => header)} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {supplierLeadTimes && skuLeadTimes ? (
-              <LeadTimesReport
-                suppliers={supplierLeadTimes.rows}
-                skus={skuLeadTimes.rows}
-                error={leadTimesError}
-                onCsvError={setError}
-              />
-            ) : loading && !leadTimesError ? (
-              <ReportLoading title="Supplier lead times" columns={["Supplier", "n", "Median PO→receive", "Last 3", "Water median", "P90"]} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {skuCriticality ? (
-              <CriticalityReport
-                report={skuCriticality}
-                fromDate={fromDate}
-                toDate={toDate}
-                error={criticalityError}
-                onCsvError={setError}
-              />
-            ) : criticalityError ? (
-              <InlineNotification
-                kind="error"
-                title="Criticality"
-                subtitle={criticalityError}
-                hideCloseButton
-                lowContrast
-              />
-            ) : loading && !criticalityError ? (
-              <ReportLoading title="SKU criticality" columns={["Our ref", "Name", "Category", "Qty", "Value", "Share %", "Cumulative %", "ABC", "50% band"]} />
-            ) : null}
-          </TabPanel>
-          <TabPanel>
-            {salesVat ? (
-              <Stack gap={4}>
-                <Stack gap={4} orientation="horizontal">
-                  <p className="cds--type-body-01">
-                    {salesVat.from_date} to {salesVat.to_date}
-                  </p>
-                  <Button
-                    kind="tertiary"
-                    onClick={() =>
-                      void handleCsvDownload(() => downloadSalesVatCsv(fromDate, toDate))
-                    }
-                  >
-                    Download CSV
-                  </Button>
-                </Stack>
-                <TableContainer title="Sales VAT summary">
-                  <Table>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>Invoices</TableCell>
-                        <TableCell>{salesVat.invoice_count}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Subtotal (ex VAT)</TableCell>
-                        <TableCell>{formatZarAmount(salesVat.subtotal_ex_vat)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>VAT amount</TableCell>
-                        <TableCell>{formatZarAmount(salesVat.vat_amount)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Total (inc VAT)</TableCell>
-                        <TableCell>{formatZarAmount(salesVat.total_inc_vat)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Amount paid</TableCell>
-                        <TableCell>{formatZarAmount(salesVat.amount_paid)}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Stack>
-            ) : loading && !error ? (
-              <ReportLoading title="Sales VAT summary" columns={2} />
-            ) : null}
-          </TabPanel>
+          {view.tabs.map((tab) => <TabPanel key={tab.id}>{panels[tab.id]}</TabPanel>)}
         </TabPanels>
       </Tabs>
     </Stack>

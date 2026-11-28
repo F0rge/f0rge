@@ -17,73 +17,31 @@ import {
   Theme,
 } from "@carbon/react";
 import {
-  Barcode,
-  Calendar,
   Catalog,
-  Delivery,
-  DeliveryParcel,
+  ChartLine,
   DeliveryTruck,
-  Document,
-  DocumentImport,
   Finance,
   Home,
-  Industry,
   InventoryManagement,
-  Location,
   Logout,
   Money,
-  Movement,
-  Notebook,
-  PiggyBank,
-  Product,
-  Purchase,
-  Receipt,
-  Renew,
-  Report,
   Settings,
   ShoppingCart,
-  Store,
-  Task,
-  Undo,
-  User,
-  UserAdmin,
-  UserFollow,
-  UserMultiple,
-  Wallet,
-  ChartLine,
-  Currency,
-  DocumentSubtract,
-  Security,
-  DocumentTasks,
+  Tag,
 } from "@carbon/icons-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
 import { StaffOrganizationSwitcher, useStaffSession } from "@/components/staff-provider";
 import { isPublicAuthPath, missingSessionDestination } from "@/lib/auth-routes";
 import { useAuth } from "@/lib/auth";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
-import { can } from "@/lib/permissions";
-import {
-  BOOKS_NAV_ITEMS,
-  CATALOGUE_NAV_ITEMS,
-  HOME_NAV_ITEM,
-  SALES_NAV_ITEMS,
-  STOCK_NAV_ITEMS,
-  TILL_NAV_ITEM,
-  WAREHOUSE_NAV_ITEMS,
-  isAdminPath,
-  isBooksPath,
-  isCatalogueMenuPath,
-  isNavLinkActive,
-  isSalesPath,
-  isStockPath,
-  isWarehousePath,
-} from "@/lib/nav";
+import { isNavLinkActive, navGroupForPath, navGroupsFor, type NavGroupId } from "@/lib/nav";
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { AdminBreadcrumb, AdminNavigation } from "@/components/administration";
 import adminStyles from "@/components/administration.module.css";
-import { administrationHome } from "@/lib/admin-navigation";
+import { administrationHome, isAdminPath } from "@/lib/admin-navigation";
+import navStyles from "@/components/workspace-nav.module.css";
 import { WorkspaceLoader } from "@/components/workspace-loader";
 import loadingStyles from "@/components/auth-loading.module.css";
 import { HeaderSearch } from "@/components/header-search";
@@ -102,54 +60,17 @@ import {
   toggleSideNavExpanded,
 } from "@/lib/side-nav-preference";
 
-const ICONS = {
-  "/": Home,
-  "/locations": Location,
-  "/suppliers": Industry,
-  "/price-lists": Currency,
-  "/proformas": Document,
-  "/catalogue": Catalog,
-  "/stocktakes": InventoryManagement,
-  "/adjustments": Report,
-  "/import": DocumentImport,
-  "/reorder": ShoppingCart,
-  "/purchase-orders": Purchase,
-  "/transit": Delivery,
-  "/receive": DeliveryParcel,
-  "/wms": Barcode,
-  "/transfers": Movement,
-  "/picks": Task,
-  "/deliveries": DeliveryTruck,
-  "/returns": Undo,
-  "/quotes": Document,
-  "/orders": Receipt,
-  "/laybys": PiggyBank,
-  "/customers": UserFollow,
-  "/ledger": Finance,
-  "/journals": Notebook,
-  "/invoices": Receipt,
-  "/repeating-invoices": Renew,
-  "/credit-notes": DocumentSubtract,
-  "/bills": Purchase,
-  "/payments": Wallet,
-  "/bank-reconciliation": DocumentTasks,
-  "/reports": ChartLine,
-  "/vat201": Document,
-  "/books-periods": Calendar,
-  "/till": Money,
-  "/audit": Security,
-  "/users": UserMultiple,
-  "/roles": UserAdmin,
-  "/profile": User,
-  "/settings": Settings,
-  "/organisation": UserAdmin,
-} as const;
-
-type NavHref = keyof typeof ICONS;
-
-function navIcon(href: string) {
-  return ICONS[href as NavHref];
-}
+const GROUP_ICONS = {
+  home: Home,
+  till: Money,
+  sell: Tag,
+  products: Catalog,
+  buy: ShoppingCart,
+  warehouse: DeliveryTruck,
+  stock: InventoryManagement,
+  books: Finance,
+  reports: ChartLine,
+} satisfies Record<NavGroupId, typeof Home>;
 
 type AppShellProps = {
   children: ReactNode;
@@ -214,71 +135,6 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   if (!loading && !user) return null;
-
-  const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
-    ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders")
-    : SALES_NAV_ITEMS;
-  // Commission is gated like GET /reports/commission (books.mutate or users.manage).
-  const booksNavItems = can(user, "books.mutate") || can(user, "users.manage")
-    ? BOOKS_NAV_ITEMS
-    : BOOKS_NAV_ITEMS.filter((item) => item.href !== "/commission");
-
-  function renderNavMenu(
-    title: string,
-    icon: typeof Product,
-    pathActive: boolean,
-    items: ReadonlyArray<{ href: string; label: string; mobileOnly?: boolean }>,
-    keyPrefix: string,
-  ) {
-    return (
-      <SideNavMenu
-        key={pathActive ? `${keyPrefix}-open` : `${keyPrefix}-closed`}
-        renderIcon={icon}
-        title={title}
-        defaultExpanded={pathActive}
-        isActive={pathActive}
-      >
-        {items.map((item) => (
-          <SideNavMenuItem
-            key={item.href}
-            href={item.href}
-            className={item.mobileOnly ? "firstout-nav-warehouse" : undefined}
-            isActive={isNavLinkActive(pathname, item.href)}
-            onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-              event.preventDefault();
-              router.push(item.href);
-              if (narrow) {
-                closeNav();
-              }
-            }}
-          >
-            {item.label}
-          </SideNavMenuItem>
-        ))}
-      </SideNavMenu>
-    );
-  }
-
-  function renderNavLink(href: string, label: string, className?: string, active = isNavLinkActive(pathname, href), Icon = navIcon(href)) {
-    return (
-      <SideNavLink
-        key={href}
-        href={href}
-        renderIcon={Icon}
-        className={className}
-        isActive={active}
-        onClick={(event) => {
-          event.preventDefault();
-          router.push(href);
-          if (narrow || isAdministration) {
-            closeNav();
-          }
-        }}
-      >
-        {label}
-      </SideNavLink>
-    );
-  }
 
   async function handleLogout() {
     await logout();
@@ -370,28 +226,19 @@ export function AppShell({ children }: AppShellProps) {
                 </div>
               ))}
             </div>
-          ) : <SideNavItems>
-            {renderNavLink(HOME_NAV_ITEM.href, HOME_NAV_ITEM.label)}
-            {renderNavMenu(
-              "Catalogue",
-              Catalog,
-              isCatalogueMenuPath(pathname),
-              CATALOGUE_NAV_ITEMS,
-              "catalogue",
-            )}
-            {renderNavMenu("Stock", Product, isStockPath(pathname), STOCK_NAV_ITEMS, "stock")}
-            {renderNavMenu(
-              "Warehouse",
-              InventoryManagement,
-              isWarehousePath(pathname),
-              WAREHOUSE_NAV_ITEMS,
-              "warehouse",
-            )}
-            {renderNavLink(TILL_NAV_ITEM.href, TILL_NAV_ITEM.label)}
-            {salesNavItems.length ? renderNavMenu("Sales", Store, isSalesPath(pathname), salesNavItems, "sales") : null}
-            {renderNavMenu("Books", Finance, isBooksPath(pathname), booksNavItems, "books")}
-            {renderNavLink(administrationHome(user), "Admin", undefined, isAdministration, Settings)}
-          </SideNavItems>}
+          ) : (
+            <Suspense>
+              <WorkspaceNavItems
+                pathname={pathname}
+                adminHref={administrationHome(user)}
+                isAdministration={isAdministration}
+                onNavigate={(href) => {
+                  router.push(href);
+                  if (narrow || isAdministration) closeNav();
+                }}
+              />
+            </Suspense>
+          )}
         </SideNav>
       </Theme>
       <Theme theme="g10">
@@ -412,7 +259,9 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         ) : (
           <main id="main-content" className="firstout-main">
-            <AppBreadcrumb />
+            <Suspense>
+              <AppBreadcrumb />
+            </Suspense>
             {loading ? <WorkspaceLoader /> : children}
           </main>
         )}
@@ -424,5 +273,75 @@ export function AppShell({ children }: AppShellProps) {
       </Theme>
     </div>
     </SkuPanelProvider>
+  );
+}
+
+/** The workspace sidebar: groups this person can use, the current page's group open on load. */
+function WorkspaceNavItems({ pathname, adminHref, isAdministration, onNavigate }: {
+  pathname: string;
+  adminHref: string;
+  isAdministration: boolean;
+  onNavigate: (href: string) => void;
+}) {
+  const { user } = useAuth();
+  const section = useSearchParams().get("section");
+  const currentGroup = isAdministration ? undefined : navGroupForPath(pathname)?.id;
+  const follow = (href: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onNavigate(href);
+  };
+
+  return (
+    <SideNavItems>
+      {navGroupsFor(user).map((group) => {
+        const Icon = GROUP_ICONS[group.id];
+        if (group.link) {
+          const page = group.pages[0];
+          const active = isNavLinkActive(pathname, page.href);
+          return (
+            <SideNavLink key={group.id} href={page.href} renderIcon={Icon} isActive={active} aria-current={active ? "page" : undefined} onClick={follow(page.href)}>
+              {group.label}
+            </SideNavLink>
+          );
+        }
+        const open = currentGroup === group.id;
+        return (
+          <SideNavMenu
+            // A new key when the current group changes re-applies defaultExpanded after navigation.
+            key={open ? `${group.id}-open` : `${group.id}-closed`}
+            renderIcon={Icon}
+            title={group.label}
+            defaultExpanded={open}
+            isActive={open}
+          >
+            {group.pages.map((page) => {
+              const active = isNavLinkActive(pathname, page.href, section);
+              return (
+              <SideNavMenuItem
+                key={page.href}
+                href={page.href}
+                className={page.mobileOnly ? "firstout-nav-warehouse" : undefined}
+                isActive={active}
+                aria-current={active ? "page" : undefined}
+                onClick={follow(page.href)}
+              >
+                {page.access === "view" ? (
+                  <span className={navStyles.item}>
+                    {page.label}
+                    <span className={navStyles.view} aria-hidden="true">view</span>
+                    <span className="cds--visually-hidden">, view only</span>
+                  </span>
+                ) : page.label}
+              </SideNavMenuItem>
+              );
+            })}
+          </SideNavMenu>
+        );
+      })}
+      <SideNavLink href={adminHref} renderIcon={Settings} isActive={isAdministration} aria-current={isAdministration ? "page" : undefined} onClick={follow(adminHref)}>
+        Admin
+      </SideNavLink>
+    </SideNavItems>
   );
 }

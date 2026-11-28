@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location_bin import BinStockCRUD
 from app.crud.purchase_order import LocationStockCRUD
-from app.crud.sku_stock_figures import arriving_orders, held_documents, on_order_by_sku_id
+from app.crud.sku_stock_figures import (
+    arriving_orders,
+    held_documents_by_sku_id,
+    on_order_by_sku_id,
+)
 from app.models.location import Location
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
@@ -87,7 +91,7 @@ class SkuOverviewService:
             bins.setdefault(row.bin.location_id, []).append(
                 BinOnHandResponse(bin_id=row.bin_id, code=row.bin.code, on_hand=row.on_hand)
             )
-        held = await held_documents(self.db, sku.id)
+        held = (await held_documents_by_sku_id(self.db, [sku.id])).get(sku.id, [])
         now = datetime.datetime.now(datetime.timezone.utc)
         available = (await StockAvailability(self.db).company_available([sku.id], now))[sku.id]
         unit_cost = sku_level_unit_cost([(ls.on_hand, ls.unit_cost_zar) for ls in location_stocks])

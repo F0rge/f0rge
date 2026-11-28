@@ -8,7 +8,7 @@ function Fields({ labels }: { labels: readonly string[] }) {
   return labels.map((label) => <LoadingField key={label} label={label} />);
 }
 
-export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents" | "Locations" | "Operations" | "Labels" }) {
+export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents" | "Location defaults" | "Operations" | "Labels" }) {
   return (
     <LoadingRegion label={`Loading ${panel.toLowerCase()} settings…`}>
       <Stack gap={5}>
@@ -41,7 +41,7 @@ export function SettingsPanelLoading({ panel }: { panel: "Company" | "Documents"
               <Fields labels={["Prefix", "Padding", "Next value"]} />
             </div>
           </>
-        ) : panel === "Locations" ? (
+        ) : panel === "Location defaults" ? (
           <>
             <LoadingField label="Default receive location" helperText="Warehouse locations only." />
             <LoadingField label="Default till location" helperText="Showroom locations only." />

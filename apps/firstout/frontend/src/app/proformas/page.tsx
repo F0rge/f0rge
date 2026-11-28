@@ -118,7 +118,7 @@ function ProformasContent() {
 
       <RecordWorkspace<Proforma>
         adapter={{
-          resource: "proformas", title: "Proformas", singular: "proforma", breadcrumb: "Catalogue management",
+          resource: "proformas", title: "Proformas", singular: "proforma", breadcrumb: "Buy",
           description: "Review supplier documents and keep filed invoices organised.", defaultSort: "invoice_date",
           lifecycle: { activeLabel: "Active", archivedLabel: "Archived" },
           columns: [

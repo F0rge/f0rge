@@ -63,7 +63,12 @@ DEFINITIONS = {
             "do_not_reorder": "boolean",
             "retail_inc_vat": "number",
             "on_hand": "number",
+            "held": "number",
             "available": "number",
+            "on_order": "number",
+            # Names of the locations holding stock above zero; eq/ne match any one of them.
+            "stocked_at": "text_any",
+            "below_reorder_min": "boolean",
         },
         frozenset(),
         ARCHIVE,
