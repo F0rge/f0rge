@@ -49,7 +49,8 @@ export function ErrorNotice({
         role="alert"
         title={title}
         subtitle={error}
-        hideCloseButton={!onClose}
+        // Inside a dialog: no close button, as the dialog's focus trap cannot see a portaled one.
+        hideCloseButton={!onClose || dialog !== null}
         onCloseButtonClick={onClose}
         lowContrast
       />

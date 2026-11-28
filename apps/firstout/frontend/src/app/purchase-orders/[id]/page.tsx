@@ -330,6 +330,7 @@ export default function PurchaseOrderDetailPage() {
     setFactoryBill(emptyBill(supplier?.default_currency ?? "USD"));
     setFreightBill(emptyBill("USD"));
     setClearanceBill(emptyBill("ZAR"));
+    setError(null);
     setLandOpen(true);
   }
 
@@ -449,6 +450,7 @@ export default function PurchaseOrderDetailPage() {
     setSkuLineKey(line.key);
     setSkuDraft(skuDefaults(line));
     setSkuFieldErrors({});
+    setError(null);
     setSkuOpen(true);
   }
 

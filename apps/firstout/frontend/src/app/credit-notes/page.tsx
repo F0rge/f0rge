@@ -129,6 +129,8 @@ export default function CreditNotesPage() {
   const formValid = Boolean(invoiceId);
 
   function resetCreateForm() {
+
+    setError(null);
     setInvoiceId("");
     setInvoiceQuery("");
     setReason("");
@@ -321,7 +323,7 @@ export default function CreditNotesPage() {
         onRequestSubmit={() => void handleCreate()}
       >
         <Stack gap={5}>
-          {availableInvoices.length === 0 && !invoiceId && !debouncedInvoiceQuery && !optionsQuery.isPending ? (
+          {availableInvoices.length === 0 && !invoiceId && !debouncedInvoiceQuery && !optionsQuery.isPending && !optionsQuery.isError ? (
             <InlineNotification
               kind="info"
               title="No invoices available"
@@ -338,7 +340,7 @@ export default function CreditNotesPage() {
             selectedId={invoiceId}
             onSearch={setInvoiceQuery}
             onSelect={(option) => setInvoiceId(option?.id ?? "")}
-            helperText={availableInvoices.length === 0 && debouncedInvoiceQuery ? "No invoices without a credit note match this search." : undefined}
+            helperText={availableInvoices.length === 0 && debouncedInvoiceQuery && !invoiceId ? "No invoices without a credit note match this search." : undefined}
           />
           <TextArea
             id="credit-note-reason"

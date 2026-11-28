@@ -53,7 +53,7 @@ export function ServerSearchComboBox<T extends SearchOption>({
   const [picked, setPicked] = useState<T | null>(null);
   const selected = selectedSearchOption(items, selectedId, picked);
   // A prefilled id has no pick yet: remember it once a search returns it.
-  if (selected && selected !== picked) setPicked(selected);
+  if (selected && selected.id !== picked?.id) setPicked(selected);
   return (
     <ComboBox
       id={id}

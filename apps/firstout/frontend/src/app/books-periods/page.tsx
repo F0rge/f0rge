@@ -281,6 +281,7 @@ export default function BooksPeriodsPage() {
                                       size="sm"
                                       onClick={() => {
                                         setReopenReason("");
+                                        setError(null);
                                         setReopenPeriod(period);
                                       }}
                                     >

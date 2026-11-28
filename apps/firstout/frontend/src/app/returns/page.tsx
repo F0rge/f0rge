@@ -262,6 +262,8 @@ function ReturnsPageContent() {
   );
 
   function resetCreateForm() {
+
+    setError(null);
     setInvoiceId("");
     setInvoiceQuery("");
     setSelectedInvoice(null);

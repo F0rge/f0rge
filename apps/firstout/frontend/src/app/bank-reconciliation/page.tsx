@@ -430,6 +430,7 @@ export default function BankReconciliationPage() {
       amounts[suggestion.document_id] = "";
     }
     setSplitAmounts(amounts);
+    setError(null);
     setSplitLineRow(line);
   }
 
@@ -566,6 +567,7 @@ export default function BankReconciliationPage() {
       setError("Could not find the import for this line.");
       return;
     }
+    setError(null);
     setMatchImportId(importId);
     setMatchLineId(lineId);
     setMatchPaymentId(suggestedPaymentId ?? "");
@@ -581,6 +583,7 @@ export default function BankReconciliationPage() {
       setError("Could not find the import for this line.");
       return;
     }
+    setError(null);
     setApplyImportId(importId);
     setApplyLine(line);
   }
@@ -613,6 +616,7 @@ export default function BankReconciliationPage() {
       setError("Could not find the import for this line.");
       return;
     }
+    setError(null);
     setRecodeImportId(importId);
     setRecodeLineRow(line);
     setRecodeAccountId("");

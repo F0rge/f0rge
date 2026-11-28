@@ -63,6 +63,8 @@ function ProformasContent() {
   }
 
   function openCreate() {
+
+    setError(null);
     resetForm();
     setCreateOpen(true);
   }

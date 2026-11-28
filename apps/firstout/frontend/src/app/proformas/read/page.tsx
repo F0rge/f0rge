@@ -214,6 +214,7 @@ export default function ReadProformaPage() {
   async function openSku(index: number) {
     const line = lines[index];
     setSkuLine(index);
+    setError(null);
     setSkuOpen(true);
     setSkuSaving(true);
     try {

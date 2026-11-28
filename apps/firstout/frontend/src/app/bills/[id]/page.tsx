@@ -374,7 +374,7 @@ export default function BillDetailPage() {
                         kind="danger--ghost"
                         size="sm"
                         disabled={busy}
-                        onClick={() => setRemoving(attachment)}
+                        onClick={() => { setError(null); setRemoving(attachment); }}
                       >
                         Remove
                       </Button>

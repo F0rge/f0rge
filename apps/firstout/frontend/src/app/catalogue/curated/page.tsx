@@ -170,7 +170,7 @@ export default function CuratedCataloguePage() {
               <Button
                 type="button"
                 disabled={!result || result.applied || stage !== null}
-                onClick={() => setConfirmOpen(true)}
+                onClick={() => { setError(""); setConfirmOpen(true); }}
               >{copy.apply}</Button>
             </div>
           </Stack>

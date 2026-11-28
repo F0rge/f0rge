@@ -376,6 +376,7 @@ export default function JournalsPage() {
               kind="secondary"
               onClick={() => {
                 resetImport();
+                setError(null);
                 setImportOpen(true);
               }}
             >
@@ -384,6 +385,7 @@ export default function JournalsPage() {
             <Button
               onClick={() => {
                 resetCreateForm();
+                setError(null);
                 setCreateOpen(true);
               }}
             >
@@ -495,6 +497,7 @@ export default function JournalsPage() {
                                       disabled={busy}
                                       onClick={(event) => {
                                         event.stopPropagation();
+                                        setError(null);
                                         setVoidTarget(entry);
                                       }}
                                     >

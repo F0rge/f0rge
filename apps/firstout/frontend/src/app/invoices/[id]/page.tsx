@@ -162,6 +162,7 @@ export default function InvoiceDetailPage() {
     setPaymentAmount(invoice.balance);
     setPaymentDate(localIsoDate());
     setPaymentReference("");
+    setError(null);
     setPaymentOpen(true);
   }
 
@@ -427,7 +428,7 @@ export default function InvoiceDetailPage() {
           </Button>
         ) : null}
         {showCreditNote ? (
-          <Button kind="tertiary" disabled={actionLoading} onClick={() => setCreditOpen(true)}>
+          <Button kind="tertiary" disabled={actionLoading} onClick={() => { setError(null); setCreditOpen(true); }}>
             Issue credit note
           </Button>
         ) : null}

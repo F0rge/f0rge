@@ -448,6 +448,7 @@ export default function Vat201Page() {
                 kind="danger--tertiary"
                 onClick={() => {
                   setReopenReason("");
+                  setError(null);
                   setReopenOpen(true);
                 }}
               >

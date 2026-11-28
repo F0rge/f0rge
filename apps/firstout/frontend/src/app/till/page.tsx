@@ -872,6 +872,7 @@ function TillWorkspace() {
         if (quote.status === "converted" || quote.status === "accepted" || quote.status === "cancelled") {
           throw new Error(`${quote.quote_number} is ${quote.status} and cannot be sold again.`);
         }
+        setError(null);
         setIncomingQuote(quote);
       })
       .catch((failure: unknown) => {
@@ -1211,6 +1212,7 @@ function TillWorkspace() {
   }
 
   async function startKitPick(kit: TillKitBlock) {
+    setError(null);
     setPickDraft({
       kit,
       pick: null,
@@ -1395,12 +1397,12 @@ function TillWorkspace() {
         {originalAvailable && <Button kind="secondary" disabled={heldBusy}
           onClick={keepOriginalBasket}>Keep current basket</Button>}
         {pendingBlocked && <Button kind="danger--ghost" disabled={heldBusy}
-          onClick={() => setDiscardRestored(true)}>Discard recovery copy</Button>}
+          onClick={() => { setError(null); setDiscardRestored(true); }}>Discard recovery copy</Button>}
       </div>}
       {restoreBlocked && !pendingHeld && <div>
         <InlineNotification kind="warning" lowContrast hideCloseButton title="Saved cart needs attention"
           subtitle="Your saved basket could not be loaded as it is. Reload after correcting the issue, or discard the saved cart to start again." />
-        <Button kind="danger--ghost" onClick={() => setDiscardRestored(true)}>Discard saved cart</Button>
+        <Button kind="danger--ghost" onClick={() => { setError(null); setDiscardRestored(true); }}>Discard saved cart</Button>
       </div>}
       <Modal open={discardRestored} danger
         modalHeading={pendingHeld ? "Discard the recovery copy?" : "Discard the saved cart?"}
@@ -1561,6 +1563,7 @@ function TillWorkspace() {
                       const next = event.target.value;
                       if (next === locationId) return;
                       if (cart.length) {
+                        setError(null);
                         setPendingShowroom(next);
                       } else {
                         void changeShowroom(next);

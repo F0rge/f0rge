@@ -284,7 +284,7 @@ function InvoiceForm({
               </div>
             ))}
             <div>
-              <Button kind="ghost" size="sm" renderIcon={Add} onClick={() => setFreeOpen(true)}>
+              <Button kind="ghost" size="sm" renderIcon={Add} onClick={() => { setError(null); setFreeOpen(true); }}>
                 Add free-text line
               </Button>
             </div>

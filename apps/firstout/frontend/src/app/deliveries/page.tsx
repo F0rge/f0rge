@@ -256,6 +256,8 @@ function DeliveriesPageContent() {
   );
 
   function resetCreateForm() {
+
+    setError(null);
     setSourceType("invoice");
     setInvoiceId("");
     setLaybyId("");
