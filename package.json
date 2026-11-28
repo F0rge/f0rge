@@ -52,7 +52,7 @@
     "@nx/eslint": "~23.2.1",
     "@nx/eslint-plugin": "~23.2.1",
     "@nx/next": "~23.2.1",
-    "@nx/playwright": "~23.2.1",
+    "@nx/playwright": "~24.0.6",
     "@nx/vitest": "~23.2.1",
     "@nxlv/python": "~22.2.1",
     "@playwright/test": "^1.62.1",
