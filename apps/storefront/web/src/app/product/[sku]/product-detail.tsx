@@ -12,11 +12,12 @@ import { zarMinorUnits } from "@/lib/analytics/money";
 import { formatCustomerPrice } from "@/lib/order-money";
 import { offerLive } from "@/lib/made-to-order";
 import { publishedDimensions, unqualifiedLegacySize } from "@/lib/product-dimensions";
-import { pickVariant, productVariantOptions, selectedImages, variantChoices } from "@/lib/product-variants";
+import { selectedImages } from "@/lib/product-variants";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 import { addableRange, batchPriceParts, coversMinimum, sellRules } from "@/lib/sell-rules";
 import { SHOP_CATEGORIES } from "@/lib/shop-categories";
 import { DimensionsFit } from "./dimensions-fit";
+import { VariantSelector } from "./variant-selector";
 
 const assurances = [
   { title: "Delivery", description: "Selected areas in Johannesburg and Pretoria" },
@@ -34,8 +35,6 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
   const { choice, capture } = useStorefrontAnalytics();
   const [variantId, setVariantId] = useState(initialVariantId ?? product.variants[0]?.id);
   const variant = product.variants.find((candidate) => candidate.id === variantId) ?? product.variants[0];
-  const options = productVariantOptions(product);
-  const choices = variantChoices(variant);
   const gallery = selectedImages(product, variant);
   const [activeAngle, setActiveAngle] = useState(0);
   const [requested, setRequested] = useState(1);
@@ -84,10 +83,10 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
     });
   }, [capture, choice, product.id, product.title]);
 
-  function selectOption(optionId: string, value: string, index: number) {
-    const selected = pickVariant(product.variants, variant, optionId, value);
-    if (!selected || selected.id === variant?.id) return;
+  function selectOption(optionId: string, index: number, selected: MedusaVariant) {
+    if (selected.id === variant?.id) return;
     setVariantId(selected.id);
+    setActiveAngle(0);
     setRequested(1);
     setBagMessage("");
     capture({
@@ -147,27 +146,7 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
           </dl>}
         </div>}
 
-        {options.length > 0 && <div className="space-y-4 border-t pt-6">
-          {options.map(({ id, title, availableValues }) => (
-            <fieldset key={id} className="min-w-0 space-y-2">
-              <legend className="text-sm font-medium">{title}</legend>
-              <div className="flex flex-wrap gap-2">
-                {availableValues.map((value, index) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    variant={choices[id] === value ? "default" : "outline"}
-                    className="h-auto min-h-11 max-w-full whitespace-normal text-start"
-                    aria-pressed={choices[id] === value}
-                    onClick={() => selectOption(id, value, index)}
-                  >
-                    {value}
-                  </Button>
-                ))}
-              </div>
-            </fieldset>
-          ))}
-        </div>}
+        <VariantSelector product={product} active={variant} onSelect={selectOption} />
 
         <DimensionsFit title={product.title} sku={variant?.sku} gallery={gallery} measurements={measurements} />
 

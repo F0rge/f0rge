@@ -38,14 +38,14 @@ export type ShopMatch = ListedPiece & { variant?: ListedVariant };
 export const SORT_OPTIONS = Object.entries(SORTS).map(([value, { label }]) => ({ value, label }));
 const isSort = (value: string | null): value is SortKey => value !== null && Object.hasOwn(SORTS, value);
 
-export function readShopFilters(params: Search, showShopFacets: boolean, availabilityChoices: Availability[]): ShopFilters {
+export function readShopFilters(params: Search, showCategoryFilter: boolean, availabilityChoices: Availability[]): ShopFilters {
   const sort = params.get("sort");
   const categories = params.getAll("categories");
   const price = params.getAll("price");
   const availability = params.getAll("availability");
   return {
-    categories: showShopFacets ? SHOP_CATEGORIES.map(({ handle }) => handle).filter((handle) => categories.includes(handle)) : [],
-    price: showShopFacets ? PRICE_BANDS.map(({ value }) => value).filter((value) => price.includes(value)) : [],
+    categories: showCategoryFilter ? SHOP_CATEGORIES.map(({ handle }) => handle).filter((handle) => categories.includes(handle)) : [],
+    price: PRICE_BANDS.map(({ value }) => value).filter((value) => price.includes(value)),
     availability: availabilityChoices.filter((value) => availability.includes(value)),
     sort: isSort(sort) ? sort : "name",
   };
