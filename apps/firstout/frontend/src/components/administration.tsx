@@ -2,25 +2,25 @@
 
 import { Breadcrumb, BreadcrumbItem } from "@carbon/react";
 import {
-  ArrowRight, Badge, Building, Category, ChevronDown, Document, Identification,
-  ImportExport, Layers, Location, Locked, Printer, Security, Settings, User, UserAdmin, UserMultiple,
+  Archive, ArrowRight, Badge, Building, Category, ChevronDown, Document, DocumentImport, Identification,
+  ImportExport, Layers, Location, Locked, Printer, Security, Settings, SettingsAdjust, User, UserAdmin, UserMultiple,
 } from "@carbon/icons-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
 import {
-  ADMIN_NAV_GROUPS, adminDestination, administrationHome, canOpenAdminDestination,
-  currentAdminDestination, findSettingsSection, type AdminDestination,
+  adminBreadcrumbs, adminDestination, adminNavGroupsFor, administrationHome, canOpenAdminDestination,
+  currentAdminDestination, type AdminDestination,
 } from "@/lib/admin-navigation";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import styles from "./administration.module.css";
 
 const icons = {
   organisation: Building, settings: Settings, team: UserMultiple, salesStaff: Badge, roles: UserAdmin,
-  company: Identification, documents: Document, locations: Location, operations: Settings,
+  company: Identification, documents: Document, locationsPage: Location, locations: SettingsAdjust, operations: Settings,
   labels: Printer, categories: Category, materials: Layers, integrations: ImportExport,
-  mcp: Locked, audit: Security, profile: User,
+  mcp: Locked, audit: Security, import: DocumentImport, archive: Archive, profile: User,
 } satisfies Record<AdminDestination, typeof Settings>;
 
 export function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
@@ -29,17 +29,14 @@ export function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
   const current = currentAdminDestination(path, tab);
   const { user } = useAuth();
   const mobileNav = useRef<HTMLDetailsElement>(null);
-  const groups = ADMIN_NAV_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter((id) => canOpenAdminDestination(id, user)),
-  })).filter((group) => group.items.length);
+  const groups = adminNavGroupsFor(user);
 
   function renderGroups() {
     return groups.map(({ label, items }) => (
       <div key={label} className={styles.navGroup}>
         <p className={styles.navLabel}>{label}</p>
         <ul aria-label={label}>
-          {items.map((id) => {
+          {items.map(({ id, access }) => {
             const destination = adminDestination(id);
             const Icon = icons[id];
             return (
@@ -52,6 +49,7 @@ export function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
                 >
                   <Icon size={16} aria-hidden="true" />
                   {destination.label}
+                  {access === "view" && <span className={styles.viewTag}>view<span className="cds--visually-hidden">, view only</span></span>}
                 </Link>
               </li>
             );
@@ -81,22 +79,13 @@ export function AdminBreadcrumb() {
   const path = usePathname();
   const tab = useSearchParams().get("tab");
   const { user } = useAuth();
-  const current = currentAdminDestination(path, tab);
-  const home = administrationHome(user);
+  const crumbs = adminBreadcrumbs(path, tab, administrationHome(user));
 
   useEffect(() => {
     resetMainScroll();
   }, [path, tab]);
 
-  if (!current) return null;
-  const settingsPage = (path === "/settings" && findSettingsSection(tab)) || current === "mcp" || current === "integrations"
-    || current === "categories" || current === "materials";
-  const crumbs = [
-    { label: "Administration", href: home === path && !tab ? undefined : home },
-    ...(settingsPage ? [{ label: "Settings", href: "/settings" }] : []),
-    ...(current === "mcp" ? [{ label: "Integrations", href: "/settings/integrations" }] : []),
-    { label: adminDestination(current).label },
-  ];
+  if (!crumbs.length) return null;
 
   return (
     <Breadcrumb noTrailingSlash className={`firstout-breadcrumb ${styles.breadcrumb}`} aria-label="Breadcrumb">

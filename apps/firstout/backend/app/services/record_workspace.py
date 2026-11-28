@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import datetime
 
 from app.crud.purchase_order import LocationStockCRUD
-from app.crud.sku_stock_figures import on_order_by_sku_id
+from app.crud.reorder import below_reorder_min_sku_ids
+from app.crud.sku_stock_figures import held_by_sku_id, on_order_by_sku_id
 from app.exceptions import ForbiddenError
 from app.schemas.location import LocationResponse
 from app.schemas.record_workspace import (
@@ -162,21 +163,9 @@ class RecordWorkspaceService:
             rows if query.lifecycle == "all" else past if query.lifecycle == "archived" else active
         )
         stock_locations = None
-        if resource == "skus" and "on_hand" in requested_fields:
-            stock_locations = await LocationStockCRUD(self.db).on_hand_locations_by_sku_id()
-        on_hand = (
-            {
-                sku_id: sum((qty for _, _, qty in locations), Decimal(0))
-                for sku_id, locations in stock_locations.items()
-            }
-            if stock_locations is not None
-            else None
-        )
-        derived: Optional[dict[str, dict]] = {"on_hand": on_hand} if on_hand is not None else None
+        derived: Optional[dict[str, dict]] = None
         if resource == "skus":
-            derived = {**(derived or {}), **_sku_material_values(candidates)}
-            if "available" in requested_fields:
-                derived["available"] = await _available(self.db, [row.id for row in candidates])
+            stock_locations, derived = await self._sku_figures(candidates, requested_fields)
         matching = filter_rows(candidates, query, definition.fields, derived)
         page = matching[query.offset : query.offset + query.limit]
         token = None
@@ -194,7 +183,7 @@ class RecordWorkspaceService:
         # Stock is a read projection. Bulk preflight/execute still compare original SKU revisions.
         items = page
         if resource == "skus":
-            items = await self._add_catalogue_stock(page, stock_locations)
+            items = await self._add_catalogue_stock(page, stock_locations, derived or {})
         return WorkspaceQueryResponse(
             items=items,
             total=len(matching),
@@ -206,16 +195,63 @@ class RecordWorkspaceService:
             bulk_available=bulk_available,
         )
 
+    async def _sku_figures(
+        self, candidates: list[BaseModel], requested_fields: set[str]
+    ) -> tuple[Optional[dict], dict[str, dict]]:
+        """Derived values for every candidate, fetched in bulk only when a filter or the sort
+        needs them; the page fills the rest in ``_add_catalogue_stock``."""
+        ids = [row.id for row in candidates]
+        derived = _sku_material_values(candidates)
+        stock_locations = None
+        if requested_fields & {"on_hand", "stocked_at"}:
+            stock_locations = await LocationStockCRUD(self.db).on_hand_locations_by_sku_id()
+            derived["on_hand"] = {
+                sku_id: sum((qty for _, _, qty in locations), Decimal(0))
+                for sku_id, locations in stock_locations.items()
+            }
+            # ponytail: the row's own per-location stock (on hand > 0, any location, archived
+            # included), so the filter matches what the By location column shows.
+            derived["stocked_at"] = {
+                sku_id: [name for _, name, _ in stock_locations.get(sku_id, [])] for sku_id in ids
+            }
+        if "held" in requested_fields:
+            derived["held"] = await held_by_sku_id(self.db)
+        if "available" in requested_fields:
+            derived["available"] = await _available(self.db, ids)
+        if "on_order" in requested_fields:
+            derived["on_order"] = await on_order_by_sku_id(self.db)
+        if "below_reorder_min" in requested_fields:
+            below = await below_reorder_min_sku_ids(self.db)
+            derived["below_reorder_min"] = {sku_id: sku_id in below for sku_id in ids}
+        return stock_locations, derived
+
     async def _add_catalogue_stock(
         self,
         page: list[BaseModel],
         locations_by_id: Optional[dict[uuid.UUID, list[tuple[uuid.UUID, str, Decimal]]]],
+        derived: dict[str, dict],
     ) -> list[BaseModel]:
+        """Stock figures for one page: reused from ``derived`` when already fetched for every
+        candidate, else one bulk query per figure for the page (never per row)."""
         sku_ids = [row.id for row in page]
         if locations_by_id is None:
             locations_by_id = await LocationStockCRUD(self.db).on_hand_locations_by_sku_id(sku_ids)
-        on_order_by_id = await on_order_by_sku_id(self.db, sku_ids)
-        available_by_id = await _available(self.db, sku_ids)
+        on_order_by_id = (
+            derived["on_order"]
+            if "on_order" in derived
+            else await on_order_by_sku_id(self.db, sku_ids)
+        )
+        held_by_id = (
+            derived["held"] if "held" in derived else await held_by_sku_id(self.db, sku_ids)
+        )
+        available_by_id = (
+            derived["available"] if "available" in derived else await _available(self.db, sku_ids)
+        )
+        below = (
+            {sku_id for sku_id, flag in derived["below_reorder_min"].items() if flag}
+            if "below_reorder_min" in derived
+            else await below_reorder_min_sku_ids(self.db, sku_ids)
+        )
         items: list[BaseModel] = []
         for sku in page:
             locations = locations_by_id.get(sku.id, [])
@@ -223,8 +259,10 @@ class RecordWorkspaceService:
                 WorkspaceSkuRow(
                     **sku.model_dump(),
                     on_hand=sum((qty for _, _, qty in locations), Decimal(0)),
+                    held=held_by_id.get(sku.id, Decimal(0)),
                     on_order=on_order_by_id.get(sku.id, Decimal(0)),
                     available=available_by_id[sku.id],
+                    below_reorder_min=sku.id in below,
                     stock_locations=[
                         WorkspaceStockLocation(location_id=id_, location_name=name, on_hand=qty)
                         for id_, name, qty in locations

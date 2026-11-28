@@ -76,36 +76,62 @@ async def on_order_by_sku_id(
     return totals
 
 
-async def held_documents(db: AsyncSession, sku_id: uuid.UUID) -> list[HeldDocument]:
-    """Stock taken off the shelf for open sales orders and laybys holding stock."""
+async def held_documents_by_sku_id(
+    db: AsyncSession, sku_ids: Optional[list[uuid.UUID]] = None
+) -> dict[uuid.UUID, list[HeldDocument]]:
+    """Stock taken off the shelf for open sales orders and laybys holding stock (two queries).
+
+    The one definition of "Held": the SKU overview lists these documents and the catalogue
+    workspace sums them. ``None`` means every SKU of the tenant; missing SKUs hold nothing.
+    """
+    if sku_ids == []:
+        return {}
     team_id = tenant_id_ctx.get()
-    orders = await db.execute(
-        select(SalesOrder.id, SalesOrder.so_number, func.sum(SalesOrderLine.held_qty))
+    orders = (
+        select(
+            SalesOrderLine.sku_id,
+            SalesOrder.id,
+            SalesOrder.so_number,
+            func.sum(SalesOrderLine.held_qty),
+        )
         .join(SalesOrderLine, SalesOrderLine.sales_order_id == SalesOrder.id)
         .where(
             SalesOrder.team_id == team_id,
-            SalesOrderLine.sku_id == sku_id,
             SalesOrderLine.held_qty > 0,
             SalesOrder.status.in_((SalesOrderStatus.OPEN, SalesOrderStatus.AWAITING_STOCK)),
         )
-        .group_by(SalesOrder.id, SalesOrder.so_number)
+        .group_by(SalesOrderLine.sku_id, SalesOrder.id, SalesOrder.so_number)
         .order_by(SalesOrder.so_number)
     )
-    laybys = await db.execute(
-        select(Layby.id, Layby.layby_number, func.sum(LaybyLine.qty))
+    laybys = (
+        select(LaybyLine.sku_id, Layby.id, Layby.layby_number, func.sum(LaybyLine.qty))
         .join(LaybyLine, LaybyLine.layby_id == Layby.id)
         .where(
             Layby.team_id == team_id,
-            LaybyLine.sku_id == sku_id,
             Layby.hold_stock.is_(True),
             Layby.status.in_((LaybyStatus.OPEN, LaybyStatus.READY)),
         )
-        .group_by(Layby.id, Layby.layby_number)
+        .group_by(LaybyLine.sku_id, Layby.id, Layby.layby_number)
         .order_by(Layby.layby_number)
     )
-    return [
-        HeldDocument("sales_order", id_, number, Decimal(qty)) for id_, number, qty in orders
-    ] + [HeldDocument("layby", id_, number, Decimal(qty)) for id_, number, qty in laybys]
+    if sku_ids is not None:
+        orders = orders.where(SalesOrderLine.sku_id.in_(sku_ids))
+        laybys = laybys.where(LaybyLine.sku_id.in_(sku_ids))
+    found: dict[uuid.UUID, list[HeldDocument]] = {}
+    for kind, statement in (("sales_order", orders), ("layby", laybys)):
+        for sku_id, id_, number, qty in await db.execute(statement):
+            found.setdefault(sku_id, []).append(HeldDocument(kind, id_, number, Decimal(qty)))
+    return found
+
+
+async def held_by_sku_id(
+    db: AsyncSession, sku_ids: Optional[list[uuid.UUID]] = None
+) -> dict[uuid.UUID, Decimal]:
+    """Total Held per SKU, from ``held_documents_by_sku_id``."""
+    return {
+        sku_id: sum((doc.qty for doc in docs), Decimal(0))
+        for sku_id, docs in (await held_documents_by_sku_id(db, sku_ids)).items()
+    }
 
 
 async def arriving_orders(db: AsyncSession, sku_id: uuid.UUID) -> list[ArrivingOrder]:

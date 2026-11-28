@@ -81,7 +81,7 @@ function LocationsScreen() {
     resource: "locations",
     title: "Locations",
     singular: "location",
-    breadcrumb: "Catalogue management",
+    breadcrumb: "Administration",
     description:
       "Review warehouses, showrooms and their bins, then manage location details.",
     columns: [

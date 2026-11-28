@@ -48,7 +48,7 @@ function PriceListsContent() {
   const { error, setError } = usePageError(editing ? skusQuery.error : null, "Could not load products.");
 
   const adapter: RecordWorkspaceAdapter<PriceList> = {
-    resource: "price-lists", title: "Price lists", singular: "price list", breadcrumb: "Catalogue management",
+    resource: "price-lists", title: "Price lists", singular: "price list", breadcrumb: "Products",
     description: "Review customer price overrides and maintain SKU prices.",
     lifecycle: { activeLabel: "Active", archivedLabel: "Archived" }, defaultSort: "name",
     columns: [

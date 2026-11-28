@@ -113,7 +113,7 @@ function SuppliersScreen() {
     resource: "suppliers",
     title: "Suppliers",
     singular: "supplier",
-    breadcrumb: "Catalogue management",
+    breadcrumb: "Buy",
     description:
       "Find supplier accounts, review purchasing history and manage supplier details.",
     columns: [

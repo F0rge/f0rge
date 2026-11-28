@@ -55,7 +55,7 @@ function QuotesContent() {
     resource: "quotes",
     title: "Quotes",
     singular: "quote",
-    breadcrumb: "Sales",
+    breadcrumb: "Sell",
     description: "Quotes you can edit, print, and open in the till.",
     defaultSort: "created_at",
     lifecycle: { activeLabel: "Open", archivedLabel: "Converted" },

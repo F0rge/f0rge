@@ -65,7 +65,7 @@ function invoicesAdapter(colleagues: readonly SalesStaffOption[]) {
     resource: "invoices",
     title: "Invoices",
     singular: "invoice",
-    breadcrumb: "Books",
+    breadcrumb: "Sell",
     description: "Tax invoices with VAT at the team's rate.",
     defaultSort: "-issue_date",
     columns: [

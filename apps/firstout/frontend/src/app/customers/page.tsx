@@ -278,7 +278,7 @@ function CustomersScreen() {
     resource: "customers",
     title: "Customers",
     singular: "customer",
-    breadcrumb: "Sales",
+    breadcrumb: "Sell",
     description: "Find customers, review balances and manage account details.",
     columns: [
       {

@@ -112,7 +112,7 @@ function CatalogueScreen() {
     { key: "is_sellable", label: "Sellable", type: "boolean" },
   ];
   const adapter: RecordWorkspaceAdapter<WorkspaceSkuRow> = {
-    resource: "skus", title: "Catalogue", singular: "SKU", plural: "products", breadcrumb: "Catalogue management",
+    resource: "skus", title: "Catalogue", singular: "SKU", plural: "products", breadcrumb: "Products",
     description: "Find products, manage pricing and print barcode labels.", defaultSort: "name",
     columns: [
       { key: "name", label: "Product / SKU", render: (item) => item.name, sortable: true },

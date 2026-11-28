@@ -1,0 +1,14 @@
+.item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cds-spacing-03, 0.5rem);
+  inline-size: 100%;
+}
+
+/* The quiet "view" tag: the page is a lookup for this person, not somewhere they act. */
+.view {
+  margin-inline-start: auto;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--cds-text-secondary);
+}

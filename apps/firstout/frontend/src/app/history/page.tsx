@@ -11,9 +11,10 @@ import {
 export default function HistoryPage() {
   return (
     <Stack gap={6}>
-      <h1 className="cds--type-productive-heading-04">Trading history</h1>
+      <h1 className="cds--type-productive-heading-04">Archive</h1>
+      <p className="cds--type-body-01">The old Cin7 records: past sales, purchases and supplier prices.</p>
       <Tabs>
-        <TabList aria-label="History">
+        <TabList aria-label="Archive">
           <Tab>Sales</Tab>
           <Tab>Purchases</Tab>
           <Tab>Supplier prices</Tab>

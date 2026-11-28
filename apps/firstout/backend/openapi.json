@@ -42424,6 +42424,10 @@
             "type": "string",
             "title": "On Hand"
           },
+          "held": {
+            "type": "string",
+            "title": "Held"
+          },
           "on_order": {
             "type": "string",
             "title": "On Order"
@@ -42431,6 +42435,10 @@
           "available": {
             "type": "string",
             "title": "Available"
+          },
+          "below_reorder_min": {
+            "type": "boolean",
+            "title": "Below Reorder Min"
           },
           "stock_locations": {
             "items": {
@@ -42506,8 +42514,10 @@
           "created_at",
           "updated_at",
           "on_hand",
+          "held",
           "on_order",
           "available",
+          "below_reorder_min",
           "stock_locations"
         ],
         "title": "WorkspaceSkuRow"
