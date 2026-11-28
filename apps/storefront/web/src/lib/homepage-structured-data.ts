@@ -1,4 +1,5 @@
 import { currentCustomerPolicies } from "./customer-policies";
+import { SHOWROOM } from "./showroom";
 
 const CANONICAL_HOMEPAGE = "https://www.daskasas.co.za/";
 const SITE_NAME = "DasKasas";
@@ -33,6 +34,21 @@ export function homepageStructuredData(env: Record<string, string | undefined> =
         name: SITE_NAME,
         url: homepage.href,
         publisher: { "@id": organizationId },
+      },
+      {
+        "@type": "FurnitureStore",
+        "@id": `${homepage.href}#showroom`,
+        name: SHOWROOM.name,
+        url: new URL("#visit", homepage).href,
+        parentOrganization: { "@id": organizationId },
+        address: { "@type": "PostalAddress", ...SHOWROOM.postalAddress },
+        telephone: SHOWROOM.telephone,
+        openingHoursSpecification: SHOWROOM.hours.map(({ dayOfWeek, opens, closes }) => ({
+          "@type": "OpeningHoursSpecification",
+          dayOfWeek,
+          opens: `${opens}:00`,
+          closes: `${closes}:00`,
+        })),
       },
     ],
   };
