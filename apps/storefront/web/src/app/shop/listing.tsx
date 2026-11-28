@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Button } from "@f0rge/ui";
 import { CategoryTiles } from "@/components/category-tiles";
 import { listShopProducts, listedPiece, productPath } from "@/lib/medusa";
 import { AVANZI_SOFA_PATH, type ShopCategory } from "@/lib/shop-categories";
@@ -49,19 +48,8 @@ export async function Listing({ category }: { category?: ShopCategory }) {
     : guide ? guide.link : undefined;
   const heading = category && "pageCopy" in category ? category.pageCopy.heading : category?.name ?? "Shop all";
   return <>
-    <section aria-labelledby="listing-title" className="bg-primary">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:flex lg:items-center lg:justify-between lg:px-8 lg:py-16">
-        <div className="text-3xl font-bold tracking-tight sm:text-4xl">
-          <h1 id="listing-title" className="text-primary-foreground">{heading}</h1>
-          <p className="text-primary-foreground/80">{category?.blurb ?? "Every piece for sale."}</p>
-        </div>
-        <div className="mt-8 flex flex-wrap gap-3 lg:mt-0 lg:ml-4 lg:shrink-0">
-          <Button size="lg" variant="secondary" nativeButton={false} role="link" render={<Link href="/#visit" />}>Visit the showroom</Button>
-          <Button size="lg" variant="ghost" className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground" nativeButton={false} role="link" render={<Link href="/help" />}>Delivery and returns</Button>
-        </div>
-      </div>
-    </section>
-    <ShopListing pieces={inListing.map(listedPiece)} categoryId={categoryId} shopAll={!category} />
+    <ShopListing pieces={inListing.map(listedPiece)} categoryId={categoryId} shopAll={!category}
+      heading={heading} blurb={category?.blurb ?? "Every piece for sale."} />
     {guide && <section aria-labelledby="buying-guide" className="mx-auto w-full max-w-7xl space-y-3 px-4 py-8 md:px-6">
       <h2 id="buying-guide" className="text-xl font-semibold">{guide.title}</h2>
       {guide.paragraphs.map((paragraph) => <p key={paragraph} className="max-w-prose text-muted-foreground">{paragraph}</p>)}

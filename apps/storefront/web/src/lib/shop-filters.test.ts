@@ -24,6 +24,15 @@ describe("shop filters", () => {
     });
   });
 
+  it("applies category-page price bands to individual SKUs without accepting other categories", () => {
+    const raw = new URLSearchParams("categories=bedroom&price=7500-15000&price=invalid&price=7500-15000&utm_source=example");
+    const filters = readShopFilters(raw, false, []);
+    expect(filters.price).toEqual(["7500-15000"]);
+    expect(filters.categories).toEqual([]);
+    expect(shopMatches(pieces, filters)[0]?.variant?.id).toBe("silver");
+    expect(writeShopFilters(raw, filters)).toBe("utm_source=example&price=7500-15000");
+  });
+
   it("ignores invalid and unavailable URL choices and retains unrelated parameters", () => {
     const raw = new URLSearchParams("categories=dining-room&categories=not-a-category&price=under-7500&availability=made-to-order&sort=constructor&utm_source=example");
     const filters = readShopFilters(raw, true, []);

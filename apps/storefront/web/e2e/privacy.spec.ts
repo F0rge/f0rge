@@ -16,6 +16,7 @@ async function uncovered(target: Locator) {
 }
 
 test('analytics is off by default, Reject is as prominent as Accept, and Reject sends nothing', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   const analytics: string[] = []
   await page.route('https://eu.i.posthog.com/**', async (route) => {
     analytics.push(route.request().url())
@@ -27,13 +28,15 @@ test('analytics is off by default, Reject is as prominent as Accept, and Reject 
   await expect(accept).toBeVisible()
   await expect(reject).toBeVisible()
   expect(await page.evaluate((key) => localStorage.getItem(key), consentKey)).toBeNull()
-  await expect(choices(page).getByRole('link', { name: 'Read the privacy notice' })).toHaveAttribute('href', '/policies/privacy')
+  await expect(choices(page).getByRole('link', { name: 'Privacy notice' })).toHaveAttribute('href', '/policies/privacy')
   const look = (button: Locator) => button.evaluate((element) => {
     const style = getComputedStyle(element)
-    return [style.backgroundColor, style.color, style.fontSize, style.fontWeight, element.getBoundingClientRect().height]
+    const box = element.getBoundingClientRect()
+    return [style.backgroundColor, style.color, style.fontSize, style.fontWeight, box.height, Math.round(box.width), box.top]
   })
   expect(await look(reject)).toEqual(await look(accept))
 
+  expect(await choices(page).evaluate((panel) => panel.getBoundingClientRect().height)).toBeLessThan(170)
   await reject.click()
   await expect(choices(page)).toBeHidden()
   expect(await page.evaluate((key) => localStorage.getItem(key), consentKey)).toBe('rejected')
@@ -90,7 +93,7 @@ test('privacy and PAIA pages render, link each other and fit 390px', async ({ pa
   await page.getByRole('contentinfo').getByRole('link', { name: 'PAIA manual' }).click()
   await expect(page).toHaveURL(/\/policies\/paia$/)
   await expect(page.getByRole('heading', { level: 1, name: 'PAIA manual' })).toBeVisible()
-  for (const heading of ['Contact details of the head of DasKasas', 'How to request a record', 'Personal information we process']) {
+  for (const heading of ['Information Officer and PAIA requests', 'How to request a record', 'Personal information we process']) {
     await expect(page.locator('article').getByRole('heading', { name: heading })).toBeVisible()
   }
   expect(await noHorizontalScroll(page)).toBe(true)

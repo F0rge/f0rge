@@ -103,8 +103,8 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   const colour = page.getByRole('group', { name: 'Colour', exact: true })
   const size = page.getByRole('group', { name: 'Size', exact: true })
   const article = page.getByRole('article')
-  await expect(colour.getByRole('button', { name: 'Silver' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(colour.getByRole('button', { name: 'Bronze' })).toHaveCount(0)
+  await expect(colour.getByRole('radio', { name: 'Silver' })).toBeChecked()
+  await expect(colour.getByRole('radio', { name: 'Bronze' })).toHaveCount(0)
   await expect(size.getByRole('button', { name: '200 cm' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/demo/arc-angle.jpg')
 
@@ -114,7 +114,7 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await gallery.getByRole('button', { name: 'Show image 6 of 6' }).click()
   await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/merchandising/category-coffee-console-tables.webp')
 
-  await colour.getByRole('button', { name: 'Gold' }).click()
+  await colour.getByRole('radio', { name: 'Gold' }).click()
   await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-200')
   await expect(gallery).toHaveCount(0)
   await expect(page.locator('[data-main-image] img')).toHaveAttribute('src', '/hero-sofas.jpg')
@@ -128,7 +128,7 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await expect(article.getByRole('status')).toHaveText('In stock')
   await expect(page.getByRole('button', { name: 'Add to bag' })).toBeEnabled()
 
-  await colour.getByRole('button', { name: 'Silver' }).click()
+  await colour.getByRole('radio', { name: 'Silver' }).click()
   await expect(size.getByRole('button', { name: '200 cm' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-TABLE')
   await expect(page).toHaveURL(new RegExp(`${path}$`))
@@ -140,7 +140,7 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', 'Umbra Dining Table – Gold, 160 cm | DasKasas')
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', /\/hero-sofas\.jpg$/)
   await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-160')
-  await expect(colour.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(colour.getByRole('radio', { name: 'Gold' })).toBeChecked()
   await expect(size.getByRole('button', { name: '160 cm' })).toHaveAttribute('aria-pressed', 'true')
 
   await page.goto(`${path}?variant=unknown`)
