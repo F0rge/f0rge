@@ -20,6 +20,7 @@ catalogue split view and edit modal described in
 | Header search | `/` or Ctrl/Cmd+K. Rich SKU rows (photo, name, Kit tag, ref and category, available, retail), then purchase orders and invoices, and Administration destinations on Administration pages. A live preview of the highlighted SKU sits on the right (hidden at 800px and below). `Enter` on a SKU docks the panel on the current page with every SKU hit as the stepping context; other hits navigate as before. |
 | `SkuLink` | A SKU ref rendered as a real link to `/catalogue/{id}` (new tab and middle click work; the link lands in the full view); a plain click docks the panel. Used on receive, transit, picks (list, detail, matrix), stock by bin, supplier price history, purchase order lines, cart lines, reorder, stocktake lines, adjustment lines and inside the panel. |
 | Catalogue | `RecordWorkspace` without a details pane (`openRecord`): the table is full width and opening a row docks the panel with the current page of rows as context. Paging, sorting and filtering refresh that context. Filters add Sub-category, Material (main or other), Material family and Do not reorder; Category options come from the managed list. Import, DasKasas import, Export CSV (now with sub-category, colour, materials, order up to, do not reorder and the selling rule), New SKU, label printing and archive/restore are kept. |
+| Stock on hand | `/stock`, the same `skus` workspace with stock columns (on hand, held, available, on order, by location) and Location and Below reorder minimum filters; opening a row docks the panel with the page of rows as context, as on the catalogue. No create or archive actions. |
 
 Keyboard while the panel is open: `↑` `↓` step through the context (no wrap)
 only while focus is inside the panel, so the page keeps its own arrow keys;
@@ -45,7 +46,7 @@ page's minimum); Administration pages count their own nav column as an open nav.
 | --- | --- | --- |
 | Default (catalogue, purchase orders, lists) | beside from 1344px | beside from 1136px |
 | Wide (till, quotes, new invoice) | beside from 1600px | beside from 1392px |
-| Administration (Settings) | beside from 1344px | beside from 1344px |
+| Administration (Settings, Locations, Import, Archive) | beside from 1344px | beside from 1344px |
 
 Below 1056px the nav is compact and the panel always overlays.
 

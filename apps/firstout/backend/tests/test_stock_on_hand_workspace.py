@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
 from decimal import Decimal
 
+import pytest
 from httpx import AsyncClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.crud.sku_stock_figures import held_documents_by_sku_id
+from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
+from app.models.layby import Layby, LaybyLine, LaybyStatus
 from app.models.location import Location, LocationType
+from app.models.sales_order import SalesOrder, SalesOrderLine, SalesOrderStatus
 from app.models.sku import Sku
-from tests.conftest import authenticate_as, create_test_staff
+from app.models.user import User
+from tests.conftest import OWNER_EMAIL, authenticate_as, create_test_staff
 from tests.test_purchase_orders import _location_id_by_name
 from tests.test_record_workspace import query
 from tests.test_reorder import _sku_with_opening
@@ -83,6 +90,8 @@ async def test_stocked_at_matches_stock_above_zero_by_location_name(
     assert await ids("eq", "Kramerville") == {both["id"], zero["id"]}
     assert await ids("eq", "soh old store") == {archived["id"]}
     assert await ids("ne", "BEDFORDVIEW") == {zero["id"], archived["id"], nowhere["id"]}
+    # Values are not trimmed (like the material filter); the page sends names from a list.
+    assert await ids("eq", " Bedfordview ") == set()
     row = (await query(owner_client, "skus", q="SOH-AT-BOTH"))["items"][0]
     assert [loc["location_name"] for loc in row["stock_locations"]] == [
         "Bedfordview",
@@ -166,7 +175,13 @@ async def test_page_of_25_issues_no_per_row_queries(
         return len(statements)
 
     # Plain page: figures fetched for the page in bulk.
-    assert await count(1) == await count(25)
+    # Absolute ceiling for this dataset (26 SKUs, all candidates): 24 statements, measured on
+    # 2026-11-28. About 6 for authentication and tenant context, 2 for the role's permissions,
+    # 8 for the SKU list itself, and 8 bulk stock figures (locations, on order x2, held x2,
+    # available x2, below reorder min). A query per candidate SKU would add at least 26.
+    plain = await count(25)
+    assert plain <= 24, statements
+    assert await count(1) == plain
     # Every new field used to filter and sort: fetched once for all rows.
     filtered = {
         "filters": [
@@ -177,4 +192,130 @@ async def test_page_of_25_issues_no_per_row_queries(
         ],
         "sort": {"field": "held"},
     }
-    assert await count(1, **filtered) == await count(25, **filtered)
+    full = await count(25, **filtered)
+    assert full <= 24, statements
+    assert await count(1, **filtered) == full
+
+
+# Each case is one document on its own SKU: (kind, status, qty, held_qty or hold_stock, held).
+HELD_CASES = [
+    *[
+        ("sales_order", status, 3, held_qty, held_qty if counted else 0)
+        for status, counted in [
+            (SalesOrderStatus.DRAFT, False),
+            (SalesOrderStatus.OPEN, True),
+            (SalesOrderStatus.AWAITING_STOCK, True),
+            (SalesOrderStatus.INVOICED, False),
+            (SalesOrderStatus.CANCELLED, False),
+        ]
+        for held_qty in (3, 2, 0)  # full, partial, released
+    ],
+    *[
+        ("layby", status, 2, hold_stock, 2 if counted and hold_stock else 0)
+        for status, counted in [
+            (LaybyStatus.OPEN, True),
+            (LaybyStatus.READY, True),
+            (LaybyStatus.COMPLETED, False),
+            (LaybyStatus.CANCELLED, False),
+        ]
+        for hold_stock in (True, False)
+    ],
+]
+assert {case[1] for case in HELD_CASES} >= set(SalesOrderStatus) | set(LaybyStatus)
+
+
+async def test_held_definition_over_every_document_state(owner_client: AsyncClient) -> None:
+    db = owner_client.test_db
+    kramerville = uuid.UUID(await _location_id_by_name(owner_client, "Kramerville"))
+    owner = await db.scalar(select(User).where(User.email == OWNER_EMAIL))
+    customer = Customer(name="Held states customer")
+    db.add(customer)
+    await db.flush()
+    totals = dict(
+        subtotal_ex_vat=Decimal(0),
+        vat_amount=Decimal(0),
+        total_inc_vat=Decimal(0),
+        vat_rate=Decimal("0.15"),
+    )
+    expected: dict[uuid.UUID, Decimal] = {}
+    documents: dict[uuid.UUID, tuple[str, str]] = {}
+    for index, (kind, status, qty, hold, held) in enumerate(HELD_CASES):
+        ref = f"HELD-STATE-{index:02d}"
+        sku = Sku(our_ref=ref, our_barcode=ref, name=ref, design=ref, fabric=ref)
+        number = f"{kind}-{status.value}-{hold}-{index}"
+        if kind == "sales_order":
+            doc = SalesOrder(so_number=number, customer_id=customer.id, status=status, **totals)
+        else:
+            doc = Layby(
+                layby_number=number,
+                customer_id=customer.id,
+                location_id=kramerville,
+                due_date=datetime.date.today(),
+                hold_stock=hold,
+                status=status,
+                created_by_user_id=owner.id,
+                **totals,
+            )
+        db.add_all([sku, doc])
+        await db.flush()
+        if kind == "sales_order":
+            line = SalesOrderLine(
+                sales_order_id=doc.id,
+                sku_id=sku.id,
+                qty=qty,
+                held_qty=hold,
+                unit_ex_vat=Decimal(1),
+                description="x",
+            )
+        else:
+            line = LaybyLine(layby_id=doc.id, sku_id=sku.id, qty=qty, unit_ex_vat=Decimal(1))
+        db.add(line)
+        await db.flush()
+        expected[sku.id] = Decimal(held)
+        documents[sku.id] = (kind, number)
+
+    found = await held_documents_by_sku_id(db, list(expected))
+    for sku_id, held in expected.items():
+        docs = found.get(sku_id, [])
+        assert sum((doc.qty for doc in docs), Decimal(0)) == held, documents[sku_id]
+        assert [(doc.kind, doc.number) for doc in docs] == ([documents[sku_id]] if held else [])
+    # The whole-tenant form agrees with the per-SKU form.
+    everything = await held_documents_by_sku_id(db)
+    assert {sku_id: everything.get(sku_id, []) for sku_id in expected} == {
+        sku_id: found.get(sku_id, []) for sku_id in expected
+    }
+
+
+@pytest.mark.parametrize("lifecycle", ["active", "archived"])
+async def test_below_reorder_min_with_archived_and_negative_stock(
+    owner_client: AsyncClient, lifecycle: str
+) -> None:
+    db = owner_client.test_db
+    bedfordview = uuid.UUID(await _location_id_by_name(owner_client, "Bedfordview"))
+    # Kramerville 5, Bedfordview -3: the reorder list counts 2 on hand, below the minimum of 4,
+    # while the row's on_hand shows only the positive location (5).
+    negative = await _sku_with_opening(
+        owner_client, our_ref="SOH-RN-NEGATIVE", opening_qty=5, reorder_min=4
+    )
+    db.add(LocationStock(sku_id=uuid.UUID(negative["id"]), location_id=bedfordview, on_hand=-3))
+    await db.flush()
+    # Archived and below its minimum: off the reorder list, flag still true.
+    archived = await _sku_with_opening(
+        owner_client, our_ref="SOH-RN-ARCHIVED", opening_qty=1, reorder_min=10
+    )
+    (await db.get(Sku, uuid.UUID(archived["id"]))).is_archived = True
+    await db.flush()
+
+    rows = await query(owner_client, "skus", q="SOH-RN-", lifecycle=lifecycle)
+    flags = {row["our_ref"]: (row["on_hand"], row["below_reorder_min"]) for row in rows["items"]}
+    reorder = await owner_client.get("/api/v1/reorder")
+    listed = {
+        row["our_ref"]: row["on_hand"]
+        for row in reorder.json()
+        if row["our_ref"].startswith("SOH-RN-")
+    }
+    assert listed == {"SOH-RN-NEGATIVE": 2}
+    if lifecycle == "active":
+        assert flags == {"SOH-RN-NEGATIVE": ("5", True)}
+    else:
+        assert flags == {"SOH-RN-ARCHIVED": ("1", True)}

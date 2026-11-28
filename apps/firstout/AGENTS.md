@@ -77,7 +77,7 @@ For local authentication, copy `apps/firstout/backend/.env.example` to `.env` an
 
 Authorisation is a **permission catalog**, not role-tuple checks. `users.role` is a string slug matching `roles.slug`. Five built-in roles are **presets**. Owner is immutable (`is_system`, `is_owner_preset`); `has_permission` short-circuits for owner. Custom roles are named bundles (`POST /api/v1/roles`). Clerk establishes identity; the local permission catalog remains authoritative.
 
-**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `sales.price_override`, `books.mutate`, `books.journals`.
+**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.refunds`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `sales.price_override`, `books.mutate`, `books.journals`.
 
 | Preset | Keys |
 |--------|------|
@@ -85,7 +85,7 @@ Authorisation is a **permission catalog**, not role-tuple checks. `users.role` i
 | **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view` |
 | **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.quotes`, `sales.deliveries`, `till.discount` (no `stock.cost.view`, no `till.sell`). `sales.quotes` also allows mark-sent, accept, cancel, and hold stock. |
 | **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers` (no `stock.cost.view`) |
-| **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view` (no `till.sell`) |
+| **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view`, `sales.refunds` (no `till.sell`) |
 
 `GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Every sale document prices through Sale line pricing (`services/sale_line_pricing.py`, [ADR 0001](docs/adr/0001-one-price-rule-for-sale-documents.md)). A new or changed line discount on any of them needs `till.discount`, capped by `max_till_discount_percent` unless the user has `users.manage` (409 otherwise); a unit price other than the resolved one needs `sales.price_override`, held only by the owner preset ([ADR 0002](docs/adr/0002-discount-and-price-override-authority.md)). The same key lets a user sell a quantity that breaks a SKU's sale quantity rule (see [S5 prices](#s5-prices), [ADR 0005](docs/adr/0005-sale-quantity-rule.md)).
 
@@ -339,7 +339,7 @@ Migrations: `020_v2_s12_reorder_min`; `120_sku_catalogue_lists` (`order_up_to`, 
 
 ## V2-S14 mobile WMS
 
-Frontend `/wms` warehouse console. Carbon ContentSwitcher: Receive | Count | Transfer | Pick | Pack | Deliver. Receive/count/transfer wrap existing APIs. Pick lists `source_type=sales_order` picks and scans SKU to confirm/complete. Pack scans into a draft delivery (optional `carton_count`). Deliver loads packed jobs (`POST /deliveries/{id}/load`) then completes with optional tracking. Mutate: `stock.receive` / `stock.transfer` / pick-delivery keys. Nav: Operations → WMS. Landscape phones keep the console (`viewport.ts`).
+Frontend `/wms` warehouse console. Carbon ContentSwitcher: Receive | Count | Transfer | Pick | Pack | Deliver. Receive/count/transfer wrap existing APIs. Pick lists `source_type=sales_order` picks and scans SKU to confirm/complete. Pack scans into a draft delivery (optional `carton_count`). Deliver loads packed jobs (`POST /deliveries/{id}/load`) then completes with optional tracking. Mutate: `stock.receive` / `stock.transfer` / pick-delivery keys. Nav: Warehouse → Warehouse (phone widths only). Landscape phones keep the console (`viewport.ts`).
 
 ## V2-S15 reports (stock and sales)
 
@@ -430,6 +430,13 @@ Endpoints (all under `/api/v1`, authenticated staff):
 - `activity`: the 15 newest `unit_cost_audit` rows (source, label, location, date, note). These rows have no quantities.
 
 Unit costs (SKU, per location, activity) and supplier prices are null without `stock.cost.view`.
+
+**SKU workspace** (`POST /record-workspaces/skus/query`, read by any authenticated staff member; behind Catalogue and Stock on hand). Rows (`WorkspaceSkuRow`) carry `on_hand`, `held`, `available`, `on_order` (string quantities), `below_reorder_min` and `stock_locations`. Beyond the text and boolean catalogue fields, filterable and sortable: `on_hand`, `held`, `available`, `on_order`, `retail_inc_vat` (number); `below_reorder_min`, `do_not_reorder`, `is_kit`, `is_sellable` (boolean); `material` and `stocked_at` (`text_any`). Definitions:
+
+- `held` and `on_order` are the SKU overview's figures (`crud/sku_stock_figures.py`).
+- `stocked_at` matches the names of the locations where the SKU has stock above zero (archived locations included, as the By location column shows); `eq` / `ne` are case-insensitive exact names, `ne` also matches SKUs with no stock anywhere.
+- `below_reorder_min` is the reorder list's stock condition (`crud/reorder.py`): `reorder_min` set and every location's signed balance plus on order below it. It ignores `do_not_reorder` and archive state, which the reorder list also excludes, and its on-hand can differ from the row's `on_hand` (positive locations only) when a location is below zero.
+- Figures are fetched in one bulk query each per page, or once for all candidates when a filter or the sort uses them; costs stay null without `stock.cost.view`.
 
 **Other SKU-creating paths** follow the V2-S8 rules: the PO line create-SKU (`POST /purchase-orders/{id}/lines/{line_id}/sku`, `PoLineSkuCreate` gains the classification fields, `fabric` optional) and document intake (the LLM category hint is matched to an existing category, returned as `category` + `category_id`, or both null).
 
@@ -644,7 +651,7 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 
 ## Archived records
 
-Read APIs (any authenticated user; cost fields are null without `stock.cost.view`): `GET /customers/{id}/addresses|contacts`, `GET /suppliers/{id}/addresses|contacts`, `GET /supplier-prices`, `GET /history/sales` (archive invoices and archive credit notes), `GET /history/purchases` (archive bills), and `GET /stock/by-bin`. UI: `/history` (Sales nav), `/stock-by-bin` (Stock nav), `/suppliers/[id]`, plus addresses, contacts, and sales history on `/customers/[id]`. Migration: `065_cin7_followup`.
+Read APIs (any authenticated user; cost fields are null without `stock.cost.view`): `GET /customers/{id}/addresses|contacts`, `GET /suppliers/{id}/addresses|contacts`, `GET /supplier-prices`, `GET /history/sales` (archive invoices and archive credit notes), `GET /history/purchases` (archive bills), and `GET /stock/by-bin`. UI: `/history` (titled "Archive", in Administration → Data), `/stock-by-bin` (Stock nav), `/suppliers/[id]`, plus addresses, contacts, and sales history on `/customers/[id]`. Migration: `065_cin7_followup`.
 
 ## Railway
 
@@ -677,6 +684,8 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Fir
 - **UI:** IBM Carbon only — never `@f0rge/ui`, Tailwind, shadcn, or Mantine in this app.
 - **Chrome:** Carbon UIShell; content `g10`; SideNav dark via `Theme g100`; main offset `.firstout-main` **16rem expanded / 3rem collapsed** (`data-nav-expanded`).
 - **Stub pages:** none remaining (Deliveries and Reorder shipped in V2-S11 / V2-S12).
+- **Sidebar:** Home and Till (links), then the groups Sell, Products, Buy, Warehouse, Stock, Books and Reports, then Admin (one link into the Administration shell). Which groups and pages each person sees is decided from their permission keys, never the role name, by one typed table, `NAV_GROUPS` in `frontend/src/lib/nav.ts`: each page has a rule (`everyone`; `actions`, keys that let them work there; `lookup`, keys for which looking things up there is part of the job). A `lookup` match on a page that also has `actions` shows a quiet "view" tag; a group with no visible pages disappears. **Presentation only:** it changes no permission check, and every page stays reachable by URL, header search and in-page links. A new workspace page must be added to `NAV_GROUPS` (breadcrumbs and the expanded group derive from it). Reports has three entries, `/reports?section=sales|stock|books`; each shows only that section's tabs (no or an unknown `section` shows all thirteen; the selected tab is kept in `?tab=`).
+- **Administration shell:** Organisation, Settings and its tabs, people and roles, Locations (`/locations`), Settings → Location defaults (`/settings?tab=locations`, the tab formerly called "Locations"), Categories, Materials, MCP tokens, Activity (Audit log; was "Activity & data"), Data (Import at `/import`, Archive at `/history`), My profile. Its navigation shows a page when the existing `canOpenAdminDestination` gate allows it **and** the page's own rule matches; header search still uses only the gate. The sidebar's Admin link opens the first page of that person's Administration navigation. To add an Administration page: an entry with its rule in `ADMIN_DESTINATIONS` (or `SETTINGS_SECTIONS` for a Settings tab) and a place in `ADMIN_NAV_GROUPS`, both in `frontend/src/lib/admin-navigation.ts`, and its icon in the `icons` map in `frontend/src/components/administration.tsx`. A path listed in `ADMIN_DESTINATIONS` renders inside the Administration shell (`isAdminPath`).
 
 V1 routes (stock, till, books, reports, VAT201, etc.) remain live. V2-S7 home hub KPIs and needs-attention / recent-movements tables ship on `/` via `GET /home`.
 
@@ -692,6 +701,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/forgot-password` | Redirects to `/clerk-login`; `/auth/forgot-password` rejects local reset |
 | `/reset-password` | Redirects to `/clerk-login`; `/auth/reset-password` rejects local reset |
 | `/catalogue` | `/record-workspaces/skus/query`, `/categories`, `/materials` |
+| `/stock` (Stock on hand) | `/record-workspaces/skus/query`, `/locations`, `/suppliers`, `/categories` |
 | `/catalogue/[id]` | Deep link: opens `/catalogue` with that SKU in the full view (see below) |
 | `/settings/categories` | `/categories` (unmapped rows link to `/ledger?posting=1`) |
 | `/settings/materials` | `/materials` |
@@ -713,7 +723,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/orders` | `/orders` |
 | `/trade/login`, `/trade/catalogue` | `/portal` |
 | `/wms` | `/receive`, `/stocktakes`, `/transfers`, `/picks`, `/deliveries` |
-| `/reports` | `/reports` |
+| `/reports`, `/reports?section=sales\|stock\|books` | `/reports` (a section shows only its tabs) |
 | `/vat201` | `/vat201/periods` (range preview still `GET /reports/vat201`) |
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
