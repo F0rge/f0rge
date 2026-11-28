@@ -3,6 +3,7 @@ import { zarMinorUnits } from "./analytics/money";
 import { catalogueIndexable } from "./launch-indexing";
 import { offerLive } from "./made-to-order";
 import type { MedusaVariant, StoreProduct } from "./medusa";
+import { publishedDimensions } from "./product-dimensions";
 import { productVariantOptions, selectedImages, variantChoices } from "./product-variants";
 import { customerFacingCopy } from "./purchase-feedback";
 import { coversMinimum, sellRules } from "./sell-rules";
@@ -19,7 +20,6 @@ const VARIANT_PROPERTIES = new Map([
 ]);
 const CHOICE_LIST = new Intl.ListFormat("en-ZA", { type: "disjunction" });
 const DIMENSION_WORDS = { width: "wide", depth: "deep", height: "high", diameter: "diameter", length: "long" };
-type Dimension = keyof typeof DIMENSION_WORDS;
 
 function publicText(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -40,18 +40,6 @@ function shortDescription(value: string, maxLength = MAX_DESCRIPTION_LENGTH): st
   if (value.length <= maxLength) return value;
   const prefix = value.slice(0, maxLength - 1);
   return `${prefix.replace(/\s+\S*$/, "").trimEnd().replace(/[,;:]$/, "")}…`;
-}
-
-function publishedDimensions(product: StoreProduct, variant?: MedusaVariant) {
-  const measured = variant?.metadata?.dimensions_cm;
-  const unit = measured ? "cm" : product.metadata?.dimension_unit;
-  if (unit !== "cm" && unit !== "mm") return [];
-  const measurements: [Dimension, number | null | undefined][] = measured
-    ? [["diameter", measured.diameter], ["width", measured.width], ["depth", measured.depth], ["height", measured.height]]
-    : [["length", variant?.length ?? product.length], ["width", variant?.width ?? product.width], ["height", variant?.height ?? product.height]];
-  const dimensions = measurements.flatMap(([axis, value]) =>
-    typeof value === "number" && Number.isFinite(value) && value > 0 ? [{ axis, value, unit }] : []);
-  return measured || dimensions.length === measurements.length ? dimensions : [];
 }
 
 function sizeDescription(product: StoreProduct): string | null {

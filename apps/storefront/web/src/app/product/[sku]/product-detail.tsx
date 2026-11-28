@@ -11,10 +11,12 @@ import { useStorefrontAnalytics } from "@/components/analytics/analytics-provide
 import { zarMinorUnits } from "@/lib/analytics/money";
 import { formatCustomerPrice } from "@/lib/order-money";
 import { offerLive } from "@/lib/made-to-order";
+import { publishedDimensions, unqualifiedLegacySize } from "@/lib/product-dimensions";
 import { pickVariant, productVariantOptions, selectedImages, variantChoices } from "@/lib/product-variants";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 import { addableRange, batchPriceParts, coversMinimum, sellRules } from "@/lib/sell-rules";
 import { SHOP_CATEGORIES } from "@/lib/shop-categories";
+import { DimensionsFit } from "./dimensions-fit";
 
 const assurances = [
   { title: "Delivery", description: "Selected areas in Johannesburg and Pretoria" },
@@ -66,13 +68,8 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
   const chosenQuantity = Math.max(leastToAdd, Math.min(requested, maxQuantity));
   const canAdd = !!variant?.calculated_price && maxQuantity >= leastToAdd;
   const batch = variant?.calculated_price ? batchPriceParts(variant.calculated_price.calculated_amount, variant.calculated_price.currency_code, rules) : null;
-  const measured = variant?.metadata?.dimensions_cm;
-  const dimensions = measured ? [
-    { label: "Width", value: measured.width }, { label: "Depth", value: measured.depth },
-    { label: "Height", value: measured.height }, { label: "Diameter", value: measured.diameter },
-  ].filter(({ value }) => typeof value === "number" && value > 0) : [];
-  const legacyDimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
-  const hasLegacyDimensions = measured == null && legacyDimensions.every((value) => value != null && value > 0);
+  const measurements = publishedDimensions(product, variant);
+  const legacySize = unqualifiedLegacySize(product, variant);
   const material = variant?.material || product.material;
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
   const description = customerFacingCopy(product.description);
@@ -141,12 +138,11 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
           {quantity < 1 && offerAvailable && promisedWindow && <p className="text-sm text-muted-foreground">Made to order for you. Estimated ready between {promisedWindow}.</p>}
         </div>
 
-        {(description || material || dimensions.length > 0 || hasLegacyDimensions || care) && <div className="space-y-3 text-muted-foreground">
+        {(description || material || legacySize || care) && <div className="space-y-3 text-muted-foreground">
           {description && <p>{description}</p>}
-          {(material || dimensions.length > 0 || hasLegacyDimensions || care) && <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+          {(material || legacySize || care) && <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
             {material && <><dt className="font-medium text-foreground">Material</dt><dd>{material}</dd></>}
-            {dimensions.map(({ label, value }) => <div className="contents" key={label}><dt className="font-medium text-foreground">{label}</dt><dd>{value} cm</dd></div>)}
-            {hasLegacyDimensions && <><dt className="font-medium text-foreground">Size (L × W × H)</dt><dd>{legacyDimensions.join(" × ")} {product.metadata?.dimension_unit || ""}</dd></>}
+            {legacySize && <><dt className="font-medium text-foreground">Size (L × W × H)</dt><dd>{legacySize}</dd></>}
             {care && <><dt className="font-medium text-foreground">Care</dt><dd>{care}</dd></>}
           </dl>}
         </div>}
@@ -172,6 +168,8 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
             </fieldset>
           ))}
         </div>}
+
+        <DimensionsFit title={product.title} sku={variant?.sku} gallery={gallery} measurements={measurements} />
 
         <div className="space-y-6 border-t pt-6">
           {skuCapacity > 0 && maxQuantity < leastToAdd && <p className="text-sm text-muted-foreground">{inBag > 0
