@@ -1,10 +1,10 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import {
   Button,
   FileUploaderDropContainer,
   FileUploaderItem,
-  InlineNotification,
   Modal,
   Select,
   SelectItem,
@@ -63,6 +63,8 @@ function ProformasContent() {
   }
 
   function openCreate() {
+
+    setError(null);
     resetForm();
     setCreateOpen(true);
   }
@@ -106,15 +108,7 @@ function ProformasContent() {
 
   return (
     <Stack gap={6}>
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       <RecordWorkspace<Proforma>
         adapter={{
@@ -159,7 +153,6 @@ function ProformasContent() {
         onRequestSubmit={() => void handleCreate()}
       >
         <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack gap={5}>
-          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <Select
             id="proforma-supplier"
             labelText="Supplier"

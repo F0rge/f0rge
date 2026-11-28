@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { LoadingField, LoadingRegion, LoadingTableRows } from "@/components/page-loading";
 import { StaffImage } from "@/components/staff-image";
 
@@ -161,6 +162,7 @@ export default function InvoiceDetailPage() {
     setPaymentAmount(invoice.balance);
     setPaymentDate(localIsoDate());
     setPaymentReference("");
+    setError(null);
     setPaymentOpen(true);
   }
 
@@ -414,15 +416,7 @@ export default function InvoiceDetailPage() {
         />
       ) : null}
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {!invoice.is_archive ? <Stack gap={4} orientation="horizontal">
         <Button kind="secondary" disabled={actionLoading} onClick={() => void handleDownload()}>
@@ -434,7 +428,7 @@ export default function InvoiceDetailPage() {
           </Button>
         ) : null}
         {showCreditNote ? (
-          <Button kind="tertiary" disabled={actionLoading} onClick={() => setCreditOpen(true)}>
+          <Button kind="tertiary" disabled={actionLoading} onClick={() => { setError(null); setCreditOpen(true); }}>
             Issue credit note
           </Button>
         ) : null}

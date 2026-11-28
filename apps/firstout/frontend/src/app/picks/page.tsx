@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import {
   Button,
@@ -167,18 +168,10 @@ function PicksPageContent() {
             Allocate kit components or reserved sales-order lines across locations.
           </p>
         </div>
-        {canMutate ? <Button onClick={() => setCreateOpen(true)}>New pick</Button> : null}
+        {canMutate ? <Button onClick={() => { setError(null); setCreateOpen(true); }}>New pick</Button> : null}
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {loading ? (
         <PicksLoading />

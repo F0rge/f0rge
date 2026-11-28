@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import {
   Button,
   Checkbox,
@@ -213,6 +214,7 @@ export default function ReadProformaPage() {
   async function openSku(index: number) {
     const line = lines[index];
     setSkuLine(index);
+    setError(null);
     setSkuOpen(true);
     setSkuSaving(true);
     try {
@@ -370,15 +372,7 @@ export default function ReadProformaPage() {
         </div>
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Check this"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} title="Check this" onClose={() => setError(null)} />
 
       <div
         style={{

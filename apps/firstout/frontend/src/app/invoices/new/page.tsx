@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import {
   Button,
   InlineNotification,
@@ -219,9 +220,7 @@ function InvoiceForm({
         </div>
       </div>
 
-      {error && (
-        <InlineNotification kind="error" title="Error" subtitle={error} onCloseButtonClick={() => setError(null)} lowContrast />
-      )}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       <CartEditor
         mode="invoice"
@@ -285,7 +284,7 @@ function InvoiceForm({
               </div>
             ))}
             <div>
-              <Button kind="ghost" size="sm" renderIcon={Add} onClick={() => setFreeOpen(true)}>
+              <Button kind="ghost" size="sm" renderIcon={Add} onClick={() => { setError(null); setFreeOpen(true); }}>
                 Add free-text line
               </Button>
             </div>

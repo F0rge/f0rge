@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { ArrowLeft } from "@carbon/icons-react";
 import {
   Button,
@@ -147,7 +148,7 @@ export default function CuratedCataloguePage() {
               }}
               onDelete={() => chooseArchive(null)}
             />
-            {error && <InlineNotification kind="error" title="Catalogue upload failed" subtitle={error} hideCloseButton />}
+            <ErrorNotice error={error} title="Catalogue upload failed" />
             {result && <InlineNotification
               kind={result.applied ? "success" : "info"}
               title={result.applied ? copy.success : copy.preview}
@@ -169,7 +170,7 @@ export default function CuratedCataloguePage() {
               <Button
                 type="button"
                 disabled={!result || result.applied || stage !== null}
-                onClick={() => setConfirmOpen(true)}
+                onClick={() => { setError(""); setConfirmOpen(true); }}
               >{copy.apply}</Button>
             </div>
           </Stack>

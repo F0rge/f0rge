@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import {
   landingBillColumns,
   purchaseOrderLineColumns,
@@ -329,6 +330,7 @@ export default function PurchaseOrderDetailPage() {
     setFactoryBill(emptyBill(supplier?.default_currency ?? "USD"));
     setFreightBill(emptyBill("USD"));
     setClearanceBill(emptyBill("ZAR"));
+    setError(null);
     setLandOpen(true);
   }
 
@@ -448,6 +450,7 @@ export default function PurchaseOrderDetailPage() {
     setSkuLineKey(line.key);
     setSkuDraft(skuDefaults(line));
     setSkuFieldErrors({});
+    setError(null);
     setSkuOpen(true);
   }
 
@@ -630,15 +633,7 @@ export default function PurchaseOrderDetailPage() {
         />
       ) : null}
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {!order.is_archive && missingSkus > 0 ? (
         <InlineNotification

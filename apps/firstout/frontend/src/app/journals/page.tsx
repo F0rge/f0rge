@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import {
   Button,
@@ -375,6 +376,7 @@ export default function JournalsPage() {
               kind="secondary"
               onClick={() => {
                 resetImport();
+                setError(null);
                 setImportOpen(true);
               }}
             >
@@ -383,6 +385,7 @@ export default function JournalsPage() {
             <Button
               onClick={() => {
                 resetCreateForm();
+                setError(null);
                 setCreateOpen(true);
               }}
             >
@@ -392,15 +395,7 @@ export default function JournalsPage() {
         ) : null}
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {success ? (
         <InlineNotification
@@ -502,6 +497,7 @@ export default function JournalsPage() {
                                       disabled={busy}
                                       onClick={(event) => {
                                         event.stopPropagation();
+                                        setError(null);
                                         setVoidTarget(entry);
                                       }}
                                     >

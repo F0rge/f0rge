@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import {
   Button,
@@ -429,6 +430,7 @@ export default function BankReconciliationPage() {
       amounts[suggestion.document_id] = "";
     }
     setSplitAmounts(amounts);
+    setError(null);
     setSplitLineRow(line);
   }
 
@@ -565,6 +567,7 @@ export default function BankReconciliationPage() {
       setError("Could not find the import for this line.");
       return;
     }
+    setError(null);
     setMatchImportId(importId);
     setMatchLineId(lineId);
     setMatchPaymentId(suggestedPaymentId ?? "");
@@ -580,6 +583,7 @@ export default function BankReconciliationPage() {
       setError("Could not find the import for this line.");
       return;
     }
+    setError(null);
     setApplyImportId(importId);
     setApplyLine(line);
   }
@@ -612,6 +616,7 @@ export default function BankReconciliationPage() {
       setError("Could not find the import for this line.");
       return;
     }
+    setError(null);
     setRecodeImportId(importId);
     setRecodeLineRow(line);
     setRecodeAccountId("");
@@ -671,15 +676,7 @@ export default function BankReconciliationPage() {
         </p>
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
       {success ? (
         <InlineNotification
           kind="success"

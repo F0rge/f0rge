@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { Printer } from "@carbon/icons-react";
 import {
@@ -397,6 +398,7 @@ function LaybysPageContent() {
   }, [locationOptions, locationId]);
 
   const resetCreateForm = useCallback(() => {
+    setError(null);
     setCustomerId("");
     setNewCustomerName("");
     setLines([emptyLine()]);
@@ -407,7 +409,7 @@ function LaybysPageContent() {
     const active = locations.filter(isActiveLocation);
     const showrooms = active.filter((entry) => entry.type === "showroom");
     setLocationId(defaultLocationId(showrooms.length > 0 ? showrooms : active));
-  }, [locations]);
+  }, [locations, setError]);
 
   useEffect(() => {
     if (!canMutate || searchParams.get("new") !== "1" || locations.length === 0) {
@@ -627,15 +629,7 @@ function LaybysPageContent() {
         ) : null}
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {customerFilter ? (
         <div className="firstout-catalogue-actions">

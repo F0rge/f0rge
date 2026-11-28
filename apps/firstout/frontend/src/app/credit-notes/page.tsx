@@ -1,9 +1,10 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
+import { ServerSearchComboBox } from "@/components/server-search-combo-box";
 import {
   Button,
-  ComboBox,
   DataTable,
   InlineNotification,
   Modal,
@@ -125,14 +126,11 @@ export default function CreditNotesPage() {
     [invoiceOptions, creditedInvoiceIds],
   );
 
-  const selectedInvoiceOption = useMemo(
-    () => availableInvoices.find((option) => option.id === invoiceId) ?? null,
-    [availableInvoices, invoiceId],
-  );
-
   const formValid = Boolean(invoiceId);
 
   function resetCreateForm() {
+
+    setError(null);
     setInvoiceId("");
     setInvoiceQuery("");
     setReason("");
@@ -208,15 +206,7 @@ export default function CreditNotesPage() {
         ) : null}
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {loading ? (
         <PageLoading
@@ -328,37 +318,30 @@ export default function CreditNotesPage() {
         modalHeading="Issue credit note"
         primaryButtonText={saving ? "Issuing…" : "Issue credit note"}
         secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !formValid || availableInvoices.length === 0}
+        primaryButtonDisabled={saving || !formValid}
         onRequestClose={() => setCreateOpen(false)}
         onRequestSubmit={() => void handleCreate()}
       >
         <Stack gap={5}>
-          {availableInvoices.length === 0 ? (
+          {availableInvoices.length === 0 && !invoiceId && !debouncedInvoiceQuery && !optionsQuery.isPending && !optionsQuery.isError ? (
             <InlineNotification
               kind="info"
               title="No invoices available"
-              subtitle="Every tax invoice already has a credit note, or no invoices match your search."
+              subtitle="Every tax invoice already has a credit note."
               hideCloseButton
               lowContrast
             />
-          ) : (
-            <ComboBox
-              id="credit-note-invoice"
-              titleText="Tax invoice"
-              placeholder="Search invoice number or customer…"
-              items={availableInvoices}
-              itemToString={(item) => item?.label ?? ""}
-              selectedItem={selectedInvoiceOption}
-              shouldFilterItem={() => true}
-              onInputChange={(value) => setInvoiceQuery(value)}
-              onChange={({ selectedItem }) => {
-                setInvoiceId(selectedItem?.id ?? "");
-                if (selectedItem) {
-                  setInvoiceQuery(selectedItem.label);
-                }
-              }}
-            />
-          )}
+          ) : null}
+          <ServerSearchComboBox
+            id="credit-note-invoice"
+            titleText="Tax invoice"
+            placeholder="Search invoice number or customer…"
+            items={availableInvoices}
+            selectedId={invoiceId}
+            onSearch={setInvoiceQuery}
+            onSelect={(option) => setInvoiceId(option?.id ?? "")}
+            helperText={availableInvoices.length === 0 && debouncedInvoiceQuery && !invoiceId ? "No invoices without a credit note match this search." : undefined}
+          />
           <TextArea
             id="credit-note-reason"
             labelText="Reason (optional)"

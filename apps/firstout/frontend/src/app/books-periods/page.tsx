@@ -1,6 +1,7 @@
 // Superdesign skipped — implemented Carbon from /vat201 lock/reopen pattern (CLI available).
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import {
   Button,
@@ -187,15 +188,7 @@ export default function BooksPeriodsPage() {
         </p>
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {canMutate ? (
         <Stack gap={4}>
@@ -288,6 +281,7 @@ export default function BooksPeriodsPage() {
                                       size="sm"
                                       onClick={() => {
                                         setReopenReason("");
+                                        setError(null);
                                         setReopenPeriod(period);
                                       }}
                                     >

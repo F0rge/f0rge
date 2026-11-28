@@ -1,9 +1,10 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
+import { ServerSearchComboBox } from "@/components/server-search-combo-box";
 import {
   Button,
-  ComboBox,
   DataTable,
   InlineNotification,
   Modal,
@@ -217,12 +218,6 @@ function DeliveriesPageContent() {
   const { error, setError } = usePageError(loadFailure, "Failed to load deliveries.");
   const loadDeliveries = () => client.invalidateQueries({ queryKey: ["deliveries"] });
 
-  const selectedInvoiceOption = invoiceOptions.find((option) => option.id === invoiceId) ?? null;
-
-  const selectedLaybyOption = laybyOptions.find((option) => option.id === laybyId) ?? null;
-
-  const selectedSalesOrderOption = salesOrderOptions.find((option) => option.id === salesOrderId) ?? null;
-
   useEffect(() => {
     if (!canMutate || prefillConsumed.current) {
       return;
@@ -261,6 +256,8 @@ function DeliveriesPageContent() {
   );
 
   function resetCreateForm() {
+
+    setError(null);
     setSourceType("invoice");
     setInvoiceId("");
     setLaybyId("");
@@ -399,15 +396,7 @@ function DeliveriesPageContent() {
         ) : null}
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {loading ? (
         <DeliveriesLoading />
@@ -577,55 +566,37 @@ function DeliveriesPageContent() {
             <SelectItem value="sales_order" text="Sales order" />
           </Select>
           {sourceType === "invoice" ? (
-            <ComboBox
+            <ServerSearchComboBox
+              key="delivery-invoice"
               id="delivery-invoice"
               titleText="Invoice"
               placeholder="Search paid invoices…"
               items={invoiceOptions}
-              itemToString={(item) => item?.label ?? ""}
-              selectedItem={selectedInvoiceOption}
-              shouldFilterItem={() => true}
-              onInputChange={(value) => setSourceQuery(value)}
-              onChange={({ selectedItem }) => {
-                setInvoiceId(selectedItem?.id ?? "");
-                if (selectedItem) {
-                  setSourceQuery(selectedItem.label);
-                }
-              }}
+              selectedId={invoiceId}
+              onSearch={setSourceQuery}
+              onSelect={(option) => setInvoiceId(option?.id ?? "")}
             />
           ) : sourceType === "sales_order" ? (
-            <ComboBox
+            <ServerSearchComboBox
+              key="delivery-sales-order"
               id="delivery-sales-order"
               titleText="Sales order"
               placeholder="Search sales orders…"
               items={salesOrderOptions}
-              itemToString={(item) => item?.label ?? ""}
-              selectedItem={selectedSalesOrderOption}
-              shouldFilterItem={() => true}
-              onInputChange={(value) => setSourceQuery(value)}
-              onChange={({ selectedItem }) => {
-                setSalesOrderId(selectedItem?.id ?? "");
-                if (selectedItem) {
-                  setSourceQuery(selectedItem.label);
-                }
-              }}
+              selectedId={salesOrderId}
+              onSearch={setSourceQuery}
+              onSelect={(option) => setSalesOrderId(option?.id ?? "")}
             />
           ) : (
-            <ComboBox
+            <ServerSearchComboBox
+              key="delivery-layby"
               id="delivery-layby"
               titleText="Layby"
               placeholder="Search laybys…"
               items={laybyOptions}
-              itemToString={(item) => item?.label ?? ""}
-              selectedItem={selectedLaybyOption}
-              shouldFilterItem={() => true}
-              onInputChange={(value) => setSourceQuery(value)}
-              onChange={({ selectedItem }) => {
-                setLaybyId(selectedItem?.id ?? "");
-                if (selectedItem) {
-                  setSourceQuery(selectedItem.label);
-                }
-              }}
+              selectedId={laybyId}
+              onSearch={setSourceQuery}
+              onSelect={(option) => setLaybyId(option?.id ?? "")}
             />
           )}
           <Select
