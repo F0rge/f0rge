@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import {
   Button,
   InlineNotification,
@@ -208,15 +209,7 @@ function RepeatingInvoicesContent() {
 
   return (
     <Stack gap={6}>
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {success ? (
         <InlineNotification
@@ -270,7 +263,6 @@ function RepeatingInvoicesContent() {
         primaryButtonDisabled={saving || typeof editDay !== "number" || editDay < 1 || editDay > 28 || !editDate}
         onRequestClose={() => { if (!saving) setEditing(null); }} onRequestSubmit={() => void saveEdit()}>
         <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack gap={5}>
-          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <TextInput id="schedule-edit-name" labelText="Name" value={editName} onChange={(event) => setEditName(event.target.value)} />
           <NumberInput id="schedule-edit-day" label="Day of month" min={1} max={28} value={editDay} onChange={(_, { value }) => setEditDay(value === "" ? "" : Number(value))} />
           <TextInput id="schedule-edit-date" labelText="Next invoice" type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} />
@@ -281,7 +273,6 @@ function RepeatingInvoicesContent() {
         primaryButtonDisabled={runningId !== null}
         onRequestClose={() => { if (!runningId) setRunTarget(null); }}
         onRequestSubmit={() => { if (runTarget) void handleRun(runTarget.id); }}>
-        {error && <InlineNotification kind="error" title="Could not create invoice" subtitle={error} hideCloseButton lowContrast />}
         <p>Create a tax invoice from {runTarget?.name || "this schedule"}? This posts the invoice and advances the next date.</p>
       </Modal>
 
@@ -296,7 +287,6 @@ function RepeatingInvoicesContent() {
         size="lg"
       >
         <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Stack gap={5}>
-          {error && <InlineNotification kind="error" title="Could not save" subtitle={error} hideCloseButton lowContrast />}
           <CustomerPicker
             id="repeating-customer"
             customers={customers}

@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { Printer } from "@carbon/icons-react";
 import {
@@ -627,15 +628,7 @@ function LaybysPageContent() {
         ) : null}
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {customerFilter ? (
         <div className="firstout-catalogue-actions">

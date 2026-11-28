@@ -1,9 +1,10 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
+import { ServerSearchComboBox } from "@/components/server-search-combo-box";
 import {
   Button,
-  ComboBox,
   DataTable,
   InlineNotification,
   Modal,
@@ -170,11 +171,6 @@ function ReturnsPageContent() {
   const loadFailure = returnsQuery.error ?? locationsQuery.error;
   const { error, setError } = usePageError(loadFailure, returnsQuery.error ? "Failed to load returns." : "Failed to load locations.");
   const loadReturns = () => client.invalidateQueries({ queryKey: ["returns"] });
-
-  const selectedInvoiceOption = useMemo(
-    () => invoiceOptions.find((option) => option.id === invoiceId) ?? null,
-    [invoiceOptions, invoiceId],
-  );
 
   useEffect(() => {
     const prefilled = searchParams.get("invoice");
@@ -390,15 +386,7 @@ function ReturnsPageContent() {
         </div>
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       {loading ? (
         <ReturnsLoading />
@@ -524,21 +512,14 @@ function ReturnsPageContent() {
         onRequestSubmit={() => void handleCreate()}
       >
         <Stack gap={5}>
-          <ComboBox
+          <ServerSearchComboBox
             id="return-invoice"
             titleText="Invoice"
             placeholder="Search invoice number or customer…"
             items={invoiceOptions}
-            itemToString={(item) => item?.label ?? ""}
-            selectedItem={selectedInvoiceOption}
-            shouldFilterItem={() => true}
-            onInputChange={(value) => setInvoiceQuery(value)}
-            onChange={({ selectedItem }) => {
-              setInvoiceId(selectedItem?.id ?? "");
-              if (selectedItem) {
-                setInvoiceQuery(selectedItem.label);
-              }
-            }}
+            selectedId={invoiceId}
+            onSearch={setInvoiceQuery}
+            onSelect={(option) => setInvoiceId(option?.id ?? "")}
           />
           <Select
             id="return-location"

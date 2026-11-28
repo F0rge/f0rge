@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import {
   Button,
@@ -671,15 +672,7 @@ export default function BankReconciliationPage() {
         </p>
       </div>
 
-      {error ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
       {success ? (
         <InlineNotification
           kind="success"

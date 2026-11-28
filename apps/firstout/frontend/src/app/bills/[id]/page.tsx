@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { LoadingField, LoadingRegion, LoadingTableRows } from "@/components/page-loading";
 import {
   Button,
@@ -282,9 +283,7 @@ export default function BillDetailPage() {
       {success ? (
         <InlineNotification kind="success" title="Done" subtitle={success} onCloseButtonClick={() => setSuccess(null)} lowContrast />
       ) : null}
-      {error ? (
-        <InlineNotification kind="error" title="Error" subtitle={error} onCloseButtonClick={() => setError(null)} lowContrast />
-      ) : null}
+      <ErrorNotice error={error} onClose={() => setError(null)} />
 
       <div className="firstout-bill-summary">
         <p className="cds--type-body-01">

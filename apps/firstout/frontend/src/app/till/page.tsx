@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { StaffImage } from "@/components/staff-image";
 
 import {
@@ -1379,15 +1380,7 @@ function TillWorkspace() {
         </div>
       </div>
 
-      {error || loadError ? (
-        <InlineNotification
-          kind="error"
-          title="Error"
-          subtitle={error ?? loadError?.message}
-          onCloseButtonClick={() => setError(null)}
-          lowContrast
-        />
-      ) : null}
+      <ErrorNotice error={error ?? loadError?.message} onClose={() => setError(null)} />
 
       {basketMessage && <InlineNotification kind={basketMessage.kind} lowContrast title={basketMessage.title}
         subtitle={basketMessage.subtitle} onCloseButtonClick={() => setBasketNotice(null)} />}
@@ -1423,8 +1416,6 @@ function TillWorkspace() {
         secondaryButtonText="Cancel" preventCloseOnClickOutside
         onRequestClose={() => { if (!heldBusy) setResumeDraft(null); }}
         onRequestSubmit={() => { if (resumeDraft) void startHeldOperation(resumeDraft); }}>
-        {error && resumeDraft && <InlineNotification kind="error" lowContrast hideCloseButton
-          title="Could not resume the held sale" subtitle={error} />}
         <p>The current basket will go into Held sales. The selected basket will become the current sale.</p>
       </Modal>
       <Modal open={incomingQuote !== null && cartReady && cart.length > 0}
