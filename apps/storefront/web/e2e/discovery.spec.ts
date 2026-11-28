@@ -43,6 +43,18 @@ test('the homepage keeps its canonical and private pages have no canonical', asy
   }
 })
 
+test('the homepage explains what customers can shop and where they can visit', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+
+  const introduction = page.getByRole('region', { name: 'Furniture store in Bedfordview' })
+  await expect(introduction.getByText('Shop sofas, armchairs, dining tables and bedroom furniture online, or visit our showroom at Bedford Square.')).toBeInViewport()
+  await expect(introduction.getByRole('link', { name: 'Shop all' })).toHaveAttribute('href', '/shop')
+  await introduction.getByRole('link', { name: 'Visit the showroom' }).click()
+  await expect(page.getByRole('heading', { name: 'Visit the showroom' })).toBeVisible()
+  await expect(page).toHaveURL(/#visit$/)
+})
+
 test('mobile keyboard path reaches a piece and its gallery without horizontal overflow', async ({ page }) => {
   test.skip(!sourceSkuId, 'Set STOREFRONT_TEST_SKU_ID to a published product with a gallery')
 
