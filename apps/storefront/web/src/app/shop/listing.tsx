@@ -1,17 +1,23 @@
 import Link from "next/link";
 import { Button } from "@f0rge/ui";
 import { CategoryTiles } from "@/components/category-tiles";
-import { listShopProducts, listedPiece } from "@/lib/medusa";
-import type { ShopCategory } from "@/lib/shop-categories";
+import { listShopProducts, listedPiece, productPath } from "@/lib/medusa";
+import { AVANZI_SOFA_PATH, type ShopCategory } from "@/lib/shop-categories";
 import { SHOWROOM } from "@/lib/showroom";
 import { ShopListing } from "./shop-listing";
 
-const buyingGuides: Partial<Record<ShopCategory["handle"], { title: string; paragraphs: string[] }>> = {
+type BuyingGuide = {
+  title: string;
+  paragraphs: string[];
+  link?: { href: string; label: string };
+};
+
+const buyingGuides: Partial<Record<ShopCategory["handle"], BuyingGuide>> = {
   "sofas-armchairs": {
     title: "Choosing a sofa for your living room",
     paragraphs: [
-      "Measure the space the sofa will occupy and the route it has to take to get there. Allow room to walk around it, reach a coffee table and open nearby doors. If you are comparing corner sofas, check which side the shorter section sits on and whether it leaves your main route through the room clear.",
-      "Think about how you sit. A deeper sofa gives you more room to stretch out, while a shallower seat can make it easier to sit upright. If you need extra seating or want to keep the arrangement flexible, compare a straight sofa with a separate armchair. Check the dimensions and finish for the option you plan to order.",
+      "Measure the space the sofa will occupy and the route it has to take to get there. For an L-shaped sofa, check which side the return sits on when you face the sofa and whether it leaves your main walkway clear. A U-shaped layout also needs a clear opening between the two returns.",
+      "If you only need one seat, measure the full width of an armchair or accent chair, including the arms. A shallower seat can make it easier to sit upright to read, while a deeper seat leaves more room to stretch out. For more seats, a straight sofa and a separate chair can be rearranged as the room changes.",
     ],
   },
   bedroom: {
@@ -19,7 +25,9 @@ const buyingGuides: Partial<Record<ShopCategory["handle"], { title: string; para
     paragraphs: [
       "Start with the bed's full footprint, including the headboard and frame. Check the mattress size separately and leave room to walk around the bed and open nearby drawers and cupboard doors. Measure the doorways, stairs and turns the piece will need to pass through as well as the space it will stand in.",
       "For a bedside table, compare its height with the top of your mattress so you can reach a lamp or a glass of water from bed. Think about what you want to keep within reach and whether a drawer or an open shelf suits you. Check dimensions and finishes on the product page before deciding.",
+      "For a bedroom chair, check that you can walk between the chair and the bed and still open drawers and cupboard doors. If the chair is for a dressing table, check that the seat is a comfortable height and that the chair arms fit underneath.",
     ],
+    link: { href: "/shop/sofas-armchairs", label: "Browse armchairs and accent chairs" },
   },
   "coffee-console-tables": {
     title: "Choosing a coffee or console table",
@@ -36,6 +44,9 @@ export async function Listing({ category }: { category?: ShopCategory }) {
   const inListing = category ? products.filter((product) => product.categories?.some((item) => item.handle === category.handle)) : products;
   const categoryId = category && inListing[0]?.categories?.find((item) => item.handle === category.handle)?.id;
   const guide = category && buyingGuides[category.handle];
+  const guideLink = category?.handle === "sofas-armchairs" && inListing.some((product) => productPath(product) === AVANZI_SOFA_PATH)
+    ? { href: AVANZI_SOFA_PATH, label: "See the Avanzi L-Shaped Sofa" }
+    : guide ? guide.link : undefined;
   const heading = category && "pageCopy" in category ? category.pageCopy.heading : category?.name ?? "Shop all";
   return <>
     <section aria-labelledby="listing-title" className="bg-primary">
@@ -54,6 +65,7 @@ export async function Listing({ category }: { category?: ShopCategory }) {
     {guide && <section aria-labelledby="buying-guide" className="mx-auto w-full max-w-7xl space-y-3 px-4 py-8 md:px-6">
       <h2 id="buying-guide" className="text-xl font-semibold">{guide.title}</h2>
       {guide.paragraphs.map((paragraph) => <p key={paragraph} className="max-w-prose text-muted-foreground">{paragraph}</p>)}
+      {guideLink && <Link href={guideLink.href} className="inline-flex min-h-11 items-center font-medium underline underline-offset-4">{guideLink.label}</Link>}
     </section>}
     <section aria-labelledby="listing-help-title" className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6">
       <div className="rounded-xl border p-5 md:p-6">

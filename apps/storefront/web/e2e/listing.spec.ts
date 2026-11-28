@@ -39,7 +39,36 @@ test('the sofa category describes the range and helps shoppers choose a sofa', a
   await page.goto('/shop/sofas-armchairs')
   await expect(page).toHaveTitle('Sofa & Armchair Shop in Bedfordview | DasKasas')
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Find a sofa or armchair at DasKasas/)
-  await expect(page.getByRole('region', { name: 'Choosing a sofa for your living room' })).toContainText('Measure the space the sofa will occupy')
+  const guide = page.getByRole('region', { name: 'Choosing a sofa for your living room' })
+  await expect(guide).toContainText('For an L-shaped sofa, check which side the return sits on')
+  await expect(guide).toContainText('A U-shaped layout also needs a clear opening')
+  await expect(guide).toContainText('If you only need one seat, measure the full width of an armchair or accent chair')
+})
+
+test('the sofa guide links to fit advice for the Avanzi when it is published', async ({ page }) => {
+  await page.goto('/shop/sofas-armchairs')
+  const guide = page.getByRole('region', { name: 'Choosing a sofa for your living room' })
+  const avanzi = guide.getByRole('link', { name: 'See the Avanzi L-Shaped Sofa' })
+  if (process.env.STOREFRONT_TEST_AVANZI_GUIDANCE !== 'true') {
+    await expect(avanzi).toHaveCount(0)
+    return
+  }
+  await avanzi.press('Enter')
+  const fitAdvice = page.getByRole('region', { name: 'Will the Avanzi fit your room?' })
+  await expect(fitAdvice).toContainText('Mark out both sides of this L-shaped sofa on your floor.')
+  await expect(fitAdvice.getByRole('link', { name: 'Ask the showroom' })).toHaveAttribute('href', '/help#contact')
+})
+
+test('the bedroom guide helps shoppers choose a chair and leads them to the seating catalogue', async ({ page }) => {
+  await page.goto('/shop/bedroom')
+  await expect(page).toHaveTitle('Bedroom Furniture in Bedfordview | DasKasas')
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Shop beds, headboards and bedside tables/)
+  const guide = page.getByRole('region', { name: 'Choosing bedroom furniture' })
+  await expect(guide).toContainText('For a bedroom chair, check that you can walk between the chair and the bed')
+  const seatingLink = guide.getByRole('link', { name: 'Browse armchairs and accent chairs' })
+  await expect(seatingLink).toHaveAttribute('href', '/shop/sofas-armchairs')
+  await seatingLink.press('Enter')
+  await expect(page.getByRole('heading', { level: 1, name: 'Find a sofa or armchair' })).toBeVisible()
 })
 
 test('availability filter, sort and counts agree with the grid', async ({ page }) => {
@@ -152,20 +181,22 @@ test('each card shows at most one alert, and finish dots switch the photos, pric
   // One dot per colour: both gold sizes share a dot, which opens the gold size in stock.
   const finishes = table.getByRole('group', { name: 'Finishes of Umbra Dining Table' })
   await expect(finishes.getByRole('button')).toHaveCount(2)
-  await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'true')
-  for (const link of await table.getByRole('link').all()) {
-    await expect(link).toHaveAttribute('href', productPath)
-  }
+  await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  const allOptions = table.getByRole('link', { name: 'View all options for Umbra Dining Table' })
+  await expect(allOptions).toHaveAttribute('href', productPath)
+  await expect(table.getByRole('heading', { level: 3 }).getByRole('link')).toHaveAttribute('href', `${productPath}?variant=variant_umbra_gold_large`)
   await finishes.getByRole('button', { name: 'Gold', exact: true }).click()
   await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'false')
   await expect(table.getByRole('img', { name: 'Umbra Dining Table, photo 1 of 1' })).toHaveAttribute('src', '/demo/arc-front.jpg')
   await expect(table).toContainText(/R\s37\s000,00/)
-  for (const link of await table.getByRole('link').all()) await expect(link).toHaveAttribute('href', /\?variant=variant_umbra_gold_small$/)
+  await expect(table.getByRole('heading', { level: 3 }).getByRole('link')).toHaveAttribute('href', /\?variant=variant_umbra_gold_small$/)
+  await expect(allOptions).toHaveAttribute('href', productPath)
   // A new filter result keeps the card (and the shopper's finish) rather than remounting it.
   await page.getByRole('complementary', { name: 'Filters' }).getByRole('checkbox', { name: /^In stock/ }).check()
   await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await finishes.getByRole('button', { name: 'Silver / 200 cm' }).click()
+  await expect(allOptions).toHaveCount(0)
   for (const link of await table.getByRole('link').all()) await expect(link).toHaveAttribute('href', productPath)
   await expect(card(page, 'Tilda Sofa').getByRole('group', { name: /^Finishes/ })).toHaveCount(0)
 })

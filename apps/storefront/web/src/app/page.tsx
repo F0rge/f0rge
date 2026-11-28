@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge, Button } from "@f0rge/ui";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Button } from "@f0rge/ui";
 import { StorefrontMotion } from "@/components/storefront-motion";
 import { ProductCard } from "@/components/product-card";
 import { CategoryTiles } from "@/components/category-tiles";
@@ -135,8 +135,8 @@ export default async function HomePage() {
       <div className="mx-auto max-w-7xl lg:grid lg:grid-cols-12 lg:gap-x-8 lg:px-8">
         <div className="px-6 pt-10 pb-16 sm:pb-24 lg:col-span-7 lg:px-0 lg:pt-40 lg:pb-48 xl:col-span-6">
           <div className="mx-auto max-w-2xl lg:mx-0">
-            <Badge variant="secondary" className="mb-4">Bedford Square, Bedfordview</Badge>
-            <h1 id="hero-title" className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Furniture store in Bedfordview</h1>
+            <h1 id="hero-title" className="text-3xl font-bold tracking-tight sm:text-4xl">Furniture store in Bedfordview</h1>
+            <p className="mt-4 max-w-lg text-base text-muted-foreground sm:text-lg">Shop sofas, armchairs, dining tables and bedroom furniture online, or visit our showroom at Bedford Square.</p>
             <div className="mt-10 flex flex-wrap items-center gap-4">
               <Button size="lg" className="px-4" nativeButton={false} role="link" render={<Link href="/shop" />}>Shop all</Button>
               <Button size="lg" variant="outline" className="px-4" nativeButton={false} role="link" render={<Link href="/#visit" />}>Visit the showroom</Button>

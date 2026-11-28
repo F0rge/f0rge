@@ -8,6 +8,7 @@ import { getStoreProduct, listStoreProducts, listedPiece, productPath, type Stor
 import { productPageCopy, productShareImage, productStructuredData } from "@/lib/product-seo";
 import { POLICY_DRAFT_NOTICE, RETURNS_SUMMARY, currentCustomerPolicies } from "@/lib/customer-policies";
 import { COLLECTION_ADDRESS } from "@/lib/checkout-fulfillment";
+import { AVANZI_SOFA_PATH } from "@/lib/shop-categories";
 import { publicPageMetadata } from "@/lib/storefront-metadata";
 import { ProductDetail } from "./product-detail";
 
@@ -87,10 +88,17 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
   const product = await getStoreProduct(sku);
   if (!product) notFound();
   const variantId = selectedVariant(product, variant)?.id;
-  const structuredData = productStructuredData(product, productPath(product));
+  const path = productPath(product);
+  const structuredData = productStructuredData(product, path);
   return <>
     {structuredData && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />}
     <ProductDetail key={variantId ?? product.id} product={product} initialVariantId={variantId} />
+    {path === AVANZI_SOFA_PATH && <section aria-labelledby="avanzi-fit-title" className="mx-auto w-full max-w-7xl space-y-2 px-6 pb-8">
+      <h2 id="avanzi-fit-title" className="text-lg font-semibold">Will the Avanzi fit your room?</h2>
+      <p className="max-w-prose text-muted-foreground">
+        Mark out both sides of this L-shaped sofa on your floor. Check that the return leaves enough room to walk past and open nearby doors. <Link href="/help#contact" className="font-medium text-foreground underline underline-offset-4">Ask the showroom</Link> to confirm the dimensions and which side the return is on before ordering.
+      </p>
+    </section>}
     <DeliveryAndReturns />
     <Suspense fallback={null}>
       <RelatedCatalogue product={product} />

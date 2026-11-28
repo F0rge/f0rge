@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Stepper, cn } from "@f0rge/ui";
+import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { MedusaVariant, StoreProduct } from "@/lib/medusa";
 import { PieceImage } from "@/components/piece-image";
@@ -13,6 +14,7 @@ import { offerLive } from "@/lib/made-to-order";
 import { pickVariant, productVariantOptions, selectedImages, variantChoices } from "@/lib/product-variants";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 import { addableRange, batchPriceParts, coversMinimum, sellRules } from "@/lib/sell-rules";
+import { SHOP_CATEGORIES } from "@/lib/shop-categories";
 
 const assurances = [
   { title: "Delivery", description: "Selected areas in Johannesburg and Pretoria" },
@@ -74,7 +76,8 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
   const material = variant?.material || product.material;
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
   const description = customerFacingCopy(product.description);
-  const category = product.categories?.[0]?.name;
+  const category = product.categories?.[0];
+  const collection = SHOP_CATEGORIES.find(({ handle }) => product.categories?.some((item) => item.handle === handle));
   const feedback = bagMessage ? purchaseFeedback(bagMessage, true) : null;
   useEffect(() => { if (bagMessage) feedbackRef.current?.focus(); }, [bagMessage]);
   useEffect(() => {
@@ -116,7 +119,11 @@ export function ProductDetail({ product, initialVariantId }: { product: StorePro
 
       <div className="min-w-0 space-y-8 self-start lg:sticky lg:top-20">
         <div className="space-y-1">
-          {category && <p className="text-sm font-medium text-primary">{category}</p>}
+          {category && <p className="text-sm font-medium text-primary">
+            {collection
+              ? <Link href={collection.href} className="underline underline-offset-4">{collection.name}</Link>
+              : category.name}
+          </p>}
           <h1 id="product-title" className="text-3xl font-bold">{product.title}</h1>
         </div>
 

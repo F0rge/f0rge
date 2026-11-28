@@ -67,6 +67,10 @@ test('a piece without a photo gets a named tile, and related pieces start with i
   await expect(page.getByRole('button', { name: 'Increase Quantity' })).toBeDisabled()
   // Nothing else is in Bedroom, so related pieces fall back to the rest in catalogue order.
   expect(await relatedTitles(page)).toEqual(['Test chair', 'Tilda Sofa', 'Umbra Dining Table', 'Wren Coffee Table'])
+  const collectionLink = page.getByRole('article').getByRole('link', { name: 'Bedroom' })
+  await expect(collectionLink).toHaveAttribute('href', '/shop/bedroom')
+  await collectionLink.press('Enter')
+  await expect(page.getByRole('heading', { level: 1, name: 'Bedroom' })).toBeVisible()
 })
 
 test('the gallery and add to bag work from the keyboard', async ({ page }) => {
@@ -77,7 +81,9 @@ test('the gallery and add to bag work from the keyboard', async ({ page }) => {
   await expect(second).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('[data-main-image] img')).toHaveAttribute('alt', 'Test chair, view 2 of 2')
 
-  // One unit in stock, so both quantity buttons are disabled and Tab goes straight to Add to bag.
+  // One unit in stock, so both quantity buttons are disabled.
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('article').getByRole('link', { name: 'Sofas & Armchairs' })).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Add to bag' })).toBeFocused()
   await page.keyboard.press('Enter')
@@ -141,6 +147,30 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await expect(page).toHaveTitle('Umbra Dining Table | DasKasas')
   await expect(description).toHaveAttribute('content', groupDescription ?? '')
   await expect(canonical).toHaveAttribute('href', new RegExp(`${path}$`))
+})
+
+test('a grouped card links to both its displayed SKU and all product options', async ({ page }) => {
+  const path = '/product/firstout-group-33333333-3333-4333-8333-333333333333'
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/shop/dining-room')
+  await page.getByRole('button', { name: 'Reject optional analytics' }).click()
+  const card = page.getByRole('list', { name: 'Pieces' }).getByRole('listitem')
+  const productTitle = card.getByRole('heading', { name: 'Umbra Dining Table' }).getByRole('link')
+  const productPhoto = card.getByRole('link').filter({ has: page.getByRole('img') })
+  const allOptions = card.getByRole('link', { name: 'View all options for Umbra Dining Table' })
+  await expect(productTitle).toHaveAttribute('href', `${path}?variant=variant_umbra_gold_large`)
+  await expect(productPhoto).toHaveAttribute('href', `${path}?variant=variant_umbra_gold_large`)
+  await expect(allOptions).toHaveAttribute('href', path)
+  expect((await allOptions.boundingBox())?.height).toBeGreaterThanOrEqual(24)
+  expect(await noHorizontalScroll(page)).toBe(true)
+  await allOptions.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`${path}$`))
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-TABLE')
+
+  await page.goBack()
+  await productTitle.click()
+  await expect(page).toHaveURL(new RegExp(`${path}\\?variant=variant_umbra_gold_large$`))
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-200')
 })
 
 for (const path of [tilda, wren, vale]) {
