@@ -27,6 +27,7 @@ export const queryKeys = {
   locations: ["locations"],
   salesStaffOptions: ["sales-staff", "options"],
   inventory: ["inventory"],
+  tillReservations: ["till-reservations"],
   picks: ["picks"],
 } as const;
 
