@@ -19,9 +19,11 @@ function render(product: StoreProduct) {
 describe("storefront variant presentation", () => {
   it("adds only verified samples while keeping a newly published upholstery option selectable", () => {
     const html = render(piece(["Upholstery material"], [
-      ["P20307PC3", ["Solo 111"]], ["P20302PC3", ["Solo 451"]], ["NEW", ["New upholstery"]],
+      ["P20307PC3", ["Solo 111"]], ["P20302PC3", ["Taupe Fabric"]], ["NEW", ["New upholstery"]],
     ]));
     expect(html).toContain("See fabric close-up");
+    expect(html).toContain('aria-label="Sand Fabric"');
+    expect(html).toContain('aria-label="Taupe Fabric"');
     expect(html).toContain('aria-label="New upholstery"');
     expect(html.match(/<img /g)).toHaveLength(2);
     expect(html).toContain('aria-expanded="false"');
@@ -29,12 +31,21 @@ describe("storefront variant presentation", () => {
 
   it("keeps frame details in the labels if a new chair finish makes the shared note inapplicable", () => {
     const html = render(piece(["Upholstery"], [
-      ["P62131X2", ["Grey / silver frame"]], ["P62132X2", ["White PU / silver frame"]],
+      ["P62131X2", ["Grey / silver frame"]], ["P62132X2", ["White Faux Leather"]],
       ["NEW", ["Grey / wood frame"]],
     ]));
-    expect(html).toContain('aria-label="Grey / silver frame"');
+    expect(html).toContain('aria-label="Light Grey · Silver frame"');
+    expect(html).toContain('aria-label="White Faux Leather · Silver frame"');
     expect(html).toContain('aria-label="Grey / wood frame"');
-    expect(html).not.toContain("Silver frame on every colour.");
+    expect(html).not.toContain(">Silver frame<");
+  });
+
+  it("shows the common silver frame once for all reviewed Alexa colours", () => {
+    const html = render(piece(["Upholstery"], [
+      ["P62131X2", ["Light Grey"]], ["P62132X2", ["White Faux Leather"]], ["P62129X2", ["Navy Velvet"]],
+    ]));
+    expect(html).toContain('aria-label="Navy Velvet"');
+    expect(html.match(/>Silver frame</g)).toHaveLength(1);
   });
 
   it("uses an explicit SKU colour only for the colour axis of a multi-option piece", () => {

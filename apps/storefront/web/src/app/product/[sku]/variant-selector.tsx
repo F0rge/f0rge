@@ -11,7 +11,7 @@ import { pickVariant, productVariantOptions, variantChoices } from "@/lib/produc
 import styles from "./variant-selector.module.css";
 
 type SelectVariant = (optionId: string, index: number, variant: MedusaVariant) => void;
-type Choice = { value: string; index: number; variant: MedusaVariant; sample?: MaterialSample; hex?: string | null };
+type Choice = { value: string; label: string; index: number; variant: MedusaVariant; sample?: MaterialSample; hex?: string | null };
 type PhotoChoice = Choice & { sample: MaterialSample };
 
 const colourAxis = /\bcolou?r\b/i;
@@ -64,8 +64,9 @@ function OptionGroup({ id, title, choices, selected, onSelect }: {
   const source = sharedText(photos.map(({ sample }) => sample.sourceLabel));
 
   function label(item: Choice) {
-    // A shortened label can omit a qualifier only if we still show the group's shared note.
-    return item.sample?.optionNote && !note ? item.value : item.sample?.label ?? item.value;
+    if (!item.sample) return item.label;
+    // If the note does not apply to every option, show it only on the finishes it describes.
+    return item.sample.optionNote && !note ? `${item.sample.label} · ${item.sample.optionNote}` : item.sample.label;
   }
   function select(item: Choice) { onSelect(id, item.index, item.variant); }
   function close() {
@@ -108,7 +109,7 @@ function OptionGroup({ id, title, choices, selected, onSelect }: {
             <h2 id={`${groupId}-heading`}>{heading}</h2>
             <Button type="button" variant="ghost" size="icon-sm" aria-label={`Close ${heading.toLowerCase()}`} onClick={close}><X aria-hidden="true" /></Button>
           </div>
-          <div role="radiogroup" aria-labelledby={`${groupId}-heading`} className={cn(styles.samples, (round || colourSamples) && styles.roundSamples)}>
+          <div role="radiogroup" aria-labelledby={`${groupId}-heading`} className={cn(styles.samples, comparison === "finishes" && styles.roundSamples)}>
             {photos.map((item) => <label key={item.value} className={styles.sample}>
               {radio(item, `${groupId}-compare`)}
               <span className={styles.picture} style={{ maxWidth: item.sample.width }}>
@@ -133,9 +134,9 @@ function OptionGroup({ id, title, choices, selected, onSelect }: {
 export function VariantSelector({ product, active, onSelect }: {
   product: StoreProduct; active?: MedusaVariant; onSelect: SelectVariant;
 }) {
-  const options = productVariantOptions(product);
+  const options = productVariantOptions(product, "source");
   if (!options.length) return null;
-  const selected = variantChoices(active);
+  const selected = variantChoices(active, "source");
   // swatch_hex describes the SKU. Attribute it to an axis only when its meaning is unambiguous.
   const colourOptions = options.filter(({ title }) => colourAxis.test(title) || finishAxis.test(title));
   return <div className="space-y-4 border-t pt-6">{options.map(({ id, title, availableValues }) => {
@@ -144,7 +145,7 @@ export function VariantSelector({ product, active, onSelect }: {
       if (!variant) return [];
       const sample = materialSample(variant.sku, title, value);
       const hex = colourOptions.length === 1 && colourOptions[0].id === id ? variant.metadata?.swatch_hex : null;
-      return [{ value, index, variant, sample, hex }];
+      return [{ value, label: variantChoices(variant)[id] ?? value, index, variant, sample, hex }];
     });
     return <OptionGroup key={id} id={id} title={title} choices={choices} selected={selected[id]} onSelect={onSelect} />;
   })}</div>;

@@ -5,17 +5,19 @@ import { materialSample } from "./material-samples";
 
 describe("photographic material samples", () => {
   it("requires the exact published SKU, axis and value", () => {
-    expect(materialSample("P20307PC3", "Size", "Solo 111")).toBeUndefined();
+    expect(materialSample("P20307PC3", "Size", "Sand Fabric")).toBeUndefined();
+    expect(materialSample("P20307PC3", "Upholstery material", "Taupe Fabric")).toBeUndefined();
     expect(materialSample("P20307PC3", "Upholstery material", "Solo 451")).toBeUndefined();
-    expect(materialSample(null, "Upholstery material", "Solo 111")).toBeUndefined();
-    expect(materialSample("__proto__", "Upholstery", "Solo 111")).toBeUndefined();
+    expect(materialSample(null, "Upholstery material", "Sand Fabric")).toBeUndefined();
+    expect(materialSample("__proto__", "Upholstery", "Sand Fabric")).toBeUndefined();
   });
 
   it("uses the original Swank photograph for the same Solo fabric on Kidman", () => {
     const kidman = materialSample("P20307PC3", "Upholstery material", "Solo 111");
-    const swank = materialSample("P20305", "Upholstery", "Solo 111");
+    const swank = materialSample("P20305", "Upholstery", "Sand Fabric");
     assert.isDefined(kidman);
     expect(kidman).toEqual(swank);
+    expect(kidman.label).toBe("Sand Fabric");
     expect(kidman.sourceLabel).toContain("Swank");
     expect(kidman.swatch).not.toBe(kidman.detail);
     for (const url of [kidman.swatch, kidman.detail]) {
@@ -27,11 +29,12 @@ describe("photographic material samples", () => {
     const sample = materialSample("P62132X2", "Upholstery", "White PU / silver frame");
     expect(sample).toMatchObject({
       kind: "colour",
-      label: "White PU",
-      optionNote: "Silver frame on every colour.",
-      width: 60,
-      height: 66,
+      label: "White Faux Leather",
+      optionNote: "Silver frame",
+      width: 119,
+      height: 119,
     });
     expect(sample?.detail).toBe(sample?.swatch);
+    expect(materialSample("P62132X2", "Upholstery", "White Faux Leather")).toEqual(sample);
   });
 });

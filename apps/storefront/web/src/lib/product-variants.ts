@@ -1,18 +1,25 @@
-import type { MedusaVariant, StoreProduct } from "./medusa";
+import type { MedusaOption, MedusaVariant, StoreProduct } from "./medusa";
 
-export function variantChoices(variant: MedusaVariant | undefined): Record<string, string> {
+type OptionValue = NonNullable<MedusaOption["values"]>[number];
+type OptionValueMode = "display" | "source";
+
+function optionValue(option: OptionValue, mode: OptionValueMode) {
+  return mode === "source" ? option.sourceValue ?? option.value : option.value;
+}
+
+export function variantChoices(variant: MedusaVariant | undefined, mode: OptionValueMode = "display"): Record<string, string> {
   return Object.fromEntries((variant?.options ?? []).flatMap((option) => {
     const id = option.option_id || option.option?.id;
-    return id ? [[id, option.value]] : [];
+    return id ? [[id, optionValue(option, mode)]] : [];
   }));
 }
 
-export function productVariantOptions(product: StoreProduct) {
-  const choices = product.variants.map(variantChoices);
+export function productVariantOptions(product: StoreProduct, mode: OptionValueMode = "display") {
+  const choices = product.variants.map((variant) => variantChoices(variant, mode));
   return (product.options ?? []).flatMap((option) => {
     const present = Array.from(new Set(choices.flatMap((row) => row[option.id] ? [row[option.id]] : [])));
     if (present.length < 2) return [];
-    const ordered = (option.values ?? []).map(({ value }) => value).filter((value) => present.includes(value));
+    const ordered = (option.values ?? []).map((value) => optionValue(value, mode)).filter((value) => present.includes(value));
     return [{ ...option, availableValues: Array.from(new Set([...ordered, ...present])) }];
   });
 }
@@ -24,12 +31,12 @@ export function pickVariant(
   optionId: string,
   value: string,
 ): MedusaVariant | undefined {
-  const selected = variantChoices(active);
+  const selected = variantChoices(active, "source");
   const otherOptions = Object.entries(selected).filter(([id]) => id !== optionId);
   let bestScore = -1;
   let bestMatch: MedusaVariant | undefined;
   for (const variant of variants) {
-    const choices = variantChoices(variant);
+    const choices = variantChoices(variant, "source");
     if (choices[optionId] !== value) continue;
     const score = otherOptions.filter(([id, current]) => choices[id] === current).length;
     if (score > bestScore) {
