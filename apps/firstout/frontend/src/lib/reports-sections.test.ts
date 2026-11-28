@@ -30,4 +30,22 @@ describe("reports sections", () => {
     expect(reportsView(null, "sales-vat").selected).toBe(12);
     expect(reportsView("stock", null).selected).toBe(0);
   });
+
+  it("shows only the date controls the visible reports read", () => {
+    expect(reportsView("stock").asOfLabel).toBeNull();
+    expect(reportsView("stock").rangeLabels).toBeNull();
+    expect(reportsView("sales").asOfLabel).toBeNull();
+    expect(reportsView("sales").rangeLabels).toEqual({ from: "From (Sales by SKU, Criticality, Sales VAT)", to: "To (Sales by SKU, Criticality, Sales VAT)" });
+    expect(reportsView("books").asOfLabel).toBe("As of (Aged AR, Aged AP, Balance sheet, Trial balance)");
+    expect(reportsView("books").rangeLabels?.from).toBe("From (Profit & loss, Journals, Cash summary)");
+    expect(reportsView(null).asOfLabel).not.toBeNull();
+    expect(reportsView(null).rangeLabels).not.toBeNull();
+  });
+
+  it("fetches only the visible section's reports", () => {
+    const fetched = (section: string | null) => REPORT_TABS.filter((tab) => reportsView(section).shows(tab.id)).map((tab) => tab.id);
+    expect(fetched("stock")).toEqual(["stock-valuation", "aged-stock", "lead-times"]);
+    expect(fetched("sales")).toEqual(["sales-by-sku", "criticality", "sales-vat"]);
+    expect(fetched(null)).toHaveLength(13);
+  });
 });

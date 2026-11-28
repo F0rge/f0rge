@@ -102,10 +102,16 @@ export function adminNavGroupsFor(user: AdminIdentity | null | undefined): { lab
   })).filter((group) => group.items.length > 0);
 }
 
-/** Where the sidebar's Admin link lands: the first page of the shell's navigation this person sees. */
+/** Admin landing pages, most useful first; the link takes the first one this person sees in the shell. */
+const ADMIN_HOME_ORDER: readonly AdminDestination[] = [
+  "organisation", "team", "settings", "locationsPage", "categories", "audit", "archive", "import",
+];
+
+/** Where the sidebar's Admin link lands. Always falls back to My profile, which everyone sees. */
 export function administrationHome(user: AdminIdentity | null | undefined) {
-  const first = adminNavGroupsFor(user)[0]?.items[0]?.id;
-  return first ? adminDestination(first).href : ADMIN_DESTINATIONS.profile.href;
+  const visible = new Set(adminNavGroupsFor(user).flatMap((group) => group.items.map(({ id }) => id)));
+  const first = ADMIN_HOME_ORDER.find((id) => visible.has(id));
+  return adminDestination(first ?? "profile").href;
 }
 
 export type AdminCrumb = { label: string; href?: string };

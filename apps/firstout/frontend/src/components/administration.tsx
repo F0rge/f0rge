@@ -36,7 +36,7 @@ export function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
       <div key={label} className={styles.navGroup}>
         <p className={styles.navLabel}>{label}</p>
         <ul aria-label={label}>
-          {items.map(({ id, access }) => {
+          {items.map(({ id }) => {
             const destination = adminDestination(id);
             const Icon = icons[id];
             return (
@@ -49,7 +49,6 @@ export function AdminNavigation({ mobile = false }: { mobile?: boolean }) {
                 >
                   <Icon size={16} aria-hidden="true" />
                   {destination.label}
-                  {access === "view" && <span className={styles.viewTag}>view<span className="cds--visually-hidden">, view only</span></span>}
                 </Link>
               </li>
             );

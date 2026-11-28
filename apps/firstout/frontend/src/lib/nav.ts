@@ -66,8 +66,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "Sell",
     pages: [
       { href: "/quotes", label: "Quotes", actions: ["sales.quotes"] },
-      // Refunds are taken on an order; warehouse accepts quotes into orders and delivers them.
-      { href: "/orders", label: "Orders", actions: ["sales.orders", "sales.refunds"], lookup: ["sales.quotes", "sales.deliveries"] },
+      // Refunds are taken on an order; delivery staff change storefront collection status there.
+      { href: "/orders", label: "Orders", actions: ["sales.orders", "sales.refunds", "sales.deliveries"] },
       { href: "/laybys", label: "Laybys", actions: ["sales.laybys"] },
       { href: "/invoices", label: "Invoices", actions: ["books.mutate"], lookup: ["till.sell"] },
       { href: "/returns", label: "Returns", actions: ["sales.returns"] },
@@ -89,7 +89,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "Buy",
     pages: [
       { href: "/reorder", label: "Reorder", actions: ["catalogue.mutate"] },
-      { href: "/purchase-orders", label: "Purchase orders", actions: ["catalogue.mutate", "po.raise"] },
+      // Every purchase-order write needs catalogue.mutate; po.raise is checked only for customer credit.
+      { href: "/purchase-orders", label: "Purchase orders", actions: ["catalogue.mutate"], lookup: ["po.raise"] },
       { href: "/proformas", label: "Proformas", actions: ["catalogue.mutate"] },
       { href: "/suppliers", label: "Suppliers", actions: ["catalogue.mutate"], lookup: ["books.mutate"] },
     ],
@@ -123,7 +124,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/bills", label: "Bills", actions: ["books.mutate"] },
       { href: "/payments", label: "Payments", actions: ["books.mutate"] },
       { href: "/bank-reconciliation", label: "Bank reconciliation", actions: ["books.mutate"] },
-      { href: "/journals", label: "Journals", actions: ["books.mutate", "books.journals"] },
+      // Every journal write needs books.mutate; the API never checks books.journals.
+      { href: "/journals", label: "Journals", actions: ["books.mutate"], lookup: ["books.journals"] },
       { href: "/repeating-invoices", label: "Repeating invoices", actions: ["books.mutate"] },
       { href: "/ledger", label: "Chart of accounts", actions: ["books.mutate"] },
       { href: "/vat201", label: "VAT201", actions: ["books.mutate"] },
@@ -179,14 +181,4 @@ export function isNavLinkActive(pathname: string, href: string, section: string 
 /** The group containing this page (expanded on load), ignoring the Reports section. */
 export function navGroupForPath(pathname: string): NavGroup | undefined {
   return NAV_GROUPS.find((group) => group.pages.some((page) => pathMatches(pathname, splitHref(page.href).path)));
-}
-
-/** Human label for a workspace page path — maps `/invoices/abc` → "Invoices", not the raw path. */
-export function labelForNavPath(path: string): string {
-  for (const group of NAV_GROUPS) {
-    for (const page of group.pages) {
-      if (pathMatches(path, page.href)) return page.label;
-    }
-  }
-  return path;
 }

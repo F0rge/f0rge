@@ -31,7 +31,8 @@ export function stockOnHandFilters(lists: {
     { key: "held", label: "Held", type: "number" },
     { key: "available", label: "Available", type: "number" },
     { key: "on_order", label: "On order", type: "number" },
-    { key: "below_reorder_min", label: "Below reorder minimum", type: "boolean" },
+    // Same rule as the Reorder list (it counts every location's balance, so it can disagree with On hand when one is below zero).
+    { key: "below_reorder_min", label: "Below reorder minimum (as on the Reorder list)", type: "boolean" },
     { key: "do_not_reorder", label: "Do not reorder", type: "boolean" },
     { key: "is_kit", label: "Kit", type: "boolean" },
     { key: "name", label: "Product name", type: "text" },

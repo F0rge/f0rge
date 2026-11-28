@@ -116,9 +116,7 @@ function StockOnHandScreen() {
       }}
     >
       <p className={`cds--type-body-01 ${styles.note}`}>
-        Held stock is set aside for open orders and laybys and has already left on hand. Available is what can be sold now.
-        Below reorder minimum follows the reorder list, which adds up every location&apos;s balance, so it can differ from On hand
-        when a location has gone below zero.
+        Held stock has already left on hand. Available is what can be sold now.
       </p>
     </RecordWorkspace>
   </>;

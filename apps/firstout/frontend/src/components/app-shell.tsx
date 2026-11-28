@@ -298,8 +298,9 @@ function WorkspaceNavItems({ pathname, adminHref, isAdministration, onNavigate }
         const Icon = GROUP_ICONS[group.id];
         if (group.link) {
           const page = group.pages[0];
+          const active = isNavLinkActive(pathname, page.href);
           return (
-            <SideNavLink key={group.id} href={page.href} renderIcon={Icon} isActive={isNavLinkActive(pathname, page.href)} onClick={follow(page.href)}>
+            <SideNavLink key={group.id} href={page.href} renderIcon={Icon} isActive={active} aria-current={active ? "page" : undefined} onClick={follow(page.href)}>
               {group.label}
             </SideNavLink>
           );
@@ -314,12 +315,15 @@ function WorkspaceNavItems({ pathname, adminHref, isAdministration, onNavigate }
             defaultExpanded={open}
             isActive={open}
           >
-            {group.pages.map((page) => (
+            {group.pages.map((page) => {
+              const active = isNavLinkActive(pathname, page.href, section);
+              return (
               <SideNavMenuItem
                 key={page.href}
                 href={page.href}
                 className={page.mobileOnly ? "firstout-nav-warehouse" : undefined}
-                isActive={isNavLinkActive(pathname, page.href, section)}
+                isActive={active}
+                aria-current={active ? "page" : undefined}
                 onClick={follow(page.href)}
               >
                 {page.access === "view" ? (
@@ -330,11 +334,12 @@ function WorkspaceNavItems({ pathname, adminHref, isAdministration, onNavigate }
                   </span>
                 ) : page.label}
               </SideNavMenuItem>
-            ))}
+              );
+            })}
           </SideNavMenu>
         );
       })}
-      <SideNavLink href={adminHref} renderIcon={Settings} isActive={isAdministration} onClick={follow(adminHref)}>
+      <SideNavLink href={adminHref} renderIcon={Settings} isActive={isAdministration} aria-current={isAdministration ? "page" : undefined} onClick={follow(adminHref)}>
         Admin
       </SideNavLink>
     </SideNavItems>

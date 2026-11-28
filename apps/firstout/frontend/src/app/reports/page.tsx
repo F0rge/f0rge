@@ -170,6 +170,7 @@ function ReportsScreen() {
   const pathname = usePathname();
   const router = useRouter();
   const view = reportsView(params.get("section"), params.get("tab"));
+  const section = view.section;
   // The tab lives in the URL (?tab=), so it survives a reload; other parameters (section, SKU panel) are kept.
   function selectTab(id: string | undefined) {
     if (!id) return;
@@ -215,20 +216,23 @@ function ReportsScreen() {
     setError(null);
     setLeadTimesError(null);
     setCriticalityError(null);
+    // Only the visible section's reports are fetched, so a failing books report never shows on Stock.
+    const shows = reportsView(section).shows;
+    const fetchIf = <T,>(id: ReportTabId, load: () => Promise<T>): Promise<T | null> => (shows(id) ? load() : Promise.resolve(null));
     try {
       const [ar, ap, pl, bs, tb, journals, cash, valuation, aged, salesSku, salesVatReport] =
         await Promise.all([
-          getAgedAr(effectiveAsOf),
-          getAgedAp(effectiveAsOf),
-          getProfitLoss(effectiveFrom, effectiveTo),
-          getBalanceSheet(effectiveAsOf),
-          getTrialBalance(effectiveAsOf),
-          getJournalsReport(effectiveFrom, effectiveTo, journalSourceRef.current),
-          getCashSummary(effectiveFrom, effectiveTo),
-          getStockValuation(),
-          getAgedStock(),
-          getSalesBySku(effectiveFrom, effectiveTo),
-          getSalesVat(effectiveFrom, effectiveTo),
+          fetchIf("aged-ar", () => getAgedAr(effectiveAsOf)),
+          fetchIf("aged-ap", () => getAgedAp(effectiveAsOf)),
+          fetchIf("profit-loss", () => getProfitLoss(effectiveFrom, effectiveTo)),
+          fetchIf("balance-sheet", () => getBalanceSheet(effectiveAsOf)),
+          fetchIf("trial-balance", () => getTrialBalance(effectiveAsOf)),
+          fetchIf("journals", () => getJournalsReport(effectiveFrom, effectiveTo, journalSourceRef.current)),
+          fetchIf("cash-summary", () => getCashSummary(effectiveFrom, effectiveTo)),
+          fetchIf("stock-valuation", () => getStockValuation()),
+          fetchIf("aged-stock", () => getAgedStock()),
+          fetchIf("sales-by-sku", () => getSalesBySku(effectiveFrom, effectiveTo)),
+          fetchIf("sales-vat", () => getSalesVat(effectiveFrom, effectiveTo)),
         ]);
       setAgedAr(ar);
       setAgedAp(ap);
@@ -245,29 +249,30 @@ function ReportsScreen() {
       setError(err instanceof Error ? err.message : "Failed to load reports.");
     }
 
-    try {
-      const [supplierLead, skuLead] = await Promise.all([
-        getSupplierLeadTimes(),
-        getSkuLeadTimes(),
-      ]);
-      setSupplierLeadTimes(supplierLead);
-      setSkuLeadTimes(skuLead);
-    } catch (err) {
-      setSupplierLeadTimes({ rows: [] });
-      setSkuLeadTimes({ rows: [] });
-      setLeadTimesError(err instanceof Error ? err.message : "Failed to load lead times.");
+    if (shows("lead-times")) {
+      try {
+        const [supplierLead, skuLead] = await Promise.all([
+          getSupplierLeadTimes(),
+          getSkuLeadTimes(),
+        ]);
+        setSupplierLeadTimes(supplierLead);
+        setSkuLeadTimes(skuLead);
+      } catch (err) {
+        setSupplierLeadTimes({ rows: [] });
+        setSkuLeadTimes({ rows: [] });
+        setLeadTimesError(err instanceof Error ? err.message : "Failed to load lead times.");
+      }
     }
 
     try {
-      const criticality = await getSkuCriticality(effectiveFrom, effectiveTo);
-      setSkuCriticality(criticality);
+      if (shows("criticality")) setSkuCriticality(await getSkuCriticality(effectiveFrom, effectiveTo));
     } catch (err) {
       setSkuCriticality(null);
       setCriticalityError(err instanceof Error ? err.message : "Failed to load criticality.");
     } finally {
       setLoading(false);
     }
-  }, [asOf, fromDate, toDate]);
+  }, [asOf, fromDate, toDate, section]);
 
   useEffect(() => {
     if (user) {
@@ -1038,30 +1043,36 @@ function ReportsScreen() {
       ) : null}
 
       <Stack gap={4} orientation="horizontal">
-        <DatePicker datePickerType="single" dateFormat="Y-m-d" value={asOf}>
-          <DatePickerInput
-            id="as-of"
-            labelText="As of (aged AR/AP, balance sheet, trial balance)"
-            placeholder="YYYY-MM-DD"
-            onChange={(event) => setAsOf(event.target.value)}
-          />
-        </DatePicker>
-        <DatePicker datePickerType="single" dateFormat="Y-m-d" value={fromDate}>
-          <DatePickerInput
-            id="from-date"
-            labelText="From (P&L, sales, journals, cash)"
-            placeholder="YYYY-MM-DD"
-            onChange={(event) => setFromDate(event.target.value)}
-          />
-        </DatePicker>
-        <DatePicker datePickerType="single" dateFormat="Y-m-d" value={toDate}>
-          <DatePickerInput
-            id="to-date"
-            labelText="To (P&L, sales, journals, cash)"
-            placeholder="YYYY-MM-DD"
-            onChange={(event) => setToDate(event.target.value)}
-          />
-        </DatePicker>
+        {view.asOfLabel && (
+          <DatePicker datePickerType="single" dateFormat="Y-m-d" value={asOf}>
+            <DatePickerInput
+              id="as-of"
+              labelText={view.asOfLabel}
+              placeholder="YYYY-MM-DD"
+              onChange={(event) => setAsOf(event.target.value)}
+            />
+          </DatePicker>
+        )}
+        {view.rangeLabels && (
+          <>
+            <DatePicker datePickerType="single" dateFormat="Y-m-d" value={fromDate}>
+              <DatePickerInput
+                id="from-date"
+                labelText={view.rangeLabels.from}
+                placeholder="YYYY-MM-DD"
+                onChange={(event) => setFromDate(event.target.value)}
+              />
+            </DatePicker>
+            <DatePicker datePickerType="single" dateFormat="Y-m-d" value={toDate}>
+              <DatePickerInput
+                id="to-date"
+                labelText={view.rangeLabels.to}
+                placeholder="YYYY-MM-DD"
+                onChange={(event) => setToDate(event.target.value)}
+              />
+            </DatePicker>
+          </>
+        )}
         <Button kind="primary" disabled={loading} onClick={() => void loadReports()}>
           {loading ? "Loading…" : "Refresh"}
         </Button>

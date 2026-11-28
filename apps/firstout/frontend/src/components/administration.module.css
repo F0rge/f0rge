@@ -124,4 +124,3 @@
   .saveActions > span:empty { display: none; }
   .saveActions > span:not(:empty) { flex-basis: 100%; }
 }
-.viewTag { margin-inline-start: auto; font-size: .75rem; font-weight: 400; color: var(--cds-text-secondary); }

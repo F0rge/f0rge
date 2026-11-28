@@ -3,7 +3,6 @@ import { adminDestination, adminNavGroupsFor, administrationHome, isAdminPath, s
 import {
   NAV_GROUPS,
   isNavLinkActive,
-  labelForNavPath,
   navAccess,
   navGroupForPath,
   navGroupsFor,
@@ -63,7 +62,7 @@ describe("role-aware sidebar", () => {
 
   it("shows warehouse staff the goods", () => {
     expect(forPreset("warehouse")).toEqual([
-      "Home", "Quotes", "Orders (view)", "Returns", "Catalogue (view)",
+      "Home", "Quotes", "Orders", "Returns", "Catalogue (view)",
       "Receive", "Transit (view)", "Transfers", "Picks", "Deliveries",
       "Stock on hand", "Stock by bin", "Stocktakes", "Adjustments", "Locations", "My profile",
     ]);
@@ -90,7 +89,15 @@ describe("role-aware sidebar", () => {
   it("decides from permission keys, not the role name", () => {
     expect(pagesFor("owner", [])).toEqual(["Home", "My profile"]);
     expect(pagesFor("deliveries-only", ["sales.deliveries"])).toEqual([
-      "Home", "Orders (view)", "Picks", "Deliveries", "My profile",
+      "Home", "Orders", "Picks", "Deliveries", "My profile",
+    ]);
+    // The API checks books.journals and po.raise on no journal or purchase-order write: lookups only.
+    expect(pagesFor("journals-only", ["books.journals"])).toEqual(["Home", "Journals (view)", "Reports: Books", "My profile"]);
+    expect(pagesFor("credit-only", ["po.raise"])).toEqual([
+      "Home", "Customers", "Purchase orders (view)", "Stock on hand", "Stock by bin", "Reports: Sales", "Reports: Stock", "Archive", "My profile",
+    ]);
+    expect(pagesFor("quotes-only", ["sales.quotes"])).toEqual([
+      "Home", "Quotes", "Catalogue (view)", "Stock on hand", "Stock by bin", "My profile",
     ]);
     expect(pagesFor("stock-counter", ["stock.receive"])).toEqual([
       "Home", "Catalogue (view)", "Receive", "Transit (view)", "Stock on hand", "Stock by bin", "Stocktakes", "Adjustments", "Locations", "My profile",
@@ -119,6 +126,12 @@ describe("role-aware sidebar", () => {
     expect(administrationHome(userFor("owner", PRESETS.owner))).toBe("/organisation");
     expect(administrationHome(userFor("buyer", PRESETS.buyer))).toBe("/settings/categories");
     expect(administrationHome(userFor("till", PRESETS.till))).toBe("/profile");
+    expect(administrationHome(userFor("warehouse", PRESETS.warehouse))).toBe("/locations");
+    expect(administrationHome(userFor("books", PRESETS.books))).toBe("/audit");
+    expect(administrationHome(userFor("settings-only", ["settings.mutate"]))).toBe("/settings");
+    expect(administrationHome(userFor("credit-only", ["po.raise"]))).toBe("/history");
+    expect(administrationHome(userFor("nobody", []))).toBe("/profile");
+    expect(administrationHome(null)).toBe("/profile");
   });
 });
 
@@ -154,14 +167,6 @@ describe("nav paths", () => {
   it("puts every route in exactly one group", () => {
     const hrefs = NAV_GROUPS.flatMap((group) => group.pages.map((page) => page.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
-  });
-
-  it("labels nested paths from the nav table", () => {
-    expect(labelForNavPath("/catalogue/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).toBe("Catalogue");
-    expect(labelForNavPath("/invoices/abc")).toBe("Invoices");
-    expect(labelForNavPath("/bills/new")).toBe("Bills");
-    expect(labelForNavPath("/stock")).toBe("Stock on hand");
-    expect(labelForNavPath("/unknown")).toBe("/unknown");
   });
 
   it("renders the moved pages inside the Administration shell", () => {
