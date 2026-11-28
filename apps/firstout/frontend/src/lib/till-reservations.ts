@@ -3,10 +3,39 @@ import { conflictCode, type ApiError, type InventorySku, type TillBasket, type T
 const clock = new Intl.DateTimeFormat("en-ZA", {
   hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Johannesburg",
 });
+const showroomDate = new Intl.DateTimeFormat("en-ZA", {
+  day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Johannesburg",
+});
 
 /** 24-hour showroom time (Africa/Johannesburg) for an ISO timestamp. */
 export function tillClock(iso: string): string {
   return clock.format(new Date(iso));
+}
+
+function expiryDateTime(iso: string): string {
+  return `${showroomDate.format(new Date(iso))} at ${tillClock(iso)}`;
+}
+
+// A basket ID belongs to a single cashier and showroom. Keep only its last displayed expiry.
+const fallbackExpiries = new Map<string, string>();
+const expiryStorageKey = (basketId: string) => `firstout.till.shownExpiry.${basketId}`;
+
+export function hasShownBasketExpiry(basketId: string, expiredAt: string): boolean {
+  if (fallbackExpiries.get(basketId) === expiredAt) return true;
+  try {
+    return window.localStorage.getItem(expiryStorageKey(basketId)) === expiredAt;
+  } catch {
+    return false;
+  }
+}
+
+export function rememberBasketExpiry(basketId: string, expiredAt: string): void {
+  try {
+    window.localStorage.setItem(expiryStorageKey(basketId), expiredAt);
+  } catch {
+    // Storage can be unavailable on a shared till. Navigation still remembers the notice.
+    fallbackExpiries.set(basketId, expiredAt);
+  }
 }
 
 /** Why a SKU cannot be added; names the showroom only, never the cashier or customer. */
@@ -26,6 +55,17 @@ export type TillAvailability = {
   /** Set when other sales' reservations are what stops it. */
   reason: string | null;
 };
+
+/** Refresh at the first advertised deadline. The server decides which units are still held. */
+export function reservationRefreshInterval(rows: TillReservation[] | undefined, now: number): number | false {
+  let earliest = Infinity;
+  for (const row of rows ?? []) {
+    if (row.blocking?.expires_at) earliest = Math.min(earliest, Date.parse(row.blocking.expires_at));
+  }
+  if (!Number.isFinite(earliest)) return false;
+  // After a failed refresh or with a fast client clock, give the server time before retrying.
+  return earliest > now ? earliest - now : 15_000;
+}
 
 /** The server re-checks every add; this only decides what the till offers. */
 export function tillAvailability({ row, sellableLocationIds, reservation, inCart }: {
@@ -54,7 +94,7 @@ export function expiryNotice(expiresAt: string, now: number, holdHours?: number)
   const time = tillClock(expiresAt);
   const left = Date.parse(expiresAt) - now;
   if (left <= 0) {
-    return { kind: "warning", title: `This sale expired at ${time}.`, subtitle: "Its items were released. Add them again." };
+    return { kind: "warning", title: `This sale expired on ${expiryDateTime(expiresAt)}.`, subtitle: "Its items were released. Add them again." };
   }
   if (left <= 15 * 60_000) {
     const minutes = Math.ceil(left / 60_000);
@@ -120,7 +160,7 @@ export function heldExpiryNotice(expiresAt: string, now: number): TillNotice | n
 }
 
 export function expiredMessage(expiredAt: string): string {
-  return `Your sale expired at ${tillClock(expiredAt)}. Its items were released. Add them again.`;
+  return `Your sale expired on ${expiryDateTime(expiredAt)}. Its items were released. Add them again.`;
 }
 
 /** A 409 that carries the server's current basket for the till to show instead of its own. */

@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type InventorySku, type TillBlockingReservation } from "./api";
 import {
   basketConflict, conflictNotice, expiryNotice, heldExpiryNotice, heldSalesExplainer, heldTimeLeft,
-  reservationReason, tillAvailability, tillClock,
+  hasShownBasketExpiry, rememberBasketExpiry, reservationReason, reservationRefreshInterval, tillAvailability, tillClock,
 } from "./till-reservations";
 
 // 14:32 in Johannesburg (UTC+2).
@@ -60,6 +60,24 @@ describe("till availability", () => {
   });
 });
 
+describe("other tills' reservation deadlines", () => {
+  const now = Date.parse(FREES);
+  const reserved = (expires_at: string | null) => ({
+    sku_id: "sofa", reserved_by_others: 1, blocking: { ...open, expires_at },
+  });
+
+  it("refreshes at the earliest timed hold even alongside indefinite holds", () => {
+    const rows = [reserved(null), reserved(new Date(now + 60_000).toISOString()), reserved(FREES)];
+    expect(reservationRefreshInterval(rows, now - 2_000)).toBe(2_000);
+    expect(reservationRefreshInterval([reserved(null)], now)).toBe(false);
+    expect(reservationRefreshInterval([], now)).toBe(false);
+  });
+
+  it("backs off while a deadline in the last server response is already past", () => {
+    expect(reservationRefreshInterval([reserved(FREES)], now + 1)).toBe(15_000);
+  });
+});
+
 describe("expiry notice", () => {
   const expires = Date.parse(FREES);
 
@@ -77,7 +95,7 @@ describe("expiry notice", () => {
       kind: "warning", title: "Expires at 14:32, in 15 minutes.",
     });
     expect(expiryNotice(FREES, expires - 30_000).title).toBe("Expires at 14:32, in 1 minute.");
-    expect(expiryNotice(FREES, expires)).toMatchObject({ kind: "warning", title: "This sale expired at 14:32." });
+    expect(expiryNotice(FREES, expires)).toMatchObject({ kind: "warning", title: "This sale expired on 20 Nov 2026 at 14:32." });
   });
 });
 
@@ -100,8 +118,44 @@ describe("basket conflicts", () => {
       subtitle: "Reserved in open sale at Kramerville · frees 14:32 unless sold.",
     });
     expect(conflictNotice({ code: "basket_expired", basket }, name).subtitle)
-      .toBe("Your sale expired at 14:32. Its items were released. Add them again.");
+      .toBe("Your sale expired on 20 Nov 2026 at 14:32. Its items were released. Add them again.");
     expect(conflictNotice({ code: "basket_version_conflict", basket }, name).title).toBe("Basket updated elsewhere");
+  });
+
+  it("dates a previous sale by the showroom calendar even when UTC is still on the previous day", () => {
+    const expired = { ...basket, expired_at: "2026-11-24T22:30:00Z" };
+    expect(conflictNotice({ code: "basket_expired", basket: expired }, () => undefined).subtitle)
+      .toContain("25 Nov 2026 at 00:30");
+  });
+
+  it("remembers one expiry per basket across page loads and allows a later expiry", async () => {
+    const entries = new Map<string, string>();
+    vi.stubGlobal("window", { localStorage: {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+    } });
+    try {
+      expect(hasShownBasketExpiry("first-basket", FREES)).toBe(false);
+      rememberBasketExpiry("first-basket", FREES);
+      vi.resetModules();
+      const reloaded = await import("./till-reservations");
+      expect(reloaded.hasShownBasketExpiry("first-basket", FREES)).toBe(true);
+      expect(reloaded.hasShownBasketExpiry("other-basket", FREES)).toBe(false);
+      expect(reloaded.hasShownBasketExpiry("first-basket", "2026-11-28T18:00:00Z")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("continues to show each expiry once while navigating with browser storage disabled", () => {
+    vi.stubGlobal("window", { get localStorage() { throw new Error("Storage is disabled"); } });
+    try {
+      expect(hasShownBasketExpiry("private-basket", FREES)).toBe(false);
+      rememberBasketExpiry("private-basket", FREES);
+      expect(hasShownBasketExpiry("private-basket", FREES)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

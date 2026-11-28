@@ -160,6 +160,9 @@ import {
   basketConflict,
   conflictNotice,
   expiryNotice,
+  hasShownBasketExpiry,
+  rememberBasketExpiry,
+  reservationRefreshInterval,
   tillAvailability,
   type BasketConflict,
 } from "@/lib/till-reservations";
@@ -340,16 +343,38 @@ function TillWorkspace() {
   const [basketId, setBasketId] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [reservations, setReservations] = useState<{ locationId: string; rows: TillReservation[] } | null>(null);
-  const [reservationRevision, setReservationRevision] = useState(0);
-  const refreshReservations = useCallback(() => setReservationRevision((revision) => revision + 1), []);
+  const { data: reservations } = useQuery({
+    queryKey: [...queryKeys.tillReservations, locationId],
+    enabled: canSell && loadSucceeded && Boolean(locationId),
+    refetchOnWindowFocus: true,
+    queryFn: async ({ queryKey, signal }) => {
+      const previous = client.getQueryData<TillReservation[]>(queryKey);
+      const rows = await listTillReservations(locationId, signal);
+      if (previous?.length) {
+        const reserved = new Map(rows.map((row) => [row.sku_id, row.reserved_by_others]));
+        // A disappeared hold may have become a sale. Read on-hand before offering those units.
+        if (previous.some((row) => row.reserved_by_others > (reserved.get(row.sku_id) ?? 0))) {
+          await client.fetchQuery(stockQueries.inventory);
+        }
+      }
+      return rows;
+    },
+    refetchInterval: (query) => reservationRefreshInterval(query.state.data, Date.now()),
+  });
+  const refreshReservations = useCallback(() => {
+    void client.invalidateQueries({ queryKey: queryKeys.tillReservations });
+  }, [client]);
   // A basket a 409 carried; the restore effect shows it instead of fetching one.
   const incomingBasket = useRef<TillBasket | null>(null);
-  const shownExpiry = useRef("");
+  // A passive restore reports each expiry once on this browser. Failed actions still explain why.
+  useEffect(() => {
+    if (basketNotice?.code === "basket_expired" && basketNotice.basket?.expired_at) {
+      rememberBasketExpiry(basketNotice.basket.id, basketNotice.basket.expired_at);
+    }
+  }, [basketNotice]);
   const adoptServerBasket = useCallback((failure: unknown) => {
     const conflict = basketConflict(failure) ?? { code: "basket_version_conflict" };
     incomingBasket.current = conflict.basket ?? null;
-    if (conflict.code === "basket_expired") shownExpiry.current = conflict.basket?.expired_at ?? "";
     setBasketNotice(conflict);
     setCartReady(false);
   }, []);
@@ -435,9 +460,8 @@ function TillWorkspace() {
     return totals;
   }, [cart]);
   const reservationsBySku = useMemo(
-    () => new Map((reservations?.locationId === locationId ? reservations.rows : [])
-      .map((row) => [row.sku_id, row])),
-    [locationId, reservations],
+    () => new Map((reservations ?? []).map((row) => [row.sku_id, row])),
+    [reservations],
   );
   const availabilityFor = useCallback(
     (id: string) => tillAvailability({
@@ -511,15 +535,16 @@ function TillWorkspace() {
     const incoming = incomingBasket.current;
     incomingBasket.current = null;
     void (async () => {
-      const basket = incoming?.location_id === locationId ? incoming : await getTillBasket(locationId);
+      const conflictBasket = incoming?.location_id === locationId ? incoming : null;
+      const basket = conflictBasket ?? await getTillBasket(locationId);
       if (cancelled) return;
       // Reset first so a basket that cannot be shown can still be discarded.
       saver.reset(basket);
       setBasketId(basket.id);
       setExpiresAt(basket.expires_at ?? null);
       setNow(Date.now());
-      if (basket.expired_at && !basket.lines.length && shownExpiry.current !== basket.expired_at) {
-        shownExpiry.current = basket.expired_at;
+      if (!conflictBasket && basket.expired_at && !basket.lines.length &&
+          !hasShownBasketExpiry(basket.id, basket.expired_at)) {
         setBasketNotice({ code: "basket_expired", basket });
       }
       const snapshot = cartSnapshot(basket);
@@ -541,16 +566,6 @@ function TillWorkspace() {
   }, [cartReady, currentSnapshot, pendingHeld, saver, tillPicks]);
 
   useEffect(() => () => saver.dispose(), [saver]);
-
-  useEffect(() => {
-    if (!canSell || !loadSucceeded || !locationId) return;
-    const controller = new AbortController();
-    // ponytail: a failed refresh keeps the last list; the server re-checks every add.
-    void listTillReservations(locationId, controller.signal).then((rows) => {
-      if (!controller.signal.aborted) setReservations({ locationId, rows });
-    }).catch(() => undefined);
-    return () => controller.abort();
-  }, [canSell, loadSucceeded, locationId, reservationRevision]);
 
   // Minute clock for the expiry notice; focus also refreshes other tills' reservations.
   useEffect(() => {
