@@ -67,6 +67,10 @@ test('a piece without a photo gets a named tile, and related pieces start with i
   await expect(page.getByRole('button', { name: 'Increase Quantity' })).toBeDisabled()
   // Nothing else is in Bedroom, so related pieces fall back to the rest in catalogue order.
   expect(await relatedTitles(page)).toEqual(['Test chair', 'Tilda Sofa', 'Umbra Dining Table', 'Wren Coffee Table'])
+  const collectionLink = page.getByRole('article').getByRole('link', { name: 'Bedroom' })
+  await expect(collectionLink).toHaveAttribute('href', '/shop/bedroom')
+  await collectionLink.press('Enter')
+  await expect(page.getByRole('heading', { level: 1, name: 'Bedroom' })).toBeVisible()
 })
 
 test('the gallery and add to bag work from the keyboard', async ({ page }) => {
@@ -77,7 +81,9 @@ test('the gallery and add to bag work from the keyboard', async ({ page }) => {
   await expect(second).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('[data-main-image] img')).toHaveAttribute('alt', 'Test chair, view 2 of 2')
 
-  // One unit in stock, so both quantity buttons are disabled and Tab goes straight to Add to bag.
+  // One unit in stock, so both quantity buttons are disabled.
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('article').getByRole('link', { name: 'Sofas & Armchairs' })).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Add to bag' })).toBeFocused()
   await page.keyboard.press('Enter')

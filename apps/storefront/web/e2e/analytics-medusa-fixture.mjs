@@ -55,7 +55,7 @@ function products() {
       umbraVariant('variant_umbra_gold_large', 'UMBRA-GOLD-200', 'Gold', '200 cm', 36500, 0, ['/hero-sofas.jpg']),
       umbraVariant('variant_umbra_gold_small', 'UMBRA-GOLD-160', 'Gold', '160 cm', 37000, 2, ['/demo/arc-front.jpg']),
     ] }),
-    piece({ uuid: '44444444-4444-4444-8444-444444444444', id: 'prod_vale_bedside', title: 'Vale Bedside Table', categories: category('bedroom', 'Bedroom'), variants: [variant('variant_vale_bedside', 'VALE-BEDSIDE', 6877.39, 1)] }),
+    piece({ uuid: '44444444-4444-4444-8444-444444444444', id: 'prod_vale_bedside', title: 'Vale Bedside Table', categories: [...category('custom-label', 'Custom label'), ...category('bedroom', 'Bedroom')], variants: [variant('variant_vale_bedside', 'VALE-BEDSIDE', 6877.39, 1)] }),
     piece({ uuid: '55555555-5555-4555-8555-555555555555', id: 'prod_wren_coffee', title: 'Wren Coffee Table', image: '/demo/arc-detail.jpg', categories: category('coffee-console-tables', 'Coffee & Console Tables'), variants: [variant('variant_wren_coffee', 'WREN-COFFEE', 7817.39, 0, madeToOrder)] }),
     piece({ uuid: '66666666-6666-4666-8666-666666666666', id: 'prod_yara_lamp', title: 'Yara Floor Lamp', image: '/demo/arc-front.jpg', variants: [variant('variant_yara_lamp', 'YARA-LAMP', 1999, 3)] }),
   ]
