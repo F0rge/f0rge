@@ -181,20 +181,22 @@ test('each card shows at most one alert, and finish dots switch the photos, pric
   // One dot per colour: both gold sizes share a dot, which opens the gold size in stock.
   const finishes = table.getByRole('group', { name: 'Finishes of Umbra Dining Table' })
   await expect(finishes.getByRole('button')).toHaveCount(2)
-  await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'true')
-  for (const link of await table.getByRole('link').all()) {
-    await expect(link).toHaveAttribute('href', productPath)
-  }
+  await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  const allOptions = table.getByRole('link', { name: 'View all options for Umbra Dining Table' })
+  await expect(allOptions).toHaveAttribute('href', productPath)
+  await expect(table.getByRole('heading', { level: 3 }).getByRole('link')).toHaveAttribute('href', `${productPath}?variant=variant_umbra_gold_large`)
   await finishes.getByRole('button', { name: 'Gold', exact: true }).click()
   await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(finishes.getByRole('button', { name: 'Silver / 200 cm' })).toHaveAttribute('aria-pressed', 'false')
   await expect(table.getByRole('img', { name: 'Umbra Dining Table, photo 1 of 1' })).toHaveAttribute('src', '/demo/arc-front.jpg')
   await expect(table).toContainText(/R\s37\s000,00/)
-  for (const link of await table.getByRole('link').all()) await expect(link).toHaveAttribute('href', /\?variant=variant_umbra_gold_small$/)
+  await expect(table.getByRole('heading', { level: 3 }).getByRole('link')).toHaveAttribute('href', /\?variant=variant_umbra_gold_small$/)
+  await expect(allOptions).toHaveAttribute('href', productPath)
   // A new filter result keeps the card (and the shopper's finish) rather than remounting it.
   await page.getByRole('complementary', { name: 'Filters' }).getByRole('checkbox', { name: /^In stock/ }).check()
   await expect(finishes.getByRole('button', { name: 'Gold', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await finishes.getByRole('button', { name: 'Silver / 200 cm' }).click()
+  await expect(allOptions).toHaveCount(0)
   for (const link of await table.getByRole('link').all()) await expect(link).toHaveAttribute('href', productPath)
   await expect(card(page, 'Tilda Sofa').getByRole('group', { name: /^Finishes/ })).toHaveCount(0)
 })

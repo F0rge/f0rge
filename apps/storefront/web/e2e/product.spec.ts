@@ -149,6 +149,30 @@ test('colour and size select real SKUs, prices and photos on one grouped page', 
   await expect(canonical).toHaveAttribute('href', new RegExp(`${path}$`))
 })
 
+test('a grouped card links to both its displayed SKU and all product options', async ({ page }) => {
+  const path = '/product/firstout-group-33333333-3333-4333-8333-333333333333'
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/shop/dining-room')
+  await page.getByRole('button', { name: 'Reject optional analytics' }).click()
+  const card = page.getByRole('list', { name: 'Pieces' }).getByRole('listitem')
+  const productTitle = card.getByRole('heading', { name: 'Umbra Dining Table' }).getByRole('link')
+  const productPhoto = card.getByRole('link').filter({ has: page.getByRole('img') })
+  const allOptions = card.getByRole('link', { name: 'View all options for Umbra Dining Table' })
+  await expect(productTitle).toHaveAttribute('href', `${path}?variant=variant_umbra_gold_large`)
+  await expect(productPhoto).toHaveAttribute('href', `${path}?variant=variant_umbra_gold_large`)
+  await expect(allOptions).toHaveAttribute('href', path)
+  expect((await allOptions.boundingBox())?.height).toBeGreaterThanOrEqual(24)
+  expect(await noHorizontalScroll(page)).toBe(true)
+  await allOptions.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`${path}$`))
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-TABLE')
+
+  await page.goBack()
+  await productTitle.click()
+  await expect(page).toHaveURL(new RegExp(`${path}\\?variant=variant_umbra_gold_large$`))
+  await expect(page.locator('#product-sku')).toHaveText('SKU UMBRA-GOLD-200')
+})
+
 for (const path of [tilda, wren, vale]) {
   test(`${path} fits 390px without horizontal scroll`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
