@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 
 const port = Number(process.env.STOREFRONT_ANALYTICS_MEDUSA_PORT || 9011)
+const includeAvanzi = process.env.STOREFRONT_TEST_AVANZI_GUIDANCE === 'true'
 const category = (handle, name) => [{ id: `cat_${handle}`, name, handle }]
 // `was` puts the variant on a sale price list, as Medusa reports it.
 const variant = (id, sku, amount, inventory, metadata = null, was = null) => ({
@@ -39,7 +40,7 @@ function products() {
       expires_at: new Date(now + 30 * 86_400_000).toISOString(), observed_at: new Date(now).toISOString(),
     },
   }
-  return [
+  const catalogue = [
     piece({ uuid: '11111111-1111-4111-8111-111111111111', id: 'prod_test_chair', title: 'Test chair', image: '/demo/arc-front.jpg', extraImages: ['/demo/arc-angle.jpg'], tags: ['just-arrived'], categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_test_chair', 'TEST-CHAIR', 2400, 1)] }),
     piece({ uuid: '22222222-2222-4222-8222-222222222222', id: 'prod_tilda_sofa', title: 'Tilda Sofa', image: '/hero-sofas.jpg', material: 'Bouclé', length: 220, width: 95, height: 80, metadata: { dimension_unit: 'cm' }, categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_tilda_sofa', 'TILDA-SOFA', 18999, 2, { piece_count: 2 }, 22999)] }),
     piece({ uuid: 'group-33333333-3333-4333-8333-333333333333', id: 'prod_umbra_table', title: 'Umbra Dining Table', image: '/demo/arc-angle.jpg', categories: category('dining-room', 'Dining Room'), options, variants: [
@@ -58,6 +59,10 @@ function products() {
     piece({ uuid: '55555555-5555-4555-8555-555555555555', id: 'prod_wren_coffee', title: 'Wren Coffee Table', image: '/demo/arc-detail.jpg', categories: category('coffee-console-tables', 'Coffee & Console Tables'), variants: [variant('variant_wren_coffee', 'WREN-COFFEE', 7817.39, 0, madeToOrder)] }),
     piece({ uuid: '66666666-6666-4666-8666-666666666666', id: 'prod_yara_lamp', title: 'Yara Floor Lamp', image: '/demo/arc-front.jpg', variants: [variant('variant_yara_lamp', 'YARA-LAMP', 1999, 3)] }),
   ]
+  if (includeAvanzi) {
+    catalogue.push(piece({ uuid: '7d36b7b6-9871-44c5-b330-b808221f8005', id: 'prod_avanzi', title: 'Avanzi L-Shaped Sofa', image: '/hero-sofas.jpg', categories: category('sofas-armchairs', 'Sofas & Armchairs'), variants: [variant('variant_avanzi', 'FIXTURE-AVANZI', 12000, 1)] }))
+  }
+  return catalogue
 }
 // Sold in pairs with five in stock, so the most a shopper can take is four.
 // Unlisted: served only by handle or id, so the listing and analytics counts stay as they are.

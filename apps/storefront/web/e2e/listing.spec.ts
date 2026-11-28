@@ -39,7 +39,36 @@ test('the sofa category describes the range and helps shoppers choose a sofa', a
   await page.goto('/shop/sofas-armchairs')
   await expect(page).toHaveTitle('Sofa & Armchair Shop in Bedfordview | DasKasas')
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Find a sofa or armchair at DasKasas/)
-  await expect(page.getByRole('region', { name: 'Choosing a sofa for your living room' })).toContainText('Measure the space the sofa will occupy')
+  const guide = page.getByRole('region', { name: 'Choosing a sofa for your living room' })
+  await expect(guide).toContainText('For an L-shaped sofa, check which side the return sits on')
+  await expect(guide).toContainText('A U-shaped layout also needs a clear opening')
+  await expect(guide).toContainText('If you only need one seat, measure the full width of an armchair or accent chair')
+})
+
+test('the sofa guide links to fit advice for the Avanzi when it is published', async ({ page }) => {
+  await page.goto('/shop/sofas-armchairs')
+  const guide = page.getByRole('region', { name: 'Choosing a sofa for your living room' })
+  const avanzi = guide.getByRole('link', { name: 'See the Avanzi L-Shaped Sofa' })
+  if (process.env.STOREFRONT_TEST_AVANZI_GUIDANCE !== 'true') {
+    await expect(avanzi).toHaveCount(0)
+    return
+  }
+  await avanzi.press('Enter')
+  const fitAdvice = page.getByRole('region', { name: 'Will the Avanzi fit your room?' })
+  await expect(fitAdvice).toContainText('Mark out both sides of this L-shaped sofa on your floor.')
+  await expect(fitAdvice.getByRole('link', { name: 'Ask the showroom' })).toHaveAttribute('href', '/help#contact')
+})
+
+test('the bedroom guide helps shoppers choose a chair and leads them to the seating catalogue', async ({ page }) => {
+  await page.goto('/shop/bedroom')
+  await expect(page).toHaveTitle('Bedroom Furniture in Bedfordview | DasKasas')
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /Shop beds, headboards and bedside tables/)
+  const guide = page.getByRole('region', { name: 'Choosing bedroom furniture' })
+  await expect(guide).toContainText('For a bedroom chair, check that you can walk between the chair and the bed')
+  const seatingLink = guide.getByRole('link', { name: 'Browse armchairs and accent chairs' })
+  await expect(seatingLink).toHaveAttribute('href', '/shop/sofas-armchairs')
+  await seatingLink.press('Enter')
+  await expect(page.getByRole('heading', { level: 1, name: 'Find a sofa or armchair' })).toBeVisible()
 })
 
 test('availability filter, sort and counts agree with the grid', async ({ page }) => {
