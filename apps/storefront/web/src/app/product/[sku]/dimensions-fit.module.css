@@ -1,0 +1,18 @@
+.panel { color: var(--foreground); }
+.panel > summary { display: flex; align-items: center; gap: 10px; min-height: 49px; border-top: 1px solid var(--border); cursor: pointer; list-style: none; font-size: .875rem; font-weight: 600; }
+.panel > summary::-webkit-details-marker { display: none; }
+.panel > summary:focus-visible { outline: 2px solid var(--foreground); outline-offset: 2px; border-radius: 3px; }
+.summaryValue { margin-left: auto; text-align: right; color: var(--muted-foreground); font-size: .8125rem; font-weight: 400; }
+.chevron { flex-shrink: 0; }
+.panel[open] .chevron { transform: rotate(180deg); }
+.figure { margin: 0; padding: 7px 8px 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--background); }
+.picture { display: block; width: 100%; max-width: 530px; height: auto; margin: 0 auto; }
+.line { fill: none; stroke: currentColor; stroke-width: 1.3; }
+.rimUnderlay { stroke: var(--background); stroke-width: 3.2; }
+.label, .horizontalLabel { font-size: 16px; font-weight: 600; fill: currentColor; }
+.horizontalLabel { paint-order: stroke; stroke: var(--background); stroke-width: 9; stroke-linejoin: round; }
+.axisName { fill: var(--muted-foreground); font-size: 14px; }
+.measurements { display: grid; gap: 4px; margin: 7px 0 0; font-size: .875rem; }
+.measurements > div { display: flex; align-items: baseline; gap: 12px; }
+.measurements dt { font-weight: 500; }
+.measurements dd { margin: 0; color: var(--muted-foreground); }
