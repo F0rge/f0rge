@@ -1,12 +1,14 @@
 import "server-only";
 import { formatCustomerPrice, isZarCurrency } from "./order-money";
 import { offerLive } from "./made-to-order";
+import { materialSample } from "./material-samples";
 import { selectedImages } from "./product-variants";
 import { coversMinimum, sellCount, sellRules, type SellRules } from "./sell-rules";
 
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
-export type MedusaOption = { id: string; title: string; values?: { id: string; value: string }[] };
+type MedusaOptionValue = { id: string; value: string; sourceValue?: string };
+export type MedusaOption = { id: string; title: string; values?: MedusaOptionValue[] };
 export type MadeToOrderOffer = {
   id: string;
   capacity: number;
@@ -37,7 +39,7 @@ export type MedusaVariant = {
   title?: string;
   thumbnail?: string | null;
   images?: MedusaImage[] | null;
-  options?: { id: string; value: string; option_id?: string | null; option?: { id: string; title: string } | null }[];
+  options?: (MedusaOptionValue & { option_id?: string | null; option?: { id: string; title: string } | null })[];
   metadata?: {
     suitable_image_urls?: string[] | string;
     dimensions_cm?: DimensionsCm | null;
@@ -110,9 +112,40 @@ async function zarRegionId(): Promise<string> {
   return region.id;
 }
 
+function publicMaterialLabels(product: StoreProduct): StoreProduct {
+  const axes = new Map(product.options?.map(({ id, title }) => [id, title]));
+  const labels = new Map<string, string>();
+  for (const variant of product.variants) {
+    for (const option of variant.options ?? []) {
+      const axisId = option.option_id || option.option?.id;
+      const axis = (axisId && axes.get(axisId)) || option.option?.title;
+      const sample = axis && materialSample(variant.sku, axis, option.value);
+      if (sample && sample.label !== option.value) labels.set(option.id, sample.label);
+    }
+  }
+  function labelOption<T extends MedusaOptionValue>(option: T): T {
+    const label = labels.get(option.id);
+    return label ? { ...option, value: label, sourceValue: option.value } : option;
+  }
+  const variants = product.variants.map((variant) => {
+    const options = variant.options?.map(labelOption);
+    const sourceTitle = variant.options?.map(({ value }) => value).join(" / ");
+    const title = variant.title === sourceTitle ? options?.map(({ value }) => value).join(" / ") : variant.title;
+    return { ...variant, title, options };
+  });
+  const title = product.title === "Casablanca Dining Chair Grey PU & S/Steel" && variants.some(({ sku }) => sku === "P61625")
+    ? "Casablanca Dining Chair – Grey Faux Leather & Stainless Steel" : product.title;
+  const options = product.options?.map((option) => ({
+    ...option,
+    values: option.values?.map(labelOption),
+  }));
+  // This is the public catalogue projection. Cart and stock operations use Medusa's original IDs.
+  return { ...product, title, options, variants };
+}
+
 function publicProduct(product: StoreProduct): StoreProduct {
   // Only these presentation fields cross the server-to-client boundary.
-  return {
+  return publicMaterialLabels({
     id: product.id, handle: product.handle, title: product.title,
     description: product.description, thumbnail: product.thumbnail,
     images: (product.images || []).map(({ id, url }) => ({ id, url })),
@@ -151,7 +184,7 @@ function publicProduct(product: StoreProduct): StoreProduct {
         min_quantity: sellCount(variant.metadata?.min_quantity),
       },
     })),
-  };
+  });
 }
 
 export async function listStoreProducts(): Promise<StoreProduct[]> {

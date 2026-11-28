@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
+import { productPageCopy, productStructuredData } from "./product-seo";
+import { pickVariant, productVariantOptions } from "./product-variants";
 
 vi.mock("server-only", () => ({}));
 vi.stubEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY", "pk_test_fixture");
-const { listedPiece, listShopProducts, listStoreProducts, saleOriginal, swatchHex, variantQuantityCaps } = await import("./medusa");
+const { getStoreProduct, listedPiece, listShopProducts, listStoreProducts, saleOriginal, swatchHex, variantQuantityCaps } = await import("./medusa");
 vi.unstubAllEnvs();
 import type { MedusaVariant, StoreProduct } from "./medusa";
 
@@ -70,6 +72,78 @@ describe("sell rules", () => {
         variant_pairs: { cap: 5, multiple: 2, minimum: 4 },
         variant_odd: { cap: 1, multiple: 1, minimum: 1 },
       });
+    } finally {
+      fetchStore.mockRestore();
+    }
+  });
+});
+
+describe("public material names", () => {
+  it("projects reviewed labels to the product, listing and search metadata using the original option and variant IDs", async () => {
+    const handle = "firstout-group-11111111-1111-4111-8111-111111111111";
+    const axis = { id: "opt_upholstery", title: "Upholstery material" };
+    const sand = { id: "opt_sand", value: "Solo 111" };
+    const taupe = { id: "opt_taupe", value: "Solo 451" };
+    const source: StoreProduct = {
+      id: "prod_kidman", handle, title: "Kidman Corner Sofa", description: null,
+      options: [{ ...axis, values: [sand, taupe] }],
+      variants: [
+        variant({ id: "variant_taupe", sku: "P20302PC3", title: taupe.value, options: [{ ...taupe, option: axis }] }),
+        variant({ id: "variant_sand", sku: "P20307PC3", title: sand.value, options: [{ ...sand, option: axis }] }),
+        variant({ id: "variant_same_finish", sku: "LARGER-SAND", title: sand.value, options: [{ ...sand, option: axis }] }),
+        variant({ id: "variant_same_name", sku: "NEW-SAND", title: "Sand Fabric", options: [{ id: "opt_new_sand", value: "Sand Fabric", option: axis }] }),
+        variant({ id: "variant_new", sku: "NEW", title: "New upholstery", options: [{ id: "opt_new", value: "New upholstery", option: axis }] }),
+      ],
+    };
+    const fetchStore = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      new URL(String(input)).pathname === "/store/regions"
+        ? Response.json({ regions: [{ id: "reg_fixture", currency_code: "zar" }] })
+        : Response.json({ products: [source], count: 1 }));
+    try {
+      const page = await getStoreProduct(handle);
+      assert.isNotNull(page);
+      expect(page.options?.[0].values).toEqual([
+        { id: sand.id, value: "Sand Fabric", sourceValue: sand.value }, { id: taupe.id, value: "Taupe Fabric", sourceValue: taupe.value },
+      ]);
+      expect(listedPiece(page).variants.map(({ id, name, options }) => ({ id, name, options }))).toEqual([
+        { id: "variant_taupe", name: "Taupe Fabric", options: ["Taupe Fabric"] },
+        { id: "variant_sand", name: "Sand Fabric", options: ["Sand Fabric"] },
+        { id: "variant_same_finish", name: "Sand Fabric", options: ["Sand Fabric"] },
+        { id: "variant_same_name", name: "Sand Fabric", options: ["Sand Fabric"] },
+        { id: "variant_new", name: "New upholstery", options: ["New upholstery"] },
+      ]);
+      expect(productVariantOptions(page, "source")[0].availableValues).toEqual(["Solo 111", "Solo 451", "Sand Fabric", "New upholstery"]);
+      expect(pickVariant(page.variants, page.variants[0], axis.id, "Sand Fabric")?.id).toBe("variant_same_name");
+      expect(productPageCopy(page, page.variants[0]).title).toContain("Taupe Fabric");
+      expect(productPageCopy(page).description).toContain("Sand Fabric");
+      const data = productStructuredData(page, `/product/${handle}`, {
+        NEXT_PUBLIC_BASE_URL: "https://www.daskasas.co.za", RAILWAY_ENVIRONMENT_NAME: "production",
+        STOREFRONT_PRIVATE_PREVIEW: "off", STOREFRONT_INDEXING_ENABLED: "true",
+      });
+      expect(data).toContain('"material":"Taupe Fabric"');
+      expect(data).not.toContain("Solo 451");
+    } finally {
+      fetchStore.mockRestore();
+    }
+  });
+
+  it("expands the Casablanca legacy title only for the reviewed SKU and original spelling", async () => {
+    const oldTitle = "Casablanca Dining Chair Grey PU & S/Steel";
+    const fixture: StoreProduct = {
+      id: "prod_casablanca", handle: "firstout-11111111-1111-4111-8111-111111111111", title: oldTitle,
+      description: null, variants: [variant({ sku: "P61625" })],
+    };
+    const fetchStore = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      new URL(String(input)).pathname === "/store/regions"
+        ? Response.json({ regions: [{ id: "reg_fixture", currency_code: "zar" }] })
+        : Response.json({ products: [fixture], count: 1 }));
+    try {
+      expect(await listStoreProducts()).toMatchObject([{ title: "Casablanca Dining Chair – Grey Faux Leather & Stainless Steel" }]);
+      fixture.title = "Casablanca Dining Chair with a Silver Frame";
+      expect(await listStoreProducts()).toMatchObject([{ title: fixture.title }]);
+      fixture.title = oldTitle;
+      fixture.variants[0].sku = "NEW";
+      expect(await listStoreProducts()).toMatchObject([{ title: oldTitle }]);
     } finally {
       fetchStore.mockRestore();
     }
